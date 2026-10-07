@@ -7,6 +7,7 @@ import { type ChartRow, LinesChart, SeriesLegend } from "@/components/analytics/
 import { Panel, PanelHeader } from "@/components/analytics/panel";
 import { RangeSelect } from "@/components/analytics/range-select";
 import { AnimatedValue } from "@/components/appica/effects";
+import { Sparkline } from "@/components/appica/sparkline";
 import { type Columns, DataTable } from "@/components/data-table";
 import { EmptyState, QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,15 @@ const REFRESH_MS = 60_000;
 /** Most points a chart draws; minute buckets of longer ranges are summed into wider ones. */
 const MAX_POINTS = 120;
 const CHARTED = ["connections", "refused", "bytesReceived", "bytesSent"] as const;
+
+/** A counter's points for a tile's trend line: at most `max`, a group's highest value each. */
+function trend(points: L4Stats["points"], key: Counter, max = 60): number[] {
+  const values = points.map((point) => point[key]);
+  const size = Math.max(1, Math.ceil(values.length / max));
+  const out: number[] = [];
+  for (let i = 0; i < values.length; i += size) out.push(Math.max(...values.slice(i, i + size)));
+  return out;
+}
 
 export const isL4StatsRange = (value: string): value is L4StatsRange =>
   (L4_STATS_RANGES as readonly string[]).includes(value);
@@ -143,15 +153,21 @@ function StatsBody({
             {...enter(index)}
             className={cn("animate-enter", index === 0 && "col-span-2 @3xl/main:col-span-1")}
           >
-            <Panel className="gap-1 px-4 py-3" data-testid={`l4-stat-${tile.key}`}>
-              <h3 className="truncate text-[13px] text-muted-foreground">{tile.title()}</h3>
+            <Panel className="gap-1 pt-3" data-testid={`l4-stat-${tile.key}`}>
+              <h3 className="truncate px-4 text-[13px] text-muted-foreground">{tile.title()}</h3>
               <p
-                className="truncate text-2xl font-semibold tracking-tight tabular-nums"
+                className="truncate px-4 text-2xl font-semibold tracking-tight readout [font-stretch:112%]"
                 data-slot="metric-value"
                 data-value={stats.totals[tile.key]}
               >
                 <AnimatedValue value={tile.format(stats.totals[tile.key])} />
               </p>
+              <Sparkline
+                data={trend(stats.points, tile.key)}
+                tone="metric"
+                height={32}
+                className="mt-1"
+              />
             </Panel>
           </div>
         ))}
@@ -234,6 +250,7 @@ function NodeShares({ nodes }: { nodes: NodeShare[] }) {
           columns={columns}
           getRowId={(node) => node.nodeId}
           testId="l4-stats-nodes"
+          pinFirstColumn
         />
       )}
     </section>

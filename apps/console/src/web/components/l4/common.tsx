@@ -48,8 +48,19 @@ export function L4NodesWarning({
   );
 }
 
-/** The CNAME clients connect to, with a copy button; a muted note while the cluster's DNS is off. */
-export function DnsTarget({ target, testId }: { target: string | null; testId?: string }) {
+/**
+ * The CNAME clients connect to, with a copy button (in a small well with `well`); a muted note
+ * while the cluster's DNS is off.
+ */
+export function DnsTarget({
+  target,
+  testId,
+  well = false,
+}: {
+  target: string | null;
+  testId?: string;
+  well?: boolean;
+}) {
   if (!target)
     return (
       <span className="text-sm text-muted-foreground" data-testid={testId} data-dns="off">
@@ -57,7 +68,12 @@ export function DnsTarget({ target, testId }: { target: string | null; testId?: 
       </span>
     );
   return (
-    <span className="flex min-w-0 items-center gap-1.5">
+    <span
+      className={cn(
+        "flex min-w-0 items-center gap-1.5",
+        well && "w-fit max-w-full rounded-lg bg-well py-0.5 pr-0.5 pl-2",
+      )}
+    >
       <code className="min-w-0 truncate font-mono text-xs" title={target} data-testid={testId}>
         {target}
       </code>

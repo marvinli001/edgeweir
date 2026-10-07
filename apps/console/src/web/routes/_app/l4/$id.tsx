@@ -1,5 +1,5 @@
 import type { L4App } from "@edgeweir/contract";
-import { Delete02Icon, PencilEdit01Icon } from "@hugeicons/core-free-icons";
+import { ArrowRight01Icon, Delete02Icon, PencilEdit01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useLocation } from "@tanstack/react-router";
@@ -12,6 +12,7 @@ import { L4AppStats } from "@/components/l4/app-stats";
 import { DnsTarget, L4NodesWarning, ProtocolBadge } from "@/components/l4/common";
 import { Page } from "@/components/page";
 import { QueryView } from "@/components/states";
+import { StatusDot } from "@/components/status-dot";
 import { NotFoundPage } from "@/components/status-page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -100,6 +101,29 @@ function L4AppPage() {
   );
 }
 
+/** One cell of the overview's summary well: label over value. */
+function SummaryCell({
+  label,
+  children,
+  testId,
+}: {
+  label: string;
+  children: React.ReactNode;
+  testId?: string;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5 px-4 py-3">
+      <dt className="truncate text-xs text-muted-foreground">{label}</dt>
+      <dd
+        className="flex min-h-7 min-w-0 flex-wrap items-center gap-2 text-sm"
+        data-testid={testId}
+      >
+        {children}
+      </dd>
+    </div>
+  );
+}
+
 function InfoRow({
   label,
   children,
@@ -164,38 +188,50 @@ function Overview({ app }: { app: L4App }) {
             {m.common_delete()}
           </Button>
         </CardHeader>
-        <CardContent>
-          <dl className="divide-y">
-            <InfoRow label={m.sites_col_status()} testId="l4-app-state">
-              <L4EnabledSwitch app={app} />
-              <span>{app.enabled ? m.l4_state_enabled() : m.l4_state_disabled()}</span>
-            </InfoRow>
-            <InfoRow label={m.l4_port()} testId="l4-app-listen">
+        <CardContent className="flex flex-col gap-2">
+          <dl className="grid divide-y divide-edge overflow-hidden rounded-xl sunk-well @2xl/main:grid-cols-3 @2xl/main:divide-x @2xl/main:divide-y-0">
+            <SummaryCell label={m.l4_port()} testId="l4-app-listen">
               <ProtocolBadge protocol={app.protocol} />
-              <span className="font-mono tabular-nums">{app.port}</span>
-            </InfoRow>
-            <InfoRow label={m.sites_col_cluster()}>
-              <Badge
-                variant="secondary"
-                render={<Link to="/clusters" search={{ cluster: app.clusterId, tab: "ports" }} />}
+              <span className="font-mono text-xl font-semibold tracking-tight readout">
+                {app.port}
+              </span>
+            </SummaryCell>
+            <SummaryCell label={m.sites_col_status()} testId="l4-app-state">
+              <L4EnabledSwitch app={app} />
+              <StatusDot tone={app.enabled ? "good" : "idle"}>
+                {app.enabled ? m.l4_state_enabled() : m.l4_state_disabled()}
+              </StatusDot>
+            </SummaryCell>
+            <SummaryCell label={m.sites_col_cluster()}>
+              <Link
+                to="/clusters"
+                search={{ cluster: app.clusterId, tab: "ports" }}
+                className="inline-flex min-w-0 items-center gap-1 rounded-md font-medium text-primary-ink underline-offset-4 outline-none focus-lit hover:underline"
               >
-                {app.clusterName}
-              </Badge>
-            </InfoRow>
+                <span className="truncate">{app.clusterName}</span>
+                <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className="size-3.5" />
+              </Link>
+            </SummaryCell>
+          </dl>
+          <dl className="divide-y divide-edge">
             <InfoRow label={m.dns_cname_target()}>
               <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                <DnsTarget target={app.dnsTarget} testId="l4-app-dns" />
+                <DnsTarget target={app.dnsTarget} testId="l4-app-dns" well />
                 {app.dnsLines.map((line) => (
                   <div
                     key={line.name}
                     className="flex min-w-0 items-center gap-2"
                     data-testid="l4-app-dns-line"
                   >
-                    <span className="shrink-0 text-muted-foreground">{line.name}</span>
-                    <code className="min-w-0 truncate font-mono text-xs" title={line.target}>
-                      {line.target}
-                    </code>
-                    <CopyButton iconOnly value={line.target} />
+                    <span className="w-10 shrink-0 truncate text-xs text-muted-foreground">
+                      {line.name}
+                    </span>
+                    <span className="flex w-fit max-w-full min-w-0 items-center gap-1.5 rounded-lg bg-well py-0.5 pr-0.5 pl-2">
+                      <code className="min-w-0 truncate font-mono text-xs" title={line.target}>
+                        {line.target}
+                      </code>
+                      <CopyButton iconOnly value={line.target} />
+                    </span>
                   </div>
                 ))}
               </div>

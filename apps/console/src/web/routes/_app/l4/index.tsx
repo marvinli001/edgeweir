@@ -13,6 +13,7 @@ import { DnsTarget, L4NodesWarning, ProtocolBadge } from "@/components/l4/common
 import { Page } from "@/components/page";
 import { SitesTabs } from "@/components/sites-tabs";
 import { EmptyState, QueryView } from "@/components/states";
+import { Dot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useDialogState } from "@/hooks/use-dialog-state";
@@ -64,19 +65,24 @@ function L4AppsPage() {
         id: "name",
         header: () => m.site_form_name(),
         cell: ({ row }) => (
-          <div className="flex max-w-56 min-w-0 flex-col">
-            <Link
-              to="/l4/$id"
-              params={{ id: row.original.id }}
-              className="truncate font-medium underline-offset-4 hover:underline"
-              title={row.original.name}
-              data-testid="l4-app-link"
-            >
-              {row.original.name}
-            </Link>
-            <span className="truncate text-xs text-muted-foreground" data-testid="l4-app-cluster">
-              {row.original.clusterName}
+          <div className="flex max-w-56 min-w-0 items-start gap-2.5">
+            <span className="pt-1.5">
+              <Dot tone={row.original.enabled ? "good" : "idle"} />
             </span>
+            <div className="flex min-w-0 flex-col">
+              <Link
+                to="/l4/$id"
+                params={{ id: row.original.id }}
+                className="truncate font-medium underline-offset-4 hover:underline"
+                title={row.original.name}
+                data-testid="l4-app-link"
+              >
+                {row.original.name}
+              </Link>
+              <span className="truncate text-xs text-muted-foreground" data-testid="l4-app-cluster">
+                {row.original.clusterName}
+              </span>
+            </div>
           </div>
         ),
       },
@@ -202,6 +208,7 @@ function L4AppsPage() {
             columns={columns}
             getRowId={(app) => app.id}
             testId="l4-apps-table"
+            pinFirstColumn
           />
         )}
       </QueryView>
