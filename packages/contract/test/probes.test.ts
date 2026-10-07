@@ -149,6 +149,8 @@ describe("DNS binding lines", () => {
 
   it("names the DNS revision reasons and their message parameters", () => {
     expect(Object.keys(dnsRevisionReasonDefs).sort()).toEqual([
+      "cname",
+      "cname_expired",
       "force",
       "health",
       "manual",
@@ -156,6 +158,9 @@ describe("DNS binding lines", () => {
       "scheduling",
     ]);
     expect(dnsRevisionReasonDefs.scheduling.params).toEqual(["rule", "node"]);
+    // G10: a changed CNAME prefix names its site or application; expiry has no parameters.
+    expect(dnsRevisionReasonDefs.cname.params).toEqual(["name"]);
+    expect(dnsRevisionReasonDefs.cname_expired.params).toEqual([]);
   });
 });
 
