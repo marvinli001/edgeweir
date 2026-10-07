@@ -64,7 +64,7 @@ function SiteDetailPage() {
   const name = site.data?.name;
   const tabsList = React.useRef<HTMLDivElement>(null);
   // The tab bar's ref: the edges that hide more tabs fade out (scroll-fade), so a phone shows that
-  // the bar scrolls.
+  // the bar scrolls; a tab that takes keyboard focus scrolls clear of the fades.
   const tabBar = React.useCallback((list: HTMLDivElement | null) => {
     tabsList.current = list;
     if (!list) return;
@@ -74,13 +74,19 @@ function SiteDetailPage() {
       if (start || end) list.dataset.fade = start && end ? "both" : start ? "start" : "end";
       else delete list.dataset.fade;
     };
+    const focus = (event: FocusEvent) => {
+      if (event.target instanceof HTMLElement && event.target !== list)
+        revealTab(list, event.target);
+    };
     mark();
     list.addEventListener("scroll", mark, { passive: true });
+    list.addEventListener("focusin", focus);
     const observer = new ResizeObserver(mark);
     observer.observe(list);
     return () => {
       tabsList.current = null;
       list.removeEventListener("scroll", mark);
+      list.removeEventListener("focusin", focus);
       observer.disconnect();
     };
   }, []);
@@ -89,11 +95,7 @@ function SiteDetailPage() {
     if (!list || !site.isSuccess) return;
     const reveal = () => {
       const active = list.querySelector<HTMLElement>(`[data-testid="tab-${tab}"]`);
-      if (!active) return;
-      const bounds = list.getBoundingClientRect(),
-        item = active.getBoundingClientRect();
-      if (item.left < bounds.left) list.scrollLeft += item.left - bounds.left;
-      else if (item.right > bounds.right) list.scrollLeft += item.right - bounds.right;
+      if (active) revealTab(list, active);
     };
     reveal();
     const observer = new ResizeObserver(reveal);
@@ -213,6 +215,22 @@ function SiteDetailPage() {
       </QueryView>
     </Page>
   );
+}
+
+/**
+ * Scrolls a tab of the tab bar into view with the bar's scroll padding (the scroll-fade width)
+ * between it and either edge, so the active or focused tab never sits under a faded edge: its
+ * label keeps full contrast and its indicator stays whole. At the ends of the bar the scroll
+ * stops short of the padding, and an edge with nothing beyond it does not fade.
+ */
+function revealTab(list: HTMLElement, tab: HTMLElement) {
+  const style = getComputedStyle(list);
+  const start = Number.parseFloat(style.scrollPaddingInlineStart) || 0;
+  const end = Number.parseFloat(style.scrollPaddingInlineEnd) || 0;
+  const bounds = list.getBoundingClientRect(),
+    item = tab.getBoundingClientRect();
+  if (item.left < bounds.left + start) list.scrollLeft += item.left - bounds.left - start;
+  else if (item.right > bounds.right - end) list.scrollLeft += item.right - bounds.right + end;
 }
 
 /** The site's origin groups besides the default one, for origin rules. */

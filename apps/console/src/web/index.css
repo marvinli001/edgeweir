@@ -476,11 +476,14 @@
 /*
  * A sideways scroller that fades out at each edge that hides more of it ([data-fade] = start, end
  * or both, set from its scroll position), so a phone shows that it scrolls: the site's tab bar.
+ * Its scroll padding is the fade, so an item scrolled into view (the active or focused tab) stops
+ * clear of a faded edge instead of under it.
  */
 @utility scroll-fade {
   /* The edge keeps a trace, so the next item still peeks in. */
   --fade: 3rem;
   --fade-edge: rgb(0 0 0 / 15%);
+  scroll-padding-inline: var(--fade);
   &[data-fade="end"] {
     mask-image: linear-gradient(to right, #000 calc(100% - var(--fade)), var(--fade-edge));
   }
