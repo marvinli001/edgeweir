@@ -23,6 +23,7 @@ import { ClusterScheduling } from "@/components/scheduling";
 import { EmptyState, QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTabBar } from "@/hooks/use-tab-bar";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
@@ -163,6 +164,7 @@ function ClusterView({
 }) {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
+  const tabBar = useTabBar(`cluster-tab-${search.tab ?? "overview"}`);
   // The node whose details are open (?node=).
   const showDetail = React.useCallback(
     (id: string | null) =>
@@ -207,8 +209,9 @@ function ClusterView({
         >
           {/* The cluster's tab bar: line tabs over a hairline, scrolling sideways on phones. */}
           <TabsList
+            ref={tabBar}
             variant="line"
-            className="h-11 w-full max-w-full justify-start gap-0.5 overflow-x-auto overflow-y-hidden border-b px-0 pt-1 pb-[5px] [scrollbar-width:none]"
+            className="h-11 w-full max-w-full justify-start gap-0.5 overflow-x-auto overflow-y-hidden border-b px-0 pt-1 pb-[5px] scroll-fade [scrollbar-width:none]"
           >
             <TabsTrigger
               value="overview"

@@ -475,7 +475,8 @@
 
 /*
  * A sideways scroller that fades out at each edge that hides more of it ([data-fade] = start, end
- * or both, set from its scroll position), so a phone shows that it scrolls: the site's tab bar.
+ * or both, set from its scroll position), so a phone shows that it scrolls: the site's and the
+ * cluster's tab bars (hooks/use-tab-bar.ts), the origin topology.
  * Its scroll padding is the fade, so an item scrolled into view (the active or focused tab) stops
  * clear of a faded edge instead of under it.
  */

@@ -34,6 +34,7 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDraft } from "@/hooks/use-draft";
+import { useTabBar } from "@/hooks/use-tab-bar";
 import { domainList } from "@/lib/address-input";
 import { DEFAULT_RANGE } from "@/lib/analytics";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
@@ -63,46 +64,7 @@ function SiteDetailPage() {
   const stars = useSiteStars();
   const tab: SiteTab = search.tab ?? "overview";
   const name = site.data?.name;
-  const tabsList = React.useRef<HTMLDivElement>(null);
-  // The tab bar's ref: the edges that hide more tabs fade out (scroll-fade), so a phone shows that
-  // the bar scrolls; a tab that takes keyboard focus scrolls clear of the fades.
-  const tabBar = React.useCallback((list: HTMLDivElement | null) => {
-    tabsList.current = list;
-    if (!list) return;
-    const mark = () => {
-      const start = list.scrollLeft > 1;
-      const end = list.scrollLeft + list.clientWidth < list.scrollWidth - 1;
-      if (start || end) list.dataset.fade = start && end ? "both" : start ? "start" : "end";
-      else delete list.dataset.fade;
-    };
-    const focus = (event: FocusEvent) => {
-      if (event.target instanceof HTMLElement && event.target !== list)
-        revealTab(list, event.target);
-    };
-    mark();
-    list.addEventListener("scroll", mark, { passive: true });
-    list.addEventListener("focusin", focus);
-    const observer = new ResizeObserver(mark);
-    observer.observe(list);
-    return () => {
-      tabsList.current = null;
-      list.removeEventListener("scroll", mark);
-      list.removeEventListener("focusin", focus);
-      observer.disconnect();
-    };
-  }, []);
-  React.useEffect(() => {
-    const list = tabsList.current;
-    if (!list || !site.isSuccess) return;
-    const reveal = () => {
-      const active = list.querySelector<HTMLElement>(`[data-testid="tab-${tab}"]`);
-      if (active) revealTab(list, active);
-    };
-    reveal();
-    const observer = new ResizeObserver(reveal);
-    observer.observe(list);
-    return () => observer.disconnect();
-  }, [tab, site.isSuccess]);
+  const tabBar = useTabBar(`tab-${tab}`);
 
   React.useEffect(() => {
     if (name) {
@@ -216,22 +178,6 @@ function SiteDetailPage() {
       </QueryView>
     </Page>
   );
-}
-
-/**
- * Scrolls a tab of the tab bar into view with the bar's scroll padding (the scroll-fade width)
- * between it and either edge, so the active or focused tab never sits under a faded edge: its
- * label keeps full contrast and its indicator stays whole. At the ends of the bar the scroll
- * stops short of the padding, and an edge with nothing beyond it does not fade.
- */
-function revealTab(list: HTMLElement, tab: HTMLElement) {
-  const style = getComputedStyle(list);
-  const start = Number.parseFloat(style.scrollPaddingInlineStart) || 0;
-  const end = Number.parseFloat(style.scrollPaddingInlineEnd) || 0;
-  const bounds = list.getBoundingClientRect(),
-    item = tab.getBoundingClientRect();
-  if (item.left < bounds.left + start) list.scrollLeft += item.left - bounds.left - start;
-  else if (item.right > bounds.right - end) list.scrollLeft += item.right - bounds.right + end;
 }
 
 /** The site's origin groups besides the default one, for origin rules. */
