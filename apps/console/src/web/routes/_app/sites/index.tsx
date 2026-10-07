@@ -37,6 +37,8 @@ import { formatCompact, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
 const PAGE_SIZE = 20;
+/** The most sites one traffic breakdown returns (the contract's limit). */
+const TREND_LIMIT = 20;
 
 /** Sums neighbouring buckets so a long series draws as `points` points. */
 function coarse(series: number[], points: number): number[] {
@@ -81,19 +83,32 @@ function SitesPage() {
     navigate({ search: (prev) => ({ ...prev, create: open || undefined }), replace: true });
   const filtered = !!search.q || !!search.cluster;
 
-  // Each site's requests over the last day, for the trend column.
+  // Each site's requests over the last day, for the trend column. The breakdown ranks all sites
+  // and returns only the busiest, so it speaks for the rows only when the table lists every site:
+  // no filter, the first page and no more sites than one breakdown returns. Otherwise the column
+  // is left out rather than showing a site outside the top list as idle.
+  const allListed = !filtered && page === 1;
   const trends = useQuery({
     ...orpc.analytics.breakdown.queryOptions({
-      input: { by: "site", range: "24h", limit: PAGE_SIZE },
+      input: { by: "site", range: "24h", limit: TREND_LIMIT },
     }),
+    enabled: allListed && (sites.data?.total ?? 0) <= TREND_LIMIT,
     placeholderData: keepPreviousData,
     refetchInterval: 60_000,
     meta: { background: true },
   });
+  const showTrends =
+    allListed &&
+    sites.data !== undefined &&
+    !sites.isPlaceholderData &&
+    sites.data.total <= TREND_LIMIT &&
+    (trends.data !== undefined || trends.isPending);
+  // Undefined while the breakdown loads; a site missing from a loaded one had no requests.
   const trendById = React.useMemo(
     () =>
+      trends.data &&
       new Map(
-        (trends.data?.items ?? []).map((item) => [
+        trends.data.items.map((item) => [
           item.id,
           { total: item.total, series: coarse(item.series, 48) },
         ]),
@@ -139,26 +154,36 @@ function SitesPage() {
         header: () => m.sites_col_status(),
         cell: ({ row }) => <SiteStatus site={row.original} />,
       },
-      {
-        id: "traffic",
-        header: () => m.sites_col_traffic(),
-        cell: ({ row }) => {
-          const trend = trendById.get(row.original.id);
-          if (!trend) return <span className="text-muted-foreground">—</span>;
-          return (
-            <div className="flex w-36 items-center gap-3">
-              <Sparkline
-                data={trend.series}
-                tone="metric"
-                height={24}
-                fill={false}
-                className="w-20"
-              />
-              <span className="text-xs font-medium tabular-nums">{formatCompact(trend.total)}</span>
-            </div>
-          );
-        },
-      },
+      ...(showTrends
+        ? ([
+            {
+              id: "traffic",
+              header: () => m.sites_col_traffic(),
+              cell: ({ row }) => {
+                if (!trendById) return <div className="h-6 w-36" />;
+                const trend = trendById.get(row.original.id);
+                return (
+                  <div className="flex w-36 items-center gap-3">
+                    {trend ? (
+                      <Sparkline
+                        data={trend.series}
+                        tone="metric"
+                        height={24}
+                        fill={false}
+                        className="w-20"
+                      />
+                    ) : (
+                      <span className="h-6 w-20 shrink-0" />
+                    )}
+                    <span className="text-xs font-medium tabular-nums">
+                      {formatCompact(trend?.total ?? 0)}
+                    </span>
+                  </div>
+                );
+              },
+            },
+          ] satisfies Columns<Site>)
+        : []),
       {
         id: "domains",
         header: () => m.sites_col_domains(),
@@ -189,7 +214,7 @@ function SitesPage() {
         cell: ({ row }) => <Badge variant="secondary">{row.original.clusterName}</Badge>,
       },
     ],
-    [starredIds, pendingId, toggle, trendById],
+    [starredIds, pendingId, toggle, showTrends, trendById],
   );
 
   return (
