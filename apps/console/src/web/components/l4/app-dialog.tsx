@@ -476,7 +476,8 @@ function AppForm({
               testId="l4-app-origin-port-mode"
             />
           </Field>
-          <ol className="flex flex-col gap-3">
+          {/* Flat rows split by hairlines, not boxes in the dialog. */}
+          <ol className="flex flex-col border-y">
             {draft.origins.map((origin, index) => (
               <OriginRow
                 key={origin.key}
@@ -567,6 +568,7 @@ function AppForm({
                   .map((c) => ({ value: c.id, label: c.name })),
               ]}
               onChange={(certificateId) => set({ certificateId })}
+              label={m.cert_title()}
               testId="l4-app-tls-certificate"
             />
             <OptionSelect
@@ -578,6 +580,7 @@ function AppForm({
                 { value: "1.3" as const, label: m.cert_tls13() },
               ]}
               onChange={(tlsMinimumVersion) => set({ tlsMinimumVersion })}
+              label={m.cert_min_tls()}
               testId="l4-app-tls-version"
             />
           </div>
@@ -780,7 +783,7 @@ function OriginRow({
   const id = (name: string) => `${uid}-${name}`;
   return (
     <li
-      className="grid grid-cols-2 items-end gap-3 rounded-2xl border p-3 animate-enter sm:grid-cols-[minmax(0,1fr)_6rem_5rem_auto_auto]"
+      className="grid grid-cols-2 items-end gap-3 border-t py-3 animate-enter first:border-t-0 sm:grid-cols-[minmax(0,1fr)_6rem_5rem_auto_auto]"
       style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
       aria-label={m.site_origin_number({ index: index + 1 })}
       data-testid="l4-origin-row"
@@ -844,9 +847,9 @@ function OriginRow({
       />
       <Button
         type="button"
-        size="icon"
+        size="icon-sm"
         variant="ghost"
-        className="justify-self-end"
+        className="mb-0.5 justify-self-end"
         aria-label={m.common_remove()}
         disabled={!removable}
         onClick={onRemove}
