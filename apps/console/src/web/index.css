@@ -275,6 +275,35 @@
   }
 }
 
+/*
+ * The hairline of a row whose task is running (purge and prefetch tasks waiting for nodes): the
+ * signal at 40%, inside the row's radius, under its border beam; the still edge that stays under
+ * reduced motion. Only while the task runs; not for finished rows or for focus.
+ */
+@utility signal-hairline {
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--signal) 40%, transparent);
+}
+
+/*
+ * The light under the overview globe, so the sphere sits in it rather than on the card: the
+ * action blue in light mode, the signal in dark. Blur it with a filter utility (blur-2xl). The
+ * globe only; not behind text or data.
+ */
+@utility globe-halo {
+  background-image: radial-gradient(
+    closest-side,
+    color-mix(in oklch, var(--primary) 14%, transparent),
+    transparent
+  );
+  &:where(.dark *) {
+    background-image: radial-gradient(
+      closest-side,
+      color-mix(in oklch, var(--signal) 18%, transparent),
+      transparent
+    );
+  }
+}
+
 /* Film grain over large gradients (auth backdrop); breaks up banding. */
 @utility grain {
   &::before {

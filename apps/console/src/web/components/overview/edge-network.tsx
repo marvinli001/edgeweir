@@ -119,7 +119,7 @@ export function EdgeNetworkCard({
       <div className="relative z-[1] grid flex-1 content-center items-center gap-2 p-3 @3xl/main:grid-cols-[minmax(0,17rem)_minmax(0,1fr)] @5xl/main:grid-cols-1">
         <div className="relative mx-auto w-full max-w-60" aria-hidden>
           {/* Light under the globe, so the sphere sits in it rather than on the card. */}
-          <div className="absolute inset-[6%] rounded-full bg-[radial-gradient(closest-side,color-mix(in_oklch,var(--primary)_14%,transparent),transparent)] blur-2xl dark:bg-[radial-gradient(closest-side,color-mix(in_oklch,var(--signal)_18%,transparent),transparent)]" />
+          <div className="absolute inset-[6%] rounded-full blur-2xl globe-halo" />
           <React.Suspense fallback={<div className="aspect-square w-full" />}>
             <EdgeGlobe markers={markers} />
           </React.Suspense>

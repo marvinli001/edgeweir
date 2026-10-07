@@ -181,11 +181,7 @@ function TaskRow({
       <Collapsible
         open={open}
         onOpenChange={onOpenChange}
-        className={cn(
-          "relative",
-          active &&
-            "m-1 rounded-xl shadow-[inset_0_0_0_1px_color-mix(in_oklch,var(--signal)_40%,transparent)]",
-        )}
+        className={cn("relative", active && "m-1 rounded-xl signal-hairline")}
       >
         {active ? (
           <BorderBeam
