@@ -23,8 +23,8 @@ function toneOf(node: Node, latest: number): StatusTone {
  * The cluster and its nodes, joined by the configuration channel: every online node hangs on a
  * still line that a signal pulse runs along once when the strip appears and again whenever the
  * node applies a new revision (the page polls, so nothing loops); an offline or disabled one
- * hangs on a dashed idle line. Each node shows its applied revision (with a word while it lags)
- * and its egress.
+ * hangs on a dashed idle line. Each node shows its applied revision, a word for every state but
+ * in sync (at every width; the light never says it alone) and its egress.
  */
 export function ClusterLinks({ cluster }: { cluster: Cluster }) {
   const nodes = useQuery({
@@ -73,8 +73,19 @@ export function ClusterLinks({ cluster }: { cluster: Cluster }) {
       <ul className="relative z-[1] flex w-full flex-col gap-2">
         {list.map((node, index) => {
           const tone = toneOf(node, latest);
-          const target = node.targetRevision ?? latest;
-          const lagging = node.appliedRevision > 0 && node.appliedRevision < target;
+          // Every light but green carries its word (offline and disabled in place of the egress).
+          const state =
+            !node.online || node.status === "disabled"
+              ? null
+              : node.applyState === "failed"
+                ? m.nodes_apply_failed()
+                : node.appliedRevision === 0
+                  ? m.nodes_pending()
+                  : !node.dataPlaneHealthy
+                    ? m.nodes_unhealthy()
+                    : node.appliedRevision < (node.targetRevision ?? latest)
+                      ? m.nodes_behind()
+                      : null;
           return (
             <li
               key={node.id}
@@ -90,15 +101,13 @@ export function ClusterLinks({ cluster }: { cluster: Cluster }) {
                 )}
               />
               <Dot tone={tone} glow={node.online && tone === "good"} small />
-              <span className="min-w-0 flex-1 truncate font-medium">{node.name}</span>
+              <span className="min-w-10 flex-1 truncate font-medium">{node.name}</span>
               {node.appliedRevision > 0 ? (
-                <span className="hidden shrink-0 items-center gap-1 font-mono text-[11px] text-muted-foreground @min-[22rem]:inline-flex">
+                <span className="hidden shrink-0 font-mono text-[11px] text-muted-foreground @min-[22rem]:inline">
                   #{node.appliedRevision}
-                  {lagging ? (
-                    <span className="font-sans text-foreground">{m.nodes_behind()}</span>
-                  ) : null}
                 </span>
               ) : null}
+              {state ? <span className="min-w-0 truncate text-foreground">{state}</span> : null}
               <span className="shrink-0 text-right tabular-nums text-muted-foreground @min-[22rem]:w-[4.75rem]">
                 {node.online && node.metrics
                   ? formatBitRate(node.metrics.egressBps / 8)
