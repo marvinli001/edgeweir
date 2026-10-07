@@ -109,7 +109,7 @@ function ClustersPage() {
         <QueryView
           query={clusters}
           empty={
-            <EmptyState icon={ServerStack01Icon} title={m.clusters_empty_title()}>
+            <EmptyState icon={ServerStack01Icon} art="node" title={m.clusters_empty_title()}>
               <Button onClick={() => setCreateOpen(true)}>
                 <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
                 {m.clusters_create()}
@@ -214,9 +214,9 @@ function ClusterView({
               {m.l4_pools_title()}
             </TabsTrigger>
           </TabsList>
-          <TabsContent value="overview" className="flex flex-col gap-4 animate-enter">
-            <NodeGroupsSection cluster={selected} />
+          <TabsContent value="overview" className="flex flex-col gap-6 animate-enter">
             {nodes}
+            <NodeGroupsSection cluster={selected} />
             <ClusterRolloutCard key={`rollout-${selected.id}`} clusterId={selected.id} />
             <NodeUpgrades key={selected.id} clusterId={selected.id} />
             <RevisionsSection cluster={selected} />
