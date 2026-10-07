@@ -162,6 +162,19 @@ function FlowEdge({
 const nodeTypes = { box: BoxNode };
 const edgeTypes = { flow: FlowEdge };
 
+/** The sides of a scroller that hide more content fade out (scroll-fade), so a phone shows it scrolls. */
+function markFade(element: HTMLElement) {
+  const start = element.scrollLeft > 1;
+  const end = element.scrollLeft + element.clientWidth < element.scrollWidth - 1;
+  if (start || end) element.dataset.fade = start && end ? "both" : start ? "start" : "end";
+  else delete element.dataset.fade;
+}
+
+/** fitView's padding on each side, as a share of the graph's size. */
+const FIT_PADDING = 0.06;
+/** The smallest scale the graph is drawn at; narrower cards scroll sideways instead. */
+const MIN_SCALE = 0.72;
+
 function layout(nodes: TopologyNode[], edges: TopologyEdge[]) {
   const graph = new dagre.graphlib.Graph();
   graph.setGraph({ rankdir: "LR", nodesep: 18, ranksep: 72, marginx: 8, marginy: 8 });
@@ -191,7 +204,12 @@ function layout(nodes: TopologyNode[], edges: TopologyEdge[]) {
     data: { label: edge.label, kind: edge.kind },
     selectable: false,
   }));
-  return { placed, links, height: graph.graph().height ?? 240 };
+  return {
+    placed,
+    links,
+    width: graph.graph().width ?? 960,
+    height: graph.graph().height ?? 240,
+  };
 }
 
 export default function OriginTopology({
@@ -207,38 +225,74 @@ export default function OriginTopology({
   const wrap = React.useRef<HTMLDivElement>(null);
   const live = useLive(wrap);
   const theme = useThemeKey();
-  const { placed, links, height } = React.useMemo(() => layout(nodes, edges), [nodes, edges]);
+  const { placed, links, width, height } = React.useMemo(
+    () => layout(nodes, edges),
+    [nodes, edges],
+  );
+  // Narrow cards would shrink the graph past legibility (React Flow's fitView stops at its
+  // minZoom and crops the sides instead): below MIN_SCALE the graph keeps that scale and the
+  // card scrolls sideways; the frame's height follows the scale the graph gets.
+  const [boxWidth, setBoxWidth] = React.useState(0);
+  React.useEffect(() => {
+    const element = wrap.current;
+    if (!element) return;
+    const mark = () => markFade(element);
+    const observer = new ResizeObserver(([entry]) => {
+      setBoxWidth(Math.round((entry?.contentRect.width ?? 0) / 8) * 8);
+      mark();
+    });
+    observer.observe(element);
+    element.addEventListener("scroll", mark, { passive: true });
+    return () => {
+      observer.disconnect();
+      element.removeEventListener("scroll", mark);
+    };
+  }, []);
+  const span = width * (1 + 2 * FIT_PADDING);
+  const innerWidth = boxWidth > 0 ? Math.max(boxWidth, Math.round(span * MIN_SCALE)) : 0;
+  const scale = innerWidth > 0 ? Math.min(1, innerWidth / span) : 1;
+  const frameHeight = Math.min(
+    420,
+    Math.max(scale < 1 ? 140 : 220, Math.round((height + 24) * scale)),
+  );
+  // The inner frame's width changes after the box is measured; mark the fade again then.
+  React.useEffect(() => {
+    if (innerWidth > 0 && wrap.current) markFade(wrap.current);
+  }, [innerWidth]);
   return (
     <LiveContext.Provider value={live}>
       <div
         ref={wrap}
         role="img"
         aria-label={label}
-        className="topology w-full"
-        style={{ height: Math.min(420, Math.max(220, height + 24)) }}
+        className="topology w-full overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-fade [scrollbar-width:none]"
       >
-        <ReactFlow
-          nodes={placed}
-          edges={links}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          colorMode={theme === "dark" ? "dark" : "light"}
-          fitView
-          fitViewOptions={{ padding: 0.06, maxZoom: 1 }}
-          nodesDraggable={false}
-          nodesConnectable={false}
-          nodesFocusable={false}
-          edgesFocusable={false}
-          elementsSelectable={false}
-          disableKeyboardA11y
-          aria-hidden
-          panOnDrag={false}
-          zoomOnScroll={false}
-          zoomOnPinch={false}
-          zoomOnDoubleClick={false}
-          preventScrolling={false}
-          proOptions={{ hideAttribution: true }}
-        />
+        <div style={{ width: innerWidth || "100%", height: frameHeight }}>
+          <ReactFlow
+            key={innerWidth}
+            nodes={placed}
+            edges={links}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            colorMode={theme === "dark" ? "dark" : "light"}
+            fitView
+            minZoom={MIN_SCALE * 0.9}
+            fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1, minZoom: MIN_SCALE * 0.9 }}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            nodesFocusable={false}
+            edgesFocusable={false}
+            elementsSelectable={false}
+            disableKeyboardA11y
+            aria-hidden
+            panOnDrag={false}
+            zoomOnScroll={false}
+            zoomOnPinch={false}
+            zoomOnDoubleClick={false}
+            preventScrolling={false}
+            proOptions={{ hideAttribution: true }}
+          />
+        </div>
       </div>
     </LiveContext.Provider>
   );
