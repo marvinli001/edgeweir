@@ -1,4 +1,5 @@
 import type { OriginHealth, OriginHealthSource } from "@edgeweir/contract";
+import { Dot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { m, timeAgo } from "@/lib/i18n";
@@ -23,7 +24,7 @@ export function OriginHealthBadge({ health }: { health: OriginHealth | undefined
   if (health.downNodes === 0) {
     return (
       <Badge variant="outline" data-testid="origin-health" data-state="healthy">
-        <span className="size-1.5 rounded-full bg-chart-2" />
+        <Dot tone="good" small />
         {m.site_origin_health_ok()}
       </Badge>
     );

@@ -8,6 +8,7 @@ import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
 import { BorderBeam } from "@/components/appica/effects";
+import { Dot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -114,7 +115,7 @@ function StateBadge({ state, testId }: { state: CacheTaskNodeState; testId: stri
     case "succeeded":
       return (
         <Badge variant="outline" data-testid={testId}>
-          <span className="size-1.5 rounded-full bg-chart-2" />
+          <Dot tone="good" small />
           {m.purge_state_succeeded()}
         </Badge>
       );
