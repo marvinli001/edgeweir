@@ -1,4 +1,3 @@
-import type { CertificateDto } from "@edgeweir/contract";
 import { Add01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -23,6 +22,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { certificateErrorText } from "@/lib/certificate-errors";
+import {
+  type CertificateState,
+  certificateDaysLeft,
+  certificateExpired,
+  certificateState,
+} from "@/lib/certificate-status";
 import { formatDateTime, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
@@ -80,9 +85,6 @@ function CertificatesPage() {
             data-testid="certificate-list"
           >
             {list.map((cert, index) => {
-              const days = cert.notAfter
-                ? Math.max(0, Math.ceil((Date.parse(cert.notAfter) - Date.now()) / 86_400_000))
-                : null;
               return (
                 <li
                   key={cert.id}
@@ -93,7 +95,7 @@ function CertificatesPage() {
                   <div className="flex min-w-0 flex-col gap-1.5">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
                       <span className="truncate font-medium">{cert.name}</span>
-                      <CertificateStatus status={cert.status} />
+                      <CertificateStatus state={certificateState(cert)} />
                     </div>
                     <p className="font-mono text-xs leading-5 break-all text-muted-foreground">
                       {cert.names.join(", ")}
@@ -105,9 +107,14 @@ function CertificatesPage() {
                     ) : null}
                   </div>
                   <div className="flex min-w-0 flex-col gap-1 text-sm">
-                    {cert.notAfter && days !== null ? (
+                    {cert.notAfter ? (
                       <span className="text-muted-foreground">
-                        {m.cert_expires({ date: formatDateTime(cert.notAfter), days })}
+                        {certificateExpired(cert.notAfter)
+                          ? m.cert_expired_at({ date: formatDateTime(cert.notAfter) })
+                          : m.cert_expires({
+                              date: formatDateTime(cert.notAfter),
+                              days: certificateDaysLeft(cert.notAfter),
+                            })}
                       </span>
                     ) : null}
                     <span className="text-muted-foreground">
@@ -226,18 +233,25 @@ function CertificatesPage() {
  * A certificate's state as a tinted chip with its light: ready (good), waiting (idle), issuing
  * (the signal, live), failed (the destructive tint).
  */
-function CertificateStatus({ status }: { status: CertificateDto["status"] }) {
-  if (status === "error") return <Badge variant="destructive">{m.cert_status_error()}</Badge>;
+function CertificateStatus({ state }: { state: CertificateState }) {
+  if (state === "error" || state === "expired") {
+    return (
+      <Badge variant="destructive" data-testid="certificate-status">
+        <Dot tone="bad" small />
+        {state === "expired" ? m.cert_status_expired() : m.cert_status_error()}
+      </Badge>
+    );
+  }
   return (
-    <Badge variant="secondary">
-      {status === "issuing" ? (
+    <Badge variant="secondary" data-testid="certificate-status">
+      {state === "issuing" ? (
         <span className="lit-glow dot-pulse relative inline-flex size-1.5 shrink-0 rounded-full border border-transparent bg-signal" />
       ) : (
-        <Dot tone={status === "ready" ? "good" : "idle"} small />
+        <Dot tone={state === "ready" ? "good" : "idle"} small />
       )}
-      {status === "ready"
+      {state === "ready"
         ? m.cert_status_ready()
-        : status === "issuing"
+        : state === "issuing"
           ? m.cert_status_issuing()
           : m.cert_status_pending()}
     </Badge>

@@ -11,16 +11,19 @@ import { Sparkline } from "@/components/appica/sparkline";
 import { type Columns, DataTable } from "@/components/data-table";
 import { EmptyState, QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
-import { groupBuckets, SERIES_COLORS } from "@/lib/analytics";
+import { SERIES_COLORS } from "@/lib/analytics";
 import { formatBytes, formatCompact, formatNumber, m } from "@/lib/i18n";
 import { L4_STATS_RANGE_SECONDS, L4_STATS_RANGES, type L4StatsRange } from "@/lib/l4";
 import { orpc } from "@/lib/orpc";
+import { groupBuckets, wholeGroups } from "@/lib/time-buckets";
 import { cn } from "@/lib/utils";
 
 const REFRESH_MS = 60_000;
 /** Most points a chart draws; minute buckets of longer ranges are summed into wider ones. */
 const MAX_POINTS = 120;
 const CHARTED = ["connections", "refused", "bytesReceived", "bytesSent"] as const;
+/** Nodes report their finished minutes once a minute, so the last one may not have arrived yet. */
+const REPORT_LAG_MS = 60_000;
 
 /** A counter's points for a tile's trend line: at most `max`, a group's highest value each. */
 function trend(points: L4Stats["points"], key: Counter, max = 60): number[] {
@@ -130,11 +133,14 @@ function StatsBody({
     { key: "bytesReceived", label: m.l4_stats_received(), color: SERIES_COLORS[1] },
     { key: "bytesSent", label: m.l4_stats_sent(), color: SERIES_COLORS[2] },
   ];
-  const rows: ChartRow[] = groupBuckets(
-    stats.points.map((point) => point.time),
-    CHARTED.map((key) => stats.points.map((point) => point[key])),
-    stats.bucketSeconds,
-    MAX_POINTS,
+  const rows: ChartRow[] = wholeGroups(
+    groupBuckets(
+      stats.points.map((point) => point.time),
+      CHARTED.map((key) => stats.points.map((point) => point[key])),
+      stats.bucketSeconds,
+      MAX_POINTS,
+      Date.parse(stats.to) - REPORT_LAG_MS,
+    ),
   ).map((group) => ({
     time: group.time,
     ...Object.fromEntries(CHARTED.map((key, index) => [key, group.values[index] ?? 0])),

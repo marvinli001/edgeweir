@@ -177,7 +177,7 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
         <CardTitle className="flex-1">{m.security_2fa()}</CardTitle>
         <StatusDot tone={enabled ? "good" : "idle"} data-testid="two-factor-status">
           <span className={enabled ? "font-medium" : "text-muted-foreground"}>
-            {enabled ? m.members_2fa_on() : m.members_2fa_off()}
+            {enabled ? m.security_2fa_on() : m.security_2fa_off()}
           </span>
         </StatusDot>
       </CardHeader>

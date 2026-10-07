@@ -19,7 +19,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
-import { L4_STATS_RANGES, type L4StatsRange, originLabel, proxyVersionLabel } from "@/lib/l4";
+import {
+  L4_STATS_RANGES,
+  type L4StatsRange,
+  listChips,
+  originLabel,
+  proxyVersionLabel,
+} from "@/lib/l4";
 import { orpc } from "@/lib/orpc";
 
 const DEFAULT_RANGE: L4StatsRange = "24h";
@@ -154,8 +160,6 @@ function Overview({ app }: { app: L4App }) {
   const lists = useQuery(orpc.ipLists.list.queryOptions());
   const [editOpen, setEditOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
-  const listNames = (ids: string[]) =>
-    ids.map((listId) => lists.data?.find((l) => l.id === listId)?.name ?? listId.slice(0, 8));
   const proxy: string[] = [];
   if (app.acceptProxyProtocol) proxy.push(m.l4_proxy_accepts());
   if (app.proxyProtocolVersion > 0)
@@ -267,8 +271,14 @@ function Overview({ app }: { app: L4App }) {
               })}
             </InfoRow>
             <InfoRow label={m.ip_lists_title()} testId="l4-app-lists">
-              <ListNames label={m.l4_allow_lists()} names={listNames(app.allowListIds)} />
-              <ListNames label={m.l4_block_lists()} names={listNames(app.blockListIds)} />
+              <ListNames
+                label={m.l4_allow_lists()}
+                chips={listChips(app.allowListIds, lists.data)}
+              />
+              <ListNames
+                label={m.l4_block_lists()}
+                chips={listChips(app.blockListIds, lists.data)}
+              />
             </InfoRow>
             <InfoRow label={m.l4_limits()}>
               {m.l4_limits_value({
@@ -298,16 +308,16 @@ function Overview({ app }: { app: L4App }) {
   );
 }
 
-function ListNames({ label, names }: { label: string; names: string[] }) {
+function ListNames({ label, chips }: { label: string; chips: { id: string; name: string }[] }) {
   return (
     <span className="flex min-w-0 flex-wrap items-center gap-1.5">
       <span className="text-muted-foreground">{label}</span>
-      {names.length === 0 ? (
+      {chips.length === 0 ? (
         <span>{m.l4_lists_none()}</span>
       ) : (
-        names.map((name) => (
-          <Badge key={name} variant="outline" className="font-mono">
-            {name}
+        chips.map((chip) => (
+          <Badge key={chip.id} variant="outline" className="font-mono">
+            {chip.name}
           </Badge>
         ))
       )}
