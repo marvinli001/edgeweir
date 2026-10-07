@@ -147,9 +147,9 @@ function IpListCard({
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col">
-        <ul className="grid flex-1 grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] content-start gap-x-3 gap-y-1 rounded-xl px-3 py-2.5 font-mono text-xs sunk-well">
+        <ul className="flex flex-1 flex-wrap content-start gap-x-5 gap-y-1 rounded-xl px-3 py-2.5 font-mono text-xs sunk-well">
           {shown.map((entry) => (
-            <li key={entry} className="truncate" title={entry}>
+            <li key={entry} className="max-w-full truncate" title={entry}>
               {entry}
             </li>
           ))}

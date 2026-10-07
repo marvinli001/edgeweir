@@ -210,7 +210,8 @@ export function BansPage({
     <Page title={m.bans_title()} actions={createButton}>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
         <AccessTabs value="bans" />
-        <FilterBar className="w-full @3xl/main:ml-auto @3xl/main:w-auto @3xl/main:justify-end">
+        {/* Narrow: scope and source share a row, the site picker and an address get their own. */}
+        <FilterBar className="grid w-full grid-flow-dense grid-cols-2 sm:flex @3xl/main:ml-auto @3xl/main:w-auto @3xl/main:justify-end">
           <FilterSelect
             value={scope}
             onChange={filter((value) => setScope(value as BanScope | undefined))}
@@ -229,6 +230,7 @@ export function BansPage({
             options={(sites.data?.items ?? []).map((s) => ({ value: s.id, label: s.name }))}
             label={m.bans_filter_site()}
             testId="ban-filter-site"
+            className="col-span-2 w-full sm:w-48"
           />
           <FilterSelect
             value={source}
@@ -244,7 +246,7 @@ export function BansPage({
           {address ? (
             <Badge
               variant="secondary"
-              className="h-8 gap-1 pr-1 pl-3 font-mono"
+              className="col-span-2 h-8 gap-1 pr-1 pl-3 font-mono"
               data-testid="ban-filter-address"
             >
               {address}
