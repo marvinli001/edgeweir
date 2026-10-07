@@ -370,8 +370,11 @@ function NodeCache({ node }: { node: Node }) {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-sm font-medium">{m.node_cache_title()}</h3>
         {usage ? (
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {m.node_cache_measured({ time: formatDateTime(usage.measuredAt) })}
+          <span
+            className="text-xs text-muted-foreground tabular-nums"
+            title={formatDateTime(usage.measuredAt)}
+          >
+            {m.node_cache_measured({ time: timeAgo(usage.measuredAt) })}
           </span>
         ) : null}
       </div>
