@@ -211,7 +211,7 @@ export function BansPage({
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
         <AccessTabs value="bans" />
         {/* Narrow: scope and source share a row, the site picker and an address get their own. */}
-        <FilterBar className="grid w-full grid-flow-dense grid-cols-2 sm:flex @3xl/main:ml-auto @3xl/main:w-auto @3xl/main:justify-end">
+        <FilterBar className="grid w-full grid-flow-dense grid-cols-2 sm:flex @3xl/main:w-auto">
           <FilterSelect
             value={scope}
             onChange={filter((value) => setScope(value as BanScope | undefined))}

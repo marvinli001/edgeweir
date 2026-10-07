@@ -5,7 +5,7 @@ import { keepPreviousData, useQueries, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
-import { type Columns, DataTable } from "@/components/data-table";
+import { type Columns, DataTable, FilterBar } from "@/components/data-table";
 import { FilterSelect } from "@/components/form-select";
 import { L4AppActions, L4EnabledSwitch } from "@/components/l4/app-actions";
 import { L4AppDialog } from "@/components/l4/app-dialog";
@@ -166,7 +166,8 @@ function L4AppsPage() {
 
   return (
     <Page title={m.l4_title()} actions={create}>
-      <div className="flex flex-wrap items-center gap-2">
+      {/* The cluster filter follows the switch, at the start of the row as on the sites list. */}
+      <FilterBar>
         <SitesTabs value="l4" />
         {clusters.data && clusters.data.length > 1 ? (
           <FilterSelect
@@ -178,10 +179,10 @@ function L4AppsPage() {
             options={clusters.data.map((c) => ({ label: c.name, value: c.id }))}
             label={m.sites_col_cluster()}
             testId="l4-cluster-filter"
-            className="w-44 sm:ml-auto"
+            className="w-full sm:w-44"
           />
         ) : null}
-      </div>
+      </FilterBar>
       {pools.map((query, index) =>
         query.data ? (
           <L4NodesWarning
