@@ -21,12 +21,17 @@ describe("site-content-v1 inputs", () => {
     expect(
       cacheKeyPolicy.parse({ query: "exclude", queryParams: ["utm_*", "fbclid"] }).queryParams,
     ).toEqual(["utm_*", "fbclid"]);
+    // Elsewhere "*" is an ordinary character, as stored before the exclude mode existed.
     for (const [query, name] of [
-      ["include", "utm_*"],
+      ["include", "v*"],
+      ["include", "a*b"],
+      ["all", "x*"],
+    ] as const)
+      expect(cacheKeyPolicy.parse({ query, queryParams: [name] }).queryParams).toEqual([name]);
+    for (const [query, name] of [
       ["exclude", "*"],
       ["exclude", "a*b"],
       ["exclude", "**"],
-      ["all", "x*"],
     ] as const)
       expect(
         cacheKeyPolicy.safeParse({ query, queryParams: [name] }).success,
@@ -149,11 +154,19 @@ describe("error pages and maintenance", () => {
     const parsed = siteMaintenanceInput.parse({
       id,
       enabled: true,
-      allowedCidrs: ["192.0.2.7/24", "2001:DB8::1/32"],
+      allowedCidrs: ["192.0.2.7/24", "2001:DB8::1/32", "::ffff:203.0.113.5", "::ffff:0:0/96"],
       allowedPathPrefixes: ["/health"],
     });
+    expect(
+      siteMaintenanceInput.parse({
+        id,
+        enabled: true,
+        allowedPathPrefixes: [`/${"中".repeat(341)}`],
+      }).allowedPathPrefixes,
+    ).toHaveLength(1);
     expect(parsed).toMatchObject({
-      allowedCidrs: ["192.0.2.0/24", "2001:db8::/32"],
+      // IPv4-mapped prefixes become IPv4, as nodes look IPv4 clients up.
+      allowedCidrs: ["192.0.2.0/24", "2001:db8::/32", "203.0.113.5/32", "0.0.0.0/0"],
       retryAfterSeconds: 0,
       template: "",
     });
@@ -164,6 +177,8 @@ describe("error pages and maintenance", () => {
       { allowedPathPrefixes: ["/a?b"] },
       { allowedPathPrefixes: ["/a#b"] },
       { allowedPathPrefixes: Array(33).fill("/a") },
+      // 401 characters but 1201 bytes of UTF-8: nodes count bytes.
+      { allowedPathPrefixes: [`/${"中".repeat(400)}`] },
       { retryAfterSeconds: 86_401 },
     ])
       expect(

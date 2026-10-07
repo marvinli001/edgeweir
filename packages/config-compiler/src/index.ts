@@ -1280,7 +1280,8 @@ function compileSite(model: SiteModel, challenges: boolean): Site {
           template: model.maintenance.template,
           retryAfterSeconds: model.maintenance.retryAfterSeconds,
           allowedCidrs: sortedSet(model.maintenance.allowedCidrs),
-          allowedPathPrefixes: sortedSet(model.maintenance.allowedPathPrefixes),
+          // Byte order: nodes sort the prefixes as Go compares strings.
+          allowedPathPrefixes: sortedByteSet(model.maintenance.allowedPathPrefixes),
         })
       : undefined,
     charset: model.charset ? create(CharsetSchema, model.charset) : undefined,
@@ -1398,7 +1399,7 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
     site.errorPages?.pages.sort((a, b) => a.status - b.status);
     if (site.maintenance) {
       site.maintenance.allowedCidrs = sortedSet(site.maintenance.allowedCidrs);
-      site.maintenance.allowedPathPrefixes = sortedSet(site.maintenance.allowedPathPrefixes);
+      site.maintenance.allowedPathPrefixes = sortedByteSet(site.maintenance.allowedPathPrefixes);
     }
     site.bulkRedirects.sort(byBytes((redirect) => redirect.source));
     for (const rule of site.rules) canonicalizeAction(rule.action);

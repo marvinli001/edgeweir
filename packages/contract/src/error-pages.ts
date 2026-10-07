@@ -1,6 +1,7 @@
 import { RULES_V3_PLACEHOLDERS, usesRulesV3Placeholders } from "@edgeweir/rule-engine";
 import { oc } from "@orpc/contract";
 import * as z from "zod";
+import { banLookupCidr } from "./bans";
 import { cidr, expectedUpdatedAt, isoDateTime, pathPrefix, uuid } from "./schemas";
 
 /**
@@ -47,16 +48,30 @@ export const errorPageStatus = z.union([
 ]);
 
 /**
+ * An absolute redirect URL as nodes and the console both take it: http(s),
+ * "//", a host of DNS characters or a bracketed IPv6 literal (no user
+ * information, no escapes), an optional port, then a path, query or
+ * fragment. URL parsers repair other shapes differently (WHATWG reads
+ * "https:example.com" as https://example.com/, Go as an opaque URL).
+ */
+const ABSOLUTE_REDIRECT =
+  /^https?:\/\/(?:[A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::[0-9]{1,5})?(?:[/?#][\x21-\x7e]*)?$/;
+
+/**
  * Whether a redirect URL is valid: an absolute http(s) URL without user
  * information, or a path starting with a single "/", 1-2048 printable ASCII
  * characters without spaces, whose only placeholders are {{status}} and
- * {{request_id}}.
+ * {{request_id}}, and whose "%" each start an escape of two hex digits.
+ * edgeweir-node (internal/configir validErrorRedirect) applies the same
+ * rule; shared vectors: packages/contract/test/fixtures/error_redirect_vectors.json.
  */
 export function validErrorRedirect(url: string): boolean {
   if (url.length > ERROR_PAGE_REDIRECT_MAX || !/^[\x21-\x7e]+$/.test(url)) return false;
   const bare = url.replaceAll("{{status}}", "0").replaceAll("{{request_id}}", "0");
   if (bare.includes("{{") || bare.includes("}}") || bare.includes("\\")) return false;
+  if (/%(?![0-9A-Fa-f]{2})/.test(bare)) return false;
   if (bare.startsWith("/")) return !bare.startsWith("//");
+  if (!ABSOLUTE_REDIRECT.test(bare)) return false;
   try {
     const parsed = new URL(bare);
     return (
@@ -184,13 +199,20 @@ export const siteMaintenanceInput = z.object({
   /** 0-65536 bytes (UTF-8), with the error page placeholders; larger fails with ERROR_PAGE_TOO_LARGE. */
   template: z.string().default(""),
   retryAfterSeconds: z.number().int().min(0).max(86_400).default(0),
-  allowedCidrs: z.array(cidr).max(MAINTENANCE_MAX_CIDRS).default([]),
+  /** An IPv4-mapped IPv6 prefix becomes IPv4: nodes look IPv4 clients up as IPv4. */
+  allowedCidrs: z
+    .array(cidr.transform((value) => banLookupCidr(value) ?? value))
+    .max(MAINTENANCE_MAX_CIDRS)
+    .default([]),
   allowedPathPrefixes: z
     .array(
-      pathPrefix.refine(
-        (value) => !/[?#]/.test(value) && [...value].every((c) => c >= " " && c !== "\x7f"),
-        "no query, fragment or control characters",
-      ),
+      pathPrefix
+        .refine(
+          (value) => !/[?#]/.test(value) && [...value].every((c) => c >= " " && c !== "\x7f"),
+          "no query, fragment or control characters",
+        )
+        // Nodes count bytes of UTF-8, not characters.
+        .refine((value) => utf8Bytes(value) <= 1024, "at most 1024 bytes"),
     )
     .max(MAINTENANCE_MAX_PREFIXES)
     .default([]),

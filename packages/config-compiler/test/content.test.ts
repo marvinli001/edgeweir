@@ -99,7 +99,8 @@ const v0240Models = (): CompileInput => {
     template: "<h1>{{status}}</h1><p>{{request_id}} 维护中</p>",
     retryAfterSeconds: 600,
     allowedCidrs: ["2001:db8::/32", "192.0.2.0/24", "2001:db8::/32"],
-    allowedPathPrefixes: ["/status", "/health", "/status"],
+    // "/😀" before "/！" in UTF-16, after it in UTF-8 byte order (as nodes sort).
+    allowedPathPrefixes: ["/status", "/health", "/status", "/😀", "/！"],
   };
   site.charset = { name: "gbk", force: true, uppercase: true };
   site.requestBodyLimit = 0;
@@ -358,7 +359,7 @@ describe("site-content-v1 and cache-zone-v1 (proto v0.24.0)", () => {
     const site = config.sites.find((s) => s.id === "s1");
     if (!site) throw new Error("site s1 missing");
     expect(site.maintenance?.allowedCidrs).toEqual(["192.0.2.0/24", "2001:db8::/32"]);
-    expect(site.maintenance?.allowedPathPrefixes).toEqual(["/health", "/status"]);
+    expect(site.maintenance?.allowedPathPrefixes).toEqual(["/health", "/status", "/！", "/😀"]);
     expect(site.requestBodyLimit).toBe(0n);
     expect(site.originPool?.tries).toBe(5);
     expect(site.originPool?.statusRetryDisabled).toBe(true);

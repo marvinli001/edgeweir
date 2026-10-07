@@ -27,7 +27,8 @@ type SiteRow = typeof schema.site.$inferSelect;
 type PageRow = typeof schema.siteErrorPage.$inferSelect;
 
 /** Refuses a template over 64 KiB of UTF-8 with the page's status. */
-export function assertTemplateSize(status: number, template: string) {
+/** status: the page's status as the operator names it (403, "4xx"). */
+export function assertTemplateSize(status: number | string, template: string) {
   if (utf8Bytes(template) > ERROR_PAGE_MAX_BYTES)
     fail(
       "ERROR_PAGE_TOO_LARGE",
@@ -110,7 +111,7 @@ export async function updateSiteErrorPages(
   input: SiteErrorPagesInput,
   ctx: { actor: Actor },
 ): Promise<SiteErrorPages> {
-  for (const page of input.pages) assertTemplateSize(storedStatus(page.status), page.template);
+  for (const page of input.pages) assertTemplateSize(page.status, page.template);
   return db.transaction(async (tx) => {
     const site = await findSite(tx, input.id, true);
     if (input.expectedUpdatedAt !== undefined) {

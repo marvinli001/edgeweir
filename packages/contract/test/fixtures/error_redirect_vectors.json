@@ -1,0 +1,185 @@
+{
+  "description": "Redirect URLs of error pages: valid is what edgeweir-node accepts (internal/configir validErrorRedirect) and the console checks before saving (@edgeweir/contract validErrorRedirect). Identical copies: edgeweir packages/contract/test/fixtures/error_redirect_vectors.json and edgeweir-node internal/configir/testdata/error_redirect_vectors.json.",
+  "cases": [
+    {
+      "value": "/error?code={{status}}",
+      "valid": true,
+      "note": "local path with a placeholder"
+    },
+    {
+      "value": "/e/{{status}}/{{request_id}}",
+      "valid": true,
+      "note": "both placeholders in the path"
+    },
+    {
+      "value": "/sale-100%25",
+      "valid": true,
+      "note": "a valid escape"
+    },
+    {
+      "value": "https://status.example.com/?s={{status}}&id={{request_id}}",
+      "valid": true,
+      "note": "absolute URL with placeholders in the query"
+    },
+    {
+      "value": "http://example.com",
+      "valid": true,
+      "note": "no path"
+    },
+    {
+      "value": "https://example.com:8443/x#frag",
+      "valid": true,
+      "note": "port and fragment"
+    },
+    {
+      "value": "http://[2001:db8::1]/x",
+      "valid": true,
+      "note": "IPv6 literal"
+    },
+    {
+      "value": "http://[::ffff:192.0.2.1]/",
+      "valid": true,
+      "note": "IPv4-mapped IPv6 literal"
+    },
+    {
+      "value": "https://example.com/a%20b",
+      "valid": true,
+      "note": "escape in the path"
+    },
+    {
+      "value": "https://example.com:0/",
+      "valid": true,
+      "note": "port 0"
+    },
+    {
+      "value": "https://example.com:65535/",
+      "valid": true,
+      "note": "highest port"
+    },
+    {
+      "value": "",
+      "valid": false,
+      "note": "empty"
+    },
+    {
+      "value": "//evil.test/",
+      "valid": false,
+      "note": "scheme-relative"
+    },
+    {
+      "value": "https:example.com/notfound",
+      "valid": false,
+      "note": "no slashes (WHATWG repairs it, Go reads an opaque URL)"
+    },
+    {
+      "value": "http:/example.com",
+      "valid": false,
+      "note": "one slash"
+    },
+    {
+      "value": "https://example.com/a%zz",
+      "valid": false,
+      "note": "invalid escape"
+    },
+    {
+      "value": "https://shop.example.com/promo-100%",
+      "valid": false,
+      "note": "lone percent sign at the end"
+    },
+    {
+      "value": "https://e.com/%{{status}}",
+      "valid": false,
+      "note": "percent sign before a placeholder"
+    },
+    {
+      "value": "/a%z",
+      "valid": false,
+      "note": "invalid escape in a path"
+    },
+    {
+      "value": "http://@example.com",
+      "valid": false,
+      "note": "empty user information"
+    },
+    {
+      "value": "http://user:pw@example.com",
+      "valid": false,
+      "note": "user information"
+    },
+    {
+      "value": "http://exa%41mple.com",
+      "valid": false,
+      "note": "escape in the host"
+    },
+    {
+      "value": "http://[1.2.3.4]/",
+      "valid": false,
+      "note": "IPv4 address in brackets"
+    },
+    {
+      "value": "http://[::1:::]/",
+      "valid": false,
+      "note": "invalid IPv6 literal"
+    },
+    {
+      "value": "http://[fe80::1%25eth0]/",
+      "valid": false,
+      "note": "IPv6 zone"
+    },
+    {
+      "value": "https://example.com:65536/",
+      "valid": false,
+      "note": "port above 65535"
+    },
+    {
+      "value": "https://example.com:123456/",
+      "valid": false,
+      "note": "port of six digits"
+    },
+    {
+      "value": "HTTPS://example.com/",
+      "valid": false,
+      "note": "upper-case scheme"
+    },
+    {
+      "value": "ftp://example.com/",
+      "valid": false,
+      "note": "other scheme"
+    },
+    {
+      "value": "javascript:alert(1)",
+      "valid": false,
+      "note": "script URL"
+    },
+    {
+      "value": "https://example.com/{{host}}",
+      "valid": false,
+      "note": "unknown placeholder"
+    },
+    {
+      "value": "https://example.com/a b",
+      "valid": false,
+      "note": "space"
+    },
+    {
+      "value": "/a\\b",
+      "valid": false,
+      "note": "backslash"
+    },
+    {
+      "value": "https://exa_mple.com/",
+      "valid": false,
+      "note": "underscore in the host"
+    },
+    {
+      "value": "https://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "valid": true,
+      "note": "2048 characters"
+    },
+    {
+      "value": "https://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "valid": false,
+      "note": "2049 characters"
+    }
+  ]
+}
