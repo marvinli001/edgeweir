@@ -210,8 +210,11 @@ export function StatusPage({
       className={cn(
         "status-surface",
         surface === "screen" && "min-h-svh bg-background",
-        surface === "shell" && "flex-1",
-        surface === "inline" && "-mx-4 min-h-[min(36rem,70svh)] lg:-mx-6",
+        // In the console the surface fills the inset to its rounded bottom edge (and, inline, the
+        // page's padding too), so no band of the redesigned canvas shows around the pinned one.
+        surface === "shell" && "flex-1 md:rounded-b-2xl",
+        surface === "inline" &&
+          "-mx-4 -my-4 min-h-[min(36rem,70svh)] flex-1 md:rounded-b-2xl lg:-mx-6 lg:-my-6",
       )}
       data-testid="status-page"
       data-kind={kind}

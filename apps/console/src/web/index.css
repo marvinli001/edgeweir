@@ -1093,6 +1093,11 @@
     overflow: hidden;
     padding: 3.5rem 1.25rem;
   }
+  /* The edge nodes' copies set no autospace: Chinese and Latin runs keep their original spacing. */
+  .status-surface,
+  .status-surface * {
+    text-autospace: no-autospace;
+  }
   .dark .status-surface {
     --background: oklch(0.145 0 0);
     --foreground: oklch(0.985 0 0);
