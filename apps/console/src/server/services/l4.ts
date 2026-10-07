@@ -19,10 +19,12 @@ import {
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { and, asc, count, eq, gte, inArray, lt, ne, sql } from "drizzle-orm";
+import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { lockClusterL4 } from "../lib/locks";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
+import { assertLoadable } from "./certificates";
 import { cnameTargets } from "./dns";
 import { loadPortPools, poolCovers, poolsCoverRange } from "./l4-config";
 import { assertOriginsAllowed } from "./origin-allow-list";
@@ -290,11 +292,18 @@ interface AppState {
  * (L4_PROXY_PROTOCOL_UNSUPPORTED), the port neither a listener port
  * (L4_PORT_RESERVED) nor outside the pools of its protocol
  * (L4_PORT_OUTSIDE_POOL) nor used by another application of the protocol
- * (L4_PORT_IN_USE), and every IP list present (IP_LIST_NOT_FOUND; the lists
- * are share-locked so they cannot be deleted before the change commits).
- * Runs under the cluster's L4 lock.
+ * (L4_PORT_IN_USE), a certificate issued, unexpired and loadable by nodes
+ * (L4_CERTIFICATE_UNAVAILABLE, assertLoadable), and every IP list present
+ * (IP_LIST_NOT_FOUND; the lists are share-locked so they cannot be deleted
+ * before the change commits). Runs under the cluster's L4 lock.
  */
-async function validateApp(tx: Tx, clusterId: string, app: AppState, exceptId?: string) {
+async function validateApp(
+  ctx: AppContext,
+  tx: Tx,
+  clusterId: string,
+  app: AppState,
+  exceptId?: string,
+) {
   if (app.protocol === "udp" && (app.acceptProxyProtocol || app.proxyProtocolVersion !== 0))
     fail("L4_PROXY_PROTOCOL_UNSUPPORTED", "PROXY protocol is for TCP applications only");
   if (app.protocol === "udp" && app.certificateId)
@@ -344,13 +353,24 @@ async function validateApp(tx: Tx, clusterId: string, app: AppState, exceptId?: 
     });
   if (app.certificateId) {
     const [certificate] = await tx
-      .select({ notAfter: schema.certificate.notAfter })
+      .select({
+        id: schema.certificate.id,
+        notAfter: schema.certificate.notAfter,
+        chainPem: schema.certificate.chainPem,
+        privateKeyEnvelope: schema.certificate.privateKeyEnvelope,
+      })
       .from(schema.certificate)
       .where(eq(schema.certificate.id, app.certificateId))
       .for("share");
     if (!certificate) fail("CERTIFICATE_NOT_FOUND", "certificate not found");
-    if (!certificate.notAfter || certificate.notAfter.getTime() <= Date.now())
+    if (
+      !certificate.chainPem ||
+      !certificate.notAfter ||
+      certificate.notAfter.getTime() <= Date.now()
+    )
       fail("L4_CERTIFICATE_UNAVAILABLE", "the certificate is not issued yet or has expired");
+    // Also when the application has it already: no revision nodes cannot apply.
+    assertLoadable(ctx, certificate);
   }
   const listIds = [...new Set([...app.allowListIds, ...app.blockListIds])];
   if (listIds.length) {
@@ -422,11 +442,11 @@ const originLabels = (origins: readonly { address: string; port?: number }[]) =>
  * (ORIGIN_ADDRESS_FORBIDDEN); see validateApp for the rest.
  */
 export async function createL4App(
-  db: Database,
+  ctx: AppContext,
   input: L4AppCreateInput,
   actor: Actor,
 ): Promise<L4AppMutationResult> {
-  return db.transaction(async (tx) => {
+  return ctx.db.transaction(async (tx) => {
     const cluster = await findCluster(tx, input.clusterId);
     await lockClusterL4(tx, cluster.id);
     const [apps] = await tx
@@ -439,7 +459,7 @@ export async function createL4App(
       });
     const idleTimeoutSeconds =
       input.idleTimeoutSeconds ?? L4_APP_DEFAULTS.idleTimeoutSeconds[input.protocol];
-    await validateApp(tx, cluster.id, input);
+    await validateApp(ctx, tx, cluster.id, input);
     await assertOriginsAllowed(tx, input.origins);
     const [row] = await tx
       .insert(schema.l4App)
@@ -524,11 +544,11 @@ const nextUpdatedAt = (row: AppRow) => new Date(Math.max(Date.now(), row.updated
  * like createL4App, publishes the cluster and audits the changed fields.
  */
 export async function updateL4App(
-  db: Database,
+  ctx: AppContext,
   input: L4AppUpdateInput,
   actor: Actor,
 ): Promise<L4AppMutationResult> {
-  return db.transaction(async (tx) => {
+  return ctx.db.transaction(async (tx) => {
     const found = await findApp(tx, input.id);
     await lockClusterL4(tx, found.clusterId);
     const row = await findApp(tx, input.id, true);
@@ -545,7 +565,7 @@ export async function updateL4App(
     }
     const next = { ...row, ...values };
     const protocol = next.protocol === "udp" ? "udp" : "tcp";
-    await validateApp(tx, row.clusterId, { ...next, protocol }, row.id);
+    await validateApp(ctx, tx, row.clusterId, { ...next, protocol }, row.id);
     const changed = Object.keys(to);
     const mode = next.originPortMode === "same" ? "same" : "fixed";
     // Changing the origin port mode alone rewrites the stored ports.

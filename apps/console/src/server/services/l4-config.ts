@@ -1,4 +1,5 @@
 import type { L4AppModel } from "@edgeweir/config-compiler";
+import { certificateUnloadable } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { L4Protocol, type NodeConfig } from "@edgeweir/proto";
 import { and, asc, eq, inArray } from "drizzle-orm";
@@ -122,7 +123,12 @@ export async function restoreL4Apps(
   const certificateIds = [...new Set(apps.map((app) => app.certificateId).filter(Boolean))];
   const certificates = certificateIds.length
     ? await tx
-        .select({ id: schema.certificate.id, notAfter: schema.certificate.notAfter })
+        .select({
+          id: schema.certificate.id,
+          notAfter: schema.certificate.notAfter,
+          status: schema.certificate.status,
+          lastError: schema.certificate.lastError,
+        })
         .from(schema.certificate)
         .where(inArray(schema.certificate.id, certificateIds))
     : [];
@@ -142,6 +148,9 @@ export async function restoreL4Apps(
         "ROLLBACK_RESOURCE_UNAVAILABLE",
         "rollback references a removed L4 application, port or IP list",
       );
+    // As for sites: an operator's rollback ships no certificate nodes cannot load.
+    if (opts.strict && row?.enabled && certificate && certificateUnloadable(certificate))
+      fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback certificate cannot be loaded by nodes");
     if (available && row.enabled) restored.push(app);
   }
   return restored;

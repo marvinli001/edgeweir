@@ -688,7 +688,7 @@ describe("port pools and layer-4 applications", async () => {
       origins: [tcp],
     });
     const before = (await config(cluster.id)).row.revision;
-    await expect(createL4App(ctx.db, input, service)).rejects.toMatchObject({
+    await expect(createL4App(ctx, input, service)).rejects.toMatchObject({
       code: "NODE_CAPABILITY_REQUIRED",
       status: 409,
       data: { features: "l4-v1" },
@@ -696,7 +696,7 @@ describe("port pools and layer-4 applications", async () => {
     expect(await admin.l4Apps.list({ clusterId: cluster.id })).toEqual([]);
     expect((await config(cluster.id)).row.revision).toBe(before);
     // A disabled application needs nothing.
-    const draft = await createL4App(ctx.db, { ...input, enabled: false }, service);
+    const draft = await createL4App(ctx, { ...input, enabled: false }, service);
     await expect(
       setL4AppEnabled(ctx.db, { id: draft.app.id, enabled: true }, service),
     ).rejects.toMatchObject({ code: "NODE_CAPABILITY_REQUIRED" });
@@ -704,7 +704,7 @@ describe("port pools and layer-4 applications", async () => {
     // A disabled node does not count.
     await ctx.db.update(schema.node).set({ status: "disabled" }).where(eq(schema.node.id, nodeId));
     expect((await admin.clusters.portPools({ clusterId: cluster.id })).nodesWithoutL4).toEqual([]);
-    const created = await createL4App(ctx.db, input, service);
+    const created = await createL4App(ctx, input, service);
     await deleteL4App(ctx.db, created.app.id, service);
     await ctx.db.update(schema.node).set({ status: "active" }).where(eq(schema.node.id, nodeId));
     // The operator may deliberately require the upgrade.
@@ -715,7 +715,7 @@ describe("port pools and layer-4 applications", async () => {
       .update(schema.node)
       .set({ supportedFeatures: ["rules-v1", "stats-sequence-v1", "l4-v1"] })
       .where(eq(schema.node.id, nodeId));
-    await updateL4App(ctx.db, l4AppUpdateInput.parse({ id: operator.app.id, port: 9001 }), service);
+    await updateL4App(ctx, l4AppUpdateInput.parse({ id: operator.app.id, port: 9001 }), service);
     await admin.l4Apps.delete({ id: operator.app.id });
     expect((await config(cluster.id)).config.requiredFeatures).toEqual([]);
     await ctx.db.delete(schema.node).where(eq(schema.node.id, nodeId));

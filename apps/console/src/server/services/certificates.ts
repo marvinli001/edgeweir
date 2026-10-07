@@ -291,7 +291,7 @@ export function assertLoadable(
  * Marks the uploaded certificates nodes cannot load (explicitCurveError):
  * status "error" with the reason as `lastError`
  * (certificate_chain_explicit_curve, certificate_key_explicit_curve), each
- * audited as the system with the sites bound to it. The list, the HTTPS tab
+ * audited as the system with the sites and layer-4 applications bound to it. The list, the HTTPS tab
  * and the launch check show it, and https.check and the HTTPS tab no longer
  * offer it. Sites bound to it keep it until the operator binds another one
  * (or none): nothing they serve changes behind the operator's back. Runs at
@@ -343,12 +343,23 @@ export async function markUnloadableCertificates(app: AppContext) {
         .where(eq(schema.site.certificateId, row.id))
         .orderBy(schema.site.name)
         .limit(20);
+      const l4Apps = await tx
+        .select({ name: schema.l4App.name })
+        .from(schema.l4App)
+        .where(eq(schema.l4App.certificateId, row.id))
+        .orderBy(schema.l4App.name)
+        .limit(20);
       await recordAudit(tx, systemActor, {
         action: "certificate.unloadable",
         targetType: "certificate",
         targetId: row.id,
         targetName: row.name,
-        metadata: { code: lastError, sites: sites.map((site) => site.name) },
+        metadata: {
+          code: lastError,
+          sites: sites.map((site) => site.name),
+          // Layer-4 applications that terminate TLS with it, where there are any.
+          ...(l4Apps.length ? { l4Apps: l4Apps.map((app) => app.name) } : {}),
+        },
       });
       marked.push(row.id);
     });

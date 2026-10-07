@@ -211,4 +211,64 @@ describe("stored certificates nodes cannot load", async () => {
     expect(await bind()).toBe(clusterId);
     expect((await api.https.get({ id: siteId })).certificateId).toBe(issued);
   });
+
+  it("keeps them from layer-4 TLS: binding, saving, rollback and the audit", async () => {
+    await api.clusters.setPortPools({
+      clusterId,
+      pools: [{ protocol: "tcp", from: 20000, to: 20100 }],
+    });
+    const create = (certificateId: string, port: number) =>
+      api.l4Apps.create({
+        clusterId,
+        name: `tls-${port}`,
+        protocol: "tcp",
+        port,
+        certificateId,
+        origins: [{ address: "tls.example.com", port: 7000 }],
+      });
+    const revision = async () => (await latestRevision(ctx.db, clusterId))?.revision ?? 0;
+    const before = await revision();
+    // The stored material is checked, marked or not.
+    expect((await rpcError(create(keyBad, 20001))).code).toBe("CERTIFICATE_KEY_EXPLICIT_CURVE");
+    const unmarked = await stored("explicit l4", certificate, pkcs8Key);
+    expect((await rpcError(create(unmarked, 20001))).code).toBe("CERTIFICATE_CHAIN_EXPLICIT_CURVE");
+    expect(await revision()).toBe(before);
+
+    const { app: tls } = await create(named, 20002);
+    const good = await revision();
+    // A binding made before the check, published as it was then.
+    await ctx.db
+      .update(schema.l4App)
+      .set({ certificateId: unmarked })
+      .where(eq(schema.l4App.id, tls.id));
+    await ctx.db.transaction((tx) =>
+      publishRevision(tx, {
+        clusterId,
+        reason: { code: "l4_app_updated", params: { app: tls.name } },
+        actor: systemActor,
+      }),
+    );
+    const bad = await revision();
+    // Saving its other settings would publish another revision nodes cannot apply.
+    expect((await rpcError(api.l4Apps.update({ id: tls.id, name: "renamed" }))).code).toBe(
+      "CERTIFICATE_CHAIN_EXPLICIT_CURVE",
+    );
+    expect(await revision()).toBe(bad);
+
+    expect(await markUnloadableCertificates(ctx)).toEqual([unmarked]);
+    const entry = (await api.auditLogs.list({ action: "certificate.unloadable" })).items.find(
+      (item) => item.targetId === unmarked,
+    );
+    expect(entry?.metadata).toEqual({
+      code: "certificate_chain_explicit_curve",
+      sites: [],
+      l4Apps: ["tls-20002"],
+    });
+
+    await api.l4Apps.update({ id: tls.id, certificateId: named });
+    expect((await rpcError(api.clusters.rollback({ id: clusterId, revision: bad }))).code).toBe(
+      "ROLLBACK_RESOURCE_UNAVAILABLE",
+    );
+    await api.clusters.rollback({ id: clusterId, revision: good });
+  });
 });
