@@ -847,7 +847,7 @@ export async function starredSites(db: Database, userId: string): Promise<Starre
   }));
 }
 
-/** Stars or un-stars a visible site for the user (a personal preference, not audited). */
+/** Stars or un-stars a site for the user (a personal preference, not audited). */
 export async function setSiteStarred(
   db: Database,
   input: { userId: string; siteId: string; starred: boolean },
