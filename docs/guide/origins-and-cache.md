@@ -444,7 +444,7 @@ curl -X PURGE -H 'X-Purge-Key: <密钥>' -H 'Host: www.example.com' 'http://<节
 | --- | --- |
 | 密钥 | 只写：保存后显示「已保存，留空不修改」；填写新密钥即轮换。用主密钥信封加密入库，经节点通道下发给 agent，不进入数据面 |
 | 应答 | 202 任务已创建；403 密钥错误或缺失（`purge-key-invalid`）；400 URL 无效（`purge-url-invalid`）；429 超过速率（`purge-rate-limited`，带 `Retry-After`）；503 节点 agent 或控制台不可用（`purge-unavailable`）。应答为 JSON，`Cache-Control: no-store` |
-| 速率 | 每个节点上，每个网站每个客户端地址每秒 20 次，密钥正确的请求每个网站每秒 20 次（没有密钥的客户端只用完自己的额度）；控制台每个网站每分钟 120 个 PURGE 任务 |
+| 速率 | 每个节点上，每个网站每个客户端网络（IPv4 地址，IPv6 按 /64）每秒 20 次，密钥正确的请求每个网站每秒 20 次（没有密钥的客户端只用完自己的额度）；控制台每个网站每分钟 120 个 PURGE 任务 |
 | 范围 | 刷新请求的 URL（协议、Host、路径与查询），比较规则同 URL 刷新 |
 | 未启用 | `PURGE` 请求照常回源 |
 | 审计 | `cache.purge`，操作者为节点，元数据 `method: PURGE` |
@@ -621,7 +621,7 @@ URL 必须以 `http://` 或 `https://` 开头，不能包含账号，Host 必须
 | 响应没有 `X-Cache` | 网站关闭了「向访客发送 X-Cache」 | 在「X-Cache」卡片打开 |
 | 413，`X-Edgeweir-Error: body-too-large` | 请求的 `Content-Length` 超过网站或规则的请求体上限 | 调高「请求体上限」，或为上传路径加配置规则 |
 | `PURGE` 返回 403，`purge-key-invalid` | `X-Purge-Key` 缺失或与保存的密钥不同 | 检查密钥；忘记时生成新密钥并保存 |
-| `PURGE` 返回 429，`purge-rate-limited` | 同一客户端地址超过每秒 20 次、网站的有效请求超过每秒 20 次，或超过每分钟 120 个任务 | 按 `Retry-After` 稍后再试；批量刷新用 **刷新预热** 或 API |
+| `PURGE` 返回 429，`purge-rate-limited` | 同一客户端网络超过每秒 20 次、网站的有效请求超过每秒 20 次，或超过每分钟 120 个任务 | 按 `Retry-After` 稍后再试；批量刷新用 **刷新预热** 或 API |
 | `PURGE` 返回 503，`purge-unavailable` | 节点 agent 或控制台不可达 | 检查节点与控制台的连接 |
 | `PURGE` 请求被转发到源站 | 网站没有启用 PURGE 方法 | 在「PURGE 方法」卡片启用 |
 | 源站的 502 直接返回访问者，没有换源站重试 | 关闭了「源站返回 502 / 503 / 504 时重试」，或「尝试次数」为 1 | 检查「源站池设置」 |

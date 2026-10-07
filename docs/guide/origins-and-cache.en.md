@@ -444,7 +444,7 @@ answers `202 {"task_id":"…"}`: the console creates a URL purge task for that U
 | --- | --- |
 | Key | Write-only: after saving it shows "Saved; leave empty to keep it"; entering a new key rotates it. Envelope-encrypted with the master key and sent over the node channel to the agent; it never enters the data plane |
 | Answers | 202 task created; 403 wrong or missing key (`purge-key-invalid`); 400 invalid URL (`purge-url-invalid`); 429 over the rate (`purge-rate-limited`, with `Retry-After`); 503 node agent or console unavailable (`purge-unavailable`). Answers are JSON with `Cache-Control: no-store` |
-| Rate | On each node, 20 per second per site and client address, and 20 accepted requests (right key) per second per site, so clients without the key use up only their own budget; 120 PURGE tasks per site and minute in the console |
+| Rate | On each node, 20 per second per site and client network (an IPv4 address, an IPv6 /64), and 20 accepted requests (right key) per second per site, so clients without the key use up only their own budget; 120 PURGE tasks per site and minute in the console |
 | Scope | The request's URL (scheme, host, path, and query), compared like a URL purge |
 | Disabled | `PURGE` requests go to the origin as before |
 | Audit | `cache.purge`, the node as actor, metadata `method: PURGE` |
@@ -621,7 +621,7 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 | Responses lack `X-Cache` | The site has **Send X-Cache to visitors** off | Turn it on in the **X-Cache** card |
 | 413, `X-Edgeweir-Error: body-too-large` | The request's `Content-Length` exceeds the site's or a rule's body limit | Raise **Request body limit**, or add a configuration rule for upload paths |
 | `PURGE` answers 403, `purge-key-invalid` | `X-Purge-Key` is missing or differs from the saved key | Check the key; if it is lost, generate a new one and save |
-| `PURGE` answers 429, `purge-rate-limited` | Over 20 per second from one client address, 20 accepted requests per second for the site, or 120 tasks per minute | Retry after `Retry-After`; purge in bulk with **Purge & prefetch** or the API |
+| `PURGE` answers 429, `purge-rate-limited` | Over 20 per second from one client network, 20 accepted requests per second for the site, or 120 tasks per minute | Retry after `Retry-After`; purge in bulk with **Purge & prefetch** or the API |
 | `PURGE` answers 503, `purge-unavailable` | The node agent or the console is unreachable | Check the connection between node and console |
 | `PURGE` requests reach the origin | The site does not have the PURGE method enabled | Enable it in the **PURGE method** card |
 | An origin's 502 reaches the visitor without a retry on another origin | **Retry on 502 / 503 / 504** is off, or **Tries** is 1 | Check **Pool settings** |

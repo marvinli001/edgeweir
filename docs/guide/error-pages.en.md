@@ -73,7 +73,7 @@ In the **Maintenance mode** card on the **Error pages** tab, turn on **Enabled**
 | --- | --- | --- | --- |
 | Enabled | On / off | Off | Turns maintenance mode on |
 | Retry-After (seconds) | 0–86400 | 0 (not sent) | `Retry-After` of the 503 response |
-| Allowed addresses | IPs or CIDRs, up to 64; IPv4-mapped `::ffff:` addresses are saved as the IPv4 they map | Empty | Requests from these addresses are served as usual |
+| Allowed addresses | IPs or CIDRs, up to 64; IPv4-mapped `::ffff:` addresses are saved as the IPv4 they map, mapped prefixes under /96 are refused (as in IP lists) | Empty | Requests from these addresses are served as usual |
 | Allowed path prefixes | Start with `/`, no query or fragment, at most 1024 bytes of UTF-8 each, up to 32 | Empty | Requests whose path starts with one of them are served as usual |
 | Maintenance page | HTML template, rules as for [templates](#templates) | Empty (built-in maintenance page) | The page of the 503 response |
 
