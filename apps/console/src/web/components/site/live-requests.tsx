@@ -12,15 +12,15 @@ import { orpc } from "@/lib/orpc";
 const LiveChart = React.lazy(() => import("@/components/effects/live-chart"));
 
 /**
- * The site's requests per second over the last hour, minute by minute, polled every 10 s. The
- * newest minute is still filling, so it is left out. Hovering reads any minute. Until the first
- * answer the card holds a loader, and a failed first load an error with a retry (no live light,
- * no 0/s).
+ * The site's requests per second over the last hour, minute by minute, polled every minute (the
+ * size of the hour's buckets, like the overview's live tiles). The newest minute is still filling,
+ * so it is left out. Hovering reads any minute. Until the first answer the card holds a loader,
+ * and a failed first load an error with a retry (no live light, no 0/s).
  */
 export function LiveRequests({ siteId }: { siteId: string }) {
   const traffic = useQuery({
     ...orpc.analytics.traffic.queryOptions({ input: { range: "1h", siteId } }),
-    refetchInterval: 10_000,
+    refetchInterval: 60_000,
     placeholderData: keepPreviousData,
     meta: { background: true },
   });
