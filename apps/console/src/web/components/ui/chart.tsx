@@ -62,8 +62,9 @@ function ChartContainer({
         data-slot="chart"
         data-chart={chartId}
         className={cn(
-          // recharts' default grey and white strokes are restyled in index.css (no color literals here).
-          "flex aspect-video justify-center text-xs [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-layer]:outline-hidden [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-sector]:outline-hidden [&_.recharts-surface]:outline-hidden",
+          // recharts' default grey and white strokes, the crosshair and the hovered point are
+          // restyled in index.css (no color literals here).
+          "flex aspect-video justify-center text-xs [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-axis-tick_text]:tabular-nums [&_.recharts-layer]:outline-hidden [&_.recharts-radial-bar-background-sector]:fill-well [&_.recharts-sector]:outline-hidden [&_.recharts-surface]:outline-hidden",
           className,
         )}
         {...props}
@@ -168,7 +169,8 @@ function ChartTooltipContent({
   return (
     <div
       className={cn(
-        "grid min-w-32 items-start gap-1.5 rounded-xl bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-lg ring-1 ring-foreground/5 dark:ring-foreground/10",
+        // The overlay surface at elev-2, like the other tooltips.
+        "grid min-w-32 items-start gap-1.5 rounded-xl bg-popover px-2.5 py-2 text-xs text-popover-foreground shadow-elev-2 edge-lit",
         className,
       )}
     >
@@ -199,7 +201,7 @@ function ChartTooltipContent({
                       !hideIndicator && (
                         <div
                           className={cn(
-                            "shrink-0 rounded-[2px] border-(--color-border) bg-(--color-bg)",
+                            "shrink-0 rounded-[3px] border-(--color-border) bg-(--color-bg)",
                             {
                               "h-2.5 w-2.5": indicator === "dot",
                               "w-1": indicator === "line",
@@ -230,7 +232,7 @@ function ChartTooltipContent({
                         </span>
                       </div>
                       {item.value != null && (
-                        <span className="font-mono font-medium text-foreground tabular-nums">
+                        <span className="readout font-medium text-foreground">
                           {typeof item.value === "number"
                             ? item.value.toLocaleString()
                             : String(item.value)}
@@ -283,14 +285,14 @@ function ChartLegendContent({
             <div
               key={index}
               className={cn(
-                "flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground",
+                "flex items-center gap-1.5 text-muted-foreground [&>svg]:h-3 [&>svg]:w-3",
               )}
             >
               {itemConfig?.icon && !hideIcon ? (
                 <itemConfig.icon />
               ) : (
                 <div
-                  className="h-2 w-2 shrink-0 rounded-[2px]"
+                  className="size-2 shrink-0 rounded-[3px]"
                   style={{
                     backgroundColor: item.color,
                   }}
