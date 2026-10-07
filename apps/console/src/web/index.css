@@ -8,6 +8,8 @@
 /* Simplified Chinese in 101 unicode-range shards: a page downloads only the shards it shows. */
 @import "@fontsource-variable/noto-sans-sc";
 @import "./appica-bridge.css";
+/* The design lab (lab/) is development only: its class strings stay out of the console CSS. */
+@source not "../../lab";
 
 @custom-variant dark (&:is(.dark *));
 
