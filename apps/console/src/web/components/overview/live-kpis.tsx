@@ -128,7 +128,7 @@ function LiveTiles({
           icon={PulseRectangle01Icon}
           title={m.overview_request_rate()}
           index={0}
-          footer={<Sparkline data={series((p) => p.requests)} />}
+          footer={<Sparkline tone="signal" data={series((p) => p.requests)} />}
         >
           <FlowNumber value={rps} suffix={m.overview_per_second()} />
         </Tile>
@@ -136,7 +136,7 @@ function LiveTiles({
           icon={ArrowDataTransferVerticalIcon}
           title={m.overview_egress()}
           index={1}
-          footer={<Sparkline data={series((p) => p.bytesSent)} />}
+          footer={<Sparkline tone="signal" data={series((p) => p.bytesSent)} />}
         >
           <FlowScaled value={bps} units={BIT_UNITS} />
         </Tile>

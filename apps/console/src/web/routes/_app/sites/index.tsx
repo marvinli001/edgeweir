@@ -147,7 +147,13 @@ function SitesPage() {
           if (!trend) return <span className="text-muted-foreground">—</span>;
           return (
             <div className="flex w-36 items-center gap-3">
-              <Sparkline data={trend.series} height={24} fill={false} className="w-20" />
+              <Sparkline
+                data={trend.series}
+                tone="metric"
+                height={24}
+                fill={false}
+                className="w-20"
+              />
               <span className="text-xs font-medium tabular-nums">{formatCompact(trend.total)}</span>
             </div>
           );

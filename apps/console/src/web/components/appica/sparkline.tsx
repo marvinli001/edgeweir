@@ -3,12 +3,13 @@ import { AppicaScope } from "@/components/appica/scope";
 import { cn } from "@/lib/utils";
 
 /**
- * A small trend line (appica Sparkline, pure SVG) in a token color: the signal for live series,
- * the metric blue for history. Decorative: the value beside it carries the number.
+ * A small trend line (appica Sparkline, pure SVG) in a token color: the metric blue for history
+ * (the default), the signal only for live series, which opt in with `tone="signal"`. Decorative:
+ * the value beside it carries the number.
  */
 export function Sparkline({
   data,
-  tone = "signal",
+  tone = "metric",
   height = 36,
   fill = true,
   className,
