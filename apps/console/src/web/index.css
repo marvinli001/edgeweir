@@ -478,20 +478,22 @@
  * or both, set from its scroll position), so a phone shows that it scrolls: the site's tab bar.
  */
 @utility scroll-fade {
-  --fade: 2.5rem;
+  /* The edge keeps a trace, so the next item still peeks in. */
+  --fade: 3rem;
+  --fade-edge: rgb(0 0 0 / 15%);
   &[data-fade="end"] {
-    mask-image: linear-gradient(to right, #000 calc(100% - var(--fade)), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - var(--fade)), var(--fade-edge));
   }
   &[data-fade="start"] {
-    mask-image: linear-gradient(to left, #000 calc(100% - var(--fade)), transparent);
+    mask-image: linear-gradient(to left, #000 calc(100% - var(--fade)), var(--fade-edge));
   }
   &[data-fade="both"] {
     mask-image: linear-gradient(
       to right,
-      transparent,
+      var(--fade-edge),
       #000 var(--fade),
       #000 calc(100% - var(--fade)),
-      transparent
+      var(--fade-edge)
     );
   }
 }
