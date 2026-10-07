@@ -327,8 +327,171 @@
   &[data-type="error"] {
     --toast-edge: var(--destructive);
   }
+  /* A change still rolling out is live: the signal edge until it settles. */
+  &[data-type="loading"] {
+    --toast-edge: var(--signal);
+  }
+  & [data-description] {
+    color: var(--muted-foreground);
+  }
+  /* The action (e.g. "view bans") is a raised pill like an outline button, not an inverted chip. */
+  & [data-button] {
+    height: 1.75rem;
+    padding-inline: 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--foreground);
+    background: var(--raised);
+    box-shadow: var(--elev-1);
+    transition: background-color 160ms var(--ease-lit);
+    &:hover {
+      background: color-mix(in oklch, var(--raised), var(--foreground) 4%);
+    }
+    &:focus-visible {
+      box-shadow:
+        0 0 0 1px var(--ring),
+        0 0 0 4px color-mix(in oklch, var(--ring) 30%, transparent);
+    }
+    @media (forced-colors: active) {
+      border: 1px solid ButtonText;
+    }
+  }
   @media (prefers-reduced-transparency: reduce) {
     backdrop-filter: none;
+  }
+}
+
+/*
+ * The sticky page header lifts off the content once the page scrolls: a soft shadow below it
+ * (elev-2's drop, no ring), driven by the root scroll position, so nothing listens to scrolling.
+ * Without scroll timelines the header keeps its hairline only. SiteHeader only.
+ */
+@utility header-lift {
+  @supports (animation-timeline: scroll()) {
+    animation: header-lift linear both;
+    animation-timeline: scroll(root block);
+    animation-range: 0 1.5rem;
+  }
+}
+
+@keyframes header-lift {
+  to {
+    box-shadow: var(--header-shadow);
+  }
+}
+
+/*
+ * The top progress bar's sweep: the action blue running into its brighter ink (the dark preset
+ * blue alone barely shows on the dark canvas), with a soft glow. TopProgress only.
+ */
+@utility progress-glow {
+  background-image: linear-gradient(90deg, transparent, var(--primary) 35%, var(--primary-ink));
+  box-shadow:
+    0 0 10px color-mix(in oklch, var(--primary-ink) 65%, transparent),
+    0 0 3px color-mix(in oklch, var(--primary-ink) 80%, transparent);
+  @media (forced-colors: active) {
+    forced-color-adjust: none;
+    background: Highlight;
+    box-shadow: none;
+  }
+}
+
+/*
+ * The pulse of a live status dot: a disc of the dot's own color grows and fades (transform and
+ * opacity of a pseudo-element; the dot's lit-glow never animates). Live states only, beside a
+ * word; off under reduced motion.
+ */
+@utility dot-pulse {
+  &::after {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background-color: inherit;
+    opacity: 0;
+    pointer-events: none;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    &::after {
+      animation: dot-pulse 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+    }
+  }
+  @media (forced-colors: active) {
+    &::after {
+      content: none;
+    }
+  }
+}
+
+@keyframes dot-pulse {
+  0% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  80%,
+  100% {
+    opacity: 0;
+    transform: scale(2.75);
+  }
+}
+
+/*
+ * A sunk panel inside a card or a dialog: code blocks, option lists, the QR code's frame. The well
+ * color, an inner top shadow and a hairline; a real border in forced colors. Not for text fields
+ * (input-well), toggles (toggle-well) or segmented tracks (seg-well).
+ */
+@utility sunk-well {
+  background-color: var(--well);
+  box-shadow:
+    inset 0 1px 2px oklch(0.2 0.03 258 / 7%),
+    inset 0 0 0 1px var(--edge);
+  &:where(.dark *) {
+    box-shadow:
+      inset 0 1px 2px oklch(0 0 0 / 40%),
+      inset 0 0 0 1px oklch(1 0 0 / 7%);
+  }
+  @media (forced-colors: active) {
+    border: 1px solid CanvasText;
+  }
+}
+
+/*
+ * DataTable's pinned first column while the table scrolls sideways ([data-overflow] on the table
+ * container): an opaque cell (the card, or the header's well via --cell-bg) that keeps the row's
+ * hover wash and selection tint, with a hairline on its trailing edge. Not for other tables.
+ */
+@utility cell-pinned {
+  [data-overflow] & {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background-color: var(--cell-bg, var(--card));
+    background-image: linear-gradient(var(--cell-tint, transparent), var(--cell-tint, transparent));
+    box-shadow: inset -1px 0 0 var(--border);
+  }
+  tr:hover > & {
+    --cell-tint: var(--wash);
+  }
+  tr[data-state="selected"] > & {
+    --cell-tint: color-mix(in oklch, var(--primary) 6%, transparent);
+  }
+}
+
+/*
+ * DataTable ([data-slot=data-table]): while the table fits its card, the container stops being a
+ * scroll container, so the header row (a well strip) sticks under the page header; while it
+ * scrolls sideways ([data-overflow]) the header scrolls with it and the first column may pin.
+ * Unlayered, so it beats the container's overflow-x-auto.
+ */
+[data-slot="data-table"] > [data-slot="table-container"]:not([data-overflow]) {
+  overflow-x: visible;
+  & th {
+    position: sticky;
+    top: var(--header-height);
+    z-index: 2;
+    /* The row's own border stays behind when the cells stick: draw the hairline on the cells. */
+    box-shadow: inset 0 -1px 0 var(--border);
   }
 }
 
@@ -415,6 +578,10 @@
  */
 :root {
   --font-latin: "Mona Sans Variable";
+  /* The sticky page header's height (SiteHeader); focus scrolling keeps clear of it. */
+  --header-height: calc(var(--spacing) * 12);
+  /* Below the sticky header once the page scrolls (header-lift). */
+  --header-shadow: 0 10px 20px -14px oklch(0.3 0.03 258 / 24%);
   --canvas: oklch(0.982 0.004 258);
   --well: oklch(0.958 0.006 258);
   --raised: oklch(1 0 0);
@@ -532,6 +699,7 @@
   --highlight: oklch(1 0 0 / 6%);
   --highlight-edge: oklch(1 0 0 / 16%);
   --spotlight: oklch(1 0 0 / 6%);
+  --header-shadow: 0 12px 24px -14px oklch(0 0 0 / 70%);
   --signal: oklch(0.8 0.13 192);
   --signal-glow: color-mix(in oklch, var(--signal) 45%, transparent);
   --glass: color-mix(in oklch, var(--canvas) 86%, transparent);
@@ -691,6 +859,11 @@
   html {
     @apply font-sans;
     font-synthesis-weight: none;
+    /* Focus scrolling keeps rows clear of the sticky header (two rows below sm: actions wrap). */
+    scroll-padding-top: calc(var(--header-height) + 0.75rem);
+    @media (width < 40rem) {
+      scroll-padding-top: calc(var(--header-height) * 2 + 0.75rem);
+    }
   }
   /* Chinese and Latin runs get their gap from the browser, not from typed spaces. */
   :lang(zh) {
@@ -787,6 +960,93 @@
     .globe-label {
       transition: none;
     }
+  }
+}
+
+/*
+ * Empty-state illustrations (components/empty-art.tsx): token strokes and one signal accent,
+ * fading out toward the sides. The loop runs only without reduced motion and while the state is
+ * on screen in a visible tab ([data-live] from useLive); otherwise it holds still.
+ */
+@layer components {
+  .empty-art {
+    overflow: visible;
+    stroke-width: 1.25;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  }
+  .empty-art * {
+    vector-effect: non-scaling-stroke;
+  }
+  .empty-art [data-anim] {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation-play-state: paused;
+  }
+  .empty-art[data-live] [data-anim] {
+    animation-play-state: running;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .empty-art [data-anim="travel"] {
+      animation: art-travel 3.6s var(--ease-lit) infinite;
+    }
+    .empty-art [data-anim="spin"] {
+      animation: art-spin 24s linear infinite;
+    }
+    .empty-art [data-anim="blink"] {
+      animation: art-blink 2.4s ease-in-out infinite;
+    }
+    .empty-art [data-anim="halo"] {
+      animation: art-halo 2.4s ease-out infinite;
+    }
+  }
+  @media (forced-colors: active) {
+    .empty-art {
+      mask-image: none;
+    }
+  }
+}
+
+@keyframes art-travel {
+  0% {
+    opacity: 0;
+    transform: translateX(0);
+  }
+  12% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+    transform: translateX(var(--travel));
+  }
+  84%,
+  100% {
+    opacity: 0;
+    transform: translateX(var(--travel));
+  }
+}
+
+@keyframes art-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes art-blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes art-halo {
+  0% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(3.2);
   }
 }
 
