@@ -367,20 +367,40 @@ function NodeCache({ node }: { node: Node }) {
   const blocked = !available && node.cache.maxSizeGb === null;
   return (
     <section className="flex flex-col gap-3" data-testid="node-cache">
-      <h3 className="text-sm font-medium">{m.node_cache_title()}</h3>
-      <p className="text-sm tabular-nums" data-testid="node-cache-usage">
-        {usage
-          ? m.node_cache_used({
-              used: formatBytes(usage.usedBytes),
-              total: formatBytes(usage.maxBytes),
-            })
-          : m.node_cache_unreported()}
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-sm font-medium">{m.node_cache_title()}</h3>
         {usage ? (
-          <span className="ml-2 text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground tabular-nums">
             {m.node_cache_measured({ time: formatDateTime(usage.measuredAt) })}
           </span>
         ) : null}
-      </p>
+      </div>
+      {/* The last measured use as a tile with its gauge (a full cache is normal: one zone). */}
+      <div className="flex min-w-0 flex-col gap-2 rounded-xl bg-well px-3 py-2.5">
+        <p
+          className={cn("text-sm tabular-nums", usage ? "font-medium" : "text-muted-foreground")}
+          data-testid="node-cache-usage"
+        >
+          {usage
+            ? m.node_cache_used({
+                used: formatBytes(usage.usedBytes),
+                total: formatBytes(usage.maxBytes),
+              })
+            : m.node_cache_unreported()}
+        </p>
+        {usage && usage.maxBytes > 0 ? (
+          <Meter
+            value={Math.min(100, (usage.usedBytes / usage.maxBytes) * 100)}
+            low={0}
+            high={100}
+            optimum={50}
+            label={m.node_cache_used({
+              used: formatBytes(usage.usedBytes),
+              total: formatBytes(usage.maxBytes),
+            })}
+          />
+        ) : null}
+      </div>
       <form
         className="flex flex-wrap items-end gap-2"
         onSubmit={async (event) => {
