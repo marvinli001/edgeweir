@@ -227,9 +227,7 @@ function Overview({ app }: { app: L4App }) {
                       {line.name}
                     </span>
                     <span className="flex w-fit max-w-full min-w-0 items-center gap-1.5 rounded-lg bg-well py-0.5 pr-0.5 pl-2">
-                      <code className="min-w-0 truncate font-mono text-xs" title={line.target}>
-                        {line.target}
-                      </code>
+                      <code className="min-w-0 font-mono text-xs break-all">{line.target}</code>
                       <CopyButton iconOnly value={line.target} />
                     </span>
                   </div>

@@ -49,8 +49,8 @@ export function L4NodesWarning({
 }
 
 /**
- * The CNAME clients connect to, with a copy button (in a small well with `well`); a muted note
- * while the cluster's DNS is off.
+ * The CNAME clients connect to, with a copy button (with `well`: in a small well, in full, wrapping;
+ * otherwise on one line, truncated); a muted note while the cluster's DNS is off.
  */
 export function DnsTarget({
   target,
@@ -74,7 +74,12 @@ export function DnsTarget({
         well && "w-fit max-w-full rounded-lg bg-well py-0.5 pr-0.5 pl-2",
       )}
     >
-      <code className="min-w-0 truncate font-mono text-xs" title={target} data-testid={testId}>
+      {/* In the well (the app's page) the whole target wraps, as on a site's Domains tab. */}
+      <code
+        className={cn("min-w-0 font-mono text-xs", well ? "break-all" : "truncate")}
+        title={well ? undefined : target}
+        data-testid={testId}
+      >
         {target}
       </code>
       <CopyButton iconOnly value={target} />
