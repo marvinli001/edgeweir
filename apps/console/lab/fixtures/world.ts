@@ -3,16 +3,18 @@
  * offline), 12 sites. Names are reserved documentation domains (RFC 2606) and addresses come
  * from the documentation ranges (RFC 5737, RFC 3849).
  */
-import type {
-  AttentionItem,
-  Cluster,
-  Node,
-  NodeGroup,
-  OriginHealth,
-  Region,
-  Revision,
-  Site,
-  SiteDelivery,
+import {
+  type AttentionItem,
+  type ClientIpSettings,
+  type Cluster,
+  DEFAULT_REQUEST_BODY_LIMIT,
+  type Node,
+  type NodeGroup,
+  type OriginHealth,
+  type Region,
+  type Revision,
+  type Site,
+  type SiteDelivery,
 } from "@edgeweir/contract";
 import { cacheConditionExpression } from "@edgeweir/rule-engine";
 
@@ -72,7 +74,20 @@ interface ClusterSeed {
   description: string;
   revision: number;
   createdAt: string;
+  /** The cache zone of every node. */
+  cache: Cluster["cache"];
+  /** Listener ports besides 80 and 443. */
+  listen: { http: number[]; https: number[] };
+  /** How the HTTP(S) listeners find the client address. */
+  clientIp: ClientIpSettings;
 }
+
+const DIRECT: ClientIpSettings = {
+  mode: "direct",
+  trustedCidrs: [],
+  header: "",
+  dropForwardedFor: false,
+};
 
 const clusterSeeds: ClusterSeed[] = [
   {
@@ -81,6 +96,11 @@ const clusterSeeds: ClusterSeed[] = [
     description: "Tokyo + Singapore",
     revision: 184,
     createdAt: ago(210 * DAY),
+    cache: { maxSizeGb: 400, inactiveDays: 7 },
+    // The shop's admin answers on 8443; a staging hostname on 8080.
+    listen: { http: [8080], https: [8443] },
+    // Visitors reach the nodes directly; origins see only the node as X-Forwarded-For.
+    clientIp: { ...DIRECT, dropForwardedFor: true },
   },
   {
     id: id(2, 2),
@@ -88,6 +108,10 @@ const clusterSeeds: ClusterSeed[] = [
     description: "Frankfurt",
     revision: 97,
     createdAt: ago(160 * DAY),
+    cache: { maxSizeGb: 200, inactiveDays: 7 },
+    listen: { http: [], https: [] },
+    // Behind the data center's layer-4 balancer, which speaks PROXY protocol.
+    clientIp: { ...DIRECT, mode: "proxy_protocol" },
   },
   {
     id: id(2, 3),
@@ -95,6 +119,16 @@ const clusterSeeds: ClusterSeed[] = [
     description: "Virginia",
     revision: 142,
     createdAt: ago(150 * DAY),
+    // The download mirror keeps large files around longer.
+    cache: { maxSizeGb: 1000, inactiveDays: 14 },
+    listen: { http: [], https: [8443] },
+    // Behind a cloud load balancer that appends the client to X-Forwarded-For.
+    clientIp: {
+      mode: "header",
+      trustedCidrs: ["192.0.2.224/27", "2001:db8:c:ff00::/56"],
+      header: "x-forwarded-for",
+      dropForwardedFor: false,
+    },
   },
 ];
 
@@ -142,6 +176,8 @@ interface NodeSeed {
   cpu: number;
   egressMbps: number;
   health?: NodeHealth;
+  /** The node's own cache zone size (GB), instead of its cluster's. */
+  cacheGb?: number;
 }
 
 const nodeSeeds: NodeSeed[] = [
@@ -168,6 +204,8 @@ const nodeSeeds: NodeSeed[] = [
     v6: "2001:db8:a::21",
     cpu: 41,
     egressMbps: 298,
+    // The canary has a smaller disk.
+    cacheGb: 160,
   },
   {
     name: "sin-edge-02",
@@ -226,6 +264,8 @@ const nodeSeeds: NodeSeed[] = [
     v6: "2001:db8:c::43",
     cpu: 27,
     egressMbps: 289,
+    // The newest node came with twice the disk.
+    cacheGb: 2000,
   },
 ];
 
@@ -257,6 +297,11 @@ const FEATURES = [
   "rules-v2",
   "rules-v3",
   "l4-v1",
+  "l4-v2",
+  "cache-zone-v1",
+  "edge-ports-v1",
+  "client-ip-v1",
+  "site-content-v1",
   "geoip-country-v1",
   "geoip-subdivision-v1",
   "geoip-city-v1",
@@ -273,6 +318,9 @@ export const nodes: Node[] = nodeSeeds.map((seed, index) => {
   const lastSeen = online ? ago(4_000 + index * 1_300) : ago(47 * MINUTE);
   const applied = health === "behind" ? cluster.revision - 2 : cluster.revision;
   const memoryTotal = 16 * 1024 ** 3;
+  const cacheBytes = (seed.cacheGb ?? cluster.cache.maxSizeGb) * 1024 ** 3;
+  // The newest node (its own, larger disk) is still filling up.
+  const cacheFilled = (seed.cacheGb ?? 0) > 1000 ? 0.18 : 0.62 + noise(index * 13) * 0.3;
   return {
     id: id(4, index + 1),
     name: seed.name,
@@ -334,6 +382,15 @@ export const nodes: Node[] = nodeSeeds.map((seed, index) => {
     remoteAddress: seed.v4,
     dnsIssue: null,
     authError: null,
+    cache: {
+      maxSizeGb: seed.cacheGb ?? null,
+      // As last measured, with the heartbeat.
+      usage: {
+        usedBytes: Math.round(cacheBytes * cacheFilled),
+        maxBytes: cacheBytes,
+        measuredAt: lastSeen,
+      },
+    },
   };
 });
 
@@ -563,6 +620,8 @@ const DEFAULT_ORIGIN_SETTINGS: Site["originSettings"] = {
     unhealthyThreshold: 3,
   },
   sessionAffinity: { enabled: false, ttlSeconds: 3600 },
+  tries: 3,
+  statusRetry: true,
 };
 
 type OriginSeed = Partial<Site["origins"][number]> & { address: string };
@@ -623,6 +682,7 @@ function cacheRules(siteIndex: number, list: CacheRuleSeed[]): Site["cacheRules"
       staleIfErrorSeconds: 0,
       cacheAuthorized: false,
       browserTtlSeconds: 0,
+      cacheSetCookie: false,
       ...seed,
       ...lists,
       expression: seed.expression ?? cacheConditionExpression(lists),
@@ -678,6 +738,8 @@ const CACHE_RULES: Record<string, CacheRuleSeed[]> = {
       staleWhileRevalidateSeconds: 600,
       staleIfErrorSeconds: 6 * 3600,
       browserTtlSeconds: 60,
+      // The origin sets a recently-viewed cookie on every product page.
+      cacheSetCookie: true,
     },
     {
       pathPrefixes: ["/account/", "/checkout", "/api/v2/cart"],
@@ -732,6 +794,17 @@ const CACHE_RULES: Record<string, CacheRuleSeed[]> = {
 
 /** shop.example.com varies its cache by the parameters it reads, currency and device. */
 const CACHE_SETTINGS: Record<string, Partial<Site["cacheSettings"]>> = {
+  "example.com": {
+    cacheKey: {
+      query: "exclude",
+      queryParams: ["fbclid", "gclid", "utm_*"],
+      sortQuery: true,
+      headers: [],
+      cookies: [],
+      deviceType: false,
+      includeHost: true,
+    },
+  },
   "shop.example.com": {
     cacheKey: {
       query: "include",
@@ -743,6 +816,8 @@ const CACHE_SETTINGS: Record<string, Partial<Site["cacheSettings"]>> = {
       includeHost: true,
     },
     keepCacheTag: true,
+    // The storefront's CMS purges a product page with PURGE when it is edited.
+    purgeMethod: { enabled: true, keySet: true },
   },
   "static.example.net": {
     cacheKey: {
@@ -754,7 +829,32 @@ const CACHE_SETTINGS: Record<string, Partial<Site["cacheSettings"]>> = {
       deviceType: false,
       includeHost: false,
     },
+    xCache: false,
   },
+};
+
+const DEFAULT_CONTENT_SETTINGS: Site["contentSettings"] = {
+  charset: { name: "off", force: false, uppercase: false },
+  requestBodyLimit: DEFAULT_REQUEST_BODY_LIMIT,
+};
+
+const CONTENT_SETTINGS: Record<string, Site["contentSettings"]> = {
+  // Product photo uploads from the admin stay under 20 MiB; text answers in UTF-8.
+  "shop.example.com": {
+    charset: { name: "utf-8", force: false, uppercase: false },
+    requestBodyLimit: 20 * 1024 * 1024,
+  },
+  "api.example.com": { ...DEFAULT_CONTENT_SETTINGS, requestBodyLimit: 10 * 1024 * 1024 },
+  // The old CMS sends pages without a charset.
+  "legacy.example.org": {
+    charset: { name: "gb18030", force: true, uppercase: true },
+    requestBodyLimit: DEFAULT_REQUEST_BODY_LIMIT,
+  },
+};
+
+/** The shop's admin answers on 8443 as well. */
+const SITE_PORTS: Record<string, Site["ports"]> = {
+  "shop.example.com": { http: [80], https: [443, 8443] },
 };
 
 export const sites: Site[] = siteSeeds.map((seed, index) => {
@@ -775,7 +875,15 @@ export const sites: Site[] = siteSeeds.map((seed, index) => {
           sessionAffinity: { enabled: true, ttlSeconds: 3600 },
         }
       : seed.name === "api.example.com"
-        ? { ...DEFAULT_ORIGIN_SETTINGS, protocol: "http2", grpc: true, policy: "round_robin" }
+        ? {
+            ...DEFAULT_ORIGIN_SETTINGS,
+            protocol: "http2",
+            grpc: true,
+            policy: "round_robin",
+            // Writes are not retried on another origin after a 5xx.
+            tries: 2,
+            statusRetry: false,
+          }
         : DEFAULT_ORIGIN_SETTINGS;
   return {
     id: id(5, index + 1),
@@ -799,9 +907,13 @@ export const sites: Site[] = siteSeeds.map((seed, index) => {
       },
       rangeSlice: seed.avgBytes > 400_000,
       keepCacheTag: false,
+      xCache: true,
+      purgeMethod: { enabled: false, keySet: false },
       ...CACHE_SETTINGS[seed.name],
     },
+    contentSettings: CONTENT_SETTINGS[seed.name] ?? DEFAULT_CONTENT_SETTINGS,
     cacheGeneration: 3 + index,
+    ports: SITE_PORTS[seed.name] ?? { http: [80], https: [443] },
     delivery: deliveryOf(seed),
     createdAt: ago(seed.created),
     updatedAt: ago(seed.updated),
@@ -830,9 +942,21 @@ export const clusters: Cluster[] = clusterSeeds.map((seed) => {
     appliedNodeCount: live.filter((n) => n.appliedRevision === seed.revision).length,
     siteCount: sites.filter((s) => s.clusterId === seed.id).length,
     latestRevision: revisionsOf(seed.id, 1)[0] ?? null,
+    clientIpMode: seed.clientIp.mode,
+    cache: seed.cache,
     createdAt: seed.createdAt,
   };
 });
+
+export const nodesWithout = (clusterId: string, feature: string) =>
+  nodes
+    .filter(
+      (n) =>
+        n.clusterId === clusterId &&
+        n.status === "active" &&
+        !n.supportedFeatures.includes(feature),
+    )
+    .map((n) => ({ id: n.id, name: n.name }));
 
 export const attention: AttentionItem[] = [
   {

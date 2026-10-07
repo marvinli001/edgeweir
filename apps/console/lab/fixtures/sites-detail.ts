@@ -1184,6 +1184,8 @@ function errorPagesOf(site: Site): SiteErrorPages {
             "Access denied",
             "This request was blocked. If you think this is a mistake, contact support with the request id below.",
           ),
+          redirectUrl: "",
+          responseStatus: 0,
         },
         {
           status: 429,
@@ -1192,6 +1194,8 @@ function errorPagesOf(site: Site): SiteErrorPages {
             "Slow down a little",
             "Too many requests came from your network. Please wait a minute and try again.",
           ),
+          redirectUrl: "",
+          responseStatus: 0,
         },
         {
           status: 502,
@@ -1201,6 +1205,8 @@ function errorPagesOf(site: Site): SiteErrorPages {
             "The shop is not answering right now. Your cart is saved.",
             '\n    <p><a href="/">Try again</a></p>',
           ),
+          redirectUrl: "",
+          responseStatus: 0,
         },
         {
           status: 503,
@@ -1209,6 +1215,8 @@ function errorPagesOf(site: Site): SiteErrorPages {
             "Down for maintenance",
             "We are updating the shop and will be back shortly.",
           ),
+          redirectUrl: "",
+          responseStatus: 0,
         },
       ],
       interceptOriginErrors: true,
@@ -1222,6 +1230,8 @@ function errorPagesOf(site: Site): SiteErrorPages {
           status: 502,
           template:
             "<!doctype html>\n<title>{{status}}</title>\n<h1>Temporarily unavailable</h1>\n<p>{{host}} · {{request_id}}</p>\n",
+          redirectUrl: "",
+          responseStatus: 0,
         },
       ],
       interceptOriginErrors: false,
@@ -1734,7 +1744,12 @@ function httpsOf(site: Site): TlsSettings {
     gzip: true,
     gzipMinLength: 256,
     gzipTypes: DEFAULT_TYPES,
+    gzipLevel: 0,
+    compressMaxLength: 0,
     ocspStapling: false,
+    redirectStatus: 301,
+    redirectPort: 443,
+    redirectExcludedDomains: [],
   };
   if (!certificateId) return base;
   if (isShop(site))
@@ -1752,7 +1767,12 @@ function httpsOf(site: Site): TlsSettings {
       zstdLevel: 3,
       zstdMinLength: 512,
       gzipMinLength: 512,
+      gzipLevel: 5,
+      // Product videos and catalogs in PDF go out as they are.
+      compressMaxLength: 8 * 1024 * 1024,
       ocspStapling: true,
+      // 308 keeps the method of checkout posts that still use http://.
+      redirectStatus: 308,
     };
   const strict = site.name === "auth.example.net" || site.name === "api.example.com";
   return {

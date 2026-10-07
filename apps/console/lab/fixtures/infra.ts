@@ -34,6 +34,7 @@ import {
   NOW,
   nodeGroups,
   nodes,
+  nodesWithout,
   noise,
   regions,
   revisionsOf,
@@ -103,6 +104,10 @@ interface AppSeed {
   clusterId: string;
   protocol: L4Protocol;
   port: number;
+  /** The last port of a range. */
+  portEnd?: number;
+  /** Origins answer on the port the connection arrived on (their port is 0). */
+  samePort?: boolean;
   enabled?: boolean;
   origins: { address: string; port: number; weight?: number; backup?: boolean }[];
   acceptProxyProtocol?: boolean;
@@ -123,11 +128,14 @@ const appSeeds: AppSeed[] = [
     name: "game-gateway",
     clusterId: APAC,
     protocol: "tcp",
+    // One port per game shard; each origin runs every shard on the same port.
     port: 20010,
+    portEnd: 20019,
+    samePort: true,
     origins: [
-      { address: "198.51.100.60", port: 7777, weight: 3 },
-      { address: "198.51.100.61", port: 7777, weight: 3 },
-      { address: "203.0.113.70", port: 7777, backup: true },
+      { address: "198.51.100.60", port: 0, weight: 3 },
+      { address: "198.51.100.61", port: 0, weight: 3 },
+      { address: "203.0.113.70", port: 0, backup: true },
     ],
     proxyProtocolVersion: 2,
     block: ["anonymizers", "blocklist"],
@@ -971,6 +979,11 @@ const l4Apps: L4App[] = appSeeds.map((seed, index) => {
     name: seed.name,
     protocol: seed.protocol,
     port: seed.port,
+    portEnd: seed.portEnd ?? null,
+    originPortMode: seed.samePort ? "same" : "fixed",
+    certificateId: null,
+    certificateName: null,
+    tlsMinimumVersion: "1.2",
     enabled: seed.enabled ?? true,
     acceptProxyProtocol: seed.acceptProxyProtocol ?? false,
     proxyProtocolVersion: seed.proxyProtocolVersion ?? 0,
@@ -1309,14 +1322,8 @@ export const infraFixtures: Fixtures = {
       clusterId,
       pools: portPools[clusterId] ?? [],
       reservedPorts: [80, 443],
-      nodesWithoutL4: nodes
-        .filter(
-          (n) =>
-            n.clusterId === clusterId &&
-            n.status === "active" &&
-            !n.supportedFeatures.includes("l4-v1"),
-        )
-        .map((n) => ({ id: n.id, name: n.name })),
+      nodesWithoutL4: nodesWithout(clusterId, "l4-v1"),
+      nodesWithoutL4V2: nodesWithout(clusterId, "l4-v2"),
     }),
     createEnrollmentToken: (input) => {
       minted = { at: Date.now(), name: input.nodeName ?? "" };

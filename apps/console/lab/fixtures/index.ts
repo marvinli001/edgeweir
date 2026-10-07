@@ -188,6 +188,9 @@ const core: Fixtures = {
         prefetchVariants: on,
         rulesV2: on,
         rulesV3: on,
+        edgePorts: on,
+        clientIp: on,
+        siteContent: on,
       };
     },
   },
