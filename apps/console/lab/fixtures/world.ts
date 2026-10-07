@@ -14,6 +14,7 @@ import type {
   Site,
   SiteDelivery,
 } from "@edgeweir/contract";
+import { cacheConditionExpression } from "@edgeweir/rule-engine";
 
 export const NOW = Date.now();
 export const MINUTE = 60_000;
@@ -592,6 +593,168 @@ const ORIGINS: Record<string, OriginSeed[]> = {
   ],
 };
 
+/**
+ * A cache rule: the builder's lists (stored as their expression, lists sorted the way the
+ * server returns them) or an expression of another shape (lists empty).
+ */
+type CacheRuleSeed = Partial<Omit<Site["cacheRules"][number], "id" | "priority">>;
+
+const DAY_S = 86_400;
+
+function cacheRules(siteIndex: number, list: CacheRuleSeed[]): Site["cacheRules"] {
+  return list.map((seed, i) => {
+    const lists = {
+      pathPrefixes: seed.pathPrefixes ?? [],
+      paths: [...(seed.paths ?? [])].sort(),
+      extensions: [...(seed.extensions ?? [])].sort(),
+    };
+    return {
+      id: id(12, siteIndex * 100 + i + 1),
+      priority: (i + 1) * 10,
+      statusCodes: [],
+      minSizeBytes: 0,
+      maxSizeBytes: 0,
+      action: "cache",
+      edgeTtlSeconds: 3600,
+      originCacheControl: "respect",
+      staleWhileRevalidateSeconds: 0,
+      staleIfErrorSeconds: 0,
+      cacheAuthorized: false,
+      browserTtlSeconds: 0,
+      ...seed,
+      ...lists,
+      expression: seed.expression ?? cacheConditionExpression(lists),
+    };
+  });
+}
+
+const ASSETS = ["css", "js", "woff2", "svg", "webp", "avif", "png", "jpg", "ico"];
+
+const CACHE_RULES: Record<string, CacheRuleSeed[]> = {
+  "example.com": [
+    {
+      extensions: ASSETS,
+      edgeTtlSeconds: 30 * DAY_S,
+      originCacheControl: "override",
+      browserTtlSeconds: 7 * DAY_S,
+    },
+    { paths: ["/", "/index.html"], edgeTtlSeconds: 600, staleWhileRevalidateSeconds: 300 },
+  ],
+  "shop.example.com": [
+    {
+      extensions: ASSETS,
+      edgeTtlSeconds: 30 * DAY_S,
+      originCacheControl: "override",
+      staleIfErrorSeconds: DAY_S,
+      browserTtlSeconds: 7 * DAY_S,
+    },
+    {
+      pathPrefixes: ["/images/", "/media/"],
+      edgeTtlSeconds: 7 * DAY_S,
+      staleWhileRevalidateSeconds: 3600,
+      staleIfErrorSeconds: DAY_S,
+    },
+    {
+      expression:
+        'starts_with(http.request.uri.path, "/api/v2/products") and http.request.method in {"GET" "HEAD"}',
+      statusCodes: [200],
+      edgeTtlSeconds: 60,
+      originCacheControl: "override",
+      staleWhileRevalidateSeconds: 300,
+      staleIfErrorSeconds: 3600,
+    },
+    {
+      paths: ["/", "/robots.txt", "/sitemap.xml"],
+      statusCodes: [200, 301],
+      edgeTtlSeconds: 300,
+      staleWhileRevalidateSeconds: 120,
+    },
+    {
+      pathPrefixes: ["/collections/", "/products/"],
+      statusCodes: [200],
+      edgeTtlSeconds: 900,
+      staleWhileRevalidateSeconds: 600,
+      staleIfErrorSeconds: 6 * 3600,
+      browserTtlSeconds: 60,
+    },
+    {
+      pathPrefixes: ["/account/", "/checkout", "/api/v2/cart"],
+      action: "bypass",
+      edgeTtlSeconds: 0,
+    },
+    {
+      expression: 'http.request.cookies["preview"] eq "1" or http.request.uri.args["draft"] ne ""',
+      action: "bypass",
+      edgeTtlSeconds: 0,
+    },
+    {
+      extensions: ["mp4", "zip"],
+      minSizeBytes: 8 * 1024 * 1024,
+      edgeTtlSeconds: 30 * DAY_S,
+      originCacheControl: "override",
+    },
+  ],
+  "api.example.com": [
+    {
+      expression:
+        'http.request.method eq "GET" and starts_with(http.request.uri.path, "/v1/catalog")',
+      statusCodes: [200],
+      edgeTtlSeconds: 30,
+      staleWhileRevalidateSeconds: 60,
+    },
+    { pathPrefixes: ["/v1/"], action: "bypass", edgeTtlSeconds: 0 },
+  ],
+  "static.example.net": [
+    {
+      pathPrefixes: ["/"],
+      edgeTtlSeconds: 365 * DAY_S,
+      originCacheControl: "override",
+      browserTtlSeconds: 30 * DAY_S,
+    },
+  ],
+  "media.example.net": [
+    {
+      extensions: ["m3u8"],
+      edgeTtlSeconds: 2,
+      originCacheControl: "override",
+      staleWhileRevalidateSeconds: 2,
+    },
+    {
+      extensions: ["m4s", "mp4", "ts"],
+      edgeTtlSeconds: 30 * DAY_S,
+      originCacheControl: "override",
+    },
+  ],
+  "docs.example.org": [{ pathPrefixes: ["/"], edgeTtlSeconds: 3600, staleIfErrorSeconds: DAY_S }],
+};
+
+/** shop.example.com varies its cache by the parameters it reads, currency and device. */
+const CACHE_SETTINGS: Record<string, Partial<Site["cacheSettings"]>> = {
+  "shop.example.com": {
+    cacheKey: {
+      query: "include",
+      queryParams: ["page", "q", "sort", "variant"],
+      sortQuery: true,
+      headers: ["accept-language"],
+      cookies: ["currency"],
+      deviceType: true,
+      includeHost: true,
+    },
+    keepCacheTag: true,
+  },
+  "static.example.net": {
+    cacheKey: {
+      query: "ignore",
+      queryParams: [],
+      sortQuery: false,
+      headers: [],
+      cookies: [],
+      deviceType: false,
+      includeHost: false,
+    },
+  },
+};
+
 export const sites: Site[] = siteSeeds.map((seed, index) => {
   const originList =
     ORIGINS[seed.name] ??
@@ -620,7 +783,7 @@ export const sites: Site[] = siteSeeds.map((seed, index) => {
     clusterName: seed.cluster.name,
     domains: seed.domains,
     origins: origins(index + 1, originList),
-    cacheRules: [],
+    cacheRules: cacheRules(index + 1, CACHE_RULES[seed.name] ?? []),
     originSettings: settings,
     cacheSettings: {
       cacheKey: {
@@ -634,6 +797,7 @@ export const sites: Site[] = siteSeeds.map((seed, index) => {
       },
       rangeSlice: seed.avgBytes > 400_000,
       keepCacheTag: false,
+      ...CACHE_SETTINGS[seed.name],
     },
     cacheGeneration: 3 + index,
     delivery: deliveryOf(seed),
