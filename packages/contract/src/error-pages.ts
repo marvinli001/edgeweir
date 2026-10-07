@@ -1,10 +1,7 @@
-import {
-  canonicalCidr,
-  RULES_V3_PLACEHOLDERS,
-  usesRulesV3Placeholders,
-} from "@edgeweir/rule-engine";
+import { RULES_V3_PLACEHOLDERS, usesRulesV3Placeholders } from "@edgeweir/rule-engine";
 import { oc } from "@orpc/contract";
 import * as z from "zod";
+import { type Cidr, cidrContains, formatCidr, parseCidr, parseIp } from "./addresses";
 import { expectedUpdatedAt, isoDateTime, pathPrefix, uuid } from "./schemas";
 
 /**
@@ -66,12 +63,16 @@ const ABSOLUTE_REDIRECT =
  * Whether a redirect URL is valid: an absolute http(s) URL without user
  * information, or a path starting with a single "/", 1-2048 printable ASCII
  * characters without spaces, whose only placeholders are {{status}} and
- * {{request_id}}, and whose "%" each start an escape of two hex digits.
+ * {{request_id}} (not in the host or port), and whose "%" each start an
+ * escape of two hex digits.
  * edgeweir-node (internal/configir validErrorRedirect) applies the same
  * rule; shared vectors: packages/contract/test/fixtures/error_redirect_vectors.json.
  */
 export function validErrorRedirect(url: string): boolean {
   if (url.length > ERROR_PAGE_REDIRECT_MAX || !/^[\x21-\x7e]+$/.test(url)) return false;
+  // The host and port are checked as written: a placeholder there would be
+  // valid as "0" and invalid with its value (http://{{status}}.1.2.3/).
+  if (/^https?:\/\/[^/?#]*\{\{/.test(url)) return false;
   const bare = url.replaceAll("{{status}}", "0").replaceAll("{{request_id}}", "0");
   if (bare.includes("{{") || bare.includes("}}") || bare.includes("\\")) return false;
   if (/%(?![0-9A-Fa-f]{2})/.test(bare)) return false;
@@ -198,17 +199,34 @@ export const siteMaintenance = z.object({
 export const MAINTENANCE_MAX_CIDRS = 64;
 export const MAINTENANCE_MAX_PREFIXES = 32;
 
+const MAPPED_V4 = parseCidr("::ffff:0:0/96") as Cidr;
+
+/**
+ * A maintenance exception as nodes read it (Go netip): host bits cleared,
+ * and an address written in IPv4-mapped form (::ffff:a.b.c.d) is the IPv4
+ * prefix it covers (nodes look IPv4 clients up as IPv4), refused under /96
+ * as ambiguous, as in IP lists. IPv4-compatible addresses (::a.b.c.d) stay
+ * IPv6. Null when invalid.
+ */
+export function maintenanceCidr(text: string): string | null {
+  const cidr = parseCidr(text);
+  if (!cidr) return null;
+  const slash = text.indexOf("/");
+  const written = parseIp(slash < 0 ? text : text.slice(0, slash));
+  if (cidr.version === 6 && written && cidrContains(MAPPED_V4, written)) {
+    if (cidr.prefix < 96) return null;
+    return formatCidr({ version: 4, bytes: cidr.bytes.slice(12), prefix: cidr.prefix - 96 });
+  }
+  return formatCidr(cidr);
+}
+
 export const siteMaintenanceInput = z.object({
   id: uuid,
   enabled: z.boolean(),
   /** 0-65536 bytes (UTF-8), with the error page placeholders; larger fails with ERROR_PAGE_TOO_LARGE. */
   template: z.string().default(""),
   retryAfterSeconds: z.number().int().min(0).max(86_400).default(0),
-  /**
-   * Addresses or CIDRs, normalized as IP list entries are: an IPv4-mapped
-   * IPv6 prefix becomes IPv4 (nodes look IPv4 clients up as IPv4), and one
-   * shorter than /96 is refused as ambiguous.
-   */
+  /** Addresses or CIDRs, as maintenanceCidr normalizes them. */
   allowedCidrs: z
     .array(
       z
@@ -216,12 +234,12 @@ export const siteMaintenanceInput = z.object({
         .trim()
         .max(64)
         .transform((value, ctx) => {
-          try {
-            return canonicalCidr(value);
-          } catch {
+          const cidr = maintenanceCidr(value);
+          if (cidr === null) {
             ctx.addIssue({ code: "custom", message: "invalid CIDR", input: value });
             return z.NEVER;
           }
+          return cidr;
         }),
     )
     .max(MAINTENANCE_MAX_CIDRS)

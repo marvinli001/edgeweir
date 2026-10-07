@@ -240,6 +240,31 @@
       "value": "http://example.com./",
       "valid": false,
       "note": "trailing dot"
+    },
+    {
+      "value": "http://{{status}}.1.2.3/",
+      "valid": false,
+      "note": "placeholder in the host (sent as 502.1.2.3)"
+    },
+    {
+      "value": "https://{{request_id}}.example.com/",
+      "valid": false,
+      "note": "placeholder in a host name"
+    },
+    {
+      "value": "https://example.com:{{status}}/",
+      "valid": false,
+      "note": "placeholder in the port"
+    },
+    {
+      "value": "http://[::{{status}}]/",
+      "valid": false,
+      "note": "placeholder in an IPv6 literal"
+    },
+    {
+      "value": "https://example.com/{{status}}?id={{request_id}}#{{status}}",
+      "valid": true,
+      "note": "placeholders after the host"
     }
   ]
 }

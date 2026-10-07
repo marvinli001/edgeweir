@@ -154,7 +154,16 @@ describe("error pages and maintenance", () => {
     const parsed = siteMaintenanceInput.parse({
       id,
       enabled: true,
-      allowedCidrs: ["192.0.2.7/24", "2001:DB8::1/32", "::ffff:203.0.113.5", "::ffff:0:0/96"],
+      allowedCidrs: [
+        "192.0.2.7/24",
+        "2001:DB8::1/32",
+        "::ffff:203.0.113.5",
+        "::ffff:0:0/96",
+        // IPv4-compatible (not mapped) addresses stay IPv6, as nodes read them.
+        "::1.2.3.4",
+        "::0.0.0.0/96",
+        "::1.2.3.4/90",
+      ],
       allowedPathPrefixes: ["/health"],
     });
     expect(
@@ -166,7 +175,15 @@ describe("error pages and maintenance", () => {
     ).toHaveLength(1);
     expect(parsed).toMatchObject({
       // IPv4-mapped prefixes become IPv4, as nodes look IPv4 clients up.
-      allowedCidrs: ["192.0.2.0/24", "2001:db8::/32", "203.0.113.5/32", "0.0.0.0/0"],
+      allowedCidrs: [
+        "192.0.2.0/24",
+        "2001:db8::/32",
+        "203.0.113.5/32",
+        "0.0.0.0/0",
+        "::102:304/128",
+        "::/96",
+        "::/90",
+      ],
       retryAfterSeconds: 0,
       template: "",
     });
