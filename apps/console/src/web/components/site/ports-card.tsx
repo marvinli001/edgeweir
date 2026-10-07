@@ -73,19 +73,25 @@ export function SitePortsCard({ site }: { site: Site }) {
   );
   const https = useQuery(orpc.https.get.queryOptions({ input: { id: site.id } }));
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
+  // The card and its title stay while the ports load or fail to.
   return (
-    <QueryView query={combineQueries(ports, https, features)}>
-      {([cluster, tls, available]) => (
-        <PortsEditor
-          key={JSON.stringify(site.ports)}
-          site={site}
-          httpOptions={sorted([80, ...cluster.httpPorts, ...site.ports.http])}
-          httpsOptions={sorted([443, ...cluster.httpsPorts, ...site.ports.https])}
-          certificate={!!tls.certificateId}
-          extraAvailable={available.edgePorts.available}
-        />
-      )}
-    </QueryView>
+    <Card className="animate-enter" style={{ animationDelay: "60ms" }} data-testid="site-ports">
+      <CardHeader>
+        <CardTitle>{m.site_ports_title()}</CardTitle>
+      </CardHeader>
+      <QueryView query={combineQueries(ports, https, features)} frame={CardContent}>
+        {([cluster, tls, available]) => (
+          <PortsEditor
+            key={JSON.stringify(site.ports)}
+            site={site}
+            httpOptions={sorted([80, ...cluster.httpPorts, ...site.ports.http])}
+            httpsOptions={sorted([443, ...cluster.httpsPorts, ...site.ports.https])}
+            certificate={!!tls.certificateId}
+            extraAvailable={available.edgePorts.available}
+          />
+        )}
+      </QueryView>
+    </Card>
   );
 }
 
@@ -114,60 +120,62 @@ function PortsEditor({
     port !== defaults &&
     !site.ports.http.concat(site.ports.https).includes(port);
   return (
-    <Card className="animate-enter" style={{ animationDelay: "60ms" }} data-testid="site-ports">
-      <form
-        className="flex flex-col gap-(--card-spacing)"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          if (!empty) await save({ ports: next });
-        }}
-      >
-        <CardHeader>
-          <CardTitle>{m.site_ports_title()}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <CheckboxList
-            id="site-port-http"
-            legend={m.site_ports_http()}
-            options={httpOptions.map((port) => ({
-              value: port,
-              label: String(port),
-              disabled: locked(port, 80),
-            }))}
-            value={http}
-            onChange={setHttp}
-            testId="site-ports-http"
-          />
-          <CheckboxList
-            id="site-port-https"
-            legend={m.site_ports_https()}
-            options={httpsOptions.map((port) => ({
-              value: port,
-              label: String(port),
-              disabled: locked(port, 443) || (!certificate && port !== 443),
-            }))}
-            value={https}
-            onChange={setHttps}
-            testId="site-ports-https"
-          />
-          {certificate ? null : (
-            <SafetyNote data-testid="site-ports-https-note">
-              {m.site_ports_https_needs_cert()}
-            </SafetyNote>
-          )}
-          {extraAvailable ? null : (
-            <SafetyNote data-testid="site-ports-unavailable">
-              {m.feature_unavailable_nodes()}
-            </SafetyNote>
-          )}
-        </CardContent>
-        <SaveBar
-          dirty={dirty && !empty}
-          pending={pending}
-          error={empty ? m.site_ports_empty() : error}
-          testId="site-ports-save"
-        />
-      </form>
-    </Card>
+    <form
+      className="flex flex-col gap-(--card-spacing)"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        if (!empty) await save({ ports: next });
+      }}
+    >
+      <CardContent className="flex flex-col gap-4">
+        {/* HTTP and HTTPS as rows split by a hairline (on wrappers: a legend sits on its fieldset's border). */}
+        <div className="flex flex-col divide-y divide-border [&>*]:py-3 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">
+          <div>
+            <CheckboxList
+              id="site-port-http"
+              legend={m.site_ports_http()}
+              options={httpOptions.map((port) => ({
+                value: port,
+                label: String(port),
+                disabled: locked(port, 80),
+              }))}
+              value={http}
+              onChange={setHttp}
+              testId="site-ports-http"
+            />
+          </div>
+          <div>
+            <CheckboxList
+              id="site-port-https"
+              legend={m.site_ports_https()}
+              options={httpsOptions.map((port) => ({
+                value: port,
+                label: String(port),
+                disabled: locked(port, 443) || (!certificate && port !== 443),
+              }))}
+              value={https}
+              onChange={setHttps}
+              testId="site-ports-https"
+            />
+          </div>
+        </div>
+        {certificate ? null : (
+          <SafetyNote data-testid="site-ports-https-note">
+            {m.site_ports_https_needs_cert()}
+          </SafetyNote>
+        )}
+        {extraAvailable ? null : (
+          <SafetyNote data-testid="site-ports-unavailable">
+            {m.feature_unavailable_nodes()}
+          </SafetyNote>
+        )}
+      </CardContent>
+      <SaveBar
+        dirty={dirty && !empty}
+        pending={pending}
+        error={empty ? m.site_ports_empty() : error}
+        testId="site-ports-save"
+      />
+    </form>
   );
 }
