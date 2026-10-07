@@ -147,7 +147,7 @@ function CertificatesPage() {
                       title={m.cert_delete_confirm({ name: cert.name })}
                       destructive
                       trigger={
-                        <Button size="sm" variant="ghost">
+                        <Button size="sm" variant="destructive">
                           {m.common_delete()}
                         </Button>
                       }
@@ -180,14 +180,14 @@ function CertificatesPage() {
                     <p className="text-sm break-words text-muted-foreground">{credential.zone}</p>
                   </div>
                   <Badge variant="secondary">{providerLabel(credential.provider)}</Badge>
-                  <Button variant="ghost" size="sm" onClick={() => dialog.show(credential)}>
+                  <Button variant="outline" size="sm" onClick={() => dialog.show(credential)}>
                     {m.common_edit()}
                   </Button>
                   <ConfirmDialog
                     title={m.cert_delete_confirm({ name: credential.name })}
                     destructive
                     trigger={
-                      <Button variant="ghost" size="sm">
+                      <Button variant="destructive" size="sm">
                         {m.common_delete()}
                       </Button>
                     }

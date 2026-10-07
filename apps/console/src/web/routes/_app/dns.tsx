@@ -87,7 +87,7 @@ function DnsPage() {
                         </span>
                         <span className="flex items-center gap-1">
                           <TestButton id={p.id} />
-                          <Button size="sm" variant="ghost" onClick={() => credential.show(p)}>
+                          <Button size="sm" variant="outline" onClick={() => credential.show(p)}>
                             {m.common_edit()}
                           </Button>
                           <ConfirmDialog
@@ -95,11 +95,7 @@ function DnsPage() {
                             note={p.zone}
                             destructive
                             trigger={
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="text-destructive hover:text-destructive"
-                              >
+                              <Button size="sm" variant="destructive">
                                 {m.common_delete()}
                               </Button>
                             }

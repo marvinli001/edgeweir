@@ -3,7 +3,7 @@ import {
   type ServiceAccountScope,
   serviceAccountScope,
 } from "@edgeweir/contract";
-import { Add01Icon, Delete02Icon, Key01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, Delete02Icon, Key01Icon, PencilEdit01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
@@ -334,8 +334,13 @@ export function ServiceAccountsPanel({
             >
               {m.service_accounts_keys()}
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => edit.show(row.original)}>
-              {m.orgs_edit()}
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label={m.service_accounts_edit()}
+              onClick={() => edit.show(row.original)}
+            >
+              <HugeiconsIcon icon={PencilEdit01Icon} strokeWidth={2} />
             </Button>
             <DeleteAccountAction account={row.original} />
           </div>

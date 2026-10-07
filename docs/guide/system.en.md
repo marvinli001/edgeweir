@@ -207,7 +207,7 @@ Page: the **Service accounts** tab of **System settings** (`/system?tab=service-
 | Action | Description |
 | --- | --- |
 | **New service account** | **Name** (at most 64 characters, unique), **Scopes**, **Enabled** |
-| **Edit** | Change name, scopes, and enabled state; keys of a disabled service account are refused |
+| Edit | Change name, scopes, and enabled state; keys of a disabled service account are refused |
 | **Keys** | **New key** (optional **Key name**; the key is shown once); **Revoke** needs confirmation. The list shows **Revoked** and **Last used** |
 | Delete | Needs confirmation; all of its keys stop working |
 
