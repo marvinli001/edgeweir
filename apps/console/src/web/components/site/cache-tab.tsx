@@ -78,13 +78,14 @@ export function CacheTab({ site }: { site: Site }) {
     <div className="flex flex-col gap-4">
       <CachePurgeCard site={site} />
       {/* Keyed by their own data, so saving one card keeps unsaved edits in the others. */}
-      <CacheRulesCard key={JSON.stringify(site.cacheRules)} site={site} />
-      <CacheKeyCard key={JSON.stringify({ cacheKey, rangeSlice })} site={site} />
-      <PurgeMethodCard key={JSON.stringify(purgeMethod)} site={site} />
-      <CacheTagCard key={String(keepCacheTag)} site={site} />
-      <XCacheCard key={String(xCache)} site={site} />
+      {/* Each key starts with the card's name: sibling keys must differ ("true" twice duplicates a card). */}
+      <CacheRulesCard key={`rules-${JSON.stringify(site.cacheRules)}`} site={site} />
+      <CacheKeyCard key={`key-${JSON.stringify({ cacheKey, rangeSlice })}`} site={site} />
+      <PurgeMethodCard key={`purge-${JSON.stringify(purgeMethod)}`} site={site} />
+      <CacheTagCard key={`cache-tag-${keepCacheTag}`} site={site} />
+      <XCacheCard key={`x-cache-${xCache}`} site={site} />
       <CompressionCard site={site} />
-      <CharsetCard key={JSON.stringify(site.contentSettings.charset)} site={site} />
+      <CharsetCard key={`charset-${JSON.stringify(site.contentSettings.charset)}`} site={site} />
     </div>
   );
 }
