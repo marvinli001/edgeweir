@@ -1,6 +1,6 @@
 /*
  * Animated Beam: adapted from Magic UI (MIT, Magic UI; THIRD-PARTY-NOTICES.md). Changes: the
- * colors are tokens (hairline track, signal pulse), `dim` draws a dashed idle track instead, the
+ * colors are tokens (muted hairline track, signal pulse), `dim` draws a dashed idle track instead, the
  * pulse rests between runs (`repeatDelay`; beams sit on polled pages and stay quiet), and it only
  * runs while the beam is on screen, the tab is in front and motion is allowed (otherwise a still
  * pulse sits on the track).
@@ -86,8 +86,8 @@ export function AnimatedBeam({
         strokeLinecap="round"
         strokeDasharray={dim ? "3 5" : undefined}
         style={{
-          stroke: dim ? "var(--muted-foreground)" : "var(--border)",
-          opacity: dim ? 0.5 : 1,
+          stroke: "var(--muted-foreground)",
+          opacity: dim ? 0.5 : 0.3,
         }}
       />
       {dim ? null : (

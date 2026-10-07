@@ -4,6 +4,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
+import { Meter } from "@/components/appica/meter";
 import { ClusterDialog } from "@/components/clusters/cluster-dialog";
 import { ClusterLinks } from "@/components/clusters/cluster-links";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
@@ -22,14 +23,23 @@ import { formatNumber, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
-/** One labeled figure of the cluster summary strip. */
-function SummaryStat({ label, children }: { label: string; children: React.ReactNode }) {
+/** One labeled figure of the cluster summary: label, readout, an optional gauge under it. */
+function SummaryStat({
+  label,
+  children,
+  meter,
+}: {
+  label: string;
+  children: React.ReactNode;
+  meter?: React.ReactNode;
+}) {
   return (
-    <div className="flex min-w-0 flex-col gap-1 px-4 py-3">
+    <div className="flex min-w-0 flex-col gap-1.5 px-3 py-3 @2xl/main:px-4">
       <dt className="truncate text-xs text-muted-foreground">{label}</dt>
-      <dd className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xl font-semibold tracking-tight">
+      <dd className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xl leading-tight font-semibold tracking-tight [font-stretch:112%] @2xl/main:text-[1.375rem]">
         {children}
       </dd>
+      {meter ? <dd>{meter}</dd> : null}
     </div>
   );
 }
@@ -51,7 +61,10 @@ export function ClusterSummary({
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center gap-3">
-        <CardTitle className="flex-1" data-testid="cluster-name">
+        <CardTitle
+          className="min-w-32 flex-1 truncate text-lg font-semibold tracking-tight [font-stretch:106%]"
+          data-testid="cluster-name"
+        >
           {selected.name}
         </CardTitle>
         <div className="flex items-center gap-2">
@@ -97,26 +110,54 @@ export function ClusterSummary({
         </div>
       </CardHeader>
       {selected.nodeCount === 0 ? null : (
-        <CardContent className="flex flex-col gap-3">
-          <dl className="grid grid-cols-3 divide-x divide-edge overflow-hidden rounded-xl bg-well/60">
-            <SummaryStat label={m.clusters_nodes_online()}>
+        <CardContent className="grid gap-3 @4xl/main:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
+          <dl className="grid grid-cols-1 divide-y divide-edge overflow-hidden rounded-xl sunk-well @xs/main:grid-cols-3 @xs/main:divide-x @xs/main:divide-y-0 @4xl/main:grid-cols-1 @4xl/main:divide-x-0 @4xl/main:divide-y">
+            <SummaryStat
+              label={m.clusters_nodes_online()}
+              meter={
+                <Meter
+                  value={selected.onlineNodeCount}
+                  max={selected.nodeCount}
+                  low={0.5}
+                  high={selected.nodeCount - 0.5}
+                  optimum={selected.nodeCount}
+                  label={m.clusters_nodes_count({
+                    online: selected.onlineNodeCount,
+                    total: selected.nodeCount,
+                  })}
+                />
+              }
+            >
               <Dot
-                tone={
-                  selected.nodeCount === 0
-                    ? "idle"
-                    : selected.onlineNodeCount < selected.nodeCount
-                      ? "bad"
-                      : "good"
-                }
+                tone={selected.onlineNodeCount < selected.nodeCount ? "bad" : "good"}
+                glow={selected.onlineNodeCount > 0}
               />
               <span data-testid="cluster-nodes-online" className="readout">
                 {selected.onlineNodeCount}/{selected.nodeCount}
               </span>
             </SummaryStat>
-            <SummaryStat label={m.clusters_sites()}>{formatNumber(selected.siteCount)}</SummaryStat>
-            <SummaryStat label={m.clusters_latest_revision()}>
+            <SummaryStat label={m.clusters_sites()}>
+              <span className="readout">{formatNumber(selected.siteCount)}</span>
+            </SummaryStat>
+            <SummaryStat
+              label={m.clusters_latest_revision()}
+              meter={
+                selected.latestRevision && selected.liveNodeCount > 0 ? (
+                  <Meter
+                    value={selected.appliedNodeCount}
+                    max={selected.liveNodeCount}
+                    high={selected.liveNodeCount - 0.5}
+                    optimum={selected.liveNodeCount}
+                    label={m.clusters_applied({
+                      applied: selected.appliedNodeCount,
+                      total: selected.liveNodeCount,
+                    })}
+                  />
+                ) : undefined
+              }
+            >
               <span
-                className={cn(selected.latestRevision && "font-mono")}
+                className={cn(selected.latestRevision && "readout font-mono")}
                 data-testid="cluster-latest-revision"
               >
                 {selected.latestRevision
@@ -125,7 +166,7 @@ export function ClusterSummary({
               </span>
               {selected.latestRevision && selected.liveNodeCount > 0 ? (
                 <span
-                  className="flex items-center gap-1.5 text-sm font-normal tracking-normal whitespace-nowrap text-muted-foreground"
+                  className="flex items-center gap-1.5 text-sm font-normal tracking-normal whitespace-nowrap text-muted-foreground [font-stretch:100%]"
                   data-testid="cluster-applied"
                 >
                   <Dot
