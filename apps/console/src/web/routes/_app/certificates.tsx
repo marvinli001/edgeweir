@@ -25,7 +25,6 @@ import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { certificateErrorText } from "@/lib/certificate-errors";
 import { formatDateTime, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
-import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/certificates")({ component: CertificatesPage });
 
@@ -107,18 +106,7 @@ function CertificatesPage() {
                   </div>
                   <div className="flex min-w-0 flex-col gap-1 text-sm">
                     {cert.notAfter && days !== null ? (
-                      <span
-                        className={cn(
-                          "relative",
-                          days <= 14 ? "ps-4 @3xl/main:ps-0" : "text-muted-foreground",
-                        )}
-                      >
-                        {/* Expiring within two weeks: a light before the days left (in the gap). */}
-                        {days <= 14 ? (
-                          <span className="absolute top-1.5 left-0 inline-flex @3xl/main:-left-4">
-                            <Dot tone={days === 0 ? "bad" : "warn"} />
-                          </span>
-                        ) : null}
+                      <span className="text-muted-foreground">
                         {m.cert_expires({ date: formatDateTime(cert.notAfter), days })}
                       </span>
                     ) : null}
