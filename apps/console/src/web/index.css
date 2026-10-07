@@ -1,9 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
-/* Second Latin face under review in the design lab (html[data-font="mona"]); loaded only when used. */
+/* Console Latin face: weight 200–900 and width 75–125% (headings and readouts widen). */
 @import "@fontsource-variable/mona-sans/standard.css";
+/* Status pages keep Geist: their readout's weight encodes the status (DESIGN.md). */
+@import "@fontsource-variable/geist";
 /* Simplified Chinese in 101 unicode-range shards: a page downloads only the shards it shows. */
 @import "@fontsource-variable/noto-sans-sc";
 @import "./appica-bridge.css";
@@ -299,7 +300,7 @@
  * never the values.
  */
 :root {
-  --font-latin: "Geist Variable";
+  --font-latin: "Mona Sans Variable";
   --canvas: oklch(0.982 0.004 258);
   --well: oklch(0.958 0.006 258);
   --raised: oklch(1 0 0);
@@ -380,10 +381,6 @@
   --sidebar-accent-foreground: oklch(0.18 0.014 258);
   --sidebar-border: oklch(0.905 0.008 258);
   --sidebar-ring: oklch(0.7 0.02 258);
-}
-
-:root[data-font="mona"] {
-  --font-latin: "Mona Sans Variable";
 }
 
 .dark {
@@ -567,14 +564,57 @@
  * edges to the edges of the surface, which clips it. Motion stops under reduced motion.
  */
 @layer components {
+  /*
+   * The instrument keeps the neutral tokens and Geist it was designed with (ADR-0034): the Lit
+   * Instrument surfaces, cool neutrals and Mona Sans stop at its edge, so it matches the edge
+   * nodes' copies (errorpages.lua, challenge.lua) without touching them.
+   */
   .status-surface {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --secondary: oklch(0.967 0.001 286.375);
+    --secondary-foreground: oklch(0.21 0.006 285.885);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --accent: oklch(0.97 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --border: oklch(0.922 0 0);
+    --input: oklch(0.922 0 0);
+    --ring: oklch(0.708 0 0);
+    --well: var(--muted);
+    --edge: oklch(0 0 0 / 8%);
     --status-tick: color-mix(in oklab, var(--foreground) 22%, transparent);
     --status-ease: cubic-bezier(0.16, 1, 0.3, 1);
+    font-family: "Geist Variable", sans-serif;
+    color: var(--foreground);
+    background-color: var(--background);
     position: relative;
     display: grid;
     place-items: center;
     overflow: hidden;
     padding: 3.5rem 1.25rem;
+  }
+  .dark .status-surface {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.274 0.006 286.033);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
+    --edge: oklch(1 0 0 / 10%);
   }
   .status-frame {
     position: relative;

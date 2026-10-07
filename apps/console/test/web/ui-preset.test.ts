@@ -34,6 +34,18 @@ describe("shadcn preset", () => {
     });
   });
 
+  it("sets the console in Mona Sans and keeps the status pages on Geist and neutral tokens", () => {
+    // shadcn presets have no Mona Sans, so the preset still resolves the Geist import that the
+    // status pages use; the console face is --font-latin (ADR-0034).
+    const css = readFileSync(resolve(root, "src/web/index.css"), "utf8");
+    expect(css).toMatch(/--font-latin:\s*"Mona Sans Variable";/);
+    expect(css).toMatch(/--font-sans:\s*var\(--font-latin\),\s*"Noto Sans SC Variable"/);
+    const status = css.slice(css.indexOf(".status-surface {"));
+    expect(status).toMatch(/^\.status-surface \{[^}]*font-family:\s*"Geist Variable", sans-serif;/);
+    expect(status).toMatch(/^\.status-surface \{[^}]*--background:\s*oklch\(1 0 0\);/);
+    expect(status).toMatch(/\.dark \.status-surface \{[^}]*--background:\s*oklch\(0\.145 0 0\);/);
+  });
+
   it("keeps a single ThemeProvider in the app", () => {
     const main = readFileSync(resolve(root, "src/web/main.tsx"), "utf8");
     expect(main.match(/<ThemeProvider/g)).toHaveLength(1);
