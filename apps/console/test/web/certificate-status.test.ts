@@ -24,6 +24,19 @@ describe("certificate state", () => {
     expect(certificateState({ status: "error", notAfter: null }, now)).toBe("error");
   });
 
+  it("shows an upload nodes cannot load as unloadable, expired or not", () => {
+    for (const notAfter of [past, future])
+      expect(
+        certificateState(
+          { status: "error", notAfter, lastError: "certificate_key_explicit_curve" },
+          now,
+        ),
+      ).toBe("unloadable");
+    expect(
+      certificateState({ status: "error", notAfter: future, lastError: "acme_caa" }, now),
+    ).toBe("error");
+  });
+
   it("keeps a renewal in progress and a certificate not issued yet", () => {
     expect(certificateState({ status: "issuing", notAfter: past }, now)).toBe("issuing");
     expect(certificateState({ status: "pending", notAfter: past }, now)).toBe("pending");

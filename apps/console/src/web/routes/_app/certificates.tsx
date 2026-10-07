@@ -50,6 +50,7 @@ function CertificatesPage() {
     ready: m.cert_status_ready,
     error: m.cert_status_error,
     expired: m.cert_status_expired,
+    unloadable: m.cert_status_unloadable,
   };
   return (
     <Page
@@ -84,7 +85,7 @@ function CertificatesPage() {
                   <CardTitle className="truncate">{cert.name}</CardTitle>
                   <Badge
                     variant={
-                      ["error", "expired"].includes(certificateState(cert))
+                      ["error", "expired", "unloadable"].includes(certificateState(cert))
                         ? "destructive"
                         : "secondary"
                     }
