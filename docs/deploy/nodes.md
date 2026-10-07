@@ -132,7 +132,7 @@ deb、rpm 由包脚本创建 `edgeweir` 用户与目录；tar.gz 由 `install.sh
 
 ## 访客 IP
 
-集群「网络」页签的「访客 IP」决定节点 HTTP / HTTPS 监听的访客地址：规则的 `ip.src`、封禁、CC、访问日志、错误页的 `{{client_ip}}` 与回源的 `X-Real-IP` 都使用它。修改后发布配置版本，节点 reload。
+集群「网络」页签的「访客 IP」决定节点 HTTP / HTTPS 监听的访客地址：规则的 `ip.src`、封禁、CC、访问日志、错误页的 `{{client_ip}}`、维护模式的放行地址、PURGE 按访客地址的限频与回源的 `X-Real-IP` 都使用它。修改后发布配置版本，节点 reload。
 
 | 来源 | 行为 | 适用 |
 | --- | --- | --- |

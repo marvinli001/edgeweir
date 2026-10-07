@@ -154,7 +154,7 @@ With **Force HTTPS** on, the redirect options appear below the switches:
 | Redirect port | 443 or an HTTPS port the site is bound to | 443 | Port of the target URL; with 443 the URL has no port ("Redirect port {port} is not an HTTPS port of the site") |
 | Domains not redirected | Domains of the site, at most 50 | None | These domains are not redirected by **Force HTTPS**; a wildcard is written `*.example.com`, and an exact domain of the site is not covered by it |
 
-A [config rule](rules.en.md)'s `forceHttps` still turns the redirect on or off per request: when a rule turns it on, the status and port above apply and excluded domains are redirected too. Removing the HTTPS port the redirect goes to is refused. Configurations with values other than the defaults need `edge-ports-v1`.
+A [config rule](rules.en.md)'s `forceHttps` still turns the redirect on or off per request: when a rule turns it on, the status and port above apply and excluded domains are redirected too. Removing the HTTPS port the redirect goes to is refused; choosing no certificate sets the redirect port back to 443, and removing a domain from the site also removes it from the excluded domains. Configurations with values other than the defaults need `edge-ports-v1`.
 
 Verify:
 

@@ -132,7 +132,7 @@ Nodes accept user traffic on these ports; open them in the host firewall and the
 
 ## Client IP
 
-**Client IP** on a cluster's **Network** tab decides the visitor address of the nodes' HTTP and HTTPS listeners: rules' `ip.src`, bans, CC, access logs, `{{client_ip}}` of error pages and `X-Real-IP` towards the origins all use it. Saving publishes a configuration revision; nodes reload.
+**Client IP** on a cluster's **Network** tab decides the visitor address of the nodes' HTTP and HTTPS listeners: rules' `ip.src`, bans, CC, access logs, `{{client_ip}}` of error pages, the allowed addresses of maintenance mode, the PURGE limit per client address and `X-Real-IP` towards the origins all use it. Saving publishes a configuration revision; nodes reload.
 
 | Source | Behavior | For |
 | --- | --- | --- |

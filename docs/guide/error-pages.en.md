@@ -80,7 +80,7 @@ In the **Maintenance mode** card on the **Error pages** tab, turn on **Enabled**
 | Item | Behavior |
 | --- | --- |
 | Response | 503, `X-Edgeweir-Error: maintenance`, `Cache-Control: no-store`; no cache lookup and no origin request, and nothing answered during maintenance enters the cache |
-| Where | After bans and PURGE, before the rules; allowed addresses are matched against the visitor's TCP address, allowed prefixes against the normalized path before rule rewrites |
+| Where | After bans and PURGE, before the rules; allowed addresses are matched against the visitor address (the rules' `ip.src`, set by the cluster's [client IP](../deploy/nodes.en.md#client-ip)), allowed prefixes against the normalized path before rule rewrites |
 | ACME | HTTP-01 validation requests for certificates are not affected |
 | Applying | Saving publishes a revision ("Maintenance of {site} updated"); nodes hot-update |
 | Audit | `site.maintenance_update` |
@@ -179,7 +179,7 @@ Nodes recognize disabled sites from the offline host list in their configuration
 | The origin's error page is not replaced | **Replace origin error responses** is off, or neither the status nor its class has a page | Turn it on and set a page for the status or for **Other 4xx** / **Other 5xx** |
 | The redirect URL shows "Check “Redirect to URL”" | The URL is no `http(s)` URL or path starting with `/`, has spaces or other placeholders, or exceeds 2048 characters | Fix the URL; use only `{{status}}` and `{{request_id}}` |
 | Every visitor sees the maintenance page | Maintenance mode is on and the visitor's address and path are not allowed | Turn maintenance off, or add allowed addresses or path prefixes |
-| An allowed address still gets the maintenance page | With a proxy in front of the node, the TCP address is the proxy's | Allow the proxy's range, or allow on the proxy |
+| An allowed address still gets the maintenance page | With a proxy in front of the node and the cluster's client IP set to direct, the visitor address is the proxy's | Set the cluster's [client IP](../deploy/nodes.en.md#client-ip) to PROXY protocol or a trusted proxy header, or allow the proxy's range |
 | Saving shows "The … error page is larger than 65536 bytes" | The template exceeds 64 KiB in UTF-8 | Shorten the template; host large images elsewhere |
 | A disabled site answers 404 | The node is too old to know offline hosts | Upgrade the node |
 | The request ID of a page is not in the logs | Access logs are off or the request was not sampled | Raise the sample rate on the **Logs** tab |
