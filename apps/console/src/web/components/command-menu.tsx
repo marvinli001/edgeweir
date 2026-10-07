@@ -46,6 +46,9 @@ const filter = (value: string, search: string, keywords?: string[]) =>
 
 type SiteEntry = { id: string; name: string; domains: string[] };
 
+/** Result rows: icons stay muted until the row is selected (the item's own style lights them). */
+const ITEM = "*:[svg]:text-muted-foreground";
+
 /**
  * ⌘K / Ctrl+K command palette (shadcn command block): sites by name or domain (starred and recent
  * ones before a search), their Under Attack and purge, pages, and console-wide actions.
@@ -104,7 +107,7 @@ export function CommandMenu() {
   const keywords = (site: SiteEntry, ...extra: string[]) => [site.name, ...site.domains, ...extra];
 
   return (
-    <CommandDialog open={open} onOpenChange={setOpenState}>
+    <CommandDialog open={open} onOpenChange={setOpenState} className="sm:max-w-lg">
       {/* cmdk items need their Command root inside the dialog. */}
       <Command filter={filter}>
         <CommandInput
@@ -118,6 +121,7 @@ export function CommandMenu() {
             <CommandGroup heading={m.command_group_sites()}>
               {sites.map((site) => (
                 <CommandItem
+                  className={ITEM}
                   key={site.id}
                   value={`${BY_KEYWORDS}site:${site.id}`}
                   keywords={keywords(site)}
@@ -139,6 +143,7 @@ export function CommandMenu() {
             <CommandGroup heading={m.command_group_site_actions()}>
               {sites.slice(0, MAX_SITE_ACTIONS).flatMap((site) => [
                 <CommandItem
+                  className={ITEM}
                   key={`${site.id}:under-attack`}
                   value={`${BY_KEYWORDS}under-attack:${site.id}`}
                   keywords={keywords(site, m.protection_under_attack())}
@@ -151,6 +156,7 @@ export function CommandMenu() {
                   {m.command_site_under_attack({ name: site.name })}
                 </CommandItem>,
                 <CommandItem
+                  className={ITEM}
                   key={`${site.id}:purge`}
                   value={`${BY_KEYWORDS}purge:${site.id}`}
                   keywords={keywords(site, m.sites_purge())}
@@ -168,13 +174,18 @@ export function CommandMenu() {
           <CommandGroup heading={m.command_group_navigation()}>
             {[...navGroups().flatMap((group) => group.items), ...moreNav(), ...accountNav()].map(
               (item) => (
-                <CommandItem key={String(item.to)} onSelect={run(() => navigate({ to: item.to }))}>
+                <CommandItem
+                  key={String(item.to)}
+                  className={ITEM}
+                  onSelect={run(() => navigate({ to: item.to }))}
+                >
                   {item.icon}
                   {item.title}
                 </CommandItem>
               ),
             )}
             <CommandItem
+              className={ITEM}
               onSelect={run(() => navigate({ to: "/system", search: { tab: "probes" } }))}
             >
               <HugeiconsIcon icon={Activity01Icon} strokeWidth={2} />
@@ -183,17 +194,22 @@ export function CommandMenu() {
           </CommandGroup>
           <CommandSeparator />
           <CommandGroup heading={m.command_group_actions()}>
-            <CommandItem onSelect={run(() => navigate({ to: "/sites", search: { create: true } }))}>
+            <CommandItem
+              className={ITEM}
+              onSelect={run(() => navigate({ to: "/sites", search: { create: true } }))}
+            >
               <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
               {m.nav_new_site()}
             </CommandItem>
             <CommandItem
+              className={ITEM}
               onSelect={run(() => navigate({ to: "/clusters", search: { enroll: true } }))}
             >
               <HugeiconsIcon icon={ServerStack01Icon} strokeWidth={2} />
               {m.nav_add_node()}
             </CommandItem>
             <CommandItem
+              className={ITEM}
               onSelect={run(() => runAction({ kind: "ban", siteId: currentSiteId }))}
               data-testid="command-ban"
             >
@@ -201,6 +217,7 @@ export function CommandMenu() {
               {m.command_ban_ip()}
             </CommandItem>
             <CommandItem
+              className={ITEM}
               onSelect={run(() =>
                 navigate({
                   to: "/purge",
@@ -213,17 +230,22 @@ export function CommandMenu() {
               {m.command_purge_urls()}
             </CommandItem>
             <CommandItem
+              className={ITEM}
               onSelect={run(() => runAction({ kind: "platform-under-attack" }))}
               data-testid="command-platform-under-attack"
             >
               <HugeiconsIcon icon={Shield01Icon} strokeWidth={2} />
               {m.command_platform_under_attack()}
             </CommandItem>
-            <CommandItem onSelect={run(() => setLocale(getLocale() === "zh-CN" ? "en" : "zh-CN"))}>
+            <CommandItem
+              className={ITEM}
+              onSelect={run(() => setLocale(getLocale() === "zh-CN" ? "en" : "zh-CN"))}
+            >
               <HugeiconsIcon icon={LanguageSkillIcon} strokeWidth={2} />
               {m.command_toggle_language()}
             </CommandItem>
             <CommandItem
+              className={ITEM}
               onSelect={run(() => setTheme(resolvedTheme === "dark" ? "light" : "dark"))}
             >
               <HugeiconsIcon icon={Moon02Icon} strokeWidth={2} />
