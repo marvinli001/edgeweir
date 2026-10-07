@@ -144,7 +144,7 @@ function KeysDialog({ account, open, onOpenChange }: { account: ServiceAccount }
             }
           }}
         >
-          <Field className="w-56">
+          <Field className="w-full sm:w-56">
             <FieldLabel htmlFor="keyName">{m.service_accounts_key_name()}</FieldLabel>
             <Input
               id="keyName"
@@ -179,29 +179,33 @@ function KeysDialog({ account, open, onOpenChange }: { account: ServiceAccount }
             {account.keys.map((k, index) => (
               <li
                 key={k.id}
-                className="flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 animate-enter"
+                className="flex min-h-12 items-center gap-3 px-3 py-2 animate-enter"
                 style={enterDelay(index)}
               >
-                <span className="font-medium">{k.name || "—"}</span>
-                <code className="font-mono text-xs text-muted-foreground">{k.prefix}…</code>
-                {k.revokedAt ? (
-                  <Badge variant="secondary">{m.service_accounts_key_revoked()}</Badge>
-                ) : null}
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {m.service_accounts_key_last_used()}{" "}
-                  {k.lastUsedAt ? (
-                    <span title={formatDateTime(k.lastUsedAt)}>{timeAgo(k.lastUsedAt)}</span>
-                  ) : (
-                    m.service_accounts_key_never_used()
-                  )}
-                </span>
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                    <span className="font-medium">{k.name || "—"}</span>
+                    <code className="font-mono text-xs text-muted-foreground">{k.prefix}…</code>
+                    {k.revokedAt ? (
+                      <Badge variant="secondary">{m.service_accounts_key_revoked()}</Badge>
+                    ) : null}
+                  </span>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {m.service_accounts_key_last_used()}{" "}
+                    {k.lastUsedAt ? (
+                      <span title={formatDateTime(k.lastUsedAt)}>{timeAgo(k.lastUsedAt)}</span>
+                    ) : (
+                      m.service_accounts_key_never_used()
+                    )}
+                  </span>
+                </div>
                 {k.revokedAt ? null : (
                   <ConfirmDialog
                     trigger={
                       <Button
                         size="sm"
                         variant="outline"
-                        className="ml-auto"
+                        className="shrink-0"
                         data-testid="service-account-key-revoke"
                       >
                         {m.service_accounts_key_revoke()}
