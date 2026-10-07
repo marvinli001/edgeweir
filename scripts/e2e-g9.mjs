@@ -19,9 +19,11 @@
 //   g. the trusted header mode: X-Forwarded-For counts from a trusted peer
 //      (client-b) only; an untrusted one (client-a) keeps its own address
 // The G9 sites, applications, cluster g9-proxy and its node stay for
-// apps/console/e2e/g9.spec.ts (.e2e/g9-state.json); `node scripts/e2e-g9.mjs
-// --cleanup` removes them and the extra listener ports, except the bench
-// site proxy-bench.g9.test (BENCH_SCENARIO=proxy in scripts/bench.sh).
+// apps/console/e2e/g9.spec.ts (.e2e/g9-state.json) and for BENCH_SCENARIO=proxy
+// and proxy-plain in scripts/bench.sh (proxy-bench.g9.test on g9-proxy);
+// `node scripts/e2e-g9.mjs --cleanup` removes them and the extra listener
+// ports. The full e2e runs that cleanup and then deletes the default
+// cluster's node this script needs, so bench after running it on its own.
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";

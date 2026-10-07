@@ -20,8 +20,10 @@
 # pass and challenge default to ua-bench.test, which scripts/e2e-g2.mjs leaves
 # behind (whoami, cache rule on /, Under Attack js); headers to
 # hdr-bench.g8.test, which scripts/e2e-g8.mjs leaves behind; proxy and
-# proxy-plain to proxy-bench.g9.test, which scripts/e2e-g9.mjs sets up (run
-# it again after the full e2e, which cleans it up).
+# proxy-plain to proxy-bench.g9.test, which scripts/e2e-g9.mjs sets up. The
+# full e2e removes it (and at its end the default cluster's node, which
+# e2e-g9.mjs needs): run e2e-g9.mjs on its own on a stack whose full e2e
+# stopped before the node lifecycle step, then bench.
 set -euo pipefail
 OHA_BIN="${OHA_BIN:-oha}"
 command -v "$OHA_BIN" >/dev/null || { echo 'Install oha or set OHA_BIN to its verified binary.' >&2; exit 1; }
