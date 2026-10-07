@@ -149,6 +149,13 @@ describe("i18n messages", () => {
     expect(Object.keys(en).sort()).toEqual(Object.keys(zh).sort());
   });
 
+  it("keeps no keys of organizations, members, invitations or roles (one operator)", () => {
+    const keys = Object.keys(zh).filter((key) =>
+      /^(orgs?|organizations?|members?|invitations?|roles?|tenants?)_/.test(key),
+    );
+    expect(keys).toEqual([]);
+  });
+
   it("uses the same placeholders in every locale and variant and never leaves a message empty", () => {
     for (const key of Object.keys(zh)) {
       if (key === "$schema") continue;

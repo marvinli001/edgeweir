@@ -170,7 +170,7 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
       <CardHeader className="flex flex-row items-center gap-2">
         <CardTitle className="flex-1">{m.security_2fa()}</CardTitle>
         <Badge variant={enabled ? "default" : "outline"} data-testid="two-factor-status">
-          {enabled ? m.members_2fa_on() : m.members_2fa_off()}
+          {enabled ? m.security_2fa_on() : m.security_2fa_off()}
         </Badge>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
