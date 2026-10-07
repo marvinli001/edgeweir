@@ -13,9 +13,9 @@ import { Sparkline } from "@/components/appica/sparkline";
 import { FlowNumber, FlowScaled, NumberFlowGroup } from "@/components/effects/number-flow";
 import { Spotlight } from "@/components/effects/spotlight";
 import { QueryView } from "@/components/states";
+import { LiveDot } from "@/components/status-dot";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
-import { cn } from "@/lib/utils";
 
 const BIT_UNITS = ["bps", "Kbps", "Mbps", "Gbps", "Tbps"] as const;
 
@@ -80,21 +80,16 @@ function Tile({
 }
 
 /**
- * The platform right now: request rate and egress of the last full minute, the cache hit ratio
- * of the last hour (labelled, as the statistics below show it for the chosen range), and nodes
- * online. Polls every minute, the size of the hour's buckets, so the 1-hour traffic query keeps
- * the cadence the statistics give it; the digits roll to each new value. Until the first answer
- * the row is a loader, and a failed first load an error with a retry, never a row of zeros.
+ * The platform right now, under the section's title: request rate and egress of the last full
+ * minute, the cache hit ratio of the last hour (labelled, as the statistics below show it for the
+ * chosen range), and nodes online. Traffic polls every minute, the size of the hour's buckets, so
+ * the 1-hour traffic query keeps the cadence the statistics give it; the digits roll to each new
+ * value. Until its first answer the traffic tiles are a loader, and a failed first load an error
+ * with a retry, never a row of zeros; the nodes tile comes from the overview summary the page has
+ * already loaded and stands on its own. The live light is on only while the traffic tiles show
+ * live numbers.
  */
-export function LiveKpis({
-  online,
-  total,
-  className,
-}: {
-  online: number;
-  total: number;
-  className?: string;
-}) {
+export function LiveKpis({ online, total }: { online: number; total: number }) {
   const traffic = useQuery({
     ...orpc.analytics.traffic.queryOptions({ input: { range: "1h" } }),
     refetchInterval: 60_000,
@@ -102,86 +97,101 @@ export function LiveKpis({
     meta: { background: true },
   });
   return (
-    <QueryView query={traffic} loadingClassName="min-h-36">
-      {(data) => <LiveTiles traffic={data} online={online} total={total} className={className} />}
-    </QueryView>
+    <section className="flex flex-col gap-3" aria-labelledby="live-title">
+      <div className="flex items-center gap-3">
+        <h2 id="live-title" className="text-base font-semibold">
+          {m.overview_live_title()}
+        </h2>
+        {traffic.isSuccess ? <LiveDot label={m.overview_live()} /> : null}
+      </div>
+      <NumberFlowGroup>
+        <div className="grid gap-3 @sm/main:grid-cols-2 @3xl/main:grid-cols-4">
+          <QueryView query={traffic} frame={TrafficPending} loadingClassName="min-h-36">
+            {(data) => <TrafficTiles traffic={data} />}
+          </QueryView>
+          <NodesTile online={online} total={total} />
+        </div>
+      </NumberFlowGroup>
+    </section>
   );
 }
 
-function LiveTiles({
-  traffic,
-  online,
-  total,
-  className,
-}: {
-  traffic: Traffic;
-  online: number;
-  total: number;
-  className?: string;
-}) {
+/** The loader or the error in the traffic tiles' place, beside the nodes tile. */
+function TrafficPending({ children }: { children?: React.ReactNode }) {
+  return (
+    <div className="col-span-full flex flex-col justify-center @3xl/main:col-span-3">
+      {children}
+    </div>
+  );
+}
+
+function TrafficTiles({ traffic }: { traffic: Traffic }) {
   const now = latest(traffic);
   const rps = useArrival(Math.round(now.rps));
   const bps = useArrival(now.bps);
   const hit = useArrival(now.hit);
-  const nodes = useArrival(online);
   const series = (pick: (p: Traffic["points"][number]) => number) => now.points.map(pick);
 
   return (
-    <NumberFlowGroup>
-      <div className={cn("grid gap-3 @sm/main:grid-cols-2", className)}>
-        <Tile
-          icon={PulseRectangle01Icon}
-          title={m.overview_request_rate()}
-          index={0}
-          footer={<Sparkline tone="signal" data={series((p) => p.requests)} />}
-        >
-          <FlowNumber value={rps} suffix={m.overview_per_second()} />
-        </Tile>
-        <Tile
-          icon={ArrowDataTransferVerticalIcon}
-          title={m.overview_egress()}
-          index={1}
-          footer={<Sparkline tone="signal" data={series((p) => p.bytesSent)} />}
-        >
-          <FlowScaled value={bps} units={BIT_UNITS} />
-        </Tile>
-        <Tile
-          icon={DatabaseLightningIcon}
-          title={m.analytics_hit_ratio()}
-          span={m.analytics_range_1h()}
-          index={2}
-          footer={
-            <Sparkline
-              tone="metric"
-              data={series((p) =>
-                p.cacheHits + p.cacheMisses > 0 ? p.cacheHits / (p.cacheHits + p.cacheMisses) : 0,
-              )}
-            />
-          }
-        >
-          <FlowNumber
-            value={hit / 100}
-            format={{ style: "percent", maximumFractionDigits: 1, minimumFractionDigits: 1 }}
+    <>
+      <Tile
+        icon={PulseRectangle01Icon}
+        title={m.overview_request_rate()}
+        index={0}
+        footer={<Sparkline tone="signal" data={series((p) => p.requests)} />}
+      >
+        <FlowNumber value={rps} suffix={m.overview_per_second()} />
+      </Tile>
+      <Tile
+        icon={ArrowDataTransferVerticalIcon}
+        title={m.overview_egress()}
+        index={1}
+        footer={<Sparkline tone="signal" data={series((p) => p.bytesSent)} />}
+      >
+        <FlowScaled value={bps} units={BIT_UNITS} />
+      </Tile>
+      <Tile
+        icon={DatabaseLightningIcon}
+        title={m.analytics_hit_ratio()}
+        span={m.analytics_range_1h()}
+        index={2}
+        footer={
+          <Sparkline
+            tone="metric"
+            data={series((p) =>
+              p.cacheHits + p.cacheMisses > 0 ? p.cacheHits / (p.cacheHits + p.cacheMisses) : 0,
+            )}
           />
-        </Tile>
-        <Tile
-          icon={ServerStack01Icon}
-          title={m.clusters_nodes_online()}
-          index={3}
-          footer={
-            <div className="flex flex-col gap-2 px-4 pb-4">
-              <Meter
-                value={total > 0 ? (online / total) * 100 : 0}
-                high={99.9}
-                optimum={100}
-                label={m.clusters_nodes_count({ online, total })}
-              />
-            </div>
-          }
-        >
-          <FlowNumber value={nodes} suffix={` / ${total}`} />
-        </Tile>
-      </div>
-    </NumberFlowGroup>
+        }
+      >
+        <FlowNumber
+          value={hit / 100}
+          format={{ style: "percent", maximumFractionDigits: 1, minimumFractionDigits: 1 }}
+        />
+      </Tile>
+    </>
+  );
+}
+
+function NodesTile({ online, total }: { online: number; total: number }) {
+  const nodes = useArrival(online);
+  return (
+    <Tile
+      icon={ServerStack01Icon}
+      title={m.clusters_nodes_online()}
+      index={3}
+      footer={
+        <div className="flex flex-col gap-2 px-4 pb-4">
+          <Meter
+            value={total > 0 ? (online / total) * 100 : 0}
+            high={99.9}
+            optimum={100}
+            label={m.clusters_nodes_count({ online, total })}
+          />
+        </div>
+      }
+    >
+      <FlowNumber value={nodes} suffix={` / ${total}`} />
+    </Tile>
   );
 }
