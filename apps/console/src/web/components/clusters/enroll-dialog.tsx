@@ -54,9 +54,11 @@ export function EnrollDialogHost({
 const TTL_OPTIONS = [15, 60, 24 * 60];
 
 /**
- * The cluster and the node being added: a dashed idle line while the token waits, a live beam
- * once the node is online. Reads the token status EnrollProgress polls (same query, no fetch of
- * its own). Decorative: the progress list says the same in words.
+ * The cluster and the node being added: a dashed idle line while the token waits, a still line
+ * once the node is online, with one signal pulse each time the node reaches the next step
+ * (online, configuration applied, data plane healthy, address); nothing runs once it is done.
+ * Reads the token status EnrollProgress polls (same query, no fetch of its own). Decorative: the
+ * progress list says the same in words.
  */
 function EnrollLink({ cluster, tokenId }: { cluster: Cluster; tokenId: string }) {
   const status = useQuery({
@@ -65,6 +67,13 @@ function EnrollLink({ cluster, tokenId }: { cluster: Cluster; tokenId: string })
   });
   const node = status.data?.node ?? null;
   const online = !!node?.online;
+  const steps = node
+    ? [
+        node.applyState === "applied" && node.appliedRevision > 0,
+        node.dataPlaneHealthy,
+        node.schedulingAddresses.length > 0,
+      ].filter(Boolean).length
+    : 0;
   const container = React.useRef<HTMLDivElement>(null);
   const from = React.useRef<HTMLSpanElement>(null);
   const to = React.useRef<HTMLSpanElement>(null);
@@ -86,8 +95,8 @@ function EnrollLink({ cluster, tokenId }: { cluster: Cluster; tokenId: string })
       </div>
       <div
         className={cn(
-          "relative z-[1] flex min-w-0 items-center gap-2 rounded-xl py-2 pr-3 pl-2 transition-colors duration-300",
-          node ? "bg-raised shadow-elev-1" : "border border-dashed border-muted-foreground/40",
+          "relative z-[1] flex min-w-0 items-center gap-2 rounded-xl p-2 transition-colors duration-300",
+          node ? "bg-raised pr-3 shadow-elev-1" : "border border-dashed border-muted-foreground/40",
         )}
       >
         <span
@@ -100,18 +109,15 @@ function EnrollLink({ cluster, tokenId }: { cluster: Cluster; tokenId: string })
         <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-wash text-muted-foreground [&_svg]:size-3.5">
           <HugeiconsIcon icon={CloudServerIcon} strokeWidth={2} />
         </span>
-        {node ? (
-          <span className="truncate text-xs font-medium">{node.name}</span>
-        ) : (
-          <span className="h-2 w-14 rounded-full bg-wash" />
-        )}
+        {node ? <span className="truncate text-xs font-medium">{node.name}</span> : null}
       </div>
       <AnimatedBeam
         containerRef={container}
         fromRef={from}
         toRef={to}
         dim={!online}
-        repeatDelay={1.2}
+        runs={1}
+        replayKey={steps}
         className="z-0"
       />
     </div>
