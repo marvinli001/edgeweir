@@ -1124,6 +1124,21 @@ export const systemFixtures: Fixtures = {
   },
   probes: {
     list: () => probes,
+    // A one-time token, shown once with its start command (obviously fake values).
+    createToken: (input) => ({
+      tokenId: id(49, 1),
+      token: "ewp_LAB0token0not0a0real0secret",
+      expiresAt: ahead((input.ttlMinutes ?? 60) * MINUTE),
+      serverUrl: NODE_CHANNEL_URL,
+      caSha256: CA_SHA256,
+      command: [
+        "docker run -d --name edgeweir-probe --restart unless-stopped \\",
+        `  -e EDGEWEIR_SERVER=${NODE_CHANNEL_URL} \\`,
+        `  -e EDGEWEIR_CA_SHA256=${CA_SHA256} \\`,
+        "  -e EDGEWEIR_TOKEN=ewp_LAB0token0not0a0real0secret \\",
+        "  registry.example.net/edgeweir-probe:latest",
+      ].join("\n"),
+    }),
     results: (input) =>
       probeResults.filter(
         (r) =>
@@ -1133,8 +1148,30 @@ export const systemFixtures: Fixtures = {
   },
   serviceAccounts: {
     list: () => serviceAccounts,
+    // The new key's secret is shown once (an obviously fake value).
+    createKey: (input) => ({
+      key: {
+        id: id(45, 99),
+        name: input.name || "",
+        prefix: "ews_LAB0new0",
+        createdAt: iso(NOW),
+        lastUsedAt: null,
+        revokedAt: null,
+      },
+      secret: "ews_LAB0new0key0not0a0real0secret0value",
+    }),
   },
   accessKeys: {
     list: () => accessKeys,
+    create: (input) => ({
+      id: id(46, 99),
+      name: input.name,
+      prefix: "ewk_LAB0",
+      scope: input.scope ?? "write",
+      enabled: true,
+      createdAt: iso(NOW),
+      lastUsedAt: null,
+      key: "ewk_LAB0access0key0not0a0real0secret",
+    }),
   },
 };
