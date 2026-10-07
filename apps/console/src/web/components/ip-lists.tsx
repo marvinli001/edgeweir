@@ -1,5 +1,7 @@
 import { type IpListDto, ipListInput } from "@edgeweir/contract";
 import { canonicalCidr } from "@edgeweir/rule-engine";
+import { Add01Icon, ListViewIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
@@ -7,17 +9,20 @@ import { AccessTabs } from "@/components/access-tabs";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
-import { Page } from "@/components/page";
+import { enterDelay, Page } from "@/components/page";
 import { EmptyState, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
-import { m } from "@/lib/i18n";
+import { formatNumber, m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
+
+/** Entries a list card shows in its well; a longer list ends with the count of the rest. */
+const PREVIEW = 6;
 
 /** An entry the contract accepts: an IP address or CIDR of at most 64 characters. */
 function validEntry(entry: string) {
@@ -41,46 +46,36 @@ export function IpListsPage() {
       await queries.invalidateQueries();
     },
   });
+  const createButton = (
+    <Button onClick={() => edit.show("new")} data-testid="ip-list-create">
+      <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+      {m.ip_lists_create()}
+    </Button>
+  );
   return (
-    <Page
-      title={m.ip_lists_title()}
-      actions={
-        <Button onClick={() => edit.show("new")} data-testid="ip-list-create">
-          {m.ip_lists_create()}
-        </Button>
-      }
-    >
+    <Page title={m.ip_lists_title()} actions={createButton}>
       <AccessTabs value="ip-lists" />
-      <QueryView query={query} empty={<EmptyState title={m.ip_lists_empty()} />}>
+      <QueryView
+        query={query}
+        empty={
+          <EmptyState icon={ListViewIcon} art="checkpoint" title={m.ip_lists_empty()}>
+            <Button variant="outline" onClick={() => edit.show("new")}>
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+              {m.ip_lists_create()}
+            </Button>
+          </EmptyState>
+        }
+      >
         {(lists) => (
-          <div className="grid gap-4">
-            {lists.map((list) => (
-              <Card key={list.id} className="animate-enter">
-                <CardContent className="flex flex-wrap items-center gap-3 py-4">
-                  <div className="min-w-0 flex-1">
-                    <p className="flex flex-wrap items-center gap-2 break-all font-mono text-sm">
-                      {`$${list.name}`}
-                      {list.kind === "collection" ? null : (
-                        <Badge variant="secondary" className="font-sans">
-                          {list.kind === "allow" ? m.rules_allow() : m.rules_block()}
-                        </Badge>
-                      )}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {m.ip_lists_count({ count: list.entries.length })}
-                    </p>
-                  </div>
-                  <Button variant="outline" onClick={() => edit.show(list)}>
-                    {m.common_edit()}
-                  </Button>
-                  <ConfirmDialog
-                    title={m.common_delete()}
-                    trigger={<Button variant="destructive">{m.common_delete()}</Button>}
-                    destructive
-                    onConfirm={() => remove.mutateAsync(list.id)}
-                  />
-                </CardContent>
-              </Card>
+          <div className="grid gap-4 @3xl/main:grid-cols-2">
+            {lists.map((list, index) => (
+              <IpListCard
+                key={list.id}
+                list={list}
+                index={index}
+                onEdit={() => edit.show(list)}
+                onDelete={() => remove.mutateAsync(list.id)}
+              />
             ))}
           </div>
         )}
@@ -103,6 +98,71 @@ export function IpListsPage() {
     </Page>
   );
 }
+
+/**
+ * One list: its `$name` (how expressions reference it), what it does on its own (block / allow)
+ * and its size, then the first entries in a well, as the dialog will show them.
+ */
+function IpListCard({
+  list,
+  index,
+  onEdit,
+  onDelete,
+}: {
+  list: IpListDto;
+  index: number;
+  onEdit: () => void;
+  onDelete: () => Promise<unknown>;
+}) {
+  const shown = list.entries.length > PREVIEW ? list.entries.slice(0, PREVIEW - 1) : list.entries;
+  const rest = list.entries.length - shown.length;
+  return (
+    <Card size="sm" className="animate-enter" style={enterDelay(index)}>
+      <CardHeader>
+        <CardTitle className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="font-mono text-sm break-all">{`$${list.name}`}</span>
+          {list.kind === "collection" ? null : (
+            <Badge variant={list.kind === "block" ? "destructive" : "secondary"}>
+              {list.kind === "allow" ? m.rules_allow() : m.rules_block()}
+            </Badge>
+          )}
+        </CardTitle>
+        <p className="text-xs text-muted-foreground tabular-nums">
+          {m.ip_lists_count({ count: formatNumber(list.entries.length) })}
+        </p>
+        <CardAction className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={onEdit}>
+            {m.common_edit()}
+          </Button>
+          <ConfirmDialog
+            title={m.common_delete()}
+            trigger={
+              <Button size="sm" variant="destructive">
+                {m.common_delete()}
+              </Button>
+            }
+            destructive
+            onConfirm={onDelete}
+          />
+        </CardAction>
+      </CardHeader>
+      <CardContent className="flex flex-1 flex-col">
+        <ul className="grid flex-1 grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] content-start gap-x-3 gap-y-1 rounded-xl px-3 py-2.5 font-mono text-xs sunk-well">
+          {shown.map((entry) => (
+            <li key={entry} className="truncate" title={entry}>
+              {entry}
+            </li>
+          ))}
+          {rest > 0 ? (
+            <li className="text-muted-foreground tabular-nums">{`+${formatNumber(rest)}`}</li>
+          ) : null}
+          {list.entries.length === 0 ? <li className="text-muted-foreground">—</li> : null}
+        </ul>
+      </CardContent>
+    </Card>
+  );
+}
+
 function IpListDialog({
   list,
   open,
@@ -135,36 +195,43 @@ function IpListDialog({
         await onSave(parsed.data);
       }}
     >
-      <Field>
-        <FieldLabel htmlFor="ip-list-name">{m.rules_name()}</FieldLabel>
-        <Input
-          id="ip-list-name"
-          name="name"
-          required
-          defaultValue={list?.name}
-          disabled={!!list}
-          pattern="[a-zA-Z_][a-zA-Z0-9_]{0,63}"
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="ip-list-name">{m.rules_name()}</FieldLabel>
+          <Input
+            id="ip-list-name"
+            name="name"
+            required
+            defaultValue={list?.name}
+            disabled={!!list}
+            pattern="[a-zA-Z_][a-zA-Z0-9_]{0,63}"
+            autoComplete="off"
+            spellCheck={false}
+            className="font-mono"
+          />
+        </Field>
+        <FormSelect
+          id="ip-list-kind"
+          label={m.rules_action()}
+          value={kind}
+          onChange={setKind}
+          options={[
+            { value: "collection", label: m.ip_lists_collection() },
+            { value: "block", label: m.rules_block() },
+            { value: "allow", label: m.rules_allow() },
+          ]}
         />
-      </Field>
-      <FormSelect
-        id="ip-list-kind"
-        label={m.rules_action()}
-        value={kind}
-        onChange={setKind}
-        options={[
-          { value: "collection", label: m.ip_lists_collection() },
-          { value: "block", label: m.rules_block() },
-          { value: "allow", label: m.rules_allow() },
-        ]}
-      />
+      </div>
       <Field>
         <FieldLabel htmlFor="ip-list-entries">{m.ip_lists_entries()}</FieldLabel>
+        {/* Grows with its entries up to half the screen, then scrolls (lists hold thousands). */}
         <Textarea
           id="ip-list-entries"
           name="entries"
           rows={8}
           defaultValue={list?.entries.join("\n")}
-          className="font-mono"
+          spellCheck={false}
+          className="max-h-[50svh] min-h-40 overflow-y-auto font-mono"
         />
       </Field>
     </FormDialog>
