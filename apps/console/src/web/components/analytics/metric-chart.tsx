@@ -79,6 +79,7 @@ export function MetricChart({
       className={cn("aspect-auto h-full w-full", className)}
     >
       <AreaChart
+        accessibilityLayer
         data={data}
         margin={{ top: axis ? 12 : 6, right: 0, bottom: 0, left: 0 }}
         onClick={onClick}
@@ -113,12 +114,14 @@ export function MetricChart({
             const value = payload?.[0]?.value;
             if (!active || typeof value !== "number") return null;
             return (
-              <div className="grid min-w-44 gap-1.5 rounded-xl bg-popover px-3 py-2 text-xs text-popover-foreground shadow-elev-3">
-                <span className="text-muted-foreground">{formatChartTime(String(time))}</span>
+              <div className="grid min-w-44 gap-1.5 rounded-xl bg-popover px-3 py-2 text-xs text-popover-foreground shadow-elev-2 edge-lit">
+                <span className="tabular-nums text-muted-foreground">
+                  {formatChartTime(String(time))}
+                </span>
                 <div className="flex items-center gap-2">
                   <span className="h-0.5 w-3 shrink-0 rounded-full bg-metric" />
                   <span className="text-muted-foreground">{label}</span>
-                  <span className="ml-auto pl-3 font-semibold tabular-nums text-foreground">
+                  <span className="readout ml-auto pl-3 font-semibold text-foreground">
                     {format(value)}
                   </span>
                 </div>

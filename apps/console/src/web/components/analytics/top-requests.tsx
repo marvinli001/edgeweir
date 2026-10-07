@@ -60,12 +60,14 @@ export function TopRequestsCard({
                   <span className="min-w-0 flex-1 truncate font-mono" title={item.value}>
                     {item.value}
                   </span>
-                  <span className="shrink-0 tabular-nums">{formatCompact(item.requests)}</span>
+                  <span className="shrink-0 font-medium tabular-nums">
+                    {formatCompact(item.requests)}
+                  </span>
                   <RowMenu items={actions(item.value)} />
                 </div>
-                <div className="h-1 overflow-hidden rounded-full bg-muted">
+                <div className="h-1 overflow-hidden rounded-full bg-wash">
                   <div
-                    className="h-full bg-metric transition-[width] duration-500 motion-reduce:transition-none"
+                    className="h-full rounded-full bg-metric transition-[width] duration-500 motion-reduce:transition-none"
                     style={{ width: `${(item.requests / maximum) * 100}%` }}
                   />
                 </div>

@@ -31,7 +31,11 @@ export function StatusCodesCard({
   return (
     <Panel
       data-testid="status-codes"
-      className={cn("h-full", onOpen && "group/panel transition-colors hover:border-foreground/20")}
+      className={cn(
+        "h-full",
+        onOpen &&
+          "group/panel transition-shadow duration-200 ease-lit hover:shadow-elev-2 motion-reduce:transition-none",
+      )}
     >
       {onOpen ? (
         <OpenCardButton
@@ -138,7 +142,7 @@ export function TopListCard({
             <li key={item.id}>
               {renderLink(item, {
                 className:
-                  "flex flex-col gap-1.5 rounded-lg px-2 py-2 transition-colors hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none",
+                  "flex flex-col gap-1.5 rounded-xl px-2 py-2 outline-none transition-colors focus-lit hover:bg-wash focus-visible:bg-wash",
                 children: (
                   <>
                     <span className="flex items-baseline gap-2 text-sm">
@@ -154,7 +158,7 @@ export function TopListCard({
                         {formatCompact(item.requests)}
                       </span>
                     </span>
-                    <span className="h-1 overflow-hidden rounded-full bg-muted">
+                    <span className="h-1 overflow-hidden rounded-full bg-wash">
                       <span
                         className="block h-full rounded-full bg-metric transition-[width] duration-500 motion-reduce:transition-none"
                         style={{ width: `${(item.requests / max) * 100}%` }}

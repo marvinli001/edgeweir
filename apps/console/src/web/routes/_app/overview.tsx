@@ -122,35 +122,18 @@ function OverviewPage() {
                 </h2>
                 <LiveDot label={m.overview_live()} />
               </div>
-              <div className="grid gap-3 @5xl/main:grid-cols-3">
-                <EdgeNetworkCard
-                  nodes={nodeList}
-                  clusters={clusterList}
-                  className="@5xl/main:col-span-2"
-                />
-                <LiveKpis
-                  online={summary.onlineNodes}
-                  total={summary.nodes}
-                  className="@3xl/main:grid-cols-4 @5xl/main:grid-cols-2"
-                />
-              </div>
-            </section>
-            <div className="grid gap-4 @3xl/main:grid-cols-2">
-              <SitesList total={recent.total} starred={starredSites} recent={recent.items} />
-              <NodesList
-                nodes={nodeList}
-                clusters={clusterList}
+              <LiveKpis
                 online={summary.onlineNodes}
                 total={summary.nodes}
+                className="@3xl/main:grid-cols-4"
               />
-              <RevisionsList revisions={summary.revisions} clusters={clusterList} />
-              <RecentsList />
-            </div>
+            </section>
             <AnalyticsSection
               range={search.range ?? DEFAULT_RANGE}
               onRangeChange={(range) =>
                 navigate({ search: { range: range === DEFAULT_RANGE ? undefined : range } })
               }
+              aside={<EdgeNetworkCard nodes={nodeList} clusters={clusterList} />}
               topLists={[
                 {
                   id: "sites",
@@ -167,8 +150,19 @@ function OverviewPage() {
                   ),
                 },
               ]}
-              delay={240}
+              delay={200}
             />
+            <div className="grid gap-3 @3xl/main:grid-cols-2">
+              <RevisionsList revisions={summary.revisions} clusters={clusterList} />
+              <RecentsList />
+              <SitesList total={recent.total} starred={starredSites} recent={recent.items} />
+              <NodesList
+                nodes={nodeList}
+                clusters={clusterList}
+                online={summary.onlineNodes}
+                total={summary.nodes}
+              />
+            </div>
           </>
         )}
       </QueryView>
@@ -279,6 +273,7 @@ function SitesList({
       link={{ to: "/sites" }}
       testId="home-sites"
       className="animate-enter"
+      style={{ animationDelay: "120ms" }}
     >
       {rows.length === 0 ? (
         <ResourceEmpty>
@@ -347,7 +342,7 @@ function NodesList({
       link={{ to: "/clusters" }}
       testId="home-nodes"
       className="animate-enter"
-      style={{ animationDelay: "60ms" }}
+      style={{ animationDelay: "180ms" }}
     >
       {rows.length === 0 ? (
         <ResourceEmpty>
@@ -386,12 +381,7 @@ function NodesList({
 function RevisionsList({ revisions, clusters }: { revisions: Revision[]; clusters: Cluster[] }) {
   const names = new Map(clusters.map((c) => [c.id, c.name]));
   return (
-    <ResourceList
-      title={m.revisions_recent()}
-      testId="home-revisions"
-      className="animate-enter"
-      style={{ animationDelay: "120ms" }}
-    >
+    <ResourceList title={m.revisions_recent()} testId="home-revisions" className="animate-enter">
       {revisions.length === 0 ? (
         <ResourceEmpty>{m.revisions_empty()}</ResourceEmpty>
       ) : (
@@ -424,7 +414,7 @@ function RecentsList() {
       title={m.home_recents()}
       testId="home-recents"
       className="animate-enter"
-      style={{ animationDelay: "180ms" }}
+      style={{ animationDelay: "60ms" }}
     >
       {recents.length === 0 ? (
         <ResourceEmpty>{m.home_recents_empty()}</ResourceEmpty>

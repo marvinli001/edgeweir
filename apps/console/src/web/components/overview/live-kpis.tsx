@@ -66,7 +66,7 @@ function Tile({
         <HugeiconsIcon icon={icon} strokeWidth={2} className="size-4" />
         <span className="truncate">{title}</span>
       </div>
-      <div className="relative z-[1] truncate px-4 pt-1.5 text-2xl leading-tight font-semibold tracking-tight">
+      <div className="relative z-[1] truncate px-4 pt-1.5 text-[1.75rem] leading-tight font-semibold tracking-tight font-stretch-112%">
         {children}
       </div>
       <div className="relative z-[1] mt-auto">{footer}</div>
@@ -102,7 +102,7 @@ export function LiveKpis({
 
   return (
     <NumberFlowGroup>
-      <div className={cn("grid grid-cols-2 gap-3", className)}>
+      <div className={cn("grid gap-3 @sm/main:grid-cols-2", className)}>
         <Tile
           icon={PulseRectangle01Icon}
           title={m.overview_request_rate()}
