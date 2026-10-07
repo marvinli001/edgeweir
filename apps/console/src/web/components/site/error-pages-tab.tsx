@@ -367,7 +367,6 @@ function PageRow({
             disabled={disabled}
             aria-invalid={!statusValid(draft.responseStatus) || undefined}
             onChange={(event) => onChange({ responseStatus: event.target.value })}
-            className="font-mono"
             data-testid={`${id}-status`}
           />
         </Field>
