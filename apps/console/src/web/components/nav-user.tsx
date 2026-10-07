@@ -61,22 +61,24 @@ export function NavUser({ user }: { user: { name: string; email: string } }) {
             render={
               <SidebarMenuButton
                 size="lg"
-                className="aria-expanded:bg-muted"
+                className="aria-expanded:bg-wash"
                 data-testid="user-menu"
               />
             }
           >
-            <Avatar className="size-8 rounded-lg">
-              <AvatarFallback className="rounded-lg">{initials(user.name)}</AvatarFallback>
+            <Avatar className="size-8">
+              <AvatarFallback className="text-xs text-foreground">
+                {initials(user.name)}
+              </AvatarFallback>
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
               <span className="truncate font-medium">{user.name}</span>
-              <span className="truncate text-xs text-foreground/70">{user.email}</span>
+              <span className="truncate text-xs text-muted-foreground">{user.email}</span>
             </div>
             <HugeiconsIcon
               icon={MoreVerticalCircle01Icon}
               strokeWidth={2}
-              className="ml-auto size-4"
+              className="ml-auto size-4 text-muted-foreground"
             />
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -88,7 +90,7 @@ export function NavUser({ user }: { user: { name: string; email: string } }) {
             <DropdownMenuGroup>
               <DropdownMenuLabel className="p-0 font-normal">
                 <div className="flex flex-col px-1 py-1.5 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{user.name}</span>
+                  <span className="truncate font-medium text-foreground">{user.name}</span>
                   <span className="truncate text-xs text-muted-foreground">{user.email}</span>
                 </div>
               </DropdownMenuLabel>

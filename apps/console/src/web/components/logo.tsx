@@ -1,6 +1,9 @@
 import { cn } from "@/lib/utils";
 
-/** Edgeweir mark: a weir crest letting the flow over while holding back the rest. */
+/**
+ * Edgeweir mark: a weir crest letting the flow over while holding back the rest. Drawn in the
+ * action blue's ink (the dark preset blue alone sits near 2:1 on the dark sidebar).
+ */
 export function Logo({ className }: { className?: string }) {
   return (
     <svg
@@ -10,7 +13,7 @@ export function Logo({ className }: { className?: string }) {
       strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={cn("size-5 text-primary", className)}
+      className={cn("size-5 text-primary-ink", className)}
       aria-hidden="true"
     >
       <path d="M3 17c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 3 2" />

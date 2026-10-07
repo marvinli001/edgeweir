@@ -2,8 +2,9 @@ import { Add01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, type LinkProps, useRouterState } from "@tanstack/react-router";
-import type * as React from "react";
+import * as React from "react";
 import { type IconPlayer, useIconPlay } from "@/components/effects/animated-icons";
+import { Button } from "@/components/ui/button";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -36,6 +37,12 @@ export interface NavItem {
 function NavRow({ item, active }: { item: NavItem; active: boolean }) {
   const { ref, trigger } = useIconPlay();
   const Animated = item.animated;
+  // The animated glyph plays once when its entry becomes the current page (not on first render).
+  const wasActive = React.useRef(active);
+  React.useEffect(() => {
+    if (active && !wasActive.current) ref.current?.play();
+    wasActive.current = active;
+  }, [active, ref]);
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
@@ -51,9 +58,6 @@ function NavRow({ item, active }: { item: NavItem; active: boolean }) {
     </SidebarMenuItem>
   );
 }
-
-const PRIMARY =
-  "min-w-8 bg-primary text-primary-foreground shadow-md shadow-primary/20 duration-200 ease-linear hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground";
 
 /** How many things need the operator, beside the entry that lists them; nothing at zero. */
 function AttentionBadge() {
@@ -75,7 +79,10 @@ function AttentionBadge() {
   );
 }
 
-/** The sidebar's primary action: a new site, or adding a node while there is none. */
+/**
+ * The sidebar's primary action: a new site, or adding a node while there is none. A primary
+ * Button (the lit face, btn-lit) spanning the sidebar, not a menu row.
+ */
 function PrimaryAction() {
   const overview = useQuery({
     ...orpc.overview.get.queryOptions(),
@@ -85,34 +92,30 @@ function PrimaryAction() {
   const addNode = overview.data?.nodes === 0;
   const title = addNode ? m.nav_add_node() : m.nav_new_site();
   return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <SidebarMenuButton
-          tooltip={title}
-          className={PRIMARY}
-          render={
-            addNode ? (
-              <Link
-                to="/clusters"
-                search={{ enroll: true }}
-                data-testid="nav-primary-action"
-                data-action="add-node"
-              />
-            ) : (
-              <Link
-                to="/sites"
-                search={{ create: true }}
-                data-testid="nav-primary-action"
-                data-action="new-site"
-              />
-            )
-          }
-        >
-          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-          <span>{title}</span>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-    </SidebarMenu>
+    <Button
+      className="w-full justify-start"
+      nativeButton={false}
+      render={
+        addNode ? (
+          <Link
+            to="/clusters"
+            search={{ enroll: true }}
+            data-testid="nav-primary-action"
+            data-action="add-node"
+          />
+        ) : (
+          <Link
+            to="/sites"
+            search={{ create: true }}
+            data-testid="nav-primary-action"
+            data-action="new-site"
+          />
+        )
+      }
+    >
+      <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
+      <span className="truncate">{title}</span>
+    </Button>
   );
 }
 
