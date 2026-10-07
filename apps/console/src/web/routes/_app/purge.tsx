@@ -2,6 +2,7 @@ import {
   type CacheTask,
   type CacheTaskCreateInput,
   type CacheTaskType,
+  displaySiteDomain,
   MAX_CACHE_TASK_HOSTS,
   MAX_CACHE_TASK_TAGS,
   MAX_CACHE_TASK_URLS,
@@ -738,7 +739,7 @@ function SitePicker({
                   />
                   <span className="shrink-0 text-sm font-medium">{site.name}</span>
                   <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
-                    {site.domains.join(", ")}
+                    {site.domains.map(displaySiteDomain).join(", ")}
                   </span>
                 </label>
               ))

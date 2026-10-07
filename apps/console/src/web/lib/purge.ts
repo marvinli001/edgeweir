@@ -1,3 +1,5 @@
+import { siteDomainKind } from "@edgeweir/contract";
+
 /** What a purge entry list of a site turns into: absolute URLs, and the entries that are neither. */
 export interface PurgeTargets {
   urls: string[];
@@ -18,14 +20,15 @@ const SCHEME = "https";
 export const requestUrl = (host: string, path: string) => `${SCHEME}://${host}${path}`;
 
 /**
- * Paths ("/app.js") become a URL on each of the site's domains that is not a wildcard; http(s)
- * URLs stay as they are. Duplicates are dropped and the order kept. Anything else is invalid.
+ * Paths ("/app.js") become a URL on each of the site's exact domains (not wildcards, suffixes
+ * or patterns, which name no single host); http(s) URLs stay as they are. Duplicates are
+ * dropped and the order kept. Anything else is invalid.
  */
 export function expandPurgeTargets(
   entries: readonly string[],
   domains: readonly string[],
 ): PurgeTargets {
-  const hosts = domains.filter((domain) => !domain.startsWith("*."));
+  const hosts = domains.filter((domain) => siteDomainKind(domain) === "exact");
   const urls = new Set<string>();
   const invalid: string[] = [];
   for (const entry of entries) {

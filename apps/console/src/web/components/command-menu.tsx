@@ -1,3 +1,4 @@
+import { displaySiteDomain } from "@edgeweir/contract";
 import {
   Activity01Icon,
   Add01Icon,
@@ -104,7 +105,13 @@ export function CommandMenu() {
     setOpenState(false);
     fn();
   };
-  const keywords = (site: SiteEntry, ...extra: string[]) => [site.name, ...site.domains, ...extra];
+  // Unicode and Punycode forms of the domains both find the site.
+  const keywords = (site: SiteEntry, ...extra: string[]) => [
+    site.name,
+    ...site.domains,
+    ...site.domains.map(displaySiteDomain),
+    ...extra,
+  ];
 
   return (
     <CommandDialog open={open} onOpenChange={setOpenState} className="sm:max-w-lg">
@@ -130,9 +137,9 @@ export function CommandMenu() {
                 >
                   <HugeiconsIcon icon={GlobeIcon} strokeWidth={2} />
                   <span className="truncate">{site.name}</span>
-                  {site.domains[0] && site.domains[0] !== site.name ? (
+                  {site.domains[0] && displaySiteDomain(site.domains[0]) !== site.name ? (
                     <span className="ml-auto truncate font-mono text-xs text-muted-foreground">
-                      {site.domains[0]}
+                      {displaySiteDomain(site.domains[0])}
                     </span>
                   ) : null}
                 </CommandItem>

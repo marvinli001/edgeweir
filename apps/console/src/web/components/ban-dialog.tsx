@@ -24,6 +24,7 @@ export const BAN_REASON_LABELS: Record<BanReason, () => string> = {
   spam: () => m.bans_reason_spam(),
   other: () => m.bans_reason_other(),
   cc_ip_rate: () => m.bans_reason_cc_ip_rate(),
+  unknown_host_scan: () => m.bans_reason_unknown_host_scan(),
 };
 
 export const BAN_SCOPE_LABELS: Record<BanScope, () => string> = {

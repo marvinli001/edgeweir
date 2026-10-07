@@ -1,3 +1,4 @@
+import { displaySiteDomain } from "@edgeweir/contract";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { enterDelay } from "@/components/page";
@@ -111,7 +112,7 @@ export function SiteMultiSelect({
                   />
                   <span className="shrink-0 text-sm font-medium">{site.name}</span>
                   <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
-                    {site.domains.join(", ")}
+                    {site.domains.map(displaySiteDomain).join(", ")}
                   </span>
                 </label>
               ))

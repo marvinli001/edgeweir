@@ -1,4 +1,4 @@
-import { analyticsRange, domainName, type Site } from "@edgeweir/contract";
+import { analyticsRange, type Site, siteDomain } from "@edgeweir/contract";
 import { Add01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,6 +13,7 @@ import { BulkRedirectsTab } from "@/components/site/bulk-redirects-tab";
 import { CacheTab } from "@/components/site/cache-tab";
 import { DnsSetupCard } from "@/components/site/cname-target";
 import { followSiteDelivery } from "@/components/site/delivery-toast";
+import { DomainKindBadge, DomainName } from "@/components/site/domain-name";
 import { ErrorPagesTab } from "@/components/site/error-pages-tab";
 import { HttpsTab } from "@/components/site/https-tab";
 import { LaunchCheck } from "@/components/site/launch-check";
@@ -347,7 +348,7 @@ function DomainsTab({ site }: { site: Site }) {
   const dirty = listChanged || typed.length > 0;
   /** The typed domains, or null (and the first invalid one shown) when one is invalid. */
   const take = () => {
-    const bad = typed.find((d) => !domainName.safeParse(d).success);
+    const bad = typed.find((d) => !siteDomain.safeParse(d).success);
     setInvalid(bad ? m.site_domain_invalid({ domain: bad }) : null);
     return bad ? null : typed;
   };
@@ -385,10 +386,8 @@ function DomainsTab({ site }: { site: Site }) {
                   className="flex items-center gap-2 px-3 py-2 animate-enter"
                   style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
                 >
-                  <span className="flex-1 font-mono text-sm break-all">{domain}</span>
-                  {domain.startsWith("*.") ? (
-                    <Badge variant="secondary">{m.site_domain_wildcard()}</Badge>
-                  ) : null}
+                  <DomainName domain={domain} className="flex-1 font-mono text-sm break-all" />
+                  <DomainKindBadge domain={domain} />
                   <Button
                     type="button"
                     size="icon-sm"
@@ -415,7 +414,7 @@ function DomainsTab({ site }: { site: Site }) {
                     add();
                   }
                 }}
-                placeholder="www.example.com, *.example.com"
+                placeholder="www.example.com, *.example.com, .example.com, ~(www|m)\.example\.com"
                 aria-label={m.site_domain_add()}
                 data-testid="domain-input"
               />

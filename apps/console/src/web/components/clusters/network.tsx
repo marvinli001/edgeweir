@@ -3,8 +3,13 @@ import {
   type ClientIpMode,
   type ClusterClientIp,
   type ClusterListenPorts,
+  type ClusterUnknownHosts,
   clientIpSettings,
   listenPortsInput,
+  SCAN_BAN_SECONDS,
+  SCAN_THRESHOLD,
+  type UnknownHostAction,
+  unknownHostSettings,
 } from "@edgeweir/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
@@ -23,10 +28,14 @@ import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
-/** The cluster page's network tab: listener ports and the client address setting. */
+/**
+ * The cluster page's network tab: listener ports, the client address
+ * setting and the handling of unknown hosts and node IP access.
+ */
 export function ClusterNetwork({ clusterId }: { clusterId: string }) {
   const ports = useQuery(orpc.clusters.listenPorts.queryOptions({ input: { clusterId } }));
   const clientIp = useQuery(orpc.clusters.clientIp.queryOptions({ input: { clusterId } }));
+  const unknownHosts = useQuery(orpc.clusters.unknownHosts.queryOptions({ input: { clusterId } }));
   // Each card and its title stay while its setting loads or fails to.
   return (
     <div className="flex flex-col gap-4">
@@ -44,6 +53,18 @@ export function ClusterNetwork({ clusterId }: { clusterId: string }) {
         </CardHeader>
         <QueryView query={clientIp} frame={CardContent}>
           {(data) => <ClientIpForm key={JSON.stringify(data.settings)} data={data} />}
+        </QueryView>
+      </Card>
+      <Card
+        className="animate-enter"
+        style={{ animationDelay: "120ms" }}
+        data-testid="unknown-hosts"
+      >
+        <CardHeader>
+          <CardTitle>{m.unknown_hosts_title()}</CardTitle>
+        </CardHeader>
+        <QueryView query={unknownHosts} frame={CardContent}>
+          {(data) => <UnknownHostsForm key={JSON.stringify(data.settings)} data={data} />}
         </QueryView>
       </Card>
     </div>
@@ -308,6 +329,197 @@ function ClientIpForm({ data }: { data: ClusterClientIp }) {
         error={error}
         testId="client-ip-save"
         errorTestId="client-ip-error"
+      />
+    </form>
+  );
+}
+
+const ACTIONS: { value: UnknownHostAction; label: () => string }[] = [
+  { value: "page", label: m.unknown_hosts_action_page },
+  { value: "close", label: m.unknown_hosts_action_close },
+  { value: "site", label: m.unknown_hosts_action_site },
+];
+
+function UnknownHostsForm({ data }: { data: ClusterUnknownHosts }) {
+  const client = useQueryClient();
+  const saved = data.settings;
+  const [unknownHost, setUnknownHost] = React.useState(saved.unknownHost);
+  const [ipAccess, setIpAccess] = React.useState(saved.ipAccess);
+  const [siteId, setSiteId] = React.useState(saved.defaultSiteId ?? "");
+  const [certificate, setCertificate] = React.useState(saved.defaultCertificate);
+  const [scan, setScan] = React.useState(saved.scan.enabled);
+  const [threshold, setThreshold] = React.useState(String(saved.scan.threshold));
+  const [banSeconds, setBanSeconds] = React.useState(String(saved.scan.banSeconds));
+  const [error, setError] = React.useState<string | null>(null);
+  const save = useMutation(orpc.clusters.setUnknownHosts.mutationOptions());
+  const handsOver = unknownHost === "site" || ipAccess === "site";
+  // Enabled sites of the cluster may take requests; the current one stays listed.
+  const sites = useQuery(
+    orpc.sites.list.queryOptions({
+      input: { clusterId: data.clusterId, pageSize: 100 },
+      enabled: handsOver,
+    }),
+  );
+  const options = [
+    ...(sites.data?.items ?? [])
+      .filter((site) => site.enabled || site.id === saved.defaultSiteId)
+      .map((site) => ({ value: site.id, label: site.name })),
+    ...(data.defaultSite && !sites.data?.items.some((site) => site.id === data.defaultSite?.id)
+      ? [{ value: data.defaultSite.id, label: data.defaultSite.name }]
+      : []),
+  ];
+  const settings = {
+    unknownHost,
+    ipAccess,
+    defaultSiteId: handsOver && siteId ? siteId : null,
+    defaultCertificate: unknownHost === "site" && certificate,
+    scan: { enabled: scan, threshold: Number(threshold), banSeconds: Number(banSeconds) },
+  };
+  const parsed = unknownHostSettings.safeParse(settings);
+  const normalized = parsed.success ? parsed.data : null;
+  const dirty = JSON.stringify(normalized ?? settings) !== JSON.stringify(saved);
+  useUnsavedChanges(dirty);
+  const defaults =
+    unknownHost === "page" && ipAccess === "page" && !scan && !settings.defaultCertificate;
+  const locked = data.nodesWithout.length > 0 && !defaults;
+  const scanError = !parsed.success && parsed.error.issues.some((i) => i.path[0] === "scan");
+  return (
+    <form
+      className="flex flex-col gap-(--card-spacing)"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        if (!normalized) return;
+        setError(null);
+        try {
+          const result = await save.mutateAsync({
+            clusterId: data.clusterId,
+            settings: normalized,
+          });
+          client.setQueryData(
+            orpc.clusters.unknownHosts.queryKey({ input: { clusterId: data.clusterId } }),
+            result,
+          );
+          toast.success(m.common_saved());
+        } catch (e) {
+          setError(errorMessage(e));
+        }
+      }}
+    >
+      <CardContent className="flex flex-col gap-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor="unknown-hosts-unknown">{m.unknown_hosts_unknown()}</FieldLabel>
+            <OptionSelect
+              id="unknown-hosts-unknown"
+              value={unknownHost}
+              options={ACTIONS.map((option) => ({ value: option.value, label: option.label() }))}
+              onChange={setUnknownHost}
+              testId="unknown-hosts-unknown"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="unknown-hosts-ip">{m.unknown_hosts_ip_access()}</FieldLabel>
+            <OptionSelect
+              id="unknown-hosts-ip"
+              value={ipAccess}
+              options={ACTIONS.map((option) => ({ value: option.value, label: option.label() }))}
+              onChange={setIpAccess}
+              testId="unknown-hosts-ip"
+            />
+          </Field>
+        </div>
+        {handsOver ? (
+          <div className="flex flex-col gap-4 animate-enter">
+            <Field className="sm:max-w-xs" data-invalid={!siteId || undefined}>
+              <FieldLabel htmlFor="unknown-hosts-site">{m.unknown_hosts_default_site()}</FieldLabel>
+              <OptionSelect
+                id="unknown-hosts-site"
+                value={siteId || null}
+                options={options}
+                placeholder={m.unknown_hosts_choose_site()}
+                onChange={setSiteId}
+                testId="unknown-hosts-site"
+              />
+            </Field>
+            {data.defaultSite && !data.defaultSite.enabled && siteId === data.defaultSite.id ? (
+              <SafetyNote data-testid="unknown-hosts-site-disabled">
+                {m.unknown_hosts_default_disabled()}
+              </SafetyNote>
+            ) : null}
+            {unknownHost === "site" ? (
+              <SwitchField
+                id="unknown-hosts-certificate"
+                label={m.unknown_hosts_default_certificate()}
+                checked={certificate}
+                onCheckedChange={setCertificate}
+                className="self-start"
+                testId="unknown-hosts-certificate"
+              />
+            ) : null}
+          </div>
+        ) : null}
+        <SwitchField
+          id="unknown-hosts-scan"
+          label={m.unknown_hosts_scan()}
+          checked={scan}
+          onCheckedChange={setScan}
+          className="self-start"
+          testId="unknown-hosts-scan"
+        />
+        {scan ? (
+          <div className="grid gap-4 animate-enter sm:grid-cols-2">
+            <Field data-invalid={scanError || undefined}>
+              <FieldLabel htmlFor="unknown-hosts-threshold">
+                {m.unknown_hosts_scan_threshold()}
+              </FieldLabel>
+              <Input
+                id="unknown-hosts-threshold"
+                type="number"
+                inputMode="numeric"
+                min={SCAN_THRESHOLD.min}
+                max={SCAN_THRESHOLD.max}
+                value={threshold}
+                onChange={(event) => setThreshold(event.target.value)}
+                data-testid="unknown-hosts-threshold"
+              />
+            </Field>
+            <Field data-invalid={scanError || undefined}>
+              <FieldLabel htmlFor="unknown-hosts-ban">{m.unknown_hosts_scan_ban()}</FieldLabel>
+              <Input
+                id="unknown-hosts-ban"
+                type="number"
+                inputMode="numeric"
+                min={SCAN_BAN_SECONDS.min}
+                max={SCAN_BAN_SECONDS.max}
+                value={banSeconds}
+                onChange={(event) => setBanSeconds(event.target.value)}
+                data-testid="unknown-hosts-ban"
+              />
+            </Field>
+            {scanError ? (
+              <FieldError className="sm:col-span-2" data-testid="unknown-hosts-scan-invalid">
+                {m.unknown_hosts_scan_invalid({
+                  min: SCAN_THRESHOLD.min,
+                  max: SCAN_THRESHOLD.max,
+                  banMin: SCAN_BAN_SECONDS.min,
+                  banMax: SCAN_BAN_SECONDS.max,
+                })}
+              </FieldError>
+            ) : null}
+          </div>
+        ) : null}
+        {locked ? (
+          <SafetyNote data-testid="unknown-hosts-unavailable">
+            {m.feature_unavailable_nodes()}
+          </SafetyNote>
+        ) : null}
+      </CardContent>
+      <SaveBar
+        dirty={dirty && !!normalized && !locked}
+        pending={save.isPending}
+        error={error}
+        testId="unknown-hosts-save"
+        errorTestId="unknown-hosts-error"
       />
     </form>
   );

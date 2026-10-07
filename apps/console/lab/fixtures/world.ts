@@ -893,6 +893,9 @@ export const sites: Site[] = siteSeeds.map((seed, index) => {
     clusterId: seed.cluster.id,
     clusterName: seed.cluster.name,
     domains: seed.domains,
+    // Sites from before CNAME prefixes keep their id; newer ones have 8 random characters.
+    cnamePrefix:
+      index % 3 === 0 ? id(5, index + 1) : `s${(index * 7919).toString(36).padStart(7, "x")}`,
     origins: origins(index + 1, originList),
     cacheRules: cacheRules(index + 1, CACHE_RULES[seed.name] ?? []),
     originSettings: settings,

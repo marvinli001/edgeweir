@@ -13,6 +13,7 @@ import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
 import { SearchBox } from "@/components/search-box";
 import { followSiteDelivery } from "@/components/site/delivery-toast";
+import { DomainName } from "@/components/site/domain-name";
 import { StarButton, useSiteStars } from "@/components/site-star";
 import { SiteStatus, untilLive } from "@/components/site-status";
 import { SitesTabs } from "@/components/sites-tabs";
@@ -190,7 +191,7 @@ function SitesPage() {
         cell: ({ row }) => (
           <div className="flex flex-col font-mono text-xs leading-5">
             {row.original.domains.map((d) => (
-              <span key={d}>{d}</span>
+              <DomainName key={d} domain={d} />
             ))}
           </div>
         ),
@@ -440,7 +441,7 @@ function CreateSiteDialog({
                 name="domains"
                 required
                 rows={2}
-                placeholder={"demo.test\n*.demo.test"}
+                placeholder={"demo.test\n*.demo.test\n.demo.test"}
                 onChange={(event) => setFirstDomain(domainList(event.target.value)[0] ?? "")}
               />
             </Field>

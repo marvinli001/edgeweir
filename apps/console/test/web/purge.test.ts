@@ -2,9 +2,15 @@ import { describe, expect, it } from "vitest";
 import { expandPurgeTargets, purgeLines, requestUrl } from "../../src/web/lib/purge";
 
 describe("purge targets", () => {
-  const domains = ["www.shop.test", "*.cdn.shop.test", "shop.test"];
+  const domains = [
+    "www.shop.test",
+    "*.cdn.shop.test",
+    ".img.shop.test",
+    "~a\\d\\.shop\\.test",
+    "shop.test",
+  ];
 
-  it("expands paths to the site's domains that are not wildcards", () => {
+  it("expands paths to the site's exact domains (not wildcards, suffixes or patterns)", () => {
     expect(expandPurgeTargets(["/app.js?v=2", "/"], domains)).toEqual({
       urls: [
         "https://www.shop.test/app.js?v=2",

@@ -1,7 +1,9 @@
 import type { SiteLaunch } from "@edgeweir/contract";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type * as React from "react";
 import { CopyButton } from "@/components/copy-button";
+import { CnamePrefixActions, RetiredNames } from "@/components/site/cname-prefix";
+import { DomainName } from "@/components/site/domain-name";
 import { PointingStatus, RecheckButton, useSiteLaunch } from "@/components/site/launch-check";
 import { type QueryResult, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +33,7 @@ export function DnsSetupCard({ siteId }: { siteId: string }) {
     <QueryView query={target} loadingClassName="min-h-24">
       {(data) => (
         <DnsSetup
+          siteId={siteId}
           target={data}
           launch={launch}
           recheck={<RecheckButton queries={[target, launch]} />}
@@ -41,15 +44,19 @@ export function DnsSetupCard({ siteId }: { siteId: string }) {
 }
 
 function DnsSetup({
+  siteId,
   target,
   launch,
   recheck,
 }: {
+  siteId: string;
   target: SiteDnsTarget;
   launch: QueryResult<SiteLaunch>;
   recheck: React.ReactNode;
 }) {
   const cname = target.target;
+  const client = useQueryClient();
+  const setPrefix = useMutation(orpc.sites.setCnamePrefix.mutationOptions());
   return (
     <Card data-testid={cname ? "cname-target" : "edge-addresses"}>
       <CardHeader className="flex flex-row items-center gap-3">
@@ -83,6 +90,18 @@ function DnsSetup({
                 <CopyButton iconOnly value={line.target} />
               </div>
             ))}
+            <RetiredNames names={target.retired} />
+            <CnamePrefixActions
+              prefix={cname.split(".")[0] ?? ""}
+              change={async (prefix) => {
+                const state = await setPrefix.mutateAsync({ id: siteId, prefix });
+                await Promise.all([
+                  client.invalidateQueries({ queryKey: orpc.dns.siteTarget.key() }),
+                  client.invalidateQueries({ queryKey: orpc.sites.key() }),
+                ]);
+                return state;
+              }}
+            />
           </>
         ) : null}
         <QueryView query={launch} loadingClassName="min-h-20">
@@ -132,7 +151,7 @@ function DomainPointing({ launch, checks }: { launch: SiteLaunch; checks: boolea
     <ul className="divide-y rounded-2xl sunk-well" data-testid="domain-pointing">
       {launch.domains.map((domain, index) => {
         const command =
-          checks && address
+          checks && address && domain.pointing !== "unchecked"
             ? curlCheck(domain.probe, address, coversDomain(launch.certificate, domain.name))
             : null;
         return (
@@ -143,7 +162,10 @@ function DomainPointing({ launch, checks }: { launch: SiteLaunch; checks: boolea
             data-testid="domain-pointing-row"
           >
             <div className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 font-mono text-sm break-all">{domain.name}</span>
+              <DomainName
+                domain={domain.name}
+                className="min-w-0 flex-1 font-mono text-sm break-all"
+              />
               <PointingStatus pointing={domain.pointing} />
             </div>
             {command ? (

@@ -17,6 +17,18 @@ describe("address input", () => {
     expect(domainList("https://a.test/, b.test\nA.test")).toEqual(["a.test", "b.test"]);
   });
 
+  it("keeps suffixes, patterns and Unicode hosts", () => {
+    expect(domainInput(".Shop.test")).toBe(".shop.test");
+    expect(domainInput(" ~(Www|m)\\.shop\\.test/x?y ")).toBe("~(Www|m)\\.shop\\.test/x?y");
+    expect(domainInput("Bücher.test")).toBe("bücher.test");
+    expect(domainList("~a{1,3}\\.test, .b.test,c.test ~x")).toEqual([
+      "~a{1,3}\\.test",
+      ".b.test",
+      "c.test",
+      "~x",
+    ]);
+  });
+
   it("splits an origin into address, port and scheme", () => {
     expect(originInput("https://origin.test:8443/app")).toEqual({
       address: "origin.test",

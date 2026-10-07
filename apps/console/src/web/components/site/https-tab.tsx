@@ -1,9 +1,11 @@
 import {
   type CertificateDto,
   certificateUnloadable,
+  displaySiteDomain,
   HTTPS_REDIRECT_STATUSES,
   type HttpsCheck,
   type Site,
+  siteDomainKind,
   type TlsSettings,
   tlsSettings,
 } from "@edgeweir/contract";
@@ -263,7 +265,9 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
         className="flex flex-col gap-(--card-spacing)"
       >
         <CardContent className="grid gap-4">
-          <p className="text-sm break-words text-muted-foreground">{site.domains.join(", ")}</p>
+          <p className="text-sm break-words text-muted-foreground">
+            {site.domains.map(displaySiteDomain).join(", ")}
+          </p>
           {check.isLoadingError ? (
             <ErrorState error={check.error} onRetry={() => void check.refetch()} />
           ) : blockers.length ? (
@@ -468,6 +472,11 @@ function HttpsEditor({
   const client = useQueryClient();
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
   const redirectAvailable = features.data?.edgePorts.available ?? true;
+  // The redirect leaves host names alone: exact and `*.` domains, not suffixes or patterns.
+  const hostDomains = site.domains.filter((domain) => {
+    const kind = siteDomainKind(domain);
+    return kind === "exact" || kind === "wildcard";
+  });
   // Force HTTPS comes first, with its redirect settings under it; then the other switches.
   const flags = [
     ["http2", m.cert_http2()],
@@ -601,12 +610,15 @@ function HttpsEditor({
                   onChange={(value) => setSettings({ ...settings, redirectPort: Number(value) })}
                 />
               </Field>
-              {site.domains.length > 1 ? (
+              {hostDomains.length > 1 ? (
                 <div className="sm:col-span-2">
                   <CheckboxList
                     id="redirect-excluded"
                     legend={m.https_redirect_excluded()}
-                    options={site.domains.map((domain) => ({ value: domain, label: domain }))}
+                    options={hostDomains.map((domain) => ({
+                      value: domain,
+                      label: displaySiteDomain(domain),
+                    }))}
                     value={settings.redirectExcludedDomains}
                     disabled={!redirectAvailable}
                     onChange={(redirectExcludedDomains) =>

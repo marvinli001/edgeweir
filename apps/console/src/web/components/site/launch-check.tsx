@@ -61,6 +61,7 @@ const POINTING_TONE: Record<DnsPointing, StatusTone> = {
   elsewhere: "bad",
   unresolved: "warn",
   unknown: "idle",
+  unchecked: "idle",
 };
 
 export const pointingLabel = (pointing: DnsPointing) =>
@@ -69,6 +70,7 @@ export const pointingLabel = (pointing: DnsPointing) =>
     elsewhere: m.dns_pointing_elsewhere,
     unresolved: m.dns_pointing_unresolved,
     unknown: m.dns_pointing_unknown,
+    unchecked: m.dns_pointing_unchecked,
   })[pointing]();
 
 /** A domain's pointing state: dot and label. */
@@ -86,7 +88,8 @@ export function PointingStatus({ pointing }: { pointing: DnsPointing }) {
 }
 
 function dnsItem(launch: SiteLaunch) {
-  const total = launch.domains.length;
+  // `.a.com` and `~pattern` domains name no host to look up: not counted.
+  const total = launch.domains.filter((d) => d.pointing !== "unchecked").length;
   const ok = launch.domains.filter((d) => d.pointing === "ok").length;
   const failing = notPointing(launch).map((d) => d.name);
   const tone: StatusTone = ok === total ? "good" : failing.length ? "warn" : "idle";

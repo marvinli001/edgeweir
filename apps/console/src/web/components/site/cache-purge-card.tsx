@@ -1,4 +1,4 @@
-import { MAX_CACHE_TASK_URLS, type Site } from "@edgeweir/contract";
+import { displaySiteDomain, MAX_CACHE_TASK_URLS, type Site } from "@edgeweir/contract";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import * as React from "react";
@@ -109,7 +109,7 @@ export function CachePurgeCard({ site }: { site: Site }) {
           </Tabs>
           {type === "site" ? (
             <SafetyNote className="break-all font-mono" data-testid="cache-purge-site">
-              {site.domains.join(", ")}
+              {site.domains.map(displaySiteDomain).join(", ")}
             </SafetyNote>
           ) : (
             <Field data-invalid={problem ? true : undefined}>

@@ -46,7 +46,7 @@ try {
   assert.ok(node);
   const [site] = await db
     .insert(schema.site)
-    .values({ name: "ch-e2e", clusterId: cluster.id, logSampleRate: 10000 })
+    .values({ name: "ch-e2e", clusterId: cluster.id, logSampleRate: 10000, cnamePrefix: "ch-e2e" })
     .returning();
   assert.ok(site);
   const at = new Date(Date.now() - 1000);

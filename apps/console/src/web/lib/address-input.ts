@@ -16,18 +16,28 @@ function authority(value: string): { scheme?: string; rest: string } {
   };
 }
 
-/** A pasted URL or "Shop.test:443" → "shop.test"; "*.shop.test" stays as it is. */
+/**
+ * A pasted URL or "Shop.test:443" → "shop.test"; "*.shop.test" and
+ * ".shop.test" stay as they are; a "~pattern" is taken as typed.
+ */
 export function domainInput(value: string): string {
-  const { rest } = authority(value);
+  const trimmed = value.trim();
+  if (trimmed.startsWith("~")) return trimmed;
+  const { rest } = authority(trimmed);
   return rest.replace(/:\d+$/, "").replace(/\.$/, "").toLowerCase();
 }
 
-/** Splits a list of domains (whitespace, commas) and reads each one with domainInput. */
+/**
+ * Splits a list of domains (whitespace, and commas outside "~patterns",
+ * whose repetitions may hold them) and reads each one with domainInput.
+ */
 export function domainList(value: string): string[] {
   return [
     ...new Set(
       value
-        .split(/[\s,]+/)
+        .split(/\s+/)
+        // A separating comma after a pattern is no part of it (hosts have none).
+        .flatMap((token) => (token.startsWith("~") ? [token.replace(/,+$/, "")] : token.split(",")))
         .map(domainInput)
         .filter(Boolean),
     ),

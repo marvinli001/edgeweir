@@ -1890,20 +1890,35 @@ async function bindingOf(clusterId: string) {
 async function siteTarget(site: Site) {
   const binding = await bindingOf(site.clusterId);
   if (binding.mode === "off" || !binding.domain)
-    return { target: null, mode: "off" as const, published: false, healthy: false, lines: [] };
-  const target = `${site.id}.${binding.domain}`;
+    return {
+      target: null,
+      mode: "off" as const,
+      published: false,
+      healthy: false,
+      lines: [],
+      retired: [],
+    };
+  const target = `${site.cnamePrefix}.${binding.domain}`;
   const lines = binding.lines.map((name) => ({
     name,
     target: binding.lineAliases ? `${name}.${target}` : `${name}.${binding.domain}`,
   }));
   if (binding.mode === "manual")
-    return { target, mode: "manual" as const, published: false, healthy: false, lines };
+    return {
+      target,
+      mode: "manual" as const,
+      published: false,
+      healthy: false,
+      lines,
+      retired: [],
+    };
   return {
     target,
     mode: "auto" as const,
     published: site.enabled,
     healthy: clusterNodes(site).some((n) => n.online && n.dataPlaneHealthy),
     lines,
+    retired: [],
   };
 }
 

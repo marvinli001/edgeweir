@@ -1010,7 +1010,13 @@ const l4Apps: L4App[] = appSeeds.map((seed, index) => {
     blockListIds: listIds(...(seed.block ?? [])),
     maxConnections: seed.maxConnections ?? 0,
     newConnectionsPerSecond: seed.newConnectionsPerSecond ?? 0,
-    ...dnsNames(seed.clusterId, appIdValue),
+    // The first application predates CNAME prefixes (its id); the others are random.
+    cnamePrefix: index === 0 ? appIdValue : `l4${(index * 104729).toString(36).padStart(6, "x")}`,
+    ...dnsNames(
+      seed.clusterId,
+      index === 0 ? appIdValue : `l4${(index * 104729).toString(36).padStart(6, "x")}`,
+    ),
+    dnsRetired: [],
     createdAt: ago(seed.created),
     updatedAt: ago(seed.updated),
   };

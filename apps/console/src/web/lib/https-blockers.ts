@@ -30,5 +30,7 @@ export function httpsBlockerText(blocker: HttpsBlocker, ca: string): string {
       });
     case "caa_forbidden":
       return m.https_blocker_caa_forbidden({ name: blocker.name, ca });
+    case "no_certificate_names":
+      return m.https_blocker_no_certificate_names();
   }
 }

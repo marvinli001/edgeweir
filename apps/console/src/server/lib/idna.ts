@@ -1,3 +1,4 @@
+/// <reference path="./tr46.d.ts" />
 import { ldhHost, needsIdna, parseSiteDomain, punycodeDecode } from "@edgeweir/contract";
 import { toASCII } from "tr46";
 

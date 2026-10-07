@@ -1,7 +1,7 @@
 import type { L4App } from "@edgeweir/contract";
 import { ArrowRight01Icon, Delete02Icon, PencilEdit01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useLocation } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
@@ -11,6 +11,7 @@ import { L4AppDialog } from "@/components/l4/app-dialog";
 import { L4AppStats } from "@/components/l4/app-stats";
 import { DnsTarget, L4NodesWarning, ProtocolBadge } from "@/components/l4/common";
 import { Page } from "@/components/page";
+import { CnamePrefixActions, RetiredNames } from "@/components/site/cname-prefix";
 import { QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { NotFoundPage } from "@/components/status-page";
@@ -237,6 +238,12 @@ function Overview({ app }: { app: L4App }) {
                     </span>
                   </div>
                 ))}
+                {app.dnsTarget ? (
+                  <>
+                    <RetiredNames names={app.dnsRetired} />
+                    <L4CnamePrefix app={app} />
+                  </>
+                ) : null}
               </div>
             </InfoRow>
             <InfoRow label={m.sites_col_origins()}>
@@ -329,5 +336,22 @@ function ListNames({ label, chips }: { label: string; chips: { id: string; name:
         ))
       )}
     </span>
+  );
+}
+
+/** Regenerates or sets the application's CNAME prefix (its old name resolves for 24 hours). */
+function L4CnamePrefix({ app }: { app: L4App }) {
+  const client = useQueryClient();
+  const setPrefix = useMutation(orpc.l4Apps.setCnamePrefix.mutationOptions());
+  return (
+    <CnamePrefixActions
+      prefix={app.cnamePrefix}
+      testId="l4-cname-prefix"
+      change={async (prefix) => {
+        const state = await setPrefix.mutateAsync({ id: app.id, prefix });
+        await client.invalidateQueries({ queryKey: orpc.l4Apps.key() });
+        return state;
+      }}
+    />
   );
 }

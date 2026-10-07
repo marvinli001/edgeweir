@@ -33,6 +33,7 @@ export const metricLabel = (metric: string) =>
       ip_qps: m.metric_ip_qps,
       origin_error_rate: m.metric_origin_error_rate,
       cooldown: m.metric_cooldown,
+      unknown_host_requests: m.metric_unknown_host_requests,
     }) as Record<string, (() => string) | undefined>
   )[metric]?.() ?? metric;
 
