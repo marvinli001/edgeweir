@@ -18,8 +18,26 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useDialogState } from "@/hooks/use-dialog-state";
+import { placeOf } from "@/lib/edge-map";
 import { m, timeAgo } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
+
+const RegionMap = React.lazy(() => import("@/components/effects/region-map"));
+
+/** The regions on the dot map (placed by city); the table below lists them in words. */
+function RegionMapCard({ regions }: { regions: Region[] }) {
+  if (!regions.some((r) => placeOf(r.code, r.name))) return null;
+  return (
+    <section
+      className="overflow-hidden rounded-2xl bg-card px-3 py-5 shadow-elev-1 edge-lit animate-enter @3xl/main:px-8 @3xl/main:py-7"
+      data-testid="regions-map"
+    >
+      <React.Suspense fallback={<div className="aspect-[173/66] w-full" />}>
+        <RegionMap regions={regions} />
+      </React.Suspense>
+    </section>
+  );
+}
 
 function RegionDialog({
   region,
@@ -185,7 +203,7 @@ function RegionsList({ onCreate }: { onCreate: () => void }) {
       <QueryView
         query={regions}
         empty={
-          <EmptyState icon={Location01Icon} title={m.regions_empty()}>
+          <EmptyState icon={Location01Icon} art="node" title={m.regions_empty()}>
             <Button onClick={onCreate}>
               <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
               {m.regions_create()}
@@ -194,7 +212,16 @@ function RegionsList({ onCreate }: { onCreate: () => void }) {
         }
       >
         {(list) => (
-          <DataTable data={list} columns={columns} getRowId={(r) => r.id} testId="regions-table" />
+          <>
+            <RegionMapCard regions={list} />
+            <DataTable
+              data={list}
+              columns={columns}
+              getRowId={(r) => r.id}
+              testId="regions-table"
+              pinFirstColumn
+            />
+          </>
         )}
       </QueryView>
       {edit.value ? (
