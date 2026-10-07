@@ -237,6 +237,8 @@ interface TaskSeed {
   maxUrls?: number;
   by?: string;
   recovery?: boolean;
+  /** A PURGE request this node accepted. */
+  purgeNode?: string;
   /** Only these nodes (a recovery purge goes to one node). */
   only?: string[];
   /** Targets each node reports (default: targets × variants). */
@@ -300,8 +302,8 @@ function task(seed: TaskSeed): CacheTask {
     maxUrls: seed.type === "sitemap" ? (seed.maxUrls ?? 1000) : null,
     state,
     nodes: taskNodes,
-    source: seed.recovery ? "recovery" : "user",
-    createdByName: seed.recovery ? "" : (seed.by ?? OPERATOR.name),
+    source: seed.recovery ? "recovery" : seed.purgeNode ? "purge_method" : "user",
+    createdByName: seed.recovery ? "" : (seed.purgeNode ?? seed.by ?? OPERATOR.name),
     createdAt: new Date(created).toISOString(),
     finishedAt: state === "succeeded" || state === "failed" ? (lastFinish ?? null) : null,
   };
@@ -340,6 +342,15 @@ export const cacheTasks: CacheTask[] = [
       "https://shop.example.com/api/v2/products?page=1",
     ],
     nodes: { "sin-edge-01": { state: "running" }, "sin-edge-02": { state: "pending" } },
+  }),
+  // The storefront's CMS sent PURGE for an edited product page through the Tokyo node.
+  task({
+    n: 27,
+    at: 9 * MINUTE,
+    type: "url",
+    sites: ["shop.example.com"],
+    targets: ["https://shop.example.com/products/trail-runner-9"],
+    purgeNode: "tyo-edge-01",
   }),
   // fra-edge-03 is offline: the purge waits for it.
   task({
