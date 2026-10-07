@@ -830,6 +830,7 @@
   "cert_status_issuing": "Issuing",
   "cert_status_ready": "Ready",
   "cert_status_error": "Issuance failed",
+  "cert_status_expired": "Expired",
   "cert_error_certificate_operation_failed": "Issuance failed; see the console log",
   "cert_error_certd_failed": "The certificate helper failed",
   "cert_error_certd_timeout": "The certificate helper ran out of time",
@@ -878,6 +879,7 @@
       }
     }
   ],
+  "cert_expired_at": "Expired {date}",
   "cert_auto_on": "Automatic renewal enabled",
   "cert_auto_off": "Automatic renewal disabled",
   "cert_renew_at": "Next renewal: {date}",
