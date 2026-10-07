@@ -1,7 +1,11 @@
+import type { DnsRevision } from "@edgeweir/contract";
+import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
+import { CardTable } from "@/components/clusters/card-table";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
   CapabilityBadges,
@@ -11,11 +15,13 @@ import {
 } from "@/components/dns/credential-dialog";
 import { modeLabel, providerLabel, revisionError, statusLabel } from "@/components/dns/labels";
 import { DnsProtectionCard } from "@/components/dns-protection";
-import { Page } from "@/components/page";
+import { enterDelay, Page } from "@/components/page";
 import { combineQueries, EmptyState, QueryView } from "@/components/states";
+import { StatusDot, type StatusTone } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
   TableBody,
@@ -51,9 +57,10 @@ function DnsPage() {
       <QueryView query={combineQueries(providers, bindings, catalog)}>
         {([providerList, bindingList, catalogList]) => (
           <>
-            <Card>
-              <CardHeader>
+            <Card className="animate-enter">
+              <CardHeader className="flex flex-row items-center gap-2">
                 <CardTitle>{m.dns_accounts()}</CardTitle>
+                {providerList.items.length ? <Count value={providerList.items.length} /> : null}
               </CardHeader>
               <CardContent>
                 {!providerList.items.length ? (
@@ -61,51 +68,64 @@ function DnsPage() {
                     <Button onClick={() => credential.show("new")}>{m.dns_add_account()}</Button>
                   </EmptyState>
                 ) : (
-                  <ul className="divide-y" data-testid="dns-accounts">
+                  <ul className="-my-1 divide-y divide-edge" data-testid="dns-accounts">
                     {providerList.items.map((p, index) => (
                       <li
                         key={p.id}
-                        className="flex flex-wrap items-center gap-3 py-3 animate-enter"
-                        style={{ animationDelay: `${index * 40}ms` }}
+                        className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3 animate-enter"
+                        style={enterDelay(index, 40)}
                       >
-                        <span className="min-w-48 flex-1 text-sm break-words">
-                          <span>{p.name}</span>
-                          <span className="ml-2 text-muted-foreground">{p.zone}</span>
+                        <span className="flex min-w-48 flex-1 flex-wrap items-center gap-2 text-sm">
+                          <span className="font-medium break-all">{p.name}</span>
+                          <ValueWell>{p.zone}</ValueWell>
                         </span>
-                        <Badge variant="outline">{providerLabel(p.provider)}</Badge>
-                        <CapabilityBadges provider={catalogList.find((c) => c.id === p.provider)} />
-                        <TestButton id={p.id} />
-                        <Button size="sm" variant="outline" onClick={() => credential.show(p)}>
-                          {m.common_edit()}
-                        </Button>
-                        <ConfirmDialog
-                          title={m.common_delete()}
-                          note={p.zone}
-                          destructive
-                          trigger={
-                            <Button size="sm" variant="outline">
-                              {m.common_delete()}
-                            </Button>
-                          }
-                          onConfirm={async () => {
-                            await client.dns.deleteProvider({ id: p.id });
-                            await refresh();
-                          }}
-                        />
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <Badge variant="outline">{providerLabel(p.provider)}</Badge>
+                          <CapabilityBadges
+                            provider={catalogList.find((c) => c.id === p.provider)}
+                          />
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <TestButton id={p.id} />
+                          <Button size="sm" variant="ghost" onClick={() => credential.show(p)}>
+                            {m.common_edit()}
+                          </Button>
+                          <ConfirmDialog
+                            title={m.common_delete()}
+                            note={p.zone}
+                            destructive
+                            trigger={
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-destructive hover:text-destructive"
+                              >
+                                {m.common_delete()}
+                              </Button>
+                            }
+                            onConfirm={async () => {
+                              await client.dns.deleteProvider({ id: p.id });
+                              await refresh();
+                            }}
+                          />
+                        </span>
                       </li>
                     ))}
                   </ul>
                 )}
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader>
+            <Card className="pb-0 animate-enter" style={enterDelay(1, 60)}>
+              <CardHeader className="flex flex-row items-center gap-2">
                 <CardTitle>{m.dns_bindings()}</CardTitle>
+                {bindingList.length ? <Count value={bindingList.length} /> : null}
               </CardHeader>
-              <CardContent>
-                {!bindingList.length ? (
-                  <EmptyState title={m.clusters_empty_title()} />
-                ) : (
+              {!bindingList.length ? (
+                <CardContent className="pb-(--card-spacing)">
+                  <EmptyState art="node" title={m.clusters_empty_title()} />
+                </CardContent>
+              ) : (
+                <CardTable>
                   <Table data-testid="dns-bindings">
                     <TableHeader>
                       <TableRow>
@@ -113,27 +133,31 @@ function DnsPage() {
                         <TableHead>{m.dns_mode()}</TableHead>
                         <TableHead>{m.dns_cluster_domain()}</TableHead>
                         <TableHead>{m.dns_status()}</TableHead>
-                        <TableHead>{m.common_actions()}</TableHead>
+                        <TableHead>
+                          <span className="sr-only">{m.common_actions()}</span>
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {bindingList.map((b) => (
                         <TableRow key={b.clusterId}>
-                          <TableCell>{b.clusterName}</TableCell>
+                          <TableCell className="font-medium">{b.clusterName}</TableCell>
                           <TableCell>
-                            <Badge variant="outline">{modeLabel(b.mode)}</Badge>
+                            <Badge variant={b.mode === "off" ? "outline" : "secondary"}>
+                              {modeLabel(b.mode)}
+                            </Badge>
                           </TableCell>
-                          <TableCell className="font-mono text-xs">{b.domain}</TableCell>
+                          <TableCell>
+                            {b.domain ? <ValueWell>{b.domain}</ValueWell> : "—"}
+                          </TableCell>
                           <TableCell>
                             {b.mode === "auto" && b.revision ? (
                               <span className="flex items-center gap-2">
-                                <Badge variant={b.blocked ? "destructive" : "outline"}>
-                                  {b.blocked
-                                    ? m.dns_blocked()
-                                    : b.applied
-                                      ? m.dns_applied()
-                                      : statusLabel(b.revision.status)}
-                                </Badge>
+                                <BindingState
+                                  blocked={!!b.blocked}
+                                  applied={b.applied}
+                                  status={b.revision.status}
+                                />
                                 {b.revision.lastError && !b.blocked ? (
                                   <span className="text-xs text-muted-foreground">
                                     {revisionError(
@@ -145,10 +169,10 @@ function DnsPage() {
                               </span>
                             ) : null}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="text-right">
                             <Button
                               size="sm"
-                              variant="outline"
+                              variant="ghost"
                               nativeButton={false}
                               render={
                                 <Link
@@ -158,14 +182,15 @@ function DnsPage() {
                               }
                             >
                               {m.dns_open_cluster()}
+                              <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
                             </Button>
                           </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
-                )}
-              </CardContent>
+                </CardTable>
+              )}
             </Card>
             <DnsProtectionCard />
           </>
@@ -188,6 +213,49 @@ function DnsPage() {
   );
 }
 
+/** A machine value (zone, cluster domain) in a small well. */
+function ValueWell({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex max-w-full rounded-md bg-well px-1.5 py-0.5 font-mono text-xs break-all text-foreground">
+      {children}
+    </span>
+  );
+}
+
+function Count({ value }: { value: number }) {
+  return (
+    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-wash px-1.5 text-xs font-medium tabular-nums text-muted-foreground">
+      {value}
+    </span>
+  );
+}
+
+/** A binding's publication as a light and a word: held back, published, or on its way. */
+function BindingState({
+  blocked,
+  applied,
+  status,
+}: {
+  blocked: boolean;
+  applied: boolean;
+  status: DnsRevision["status"];
+}) {
+  const tone: StatusTone = blocked
+    ? "bad"
+    : applied || status === "applied"
+      ? "good"
+      : status === "failed"
+        ? "bad"
+        : status === "pending"
+          ? "warn"
+          : "idle";
+  return (
+    <StatusDot tone={tone} pulse={!blocked && !applied && status === "pending"}>
+      {blocked ? m.dns_blocked() : applied ? m.dns_applied() : statusLabel(status)}
+    </StatusDot>
+  );
+}
+
 function TestButton({ id }: { id: string }) {
   const [pending, setPending] = React.useState(false);
   return (
@@ -195,6 +263,7 @@ function TestButton({ id }: { id: string }) {
       size="sm"
       variant="outline"
       disabled={pending}
+      data-testid="dns-account-test"
       onClick={async () => {
         setPending(true);
         try {
@@ -207,6 +276,7 @@ function TestButton({ id }: { id: string }) {
         }
       }}
     >
+      {pending ? <Spinner /> : null}
       {m.dns_test_connection()}
     </Button>
   );
