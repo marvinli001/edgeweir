@@ -40,8 +40,8 @@ message NodeConfig {
   repeated CertificateRef certificates = 7;
   // CIDRs origins may use although they are special-purpose addresses
   // (loopback, link-local, private, CGNAT...), which nodes otherwise refuse
-  // both as configured literals and as DNS answers. Set by the platform
-  // administrator; empty by default. Added in v0.2.1.
+  // both as configured literals and as DNS answers. Set by the operator;
+  // empty by default. Added in v0.2.1.
   repeated string origin_allowed_cidrs = 8;
   // Feature identifiers every receiving agent must implement. Unknown features
   // reject the whole configuration and retain last-known-good.
@@ -185,7 +185,7 @@ message CacheZone {
   uint32 inactive_seconds = 4;
 }
 
-// Site is one customer property: a set of domains, an origin pool and rules.
+// Site is one property: a set of domains, an origin pool and rules.
 message Site {
   string id = 1;
   string name = 2;
@@ -269,7 +269,7 @@ message ErrorPage {
   string template = 2;
 }
 
-// PlatformErrorPages are the platform administrator's templates, with the
+// PlatformErrorPages are the operator's platform-wide templates, with the
 // rules of ErrorPage. An empty template uses the node's built-in page.
 message PlatformErrorPages {
   // Hosts no site of the cluster serves (status 404).
@@ -349,7 +349,7 @@ message CcPolicy {
   uint32 cooldown_seconds = 12;
 }
 
-// PlatformProtection is set by platform administrators for every site.
+// PlatformProtection is set by the operator for every site.
 message PlatformProtection {
   bool under_attack = 1;
   string under_attack_challenge = 2;
@@ -494,7 +494,7 @@ message IpList {
   bool platform = 5;
 }
 
-// HTTP and TLS policy. Cipher strings are never accepted from tenants.
+// HTTP and TLS policy. Ciphers come from a named profile, never a cipher string.
 message TlsOptions {
   bool force_https = 1;
   uint32 hsts_max_age = 2;

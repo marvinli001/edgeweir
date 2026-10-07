@@ -90,8 +90,8 @@ export type NodeConfig = Message<"edgeweir.node.v1.NodeConfig"> & {
   /**
    * CIDRs origins may use although they are special-purpose addresses
    * (loopback, link-local, private, CGNAT...), which nodes otherwise refuse
-   * both as configured literals and as DNS answers. Set by the platform
-   * administrator; empty by default. Added in v0.2.1.
+   * both as configured literals and as DNS answers. Set by the operator;
+   * empty by default. Added in v0.2.1.
    *
    * @generated from field: repeated string origin_allowed_cidrs = 8;
    */
@@ -537,7 +537,7 @@ export const CacheZoneSchema: GenMessage<CacheZone> = /*@__PURE__*/
   messageDesc(file_edgeweir_node_v1_config, 5);
 
 /**
- * Site is one customer property: a set of domains, an origin pool and rules.
+ * Site is one property: a set of domains, an origin pool and rules.
  *
  * @generated from message edgeweir.node.v1.Site
  */
@@ -791,7 +791,7 @@ export const ErrorPageSchema: GenMessage<ErrorPage> = /*@__PURE__*/
   messageDesc(file_edgeweir_node_v1_config, 9);
 
 /**
- * PlatformErrorPages are the platform administrator's templates, with the
+ * PlatformErrorPages are the operator's platform-wide templates, with the
  * rules of ErrorPage. An empty template uses the node's built-in page.
  *
  * @generated from message edgeweir.node.v1.PlatformErrorPages
@@ -1058,7 +1058,7 @@ export const CcPolicySchema: GenMessage<CcPolicy> = /*@__PURE__*/
   messageDesc(file_edgeweir_node_v1_config, 14);
 
 /**
- * PlatformProtection is set by platform administrators for every site.
+ * PlatformProtection is set by the operator for every site.
  *
  * @generated from message edgeweir.node.v1.PlatformProtection
  */
@@ -1501,7 +1501,7 @@ export const IpListSchema: GenMessage<IpList> = /*@__PURE__*/
   messageDesc(file_edgeweir_node_v1_config, 21);
 
 /**
- * HTTP and TLS policy. Cipher strings are never accepted from tenants.
+ * HTTP and TLS policy. Ciphers come from a named profile, never a cipher string.
  *
  * @generated from message edgeweir.node.v1.TlsOptions
  */
