@@ -11,9 +11,11 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type NodeChannel, startNodeChannel } from "../../src/server/node-channel/server";
 import {
+  createCacheTask,
   getCacheTask,
   listCacheTasks,
   PURGE_METHOD_TASKS_PER_MINUTE,
+  PurgeMethodLimited,
 } from "../../src/server/services/cache-tasks";
 import { createClusterTx } from "../../src/server/services/clusters";
 import { createEnrollmentToken } from "../../src/server/services/enrollment";
@@ -241,6 +243,68 @@ describe("PURGE method and cache usage over the node channel", async () => {
     expect(
       (await mtls.submitPurge({ siteId: calm.id, url: "https://calm.test/x" })).taskId,
     ).toBeTruthy();
+  });
+
+  it("never lets concurrent PURGE requests exceed the per-minute quota", async () => {
+    const { mtls } = await enroll("edge-burst", clusterId);
+    const burst = await site("burst", clusterId);
+    await purgeOn(burst.id);
+    const now = Date.now();
+    await ctx.db.insert(schema.cacheTask).values(
+      Array.from({ length: PURGE_METHOD_TASKS_PER_MINUTE - 1 }, (_, i) => ({
+        type: "url",
+        targets: [`https://burst.test/${i}`],
+        siteIds: [burst.id],
+        source: "purge_method",
+        createdAt: new Date(now - 30_000 + i),
+      })),
+    );
+    // One task of room, five requests at once: exactly one gets it.
+    const results = await Promise.allSettled(
+      Array.from({ length: 5 }, (_, i) =>
+        mtls.submitPurge({ siteId: burst.id, url: `https://burst.test/x${i}` }),
+      ),
+    );
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    for (const r of results)
+      if (r.status === "rejected") expect(code(r.reason)).toBe(Code.ResourceExhausted);
+    const tasks = await ctx.db
+      .select({ id: schema.cacheTask.id })
+      .from(schema.cacheTask)
+      .where(eq(schema.cacheTask.source, "purge_method"));
+    expect((await listCacheTasks(ctx.db, { siteId: burst.id, page: 1, pageSize: 100 })).total).toBe(
+      PURGE_METHOD_TASKS_PER_MINUTE,
+    );
+    expect(tasks.length).toBeGreaterThanOrEqual(PURGE_METHOD_TASKS_PER_MINUTE);
+    // The quota is part of the task's own transaction: concurrent creations
+    // at the service level get the last task of room once, never more.
+    const direct = await site("direct", clusterId);
+    await purgeOn(direct.id);
+    await ctx.db.insert(schema.cacheTask).values(
+      Array.from({ length: PURGE_METHOD_TASKS_PER_MINUTE - 1 }, (_, i) => ({
+        type: "url",
+        targets: [`https://direct.test/${i}`],
+        siteIds: [direct.id],
+        source: "purge_method",
+        createdAt: new Date(now - 30_000 + i),
+      })),
+    );
+    const created = await Promise.allSettled(
+      Array.from({ length: 5 }, (_, i) =>
+        createCacheTask(
+          ctx.db,
+          { type: "url", urls: [`https://direct.test/y${i}`], siteIds: [] },
+          {
+            actor: { type: "node", id: "n", name: "edge" },
+            source: "purge_method",
+            siteId: direct.id,
+          },
+        ),
+      ),
+    );
+    expect(created.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    for (const r of created)
+      if (r.status === "rejected") expect(r.reason).toBeInstanceOf(PurgeMethodLimited);
   });
 
   it("stores the cache usage nodes report and keeps it until the next measurement", async () => {

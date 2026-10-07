@@ -51,8 +51,8 @@ import {
   createCacheTask,
   deviceTypeSites,
   hasDeliverableTasks,
+  PurgeMethodLimited,
   pullCacheTasks,
-  purgeMethodRetryAfter,
   reportCacheTaskResult,
 } from "../services/cache-tasks";
 import { nodeCertificates } from "../services/certificates";
@@ -921,9 +921,6 @@ export function createNodeService(
           "the site has no PURGE method on this cluster",
           Code.PermissionDenied,
         );
-      const retryAfter = await purgeMethodRetryAfter(app.db, site.id);
-      if (retryAfter > 0)
-        throw new ConnectError(`retry after ${retryAfter}`, Code.ResourceExhausted);
       try {
         const task = await createCacheTask(
           app.db,
@@ -937,6 +934,8 @@ export function createNodeService(
         log.info("PURGE task created", { nodeId: node.id, siteId: site.id, taskId: task.id });
         return { taskId: task.id };
       } catch (error) {
+        if (error instanceof PurgeMethodLimited)
+          throw new ConnectError(`retry after ${error.retryAfter}`, Code.ResourceExhausted);
         const code = (error as { code?: string }).code;
         if (code === "CACHE_TASK_URL_INVALID" || code === "CACHE_TASK_HOST_UNKNOWN")
           throw new ConnectError("the site does not serve this URL", Code.InvalidArgument);

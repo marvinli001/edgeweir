@@ -31,6 +31,7 @@ import type * as z from "zod";
 import { readCacheKey } from "../lib/cache-key";
 import { fail } from "../lib/errors";
 import { TASKS_CHANNEL } from "../lib/events";
+import { lockPurgeMethod } from "../lib/locks";
 import { cleanErrorCode, cleanErrorParams, taskError } from "../lib/node-errors";
 import { assertNodeFeatures } from "../lib/node-features";
 import { deleteInBatches } from "../lib/retention";
@@ -277,6 +278,14 @@ export async function createCacheTask(
   ctx: { actor: Actor; source?: "purge_method"; siteId?: string },
 ): Promise<CacheTask> {
   return db.transaction(async (tx) => {
+    // PURGE-method tasks: the quota is counted under the site's lock, in the
+    // transaction that inserts the task, so concurrent requests cannot all
+    // see room.
+    if (ctx.source === "purge_method" && ctx.siteId) {
+      await lockPurgeMethod(tx, ctx.siteId);
+      const retryAfter = await purgeMethodRetryAfter(tx, ctx.siteId);
+      if (retryAfter > 0) throw new PurgeMethodLimited(retryAfter);
+    }
     const items: CacheTaskItem[] = [];
     const targets: string[] = [];
     const siteNames = new Map<string, string>();
@@ -870,6 +879,13 @@ export async function pruneCacheTasks(db: Database, now = new Date()): Promise<n
 
 /** PURGE-method tasks a site may create per minute (all nodes together). */
 export const PURGE_METHOD_TASKS_PER_MINUTE = 120;
+
+/** The site created PURGE_METHOD_TASKS_PER_MINUTE tasks within the last minute. */
+export class PurgeMethodLimited extends Error {
+  constructor(readonly retryAfter: number) {
+    super(`retry after ${retryAfter}`);
+  }
+}
 
 /**
  * Seconds until the site may create another PURGE-method task, 0 when it
