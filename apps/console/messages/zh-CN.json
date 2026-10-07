@@ -1643,6 +1643,7 @@
   "dns_accounts_empty": "暂无 DNS 服务商账号",
   "dns_add_account": "添加服务商账号",
   "dns_account": "服务商账号",
+  "dns_account_none": "不使用账号",
   "dns_zone": "区域",
   "dns_test_connection": "测试连接",
   "dns_test_ok": "连接正常：区域内有 {records} 条记录",

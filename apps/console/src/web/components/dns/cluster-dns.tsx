@@ -160,7 +160,9 @@ function BindingEditor({
                 label={m.dns_account()}
                 value={draft.providerId ?? "none"}
                 options={[
-                  ...(draft.mode === "manual" ? [{ value: "none", label: m.cert_none() }] : []),
+                  ...(draft.mode === "manual"
+                    ? [{ value: "none", label: m.dns_account_none() }]
+                    : []),
                   ...providers.map((p) => ({ value: p.id, label: p.name })),
                 ]}
                 onChange={(value) => {

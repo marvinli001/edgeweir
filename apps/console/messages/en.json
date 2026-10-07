@@ -1813,6 +1813,7 @@
   "dns_accounts_empty": "No DNS provider accounts",
   "dns_add_account": "Add provider account",
   "dns_account": "Provider account",
+  "dns_account_none": "No account",
   "dns_zone": "Zone",
   "dns_test_connection": "Test connection",
   "dns_test_ok": "Connected: {records} records in the zone",
