@@ -10,7 +10,12 @@ import { isoDateTime, uuid } from "./schemas";
  */
 
 export const MANUAL_BAN_REASONS = ["abuse", "attack", "scanner", "spam", "other"] as const;
-export const AUTO_BAN_REASONS = ["cc_ip_rate"] as const;
+/**
+ * cc_ip_rate: a site's CC protection (site scope); unknown_host_scan: scan
+ * protection of the cluster's unknown hosts and node IP access (platform
+ * scope, unknown-host-v1).
+ */
+export const AUTO_BAN_REASONS = ["cc_ip_rate", "unknown_host_scan"] as const;
 
 export const banScope = z.enum(["platform", "site"]);
 export const banSource = z.enum(["manual", "auto"]);

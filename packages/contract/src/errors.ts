@@ -152,6 +152,14 @@ export const errorDefs = {
   SITE_DISABLED: { status: 409, params: [] },
   UPDATED_AT_MISMATCH: { status: 409, params: [] },
   DOMAIN_IN_USE: { status: 409, params: ["domains"] },
+  /** A Unicode (or xn--) host name that UTS #46 or the LDH rules refuse. */
+  DOMAIN_INVALID: { status: 400, params: ["domain"] },
+  /** The CNAME prefix is taken, still resolving for another site or application, or a DNS record name. */
+  CNAME_PREFIX_CONFLICT: { status: 409, params: ["prefix"] },
+  /** The default site for unknown hosts is not an enabled site of the cluster. */
+  DEFAULT_SITE_INVALID: { status: 400, params: [] },
+  /** Unknown SNI can only get the default site's certificate when it has one. */
+  DEFAULT_SITE_CERTIFICATE_REQUIRED: { status: 409, params: [] },
   REVISION_NOT_FOUND: { status: 404, params: [] },
   ROLLOUT_NOT_ACTIVE: { status: 409, params: [] },
   ROLLBACK_RESOURCE_UNAVAILABLE: { status: 409, params: [] },
@@ -266,6 +274,7 @@ export const revisionReasonDefs = {
   l4_app_deleted: { params: ["app"], en: "L4 application {app} deleted" },
   listen_ports_updated: { params: [], en: "listener ports updated" },
   client_ip_updated: { params: [], en: "client address setting updated" },
+  unknown_hosts_updated: { params: [], en: "unknown host settings updated" },
 } as const satisfies Record<string, { params: readonly string[]; en: string }>;
 
 export type RevisionReasonCode = keyof typeof revisionReasonDefs;

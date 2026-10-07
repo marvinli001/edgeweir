@@ -28,6 +28,7 @@ import { ccTemplate, protectionContract, protectionSettings, securityContract } 
 import { ipListsContract, platformRulesContract, rulesContract } from "./rules";
 import * as s from "./schemas";
 import { serviceAccountsContract } from "./service-accounts";
+import { cnamePrefixInput, cnamePrefixState, unknownHostProcedures } from "./unknown-hosts";
 import { usageContract, usageSettings } from "./usage";
 import { siteFeatures, wafContract } from "./waf";
 
@@ -36,6 +37,7 @@ export * from "./audit";
 export * from "./bans";
 export * from "./bulk-redirects";
 export * from "./certificates";
+export * from "./domains";
 export * from "./error-pages";
 export * from "./errors";
 export * from "./expressions";
@@ -45,6 +47,7 @@ export * from "./protection";
 export * from "./rules";
 export * from "./s3-presets";
 export * from "./schemas";
+export * from "./unknown-hosts";
 export * from "./waf";
 
 const idParam = z.object({ id: s.uuid });
@@ -235,6 +238,10 @@ export const contract = {
     clientIp: edgeProcedures.clientIp,
     /** Replaces the client address setting and publishes a revision. */
     setClientIp: edgeProcedures.setClientIp,
+    /** How the cluster's nodes answer unknown hosts and requests by node IP; scan protection. */
+    unknownHosts: unknownHostProcedures.unknownHosts,
+    /** Replaces the unknown host settings and publishes a revision. */
+    setUnknownHosts: unknownHostProcedures.setUnknownHosts,
   },
   nodeGroups: {
     list: oc
@@ -353,6 +360,14 @@ export const contract = {
       .route({ method: "PUT", path: "/sites/{id}/starred", tags: ["sites"] })
       .input(s.siteStarInput)
       .output(ok),
+    /**
+     * Sets the first label of the site's CNAME target, or a new random one
+     * without `prefix`. The replaced name keeps resolving for 24 hours.
+     */
+    setCnamePrefix: oc
+      .route({ method: "PUT", path: "/sites/{id}/cname-prefix", tags: ["sites"] })
+      .input(cnamePrefixInput)
+      .output(cnamePrefixState),
     /** Turns the site on or off. A disabled site is not shipped to nodes; its DNS records stay. */
     setEnabled: oc
       .route({ method: "PUT", path: "/sites/{id}/enabled", tags: ["sites"] })

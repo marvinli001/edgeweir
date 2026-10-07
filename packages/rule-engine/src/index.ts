@@ -768,6 +768,15 @@ export function validatePattern(pattern: string): void {
   compilePattern(pattern);
 }
 
+/**
+ * A pattern of the subset (see validatePattern) as a JavaScript RegExp; `whole`
+ * anchors it to the entire value, as `^(?:pattern)$`. Throws ExpressionError.
+ */
+export function patternRegExp(pattern: string, whole = false): RegExp {
+  const source = compilePattern(pattern);
+  return new RegExp(whole ? `^(?:${source})$` : source);
+}
+
 /** Source offset of character `index` of the quoted string token that starts at `start`. */
 function stringOffset(source: string, start: number, index: number): number {
   let i = start + 1;

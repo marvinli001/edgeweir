@@ -63,11 +63,11 @@ export const dnsBindingInput = z
   .object({
     mode: dnsBindingMode.default("off"),
     providerId: uuid.nullable().default(null),
-    /** Parent name of the cluster's records; site targets are `<site id>.<domain>`. */
+    /** Parent name of the cluster's records; site targets are `<CNAME prefix>.<domain>`. */
     domain: z.union([z.literal(""), zoneName]).default(""),
     ttl: z.number().int().min(30).max(3600).default(600),
     lines: z.array(dnsLine).max(128).default([]),
-    /** Also keep `<line>.<site id>.<domain>` for every site (targets shown before cluster bindings). */
+    /** Also keep `<line>.<CNAME prefix>.<domain>` for every site (targets shown before cluster bindings). */
     lineAliases: z.boolean().default(false),
   })
   .superRefine((binding, ctx) => {
@@ -149,13 +149,17 @@ export const dnsRevisionReasonDefs = {
   rollback: { params: [] },
   force: { params: [] },
   scheduling: { params: ["rule", "node"] },
+  /** A site's or layer-4 application's CNAME prefix changed. */
+  cname: { params: ["name"] },
+  /** Replaced CNAME prefixes stopped resolving after their 24 hours. */
+  cname_expired: { params: [] },
 } as const satisfies Record<string, { params: readonly string[] }>;
 export type DnsRevisionReason = keyof typeof dnsRevisionReasonDefs;
 const revision = z.object({
   revision: z.number(),
   /** blocked: the mass removal protection kept the previous records instead. */
   status: z.enum(["pending", "applied", "failed", "superseded", "blocked"]),
-  /** A code of dnsRevisionReasonDefs (manual, health, rollback, force, scheduling). */
+  /** A code of dnsRevisionReasonDefs (manual, health, rollback, force, scheduling, cname, cname_expired). */
   reason: z.string(),
   reasonParams: z.record(z.string(), z.union([z.string(), z.number()])),
   recordCount: z.number(),
@@ -326,6 +330,8 @@ export const dnsContract = {
         published: z.boolean(),
         healthy: z.boolean(),
         lines: z.array(z.object({ name: z.string(), target: z.string() })),
+        /** Names of replaced prefixes that keep resolving until `expiresAt`. */
+        retired: z.array(z.object({ name: z.string(), expiresAt: isoDateTime })),
       }),
     ),
 };

@@ -1,6 +1,7 @@
 import { oc } from "@orpc/contract";
 import * as z from "zod";
 import { isoDateTime, originAddress, port, revision, uuid } from "./schemas";
+import { cnamePrefixInput, cnamePrefixState } from "./unknown-hosts";
 
 /** Ports layer-4 applications and port pools may use. */
 export const L4_PORT_MIN = 1024;
@@ -230,14 +231,18 @@ export const l4App = z.object({
   blockListIds: z.array(uuid),
   maxConnections: z.number().int(),
   newConnectionsPerSecond: z.number().int(),
+  /** First label of the CNAME target (random for new applications, the id for older ones). */
+  cnamePrefix: z.string(),
   /**
-   * The CNAME clients connect to, `<application id>.<cluster DNS domain>`
+   * The CNAME clients connect to, `<cnamePrefix>.<cluster DNS domain>`
    * (published while the application is enabled); null while the
    * cluster's DNS is off.
    */
   dnsTarget: z.string().nullable(),
-  /** Per DNS line: `<line>.<application id>.<domain>` with line aliases, else `<line>.<domain>`. */
+  /** Per DNS line: `<line>.<cnamePrefix>.<domain>` with line aliases, else `<line>.<domain>`. */
   dnsLines: z.array(z.object({ name: z.string(), target: z.string() })),
+  /** Names of replaced prefixes that keep resolving until `expiresAt` (with a DNS binding). */
+  dnsRetired: z.array(z.object({ name: z.string(), expiresAt: isoDateTime })),
   createdAt: isoDateTime,
   updatedAt: isoDateTime,
 });
@@ -326,6 +331,14 @@ export const l4AppsContract = {
     .route({ method: "PUT", path: "/l4-apps/{id}/enabled", tags: ["l4"] })
     .input(l4AppSetEnabledInput)
     .output(l4AppMutationResult),
+  /**
+   * Sets the first label of the application's CNAME target, or a new random
+   * one without `prefix`. The replaced name keeps resolving for 24 hours.
+   */
+  setCnamePrefix: oc
+    .route({ method: "PUT", path: "/l4-apps/{id}/cname-prefix", tags: ["l4"] })
+    .input(cnamePrefixInput)
+    .output(cnamePrefixState),
   /** Per-minute counters the nodes reported, with totals and the nodes' shares. */
   stats: oc
     .route({ method: "GET", path: "/l4-apps/{id}/stats", tags: ["l4"] })

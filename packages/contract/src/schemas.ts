@@ -13,6 +13,7 @@ import {
   parseIp,
   parseUrl,
 } from "./addresses";
+import { siteDomains } from "./domains";
 import { addExpressionIssue } from "./expressions";
 
 const LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
@@ -496,7 +497,12 @@ export const siteCreateInput = z.object({
   /** Defaults to the first domain. */
   name: z.string().trim().min(1).max(100).optional(),
   clusterId: uuid.optional(),
-  domains: z.array(domainName).min(1).max(50),
+  /**
+   * `a.com`, `*.a.com` (one label), `.a.com` (any depth) or `~pattern`
+   * (whole host, at most 10); Unicode hosts are stored as Punycode
+   * (DOMAIN_INVALID when UTS #46 refuses them).
+   */
+  domains: siteDomains,
   origins: siteOrigins,
   cacheRules: z.array(cacheRuleInput).max(64).default([]),
   /** grpc needs protocol http2 (ORIGIN_GRPC_REQUIRES_HTTP2). */
@@ -561,7 +567,7 @@ export const siteDelivery = z.object({
 });
 
 /** Where a name points compared with the addresses of its cluster's nodes (lib/dns-check). */
-export const dnsPointing = z.enum(["ok", "elsewhere", "unresolved", "unknown"]);
+export const dnsPointing = z.enum(["ok", "elsewhere", "unresolved", "unknown", "unchecked"]);
 
 /**
  * What a site needs to serve its domains: DNS pointing to the cluster's
@@ -579,12 +585,14 @@ export const siteLaunch = z.object({
     z.object({
       /** As on the site ("*.example.com" for a wildcard). */
       name: z.string(),
-      /** The name looked up: the domain, or a fixed label under a wildcard. */
+      /** The name looked up: the domain, or a fixed label under a wildcard; "" when unchecked. */
       probe: z.string(),
       /**
        * ok: every address it resolves to is one of the cluster's active
        * nodes'; elsewhere: some address is not; unresolved: no A or AAAA
-       * record; unknown: the lookup failed or no node address is known.
+       * record; unknown: the lookup failed or no node address is known;
+       * unchecked: a `.a.com` or `~pattern` domain, which names no single
+       * host to look up.
        */
       pointing: dnsPointing,
     }),
@@ -599,7 +607,10 @@ export const siteLaunch = z.object({
     state: z.enum(["none", "covered", "uncovered", "issuing", "failed", "expired"]),
     id: uuid.nullable(),
     name: z.string(),
-    /** Domains the current chain does not cover (all of them before the first issuance). */
+    /**
+     * Domains the current chain does not cover (all of them before the
+     * first issuance); `.a.com` and `~pattern` domains are not checked.
+     */
     uncovered: z.array(z.string()),
     error: z.string(),
   }),
@@ -613,7 +624,10 @@ export const site = z.object({
   enabled: z.boolean(),
   clusterId: uuid,
   clusterName: z.string(),
+  /** In ASCII (Punycode) form: `a.com`, `*.a.com`, `.a.com`, `~pattern`. */
   domains: z.array(z.string()),
+  /** First label of the CNAME target `<prefix>.<cluster domain>` (DNS bindings). */
+  cnamePrefix: z.string(),
   origins: z.array(origin),
   cacheRules: z.array(cacheRule),
   originSettings: originSettings.required(),
@@ -1329,7 +1343,7 @@ export const auditLogFacets = z.object({
 export const siteUpdateInput = z.object({
   id: uuid,
   name: z.string().trim().min(1).max(100).optional(),
-  domains: z.array(domainName).min(1).max(50).optional(),
+  domains: siteDomains.optional(),
   origins: siteOrigins.optional(),
   cacheRules: z.array(cacheRuleInput).max(64).optional(),
   /**
