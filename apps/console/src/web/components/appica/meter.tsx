@@ -4,12 +4,14 @@ import { cn } from "@/lib/utils";
 
 /**
  * A thin gauge (appica Meter on Base UI's meter role) colored by zone: the zone of `optimum` is
- * good, the next one a warning. By default low values are good (load); pass `optimum={max}` when
- * high values are (nodes online). Pair it with the value as text.
+ * good, the next one a warning, the far one an error. By default low values are good (load); pass
+ * `optimum={max}` when high values are (nodes online), and `low` to give the bottom its own zone.
+ * Pair it with the value as text.
  */
 export function Meter({
   value,
   max = 100,
+  low = 0,
   high = 80,
   optimum = 0,
   label,
@@ -17,6 +19,7 @@ export function Meter({
 }: {
   value: number;
   max?: number;
+  low?: number;
   high?: number;
   optimum?: number;
   label: string;
@@ -27,7 +30,7 @@ export function Meter({
       <AppicaMeter
         value={value}
         max={max}
-        low={0}
+        low={low}
         high={high}
         optimum={optimum}
         aria-label={label}
