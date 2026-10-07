@@ -496,14 +496,14 @@ The **Cache zone** card on the **Overview** of the **Clusters** page sets every 
 
 Tasks go to every enabled node of the site's cluster, with a result per node. Disabled sites cannot be purged or prefetched ("The site is disabled"). `/purge?site=<site ID>` lists only that site's tasks (the site's name shows next to **Tasks**; × clears it) and preselects the site for site and tag purges; `/purge?type=<type>&urls=<URL>` opens that type with the URL filled in (several URLs as a JSON array, e.g. `urls=["https://www.example.com/a","https://www.example.com/b"]`). **Submit** stays disabled while the list is empty or blank. **Purge URLs…** in ⌘K / Ctrl+K opens this page (listing only the site's tasks on a site's pages).
 
-The access logs, the top URLs on a site's **Analytics** tab and the top paths on its **Security** tab offer **Purge URL** under **⋯** at the end of the row: paths expand to each of the site's domains that is not a wildcard, and after you confirm the listed URLs a URL purge is created; **View tasks** in the toast opens the site's tasks.
+The access logs, the top URLs on a site's **Analytics** tab and the top paths on its **Security** tab offer **Purge URL** under **⋯** at the end of the row: paths expand to each of the site's exact domains (not wildcard, `.` suffix or pattern domains), and after you confirm the listed URLs a URL purge is created; **View tasks** in the toast opens the site's tasks.
 
 ### Purge from the site
 
 The **Purge cache** card at the top of the site's **Cache** tab:
 
 1. Select **Purge URLs**, **Purge directories**, or **Purge sites**.
-2. For URLs and directories, enter one path starting with `/` or one full URL per line. Paths expand to each of the site's domains that is not a wildcard (`/app.js` gives one URL for `www.example.com` and one for `example.com`); the count of expanded URLs shows at the top right. Over 500 URLs, or a line that is neither a path nor a URL, shows a message below and keeps **Submit** disabled. On a site with wildcard domains only, enter full URLs. **Purge sites** shows the domains it purges.
+2. For URLs and directories, enter one path starting with `/` or one full URL per line. Paths expand to each of the site's exact domains (`/app.js` gives one URL for `www.example.com` and one for `example.com`); the count of expanded URLs shows at the top right. Over 500 URLs, or a line that is neither a path nor a URL, shows a message below and keeps **Submit** disabled. On a site with only wildcard, `.` suffix or pattern domains, enter full URLs. **Purge sites** shows the domains it purges.
 3. Click **Submit**.
 
 Below the card are the site's latest 5 tasks, refreshed every 2 seconds while nodes work on them; **View tasks** opens `/purge?site=<site ID>`.
@@ -520,7 +520,7 @@ Below the card are the site's latest 5 tasks, refreshed every 2 seconds while no
 | Prefetch URLs | Full `http://` or `https://` URLs; devices | The node requests the URL through a local edge listener of its own like a normal request, with a browser's `Accept-Encoding`, and caches it; bans, CC, challenges and denying rules do not apply to prefetches, and they are not counted in the statistics. A status below 400 is success; the origin's redirects are cached as they are, not followed. The cache key holds the scheme but not the port (every [listener port](https.en.md#site-ports) of a site shares its cached objects, and purge and prefetch URLs with a port apply to the site whatever the port): for sites with a certificate an `http://` URL is prefetched as `https://` too; the node's own redirect for **Force HTTPS** is followed to the `https://` URL, any other redirect the node makes fails. With **Separate mobile and desktop** on, each checked device is requested once (mobile with a mobile User-Agent); otherwise one request |
 | Prefetch a sitemap | One sitemap URL, a URL limit (1–10000, default 1000); devices | The node fetches the sitemap through its own edge layer (so the origin address policy applies and the console makes no outbound request) and prefetches the site's URLs it lists, see [Sitemaps](#sitemaps) |
 
-URLs must start with `http://` or `https://`, must not carry credentials, and their Host must be a domain of a site (including subdomains under a wildcard), not a pattern such as `*.example.com`. `https://` URLs are prefetched through the node's local TLS listener while it has an HTTPS listener (the node's own certificate is not verified); without one they fail ("the node has no HTTPS listener yet"). Nodes pull purges on a lane of their own: a purge does not wait for prefetches or upgrades already under way.
+URLs must start with `http://` or `https://`, must not carry credentials, and their Host must be served by a site (by the [domain precedence](domains.en.md#precedence), hosts matched by wildcard, `.` suffix and pattern domains included), not a pattern such as `*.example.com`. `https://` URLs are prefetched through the node's local TLS listener while it has an HTTPS listener (the node's own certificate is not verified); without one they fail ("the node has no HTTPS listener yet"). Nodes pull purges on a lane of their own: a purge does not wait for prefetches or upgrades already under way.
 
 ### Cache-Tag
 
@@ -542,7 +542,7 @@ The origin lists tags, comma separated, in the `Cache-Tag` response header, e.g.
 | --- | --- |
 | Sitemap URL | Must belong to a site; the node requests it from its own edge layer without following redirects, 30 seconds and at most 50 MiB unpacked per document; gzip-compressed sitemaps are recognized by their content |
 | Format | `<loc>` of a `urlset`; a `sitemapindex` is followed one level, and its sitemaps must be on the site's domains too |
-| Selection | Only `http(s)` URLs on the site's domains (wildcards included), de-duplicated, the first ones in document order up to the URL limit |
+| Selection | Only `http(s)` URLs on hosts the site serves by the [domain precedence](domains.en.md#precedence), de-duplicated, the first ones in document order up to the URL limit |
 | Result | Each URL and device counts as one success or failure; a sitemap that cannot be fetched or parsed fails the task (`sitemap_failed`), one without URLs of the site too (`sitemap_empty`) |
 | Node requirement | Node feature `prefetch-v2` (also for mobile prefetches); while an active node of the cluster lacks it the task is refused (`NODE_CAPABILITY_REQUIRED`) |
 

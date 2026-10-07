@@ -330,7 +330,7 @@ Changes are audited as `system.usage_update`. The usage API and the definition o
 
 | Field | Requests it applies to | Notes |
 | --- | --- | --- |
-| **Unknown host** | The Host belongs to no site of the cluster | Status 404; empty uses the built-in page |
+| **Unknown host** | The Host belongs to no site of the cluster (a cluster can close such connections or hand them to its default site instead, see [unknown hosts](domains.en.md#unknown-hosts-and-node-ip-access)) | Status 404; empty uses the built-in page |
 | **Site disabled** | Domains of disabled sites | Status 503 |
 
 Each template is at most 65536 bytes (UTF-8); the values of the placeholders `{{status}}`, `{{request_id}}`, `{{client_ip}}`, `{{host}}`, `{{time}}` and `{{path}}` are HTML-escaped; with `{{time}}` or `{{path}}` the configurations of every cluster need the node capability `rules-v3`. Saving publishes one revision in every cluster ("Platform error pages updated") and is audited as `system.error_pages_update`. Older nodes ignore platform error pages. See [Error pages](error-pages.en.md#platform-error-pages).

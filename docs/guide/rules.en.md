@@ -362,7 +362,7 @@ A site's table of exact-match redirects: each entry redirects one source to one 
 
 | Field | Values | Default |
 | --- | --- | --- |
-| Source | `/path` (every domain of the site) or `host/path` (that domain only); 2–512 bytes without whitespace, `?`, or control characters; the host is lowercase and one of the site's domains or one label under a wildcard domain of the site | `/` |
+| Source | `/path` (every domain of the site) or `host/path` (that domain only); 2–512 bytes without whitespace, `?`, or control characters; the host is lowercase and one of the site's exact domains or one label under a wildcard domain of the site (not a host only a `.` suffix or pattern domain matches) | `/` |
 | Target | As a static redirect target, up to 1024 bytes | `/` |
 | Status code | 301 / 302 / 307 / 308 | 301 |
 | Keep query string | On / off; on appends the request's query string to the target (with `&` when the target has one) | Off |

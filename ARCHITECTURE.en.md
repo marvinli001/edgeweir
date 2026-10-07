@@ -24,7 +24,7 @@ Console (ROLE=app|worker|all)
 └── child process stdin/stdout ──▶ edgeweir-certd ──▶ ACME CA, DNS provider APIs
 ```
 
-The only contract between the console and the nodes is `edgeweir.node.v1` in `proto/` (current tag `proto/v0.21.0`). The boundary between the open core and commercial products is defined in [LICENSING.en.md](LICENSING.en.md).
+The only contract between the console and the nodes is `edgeweir.node.v1` in `proto/` (current tag `proto/v0.25.0`). The boundary between the open core and commercial products is defined in [LICENSING.en.md](LICENSING.en.md).
 
 ## Repository layout
 
@@ -253,6 +253,23 @@ The nodes' stream subsystem forwards TCP / UDP L4 apps; the console handles port
 
 Behavior: [Layer-4 forwarding](docs/guide/l4.en.md).
 
+## Domain matching and unknown hosts
+
+Proto `v0.25.0` adds two capabilities. `domains-v2`: `Domain.match` (`SUFFIX` subdomains at any depth, `REGEX` a pattern for the whole host) and `Domain.order` (the precedence key of patterns: the site's creation time in milliseconds × 16 plus the pattern's index in the site), and `OfflineHost.match` for disabled sites. `unknown-host-v1`: `NodeConfig.unknown_hosts` (the handling of unknown hosts and of node IP access each: the platform's page, 444 or the default site; the default site's certificate for unknown SNI; scan protection's threshold and ban time) and `AutoBan.scope` (scan protection's platform-wide bans). Exact and `*.` domains and the default settings stay out of the encoding: configurations that use neither encode as before.
+
+1. The console converts Unicode host names to Punycode by UTS #46 (`tr46`, nontransitional processing) when domains are saved; patterns use the rule engine's regular expression subset with lowercase letters. A name in one form belongs to one site; forms may overlap, and nodes look up "exact > `*.` > the longest `.` suffix > patterns (by `order`, then site id)". Console purges and prefetches by Host and node sitemap prefetches use the same order (shared vectors `host_match_vectors.json`).
+2. Node Lua looks up `host:`, `wild:` and `sfx:` keys in the shared dictionary; patterns come with the site table settings and are compiled once per version (`ngx.re` with `jo`; `lua_regex_cache_max_entries` grows with them). Hits through suffixes and patterns go to an LRU of their own and never evict exact names. A host found through a suffix or pattern completes TLS only where the certificate's DNS names cover it.
+3. With suffix or pattern domains in the configuration, nodes render `*.x` as a one-label regular expression `server_name`, and give each suffix (longest first) and each pattern (by precedence) a server block of its own after every site's, so nginx picks the server block of the site Lua routes to; the default site's server block is the `default_server` while requests are handed to it.
+4. Unknown hosts, node IP access (a Host that is an IP or empty) and sites' unbound ports follow the cluster's setting; domains of disabled sites keep the disabled page. Scan protection counts by `ip.src` (IPv4 address, IPv6 /64) in `edgeweir_cc`; over the threshold the node creates a platform-wide automatic ban and reports it through `ReportBans` (reason `unknown_host_scan`), which the console stores as an automatic ban with `scope = platform` and no cluster.
+5. CNAME prefixes: new sites and L4 apps get 8 random characters, existing ones keep their UUID. After a change the old prefix is written to `cname_retired` and stays in the DNS plan for 24 hours (published at once, reason `cname`); the per-minute `dns.reconcile` deletes expired ones and publishes (reason `cname_expired`). Prefixes are unique across sites and L4 apps and never `all`, `all-<n>` or a binding's all-lines record or line name.
+
+| Management action | Audit |
+| --- | --- |
+| Change the unknown host settings | `cluster.unknown_hosts_update` (publishes the cluster, reason `unknown_hosts_updated`) |
+| Change a site's / L4 app's CNAME prefix | `site.cname_update` / `l4.cname_update` (publishes the cluster's DNS, reason `cname`) |
+
+Behavior: [domains and unknown hosts](docs/guide/domains.en.md).
+
 ## Node channel
 
 Connect-RPC over HTTPS; the console process terminates TLS itself.
@@ -369,7 +386,7 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificate
 | --- | --- | --- |
 | `alerts.sweep` | Every minute | Alert detection and delivery |
 | `rollouts.evaluate` | Every minute | Evaluates running configuration canaries: promote, await promotion, or roll back (canary node heartbeats trigger an evaluation too) |
-| `dns.reconcile` | Every minute | DNS steering publishing and external record maintenance |
+| `dns.reconcile` | Every minute | Deletes expired old CNAME prefixes and publishes the DNS of their clusters; DNS steering publishing and external record maintenance |
 | `traffic.rollup` | Every minute | Traffic rollup and cleanup (L4 app minute statistics included), usage rollup and retention, access log partition maintenance, upgrade expiry; one failing part does not stop the others |
 | `certificates.sweep` | Every minute | Certificate issuance and renewal |
 | `maintenance.recompile` | At start; skipped while `config_recompiled` in `system_setting` matches the current marker | Republishes every cluster once when an upgrade changes what stored data compiles to |
@@ -408,7 +425,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | Table | Contents |
 | --- | --- |
 | `region` | Region dictionary |
-| `cluster` | Clusters: sets of nodes that share one revision stream |
+| `cluster` | Clusters: sets of nodes that share one revision stream; extra listener ports, client IP, unknown host settings (`unknown_hosts`) and the default site (`default_site_id`, cleared when the site is deleted) |
 | `node_group` | Node groups, optionally tied to a region |
 | `node` | Nodes: status, capabilities, certificate serial and fingerprint (after a renewal also the replaced certificate's serial), last heartbeat and its connection's source address, why its certificate was last refused, last reported ban state, CC level per site and host metrics, whether the node also probes |
 | `node_ip` | Node IP addresses: reported by the node (`reported`) and scheduling addresses the operator configured (`configured`, level 0 primary, 1 backup 1, 2 backup 2) |
@@ -427,7 +444,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | Table | Contents |
 | --- | --- |
 | `site` | Sites: cluster, enabled state, cache key, slicing, Cache-Tag forwarding, WebSocket, certificate, TLS settings, cache generation, log sample rate, whether error pages replace origin errors and when they were saved |
-| `site_domain` | Site domains (host names or wildcards), unique across the console |
+| `site_domain` | Site domains: name and form (`kind`: exact, wildcard, suffix, pattern); a name in one form is unique across the console |
 | `site_star` | Per-user stars |
 | `origin_pool` | Origin pools: timeouts, keepalive, failure thresholds, origin TLS verification, HTTP version towards the origins and gRPC, active health check and session affinity (kept while off) |
 | `origin` | Origins and their origin group (empty for the default group) |
@@ -465,6 +482,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `scheduling_state` | Each rule's state per node: since when each condition holds, when the action started, since when it is clear |
 | `dns_managed_name` | Registered managed DNS names and the cluster they belong to |
 | `dns_lease` | Leases for DNS work (cluster bindings, DNS-01 credentials): one process at a time handles a binding or credential |
+| `cname_retired` | Old CNAME prefixes of sites and L4 apps kept for 24 hours after a change: cluster, site or app, prefix (unique), expiry |
 
 ### Statistics, logs, tasks, and alerts
 
@@ -554,6 +572,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0053_origin_protocol` | `origin_pool.protocol` (HTTP version towards the origins, `http1` or `http2`), `origin_pool.grpc` (gRPC proxied over HTTP/2 end to end) |
 | `0054_edge_ports` | `cluster.extra_http_ports`, `cluster.extra_https_ports` (listener ports besides 80 / 443), `cluster.client_ip` (the client address source, jsonb, null for direct); `site.http_ports`, `site.https_ports` (the ports a site is bound to, default 80 / 443); `l4_app.port_end` (port ranges), `l4_app.origin_port_mode` (`fixed` / `same`), `l4_app.certificate_id`, `l4_app.tls_minimum_version` (TLS termination) |
 | `0055_site_content` | `site_secret`; `cluster.cache_max_size_gb`, `cluster.cache_inactive_days` (cache zone); `node.cache_max_size_gb` (node size override), `node.cache_usage` (reported usage); `site.hide_x_cache`, `site.purge_method`, `site.maintenance`, `site.maintenance_updated_at`, `site.charset`, `site.request_body_limit`; `origin_pool.tries`, `origin_pool.status_retry`; `cache_rule.cache_set_cookie`; `site_error_page.redirect_url`, `site_error_page.response_status` |
+| `0056_domain_forms_cname_prefix` | `site_domain.kind` replaces `wildcard`, unique by `(name, kind)`; `site.cname_prefix`, `l4_app.cname_prefix` (their id for existing rows: CNAMEs do not change); `cname_retired`; `cluster.unknown_hosts`, `cluster.default_site_id` |
 
 ## Build output
 

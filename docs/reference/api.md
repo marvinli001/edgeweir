@@ -149,8 +149,8 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 | 字段 | 说明 |
 | --- | --- |
 | `addresses` | 集群的边缘地址（A / AAAA 记录的值）：在线活动节点的主调度地址，节点配置了调度地址时用配置的地址，否则用节点上报的公网地址；IPv4 在前 |
-| `domains[]` | `name`（网站上的写法，泛域名为 `*.example.com`）、`probe`（实际解析的名称；泛域名解析其下的固定名称 `edgeweir-check.example.com`）、`pointing` |
-| `domains[].pointing` | `ok`：解析到的全部地址都属于集群的活动节点（配置的地址或上报的公网地址，含备用地址与离线节点）；`elsewhere`：有地址不属于；`unresolved`：没有 A / AAAA 记录；`unknown`：解析失败（超时等），或集群节点没有已知地址 |
+| `domains[]` | `name`（网站上的写法：`a.com`、`*.a.com`、`.a.com`、`~正则`，国际化域名为 Punycode）、`probe`（实际解析的名称；泛域名解析其下的固定名称 `edgeweir-check.example.com`）、`pointing` |
+| `domains[].pointing` | `ok`：解析到的全部地址都属于集群的活动节点（配置的地址或上报的公网地址，含备用地址与离线节点）；`elsewhere`：有地址不属于；`unresolved`：没有 A / AAAA 记录；`unchecked`：`.` 后缀或正则域名（不对应单个主机名，`probe` 为空）；`unknown`：解析失败（超时等），或集群节点没有已知地址 |
 | `certificate` | `state`：`none`（网站没有证书）、`covered`（证书链覆盖全部域名）、`uncovered`（不覆盖 `uncovered` 中的域名）、`issuing`（ACME 签发排队或进行中）、`failed`（上次签发失败，`error` 为失败代码）、`expired`；另有 `id`、`name`、`uncovered`、`error` |
 | `delivery` | 同上 |
 
@@ -644,6 +644,26 @@ DNS 绑定与记录的新增字段：
 
 网站的端口经 `PATCH /sites/{id}` 的 `ports`（`{ http, https }`）修改，`POST /sites` 可选同一字段（省略为 80 与 443）；网站响应带 `ports`。错误码：`SITE_PORT_UNAVAILABLE`、`SITE_PORTS_EMPTY`、`SITE_HTTPS_PORT_NEEDS_CERTIFICATE`。`PUT /sites/{id}/https` 的设置新增 `redirectStatus`（301、302、303、307、308，默认 301）、`redirectPort`（443 或网站的 HTTPS 端口，默认 443，`HTTPS_REDIRECT_PORT_INVALID`）与 `redirectExcludedDomains`（网站的域名，最多 50 个，`HTTPS_REDIRECT_DOMAIN_INVALID`）。`GET /sites/{id}/features` 新增 `edgePorts`、`clientIp`；`GET /clusters` 的集群新增 `clientIpMode`。
 
+### 域名、未知域名与 CNAME 前缀
+
+网站的 `domains`（`POST /sites`、`PATCH /sites/{id}`）接受四种写法：`a.com`、`*.a.com`（最左一级）、`.a.com`（任意层级子域名，不含 `a.com`）、`~正则`（对小写 Host 整串匹配，最长 256 字符，字母小写，不含 `"`、`\\`、空白）；1–50 个，正则最多 10 个。Unicode 主机名按 UTS #46（非过渡处理）转为 Punycode 保存，响应只返回 Punycode；转换失败返回 400 `DOMAIN_INVALID`（`data.domain`）。同一写法的同一名称只能属于一个网站（`DOMAIN_IN_USE`）。`sites.list` 的 `search` 对 Unicode 搜索词另按 Punycode 匹配。网站响应新增 `cnamePrefix`。
+
+| 过程 | 端点 | 说明 |
+| --- | --- | --- |
+| `clusters.unknownHosts` | `GET /clusters/{clusterId}/unknown-hosts` | 未知域名设置、默认网站（`{ id, name, enabled, certificate }` 或 `null`）与缺少 `unknown-host-v1` 的节点 |
+| `clusters.setUnknownHosts` | `PUT /clusters/{clusterId}/unknown-hosts` | 替换未知域名设置，发布配置版本（原因 `unknown_hosts_updated`），审计 `cluster.unknown_hosts_update` |
+| `sites.setCnamePrefix` | `PUT /sites/{id}/cname-prefix` | 修改网站的 CNAME 前缀，返回 `{ prefix, retired: [{ prefix, expiresAt }] }`，审计 `site.cname_update` |
+| `l4Apps.setCnamePrefix` | `PUT /l4-apps/{id}/cname-prefix` | 修改 L4 应用的 CNAME 前缀，审计 `l4.cname_update` |
+
+服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
+
+| 请求 | 字段 |
+| --- | --- |
+| `PUT /clusters/{clusterId}/unknown-hosts` | `settings`：`unknownHost`、`ipAccess`（`page` / `close` / `site`，默认 `page`）；`defaultSiteId`（选了 `site` 时必填，本集群已启用的网站，否则 `DEFAULT_SITE_INVALID`）；`defaultCertificate`（只在 `unknownHost` 为 `site` 时，默认网站须有证书，否则 `DEFAULT_SITE_CERTIFICATE_REQUIRED`）；`scan`：`enabled`（默认 `false`）、`threshold`（10–10000，默认 100）、`banSeconds`（60–86400，默认 3600） |
+| `PUT /sites/{id}/cname-prefix`、`PUT /l4-apps/{id}/cname-prefix` | `prefix`：1–30 位 `[a-z0-9-]`，不以 `-` 开头或结尾；省略时生成新的随机前缀。已被使用、仍在 24 小时过渡期内、为 `all` / `all-<n>` 或任一 DNS 绑定的汇总记录名与线路名时返回 409 `CNAME_PREFIX_CONFLICT`（`data.prefix`） |
+
+`GET /sites/{siteId}/cname` 新增 `retired`（旧名称 `{ name, expiresAt }`）；DNS 版本的 `reason` 新增 `cname`（`reasonParams.name`）与 `cname_expired`。`GET /sites/{id}/https/check` 的 `blockers` 新增 `no_certificate_names`（网站只有正则域名）。自动封禁的 `reason` 新增 `unknown_host_scan`（`scope` 为 `platform`，`siteId` 为 `null`，`trigger.metric` 为 `unknown_host_requests`）。节点能力新增 `domains-v2`、`unknown-host-v1`。
+
 ### 端口池与 L4 应用
 
 | 过程 | 端点 | 说明 |
@@ -673,8 +693,10 @@ DNS 绑定与记录的新增字段：
 | --- | --- |
 | `clusters.portPools`、`clusters.setPortPools` | `clusterId`；`pools`（按起始端口、协议排序）；`reservedPorts`（集群 HTTP / HTTPS 监听的端口，含附加端口，不能进入端口池）；`nodesWithoutL4`（`[{ id, name }]`，集群中不上报 `l4-v1` 的活动节点）；`nodesWithoutL4V2`（不上报 `l4-v2` 的活动节点） |
 | `l4Apps.list`、`l4Apps.get` 与其他过程返回的应用 | `id`、`clusterId`、`clusterName`、`name`、`protocol`、`port`、`enabled`、`acceptProxyProtocol`、`proxyProtocolVersion`、`portEnd`、`originPortMode`、`certificateId`、`certificateName`、`tlsMinimumVersion`、`origins`（`[{ id, address, port, weight, backup }]`，按保存顺序）、`maxFails`、`failTimeoutSeconds`、`connectTimeoutMs`、`idleTimeoutSeconds`、`allowListIds`、`blockListIds`、`maxConnections`、`newConnectionsPerSecond`、`dnsTarget`、`dnsLines`、`createdAt`、`updatedAt` |
-| `dnsTarget` | 客户端连接的 CNAME `<应用 ID>.<集群域名>`，只在应用启用时发布；集群 DNS 为「不管理」时为 `null` |
-| `dnsLines` | 每条绑定线路 `{ name, target }`：开启线路别名时 `target` 为 `<线路>.<应用 ID>.<集群域名>`，否则为 `<线路>.<集群域名>` |
+| `cnamePrefix` | CNAME 前缀：新建应用为随机 8 位，升级前的应用为其 ID |
+| `dnsTarget` | 客户端连接的 CNAME `<cnamePrefix>.<集群域名>`，只在应用启用时发布；集群 DNS 为「不管理」时为 `null` |
+| `dnsLines` | 每条绑定线路 `{ name, target }`：开启线路别名时 `target` 为 `<线路>.<cnamePrefix>.<集群域名>`，否则为 `<线路>.<集群域名>` |
+| `dnsRetired` | 修改前缀后 24 小时内仍解析的旧名称 `{ name, expiresAt }` |
 | `l4Apps.create`、`l4Apps.update`、`l4Apps.setEnabled` | `{ app, revision }` |
 | `l4Apps.delete` | `{ revision }` |
 | `l4Apps.stats` | `appId`、`from`、`to`；`bucketSeconds`：范围不超过 1 天为 60，不超过 5 天为 300，否则 3600；`points`：从 `from` 所在的桶起每桶一项，最早在前，空桶为 0；`totals`；`nodes`：每个上报节点 `{ nodeId, nodeName, … }`，连接数多的在前 |

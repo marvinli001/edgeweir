@@ -174,7 +174,7 @@ When new domains are saved on the site's **Domains** tab:
 | Requested in the console with automatic renewal on | Saved; the certificate's names grow by the new domains and it is reissued right away ("Certificate … is being reissued for the new domains", audit `certificate.names_extended`). Until then the new domains are served over HTTP only: no TLS handshake, no HTTPS redirect, no HSTS, while the other domains keep the current certificate; once the new certificate is issued they get HTTPS too. While an active node of the cluster lacks `tls-pending-domains-v1`, the new domains take effect only once the new certificate is issued. HTTP-01 challenges are answered meanwhile. When the certificate is issuing, it is issued once more right after that attempt |
 | Uploaded, or automatic renewal off | Refused with "Certificate domains do not match the site or DNS zone: …", naming the uncovered domains |
 
-An HTTP-01 certificate cannot grow by wildcards, and a DNS-01 certificate only by names inside its DNS credential's zone; a certificate has at most 100 names.
+An HTTP-01 certificate cannot grow by wildcards, and a DNS-01 certificate only by names inside its DNS credential's zone; a certificate has at most 100 names. `.` suffix and pattern domains do not grow a certificate: nodes complete handshakes only for the host names it covers (the same name or `*.` one label up) and abort the others, see [limits of suffix and pattern domains](domains.en.md#limits-of-suffix-and-pattern-domains).
 
 ### HTTPS fields
 
@@ -240,7 +240,7 @@ They return `content-encoding: zstd` and `content-encoding: br`, with `vary: Acc
 | The cluster's extra HTTPS ports | HTTPS (HTTP/1.1, HTTP/2) | Always |
 | UDP of the same number as an HTTPS port | HTTP/3 (QUIC) | A site on that port turns on HTTP/3 |
 
-The SNI of an HTTPS request must equal its `Host`; otherwise the node returns 421. `Alt-Svc` names the port of the request's `Host` (443 without one). Adding or removing ports is structural: the node renders `nginx.conf` again and reloads, old workers keep serving open connections.
+The SNI of an HTTPS request must equal its `Host`; otherwise the node returns 421 (except requests handed to the [default site](domains.en.md#unknown-hosts-and-node-ip-access)). `Alt-Svc` names the port of the request's `Host` (443 without one). Adding or removing ports is structural: the node renders `nginx.conf` again and reloads, old workers keep serving open connections.
 
 ### The cluster's listener ports
 
@@ -265,7 +265,7 @@ The **Ports** card on a site's **Domains** tab chooses where the site is served:
 | --- | --- |
 | At least one | The site is served on at least one usable port ("The site needs at least one usable port"); without a certificate HTTPS ports are unusable |
 | HTTPS ports | Need a certificate: without one only the default 443 may stay ("HTTPS port {port} needs a certificate"); a site losing its certificate must keep an HTTP port |
-| Other ports | A request on a port the site is not bound to is treated like one for an unknown host: 404 with the platform page over HTTP (`X-Edgeweir-Error: unknown-host`), the TLS handshake is aborted over HTTPS |
+| Other ports | A request on a port the site is not bound to is treated like one for an [unknown host](domains.en.md#unknown-hosts-and-node-ip-access): by default 404 with the platform page over HTTP (`X-Edgeweir-Error: unknown-host`), the TLS handshake is aborted over HTTPS |
 | ACME | HTTP-01 challenges are always answered on 80; the origin's own HTTP-01 tokens still reach it on 80 |
 | Cache | The cache key holds no port: every port of a site shares its cached objects |
 | No extra ports | A site on the default ports compiles byte for byte as before and needs no `edge-ports-v1` |

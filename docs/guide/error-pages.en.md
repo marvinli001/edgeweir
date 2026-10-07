@@ -145,7 +145,7 @@ Set them under **System settings → Platform error pages**, with the rules of s
 
 | Field | Requests it applies to | Status |
 | --- | --- | --- |
-| Unknown host | The Host belongs to no site of the cluster and is no offline host | 404 |
+| Unknown host | The Host belongs to no site of the cluster and is no offline host, while the cluster's [unknown host settings](domains.en.md#unknown-hosts-and-node-ip-access) show the unknown host page | 404 |
 | Site disabled | The Host is a domain of a disabled site | 503 |
 
 Nodes recognize disabled sites from the offline host list in their configuration (the domains of disabled sites); wildcards match as site domains do. Once the site is enabled again, the host is served again; once the site is deleted or the domain removed from it, the host is no offline host any more and answers 404. Both pages are for HTTP requests only: nodes complete no TLS handshake for these hosts, so HTTPS requests fail in the handshake.

@@ -65,13 +65,13 @@ Automatic bans do not count toward the limit of manual bans. Once the limit is r
 
 ## Automatic bans
 
-A node bans on its own on a trigger (the per-IP QPS of CC mitigation, see [Challenges and CC mitigation](challenges.en.md#cc-mitigation)): a single IPv4 address, or the IPv6 `/64` (one client usually holds a whole `/64`); loopback addresses are never banned. The ban applies on that node at once and is reported to the console in batches every 5 seconds.
+A node bans on its own on a trigger: the per-IP QPS of CC mitigation (site scope, reason "Per-IP request rate", see [Challenges and CC mitigation](challenges.en.md#cc-mitigation)), and the cluster's scan protection (global scope, reason "Unknown host scan", see [scan protection](domains.en.md#scan-protection)). a single IPv4 address, or the IPv6 `/64` (one client usually holds a whole `/64`); loopback addresses are never banned. The ban applies on that node at once and is reported to the console in batches every 5 seconds.
 
 | Item | Behavior |
 | --- | --- |
-| Sharing | **Protection settings → Bans → Share automatic bans in the cluster**, on by default: on, the ban goes to every node of the cluster; off, it is kept for viewing only and marked "Not shared". A change applies to automatic bans added afterwards |
-| Merging | One entry per node, site and address; a repeated report extends the expiry |
-| Checks | The site must belong to the node's cluster; single addresses only; at most 7 days after creation; protected addresses are not stored |
+| Sharing | **Protection settings → Bans → Share automatic bans in the cluster**, on by default: on, a site-scope ban goes to every node of the cluster and a global one to every node; off, it is kept for viewing only and marked "Not shared". A change applies to automatic bans added afterwards |
+| Merging | Site scope: one entry per node, site and address; global scope: one entry per address (none while an active manual global ban holds it); a repeated report extends the expiry |
+| Checks | A site-scope ban's site must belong to the node's cluster; global ones come from scan protection only; single addresses only; at most 7 days after creation; protected addresses (for global ones every node's addresses and the allow lists) are not stored |
 | Unban | Like a manual ban: click "Unban" in the row; a ban that was not shared is deleted within seconds by the node that created it (older nodes without support keep it until it expires), and a later ban of the same address by that node is not affected |
 
 ## Nodes

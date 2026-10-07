@@ -24,7 +24,7 @@
 └── 子进程 stdin/stdout ──▶ edgeweir-certd ──▶ ACME CA、DNS 服务商 API
 ```
 
-控制台与节点之间唯一的契约是 `proto/` 中的 `edgeweir.node.v1`（当前 tag `proto/v0.21.0`）。开源核心与商业产品的边界见 [LICENSING.md](LICENSING.md)。
+控制台与节点之间唯一的契约是 `proto/` 中的 `edgeweir.node.v1`（当前 tag `proto/v0.25.0`）。开源核心与商业产品的边界见 [LICENSING.md](LICENSING.md)。
 
 ## 仓库布局
 
@@ -253,6 +253,23 @@ TCP / UDP 的 L4 应用由节点的 stream 子系统转发，控制台负责端�
 
 行为见 [四层转发](docs/guide/l4.md)。
 
+## 域名匹配与未知域名
+
+proto `v0.25.0` 增加两项能力。`domains-v2`：`Domain.match`（`SUFFIX` 任意层级子域名、`REGEX` 整串匹配的正则）与 `Domain.order`（正则的优先级键：网站创建时间的毫秒数 × 16 + 网站内正则的序号），停用网站的 `OfflineHost.match`。`unknown-host-v1`：`NodeConfig.unknown_hosts`（未知域名与节点 IP 访问各自的处理：平台页、444、默认网站；未知 SNI 用默认网站的证书；扫描防护的阈值与封禁时长）与 `AutoBan.scope`（扫描防护的平台范围封禁）。精确与 `*.` 域名、默认设置不进入编码，没用到的配置与之前逐字节相同。
+
+1. 控制台保存域名时按 UTS #46（`tr46`，非过渡处理）把 Unicode 主机名转为 Punycode；正则使用规则引擎的正则子集，字母须小写。同一写法的同一名称只能属于一个网站；不同写法可以重叠，节点按「精确 > `*.` > 最长的 `.` 后缀 > 正则（按 `order`、网站 ID）」查找。控制台刷新 / 预热按 Host 找网站、节点 sitemap 预热按同一顺序（共享向量 `host_match_vectors.json`）。
+2. 节点 Lua 在共享字典里按 `host:`、`wild:`、`sfx:` 键查找，正则随站点表设置下发、每个版本编译一次（`ngx.re` 的 `jo`，有正则时 `lua_regex_cache_max_entries` 按数量放大）；`.` 与正则的命中放在单独的 LRU，不挤占精确域名的缓存。经后缀或正则找到的主机只在证书 DNS 名称覆盖它时完成 TLS 握手。
+3. 配置里有 `.` 或正则域名时，节点把 `*.x` 渲染为一级的正则 `server_name`，每个后缀（长者在前）与正则（按优先级）各一个 server 块排在所有网站之后，nginx 选中的 server 块与 Lua 路由到的网站一致；交给默认网站时它的 server 块为 `default_server`。
+4. 未知域名、节点 IP 访问（Host 为 IP 或空）与网站未绑定的端口按集群设置处理；停用网站的域名保持停用页。扫描防护按 `ip.src`（IPv4 地址、IPv6 /64）在 `edgeweir_cc` 中计数，超过阈值时节点建立平台范围的自动封禁并经 `ReportBans` 上报（原因 `unknown_host_scan`），控制台保存为 `scope = platform`、`cluster_id` 为空的自动封禁。
+5. CNAME 前缀：新建网站与 L4 应用随机 8 位，已有对象保持 UUID。修改后旧前缀写入 `cname_retired`，DNS 计划保留 24 小时（立即发布原因 `cname`），每分钟的 `dns.reconcile` 删除到期的旧前缀并发布（原因 `cname_expired`）。前缀在网站与 L4 应用之间全局唯一，不能是 `all`、`all-<n>` 或任一绑定的汇总记录名与线路名。
+
+| 管理操作 | 审计 |
+| --- | --- |
+| 修改未知域名设置 | `cluster.unknown_hosts_update`（发布集群，原因 `unknown_hosts_updated`） |
+| 修改网站 / L4 应用的 CNAME 前缀 | `site.cname_update` / `l4.cname_update`（发布集群的 DNS，原因 `cname`） |
+
+行为见 [域名与未知域名](docs/guide/domains.md)。
+
 ## 节点通道
 
 Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
@@ -369,7 +386,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | --- | --- | --- |
 | `alerts.sweep` | 每分钟 | 告警检测与投递 |
 | `rollouts.evaluate` | 每分钟 | 求值进行中的配置金丝雀：推进、等待推进或回滚（金丝雀节点的心跳也触发求值） |
-| `dns.reconcile` | 每分钟 | DNS 调度发布与外部记录维护 |
+| `dns.reconcile` | 每分钟 | 删除到期的旧 CNAME 前缀并发布受影响集群的 DNS；DNS 调度发布与外部记录维护 |
 | `traffic.rollup` | 每分钟 | 流量汇总与清理（含 L4 应用的分钟统计）、用量汇总与保留期清理、访问日志分区维护、升级任务到期；一项失败不影响其他各项 |
 | `certificates.sweep` | 每分钟 | 证书签发与续期 |
 | `maintenance.recompile` | 启动时；`system_setting` 的 `config_recompiled` 与当前标记一致时跳过 | 升级改变了已存数据的编译结果时，为每个集群重新发布一次 revision |
@@ -408,7 +425,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | 表 | 内容 |
 | --- | --- |
 | `region` | 区域字典 |
-| `cluster` | 集群：共享一条 revision 序列的节点集合 |
+| `cluster` | 集群：共享一条 revision 序列的节点集合；附加监听端口、访客 IP、未知域名设置（`unknown_hosts`）与默认网站（`default_site_id`，删除网站时置空） |
 | `node_group` | 节点组，可关联区域 |
 | `node` | 节点：状态、能力清单、证书序列号与指纹（续期后还有被替换证书的序列号）、最近心跳与其连接的源地址、最近一次证书被拒绝的原因、最近上报的封禁状态、各网站的 CC 级别与主机指标、是否兼任探针 |
 | `node_ip` | 节点的 IP 地址：节点上报的（`reported`）与运营者配置的调度地址（`configured`，级别 0 主、1 备 1、2 备 2） |
@@ -427,7 +444,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | 表 | 内容 |
 | --- | --- |
 | `site` | 网站：所属集群、启用状态、缓存键、分片、Cache-Tag 转发、WebSocket、证书、TLS 设置、缓存代际号、日志采样率、错误页是否拦截源站错误与保存时间 |
-| `site_domain` | 网站域名（主机名或泛域名），全局唯一 |
+| `site_domain` | 网站域名：名称与写法（`kind`：精确、泛域名、后缀、正则），同一写法的同一名称全局唯一 |
 | `site_star` | 用户星标 |
 | `origin_pool` | 源站池：超时、keepalive、失败阈值、回源 TLS 校验、回源 HTTP 版本与 gRPC、主动健康检查与会话保持（关闭时保留设置） |
 | `origin` | 源站与所属的源站组（空为默认组） |
@@ -465,6 +482,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `scheduling_state` | 每条规则对每个节点的状态：各条件成立起点、动作起点、解除起点 |
 | `dns_managed_name` | 已登记的托管 DNS 名称及所属集群 |
 | `dns_lease` | DNS 工作的租约（集群绑定、DNS-01 凭据），同一时间只有一个进程处理同一绑定或凭据 |
+| `cname_retired` | 网站或 L4 应用修改 CNAME 前缀后保留 24 小时的旧前缀：所属集群、网站或应用、前缀（全局唯一）、到期时间 |
 
 ### 统计、日志、任务与告警
 
@@ -554,6 +572,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0053_origin_protocol` | `origin_pool.protocol`（回源 HTTP 版本，`http1` 或 `http2`）、`origin_pool.grpc`（gRPC 经 HTTP/2 端到端转发） |
 | `0054_edge_ports` | `cluster.extra_http_ports`、`cluster.extra_https_ports`（80 / 443 之外的监听端口）、`cluster.client_ip`（访客 IP 来源，jsonb，null 为直连）；`site.http_ports`、`site.https_ports`（网站绑定的端口，默认 80 / 443）；`l4_app.port_end`（端口段）、`l4_app.origin_port_mode`（`fixed` / `same`）、`l4_app.certificate_id`、`l4_app.tls_minimum_version`（TLS 卸载） |
 | `0055_site_content` | `site_secret`；`cluster.cache_max_size_gb`、`cluster.cache_inactive_days`（缓存区）；`node.cache_max_size_gb`（节点容量覆盖）、`node.cache_usage`（上报的用量）；`site.hide_x_cache`、`site.purge_method`、`site.maintenance`、`site.maintenance_updated_at`、`site.charset`、`site.request_body_limit`；`origin_pool.tries`、`origin_pool.status_retry`；`cache_rule.cache_set_cookie`；`site_error_page.redirect_url`、`site_error_page.response_status` |
+| `0056_domain_forms_cname_prefix` | `site_domain.kind` 取代 `wildcard`，唯一索引改为 `(name, kind)`；`site.cname_prefix`、`l4_app.cname_prefix`（已有行为其 ID，CNAME 不变）；`cname_retired`；`cluster.unknown_hosts`、`cluster.default_site_id` |
 
 ## 构建产物
 

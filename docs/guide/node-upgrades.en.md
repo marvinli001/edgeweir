@@ -143,6 +143,8 @@ Signing and verification are covered in the [Sigstore documentation](https://doc
 | `edge-ports-v1` | The cluster has extra listener ports, a site is bound to ports other than the defaults, or the HTTPS redirect uses a status, port or excluded domains other than the defaults, see [HTTPS](https.en.md#the-clusters-listener-ports) |
 | `client-ip-v1` | The cluster's client IP is not direct (or drops the client's X-Forwarded-For), or a rule reads `ip.peer`, see [Client IP](../deploy/nodes.en.md#client-ip) |
 | `l4-v2` | An L4 app uses a port range, origins on the arriving port or TLS termination, see [Layer-4 forwarding](l4.en.md#port-ranges-and-origin-ports) |
+| `domains-v2` | A site (disabled ones included) has `.` suffix or pattern domains, see [domain forms](domains.en.md#domain-forms) |
+| `unknown-host-v1` | The cluster's unknown host settings are not the defaults (a handling other than the unknown host page, or scan protection on), see [unknown hosts and node IP access](domains.en.md#unknown-hosts-and-node-ip-access) |
 | `l4-v1` | The cluster has an enabled [L4 app](l4.en.md): layer-4 forwarding and L4 statistics. Without it the node refuses configurations with L4 apps, and the port pools tab, the L4 app list, and the dialog warn "Nodes {nodes} of {cluster} lack L4 forwarding and refuse configurations with L4 apps until upgraded" |
 
 When a node lacks a capability the cluster's current configuration needs, or lacks `stats-sequence-v1`, the node list in **Clusters & nodes** shows **Upgrade required**; the node keeps its last-known-good configuration and rejects configurations with unknown capabilities or enum values.

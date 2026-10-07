@@ -86,7 +86,7 @@ The token is single-use. For the installer's checks, the download mirror, and fa
    | Field | Default | Description |
    | --- | --- | --- |
    | **Name** | The first domain | At most 100 characters |
-   | **Domains** | None | One per line or comma-separated; wildcards as `*.example.com`; 1–50 domains |
+   | **Domains** | None | One per line or comma-separated; wildcards as `*.example.com`, every subdomain as `.example.com`, patterns as `~pattern`, Unicode domains as they are, see [domains and unknown hosts](domains.en.md); 1–50 domains |
    | **Origin** | None | IP address or host name. Pasting a URL (`https://origin.example.com:8443/app`) or `host:port` puts the port and protocol into their own fields |
    | **Port** | 80 (HTTP) / 443 (HTTPS) | Origin port |
    | **Protocol** | HTTP | HTTP or HTTPS |
@@ -98,7 +98,7 @@ The token is single-use. For the installer's checks, the download mirror, and fa
 | Rule | Description |
 | --- | --- |
 | Cluster | With several clusters, **Cluster** in the form (default: the oldest); through the API, `clusterId`. A site cannot change clusters later |
-| Domains | Domains are published to the nodes as soon as the site is saved. A domain (name and wildcard flag) belongs to at most one site |
+| Domains | Domains are published to the nodes as soon as the site is saved. A domain (name and form) belongs to at most one site; when the forms of several sites cover the same Host, the [precedence](domains.en.md#precedence) picks one |
 | Origin address | Origins in special-purpose ranges are refused unless the origin allow list covers the range |
 | Disabling | **Disable** on the site's **Overview** tab: the site is no longer sent to the nodes, which answer HTTP requests for its domains with a 503 disabled page (`X-Edgeweir-Error: site-disabled`) and fail the TLS handshake of HTTPS requests; DNS records stay. **Enable** restores it, see [Site enabling](system.en.md#site-enabling) |
 
@@ -111,9 +111,9 @@ Add a record for every site domain in the domain's authoritative DNS.
 | DNS steering | Record |
 | --- | --- |
 | Not configured (the cluster's DNS is **Not managed**) | `A` / `AAAA` records to the addresses in the **Edge addresses** card on the site's **Domains** tab (the scheduling addresses of the cluster's online nodes, copyable), one record per address |
-| Configured (the **DNS** tab of **Clusters & nodes**) | A `CNAME` record to the address in the **CNAME target** card on the site's **Domains** tab (`<site ID>.<cluster domain>`). In Automatic mode the card shows **Published** once the records are written to the provider; in Manual mode create the cluster's records listed on that tab first |
+| Configured (the **DNS** tab of **Clusters & nodes**) | A `CNAME` record to the address in the **CNAME target** card on the site's **Domains** tab (`<CNAME prefix>.<cluster domain>`; the prefix can be regenerated or customized, see [CNAME prefixes](domains.en.md#cname-prefixes)). In Automatic mode the card shows **Published** once the records are written to the provider; in Manual mode create the cluster's records listed on that tab first |
 
-The card lists where each domain resolves now: **Points here** (every address belongs to a node of the cluster), **Points elsewhere**, **Not resolved**, **Not checked** (the lookup failed, or the nodes have no known address). A wildcard is resolved as `edgeweir-check.<domain>`. The card and the **Launch check** resolve again every 30 seconds; **Check again** beside the card's title resolves now. A recursive resolver's cached answer (also "no such name") holds until its TTL ends.
+The card lists where each domain resolves now: **Points here** (every address belongs to a node of the cluster), **Points elsewhere**, **Not resolved**, **Not checked** (the lookup failed, or the nodes have no known address), **Not checkable** (`.` suffix and pattern domains name no single host; not counted in **DNS pointed N/M**). A wildcard is resolved as `edgeweir-check.<domain>`. The card and the **Launch check** resolve again every 30 seconds; **Check again** beside the card's title resolves now. A recursive resolver's cached answer (also "no such name") holds until its TTL ends.
 
 For lines, health-based removal, and TTL of DNS steering, see [Configure DNS steering](dns-and-alerts.en.md#configure-dns-steering).
 

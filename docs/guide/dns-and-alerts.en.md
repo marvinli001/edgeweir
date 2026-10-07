@@ -40,7 +40,7 @@ An account is one set of credentials and one zone; for several zones under the s
 6. Verify: the **Current records** card shows **Published**, and the site's **Domains** tab shows the **CNAME target**.
 
    ```bash
-   dig +short CNAME <site UUID>.<cluster domain>
+   dig +short CNAME <CNAME prefix>.<cluster domain>
    dig +short A all.<cluster domain>
    ```
 
@@ -56,17 +56,17 @@ Clusters may use different provider accounts and cluster domains. The **Cluster 
 | Mode | Not managed / Manual / Automatic | Not managed | Automatic: the console writes the provider; Manual: lists the records to create, the console writes no DNS; Not managed: sites have no CNAME target and written records are removed |
 | Provider account | An added account | None | Required for Automatic; Manual can use **No account**, in which case the zone is the cluster domain |
 | Zone | The account's zone | — | Read-only |
-| Cluster domain | A name inside the zone, up to 180 characters | None | Parent of all of the cluster's records; a site's CNAME target is `<site UUID>.<cluster domain>`, an L4 app's `<app UUID>.<cluster domain>` |
+| Cluster domain | A name inside the zone, up to 180 characters | None | Parent of all of the cluster's records; the CNAME target of a site or L4 app is `<CNAME prefix>.<cluster domain>` |
 | TTL (seconds) | 30–3600 | 600 | TTL of every record; some providers or plans require a higher minimum, see the provider table |
-| Keep per-site line targets | On / Off | Off | Keeps `<line>.<UUID>.<cluster domain>` for every site and enabled L4 app, see [Upgrading from the global DNS configuration](#upgrading-from-the-global-dns-configuration) |
-| Line name | Lowercase letters, digits, `-`, 1–32 characters, not `all` | `line-N` | First label of the line's host name |
+| Keep per-site line targets | On / Off | Off | Keeps `<line>.<CNAME prefix>.<cluster domain>` for every site and enabled L4 app, see [Upgrading from the global DNS configuration](#upgrading-from-the-global-dns-configuration) |
+| Line name | Lowercase letters, digits, `-`, 1–32 characters, not `all`, not a [CNAME prefix](domains.en.md#cname-prefixes) of a site or L4 app | `line-N` | First label of the line's host name |
 | Node group | A node group of this cluster; at most one line per group | The first unused group | Nodes in the line |
 | Resolution line | Default / China Telecom / China Unicom / China Mobile / Education network / Overseas, only those the account's provider supports | Default | `all.<cluster domain>` answers with this line's addresses on that resolution line, see [Records per resolution line](#records-per-resolution-line) |
 | Minimum healthy IPs | 1–64 | 1 | Below this many healthy addresses in the line's node group, the backup node groups answer |
 | Backup node groups | Other node groups of this cluster, at most 4, ordered | None | See [Backup node groups](#backup-node-groups) |
 | Target addresses | Up to 8 IPs per node, comma-separated | Empty (the node's scheduling addresses) | Replace the node's scheduling addresses on this line, without level switching; may be private, never loopback, link-local, multicast, or other special-purpose addresses |
 
-A binding has at most 128 lines and 10,000 system-managed records. Two bindings with the same cluster domain in the same zone cannot share line names or the all-lines record name (`DNS_BINDING_CONFLICT`).
+A binding has at most 128 lines and 10,000 system-managed records. Two bindings with the same cluster domain in the same zone cannot share line names or the all-lines record name, and a line name cannot equal a CNAME prefix (old prefixes within 24 hours of a change included) (`DNS_BINDING_CONFLICT`).
 
 With a provider that has the default line only, **Resolution line** is unavailable and shows **This provider has only the default line**; selecting an account whose provider lacks a resolution line moves those lines back to default in the form. Saving a resolution line the provider does not support returns `DNS_LINE_UNSUPPORTED` ("This DNS provider has no {line} resolution line"). Manual mode without a provider account can use every resolution line.
 
@@ -76,9 +76,10 @@ With a provider that has the default line only, **Resolution line** is unavailab
 | --- | --- | --- |
 | `all.<cluster domain>` | A / AAAA | Healthy node addresses of the cluster's lines, written per resolution line, see [Records per resolution line](#records-per-resolution-line); without lines, the addresses of every healthy node of the cluster |
 | `<line name>.<cluster domain>` | A / AAAA | Healthy node addresses of the line's node group (of the backup node groups while they answer); default line only |
-| `<site UUID>.<cluster domain>` | CNAME | `all.<cluster domain>`; one per site with at least one domain, disabled sites included; default line only |
-| `<app UUID>.<cluster domain>` | CNAME | `all.<cluster domain>`; one per enabled [L4 app](l4.en.md), none for disabled apps; default line only |
-| `<line name>.<UUID>.<cluster domain>` | CNAME | `<line name>.<cluster domain>`; one set per site and per enabled L4 app, only with **Keep per-site line targets**; default line only |
+| `<site's CNAME prefix>.<cluster domain>` | CNAME | `all.<cluster domain>`; one per site with at least one domain, disabled sites included; default line only |
+| `<app's CNAME prefix>.<cluster domain>` | CNAME | `all.<cluster domain>`; one per enabled [L4 app](l4.en.md), none for disabled apps; default line only |
+| `<old CNAME prefix>.<cluster domain>` | CNAME | `all.<cluster domain>`; kept for 24 hours after a prefix change, see [CNAME prefixes](domains.en.md#cname-prefixes) |
+| `<line name>.<CNAME prefix>.<cluster domain>` | CNAME | `<line name>.<cluster domain>`; one set per site and per enabled L4 app, only with **Keep per-site line targets**; default line only |
 
 Address records are written once per cluster (`all.<cluster domain>` once per resolution line in use): the record count is "sites + enabled L4 apps + cluster addresses", plus "(sites + enabled L4 apps) × lines" with per-site line targets. With per-site line targets off, the line targets on a site's **Domains** tab and on an L4 app's page are `<line name>.<cluster domain>`.
 
@@ -193,6 +194,8 @@ The **Reason** column of the **DNS revisions** table:
 | Rolled back | **Roll back DNS** |
 | Published despite the protection | **Publish anyway** |
 | Scheduling: {rule} on {node} | A scheduling rule took effect or recovered; followed by the action and **Activated** or **Recovered** |
+| CNAME prefix of {name} changed | A site or L4 app's CNAME prefix was regenerated or customized |
+| Replaced CNAME prefixes expired | 24 hours after a prefix change the old name leaves the plan |
 
 Before deleting a provider account, point the clusters that use it at another account or switch them to Not managed and wait for cleanup (the account no longer owns system-managed records); otherwise the console returns `DNS_PROVIDER_IN_USE`. Likewise, before deleting a cluster, switch its DNS to Not managed and wait for cleanup (`DNS_BINDING_IN_USE`).
 

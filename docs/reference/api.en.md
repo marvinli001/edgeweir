@@ -149,8 +149,8 @@ Sites (`sites.list`, `sites.get` and the `site` that writes return) carry `deliv
 | Field | Description |
 | --- | --- |
 | `addresses` | The cluster's edge addresses (values for A / AAAA records): the primary scheduling addresses of its online active nodes, the configured ones of a node that has any, otherwise the public addresses it reports; IPv4 first |
-| `domains[]` | `name` (as on the site, `*.example.com` for a wildcard), `probe` (the name resolved; a wildcard resolves the fixed name `edgeweir-check.example.com` under it), `pointing` |
-| `domains[].pointing` | `ok`: every address it resolves to belongs to an active node of the cluster (configured or reported public, backup addresses and offline nodes included); `elsewhere`: some address does not; `unresolved`: no A or AAAA record; `unknown`: the lookup failed (a timeout, for example) or the cluster's nodes have no known address |
+| `domains[]` | `name` (as on the site: `a.com`, `*.a.com`, `.a.com`, `~pattern`; internationalized names in Punycode), `probe` (the name resolved; a wildcard resolves the fixed name `edgeweir-check.example.com` under it), `pointing` |
+| `domains[].pointing` | `ok`: every address it resolves to belongs to an active node of the cluster (configured or reported public, backup addresses and offline nodes included); `elsewhere`: some address does not; `unresolved`: no A or AAAA record; `unchecked`: a `.` suffix or pattern domain (no single host name; `probe` is empty); `unknown`: the lookup failed (a timeout, for example) or the cluster's nodes have no known address |
 | `certificate` | `state`: `none` (the site has no certificate), `covered` (the chain covers every domain), `uncovered` (it misses the domains in `uncovered`), `issuing` (an ACME issuance is queued or running), `failed` (the last issuance failed, `error` holds its code), `expired`; plus `id`, `name`, `uncovered`, `error` |
 | `delivery` | As above |
 
@@ -644,6 +644,26 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 
 A site's ports change with `ports` (`{ http, https }`) in `PATCH /sites/{id}`, and `POST /sites` takes the same optional field (omitted: 80 and 443); sites carry `ports`. Error codes: `SITE_PORT_UNAVAILABLE`, `SITE_PORTS_EMPTY`, `SITE_HTTPS_PORT_NEEDS_CERTIFICATE`. The settings of `PUT /sites/{id}/https` add `redirectStatus` (301, 302, 303, 307, 308, default 301), `redirectPort` (443 or an HTTPS port of the site, default 443, `HTTPS_REDIRECT_PORT_INVALID`) and `redirectExcludedDomains` (domains of the site, at most 50, `HTTPS_REDIRECT_DOMAIN_INVALID`). `GET /sites/{id}/features` adds `edgePorts` and `clientIp`; clusters of `GET /clusters` add `clientIpMode`.
 
+### Domains, unknown hosts and CNAME prefixes
+
+A site's `domains` (`POST /sites`, `PATCH /sites/{id}`) take four forms: `a.com`, `*.a.com` (one label), `.a.com` (subdomains at any depth, not `a.com`), `~pattern` (the whole lowercase Host, at most 256 characters, lowercase letters, no `"`, `\\` or whitespace); 1–50 domains, at most 10 patterns. Unicode host names are stored as Punycode by UTS #46 (nontransitional processing), and responses return Punycode only; a name the conversion refuses returns 400 `DOMAIN_INVALID` (`data.domain`). A name in one form belongs to one site only (`DOMAIN_IN_USE`). The `search` of `sites.list` also matches a Unicode term's Punycode. Site responses add `cnamePrefix`.
+
+| Procedure | Endpoint | Description |
+| --- | --- | --- |
+| `clusters.unknownHosts` | `GET /clusters/{clusterId}/unknown-hosts` | The unknown host settings, the default site (`{ id, name, enabled, certificate }` or `null`) and the nodes lacking `unknown-host-v1` |
+| `clusters.setUnknownHosts` | `PUT /clusters/{clusterId}/unknown-hosts` | Replaces the unknown host settings and publishes a configuration revision (reason `unknown_hosts_updated`); audit `cluster.unknown_hosts_update` |
+| `sites.setCnamePrefix` | `PUT /sites/{id}/cname-prefix` | Changes a site's CNAME prefix and returns `{ prefix, retired: [{ prefix, expiresAt }] }`; audit `site.cname_update` |
+| `l4Apps.setCnamePrefix` | `PUT /l4-apps/{id}/cname-prefix` | Changes an L4 app's CNAME prefix; audit `l4.cname_update` |
+
+Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys can call `GET` only.
+
+| Request | Fields |
+| --- | --- |
+| `PUT /clusters/{clusterId}/unknown-hosts` | `settings`: `unknownHost`, `ipAccess` (`page` / `close` / `site`, default `page`); `defaultSiteId` (required with `site`: an enabled site of this cluster, else `DEFAULT_SITE_INVALID`); `defaultCertificate` (only with `unknownHost` `site`; the default site needs a certificate, else `DEFAULT_SITE_CERTIFICATE_REQUIRED`); `scan`: `enabled` (default `false`), `threshold` (10–10000, default 100), `banSeconds` (60–86400, default 3600) |
+| `PUT /sites/{id}/cname-prefix`, `PUT /l4-apps/{id}/cname-prefix` | `prefix`: 1–30 of `[a-z0-9-]`, not starting or ending with `-`; without it a new random prefix. A prefix in use, still in its 24-hour transition, `all` / `all-<n>`, or an all-lines record or line name of a DNS binding returns 409 `CNAME_PREFIX_CONFLICT` (`data.prefix`) |
+
+`GET /sites/{siteId}/cname` adds `retired` (old names `{ name, expiresAt }`); DNS revision `reason` adds `cname` (`reasonParams.name`) and `cname_expired`. The `blockers` of `GET /sites/{id}/https/check` add `no_certificate_names` (a site with pattern domains only). Automatic bans add the `reason` `unknown_host_scan` (`scope` `platform`, `siteId` `null`, `trigger.metric` `unknown_host_requests`). Node capabilities add `domains-v2` and `unknown-host-v1`.
+
 ### Port pools and L4 apps
 
 | Procedure | Endpoint | Notes |
@@ -673,8 +693,10 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | --- | --- |
 | `clusters.portPools`, `clusters.setPortPools` | `clusterId`; `pools` (sorted by first port, then protocol); `reservedPorts` (the ports of the cluster's HTTP / HTTPS listeners, extra ports included, never part of a pool); `nodesWithoutL4` (`[{ id, name }]`, active nodes of the cluster that do not report `l4-v1`); `nodesWithoutL4V2` (active nodes that do not report `l4-v2`) |
 | The app returned by `l4Apps.list`, `l4Apps.get`, and the other procedures | `id`, `clusterId`, `clusterName`, `name`, `protocol`, `port`, `enabled`, `acceptProxyProtocol`, `proxyProtocolVersion`, `portEnd`, `originPortMode`, `certificateId`, `certificateName`, `tlsMinimumVersion`, `origins` (`[{ id, address, port, weight, backup }]`, in the saved order), `maxFails`, `failTimeoutSeconds`, `connectTimeoutMs`, `idleTimeoutSeconds`, `allowListIds`, `blockListIds`, `maxConnections`, `newConnectionsPerSecond`, `dnsTarget`, `dnsLines`, `createdAt`, `updatedAt` |
-| `dnsTarget` | The CNAME clients connect to, `<app ID>.<cluster domain>`, published only while the app is enabled; `null` while the cluster's DNS is **Not managed** |
-| `dnsLines` | Per binding line `{ name, target }`: `target` is `<line>.<app ID>.<cluster domain>` with line aliases, else `<line>.<cluster domain>` |
+| `cnamePrefix` | The CNAME prefix: 8 random characters for new apps, the ID for apps from before the upgrade |
+| `dnsTarget` | The CNAME clients connect to, `<cnamePrefix>.<cluster domain>`, published only while the app is enabled; `null` while the cluster's DNS is **Not managed** |
+| `dnsLines` | Per binding line `{ name, target }`: `target` is `<line>.<cnamePrefix>.<cluster domain>` with line aliases, else `<line>.<cluster domain>` |
+| `dnsRetired` | Old names still resolving within 24 hours of a prefix change, `{ name, expiresAt }` |
 | `l4Apps.create`, `l4Apps.update`, `l4Apps.setEnabled` | `{ app, revision }` |
 | `l4Apps.delete` | `{ revision }` |
 | `l4Apps.stats` | `appId`, `from`, `to`; `bucketSeconds`: 60 for ranges up to a day, 300 up to five days, else 3600; `points`: one per bucket from the bucket of `from`, oldest first, empty buckets zero; `totals`; `nodes`: every reporting node `{ nodeId, nodeName, … }`, busiest first |
