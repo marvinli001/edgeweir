@@ -130,15 +130,24 @@ describe("migrations", () => {
       .where(eq(schema.configRevision.clusterId, cl.id));
     expect(Array.from(rev?.ir ?? [])).toEqual(Array.from(ir));
 
-    const [a] = await db.insert(schema.site).values({ clusterId: cl.id, name: "a" }).returning();
-    const [b] = await db.insert(schema.site).values({ clusterId: cl.id, name: "b" }).returning();
+    const [a] = await db
+      .insert(schema.site)
+      .values({ clusterId: cl.id, name: "a", cnamePrefix: "a" })
+      .returning();
+    const [b] = await db
+      .insert(schema.site)
+      .values({ clusterId: cl.id, name: "b", cnamePrefix: "b" })
+      .returning();
     if (!a || !b) throw new Error("sites not inserted");
     await db.insert(schema.siteDomain).values({ siteId: a.id, name: "demo.test" });
     await expect(
       db.insert(schema.siteDomain).values({ siteId: b.id, name: "demo.test" }),
     ).rejects.toThrow();
-    // The same name as a wildcard suffix is a different route.
-    await db.insert(schema.siteDomain).values({ siteId: b.id, name: "demo.test", wildcard: true });
+    // The same name as a wildcard or suffix domain is a different route.
+    await db
+      .insert(schema.siteDomain)
+      .values({ siteId: b.id, name: "demo.test", kind: "wildcard" });
+    await db.insert(schema.siteDomain).values({ siteId: b.id, name: "demo.test", kind: "suffix" });
   });
 
   it("keeps one challenge key per role and cluster and one security event per node event", async () => {
@@ -150,7 +159,7 @@ describe("migrations", () => {
     ).rejects.toThrow();
     const [site] = await db
       .insert(schema.site)
-      .values({ clusterId: cl.id, name: "g2" })
+      .values({ clusterId: cl.id, name: "g2", cnamePrefix: "g2" })
       .returning();
     const [node] = await db.insert(schema.node).values({ clusterId: cl.id, name: "n" }).returning();
     if (!site || !node) throw new Error("not inserted");
@@ -185,7 +194,7 @@ describe("migrations", () => {
     if (!cl) throw new Error("cluster not inserted");
     const [site] = await db
       .insert(schema.site)
-      .values({ clusterId: cl.id, name: "g3" })
+      .values({ clusterId: cl.id, name: "g3", cnamePrefix: "g3" })
       .returning();
     if (!site) throw new Error("site not inserted");
     await db.insert(schema.siteWaf).values({ siteId: site.id });
@@ -223,7 +232,7 @@ describe("migrations", () => {
     if (!cl) throw new Error("cluster not inserted");
     const [site] = await db
       .insert(schema.site)
-      .values({ clusterId: cl.id, name: "rule-log" })
+      .values({ clusterId: cl.id, name: "rule-log", cnamePrefix: "rule-log" })
       .returning();
     if (!site) throw new Error("site not inserted");
     const nodeId = "00000000-0000-4000-8000-0000000000b1";
@@ -261,7 +270,7 @@ describe("migrations", () => {
     if (!cl) throw new Error("cluster not inserted");
     const [site] = await db
       .insert(schema.site)
-      .values({ clusterId: cl.id, name: "g4" })
+      .values({ clusterId: cl.id, name: "g4", cnamePrefix: "g4" })
       .returning();
     if (!site) throw new Error("site not inserted");
     expect(site).toMatchObject({
@@ -299,7 +308,7 @@ describe("migrations", () => {
     if (!cl) throw new Error("cluster not inserted");
     const [site] = await db
       .insert(schema.site)
-      .values({ clusterId: cl.id, name: "g5" })
+      .values({ clusterId: cl.id, name: "g5", cnamePrefix: "g5" })
       .returning();
     if (!site) throw new Error("site not inserted");
     const [pool] = await db.insert(schema.originPool).values({ siteId: site.id }).returning();
