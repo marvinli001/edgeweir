@@ -14,9 +14,11 @@ import { errorMessage } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
 /**
- * A dialog around one form. `onSubmit` receives the form data; while it runs the submit button
- * shows a spinner, and a thrown error is shown localized under the fields. The caller controls closing
- * with `onOpenChange(false)`, so a form can also show its result inside the dialog.
+ * A dialog around one form: title, fields, then a footer row (hairline above, submit on the right)
+ * that stays in view while a long form scrolls. `onSubmit` receives the form data; while it runs
+ * the submit button shows a spinner, and a thrown error is shown localized under the fields. The
+ * caller controls closing with `onOpenChange(false)`, so a form can also show its result inside
+ * the dialog.
  */
 export function FormDialog({
   open,
@@ -73,7 +75,9 @@ export function FormDialog({
                 {error}
               </FieldError>
             ) : null}
-            <DialogFooter>
+            {/* A hairline footer row that stays in view while a long form scrolls (-bottom-6: sticky
+                insets count from inside the dialog's padding). */}
+            <DialogFooter className="sticky -bottom-6 z-1 -mx-6 -mb-6 border-t border-edge bg-popover px-6 py-4">
               <Button
                 type="submit"
                 disabled={action.pending || submitDisabled}

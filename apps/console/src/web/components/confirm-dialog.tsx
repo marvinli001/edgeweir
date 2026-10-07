@@ -1,3 +1,5 @@
+import { Alert02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
 import { SafetyNote } from "@/components/safety-note";
 import { Button } from "@/components/ui/button";
@@ -97,17 +99,25 @@ export function ControlledConfirmDialog({
       }}
     >
       <DialogContent aria-describedby={note ? noteId : undefined}>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          {note ? <SafetyNote id={noteId}>{note}</SafetyNote> : null}
-        </DialogHeader>
+        <div className="flex items-start gap-3 pr-8">
+          {destructive ? (
+            // A destructive confirmation carries its warning beside the title, in the red tint.
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-tint-destructive text-destructive">
+              <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} className="size-4.5" />
+            </span>
+          ) : null}
+          <DialogHeader className={destructive ? "min-h-9 justify-center" : undefined}>
+            <DialogTitle className="leading-snug">{title}</DialogTitle>
+            {note ? <SafetyNote id={noteId}>{note}</SafetyNote> : null}
+          </DialogHeader>
+        </div>
         {children}
         {error ? (
           <FieldError data-testid="confirm-error" className="animate-in fade-in">
             {error}
           </FieldError>
         ) : null}
-        <DialogFooter>
+        <DialogFooter className="-mx-6 -mb-6 border-t border-edge px-6 py-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {m.common_cancel()}
           </Button>
