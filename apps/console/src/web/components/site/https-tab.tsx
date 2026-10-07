@@ -567,7 +567,11 @@ function HttpsEditor({
             />
           ))}
           {settings.forceHttps ? (
-            <div className="grid gap-4 sm:col-span-2 sm:grid-cols-2" data-testid="https-redirect">
+            // The redirect's settings hang off the force HTTPS switch, marked by a rule beside them.
+            <div
+              className="grid gap-4 border-l-2 border-border pl-3 animate-enter sm:col-span-2 sm:grid-cols-2"
+              data-testid="https-redirect"
+            >
               <FormSelect
                 id="redirectStatus"
                 label={m.https_redirect_status()}
