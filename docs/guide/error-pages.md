@@ -61,7 +61,7 @@
 | 项目 | 规则 |
 | --- | --- |
 | URL | 绝对 `http://` / `https://` URL（协议小写，主机为域名或方括号中的 IPv6 地址，不含账号，可带端口）或以单个 `/` 开头的路径；1–2048 个可打印 ASCII 字符，不含空格与 `\`；`%` 后必须是两位十六进制数字 |
-| 占位符 | 只允许 `{{status}}` 与 `{{request_id}}`，值按 URL 编码后替换，例如 `/error?code={{status}}&id={{request_id}}` |
+| 占位符 | 只允许 `{{status}}` 与 `{{request_id}}`，不能出现在主机或端口中，值按 URL 编码后替换，例如 `/error?code={{status}}&id={{request_id}}` |
 | 响应 | 302、`Location`、`Cache-Control: no-store`、`X-Edgeweir-Error`，正文为空 |
 | 响应状态码 | 跳转页面固定 302；HTML 模板页面可填写 200–599 改写发出的状态码，留空保持原状态码 |
 

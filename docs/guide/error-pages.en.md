@@ -61,7 +61,7 @@ With **Redirect to URL**, responses of that status become a 302 redirect.
 | Item | Rule |
 | --- | --- |
 | URL | An absolute `http://` / `https://` URL (lower-case scheme, a domain or a bracketed IPv6 address as host, no user information, an optional port) or a path starting with a single `/`; 1–2048 printable ASCII characters without spaces or `\`; every `%` followed by two hex digits |
-| Placeholders | Only `{{status}}` and `{{request_id}}`, URL-encoded when inserted, e.g. `/error?code={{status}}&id={{request_id}}` |
+| Placeholders | Only `{{status}}` and `{{request_id}}`, not in the host or port, URL-encoded when inserted, e.g. `/error?code={{status}}&id={{request_id}}` |
 | Response | 302, `Location`, `Cache-Control: no-store`, `X-Edgeweir-Error`, an empty body |
 | Response status | Redirect pages are always 302; an HTML template page can set 200–599 to change the status it is sent with, empty keeps the status |
 
