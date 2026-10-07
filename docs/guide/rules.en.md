@@ -303,6 +303,7 @@ Every string is handled as UTF-8 bytes. Arguments are fields, string literals, o
 | Item | Behavior |
 | --- | --- |
 | IPv4-mapped addresses | `::ffff:a.b.c.d` equals the IPv4 address; mapped CIDRs with a prefix shorter than 96 bits are ambiguous and refused |
+| IPv4-compatible form | `::a.b.c.d` is a plain IPv6 address (`::1.2.3.4` is saved as `::102:304/128`), not equal to IPv4 |
 | NAT64 | A distinct IPv6 address, not equal to IPv4 |
 | CIDR | Host bits are cleared before saving |
 | Refused | Leading zeros (octal ambiguity) and zone IDs (`%`) |
