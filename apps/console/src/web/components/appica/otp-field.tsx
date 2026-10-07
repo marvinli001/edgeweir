@@ -3,7 +3,7 @@ import { AppicaScope } from "@/components/appica/scope";
 
 /**
  * One-time code input (TOTP), one slot per digit; each slot is a sunk field like the console's
- * inputs (appica's soft variant over the well, input-well's inner shadow and hairline).
+ * inputs (appica's soft variant with the well's fill, input-well's inner shadow and hairline).
  */
 export function OtpField({
   length = 6,
@@ -24,7 +24,7 @@ export function OtpField({
   autoFocus?: boolean;
 }) {
   return (
-    <AppicaScope className="[--background-muted:var(--well)]">
+    <AppicaScope>
       <AppicaOTPField
         variant="soft"
         length={length}
@@ -40,7 +40,7 @@ export function OtpField({
           <OTPFieldInput
             // biome-ignore lint/suspicious/noArrayIndexKey: slots are positional
             key={index}
-            className="rounded-xl input-well"
+            className="rounded-xl bg-well input-well"
             aria-invalid={invalid || undefined}
             autoFocus={autoFocus && index === 0}
           />
