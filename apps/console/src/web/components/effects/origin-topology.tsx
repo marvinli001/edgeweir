@@ -135,22 +135,8 @@ function FlowEdge({
   const labelY = sourceY + (targetY - sourceY) * 0.66;
   return (
     <>
-      {/* Inline style: React Flow's own stylesheet sets the stroke after the utilities. */}
-      <BaseEdge
-        id={id}
-        path={path}
-        style={{
-          fill: "none",
-          strokeWidth: kind === "standby" ? 1.25 : 1.5,
-          strokeDasharray: kind === "standby" ? "4 5" : undefined,
-          stroke:
-            kind === "standby"
-              ? "color-mix(in oklch, var(--muted-foreground) 60%, transparent)"
-              : kind === "degraded"
-                ? "var(--state-warn)"
-                : "color-mix(in oklch, var(--signal) 75%, transparent)",
-        }}
-      />
+      {/* Stroke color, width and dashes per kind: .topology-edge in index.css. */}
+      <BaseEdge id={id} path={path} className="topology-edge" data-kind={kind} />
       {live && kind !== "standby" ? (
         <circle r={2.5} className={kind === "degraded" ? "fill-state-warn" : "fill-signal"}>
           <animateMotion dur="2.4s" repeatCount="indefinite" path={path} />

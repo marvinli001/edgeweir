@@ -1035,6 +1035,24 @@
     --xy-background-color: transparent;
     background: transparent;
   }
+  /*
+   * Topology edges (effects/origin-topology.tsx), through React Flow's own edge variables: its
+   * stylesheet is unlayered, so it beats a stroke set here, but it reads stroke and width from
+   * these. Traffic in signal, traffic with errors in the warning color, failover paths dashed in
+   * muted ink.
+   */
+  .topology-edge {
+    --xy-edge-stroke: color-mix(in oklch, var(--signal) 75%, transparent);
+    --xy-edge-stroke-width: 1.5;
+  }
+  .topology-edge[data-kind="degraded"] {
+    --xy-edge-stroke: var(--state-warn);
+  }
+  .topology-edge[data-kind="standby"] {
+    --xy-edge-stroke: color-mix(in oklch, var(--muted-foreground) 60%, transparent);
+    --xy-edge-stroke-width: 1.25;
+    stroke-dasharray: 4 5;
+  }
   @media (prefers-reduced-motion: reduce) {
     .globe-canvas,
     .globe-label {
