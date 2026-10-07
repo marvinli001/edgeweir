@@ -41,7 +41,7 @@ function SettingsPage() {
           </CardHeader>
           <CardContent>
             <FieldGroup className="sm:flex-row sm:gap-4">
-              <Field>
+              <Field className="sm:w-48">
                 <FieldLabel>{m.user_menu_language()}</FieldLabel>
                 <OptionSelect
                   value={getLocale()}
@@ -51,7 +51,7 @@ function SettingsPage() {
                   testId="settings-language"
                 />
               </Field>
-              <Field>
+              <Field className="sm:w-48">
                 <FieldLabel>{m.user_menu_theme()}</FieldLabel>
                 <OptionSelect
                   value={theme}
@@ -105,16 +105,18 @@ function ApiKeysCard() {
             <FieldLabel htmlFor="keyName">{m.settings_api_key_name()}</FieldLabel>
             <Input id="keyName" name="keyName" maxLength={64} placeholder="terraform" />
           </Field>
-          <FormSelect
-            id="keyScope"
-            label={m.access_key_scope()}
-            value={scope}
-            onChange={(value) => setScope(value as typeof scope)}
-            options={[
-              { value: "read", label: m.access_key_read() },
-              { value: "write", label: m.access_key_write() },
-            ]}
-          />
+          <div className="w-full sm:w-40">
+            <FormSelect
+              id="keyScope"
+              label={m.access_key_scope()}
+              value={scope}
+              onChange={(value) => setScope(value as typeof scope)}
+              options={[
+                { value: "read", label: m.access_key_read() },
+                { value: "write", label: m.access_key_write() },
+              ]}
+            />
+          </div>
           <Button type="submit" disabled={create.isPending} data-testid="access-key-create">
             {create.isPending ? <Spinner /> : null}
             {m.settings_api_key_create()}
@@ -142,26 +144,31 @@ function ApiKeysCard() {
               {list.map((k, index) => (
                 <li
                   key={k.id}
-                  className="flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 animate-enter"
+                  className="flex min-h-12 items-center gap-3 px-3 py-2 animate-enter"
                   style={enterDelay(index)}
                 >
-                  <span className="font-medium">{k.name ?? "—"}</span>
-                  <code className="font-mono text-xs text-muted-foreground">{k.prefix}…</code>
-                  <Badge variant="outline">
-                    {k.scope === "read" ? m.access_key_read() : m.access_key_write()}
-                  </Badge>
-                  {!k.enabled ? <Badge variant="secondary">{m.access_key_revoked()}</Badge> : null}
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {m.access_key_last_used({
-                      time: k.lastUsedAt ? timeAgo(k.lastUsedAt) : m.common_never(),
-                    })}
-                  </span>
-                  <span
-                    className="ml-auto text-xs text-muted-foreground tabular-nums"
-                    title={formatDateTime(new Date(k.createdAt).toISOString())}
-                  >
-                    {timeAgo(new Date(k.createdAt).toISOString())}
-                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                      <span className="font-medium">{k.name ?? "—"}</span>
+                      <code className="font-mono text-xs text-muted-foreground">{k.prefix}…</code>
+                      <Badge variant="outline">
+                        {k.scope === "read" ? m.access_key_read() : m.access_key_write()}
+                      </Badge>
+                      {!k.enabled ? (
+                        <Badge variant="secondary">{m.access_key_revoked()}</Badge>
+                      ) : null}
+                    </span>
+                    <span className="flex flex-wrap gap-x-3 text-xs text-muted-foreground tabular-nums">
+                      <span>
+                        {m.access_key_last_used({
+                          time: k.lastUsedAt ? timeAgo(k.lastUsedAt) : m.common_never(),
+                        })}
+                      </span>
+                      <span title={formatDateTime(new Date(k.createdAt).toISOString())}>
+                        {timeAgo(new Date(k.createdAt).toISOString())}
+                      </span>
+                    </span>
+                  </div>
                   {k.enabled ? (
                     <ConfirmDialog
                       title={m.access_key_revoke()}
