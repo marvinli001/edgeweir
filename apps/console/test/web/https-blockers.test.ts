@@ -33,6 +33,9 @@ describe("one-click HTTPS blockers", () => {
     expect(httpsBlockerText({ code: "caa_forbidden", name: "a.test" }, ca)).toBe(
       "CAA records of a.test do not allow Let's Encrypt",
     );
+    expect(httpsBlockerText({ code: "no_certificate_names" }, ca)).toBe(
+      "The site has only pattern domains: no name to issue for",
+    );
   });
 
   it("lists names the Chinese way in Chinese", () => {
@@ -41,8 +44,5 @@ describe("one-click HTTPS blockers", () => {
       "以下节点需要升级才能应答 HTTP-01：e1、e2",
     );
     overwriteGetLocale(() => "en");
-    expect(httpsBlockerText({ code: "no_certificate_names" }, ca)).toBe(
-      "The site has only pattern domains: no name to issue for",
-    );
   });
 });
