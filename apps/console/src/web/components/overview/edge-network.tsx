@@ -152,11 +152,17 @@ export function EdgeNetworkCard({
                 <Dot tone={location.tone} glow={location.online > 0} />
                 <span className="flex min-w-0 items-baseline gap-2">
                   <span className="truncate font-medium">{location.region}</span>
-                  <span className="shrink-[4] truncate text-xs text-muted-foreground">
+                  {/*
+                    Narrow rows give up the cluster name first (its shrink factor dwarfs the
+                    region's), then the region; the state word keeps its place.
+                  */}
+                  <span className="shrink-[10000] truncate text-xs text-muted-foreground">
                     {location.clusterName}
                   </span>
                   {location.state ? (
-                    <span className="truncate text-xs font-medium">{location.state}</span>
+                    <span className="max-w-1/2 shrink-0 truncate text-xs font-medium">
+                      {location.state}
+                    </span>
                   ) : null}
                 </span>
                 <span className="text-xs tabular-nums text-muted-foreground">
