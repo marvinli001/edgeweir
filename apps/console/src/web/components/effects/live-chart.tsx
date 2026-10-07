@@ -1,15 +1,17 @@
 /*
  * A live series on canvas (uPlot, MIT, Leon Sorokin): the signal line over a fading wash, value
  * ticks on the right, a glow on the line in dark mode. Hovering reports the point to `onRead`.
- * Colors are tokens read through a canvas and re-read when the theme changes; uPlot draws only
- * when the data or size changes, so there is no loop to stop (nor a DPR cap to apply). Lazy-loaded
- * with the page.
+ * Colors are tokens read through a canvas and re-read when the theme changes. uPlot draws only
+ * when the data or size changes, so there is no loop to stop. The one exception to the effects'
+ * DPR cap: uPlot always draws at the screen's own ratio (window.devicePixelRatio, no option), so
+ * on 3x screens this canvas is 3x. That costs one draw per poll (10 s) or resize, never a loop;
+ * the glow pass uses the same ratio (uPlot.pxRatio) so it matches the line. Lazy-loaded with the
+ * page.
  */
 import * as React from "react";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 import { tokenRgb, useThemeKey } from "./tokens";
-import { cappedDpr } from "./use-live";
 
 export interface LivePoint {
   /** Unix seconds. */
@@ -126,9 +128,10 @@ export default function LiveChart({
                 const ctx = u.ctx;
                 ctx.save();
                 ctx.shadowColor = glow;
-                ctx.shadowBlur = 10 * cappedDpr();
+                // uPlot's own ratio, so the glow traces the line it strokes at width × pxRatio.
+                ctx.shadowBlur = 10 * uPlot.pxRatio;
                 ctx.strokeStyle = signal;
-                ctx.lineWidth = 1.75 * cappedDpr();
+                ctx.lineWidth = 1.75 * uPlot.pxRatio;
                 ctx.stroke(path);
                 ctx.restore();
               },
