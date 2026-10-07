@@ -12,6 +12,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
+import { enterDelay } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
@@ -80,7 +81,7 @@ function AccountDialog({
       </Field>
       <FieldSet>
         <FieldLegend variant="label">{m.service_accounts_scopes()}</FieldLegend>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2.5 rounded-2xl p-3 sm:grid-cols-2 sunk-well">
           {SCOPES.map((scope) => (
             // biome-ignore lint/a11y/noLabelWithoutControl: the Base UI checkbox inside is the control
             <label
@@ -171,19 +172,22 @@ function KeysDialog({ account, open, onOpenChange }: { account: ServiceAccount }
         {account.keys.length === 0 ? (
           <EmptyState icon={Key01Icon} title={m.service_accounts_no_keys()} />
         ) : (
-          <ul className="divide-y rounded-2xl border text-sm" data-testid="service-account-keys">
+          <ul
+            className="divide-y divide-edge rounded-2xl text-sm sunk-well"
+            data-testid="service-account-keys"
+          >
             {account.keys.map((k, index) => (
               <li
                 key={k.id}
-                className="flex flex-wrap items-center gap-3 px-3 py-2.5 animate-enter"
-                style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
+                className="flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 animate-enter"
+                style={enterDelay(index)}
               >
                 <span className="font-medium">{k.name || "—"}</span>
-                <code className="text-xs text-muted-foreground">{k.prefix}…</code>
+                <code className="font-mono text-xs text-muted-foreground">{k.prefix}…</code>
                 {k.revokedAt ? (
                   <Badge variant="secondary">{m.service_accounts_key_revoked()}</Badge>
                 ) : null}
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted-foreground tabular-nums">
                   {m.service_accounts_key_last_used()}{" "}
                   {k.lastUsedAt ? (
                     <span title={formatDateTime(k.lastUsedAt)}>{timeAgo(k.lastUsedAt)}</span>
@@ -352,6 +356,7 @@ export function ServiceAccountsPanel({
             columns={columns}
             getRowId={(a) => a.id}
             testId="service-accounts-table"
+            pinFirstColumn
           />
         )}
       </QueryView>
