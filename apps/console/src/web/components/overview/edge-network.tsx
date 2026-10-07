@@ -147,22 +147,22 @@ export function EdgeNetworkCard({
               <Link
                 to="/clusters"
                 search={{ cluster: location.clusterId }}
-                className="grid h-10 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-3 rounded-xl px-2 text-sm outline-none transition-colors focus-lit hover:bg-wash focus-visible:bg-wash"
+                className="grid min-h-10 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-3 rounded-xl px-2 py-1.5 text-sm outline-none transition-colors focus-lit hover:bg-wash focus-visible:bg-wash"
               >
                 <Dot tone={location.tone} glow={location.online > 0} />
-                <span className="flex min-w-0 items-baseline gap-2">
-                  <span className="truncate font-medium">{location.region}</span>
+                <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  <span className="min-w-0 truncate font-medium">{location.region}</span>
                   {/*
-                    Narrow rows give up the cluster name first (its shrink factor dwarfs the
-                    region's), then the region; the state word keeps its place.
+                    Narrow rows give up the cluster name first: it takes no room of its own (zero
+                    basis) and only grows into what is left, up to its full width. The state word
+                    is never cut: when it does not fit beside the region it moves to a line of its
+                    own (and wraps there if even that is too narrow).
                   */}
-                  <span className="shrink-[10000] truncate text-xs text-muted-foreground">
+                  <span className="max-w-max min-w-0 grow basis-0 truncate text-xs text-muted-foreground">
                     {location.clusterName}
                   </span>
                   {location.state ? (
-                    <span className="max-w-1/2 shrink-0 truncate text-xs font-medium">
-                      {location.state}
-                    </span>
+                    <span className="text-xs font-medium">{location.state}</span>
                   ) : null}
                 </span>
                 <span className="text-xs tabular-nums text-muted-foreground">
