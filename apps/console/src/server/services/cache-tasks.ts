@@ -889,23 +889,27 @@ export class PurgeMethodLimited extends Error {
 
 /**
  * Seconds until the site may create another PURGE-method task, 0 when it
- * may now: at most PURGE_METHOD_TASKS_PER_MINUTE in any minute.
+ * may now: at most PURGE_METHOD_TASKS_PER_MINUTE in any minute. The window
+ * is measured with the database's clock, which also stamps the tasks.
  */
-export async function purgeMethodRetryAfter(db: Executor, siteId: string, now = new Date()) {
-  const since = new Date(now.getTime() - 60_000);
+export async function purgeMethodRetryAfter(db: Executor, siteId: string) {
   const rows = await db
-    .select({ createdAt: schema.cacheTask.createdAt })
+    .select({
+      createdAt: schema.cacheTask.createdAt,
+      now: sql<Date>`now()`.mapWith(schema.cacheTask.createdAt),
+    })
     .from(schema.cacheTask)
     .where(
       and(
         eq(schema.cacheTask.source, "purge_method"),
         arrayContains(schema.cacheTask.siteIds, [siteId]),
-        gt(schema.cacheTask.createdAt, since),
+        gt(schema.cacheTask.createdAt, sql`now() - interval '60 seconds'`),
       ),
     )
     .orderBy(desc(schema.cacheTask.createdAt))
     .limit(PURGE_METHOD_TASKS_PER_MINUTE);
   if (rows.length < PURGE_METHOD_TASKS_PER_MINUTE) return 0;
-  const oldest = rows[rows.length - 1]?.createdAt ?? now;
-  return Math.max(1, Math.ceil((oldest.getTime() + 60_000 - now.getTime()) / 1000));
+  const last = rows[rows.length - 1];
+  if (!last) return 0;
+  return Math.max(1, Math.ceil((last.createdAt.getTime() + 60_000 - last.now.getTime()) / 1000));
 }

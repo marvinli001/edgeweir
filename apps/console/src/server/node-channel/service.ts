@@ -53,6 +53,7 @@ import {
   hasDeliverableTasks,
   PurgeMethodLimited,
   pullCacheTasks,
+  purgeMethodRetryAfter,
   reportCacheTaskResult,
 } from "../services/cache-tasks";
 import { nodeCertificates } from "../services/certificates";
@@ -921,6 +922,11 @@ export function createNodeService(
           "the site has no PURGE method on this cluster",
           Code.PermissionDenied,
         );
+      // A lock-free check first: a site over its quota is refused without
+      // queueing on the site's lock (createCacheTask counts again under it).
+      const retryAfter = await purgeMethodRetryAfter(app.db, site.id);
+      if (retryAfter > 0)
+        throw new ConnectError(`retry after ${retryAfter}`, Code.ResourceExhausted);
       try {
         const task = await createCacheTask(
           app.db,
