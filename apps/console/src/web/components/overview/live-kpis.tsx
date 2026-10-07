@@ -12,6 +12,7 @@ import { Meter } from "@/components/appica/meter";
 import { Sparkline } from "@/components/appica/sparkline";
 import { FlowNumber, FlowScaled, NumberFlowGroup } from "@/components/effects/number-flow";
 import { Spotlight } from "@/components/effects/spotlight";
+import { QueryView } from "@/components/states";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
@@ -19,10 +20,10 @@ import { cn } from "@/lib/utils";
 const BIT_UNITS = ["bps", "Kbps", "Mbps", "Gbps", "Tbps"] as const;
 
 /** The last full minute of the last hour (the newest bucket is still filling). */
-function latest(traffic: Traffic | undefined) {
-  const points = traffic?.points.slice(0, -1) ?? [];
+function latest(traffic: Traffic) {
+  const points = traffic.points.slice(0, -1);
   const last = points.at(-1);
-  const seconds = traffic?.bucketSeconds ?? 60;
+  const seconds = traffic.bucketSeconds;
   const hits = points.reduce((sum, p) => sum + p.cacheHits, 0);
   const misses = points.reduce((sum, p) => sum + p.cacheMisses, 0);
   return {
@@ -76,7 +77,9 @@ function Tile({
 
 /**
  * The platform right now: request rate and egress of the last full minute, the cache hit ratio
- * of the last hour, and nodes online. Polls every 10 s; the digits roll to each new value.
+ * of the last hour, and nodes online. Polls every 10 s; the digits roll to each new value. Until
+ * the first answer the row is a loader, and a failed first load an error with a retry, never a
+ * row of zeros.
  */
 export function LiveKpis({
   online,
@@ -93,7 +96,25 @@ export function LiveKpis({
     placeholderData: keepPreviousData,
     meta: { background: true },
   });
-  const now = latest(traffic.data);
+  return (
+    <QueryView query={traffic} loadingClassName="min-h-36">
+      {(data) => <LiveTiles traffic={data} online={online} total={total} className={className} />}
+    </QueryView>
+  );
+}
+
+function LiveTiles({
+  traffic,
+  online,
+  total,
+  className,
+}: {
+  traffic: Traffic;
+  online: number;
+  total: number;
+  className?: string;
+}) {
+  const now = latest(traffic);
   const rps = useArrival(Math.round(now.rps));
   const bps = useArrival(now.bps);
   const hit = useArrival(now.hit);
