@@ -58,7 +58,7 @@ export const dnsLine = z
   });
 /** off: the console does not manage DNS; manual: records to create by hand; auto: written through the provider. */
 export const dnsBindingMode = z.enum(["off", "manual", "auto"]);
-/** A cluster's DNS binding as the administrator edits it. */
+/** A cluster's DNS binding as the operator edits it. */
 export const dnsBindingInput = z
   .object({
     mode: dnsBindingMode.default("off"),
@@ -287,7 +287,7 @@ export const dnsContract = {
     })
     .input(clusterParam.extend({ revision: z.number().int().positive() }))
     .output(revision),
-  /** Publishes the held-back plan anyway (confirmed by an administrator, audited). */
+  /** Publishes the held-back plan anyway (confirmed by the operator, audited). */
   forcePublishBinding: oc
     .route({ method: "POST", path: "/clusters/{clusterId}/dns/force-publish", tags: ["dns"] })
     .input(clusterParam.extend({ revision: z.number().int().positive() }))

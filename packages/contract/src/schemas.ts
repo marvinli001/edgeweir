@@ -661,7 +661,7 @@ export const rolloutPolicy = z.object({
   enabled: z.boolean(),
   /** Observation window. */
   windowSeconds: z.number().int().min(60).max(3600),
-  /** Promote automatically when the window passes; otherwise wait for an administrator. */
+  /** Promote automatically when the window passes; otherwise wait for the operator. */
   autoPromote: z.boolean(),
   /** Roll back when the canary 5xx ratio exceeds max(baseline × multiplier, floor). */
   errorRatioMultiplier: z.number().min(1).max(100),
