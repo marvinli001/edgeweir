@@ -87,18 +87,80 @@ describe("UI rules (ADR-0003)", () => {
   });
 
   it("imports visual effect libraries only through src/web/components/effects", () => {
-    // Canvas, WebGL and graph libraries come in through components/effects, where their colors
-    // are read from tokens and their loops follow reduced motion and visibility.
+    // Canvas, WebGL, map, graph and animation libraries come in through components/effects, where
+    // their colors are read from tokens and their loops follow reduced motion and visibility
+    // (ADR-0034). Side-effect imports (`import "uplot/dist/uPlot.min.css"`) count too.
     const effectLibraries =
-      /from\s+"(?:cobe|uplot|@xyflow\/react|@dagrejs\/dagre|@paper-design\/[a-z-]+|@number-flow\/react)["/]/;
-    const outside = webSources.filter(
+      /(?:from\s+|import\s+|import\()\s*"(?:cobe|uplot|@xyflow\/[a-z-]+|@dagrejs\/[a-z-]+|@paper-design\/[a-z-]+|@number-flow\/[a-z-]+|motion|framer-motion|maplibre-gl|@vis\.gl\/[a-z-]+|d3-geo|topojson-client|world-atlas|dotted-map|react-activity-calendar)["/]/;
+    const files = [...webSources, ...globSync("src/web/*.{ts,tsx}", { cwd: root })];
+    const outside = files.filter(
       (file) => !file.includes("components/effects/") && effectLibraries.test(read(file)),
     );
     expect(outside).toEqual([]);
   });
 
-  it("loads the WebGL, canvas and graph effects lazily (code split per page)", () => {
-    const heavy = ["edge-globe", "live-chart", "origin-topology", "auth-backdrop"];
+  it("uses none of the excluded visual libraries (license, runtime downloads or weight)", () => {
+    // GSAP (non-OSI license), React Bits and Animate UI (Commons Clause), three.js renderers,
+    // Spline, Rive and dotLottie (runtime fetches from other hosts, WASM). ADR-0034.
+    const banned =
+      /^(?:gsap|@gsap\/.+|react-bits|@react-bits\/.+|animate-ui|@animate-ui\/.+|@react-three\/.+|@splinetool\/.+|@rive-app\/.+|@lottiefiles\/dotlottie-.+)$/;
+    const manifests = globSync("{package.json,apps/*/package.json,packages/*/package.json}", {
+      cwd: resolve(root, "../.."),
+    });
+    const declared = manifests.flatMap((file) => {
+      const pkg = JSON.parse(readFileSync(resolve(root, "../..", file), "utf8"));
+      return Object.keys({
+        ...pkg.dependencies,
+        ...pkg.devDependencies,
+        ...pkg.optionalDependencies,
+        ...pkg.peerDependencies,
+      })
+        .filter((name) => banned.test(name))
+        .map((name) => `${file}: ${name}`);
+    });
+    expect(declared).toEqual([]);
+    const sources = [...allWeb, ...globSync("lab/**/*.{ts,tsx}", { cwd: root })];
+    const imported = sources.flatMap((file) =>
+      [...read(file).matchAll(/(?:from\s+|import\s+|import\()\s*"([^"./][^"]*)"/g)]
+        .map((m) => m[1] as string)
+        .map((spec) =>
+          (spec.startsWith("@") ? spec.split("/").slice(0, 2) : spec.split("/").slice(0, 1)).join(
+            "/",
+          ),
+        )
+        .filter((name) => banned.test(name))
+        .map((name) => `${file}: ${name}`),
+    );
+    expect(imported).toEqual([]);
+  });
+
+  it("loads the WebGL, canvas, map and graph effects lazily (code split per page)", () => {
+    // An effect module is heavy when it imports one of these libraries, or statically imports a
+    // heavy effect module. Outside components/effects, heavy modules come in through React.lazy.
+    const heavyLibrary =
+      /^import\s+(?!type\b)[^;]*from\s+"(?:cobe|uplot|@xyflow\/[a-z-]+|@dagrejs\/[a-z-]+|@paper-design\/[a-z-]+|maplibre-gl|@vis\.gl\/[a-z-]+|d3-geo)["/]/m;
+    const effects = webSources.filter((file) => file.includes("components/effects/"));
+    const name = (file: string) =>
+      file.replace(/^.*components\/effects\//, "").replace(/\.tsx?$/, "");
+    const staticEffectImports = (source: string) =>
+      [
+        ...source.matchAll(
+          /^import\s+(?!type\b)[^;]*from\s+"(?:@\/components\/effects\/|\.\/)([a-z-]+)";/gm,
+        ),
+      ].map((m) => m[1] as string);
+    const heavy = new Set(effects.filter((file) => heavyLibrary.test(read(file))).map(name));
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const file of effects) {
+        if (!heavy.has(name(file)) && staticEffectImports(read(file)).some((n) => heavy.has(n))) {
+          heavy.add(name(file));
+          grew = true;
+        }
+      }
+    }
+    expect([...heavy]).toEqual(
+      expect.arrayContaining(["edge-globe", "live-chart", "origin-topology", "auth-backdrop"]),
+    );
     const imports = webSources
       .filter((file) => !file.includes("components/effects/"))
       .flatMap((file) =>
@@ -108,8 +170,8 @@ describe("UI rules (ADR-0003)", () => {
           ),
         ]
           .map((m) => m[1] as string)
-          .filter((name) => heavy.includes(name))
-          .map((name) => `${file}: ${name}`),
+          .filter((n) => heavy.has(n))
+          .map((n) => `${file}: ${n}`),
       );
     expect(imports).toEqual([]);
   });
