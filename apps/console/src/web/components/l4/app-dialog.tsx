@@ -568,7 +568,7 @@ function AppForm({
                   .map((c) => ({ value: c.id, label: c.name })),
               ]}
               onChange={(certificateId) => set({ certificateId })}
-              label={m.cert_title()}
+              label={m.l4_tls_certificate()}
               testId="l4-app-tls-certificate"
             />
             <OptionSelect
