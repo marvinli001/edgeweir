@@ -21,32 +21,37 @@ export function Pager({
   const to = Math.min(total, page * pageSize);
   return (
     <nav aria-label={m.pager_label()} className="flex items-center justify-end gap-2 text-sm">
-      <span className="text-muted-foreground tabular-nums" data-testid="pager-range">
+      <span className="readout text-muted-foreground" data-testid="pager-range">
         {m.pager_range({
           from: formatNumber(from),
           to: formatNumber(to),
           total: formatNumber(total),
         })}
       </span>
-      <Button
-        size="icon-sm"
-        variant="outline"
-        aria-label={m.pager_previous()}
-        disabled={page <= 1}
-        onClick={() => onPageChange(page - 1)}
-      >
-        <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
-      </Button>
-      <Button
-        size="icon-sm"
-        variant="outline"
-        aria-label={m.pager_next()}
-        disabled={page >= pages}
-        onClick={() => onPageChange(page + 1)}
-        data-testid="pager-next"
-      >
-        <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
-      </Button>
+      {/* Previous and next ride in one shallow track, like a segmented control. */}
+      <div className="flex items-center gap-0.5 rounded-full p-0.5 seg-well">
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          className="rounded-full"
+          aria-label={m.pager_previous()}
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+        >
+          <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
+        </Button>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          className="rounded-full"
+          aria-label={m.pager_next()}
+          disabled={page >= pages}
+          onClick={() => onPageChange(page + 1)}
+          data-testid="pager-next"
+        >
+          <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
+        </Button>
+      </div>
     </nav>
   );
 }

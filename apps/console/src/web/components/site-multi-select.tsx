@@ -1,5 +1,6 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { enterDelay } from "@/components/page";
 import { ErrorState, QueryView } from "@/components/states";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -85,7 +86,7 @@ export function SiteMultiSelect({
           />
           <fieldset
             aria-labelledby={`${id}-label`}
-            className="max-h-64 min-w-0 divide-y overflow-y-auto rounded-2xl border"
+            className="max-h-64 min-w-0 divide-y divide-border/70 overflow-y-auto rounded-2xl sunk-well"
           >
             {list.isLoadingError ? (
               <div className="p-3">
@@ -100,8 +101,8 @@ export function SiteMultiSelect({
                 // biome-ignore lint/a11y/noLabelWithoutControl: the Base UI checkbox inside is the control
                 <label
                   key={site.id}
-                  className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors animate-enter hover:bg-muted/50 has-data-checked:bg-primary/5"
-                  style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
+                  className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors animate-enter hover:bg-wash has-data-checked:bg-tint-primary"
+                  style={enterDelay(index)}
                   data-testid="site-option"
                 >
                   <Checkbox
