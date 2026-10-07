@@ -982,10 +982,6 @@
   .empty-art [data-anim] {
     transform-box: fill-box;
     transform-origin: center;
-    animation-play-state: paused;
-  }
-  .empty-art[data-live] [data-anim] {
-    animation-play-state: running;
   }
   @media (prefers-reduced-motion: no-preference) {
     .empty-art [data-anim="travel"] {
@@ -1000,6 +996,10 @@
     .empty-art [data-anim="halo"] {
       animation: art-halo 2.4s ease-out infinite;
     }
+  }
+  /* After the shorthands above, which reset the play state: off screen or in a hidden tab, hold. */
+  .empty-art:not([data-live]) [data-anim] {
+    animation-play-state: paused;
   }
   @media (forced-colors: active) {
     .empty-art {
