@@ -39,7 +39,7 @@ function durationLabel(seconds: number): string {
 
 type SiteChoice = { id: string; name: string };
 
-/** Sites the caller can ban in: a search box and a select over the matches. */
+/** Sites the caller can ban in: a search box and, beside it, a select over the matches. */
 function SiteSelect({
   value,
   onChange,
@@ -58,7 +58,7 @@ function SiteSelect({
   if (value && !choices.some((c) => c.value === value.id))
     choices.unshift({ value: value.id, label: value.name });
   return (
-    <>
+    <div className="grid items-start gap-4 sm:grid-cols-2">
       <Field>
         <FieldLabel htmlFor="ban-site-search">{m.bans_site_search()}</FieldLabel>
         <Input
@@ -81,7 +81,7 @@ function SiteSelect({
           />
         )}
       </QueryView>
-    </>
+    </div>
   );
 }
 
