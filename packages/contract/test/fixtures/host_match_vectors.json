@@ -1,0 +1,46 @@
+{
+  "description": "Site lookup by host (proto v0.25.0, domains-v2): exact > *. (one label over the parent) > . suffix (any depth, longest first) > patterns by (site creation time x 16 + the pattern's index in the site, site id). Shared with edgeweir-node test/lua/host-match-vectors.json (byte-identical).",
+  "sites": [
+    { "id": "s-exact", "created": 1000, "domains": ["a.test", "www.b.test", "xn--bcher-kva.test"] },
+    { "id": "s-wild", "created": 2000, "domains": ["*.a.test", "*.c.b.test"] },
+    { "id": "s-suffix", "created": 3000, "domains": [".a.test", ".b.test"] },
+    { "id": "s-deep", "created": 4000, "domains": [".x.a.test", ".d.c.b.test"] },
+    { "id": "s-late", "created": 9000, "domains": ["~.*\\.org", "~api\\d+\\.e\\.test"] },
+    {
+      "id": "s-early",
+      "created": 5000,
+      "domains": ["~(www|m)\\.e\\.test", "~api7\\.e\\.test", "~.*\\.e\\.test"]
+    },
+    { "id": "s-same-a", "created": 7000, "domains": ["~same\\.test"] },
+    { "id": "s-same-b", "created": 7000, "domains": ["~sam.\\.test"] }
+  ],
+  "cases": [
+    { "host": "a.test", "site": "s-exact" },
+    { "host": "www.b.test", "site": "s-exact" },
+    { "host": "xn--bcher-kva.test", "site": "s-exact" },
+    { "host": "x.a.test", "site": "s-wild" },
+    { "host": "y.x.a.test", "site": "s-deep" },
+    { "host": "z.y.x.a.test", "site": "s-deep" },
+    { "host": "q.p.a.test", "site": "s-suffix" },
+    { "host": "b.test", "site": null },
+    { "host": "v.b.test", "site": "s-suffix" },
+    { "host": "c.b.test", "site": "s-suffix" },
+    { "host": "w.c.b.test", "site": "s-wild" },
+    { "host": "v.w.c.b.test", "site": "s-suffix" },
+    { "host": "d.c.b.test", "site": "s-wild" },
+    { "host": "e.d.c.b.test", "site": "s-deep" },
+    { "host": "x.test", "site": null },
+    { "host": "test", "site": null },
+    { "host": "www.e.test", "site": "s-early" },
+    { "host": "api7.e.test", "site": "s-early" },
+    { "host": "api8.e.test", "site": "s-early" },
+    { "host": "e.test", "site": null },
+    { "host": "api8.e.test.org", "site": "s-late" },
+    { "host": "example.org", "site": "s-late" },
+    { "host": "org", "site": null },
+    { "host": "same.test", "site": "s-same-a" },
+    { "host": "samx.test", "site": "s-same-b" },
+    { "host": "xsame.test", "site": null },
+    { "host": "same.test.evil", "site": null }
+  ]
+}
