@@ -1,8 +1,9 @@
 import type { AnalyticsRange } from "@edgeweir/contract";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { NoTraffic } from "@/components/analytics/breakdowns";
 import { Panel, PanelHeader } from "@/components/analytics/panel";
 import { RowMenu, type RowMenuItem } from "@/components/quick-actions";
-import { EmptyState, QueryView } from "@/components/states";
+import { QueryView } from "@/components/states";
 import { formatCompact, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
@@ -47,11 +48,7 @@ export function TopRequestsCard({
   return (
     <Panel data-testid={`top-${by}`} className="animate-enter">
       <PanelHeader title={by === "url" ? m.analytics_top_urls() : m.analytics_top_ips()} />
-      <QueryView
-        query={query}
-        isEmpty={(data) => data.items.length === 0}
-        empty={<EmptyState title={m.analytics_no_traffic()} />}
-      >
+      <QueryView query={query} isEmpty={(data) => data.items.length === 0} empty={<NoTraffic />}>
         {() => (
           <ol className="flex flex-col gap-3 px-4 py-4">
             {items.map((item) => (

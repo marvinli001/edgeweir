@@ -5,7 +5,8 @@ import { STATUS_CLASSES } from "@/lib/analytics";
 import { formatCompact, formatPercent, m } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-function NoTraffic() {
+/** A panel with nothing to show: one quiet line (no empty-state box inside the card). */
+export function NoTraffic() {
   return (
     <p className="flex flex-1 items-center justify-center px-4 py-8 text-sm text-muted-foreground">
       {m.analytics_no_traffic()}
