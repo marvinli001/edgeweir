@@ -134,6 +134,10 @@ async function take(browser: Browser, shot: Shot) {
       // Entrances (animate-enter with staggered delays) and number roll-ins.
       await page.waitForTimeout(1_800);
     }
+    // A dev server reload in between leaves an empty root: that shot is retried.
+    if (await page.evaluate(() => !document.getElementById("root")?.childElementCount)) {
+      throw new Error("the page is blank");
+    }
     await page.screenshot({
       path: path.join(out as string, name),
       fullPage: true,
