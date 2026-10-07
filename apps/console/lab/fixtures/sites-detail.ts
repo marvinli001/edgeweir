@@ -20,6 +20,7 @@ import {
   type SecurityEvent,
   type Site,
   type SiteErrorPages,
+  type SiteMaintenance,
   type SiteProtection,
   type SiteSecurityState,
   type SiteWaf,
@@ -1187,6 +1188,13 @@ function errorPagesOf(site: Site): SiteErrorPages {
           redirectUrl: "",
           responseStatus: 0,
         },
+        // Retired product URLs go to the search page.
+        {
+          status: 410,
+          template: "",
+          redirectUrl: "/search?gone={{request_id}}",
+          responseStatus: 0,
+        },
         {
           status: 429,
           template: page(
@@ -1218,6 +1226,18 @@ function errorPagesOf(site: Site): SiteErrorPages {
           redirectUrl: "",
           responseStatus: 0,
         },
+        // Every other server error: the 502 page's words, sent as 503 so crawlers come back.
+        {
+          status: "5xx",
+          template: page(
+            500,
+            "Something went wrong",
+            "We could not finish this request. Your cart is saved.",
+            '\n    <p><a href="/">Back to the shop</a></p>',
+          ),
+          redirectUrl: "",
+          responseStatus: 503,
+        },
       ],
       interceptOriginErrors: true,
       updatedAt: ago(12 * DAY),
@@ -1238,6 +1258,36 @@ function errorPagesOf(site: Site): SiteErrorPages {
       updatedAt: ago(40 * DAY),
     };
   return { siteId: site.id, pages: [], interceptOriginErrors: false, updatedAt: null };
+}
+
+/**
+ * Maintenance mode: the shop keeps its settings for the next release window (off now; the office
+ * network and the payment provider's callbacks pass); other sites never set it.
+ */
+function maintenanceOf(site: Site): SiteMaintenance {
+  if (isShop(site))
+    return {
+      siteId: site.id,
+      enabled: false,
+      template: page(
+        503,
+        "Down for maintenance",
+        "We are updating the shop and will be back within the hour. Your cart is saved.",
+      ),
+      retryAfterSeconds: 1800,
+      allowedCidrs: ["198.51.100.0/24", "2001:db8:a:100::/56"],
+      allowedPathPrefixes: ["/api/v2/payments/callback", "/healthz"],
+      updatedAt: ago(9 * DAY),
+    };
+  return {
+    siteId: site.id,
+    enabled: false,
+    template: "",
+    retryAfterSeconds: 0,
+    allowedCidrs: [],
+    allowedPathPrefixes: [],
+    updatedAt: null,
+  };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1894,6 +1944,9 @@ export const siteDetailFixtures: Fixtures = {
   },
   errorPages: {
     get: ({ id: siteId }) => errorPagesOf(siteOf(siteId)),
+  },
+  maintenance: {
+    get: ({ id: siteId }) => maintenanceOf(siteOf(siteId)),
   },
   logs: {
     settings: ({ siteId }) => ({ sampleRate: sampleRateOf(siteOf(siteId)), storage: "lite" }),

@@ -26,6 +26,7 @@ const KEEP = [
   "protection.get",
   "waf.get",
   "errorPages.get",
+  "maintenance.get",
   // Records opened by id.
   "clusters.get",
   "nodes.get",
