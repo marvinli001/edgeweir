@@ -1,33 +1,29 @@
 /**
  * Screenshots of the lab pages (the lab must be running):
  *
- *   node lab/shots.ts <out-dir> [--pages overview,sites] [--base http://localhost:5180/]
+ *   node lab/shots.ts <out-dir> [--pages overview,site-logs] [--themes light,dark]
+ *     [--widths 1440,375] [--locale zh-CN|en] [--state full|empty|error|loading] [--reduced]
+ *     [--base http://localhost:5180/] [--concurrency 4]
  *
- * Every page in light and dark at 1440 and 375 px wide (zh-CN), plus the overview in English
- * and with reduced motion. Files: <page>-<theme>-<width>[-en|-reduced].png, full page.
+ * Every page of lab/pages.ts by default, in light and dark at 1440 and 375 px wide, zh-CN, on
+ * fixture data. Files: <page>-<theme>-<width>[-en][-<state>][-reduced].png, full page; the lab
+ * panel is hidden. Waits for fonts and until no LoadingState or TopProgress is left (except in
+ * the loading state), then for entrances. Page errors and fixture answers outside their schema
+ * are printed after the file name.
  */
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { type Browser, chromium } from "@playwright/test";
+import { PAGES } from "./pages.ts";
+import { LAB_STATES, type LabState, STATE_KEY } from "./state.ts";
 
-const SHOP = "00000000-0000-4000-8005-000000000002";
-
-export const PAGES: Record<string, string> = {
-  login: "#/login",
-  setup: "#/setup",
-  overview: "#/overview",
-  sites: "#/sites",
-  site: `#/sites/${SHOP}`,
-  origins: `#/sites/${SHOP}?tab=origins`,
-  clusters: "#/clusters",
-};
+type Theme = "light" | "dark";
+type Locale = "zh-CN" | "en";
 
 interface Shot {
   page: string;
-  theme: "light" | "dark";
-  width: 1440 | 375;
-  locale: "zh-CN" | "en";
-  reduced: boolean;
+  theme: Theme;
+  width: number;
 }
 
 function argValue(name: string): string | undefined {
@@ -35,71 +31,122 @@ function argValue(name: string): string | undefined {
   return index > 0 ? process.argv[index + 1] : undefined;
 }
 
-const out = process.argv[2];
-if (!out || out.startsWith("--")) {
-  console.error("usage: node lab/shots.ts <out-dir> [--pages a,b] [--base url]");
+function fail(message: string): never {
+  console.error(message);
+  console.error(
+    "usage: node lab/shots.ts <out-dir> [--pages a,b] [--themes light,dark] [--widths 1440,375]" +
+      " [--locale zh-CN|en] [--state full|empty|error|loading] [--reduced] [--base url]" +
+      " [--concurrency n]",
+  );
   process.exit(1);
 }
+
+const list = (name: string) =>
+  argValue(name)
+    ?.split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+const out = process.argv[2];
+if (!out || out.startsWith("--")) fail("missing <out-dir>");
 const base = argValue("--base") ?? "http://localhost:5180/";
-const only = argValue("--pages")?.split(",");
-const font = argValue("--font") ?? "geist";
+const only = list("--pages");
+const themes = (list("--themes") ?? ["light", "dark"]) as Theme[];
+const widths = (list("--widths") ?? ["1440", "375"]).map(Number);
+const locale = (argValue("--locale") ?? "zh-CN") as Locale;
+const state = (argValue("--state") ?? "full") as LabState;
+const reduced = process.argv.includes("--reduced");
+const concurrency = Math.max(1, Number(argValue("--concurrency") ?? 4));
+
+const unknownPages = only?.filter((name) => !PAGES.some((page) => page.name === name)) ?? [];
+if (unknownPages.length) fail(`unknown pages: ${unknownPages.join(", ")}`);
+if (themes.some((theme) => theme !== "light" && theme !== "dark")) fail("themes: light, dark");
+if (widths.some((width) => !Number.isInteger(width) || width < 280)) fail("widths: pixels");
+if (locale !== "zh-CN" && locale !== "en") fail("locale: zh-CN or en");
+if (!LAB_STATES.includes(state)) fail(`state: ${LAB_STATES.join(", ")}`);
 
 const shots: Shot[] = [];
-for (const page of Object.keys(PAGES)) {
-  if (only && !only.includes(page)) continue;
-  for (const theme of ["light", "dark"] as const) {
-    for (const width of [1440, 375] as const) {
-      shots.push({ page, theme, width, locale: "zh-CN", reduced: false });
-    }
-  }
-  if (page === "overview") {
-    shots.push({ page, theme: "light", width: 1440, locale: "en", reduced: false });
-    shots.push({ page, theme: "light", width: 1440, locale: "zh-CN", reduced: true });
+for (const page of PAGES) {
+  if (only && !only.includes(page.name)) continue;
+  for (const theme of themes) {
+    for (const width of widths) shots.push({ page: page.name, theme, width });
   }
 }
+
+const fileName = (shot: Shot) =>
+  `${shot.page}-${shot.theme}-${shot.width}${locale === "en" ? "-en" : ""}${
+    state === "full" ? "" : `-${state}`
+  }${reduced ? "-reduced" : ""}.png`;
 
 async function take(browser: Browser, shot: Shot) {
   const context = await browser.newContext({
-    viewport: { width: shot.width, height: shot.width === 375 ? 812 : 900 },
+    viewport: { width: shot.width, height: shot.width < 768 ? 812 : 900 },
     deviceScaleFactor: 2,
-    locale: shot.locale,
+    locale,
     colorScheme: shot.theme,
-    reducedMotion: shot.reduced ? "reduce" : "no-preference",
+    reducedMotion: reduced ? "reduce" : "no-preference",
   });
   await context.addInitScript(
-    ({ theme, locale, font }) => {
+    ({ theme, locale, state, stateKey }) => {
       localStorage.setItem("theme", theme);
       localStorage.setItem("PARAGLIDE_LOCALE", locale);
       localStorage.setItem("edgeweir-lab:panel", "hidden");
-      localStorage.setItem("edgeweir-lab:font", font);
+      localStorage.setItem(stateKey, state);
     },
-    { theme: shot.theme, locale: shot.locale, font },
+    { theme: shot.theme, locale, state, stateKey: STATE_KEY },
   );
   const page = await context.newPage();
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto(`${base}${PAGES[shot.page]}`);
+  const notes: string[] = [];
+  page.on("pageerror", (error) => notes.push(`error: ${error.message}`));
+  page.on("console", (message) => {
+    const text = message.text();
+    if (text.startsWith("[lab]")) notes.push(text);
+  });
+  const route = PAGES.find((candidate) => candidate.name === shot.page)?.path ?? "/";
+  await page.goto(`${base}#${route}`);
   await page.waitForLoadState("networkidle");
-  // First loads show a loader; wait until no status loader is left, then for entrances.
-  await page
-    .waitForFunction(() => !document.querySelector('[role="status"][aria-live="polite"]'), null, {
-      timeout: 15_000,
-    })
-    .catch(() => undefined);
-  await page.waitForTimeout(2_200);
-  const name = `${shot.page}-${shot.theme}-${shot.width}${shot.locale === "en" ? "-en" : ""}${
-    shot.reduced ? "-reduced" : ""
-  }.png`;
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
+  if (state === "loading") {
+    // The loader fades in after a short delay.
+    await page.waitForTimeout(1_500);
+  } else {
+    // First loads show a loader and the top bar; wait until both are gone for a moment.
+    await page
+      .waitForFunction(
+        () => {
+          const w = window as unknown as { __labQuietSince?: number };
+          const busy =
+            document.querySelector('[role="status"][aria-live="polite"]') ||
+            document.querySelector('[data-testid="top-progress"][data-active]');
+          if (busy) {
+            w.__labQuietSince = undefined;
+            return false;
+          }
+          w.__labQuietSince ??= performance.now();
+          return performance.now() - w.__labQuietSince > 400;
+        },
+        null,
+        { timeout: 15_000, polling: 100 },
+      )
+      .catch(() => notes.push("still loading after 15 s"));
+    // Entrances (animate-enter with staggered delays) and number roll-ins.
+    await page.waitForTimeout(1_800);
+  }
+  const name = fileName(shot);
   await page.screenshot({ path: path.join(out as string, name), fullPage: true });
   await context.close();
-  if (errors.length) console.warn(`${name}: ${errors.join(" | ")}`);
-  console.log(name);
+  console.log(notes.length ? `${name}\n  ${[...new Set(notes)].join("\n  ")}` : name);
 }
 
 await mkdir(out, { recursive: true });
 const browser = await chromium.launch();
 try {
-  for (const shot of shots) await take(browser, shot);
+  const queue = [...shots];
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+      for (let shot = queue.shift(); shot; shot = queue.shift()) await take(browser, shot);
+    }),
+  );
 } finally {
   await browser.close();
 }
