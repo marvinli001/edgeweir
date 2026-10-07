@@ -14,7 +14,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DnsCredentialDialog } from "@/components/dns/credential-dialog";
-import { FormSelect } from "@/components/form-select";
+import { FormSelect, OptionSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { COMPRESSION_KEYS, compressionOf } from "@/components/site/compression-card";
 import { NumberField, SwitchField } from "@/components/site/fields";
@@ -586,17 +586,21 @@ function HttpsEditor({
                   })
                 }
               />
-              <FormSelect
-                id="redirectPort"
-                label={m.https_redirect_port()}
-                value={String(settings.redirectPort)}
-                disabled={!redirectAvailable}
-                options={[...new Set([443, ...site.ports.https])].map((port) => ({
-                  value: String(port),
-                  label: String(port),
-                }))}
-                onChange={(value) => setSettings({ ...settings, redirectPort: Number(value) })}
-              />
+              {/* A port is a machine value: monospace, like the site's ports. */}
+              <Field>
+                <FieldLabel htmlFor="redirectPort">{m.https_redirect_port()}</FieldLabel>
+                <OptionSelect
+                  id="redirectPort"
+                  className="w-full font-mono"
+                  value={String(settings.redirectPort)}
+                  disabled={!redirectAvailable}
+                  options={[...new Set([443, ...site.ports.https])].map((port) => ({
+                    value: String(port),
+                    label: String(port),
+                  }))}
+                  onChange={(value) => setSettings({ ...settings, redirectPort: Number(value) })}
+                />
+              </Field>
               {site.domains.length > 1 ? (
                 <div className="sm:col-span-2">
                   <CheckboxList
