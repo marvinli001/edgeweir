@@ -20,9 +20,11 @@ function toneOf(node: Node, latest: number): StatusTone {
 }
 
 /**
- * The cluster and its nodes, joined by the configuration channel: a beam runs to every online
- * node (a quiet signal pulse, the page's only loop), an offline or disabled one hangs on a dashed
- * idle line. Each node shows its applied revision (with a word while it lags) and its egress.
+ * The cluster and its nodes, joined by the configuration channel: every online node hangs on a
+ * still line that a signal pulse runs along once when the strip appears and again whenever the
+ * node applies a new revision (the page polls, so nothing loops); an offline or disabled one
+ * hangs on a dashed idle line. Each node shows its applied revision (with a word while it lags)
+ * and its egress.
  */
 export function ClusterLinks({ cluster }: { cluster: Cluster }) {
   const nodes = useQuery({
@@ -115,6 +117,8 @@ export function ClusterLinks({ cluster }: { cluster: Cluster }) {
           fromRef={hub}
           toRef={refFor(node.id)}
           dim={!node.online || node.status === "disabled"}
+          runs={1}
+          replayKey={node.appliedRevision}
           delay={index * 0.6}
           curvature={0}
           className="z-0"
