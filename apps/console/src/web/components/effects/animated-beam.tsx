@@ -1,8 +1,9 @@
 /*
  * Animated Beam: adapted from Magic UI (MIT, Magic UI; THIRD-PARTY-NOTICES.md). Changes: the
- * colors are tokens (hairline track, signal pulse), `dim` draws a dashed idle track instead, and
- * the pulse only runs while the beam is on screen and motion is allowed (otherwise a still pulse
- * sits on the track).
+ * colors are tokens (hairline track, signal pulse), `dim` draws a dashed idle track instead, the
+ * pulse rests between runs (`repeatDelay`; beams sit on polled pages and stay quiet), and it only
+ * runs while the beam is on screen, the tab is in front and motion is allowed (otherwise a still
+ * pulse sits on the track).
  */
 import * as motion from "motion/react-m";
 import * as React from "react";
@@ -17,6 +18,7 @@ export function AnimatedBeam({
   reverse = false,
   duration = 3.2,
   delay = 0,
+  repeatDelay = 2.4,
   dim = false,
   className,
 }: {
@@ -27,6 +29,8 @@ export function AnimatedBeam({
   reverse?: boolean;
   duration?: number;
   delay?: number;
+  /** Seconds the pulse rests before it runs again. */
+  repeatDelay?: number;
   /** An idle link: dashed, no pulse. */
   dim?: boolean;
   className?: string;
@@ -88,7 +92,7 @@ export function AnimatedBeam({
       />
       {dim ? null : (
         <>
-          <path d={path} strokeWidth={2} strokeLinecap="round" stroke={`url(#${id})`} />
+          <path d={path} strokeWidth={1.75} strokeLinecap="round" stroke={`url(#${id})`} />
           <defs>
             <motion.linearGradient
               id={id}
@@ -97,7 +101,13 @@ export function AnimatedBeam({
               animate={live ? travel : { x1: "60%", x2: "40%" }}
               transition={
                 live
-                  ? { delay, duration, ease: [0.16, 1, 0.3, 1], repeat: Number.POSITIVE_INFINITY }
+                  ? {
+                      delay,
+                      duration,
+                      ease: [0.16, 1, 0.3, 1],
+                      repeat: Number.POSITIVE_INFINITY,
+                      repeatDelay,
+                    }
                   : { duration: 0 }
               }
             >
