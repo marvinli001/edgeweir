@@ -294,6 +294,7 @@ function PageRow({
       <Field data-invalid={invalid || undefined} data-disabled={disabled || undefined}>
         <div className="flex min-h-7 flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <TemplateLabel
+            id={`${id}-label`}
             htmlFor={redirect ? `${id}-url` : id}
             status={status}
             name={statusName[status]()}
@@ -302,7 +303,11 @@ function PageRow({
             {redirect ? null : <TemplateBytes value={draft.template} testId={id} />}
             {modes ? (
               <Tabs value={draft.mode} onValueChange={(mode) => onChange({ mode: mode as Mode })}>
-                <TabsList className="h-7" data-testid={`${id}-mode`}>
+                <TabsList
+                  className="h-7"
+                  aria-labelledby={`${id}-label`}
+                  data-testid={`${id}-mode`}
+                >
                   <TabsTrigger value="template" disabled={disabled} className="text-xs">
                     {m.error_pages_mode_template()}
                   </TabsTrigger>
@@ -353,7 +358,9 @@ function PageRow({
       </Field>
       {!redirect && modes ? (
         <Field data-invalid={badStatus || undefined} data-disabled={disabled || undefined}>
-          <FieldLabel htmlFor={`${id}-status`}>{m.error_pages_response_status()}</FieldLabel>
+          <FieldLabel id={`${id}-status-label`} htmlFor={`${id}-status`}>
+            {m.error_pages_response_status()}
+          </FieldLabel>
           <Input
             id={`${id}-status`}
             type="number"
@@ -363,6 +370,7 @@ function PageRow({
             value={draft.responseStatus}
             placeholder={typeof status === "number" ? String(status) : status}
             disabled={disabled}
+            aria-labelledby={`${id}-label ${id}-status-label`}
             aria-invalid={badStatus || undefined}
             aria-describedby={badStatus ? `${id}-status-error` : undefined}
             onChange={(event) => onChange({ responseStatus: event.target.value })}

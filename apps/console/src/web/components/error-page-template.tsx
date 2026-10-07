@@ -58,16 +58,19 @@ export function TemplateField({
 
 /** The label of a page: its status (or class) in figures, then its name. */
 export function TemplateLabel({
+  id,
   htmlFor,
   status,
   name,
 }: {
+  /** Lets the page's other controls name themselves after it (`aria-labelledby`). */
+  id?: string;
   htmlFor: string;
   status: number | string;
   name: string;
 }) {
   return (
-    <FieldLabel htmlFor={htmlFor}>
+    <FieldLabel id={id} htmlFor={htmlFor}>
       <span className="font-mono tabular-nums">{status}</span>
       {name}
     </FieldLabel>
