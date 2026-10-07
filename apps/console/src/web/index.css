@@ -474,6 +474,29 @@
 }
 
 /*
+ * A sideways scroller that fades out at each edge that hides more of it ([data-fade] = start, end
+ * or both, set from its scroll position), so a phone shows that it scrolls: the site's tab bar.
+ */
+@utility scroll-fade {
+  --fade: 2.5rem;
+  &[data-fade="end"] {
+    mask-image: linear-gradient(to right, #000 calc(100% - var(--fade)), transparent);
+  }
+  &[data-fade="start"] {
+    mask-image: linear-gradient(to left, #000 calc(100% - var(--fade)), transparent);
+  }
+  &[data-fade="both"] {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 var(--fade),
+      #000 calc(100% - var(--fade)),
+      transparent
+    );
+  }
+}
+
+/*
  * A sunk panel inside a card or a dialog: code blocks, option lists, the QR code's frame. The well
  * color, an inner top shadow and a hairline; a real border in forced colors. Not for text fields
  * (input-well), toggles (toggle-well) or segmented tracks (seg-well).

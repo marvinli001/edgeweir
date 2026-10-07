@@ -63,6 +63,27 @@ function SiteDetailPage() {
   const tab: SiteTab = search.tab ?? "overview";
   const name = site.data?.name;
   const tabsList = React.useRef<HTMLDivElement>(null);
+  // The tab bar's ref: the edges that hide more tabs fade out (scroll-fade), so a phone shows that
+  // the bar scrolls.
+  const tabBar = React.useCallback((list: HTMLDivElement | null) => {
+    tabsList.current = list;
+    if (!list) return;
+    const mark = () => {
+      const start = list.scrollLeft > 1;
+      const end = list.scrollLeft + list.clientWidth < list.scrollWidth - 1;
+      if (start || end) list.dataset.fade = start && end ? "both" : start ? "start" : "end";
+      else delete list.dataset.fade;
+    };
+    mark();
+    list.addEventListener("scroll", mark, { passive: true });
+    const observer = new ResizeObserver(mark);
+    observer.observe(list);
+    return () => {
+      tabsList.current = null;
+      list.removeEventListener("scroll", mark);
+      observer.disconnect();
+    };
+  }, []);
   React.useEffect(() => {
     const list = tabsList.current;
     if (!list || !site.isSuccess) return;
@@ -127,9 +148,9 @@ function SiteDetailPage() {
           >
             {/* The page's tab bar: line tabs over a hairline, scrolling sideways on phones. */}
             <TabsList
-              ref={tabsList}
+              ref={tabBar}
               variant="line"
-              className="h-11 w-full max-w-full justify-start gap-0.5 overflow-x-auto overflow-y-hidden border-b px-0 pt-1 pb-[5px] [scrollbar-width:none]"
+              className="h-11 w-full max-w-full justify-start gap-0.5 overflow-x-auto overflow-y-hidden border-b px-0 pt-1 pb-[5px] scroll-fade [scrollbar-width:none]"
             >
               {SITE_TABS.map((value) => (
                 <TabsTrigger
