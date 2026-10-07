@@ -146,32 +146,37 @@ function CompressionEditor({
         <CardHeader>
           <CardTitle>{m.compression_title()}</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-6">
+        {/* One algorithm per row and the largest compressed response last, split by hairlines. */}
+        <CardContent className="flex flex-col divide-y divide-border [&>*]:py-4 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">
+          {/* Wrapped: a fieldset's legend would sit on the hairline. */}
           {(["zstd", "brotli", "gzip"] as const).map((algorithm) => (
-            <CompressionGroup
-              key={algorithm}
-              algorithm={algorithm}
-              settings={settings}
-              saved={server}
-              availability={availability[algorithm]}
-              content={content}
-              onChange={setSettings}
-            />
+            <div key={algorithm}>
+              <CompressionGroup
+                algorithm={algorithm}
+                settings={settings}
+                saved={server}
+                availability={availability[algorithm]}
+                content={content}
+                onChange={setSettings}
+              />
+            </div>
           ))}
-          <div className="w-full sm:w-64">
-            <NumberField
-              id="compressMaxLength"
-              label={m.compression_max_length()}
-              value={settings.compressMaxLength ? String(settings.compressMaxLength) : ""}
-              min={0}
-              step={1}
-              placeholder={m.compression_no_limit()}
-              disabled={!content.available && !server.compressMaxLength}
-              testId="compression-max-length"
-              onChange={(value) =>
-                setSettings({ ...settings, compressMaxLength: value.trim() ? Number(value) : 0 })
-              }
-            />
+          <div>
+            <div className="w-full sm:w-64">
+              <NumberField
+                id="compressMaxLength"
+                label={m.compression_max_length()}
+                value={settings.compressMaxLength ? String(settings.compressMaxLength) : ""}
+                min={0}
+                step={1}
+                placeholder={m.compression_no_limit()}
+                disabled={!content.available && !server.compressMaxLength}
+                testId="compression-max-length"
+                onChange={(value) =>
+                  setSettings({ ...settings, compressMaxLength: value.trim() ? Number(value) : 0 })
+                }
+              />
+            </div>
           </div>
         </CardContent>
         <SaveBar dirty={dirty} pending={pending} error={error} testId="compression-save" />
@@ -262,7 +267,7 @@ function CompressionGroup({
             onChange={(value) => onChange({ ...settings, [fields.min]: Number(value) })}
           />
         </div>
-        <Field className={fields.level ? undefined : "sm:col-span-2 lg:col-span-1"}>
+        <Field>
           <FieldLabel htmlFor={id("Types")}>{m.cert_gzip_types()}</FieldLabel>
           <ListInput
             id={id("Types")}
