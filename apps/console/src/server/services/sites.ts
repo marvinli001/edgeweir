@@ -429,7 +429,13 @@ async function writeOrigins(
 }
 
 /** Pool settings whose omission in an update keeps the stored value. */
-type KeptPoolSettings = "activeHealthCheck" | "sessionAffinity" | "protocol" | "grpc";
+type KeptPoolSettings =
+  | "activeHealthCheck"
+  | "sessionAffinity"
+  | "protocol"
+  | "grpc"
+  | "tries"
+  | "statusRetry";
 
 /** gRPC goes to the origins over HTTP/2 only. */
 function assertGrpcOverHttp2(settings: Pick<OriginSettingsInput, "protocol" | "grpc">) {
@@ -438,8 +444,8 @@ function assertGrpcOverHttp2(settings: Pick<OriginSettingsInput, "protocol" | "g
 }
 
 /**
- * Pool columns of the settings; health check, affinity, protocol and gRPC
- * only when given (kept otherwise).
+ * Pool columns of the settings; health check, affinity, protocol, gRPC,
+ * tries and status retries only when given (kept otherwise).
  */
 function poolSettingsValues(
   settings: Omit<OriginSettingsInput, KeptPoolSettings> &
@@ -460,8 +466,8 @@ function poolSettingsValues(
     ...(settings.grpc !== undefined ? { grpc: settings.grpc } : {}),
     ...(settings.activeHealthCheck ? { activeHealthCheck: settings.activeHealthCheck } : {}),
     ...(settings.sessionAffinity ? { sessionAffinity: settings.sessionAffinity } : {}),
-    tries: settings.tries,
-    statusRetry: settings.statusRetry,
+    ...(settings.tries !== undefined ? { tries: settings.tries } : {}),
+    ...(settings.statusRetry !== undefined ? { statusRetry: settings.statusRetry } : {}),
   };
 }
 

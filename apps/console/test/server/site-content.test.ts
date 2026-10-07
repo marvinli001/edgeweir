@@ -241,12 +241,19 @@ describe("cache, origin and content settings (site-content-v1, cache-zone-v1) on
     });
     expect(compiled?.cacheRules.map((rule) => rule.cacheSetCookie)).toEqual([true, false]);
     expect((await config()).requiredFeatures).toContain("site-content-v1");
+    // Pool settings without tries and status retries keep them, like protocol and gRPC.
+    await admin.sites.update({ id: siteId, originSettings: { policy: "round_robin" } });
+    expect((await admin.sites.get({ id: siteId })).originSettings).toMatchObject({
+      policy: "round_robin",
+      tries: 5,
+      statusRetry: false,
+    });
     // Back to the defaults: no site-content-v1.
     await admin.sites.update({
       id: siteId,
       cacheSettings: { xCache: true, cacheKey: {} },
       contentSettings: {},
-      originSettings: {},
+      originSettings: { tries: 3, statusRetry: true },
       cacheRules: [{ pathPrefixes: ["/"] }],
     });
     expect((await config()).requiredFeatures).not.toContain("site-content-v1");
@@ -346,6 +353,15 @@ describe("cache, origin and content settings (site-content-v1, cache-zone-v1) on
         }),
       ),
     ).toMatchObject({ status: 400 });
+    // A class page over the size limit is named by its class, not the stored 4 / 5.
+    expect(
+      await rpcError(
+        admin.errorPages.update({
+          id: siteId,
+          pages: [{ status: "4xx", template: "a".repeat(65_537) }],
+        }),
+      ),
+    ).toMatchObject({ code: "ERROR_PAGE_TOO_LARGE", data: { status: "4xx" } });
     await admin.errorPages.update({ id: siteId, pages: [] });
     expect((await config()).requiredFeatures).not.toContain("site-content-v1");
   });

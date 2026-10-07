@@ -377,7 +377,8 @@ export const cacheKeyPolicy = z
     query: cacheKeyQuery.default("all"),
     /**
      * Parameters kept by `include` or dropped by `exclude`; under `exclude` a
-     * name may end in "*" for every name with that prefix ("utm_*").
+     * name may end in "*" for every name with that prefix ("utm_*"), under
+     * `include` "*" is an ordinary character.
      */
     queryParams: z.array(queryParamName).max(32).default([]),
     /** Sort parameters so that their order does not matter. */
@@ -392,13 +393,14 @@ export const cacheKeyPolicy = z
     includeHost: z.boolean().default(true),
   })
   .superRefine((key, ctx) => {
+    // Other modes keep "*" as a literal character, as before the exclude mode.
+    if (key.query !== "exclude") return;
     key.queryParams.forEach((name, i) => {
       const star = name.indexOf("*");
-      if (star === -1) return;
-      if (key.query !== "exclude" || star !== name.length - 1 || name.length === 1)
+      if (star !== -1 && (star !== name.length - 1 || name.length === 1))
         ctx.addIssue({
           code: "custom",
-          message: '"*" may only end a parameter name of the exclude mode',
+          message: '"*" may only end an excluded parameter name',
           path: ["queryParams", i],
         });
     });
@@ -1309,9 +1311,9 @@ export const siteUpdateInput = z.object({
   cacheRules: z.array(cacheRuleInput).max(64).optional(),
   /**
    * Replaces the pool settings; omitted fields take their defaults, except
-   * activeHealthCheck, sessionAffinity, protocol and grpc, which stay as they
-   * are when omitted. The resulting grpc needs protocol http2
-   * (ORIGIN_GRPC_REQUIRES_HTTP2).
+   * activeHealthCheck, sessionAffinity, protocol, grpc, tries and
+   * statusRetry, which stay as they are when omitted. The resulting grpc
+   * needs protocol http2 (ORIGIN_GRPC_REQUIRES_HTTP2).
    */
   originSettings: originSettings
     .extend({
@@ -1319,6 +1321,8 @@ export const siteUpdateInput = z.object({
       sessionAffinity: sessionAffinity.optional(),
       protocol: originProtocol.optional(),
       grpc: z.boolean().optional(),
+      tries: z.number().int().min(1).max(5).optional(),
+      statusRetry: z.boolean().optional(),
     })
     .optional(),
   /**
