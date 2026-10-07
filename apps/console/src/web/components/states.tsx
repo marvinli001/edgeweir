@@ -1,33 +1,15 @@
 import { Alert02Icon, type InboxIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type * as React from "react";
-import { Loader } from "@/components/appica/loader";
 import { InboxIcon as AnimatedInbox, useIconPlay } from "@/components/effects/animated-icons";
+import { LoadingState } from "@/components/loading-state";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { m } from "@/lib/i18n";
 import { errorMessage, isNotFound } from "@/lib/orpc";
-import { cn } from "@/lib/utils";
 
-/**
- * First-load placeholder: a centered loader, faded in after a short delay so fast responses
- * never flash it. Refreshes of loaded data keep the old content and only run the top progress bar.
- */
-export function LoadingState({ className }: { className?: string }) {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className={cn(
-        "flex min-h-40 flex-1 items-center justify-center animate-in fade-in fill-mode-both delay-200 duration-300",
-        className,
-      )}
-    >
-      <Loader label={m.common_loading()} />
-    </div>
-  );
-}
+export { LoadingState };
 
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   return (

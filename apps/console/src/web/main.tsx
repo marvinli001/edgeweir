@@ -3,7 +3,7 @@ import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
-import { LoadingState } from "@/components/states";
+import { LoadingState } from "@/components/loading-state";
 import { NotFoundPage, RouteErrorPage } from "@/components/status-page";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
