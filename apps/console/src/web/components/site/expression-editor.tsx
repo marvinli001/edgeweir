@@ -30,6 +30,7 @@ import {
 } from "@/lib/expressions";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
+import { cn } from "@/lib/utils";
 
 /**
  * What an expression is: a rule condition, a redirect target or rewrite path computed per
@@ -294,23 +295,24 @@ export function ExpressionEditor({
           </Button>
         </div>
       ) : null}
+      {/* A sunk editor: the highlighted source under a transparent textarea, in an input well. */}
       <div
-        className={
-          kind === "value"
-            ? "relative min-h-16 rounded-lg border bg-background font-mono text-sm leading-6 focus-within:ring-2 focus-within:ring-ring"
-            : "relative min-h-24 rounded-lg border bg-background font-mono text-sm leading-6 focus-within:ring-2 focus-within:ring-ring"
-        }
+        className={cn(
+          "relative rounded-2xl border border-transparent input-well font-mono text-sm leading-6 transition-[color,box-shadow] duration-200 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30 has-aria-invalid:border-destructive has-aria-invalid:ring-3 has-aria-invalid:ring-destructive/20 dark:has-aria-invalid:border-destructive/50 dark:has-aria-invalid:ring-destructive/40",
+          kind === "value" ? "min-h-16" : "min-h-24",
+        )}
       >
         <pre aria-hidden className="pointer-events-none whitespace-pre-wrap break-all p-3">
           {tokens.filter(Boolean).map((token) => {
             const start = offset;
             offset += token.length;
+            // Text-strength token colors (4.5:1 on the well in both themes).
             const color = token.startsWith('"')
-              ? "text-state-good"
+              ? "text-delta-good"
               : KEYWORD_SET.has(token)
-                ? "text-primary"
+                ? "text-primary-ink"
                 : FUNCTION_SET.has(token)
-                  ? "text-chart-2"
+                  ? "text-chart-4 dark:text-chart-2"
                   : "text-foreground";
             return (
               <span key={start} className={color}>

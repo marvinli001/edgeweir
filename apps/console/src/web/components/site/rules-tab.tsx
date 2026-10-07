@@ -55,7 +55,6 @@ import { ListInput, NumberField, SwitchField } from "@/components/site/fields";
 import { nextDraftKey, SaveBar } from "@/components/site/save-site";
 import { EmptyState, QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -64,6 +63,7 @@ import { expressionErrorText, expressionReason } from "@/lib/expressions";
 import { m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 import { challengeLabel } from "@/lib/protection";
+import { cn } from "@/lib/utils";
 import { randomUuid } from "@/lib/uuid";
 
 type Action = RuleDto["action"];
@@ -378,12 +378,13 @@ function RulesEditor({
           const group = rows.filter((row) => row.phase === phase);
           const first = kinds[phase][0] ?? "block";
           return (
+            // A card per phase; its rules are flat rows split by hairlines.
             <section
               key={phase}
-              className="flex flex-col gap-3 animate-enter"
+              className="flex flex-col rounded-2xl bg-card shadow-elev-1 edge-lit animate-enter"
               data-testid={`rules-phase-${phase}`}
             >
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex min-h-14 items-center justify-between gap-3 px-5 py-3">
                 <h3 className="text-sm font-medium">{phaseLabel(phase)}</h3>
                 <Button
                   type="button"
@@ -456,93 +457,102 @@ function RuleRow({
   remove: () => void;
 }) {
   const reducedMotion = useReducedMotion();
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition } =
-    useSortable({
-      id: row.id,
-      attributes: { roleDescription: m.site_rule_role() },
-      transition: reducedMotion ? null : undefined,
-    });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: row.id,
+    attributes: { roleDescription: m.site_rule_role() },
+    transition: reducedMotion ? null : undefined,
+  });
   const a = row.action;
   const kindOptions = kinds[row.phase]
     .filter((kind) => kind === a.kind || !(locked && v2Kinds.has(kind)))
     .map((kind) => ({ value: kind, label: actionLabel(kind) }));
   return (
-    <Card
+    <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(
+        "grid gap-4 border-t px-5 pt-4 pb-5 last:rounded-b-2xl",
+        // Lifted only while it is carried.
+        isDragging && "relative z-10 rounded-2xl bg-card shadow-elev-2",
+      )}
       data-testid="rule-row"
     >
-      <CardContent className="grid gap-4 pt-5">
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            ref={setActivatorNodeRef}
-            className="cursor-grab touch-none active:cursor-grabbing"
-            aria-label={m.rules_drag()}
-            {...attributes}
-            {...listeners}
-          >
-            <HugeiconsIcon icon={DragDropVerticalIcon} />
-          </Button>
-          <Input
-            aria-label={m.rules_name()}
-            value={row.name}
-            required
-            maxLength={100}
-            onChange={(e) => patch({ name: e.target.value })}
-          />
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            aria-label={m.common_delete()}
-            onClick={remove}
-          >
-            <HugeiconsIcon icon={Delete02Icon} />
-          </Button>
-        </div>
-        <ExpressionEditor
-          id={`expr-${row.id}`}
-          label={m.rules_expression()}
-          value={row.expression}
-          phase={row.phase}
-          onChange={(expression) => patch({ expression })}
-          hideRulesV3={lockedV3}
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          ref={setActivatorNodeRef}
+          className="cursor-grab touch-none active:cursor-grabbing"
+          aria-label={m.rules_drag()}
+          {...attributes}
+          {...listeners}
+        >
+          <HugeiconsIcon icon={DragDropVerticalIcon} />
+        </Button>
+        <Input
+          aria-label={m.rules_name()}
+          value={row.name}
+          required
+          maxLength={100}
+          onChange={(e) => patch({ name: e.target.value })}
         />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormSelect
-            id={`action-${row.id}`}
-            label={m.rules_action()}
-            value={a.kind}
-            options={kindOptions}
-            onChange={(kind) => {
-              const action = defaultAction(kind as Kind);
-              // An origin rule usually picks a group: start with the first one.
-              if (action.kind === "origin" && originGroups?.[0])
-                action.originGroup = originGroups[0];
-              patch({ action });
-            }}
-          />
-          <SwitchField
-            id={`enabled-${row.id}`}
-            label={m.rules_enabled()}
-            checked={row.enabled}
-            onCheckedChange={(enabled) => patch({ enabled })}
-          />
-          <ActionFields
-            id={row.id}
-            phase={row.phase}
-            action={a}
-            originGroups={originGroups}
-            locked={locked}
-            lockedV3={lockedV3}
-            onChange={(action) => patch({ action })}
-          />
-        </div>
-      </CardContent>
-    </Card>
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          aria-label={m.common_delete()}
+          onClick={remove}
+        >
+          <HugeiconsIcon icon={Delete02Icon} />
+        </Button>
+      </div>
+      <ExpressionEditor
+        id={`expr-${row.id}`}
+        label={m.rules_expression()}
+        value={row.expression}
+        phase={row.phase}
+        onChange={(expression) => patch({ expression })}
+        hideRulesV3={lockedV3}
+      />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FormSelect
+          id={`action-${row.id}`}
+          label={m.rules_action()}
+          value={a.kind}
+          options={kindOptions}
+          onChange={(kind) => {
+            const action = defaultAction(kind as Kind);
+            // An origin rule usually picks a group: start with the first one.
+            if (action.kind === "origin" && originGroups?.[0]) action.originGroup = originGroups[0];
+            patch({ action });
+          }}
+        />
+        <SwitchField
+          id={`enabled-${row.id}`}
+          label={m.rules_enabled()}
+          checked={row.enabled}
+          onCheckedChange={(enabled) => patch({ enabled })}
+        />
+        <ActionFields
+          id={row.id}
+          phase={row.phase}
+          action={a}
+          originGroups={originGroups}
+          locked={locked}
+          lockedV3={lockedV3}
+          onChange={(action) => patch({ action })}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -1450,7 +1460,7 @@ function CompressionFields({
             return (
               <li
                 key={coding}
-                className="flex min-h-10 items-center gap-1 rounded-xl border py-1 pr-1 pl-3 animate-enter"
+                className="flex min-h-10 items-center gap-1 rounded-xl sunk-well py-1 pr-1 pl-3 animate-enter"
                 data-testid="rule-compression-algorithm"
                 data-coding={coding}
               >
