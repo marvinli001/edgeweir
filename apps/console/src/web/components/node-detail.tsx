@@ -74,6 +74,26 @@ export function AuthErrorBadge({ node }: { node: Node }) {
 export const memoryPercent = (metrics: NonNullable<Node["metrics"]>) =>
   metrics.memoryTotalBytes > 0 ? (metrics.memoryUsedBytes / metrics.memoryTotalBytes) * 100 : null;
 
+/** CPU or memory use from which a node's load is a warning, and from which an error. */
+const LOAD_WARN = 75;
+const LOAD_BAD = 90;
+
+/**
+ * CPU or memory use as a meter: good below 75 %, a warning from 75 % and an error from 90 %. The
+ * meter's zones are value < low, low..high and value > high, so `high` is the largest number below
+ * 90 and 90 itself is an error.
+ */
+function LoadMeter({ value, label }: { value: number; label: string }) {
+  return (
+    <Meter
+      value={value}
+      low={LOAD_WARN}
+      high={LOAD_BAD - 2 ** -46}
+      label={`${label} ${formatPercent(value)}`}
+    />
+  );
+}
+
 /** A node's state in its detail header: lit while online. */
 function DetailState({ node }: { node: Node }) {
   if (node.status === "disabled") return <StatusDot tone="idle">{m.nodes_disabled()}</StatusDot>;
@@ -176,13 +196,7 @@ function NodeMetrics({ node }: { node: Node }) {
             label={m.node_metrics_cpu()}
             testId="node-metric-cpu"
             className="sm:col-span-3"
-            meter={
-              <Meter
-                value={metrics.cpuPercent}
-                high={75}
-                label={`${m.node_metrics_cpu()} ${formatPercent(metrics.cpuPercent)}`}
-              />
-            }
+            meter={<LoadMeter value={metrics.cpuPercent} label={m.node_metrics_cpu()} />}
           >
             {formatPercent(metrics.cpuPercent)}
           </Metric>
@@ -192,11 +206,7 @@ function NodeMetrics({ node }: { node: Node }) {
             className="sm:col-span-3"
             meter={
               memory === null ? undefined : (
-                <Meter
-                  value={memory}
-                  high={75}
-                  label={`${m.node_metrics_memory()} ${formatPercent(memory)}`}
-                />
+                <LoadMeter value={memory} label={m.node_metrics_memory()} />
               )
             }
           >
@@ -609,11 +619,7 @@ export function NodeVitals({ node }: { node: Node }) {
   const row = (label: string, value: number | null) => (
     <>
       <span className="text-muted-foreground">{label}</span>
-      {value === null ? (
-        <span />
-      ) : (
-        <Meter value={value} high={75} label={`${label} ${formatPercent(value)}`} />
-      )}
+      {value === null ? <span /> : <LoadMeter value={value} label={label} />}
       <span className="text-right tabular-nums">{value === null ? "—" : formatPercent(value)}</span>
     </>
   );
