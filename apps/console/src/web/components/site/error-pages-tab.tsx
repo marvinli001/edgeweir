@@ -288,6 +288,7 @@ function PageRow({
   const redirect = draft.mode === "redirect";
   const badUrl = draft.redirectUrl.trim() !== "" && !validErrorRedirect(draft.redirectUrl.trim());
   const invalid = redirect ? badUrl : templateTooLarge(draft.template);
+  const badStatus = !statusValid(draft.responseStatus);
   return (
     <div className="flex flex-col gap-3">
       <Field data-invalid={invalid || undefined} data-disabled={disabled || undefined}>
@@ -328,12 +329,13 @@ function PageRow({
               autoCapitalize="off"
               placeholder={REDIRECT_EXAMPLE}
               aria-invalid={badUrl || undefined}
+              aria-describedby={badUrl ? `${id}-url-error` : undefined}
               onChange={(event) => onChange({ redirectUrl: event.target.value })}
               className="font-mono text-sm"
               data-testid={`${id}-url`}
             />
             {badUrl ? (
-              <FieldError className="animate-in fade-in">
+              <FieldError id={`${id}-url-error`} className="animate-in fade-in">
                 {m.common_check_field({ field: m.error_pages_mode_redirect() })}
               </FieldError>
             ) : null}
@@ -350,11 +352,7 @@ function PageRow({
         )}
       </Field>
       {!redirect && modes ? (
-        <Field
-          className="w-40"
-          data-invalid={!statusValid(draft.responseStatus) || undefined}
-          data-disabled={disabled || undefined}
-        >
+        <Field data-invalid={badStatus || undefined} data-disabled={disabled || undefined}>
           <FieldLabel htmlFor={`${id}-status`}>{m.error_pages_response_status()}</FieldLabel>
           <Input
             id={`${id}-status`}
@@ -365,10 +363,17 @@ function PageRow({
             value={draft.responseStatus}
             placeholder={typeof status === "number" ? String(status) : status}
             disabled={disabled}
-            aria-invalid={!statusValid(draft.responseStatus) || undefined}
+            aria-invalid={badStatus || undefined}
+            aria-describedby={badStatus ? `${id}-status-error` : undefined}
             onChange={(event) => onChange({ responseStatus: event.target.value })}
+            className="max-w-40"
             data-testid={`${id}-status`}
           />
+          {badStatus ? (
+            <FieldError id={`${id}-status-error`} className="animate-in fade-in">
+              {m.common_whole_number_range({ min: "200", max: "599" })}
+            </FieldError>
+          ) : null}
         </Field>
       ) : null}
     </div>

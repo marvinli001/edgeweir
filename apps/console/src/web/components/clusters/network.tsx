@@ -242,12 +242,13 @@ function ClientIpForm({ data }: { data: ClusterClientIp }) {
                 rows={4}
                 placeholder={"10.0.0.0/8\n2001:db8::/32"}
                 aria-invalid={cidrError || undefined}
+                aria-describedby={cidrError ? "client-ip-cidrs-invalid" : undefined}
                 onChange={(event) => setCidrs(event.target.value)}
                 className="font-mono"
                 data-testid="client-ip-cidrs"
               />
               {cidrError ? (
-                <FieldError data-testid="client-ip-cidrs-invalid">
+                <FieldError id="client-ip-cidrs-invalid" data-testid="client-ip-cidrs-invalid">
                   {m.client_ip_cidrs_invalid()}
                 </FieldError>
               ) : null}
@@ -267,7 +268,7 @@ function ClientIpForm({ data }: { data: ClusterClientIp }) {
                 />
               </Field>
               {header === CUSTOM ? (
-                <Field>
+                <Field data-invalid={headerError || undefined}>
                   <FieldLabel htmlFor="client-ip-header-name">
                     {m.client_ip_header_name()}
                   </FieldLabel>
@@ -276,10 +277,20 @@ function ClientIpForm({ data }: { data: ClusterClientIp }) {
                     value={custom}
                     placeholder="x-client-ip"
                     aria-invalid={headerError || undefined}
+                    aria-describedby={headerError ? "client-ip-header-name-invalid" : undefined}
                     onChange={(event) => setCustom(event.target.value)}
                     className="font-mono"
                     data-testid="client-ip-header-name"
                   />
+                  {headerError ? (
+                    <FieldError
+                      id="client-ip-header-name-invalid"
+                      className="animate-in fade-in"
+                      data-testid="client-ip-header-name-invalid"
+                    >
+                      {m.common_check_field({ field: m.client_ip_header_name() })}
+                    </FieldError>
+                  ) : null}
                 </Field>
               ) : null}
             </div>
