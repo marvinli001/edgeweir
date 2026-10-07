@@ -380,6 +380,310 @@
     }
   },
   {
+    "source": "ip.src in {::1.2.3.4}",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "1.2.3.4"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "",
+      "values": ["::102:304/128"],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src in {::1.2.3.4}",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "::102:304"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "",
+      "values": ["::102:304/128"],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src eq ::1.2.3.4",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "::1.2.3.4"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "::102:304/128",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src in {::0.0.0.0/96}",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "198.51.100.7"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "",
+      "values": ["::/96"],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src in {::0.0.0.0/96}",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "::198.51.100.7"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "",
+      "values": ["::/96"],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src in {::0.0.0.0/96}",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "::ffff:198.51.100.7"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "",
+      "values": ["::/96"],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src in {::1.2.3.4/90}",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "1.2.3.4"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "",
+      "values": ["::/90"],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src in {::1.2.3.4/90}",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "::3f:ffff:ffff"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "",
+      "values": ["::/90"],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src in {::ffff:1.2.3.4}",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "1.2.3.4"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "",
+      "values": ["1.2.3.4/32"],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src in {::ffff:1.2.3.4}",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "::ffff:102:304"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "",
+      "values": ["1.2.3.4/32"],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src in {::ffff:1.2.3.4}",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "::1.2.3.4"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "",
+      "values": ["1.2.3.4/32"],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src in {::ffff:0:0/96}",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "203.0.113.9"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "",
+      "values": ["0.0.0.0/0"],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src in {::ffff:0:0/96}",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "::cb00:7109"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "",
+      "values": ["0.0.0.0/0"],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src in {::ffff:0:1.2.3.4}",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "1.2.3.4"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "",
+      "values": ["::ffff:0:102:304/128"],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src in {::ffff:0:1.2.3.4}",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "::ffff:0:102:304"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "",
+      "values": ["::ffff:0:102:304/128"],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src in $blocked",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "::192.0.2.5"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in_list",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "list-1",
+      "values": [],
+      "children": []
+    }
+  },
+  {
     "source": "ip.geoip.asnum in {13335 15169}",
     "phase": "waf-custom",
     "request": {
