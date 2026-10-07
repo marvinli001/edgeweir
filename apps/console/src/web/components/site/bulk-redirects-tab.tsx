@@ -233,10 +233,10 @@ function BulkRedirectsForm({
                   {m.bulk_redirects_no_match()}
                 </p>
               ) : (
-                <div className="flex flex-col rounded-2xl border">
+                <div className="flex flex-col overflow-hidden rounded-2xl border">
                   <div
                     aria-hidden
-                    className="hidden gap-2 border-b px-3 py-2 text-xs font-medium text-muted-foreground sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_6rem_5.5rem_2rem]"
+                    className="hidden gap-2 border-b bg-well px-3 py-2 text-xs font-medium text-muted-foreground sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_6rem_5.5rem_2rem]"
                   >
                     <span>{m.bulk_redirects_source()}</span>
                     <span>{m.rules_target()}</span>

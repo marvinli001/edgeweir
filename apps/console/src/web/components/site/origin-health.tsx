@@ -42,10 +42,8 @@ export function OriginHealthBadge({ health }: { health: OriginHealth | undefined
           />
         }
       >
-        <span className="relative flex size-1.5">
-          <span className="absolute inline-flex size-full animate-ping rounded-full bg-current opacity-60 motion-reduce:hidden" />
-          <span className="relative inline-flex size-1.5 rounded-full bg-current" />
-        </span>
+        {/* Still: the health polls, and a failure is a state, not something running. */}
+        <span className="inline-flex size-1.5 rounded-full bg-current" />
         {m.site_origin_health_down({ down: health.downNodes, total: health.onlineNodes })}
       </TooltipTrigger>
       <TooltipContent className="flex-col items-start gap-1">
@@ -61,7 +59,7 @@ export function OriginHealthBadge({ health }: { health: OriginHealth | undefined
             >
               <span className="font-medium">{node.nodeName}</span>{" "}
               <span
-                className="inline-flex h-4 items-center rounded-full bg-background/15 px-1.5 align-[1px] text-[10px] font-medium"
+                className="inline-flex h-4 items-center rounded-full bg-wash px-1.5 align-[1px] text-[10px] font-medium"
                 data-testid={`origin-health-source-${node.source}`}
               >
                 {sourceLabel[node.source]()}

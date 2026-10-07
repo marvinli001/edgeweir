@@ -104,7 +104,7 @@ export function TemplateVariables({
         (placeholder) => (
           <code
             key={placeholder}
-            className="mr-1 inline-block rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground"
+            className="mr-1 inline-block rounded-md bg-wash px-1.5 py-0.5 font-mono text-xs text-foreground"
           >
             {placeholder}
           </code>

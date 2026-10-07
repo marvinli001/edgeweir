@@ -11,7 +11,6 @@ import { Add01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { BorderBeam } from "@/components/appica/effects";
 import { FormSelect, OptionSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SettingsGroup, SwitchField } from "@/components/site/fields";
@@ -188,37 +187,41 @@ function OriginsCard({ site }: { site: Site }) {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <Unavailable availability={groupsAvailability} testId="origins-groups-unavailable" />
-          {rows.map((row, index) => {
-            const rowHealth = healthOf(row.originId);
-            const fields = (
-              <OriginRow
-                row={row}
-                index={index}
-                health={rowHealth}
-                savedHostHeader={savedHost(row.originId)}
-                secretStored={storedKeys.has(row.accessKeyId.trim())}
-                removable={rows.length > 1}
-                groupLocked={groupsLocked && row.group === ""}
-                onChange={(change) => patch(row.key, change)}
-                onRemove={() => setRows(rows.filter((r) => r.key !== row.key))}
-              />
-            );
-            return (
-              <div
-                key={row.key}
-                className="animate-enter"
-                style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
-              >
-                {rowHealth && rowHealth.downNodes > 0 ? (
-                  <BorderBeam tone="destructive" speed={6} className="rounded-2xl">
-                    {fields}
-                  </BorderBeam>
-                ) : (
-                  fields
-                )}
-              </div>
-            );
-          })}
+          <div className="flex flex-col">
+            {rows.map((row, index) => {
+              const rowHealth = healthOf(row.originId);
+              const fields = (
+                <OriginRow
+                  row={row}
+                  index={index}
+                  health={rowHealth}
+                  savedHostHeader={savedHost(row.originId)}
+                  secretStored={storedKeys.has(row.accessKeyId.trim())}
+                  removable={rows.length > 1}
+                  groupLocked={groupsLocked && row.group === ""}
+                  onChange={(change) => patch(row.key, change)}
+                  onRemove={() => setRows(rows.filter((r) => r.key !== row.key))}
+                />
+              );
+              // Flat rows split by hairlines; an origin some nodes cannot reach carries a still red
+              // edge in the gutter beside its health badge (the health polls: nothing animates).
+              const down = !!rowHealth && rowHealth.downNodes > 0;
+              return (
+                <div
+                  key={row.key}
+                  className={cn(
+                    "relative border-t py-4 animate-enter first:border-t-0 first:pt-0",
+                    down &&
+                      "before:absolute before:inset-y-4 before:-left-3 before:w-0.5 before:rounded-full before:bg-destructive first:before:top-0",
+                  )}
+                  style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
+                  data-health={down ? "down" : undefined}
+                >
+                  {fields}
+                </div>
+              );
+            })}
+          </div>
           <Button
             type="button"
             variant="outline"
@@ -276,7 +279,7 @@ function OriginRow({
   const hostSkipped = hostInvalid && row.hostHeader === savedHostHeader;
   return (
     <fieldset
-      className="flex min-w-0 flex-col gap-3 rounded-2xl border p-3"
+      className="flex min-w-0 flex-col gap-3"
       aria-label={m.site_origin_number({ index: index + 1 })}
       data-testid="origin-row"
       data-origin-id={row.originId ?? undefined}
@@ -426,7 +429,7 @@ function OriginRow({
       </div>
       {row.s3 ? (
         <div
-          className="grid gap-3 rounded-xl bg-muted/50 p-3 animate-enter sm:grid-cols-2 lg:grid-cols-4"
+          className="grid gap-3 border-l-2 border-border pl-3 animate-enter sm:grid-cols-2 lg:grid-cols-4"
           data-testid="origin-s3-fields"
         >
           <Field>

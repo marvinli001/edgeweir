@@ -323,7 +323,11 @@ function CacheRulesCard({ site }: { site: Site }) {
             }}
           >
             <SortableContext items={rows.map((r) => r.key)} strategy={verticalListSortingStrategy}>
-              <ol className="flex flex-col gap-3" data-testid="cache-rule-list">
+              {/* Flat rows split by hairlines, edge to edge in the card. */}
+              <ol
+                className="-mx-(--card-spacing) flex flex-col border-b"
+                data-testid="cache-rule-list"
+              >
                 {rows.map((row, index) => (
                   <SortableRule
                     key={row.key}
@@ -435,8 +439,9 @@ function SortableRule({
           open={open}
           onOpenChange={setOpen}
           className={cn(
-            "flex flex-col gap-3 rounded-2xl border bg-card p-3 transition-shadow",
-            isDragging && "shadow-lg ring-2 ring-ring/40",
+            "flex flex-col gap-3 border-t bg-card px-(--card-spacing) py-4 transition-shadow",
+            // Lifted only while it is carried.
+            isDragging && "rounded-2xl border-transparent shadow-elev-2",
           )}
         >
           <div className="-mt-1 -ml-1 flex min-h-8 items-center gap-1">
