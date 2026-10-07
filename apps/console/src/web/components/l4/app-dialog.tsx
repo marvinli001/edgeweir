@@ -1,4 +1,5 @@
 import {
+  certificateUnloadable,
   L4_APP_DEFAULTS,
   type L4App,
   type L4Protocol,
@@ -558,7 +559,10 @@ function AppForm({
                   .filter(
                     (c) =>
                       c.id === app?.certificateId ||
-                      (!!c.fingerprint && !!c.notAfter && Date.parse(c.notAfter) > Date.now()),
+                      (!!c.fingerprint &&
+                        !!c.notAfter &&
+                        Date.parse(c.notAfter) > Date.now() &&
+                        !certificateUnloadable(c)),
                   )
                   .map((c) => ({ value: c.id, label: c.name })),
               ]}
