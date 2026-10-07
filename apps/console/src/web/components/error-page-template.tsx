@@ -35,30 +35,84 @@ export function TemplateField({
   disabled?: boolean;
   testId: string;
 }) {
-  const bytes = utf8Bytes(value);
-  const over = bytes > ERROR_PAGE_MAX_BYTES;
   return (
-    <Field data-invalid={over || undefined} data-disabled={disabled || undefined}>
+    <Field
+      data-invalid={templateTooLarge(value) || undefined}
+      data-disabled={disabled || undefined}
+    >
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <FieldLabel htmlFor={id}>
-          <span className="font-mono tabular-nums">{status}</span>
-          {name}
-        </FieldLabel>
-        {value ? (
-          <span
-            className={cn(
-              "text-xs tabular-nums text-muted-foreground",
-              over && "font-medium text-destructive",
-            )}
-            data-testid={`${testId}-bytes`}
-          >
-            {m.error_pages_bytes({
-              bytes: formatNumber(bytes),
-              limit: formatNumber(ERROR_PAGE_MAX_BYTES),
-            })}
-          </span>
-        ) : null}
+        <TemplateLabel htmlFor={id} status={status} name={name} />
+        <TemplateBytes value={value} testId={testId} />
       </div>
+      <TemplateInput
+        id={id}
+        status={status}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        testId={testId}
+      />
+    </Field>
+  );
+}
+
+/** The label of a page: its status (or class) in figures, then its name. */
+export function TemplateLabel({
+  htmlFor,
+  status,
+  name,
+}: {
+  htmlFor: string;
+  status: number | string;
+  name: string;
+}) {
+  return (
+    <FieldLabel htmlFor={htmlFor}>
+      <span className="font-mono tabular-nums">{status}</span>
+      {name}
+    </FieldLabel>
+  );
+}
+
+/** A template's size in UTF-8 bytes against the limit, once there is text. */
+export function TemplateBytes({ value, testId }: { value: string; testId: string }) {
+  if (!value) return null;
+  const bytes = utf8Bytes(value);
+  return (
+    <span
+      className={cn(
+        "text-xs tabular-nums text-muted-foreground",
+        bytes > ERROR_PAGE_MAX_BYTES && "font-medium text-destructive",
+      )}
+      data-testid={`${testId}-bytes`}
+    >
+      {m.error_pages_bytes({
+        bytes: formatNumber(bytes),
+        limit: formatNumber(ERROR_PAGE_MAX_BYTES),
+      })}
+    </span>
+  );
+}
+
+/** The template's text area, and the error of a template over the limit. */
+export function TemplateInput({
+  id,
+  status,
+  value,
+  onChange,
+  disabled,
+  testId,
+}: {
+  id: string;
+  status: number | string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  testId: string;
+}) {
+  const over = templateTooLarge(value);
+  return (
+    <>
       <Textarea
         id={id}
         value={value}
@@ -81,7 +135,7 @@ export function TemplateField({
           })}
         </FieldError>
       ) : null}
-    </Field>
+    </>
   );
 }
 

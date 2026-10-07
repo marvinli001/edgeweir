@@ -12,7 +12,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
 import {
-  TemplateField,
+  TemplateBytes,
+  TemplateInput,
+  TemplateLabel,
   TemplateVariables,
   templateTooLarge,
 } from "@/components/error-page-template";
@@ -224,22 +226,25 @@ function ErrorPagesForm({
             {m.feature_unavailable_nodes()}
           </SafetyNote>
         ) : null}
-        {STATUSES.map((status, index) => (
-          <div
-            key={status}
-            className="animate-enter"
-            style={{ animationDelay: `${Math.min(index, 12) * 40}ms` }}
-          >
-            <PageRow
-              status={status}
-              draft={drafts[status]}
-              disabled={locked(status)}
-              // Classic pages stay templates without site-content-v1.
-              modes={availabilityContent.available || isV2(status, saved[status])}
-              onChange={(change) => set(status, change)}
-            />
-          </div>
-        ))}
+        {/* One page per row, split by hairlines edge to edge in the card. */}
+        <ul className="-mx-(--card-spacing) flex flex-col border-b">
+          {STATUSES.map((status, index) => (
+            <li
+              key={status}
+              className="border-t px-(--card-spacing) py-4 animate-enter"
+              style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
+            >
+              <PageRow
+                status={status}
+                draft={drafts[status]}
+                disabled={locked(status)}
+                // Classic pages stay templates without site-content-v1.
+                modes={availabilityContent.available || isV2(status, saved[status])}
+                onChange={(change) => set(status, change)}
+              />
+            </li>
+          ))}
+        </ul>
         <SwitchField
           id="error-pages-intercept"
           label={m.error_pages_intercept()}
@@ -263,7 +268,8 @@ function ErrorPagesForm({
 
 /**
  * One status's page: an HTML template (optionally sent with another status) or a
- * redirect URL. Without `modes` only the template shows.
+ * redirect URL. Without `modes` only the template shows. The template / redirect switch
+ * sits on the label's line and stays mounted across modes (it keeps focus).
  */
 function PageRow({
   status,
@@ -279,89 +285,93 @@ function PageRow({
   onChange: (change: Partial<PageDraft>) => void;
 }) {
   const id = `error-page-${status}`;
+  const redirect = draft.mode === "redirect";
   const badUrl = draft.redirectUrl.trim() !== "" && !validErrorRedirect(draft.redirectUrl.trim());
+  const invalid = redirect ? badUrl : templateTooLarge(draft.template);
   return (
-    <div className="flex flex-col gap-2">
-      {modes ? (
-        <Tabs
-          value={draft.mode}
-          onValueChange={(mode) => onChange({ mode: mode as Mode })}
-          className="self-end"
-        >
-          <TabsList className="h-7" data-testid={`${id}-mode`}>
-            <TabsTrigger value="template" disabled={disabled} className="text-xs">
-              {m.error_pages_mode_template()}
-            </TabsTrigger>
-            <TabsTrigger
-              value="redirect"
-              disabled={disabled}
-              className="text-xs"
-              data-testid={`${id}-mode-redirect`}
-            >
-              {m.error_pages_mode_redirect()}
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-      ) : null}
-      {draft.mode === "redirect" ? (
-        <Field data-invalid={badUrl || undefined} data-disabled={disabled || undefined}>
-          <FieldLabel htmlFor={`${id}-url`}>
-            <span className="font-mono tabular-nums">{status}</span>
-            {statusName[status]()}
-          </FieldLabel>
-          <Input
-            id={`${id}-url`}
-            value={draft.redirectUrl}
-            disabled={disabled}
-            spellCheck={false}
-            autoCapitalize="off"
-            placeholder={REDIRECT_EXAMPLE}
-            aria-invalid={badUrl || undefined}
-            onChange={(event) => onChange({ redirectUrl: event.target.value })}
-            className="font-mono text-sm"
-            data-testid={`${id}-url`}
-          />
-          {badUrl ? (
-            <FieldError className="animate-in fade-in">
-              {m.common_check_field({ field: m.error_pages_mode_redirect() })}
-            </FieldError>
-          ) : null}
-        </Field>
-      ) : (
-        <>
-          <TemplateField
-            id={id}
+    <div className="flex flex-col gap-3">
+      <Field data-invalid={invalid || undefined} data-disabled={disabled || undefined}>
+        <div className="flex min-h-7 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <TemplateLabel
+            htmlFor={redirect ? `${id}-url` : id}
             status={status}
             name={statusName[status]()}
+          />
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+            {redirect ? null : <TemplateBytes value={draft.template} testId={id} />}
+            {modes ? (
+              <Tabs value={draft.mode} onValueChange={(mode) => onChange({ mode: mode as Mode })}>
+                <TabsList className="h-7" data-testid={`${id}-mode`}>
+                  <TabsTrigger value="template" disabled={disabled} className="text-xs">
+                    {m.error_pages_mode_template()}
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="redirect"
+                    disabled={disabled}
+                    className="text-xs"
+                    data-testid={`${id}-mode-redirect`}
+                  >
+                    {m.error_pages_mode_redirect()}
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            ) : null}
+          </div>
+        </div>
+        {redirect ? (
+          <>
+            <Input
+              id={`${id}-url`}
+              value={draft.redirectUrl}
+              disabled={disabled}
+              spellCheck={false}
+              autoCapitalize="off"
+              placeholder={REDIRECT_EXAMPLE}
+              aria-invalid={badUrl || undefined}
+              onChange={(event) => onChange({ redirectUrl: event.target.value })}
+              className="font-mono text-sm"
+              data-testid={`${id}-url`}
+            />
+            {badUrl ? (
+              <FieldError className="animate-in fade-in">
+                {m.common_check_field({ field: m.error_pages_mode_redirect() })}
+              </FieldError>
+            ) : null}
+          </>
+        ) : (
+          <TemplateInput
+            id={id}
+            status={status}
             value={draft.template}
             disabled={disabled}
             onChange={(template) => onChange({ template })}
             testId={id}
           />
-          {modes ? (
-            <Field
-              className="w-40"
-              data-invalid={!statusValid(draft.responseStatus) || undefined}
-              data-disabled={disabled || undefined}
-            >
-              <FieldLabel htmlFor={`${id}-status`}>{m.error_pages_response_status()}</FieldLabel>
-              <Input
-                id={`${id}-status`}
-                type="number"
-                inputMode="numeric"
-                min={200}
-                max={599}
-                value={draft.responseStatus}
-                placeholder={typeof status === "number" ? String(status) : status}
-                disabled={disabled}
-                aria-invalid={!statusValid(draft.responseStatus) || undefined}
-                onChange={(event) => onChange({ responseStatus: event.target.value })}
-                data-testid={`${id}-status`}
-              />
-            </Field>
-          ) : null}
-        </>
-      )}
+        )}
+      </Field>
+      {!redirect && modes ? (
+        <Field
+          className="w-40"
+          data-invalid={!statusValid(draft.responseStatus) || undefined}
+          data-disabled={disabled || undefined}
+        >
+          <FieldLabel htmlFor={`${id}-status`}>{m.error_pages_response_status()}</FieldLabel>
+          <Input
+            id={`${id}-status`}
+            type="number"
+            inputMode="numeric"
+            min={200}
+            max={599}
+            value={draft.responseStatus}
+            placeholder={typeof status === "number" ? String(status) : status}
+            disabled={disabled}
+            aria-invalid={!statusValid(draft.responseStatus) || undefined}
+            onChange={(event) => onChange({ responseStatus: event.target.value })}
+            className="font-mono"
+            data-testid={`${id}-status`}
+          />
+        </Field>
+      ) : null}
     </div>
   );
 }
