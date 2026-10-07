@@ -19,8 +19,9 @@ const LIT: Record<StatusTone, string> = {
 };
 
 /**
- * A state dot; `pulse` marks live states (something running now), which also glow. Always pair
- * it with a text label.
+ * A state dot; `pulse` marks live states (something running now), which also glow and pulse (a
+ * pseudo-element; not under reduced motion). Always pair it with a text label. The transparent
+ * border shows as a ring in forced colors, where the fill is dropped.
  */
 export function Dot({
   tone,
@@ -31,26 +32,15 @@ export function Dot({
   pulse?: boolean;
   small?: boolean;
 }) {
-  const size = small ? "size-1.5" : "size-2";
   return (
-    <span className={cn("relative flex shrink-0", size)}>
-      {pulse ? (
-        <span
-          className={cn(
-            "absolute inline-flex size-full animate-ping rounded-full opacity-60 motion-reduce:hidden",
-            TONE[tone],
-          )}
-        />
-      ) : null}
-      <span
-        className={cn(
-          "relative inline-flex rounded-full",
-          size,
-          TONE[tone],
-          pulse && cn("lit-glow", LIT[tone]),
-        )}
-      />
-    </span>
+    <span
+      className={cn(
+        "relative inline-flex shrink-0 rounded-full border border-transparent",
+        small ? "size-1.5" : "size-2",
+        TONE[tone],
+        pulse && cn("lit-glow dot-pulse", LIT[tone]),
+      )}
+    />
   );
 }
 
@@ -63,10 +53,7 @@ export function LiveDot({ label, className }: { label: string; className?: strin
         className,
       )}
     >
-      <span className="relative flex size-1.5 shrink-0">
-        <span className="absolute inline-flex size-full animate-ping rounded-full bg-signal opacity-60 motion-reduce:hidden" />
-        <span className="lit-glow relative inline-flex size-1.5 rounded-full bg-signal" />
-      </span>
+      <span className="lit-glow dot-pulse relative inline-flex size-1.5 shrink-0 rounded-full border border-transparent bg-signal" />
       {label}
     </span>
   );
