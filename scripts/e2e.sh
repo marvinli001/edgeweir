@@ -139,6 +139,16 @@
 #   cached); origin tries and status retries; an S3 origin with the MinIO
 #   preset; leaves charset-bench.g15.test for BENCH_SCENARIO=charset in
 #   scripts/bench.sh; Playwright e2e/g15.spec.ts.
+#   Site parity G10 (scripts/e2e-g10.mjs, after G15): both nodes report
+#   domains-v2 and unknown-host-v1; `.a.test` any-depth subdomains (not the
+#   apex), the exact name and a one-label wildcard winning over the suffix, a
+#   pattern domain matching the whole host, an internationalized domain stored
+#   and requested as Punycode; unknown hosts closed (curl: empty reply, 444);
+#   unknown hosts, node IP access and HTTPS without SNI handed to the default
+#   site, unknown SNI with its certificate; scan protection banning on request
+#   N+1 at platform scope, listed and lifted; a new site's 8-character CNAME
+#   prefix, the old name kept in the DNS zone after regenerating, a custom
+#   prefix and conflicts; Playwright e2e/g10.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -1200,6 +1210,14 @@ if ! $SKIP_UI; then
 fi
 node scripts/e2e-g15.mjs --cleanup || fail "G15 cleanup failed"
 pass "G15 checks passed"
+
+step "G10: suffix, wildcard, pattern and internationalized domains, unknown hosts closed or handed to the default site, node IP access, default certificate, scan protection, CNAME prefixes"
+node scripts/e2e-g10.mjs || fail "G10 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g10.spec.ts || fail "G10 browser checks failed"
+fi
+node scripts/e2e-g10.mjs --cleanup || fail "G10 cleanup failed"
+pass "G10 checks passed"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"
