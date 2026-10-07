@@ -327,6 +327,7 @@ function OriginRow({
               if (filled.address !== row.address || filled.port !== row.port) onChange(filled);
             }}
             placeholder="origin.example.com"
+            className="font-mono"
             data-testid="origin-address"
           />
         </Field>
@@ -337,6 +338,7 @@ function OriginRow({
           min={1}
           max={65535}
           onChange={(port) => onChange({ port })}
+          mono
           testId="origin-port"
         />
         <Field>
@@ -410,7 +412,6 @@ function OriginRow({
             disabled={groupLocked}
             onChange={(event) => onChange({ group: event.target.value })}
             placeholder={m.site_origin_group_default()}
-            className="font-mono"
             data-testid="origin-group"
           />
         </Field>

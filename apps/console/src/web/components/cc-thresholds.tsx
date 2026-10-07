@@ -154,7 +154,6 @@ function CustomThresholds({
             disabled={disabled}
             value={value[key]}
             onChange={(event) => onChange({ ...value, [key]: event.target.value })}
-            className="tabular-nums"
             data-testid={`${prefix}-${id}`}
           />
         </Field>

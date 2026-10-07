@@ -920,9 +920,10 @@
   :lang(zh) {
     text-autospace: normal;
   }
-  /* Numbers in tables line up. */
+  /* Numbers in tables, badges and number fields line up. */
   [data-slot="table"],
-  [data-slot="badge"] {
+  [data-slot="badge"],
+  [data-slot="input"][type="number"] {
     font-variant-numeric: tabular-nums;
   }
 }

@@ -78,7 +78,7 @@ export function SettingNumber({
       required
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="w-32 text-right tabular-nums"
+      className="w-32 text-right"
       data-testid={testId}
     />
   );

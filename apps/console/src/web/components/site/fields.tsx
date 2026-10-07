@@ -55,6 +55,7 @@ export function NumberField({
   placeholder,
   disabled,
   required,
+  mono,
   testId,
 }: {
   id: string;
@@ -67,6 +68,8 @@ export function NumberField({
   placeholder?: string;
   disabled?: boolean;
   required?: boolean;
+  /** A machine value (a port): set in monospace. */
+  mono?: boolean;
   testId?: string;
 }) {
   return (
@@ -84,6 +87,7 @@ export function NumberField({
         disabled={disabled}
         required={required}
         onChange={(event) => onChange(event.target.value)}
+        className={mono ? "font-mono" : undefined}
         data-testid={testId}
       />
     </Field>

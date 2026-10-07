@@ -206,6 +206,7 @@ function BindingEditor({
                     id="dns-binding-domain"
                     value={draft.domain}
                     placeholder={account ? `cdn.${account.zone}` : undefined}
+                    className="font-mono"
                     onChange={(e) =>
                       setDraft({ ...draft, domain: e.target.value.trim().toLowerCase() })
                     }
