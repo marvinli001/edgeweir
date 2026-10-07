@@ -426,7 +426,7 @@ The **Cache key & slicing** card is saved separately and applies to all rules of
 | --- | --- |
 | Fixed parts | The scheme and cache generation are always part of the key; with **Include Host** off, HTTP and HTTPS are still cached separately |
 | Mobile detection | The User-Agent matches `Mobi\|Android\|iPhone\|iPad\|iPod\|Windows Phone\|BlackBerry\|Opera Mini\|webOS` |
-| All but listed | Names are case-sensitive and compared as sent and percent-decoded; `*` may only end a name. The origin still gets the whole query string; URL purges compare the query the same way |
+| All but listed | Names are case-sensitive and compared as sent and percent-decoded; `*` may only end a name. Under **Only listed** `*` is an ordinary character. The origin still gets the whole query string; URL purges compare the query the same way |
 | After a change | Objects cached under the old key no longer hit and are evicted by the cache zone's inactive time |
 | Node requirement | **All but listed** needs `site-content-v1` |
 
@@ -444,7 +444,7 @@ answers `202 {"task_id":"…"}`: the console creates a URL purge task for that U
 | --- | --- |
 | Key | Write-only: after saving it shows "Saved; leave empty to keep it"; entering a new key rotates it. Envelope-encrypted with the master key and sent over the node channel to the agent; it never enters the data plane |
 | Answers | 202 task created; 403 wrong or missing key (`purge-key-invalid`); 400 invalid URL (`purge-url-invalid`); 429 over the rate (`purge-rate-limited`, with `Retry-After`); 503 node agent or console unavailable (`purge-unavailable`). Answers are JSON with `Cache-Control: no-store` |
-| Rate | 20 per second per site on each node; 120 PURGE tasks per site and minute in the console |
+| Rate | On each node, 20 per second per site and client address, and 20 accepted requests (right key) per second per site, so clients without the key use up only their own budget; 120 PURGE tasks per site and minute in the console |
 | Scope | The request's URL (scheme, host, path, and query), compared like a URL purge |
 | Disabled | `PURGE` requests go to the origin as before |
 | Audit | `cache.purge`, the node as actor, metadata `method: PURGE` |
@@ -464,7 +464,7 @@ The **Charset** card adds the `charset` parameter to the `Content-Type` of text 
 | Replace existing | On / off | Off | Replaces a `charset` the origin sent; off keeps the origin's |
 | Upper case | On / off | Off | Writes the name in upper case, such as `charset=GBK` |
 
-Applies to `text/*`, `application/javascript`, `application/json`, and `application/xml` responses, cache hits included; pages the node generates itself are unchanged. Needs `site-content-v1`.
+Applies to `text/*`, `application/javascript`, `application/json`, and `application/xml` responses from the origin, cache hits included; responses the node makes itself (error pages, challenge pages, PURGE answers) are unchanged. Needs `site-content-v1`.
 
 ## Cache zone
 
@@ -621,7 +621,7 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 | Responses lack `X-Cache` | The site has **Send X-Cache to visitors** off | Turn it on in the **X-Cache** card |
 | 413, `X-Edgeweir-Error: body-too-large` | The request's `Content-Length` exceeds the site's or a rule's body limit | Raise **Request body limit**, or add a configuration rule for upload paths |
 | `PURGE` answers 403, `purge-key-invalid` | `X-Purge-Key` is missing or differs from the saved key | Check the key; if it is lost, generate a new one and save |
-| `PURGE` answers 429, `purge-rate-limited` | Over 20 per second or 120 tasks per minute | Retry after `Retry-After`; purge in bulk with **Purge & prefetch** or the API |
+| `PURGE` answers 429, `purge-rate-limited` | Over 20 per second from one client address, 20 accepted requests per second for the site, or 120 tasks per minute | Retry after `Retry-After`; purge in bulk with **Purge & prefetch** or the API |
 | `PURGE` answers 503, `purge-unavailable` | The node agent or the console is unreachable | Check the connection between node and console |
 | `PURGE` requests reach the origin | The site does not have the PURGE method enabled | Enable it in the **PURGE method** card |
 | An origin's 502 reaches the visitor without a retry on another origin | **Retry on 502 / 503 / 504** is off, or **Tries** is 1 | Check **Pool settings** |

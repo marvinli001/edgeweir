@@ -60,7 +60,7 @@ With **Redirect to URL**, responses of that status become a 302 redirect.
 
 | Item | Rule |
 | --- | --- |
-| URL | An absolute `http://` / `https://` URL (without user information) or a path starting with a single `/`; 1–2048 printable ASCII characters without spaces |
+| URL | An absolute `http://` / `https://` URL (lower-case scheme, a domain or a bracketed IPv6 address as host, no user information, an optional port) or a path starting with a single `/`; 1–2048 printable ASCII characters without spaces or `\`; every `%` followed by two hex digits |
 | Placeholders | Only `{{status}}` and `{{request_id}}`, URL-encoded when inserted, e.g. `/error?code={{status}}&id={{request_id}}` |
 | Response | 302, `Location`, `Cache-Control: no-store`, `X-Edgeweir-Error`, an empty body |
 | Response status | Redirect pages are always 302; an HTML template page can set 200–599 to change the status it is sent with, empty keeps the status |
@@ -73,8 +73,8 @@ In the **Maintenance mode** card on the **Error pages** tab, turn on **Enabled**
 | --- | --- | --- | --- |
 | Enabled | On / off | Off | Turns maintenance mode on |
 | Retry-After (seconds) | 0–86400 | 0 (not sent) | `Retry-After` of the 503 response |
-| Allowed addresses | IPs or CIDRs, up to 64 | Empty | Requests from these addresses are served as usual |
-| Allowed path prefixes | Start with `/`, no query or fragment, up to 32 | Empty | Requests whose path starts with one of them are served as usual |
+| Allowed addresses | IPs or CIDRs, up to 64; IPv4-mapped `::ffff:` addresses are saved as the IPv4 they map | Empty | Requests from these addresses are served as usual |
+| Allowed path prefixes | Start with `/`, no query or fragment, at most 1024 bytes of UTF-8 each, up to 32 | Empty | Requests whose path starts with one of them are served as usual |
 | Maintenance page | HTML template, rules as for [templates](#templates) | Empty (built-in maintenance page) | The page of the 503 response |
 
 | Item | Behavior |
