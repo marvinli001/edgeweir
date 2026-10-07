@@ -17,6 +17,7 @@ const KEEP = [
   "alerts.policy",
   "alerts.smtp",
   "dns.protection",
+  "dns.catalog",
   "upgrades.latestVersion",
   // What the nodes and the site can do.
   "sites.features",
