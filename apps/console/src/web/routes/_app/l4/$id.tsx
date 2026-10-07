@@ -59,11 +59,19 @@ function L4AppPage() {
               })
             }
           >
-            <TabsList>
-              <TabsTrigger value="overview" data-testid="l4-tab-overview">
+            {/* The application's tab bar: line tabs over a hairline. */}
+            <TabsList
+              variant="line"
+              className="h-11 w-full max-w-full justify-start gap-0.5 overflow-x-auto overflow-y-hidden border-b px-0 pt-1 pb-[5px] [scrollbar-width:none]"
+            >
+              <TabsTrigger
+                value="overview"
+                className="flex-none px-2.5"
+                data-testid="l4-tab-overview"
+              >
                 {m.site_tab_overview()}
               </TabsTrigger>
-              <TabsTrigger value="stats" data-testid="l4-tab-stats">
+              <TabsTrigger value="stats" className="flex-none px-2.5" data-testid="l4-tab-stats">
                 {m.analytics_title()}
               </TabsTrigger>
             </TabsList>

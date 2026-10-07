@@ -200,17 +200,29 @@ function ClusterView({
             })
           }
         >
-          <TabsList className="max-w-full justify-start overflow-x-auto">
-            <TabsTrigger value="overview" data-testid="cluster-tab-overview">
+          {/* The cluster's tab bar: line tabs over a hairline, scrolling sideways on phones. */}
+          <TabsList
+            variant="line"
+            className="h-11 w-full max-w-full justify-start gap-0.5 overflow-x-auto overflow-y-hidden border-b px-0 pt-1 pb-[5px] [scrollbar-width:none]"
+          >
+            <TabsTrigger
+              value="overview"
+              className="flex-none px-2.5"
+              data-testid="cluster-tab-overview"
+            >
               {m.dns_tab_overview()}
             </TabsTrigger>
-            <TabsTrigger value="dns" data-testid="cluster-tab-dns">
+            <TabsTrigger value="dns" className="flex-none px-2.5" data-testid="cluster-tab-dns">
               {m.dns_tab_dns()}
             </TabsTrigger>
-            <TabsTrigger value="scheduling" data-testid="cluster-tab-scheduling">
+            <TabsTrigger
+              value="scheduling"
+              className="flex-none px-2.5"
+              data-testid="cluster-tab-scheduling"
+            >
               {m.scheduling_tab()}
             </TabsTrigger>
-            <TabsTrigger value="ports" data-testid="cluster-tab-ports">
+            <TabsTrigger value="ports" className="flex-none px-2.5" data-testid="cluster-tab-ports">
               {m.l4_pools_title()}
             </TabsTrigger>
           </TabsList>
