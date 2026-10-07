@@ -187,7 +187,13 @@ function BindingEditor({
               <>
                 <Field>
                   <FieldLabel htmlFor="dns-binding-zone">{m.dns_zone()}</FieldLabel>
-                  <Input id="dns-binding-zone" value={account?.zone ?? ""} disabled readOnly />
+                  {/* The account's zone, a value rather than a field: shown in a well. */}
+                  <output
+                    id="dns-binding-zone"
+                    className="flex h-8 min-w-0 items-center truncate rounded-2xl px-2.5 font-mono text-sm sunk-well"
+                  >
+                    {account?.zone ?? "—"}
+                  </output>
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="dns-binding-domain">{m.dns_cluster_domain()}</FieldLabel>

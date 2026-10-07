@@ -75,7 +75,7 @@ function DnsPage() {
                         className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3 animate-enter"
                         style={enterDelay(index, 40)}
                       >
-                        <span className="flex min-w-48 flex-1 flex-wrap items-center gap-2 text-sm">
+                        <span className="flex w-full flex-wrap items-center gap-2 text-sm @3xl/main:w-auto @3xl/main:min-w-48 @3xl/main:flex-1">
                           <span className="font-medium break-all">{p.name}</span>
                           <ValueWell>{p.zone}</ValueWell>
                         </span>
