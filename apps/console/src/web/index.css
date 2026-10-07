@@ -542,6 +542,13 @@
   tr[data-state="selected"] > & {
     --cell-tint: color-mix(in oklch, var(--primary) 6%, transparent);
   }
+  /* The sticky cell's opaque background covers the row's bottom rule; draw it on the cell. */
+  [data-overflow] thead tr > &,
+  [data-overflow] tbody tr:not(:last-child) > & {
+    box-shadow:
+      inset -1px 0 0 var(--border),
+      inset 0 -1px 0 var(--border);
+  }
 }
 
 /*
