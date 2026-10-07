@@ -251,6 +251,8 @@ const FEATURES = [
   "prefetch-v2",
   "probe-health-v1",
   "rule-log-v1",
+  "stats-sequence-v1",
+  "self-upgrade-v1",
   "rules-v1",
   "rules-v2",
   "rules-v3",
@@ -833,6 +835,16 @@ export const clusters: Cluster[] = clusterSeeds.map((seed) => {
 });
 
 export const attention: AttentionItem[] = [
+  {
+    // The offline node's removal is held back by the mass removal protection (fixtures/infra.ts).
+    kind: "dns_blocked",
+    clusterId: EU.id,
+    clusterName: EU.name,
+    revision: 186,
+    at: ago(46 * MINUTE),
+    count: 0,
+    version: "",
+  },
   {
     kind: "nodes_unhealthy",
     clusterId: EU.id,
