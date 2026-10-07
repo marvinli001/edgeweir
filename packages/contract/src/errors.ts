@@ -90,6 +90,10 @@ export const errorDefs = {
   /** A private key that cannot be read, such as an encrypted one. */
   CERTIFICATE_KEY_UNREADABLE: { status: 400, params: [] },
   CERTIFICATE_KEY_MISMATCH: { status: 400, params: [] },
+  /** An EC private key with explicit curve parameters instead of the curve's OID. */
+  CERTIFICATE_KEY_EXPLICIT_CURVE: { status: 400, params: [] },
+  /** A chain certificate whose EC key has explicit curve parameters instead of the curve's OID. */
+  CERTIFICATE_CHAIN_EXPLICIT_CURVE: { status: 400, params: [] },
   /** The first certificate is a CA, or one is not issued by the next. */
   CERTIFICATE_CHAIN_ORDER: { status: 400, params: [] },
   /** Not yet valid or expired; the validity in UTC ("2026-10-02 12:00 UTC"). */

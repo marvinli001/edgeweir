@@ -82,6 +82,46 @@ function readOr<T>(read: () => T, fallback: () => T): T {
   }
 }
 
+/** The bounds of the contents of the DER element at `at`. */
+function derContents(der: Uint8Array, at: number) {
+  let length = der[at + 1] ?? 0;
+  let start = at + 2;
+  if (length > 0x80) {
+    const bytes = length - 0x80;
+    length = 0;
+    for (let i = 0; i < bytes; i++) length = length * 256 + (der[start + i] ?? 0);
+    start += bytes;
+  }
+  return { start, end: start + length };
+}
+
+/** The OBJECT IDENTIFIER element id-ecPublicKey (1.2.840.10045.2.1). */
+const EC_PUBLIC_KEY = Buffer.from("06072a8648ce3d0201", "hex");
+
+/**
+ * Whether the AlgorithmIdentifier at `at` is not an EC key's or names its
+ * curve. OpenSSL, and so Node, also reads EC keys that spell out the curve's
+ * parameters (and reports them as the named curve), but RFC 5480 and
+ * RFC 5915 allow only the curve's OID and Go's crypto/x509 refuses anything
+ * else: the nodes cannot load such a key or leaf, and Go TLS clients refuse
+ * a chain with such a certificate.
+ */
+function namesCurve(der: Uint8Array, at: number) {
+  const { start, end } = derContents(der, at);
+  const parameters = start + EC_PUBLIC_KEY.length;
+  if (!EC_PUBLIC_KEY.equals(der.subarray(start, parameters))) return true;
+  return parameters < end && der[parameters] === 0x06;
+}
+
+/** Where a DER certificate's subjectPublicKeyInfo algorithm starts. */
+function publicKeyAlgorithm(der: Uint8Array) {
+  let at = derContents(der, derContents(der, 0).start).start;
+  if (der[at] === 0xa0) at = derContents(der, at).end; // version
+  // serialNumber, signature, issuer, validity, subject
+  for (let i = 0; i < 5; i++) at = derContents(der, at).end;
+  return derContents(der, at).start;
+}
+
 /**
  * Checks a chain and its key and returns them re-encoded: only the
  * certificates and the key in PKCS #8 are ever stored, whatever else the
@@ -98,10 +138,19 @@ export function inspectCertificate(chainPem: string, privateKeyPem: string) {
   const blocks = chainPem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g);
   if (!blocks?.length || blocks.length > 10 || blocks.length !== labels.length) unreadableChain();
   const chain = readOr(() => blocks.map((block) => new X509Certificate(block)), unreadableChain);
+  // Refused rather than re-encoded: a certificate's key cannot be changed
+  // without its issuer, and tools that write such keys (LibreSSL's default)
+  // usually sign the certificate with that encoding too.
+  if (!chain.every((cert) => namesCurve(cert.raw, publicKeyAlgorithm(cert.raw))))
+    fail("CERTIFICATE_CHAIN_EXPLICIT_CURVE", "an EC certificate key must name its curve");
   const key = readOr(
     () => createPrivateKey(privateKeyPem),
     () => fail("CERTIFICATE_KEY_UNREADABLE", "the private key cannot be read (or is encrypted)"),
   );
+  const pkcs8 = key.export({ type: "pkcs8", format: "der" });
+  // PrivateKeyInfo: version, then privateKeyAlgorithm.
+  if (!namesCurve(pkcs8, derContents(pkcs8, derContents(pkcs8, 0).start).end))
+    fail("CERTIFICATE_KEY_EXPLICIT_CURVE", "an EC private key must name its curve");
   const leaf = chain[0] as X509Certificate;
   const wrongOrder: () => never = () =>
     fail("CERTIFICATE_CHAIN_ORDER", "the chain must start with the leaf, each issued by the next");

@@ -806,6 +806,8 @@
   "error_certificate_chain_unreadable": "The chain must hold 1 to 10 readable PEM certificates",
   "error_certificate_key_unreadable": "The private key cannot be read; encrypted keys are not supported",
   "error_certificate_key_mismatch": "The private key does not belong to the certificate",
+  "error_certificate_key_explicit_curve": "The EC private key uses explicit curve parameters; convert it to a named curve",
+  "error_certificate_chain_explicit_curve": "A certificate's EC key uses explicit curve parameters; reissue it with a named-curve key",
   "error_certificate_chain_order": "Wrong chain order: the leaf certificate first, then each issuer",
   "error_certificate_not_currently_valid": "The certificate is not valid now (valid from {notBefore} to {notAfter})",
   "error_certificate_no_dns_names": "The certificate has no DNS names (subject alternative names)",

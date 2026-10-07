@@ -1,4 +1,4 @@
-import { generateKeyPairSync, X509Certificate } from "node:crypto";
+import { createPrivateKey, generateKeyPairSync, X509Certificate } from "node:crypto";
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
 import { tlsSettings } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import { certificateKeyBinding, nodeCertificates } from "../../src/server/services/certificates";
 import { latestRevision } from "../../src/server/services/revisions";
+import { EXPLICIT_EC_FIXTURE } from "./fixtures";
 import {
   type ApiClient,
   createTestContext,
@@ -112,6 +113,37 @@ describe("M3 certificate lifecycle and isolation", async () => {
     expect((await upload(ipOnly.certificatePem, ipOnly.privateKeyPem)).code).toBe(
       "CERTIFICATE_NO_DNS_NAMES",
     );
+  });
+  it("refuses EC keys and certificates that spell out their curve", async () => {
+    const { sec1Key, pkcs8Key, certificate, namedCertificate } = EXPLICIT_EC_FIXTURE;
+    const upload = (chainPem: string, privateKeyPem: string) =>
+      api.certificates.upload({ name: "explicit", chainPem, privateKeyPem });
+    // Node reads the key as the named curve; Go's crypto/x509 does not.
+    expect(createPrivateKey(pkcs8Key).asymmetricKeyDetails).toEqual({ namedCurve: "prime256v1" });
+    const namedKey = createPrivateKey({
+      key: createPrivateKey(sec1Key).export({ format: "jwk" }),
+      format: "jwk",
+    })
+      .export({ type: "pkcs8", format: "pem" })
+      .toString();
+    for (const key of [sec1Key, pkcs8Key])
+      expect((await rpcError(upload(namedCertificate, key))).code).toBe(
+        "CERTIFICATE_KEY_EXPLICIT_CURVE",
+      );
+    expect((await rpcError(upload(certificate, namedKey))).code).toBe(
+      "CERTIFICATE_CHAIN_EXPLICIT_CURVE",
+    );
+    expect((await rpcError(upload(certificate, sec1Key))).code).toBe(
+      "CERTIFICATE_CHAIN_EXPLICIT_CURVE",
+    );
+    // Every certificate of the chain, not only the leaf.
+    expect(
+      (await rpcError(upload(`${material.certificatePem}${certificate}`, material.privateKeyPem)))
+        .code,
+    ).toBe("CERTIFICATE_CHAIN_EXPLICIT_CURVE");
+    const cert = await upload(namedCertificate, namedKey);
+    expect(cert.names).toEqual(["explicit.test"]);
+    await api.certificates.delete({ id: cert.id });
   });
   it("stores only the certificates and the key of an upload, never a key pasted into the chain", async () => {
     // A combined fullchain-and-key file pasted as the chain (audit 2026-10-01 P1-24).

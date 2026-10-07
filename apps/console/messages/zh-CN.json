@@ -721,6 +721,8 @@
   "error_certificate_chain_unreadable": "证书链须包含 1–10 张可读取的 PEM 证书",
   "error_certificate_key_unreadable": "无法读取私钥；不支持加密的私钥",
   "error_certificate_key_mismatch": "私钥与证书不匹配",
+  "error_certificate_key_explicit_curve": "EC 私钥使用显式曲线参数，请转换为命名曲线",
+  "error_certificate_chain_explicit_curve": "证书的 EC 公钥使用显式曲线参数，请用命名曲线私钥重新签发",
   "error_certificate_chain_order": "证书链顺序错误：叶证书在前，签发者依次在后",
   "error_certificate_not_currently_valid": "证书当前不在有效期内（{notBefore} 至 {notAfter}）",
   "error_certificate_no_dns_names": "证书没有 DNS 类型的 SAN",
