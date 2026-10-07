@@ -17,15 +17,10 @@ import { LoadingState, QueryView } from "@/components/states";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { DialogProps } from "@/hooks/use-dialog-state";
-import {
-  type DetailView,
-  detailViewId,
-  groupBuckets,
-  type Metric,
-  OTHER_COLOR,
-} from "@/lib/analytics";
+import { type DetailView, detailViewId, type Metric, OTHER_COLOR } from "@/lib/analytics";
 import { formatBitRate, formatBytes, formatCompact, formatPercent, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
+import { groupBuckets } from "@/lib/time-buckets";
 import { cn } from "@/lib/utils";
 
 const REFRESH_MS = 60_000;

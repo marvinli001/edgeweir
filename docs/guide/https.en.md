@@ -25,9 +25,13 @@ Certificate upload, ACME requests and renewal, and a site's HTTPS, TLS, HTTP/2, 
 | --- | --- |
 | Chain | 1–10 certificates, up to 128 KiB; each signed by the next; certificates only: PEM with a private key in it is refused ("The chain may contain only certificates; put the private key in its own field") |
 | Leaf | Not a CA certificate, has DNS SANs, currently valid |
+| Key type | The leaf's key is RSA (2048 bits or more) or ECDSA P-256, P-384 or P-521; other curves (secp256k1, Brainpool, SM2, P-224), Ed25519, Ed448, ML-DSA, RSA-PSS and DSA are refused |
 | Private key | Matches the leaf, up to 32 KiB |
+| EC keys | Certificates and private key use a named curve (the curve's OID); explicit curve parameters are refused |
 
-Only the re-encoded certificates and the PKCS #8 private key are stored; any other text in the pasted content is not. Uploaded certificates do not renew automatically (**Automatic renewal disabled**); before expiry, upload a new certificate and select it on the sites.
+Only the re-encoded certificates and the PKCS #8 private key are stored; any other text in the pasted content is not. Uploaded certificates do not renew automatically (**Automatic renewal disabled**); before expiry, upload a new certificate and select it on the sites. An expired certificate's card shows **Expired** and "Expired …".
+
+Nodes cannot load certificates with explicit curve parameters uploaded earlier either: no node of a cluster applies a revision that references one. A background job checks the uploaded certificates at every start: such a certificate's card shows **Unusable** with the reason, and the audit log records "Certificate marked unloadable" with the sites that use it. Sites can no longer select it; a site that uses it is not changed automatically: upload a named-curve certificate (see [Troubleshooting](#troubleshooting)), select it on the site's **HTTPS** tab and save, or choose **HTTP only**, then delete the old certificate.
 
 ## Add a DNS credential
 
@@ -88,6 +92,7 @@ Certificates with the same certificate authority, EAB key ID, and account email 
 | Renewed names | An HTTP-01 renewal drops the names no site uses any more, as long as at least one name is left; every domain of a site that uses the certificate is kept, so the site stays covered. After a successful renewal the certificate's name list is updated. For a site's new domains see [Adding domains](#adding-domains-to-an-https-site) |
 | Effect | After issuance or renewal, a new revision is published for the clusters of the sites that use the certificate |
 | Failure | Status changes to **Issuance failed**, the card shows the reason, and the current certificate is kept; the next attempt waits a tenth of the certificate's remaining validity (10 minutes to 12 hours), 1 hour for a first issuance, see [Troubleshooting](#troubleshooting). An HTTP-01 certificate that failed because names did not resolve to the nodes ("A domain does not resolve to the nodes") has its names looked up again every 5 minutes and is retried as soon as they all point to the nodes |
+| Expiry | When renewals keep failing until the certificate expires, its status shows **Expired** and the card still shows the reason; while a retry runs the status is **Pending** or **Issuing** and the card shows "Expired …" |
 | Manual | ACME certificates have **Renew now**, which runs at the next check; unavailable while **Issuing** |
 | Interruption | **Issuing** for more than 10 minutes counts as interrupted and runs again at the next check; one issuance run is limited to 8 minutes |
 
@@ -126,7 +131,7 @@ While the certificate is issued, the tab refreshes its status every 3 seconds. A
 ## Configure a site's HTTPS
 
 1. Open **Sites**, select the site, and open the **HTTPS** tab (for a site without a certificate see [Enable HTTPS with one click](#enable-https-with-one-click)).
-2. Select a certificate in **Certificates**. The list contains every issued, unexpired certificate; **HTTP only** disables HTTPS.
+2. Select a certificate in **Certificates**. The list contains every issued, unexpired certificate nodes can load; **HTTP only** disables HTTPS.
 3. Set **Minimum TLS version**, **Cipher profile**, **HSTS lifetime (seconds)**, and the switches.
 4. Click **Save**. The console shows **Saved** and publishes a new configuration revision.
 5. Verify: after the node applies the revision:
@@ -278,12 +283,12 @@ The **Ports** card on a site's **Domains** tab chooses where the site is served:
 | Item | Behavior |
 | --- | --- |
 | Delivery | Nodes fetch certificate material separately over mTLS; only certificate IDs and fingerprints referenced by the cluster's current target configuration are released |
-| Checks | Nodes verify the fingerprint, the key match, and name coverage (except for domains served over HTTP until a new certificate covers them) |
+| Checks | Nodes verify the fingerprint, the key match, and name coverage (except for domains served over HTTP until a new certificate covers them); when one certificate cannot be loaded, the whole revision is not applied, the node keeps its previous configuration and retries at every sync |
 | Storage | `certificates.json` (0600) in the node state directory; private keys on the node are not encrypted, and the host administrator can read them |
 | Hot updates | Certificate content and minimum TLS version changes do not reload nginx |
 | Reloads | Changes to HTTP/2, HTTP/3, compression, cipher profile, certificate presence, domain lists, or the set of sites are tested first and then reloaded; on failure the previous configuration is restored |
 | Applied | A node reports a revision as applied only after persisting it; keys referenced by the current and previous last-known-good configurations are kept |
-| Rollback | A configuration rollback uses the current certificate material; it is refused when the certificate is deleted, expired, or does not cover the target domains |
+| Rollback | A configuration rollback uses the current certificate material; it is refused when the certificate is deleted, expired, unloadable by nodes, or does not cover the target domains |
 
 ## Key handling
 
@@ -321,9 +326,14 @@ A change saved in the console or with an AccessKey is published even when it nee
 | "The chain must hold 1 to 10 readable PEM certificates" | The chain is empty, has more than 10 certificates, or is damaged | Export the chain as PEM again |
 | "The private key cannot be read; encrypted keys are not supported" | The key is damaged or protected by a passphrase | Remove the passphrase with `openssl pkey -in key.pem -out plain.pem` and upload that |
 | "The private key does not belong to the certificate" | The key belongs to another certificate | Upload the key of the leaf certificate |
+| "The EC private key uses explicit curve parameters; convert it to a named curve" | The key spells out the curve's parameters instead of naming the curve, which nodes cannot load; when saving a site's HTTPS, the selected certificate was uploaded with such a key earlier. LibreSSL, the `openssl` shipped with macOS, does this by default for `openssl req -newkey ec` and `openssl genpkey` | Convert it with OpenSSL 3 and upload the result: `openssl pkey -in key.pem -ec_param_enc named_curve -out key-named.pem` (LibreSSL cannot convert it); add `-pkeyopt ec_param_enc:named_curve` when generating keys |
+| "A certificate's EC key uses explicit curve parameters; reissue it with a named-curve key" | The certificate was issued for such a key, for example a self-signed certificate made with LibreSSL; when saving a site's HTTPS, the selected certificate was uploaded earlier | Reissue it with the converted key, or create a new one: `openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -pkeyopt ec_param_enc:named_curve …` |
+| Certificate status **Unusable**, reason "Nodes cannot load it: a certificate's EC key uses explicit curve parameters" or "Nodes cannot load it: the EC private key uses explicit curve parameters" | The certificate was uploaded earlier with explicit curve parameters | Convert or reissue it as in the two rows above and upload it, select it on the sites that use the old one, then delete the old one |
+| A node shows **Apply failed** with `invalid certificate material` (such as `x509: invalid ECDSA parameters` or `unknown elliptic curve`) | The cluster's configuration references a certificate nodes cannot load, so the whole revision is not applied | Find the **Unusable** certificate in the list and proceed as in the row above; the revision published once another certificate is selected applies |
 | "Wrong chain order: the leaf certificate first, then each issuer" | An intermediate comes before the leaf, or a certificate is not issued by the next one | Order the PEM as leaf then intermediates |
 | "The certificate is not valid now (valid from … to …)" | Not yet valid or expired (times in UTC) | Check the server clock, or use a valid certificate |
 | "The certificate has no DNS names (subject alternative names)" | The certificate has only IP addresses or only a CN | Use a certificate with DNS SANs |
+| "The certificate's key type is not supported; use RSA (2048 bits or more) or ECDSA P-256, P-384 or P-521" | Nodes cannot load the leaf's key (curves such as secp256k1, Brainpool or SM2; Ed448, RSA-PSS, DSA; RSA with a public exponent above 2³¹−1), or browsers cannot use it (P-224, Ed25519, ML-DSA, RSA under 2048 bits); a key the nodes cannot load would fail the revision on every node of the cluster | The "Public Key Algorithm" part of `openssl x509 -in cert.pem -noout -text` shows the key type and size; reissue the certificate with an RSA 2048-bit or ECDSA P-256 key, for example `openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -pkeyopt ec_param_enc:named_curve -out key.pem` |
 | "The certificate is not issued yet or has expired" | The certificate selected for a site is still pending, or has expired | Wait for issuance, or renew it first |
 | "These names do not resolve to the nodes: …" | HTTP-01 names have no records, or resolve to the origin, another proxy, or other addresses that are not the cluster's nodes | Point the names to the nodes; with a load balancer in front of the nodes or a DNS change in progress, turn on **Skip the DNS check** |
 | "No online node can answer HTTP-01 in cluster …" | The cluster serving the names has no online active node | Check the nodes, or use DNS-01 |

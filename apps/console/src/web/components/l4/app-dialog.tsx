@@ -40,6 +40,7 @@ import { m } from "@/lib/i18n";
 import {
   apiError,
   L4_PROTOCOLS,
+  listChips,
   PROXY_VERSIONS,
   poolCovers,
   poolLabel,
@@ -868,7 +869,6 @@ function ListPicker({
   testId: string;
 }) {
   const remaining = lists.filter((list) => !value.includes(list.id));
-  const nameOf = (listId: string) => lists.find((l) => l.id === listId)?.name ?? listId.slice(0, 8);
   return (
     <div className="flex min-w-0 flex-col gap-2" data-testid={testId}>
       <span className="text-sm font-medium">{label}</span>
@@ -878,8 +878,7 @@ function ListPicker({
             {m.l4_lists_none()}
           </span>
         ) : (
-          value.map((listId) => {
-            const name = nameOf(listId);
+          listChips(value, lists).map(({ id: listId, name }) => {
             return (
               <Badge
                 key={listId}

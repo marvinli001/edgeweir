@@ -327,7 +327,7 @@ export function ServiceAccountsPanel({
               {m.service_accounts_keys()}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => edit.show(row.original)}>
-              {m.orgs_edit()}
+              {m.common_edit()}
             </Button>
             <DeleteAccountAction account={row.original} />
           </div>

@@ -1,5 +1,6 @@
 import {
   type CertificateDto,
+  certificateUnloadable,
   HTTPS_REDIRECT_STATUSES,
   type HttpsCheck,
   type Site,
@@ -39,8 +40,10 @@ const POLL = 3000;
 const busy = (cert: CertificateDto | undefined) =>
   cert?.status === "pending" || cert?.status === "issuing";
 /** Issued and not expired. */
-const usable = (cert: CertificateDto) =>
+const issuedValid = (cert: CertificateDto) =>
   !!cert.fingerprint && !!cert.notAfter && Date.parse(cert.notAfter) > Date.now();
+/** Issued, not expired, and loadable by nodes: one a site can be given. */
+const usable = (cert: CertificateDto) => issuedValid(cert) && !certificateUnloadable(cert);
 
 /**
  * A site's HTTPS: the settings while it has a certificate; the certificate
@@ -78,7 +81,7 @@ export function HttpsTab({ site }: { site: Site }) {
   return (
     <QueryView query={combineQueries(policy, certificates)}>
       {([saved, list]) =>
-        bound && (usable(bound) || bound.source === "acme") ? (
+        bound && (issuedValid(bound) || bound.source === "acme") ? (
           <div className="grid gap-4">
             {bound.status === "ready" ? null : <CertificateState cert={bound} />}
             <HttpsEditor
@@ -104,6 +107,8 @@ function CertificateState({ cert, actions }: { cert: CertificateDto; actions?: R
   const client = useQueryClient();
   const renew = useMutation(orpc.certificates.renew.mutationOptions());
   const failed = cert.status === "error";
+  // Only an ACME certificate is issued again; an upload is replaced.
+  const retry = cert.source === "acme";
   return (
     <div
       className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border px-4 py-3 text-sm animate-enter"
@@ -128,22 +133,24 @@ function CertificateState({ cert, actions }: { cert: CertificateDto; actions?: R
       {failed ? (
         <div className="flex gap-2">
           {actions}
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={renew.isPending}
-            onClick={async () => {
-              try {
-                await renew.mutateAsync({ id: cert.id });
-                await client.invalidateQueries();
-              } catch (e) {
-                toast.error(errorMessage(e));
-              }
-            }}
-          >
-            {renew.isPending ? <Spinner /> : null}
-            {m.common_retry()}
-          </Button>
+          {retry ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={renew.isPending}
+              onClick={async () => {
+                try {
+                  await renew.mutateAsync({ id: cert.id });
+                  await client.invalidateQueries();
+                } catch (e) {
+                  toast.error(errorMessage(e));
+                }
+              }}
+            >
+              {renew.isPending ? <Spinner /> : null}
+              {m.common_retry()}
+            </Button>
+          ) : null}
         </div>
       ) : null}
     </div>

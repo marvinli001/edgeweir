@@ -3,7 +3,7 @@ import { NumberField, SwitchField } from "@/components/site/fields";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
-/** Admin card: platform limit of manual bans and sharing of automatic bans in a cluster. */
+/** Protection page card: platform limit of manual bans and sharing of automatic bans in a cluster. */
 export function BanSettingsCard() {
   return (
     <SettingsCard

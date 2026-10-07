@@ -55,7 +55,7 @@ export function DnsHeldBack({
   );
 }
 
-/** Admin card: the largest share of address records one publication may remove. */
+/** DNS page card: the largest share of address records one publication may remove. */
 export function DnsProtectionCard() {
   const query = useQuery(orpc.dns.protection.queryOptions());
   return (

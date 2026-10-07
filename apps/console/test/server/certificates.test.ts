@@ -1,4 +1,4 @@
-import { generateKeyPairSync, X509Certificate } from "node:crypto";
+import { createPrivateKey, generateKeyPairSync, X509Certificate } from "node:crypto";
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
 import { tlsSettings } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import { certificateKeyBinding, nodeCertificates } from "../../src/server/services/certificates";
 import { latestRevision } from "../../src/server/services/revisions";
+import { EXPLICIT_EC_FIXTURE } from "./fixtures";
 import {
   type ApiClient,
   createTestContext,
@@ -15,6 +16,7 @@ import {
   setupPlatform,
   signIn,
 } from "./helpers";
+import { leafFor } from "./key-types";
 
 describe("M3 certificate lifecycle and isolation", async () => {
   const { ctx, client: db } = await createTestContext();
@@ -113,6 +115,37 @@ describe("M3 certificate lifecycle and isolation", async () => {
       "CERTIFICATE_NO_DNS_NAMES",
     );
   });
+  it("refuses EC keys and certificates that spell out their curve", async () => {
+    const { sec1Key, pkcs8Key, certificate, namedCertificate } = EXPLICIT_EC_FIXTURE;
+    const upload = (chainPem: string, privateKeyPem: string) =>
+      api.certificates.upload({ name: "explicit", chainPem, privateKeyPem });
+    // Node reads the key as the named curve; Go's crypto/x509 does not.
+    expect(createPrivateKey(pkcs8Key).asymmetricKeyDetails).toEqual({ namedCurve: "prime256v1" });
+    const namedKey = createPrivateKey({
+      key: createPrivateKey(sec1Key).export({ format: "jwk" }),
+      format: "jwk",
+    })
+      .export({ type: "pkcs8", format: "pem" })
+      .toString();
+    for (const key of [sec1Key, pkcs8Key])
+      expect((await rpcError(upload(namedCertificate, key))).code).toBe(
+        "CERTIFICATE_KEY_EXPLICIT_CURVE",
+      );
+    expect((await rpcError(upload(certificate, namedKey))).code).toBe(
+      "CERTIFICATE_CHAIN_EXPLICIT_CURVE",
+    );
+    expect((await rpcError(upload(certificate, sec1Key))).code).toBe(
+      "CERTIFICATE_CHAIN_EXPLICIT_CURVE",
+    );
+    // Every certificate of the chain, not only the leaf.
+    expect(
+      (await rpcError(upload(`${material.certificatePem}${certificate}`, material.privateKeyPem)))
+        .code,
+    ).toBe("CERTIFICATE_CHAIN_EXPLICIT_CURVE");
+    const cert = await upload(namedCertificate, namedKey);
+    expect(cert.names).toEqual(["explicit.test"]);
+    await api.certificates.delete({ id: cert.id });
+  });
   it("stores only the certificates and the key of an upload, never a key pasted into the chain", async () => {
     // A combined fullchain-and-key file pasted as the chain (audit 2026-10-01 P1-24).
     expect(
@@ -144,6 +177,59 @@ describe("M3 certificate lifecycle and isolation", async () => {
       /^-----BEGIN PRIVATE KEY-----\n[A-Za-z0-9+/=\n]+-----END PRIVATE KEY-----\n$/,
     );
     await api.certificates.delete({ id: cert.id });
+  });
+  it("accepts only leaf keys the nodes can load and browsers can use", async () => {
+    const upload = async (pair: Parameters<typeof leafFor>[0]) => {
+      const leaf = await leafFor(pair, ["keys.test"]);
+      return api.certificates.upload({
+        name: "keys",
+        chainPem: leaf.certificatePem,
+        privateKeyPem: leaf.privateKeyPem,
+      });
+    };
+    const refused = [
+      // Go's tls.X509KeyPair refuses these, which fails the revision on every node.
+      generateKeyPairSync("ec", { namedCurve: "secp256k1" }),
+      generateKeyPairSync("ec", { namedCurve: "brainpoolP256r1" }),
+      generateKeyPairSync("ec", { namedCurve: "SM2" }),
+      generateKeyPairSync("ed448"),
+      generateKeyPairSync("rsa-pss", { modulusLength: 2048 }),
+      generateKeyPairSync("dsa", { modulusLength: 2048, divisorLength: 256 }),
+      generateKeyPairSync("rsa", { modulusLength: 2048, publicExponent: 2 ** 31 + 1 }),
+      // Go loads these, but OpenSSL's security level 2 refuses RSA under 2048
+      // bits and browsers cannot use the others.
+      generateKeyPairSync("rsa", { modulusLength: 1024 }),
+      generateKeyPairSync("ec", { namedCurve: "P-224" }),
+      generateKeyPairSync("ed25519"),
+      generateKeyPairSync("ml-dsa-44"),
+    ];
+    for (const pair of refused)
+      expect((await rpcError(upload(pair))).code).toBe("CERTIFICATE_KEY_TYPE_UNSUPPORTED");
+    // Refused for the certificate's key, whichever key comes with it.
+    const p256 = await leafFor(generateKeyPairSync("ec", { namedCurve: "P-256" }), ["keys.test"]);
+    const k1 = await leafFor(generateKeyPairSync("ec", { namedCurve: "secp256k1" }), ["keys.test"]);
+    expect(
+      (
+        await rpcError(
+          api.certificates.upload({
+            name: "keys",
+            chainPem: k1.certificatePem,
+            privateKeyPem: p256.privateKeyPem,
+          }),
+        )
+      ).code,
+    ).toBe("CERTIFICATE_KEY_TYPE_UNSUPPORTED");
+    for (const pair of [
+      generateKeyPairSync("rsa", { modulusLength: 2048 }),
+      generateKeyPairSync("rsa", { modulusLength: 3072, publicExponent: 3 }),
+      generateKeyPairSync("ec", { namedCurve: "P-256" }),
+      generateKeyPairSync("ec", { namedCurve: "P-384" }),
+      generateKeyPairSync("ec", { namedCurve: "P-521" }),
+    ]) {
+      const cert = await upload(pair);
+      expect(cert.names).toEqual(["keys.test"]);
+      await api.certificates.delete({ id: cert.id });
+    }
   });
   it("publishes HTTPS references and required capabilities without embedding secrets", async () => {
     await api.https.update({

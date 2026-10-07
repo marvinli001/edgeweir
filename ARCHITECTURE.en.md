@@ -308,6 +308,8 @@ A revision receipt is sealed with the master key (purpose `node.revision_receipt
 
 Domains a site's certificate does not cover yet (the certificate is being reissued for them) are published with `Domain.tls_pending` (proto v0.19.0) when every active node of the cluster has `tls-pending-domains-v1`, and nodes serve them over HTTP only; otherwise they are left out until the new certificate is issued.
 
+Uploads and issued certificates with EC keys that spell out the curve's parameters are refused: nodes (Go `crypto/tls`) cannot load them. Uploads stored before are checked by `maintenance.check-certificates` at worker start, which opens their private keys: those nodes cannot load get status `error` with `last_error` `certificate_chain_explicit_curve` or `certificate_key_explicit_curve`, audited as `certificate.unloadable`. Saving a site's HTTPS settings checks the chosen certificate itself and refuses such a certificate with `CERTIFICATE_CHAIN_EXPLICIT_CURVE` / `CERTIFICATE_KEY_EXPLICIT_CURVE`; a site bound to one is not changed automatically, and its cluster's nodes apply a new revision once another certificate (or none) is bound.
+
 | Limit | Value |
 | --- | --- |
 | Duration per call | 5 minutes for `dns.*`, 8 minutes otherwise, then `SIGKILL` |
@@ -368,6 +370,7 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificate
 | `traffic.rollup` | Every minute | Traffic rollup and cleanup (L4 app minute statistics included), usage rollup and retention, access log partition maintenance, upgrade expiry; one failing part does not stop the others |
 | `certificates.sweep` | Every minute | Certificate issuance and renewal |
 | `maintenance.recompile` | At start; skipped while `config_recompiled` in `system_setting` matches the current marker | Republishes every cluster once when an upgrade changes what stored data compiles to |
+| `maintenance.check-certificates` | At start | Checks uploaded certificates not marked yet and marks those nodes cannot load (EC keys with explicit curve parameters) as failed |
 | `maintenance.prune-revisions` | Minute 17 of every hour | Deletes revisions and DNS revisions beyond the retention count |
 | `maintenance.prune-idempotency-keys` | Minute 29 of every hour | Deletes expired idempotency keys (older than 24 hours) |
 | `maintenance.expire-cache-tasks` | Minute 43 of every hour | Fails purge and prefetch deliveries past their deadline; deletes tasks older than 90 days (purges a node has yet to make up stay) |

@@ -100,7 +100,7 @@ export function createAuth(opts: {
         defaultPrefix: "ewk_",
         maximumNameLength: 64,
         permissions: { defaultPermissions: { edgeweir: ["read", "write"] } },
-        // API keys act as their owner so the same RBAC applies to /api/v1.
+        // API keys act as the account they belong to, so /api/v1 passes the same checks as /rpc.
         enableSessionForAPIKeys: true,
         rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 600 },
       }),

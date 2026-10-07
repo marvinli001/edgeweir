@@ -13,6 +13,7 @@ import {
   evaluateValue,
   expressionErrorCodes,
   expressionErrorDefs,
+  ipMatches,
   isRateLimitKey,
   needsRulesV2,
   needsRulesV3,
@@ -146,6 +147,61 @@ describe("typed rule expressions", () => {
     expect(canonicalCidr("192.0.2.123/24")).toBe("192.0.2.0/24");
     expect(canonicalCidr("::ffff:192.0.2.12/120")).toBe("192.0.2.0/24");
     expect(() => canonicalCidr("0x7f000001")).toThrow();
+  });
+  // Go's net/netip reads these alike: only ::ffff:0:0/96 is IPv4-mapped, the deprecated
+  // IPv4-compatible form ::a.b.c.d is an IPv6 address.
+  it.each([
+    ["::1.2.3.4", "::102:304/128"],
+    ["0::1.2.3.4", "::102:304/128"],
+    ["::0.0.0.0/96", "::/96"],
+    ["::1.2.3.4/90", "::/90"],
+    ["::ffff:1.2.3.4", "1.2.3.4/32"],
+    ["::FFFF:102:304", "1.2.3.4/32"],
+    ["0:0:0:0:0:ffff:1.2.3.4/120", "1.2.3.0/24"],
+    ["::ffff:0:0/96", "0.0.0.0/0"],
+    ["::ffff:0:1.2.3.4", "::ffff:0:102:304/128"],
+    ["::ffff:0/112", "::ffff:0/112"],
+  ])("keeps IPv4-mapped apart from IPv4-compatible: %s", (input, want) => {
+    expect(canonicalCidr(input)).toBe(want);
+  });
+  it("refuses mapped prefixes shorter than 96 bits only for mapped addresses", () => {
+    expect(() => canonicalCidr("::ffff:1.2.3.4/95")).toThrow();
+    expect(() => canonicalCidr("::ffff:0:0/90")).toThrow();
+    expect(canonicalCidr("::1.2.3.4/95")).toBe("::/95");
+  });
+  it.each([
+    ["1.2.3.4", "::1.2.3.4", false],
+    ["::102:304", "::1.2.3.4", true],
+    ["::1.2.3.4", "::1.2.3.4", true],
+    ["::1.2.3.4", "1.2.3.4", false],
+    ["198.51.100.7", "::0.0.0.0/96", false],
+    ["::198.51.100.7", "::0.0.0.0/96", true],
+    ["::ffff:198.51.100.7", "::0.0.0.0/96", false],
+    ["::ffff:198.51.100.7", "198.51.100.0/24", true],
+    ["::ffff:c633:6407", "::ffff:0:0/96", true],
+    ["::c633:6407", "::ffff:0:0/96", false],
+  ])("matches client %s against %s: %s", (address, cidr, want) => {
+    expect(ipMatches(address, cidr)).toBe(want);
+  });
+  it.each([
+    ["::102:304/128", true],
+    ["::/96", true],
+    ["::ffff:0:102:304/128", true],
+    ["::ffff:0/112", true],
+    ["::ffff:102:304/128", false],
+    ["::ffff:0:0/96", false],
+    ["::ffff:1.2.3.4/128", false],
+    ["::1.2.3.4/128", false],
+  ])("accepts the IP value %s in compiled rules: %s", (value, want) => {
+    const ir = {
+      op: "in",
+      field: "ip.src",
+      valueType: "ip",
+      value: "",
+      values: [value],
+      children: [],
+    };
+    expect(validExpressionIr(ir, "waf-custom")).toBe(want);
   });
 });
 

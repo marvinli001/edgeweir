@@ -35,6 +35,7 @@ export const auditActions = [
   "certificate.renew",
   "certificate.renewal_rescheduled",
   "certificate.request",
+  "certificate.unloadable",
   "certificate.upload",
   "cluster.challenge_keys_rotate",
   "cluster.client_ip_update",

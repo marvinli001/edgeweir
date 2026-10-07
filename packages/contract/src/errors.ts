@@ -90,11 +90,17 @@ export const errorDefs = {
   /** A private key that cannot be read, such as an encrypted one. */
   CERTIFICATE_KEY_UNREADABLE: { status: 400, params: [] },
   CERTIFICATE_KEY_MISMATCH: { status: 400, params: [] },
+  /** An EC private key with explicit curve parameters instead of the curve's OID. */
+  CERTIFICATE_KEY_EXPLICIT_CURVE: { status: 400, params: [] },
+  /** A chain certificate whose EC key has explicit curve parameters instead of the curve's OID. */
+  CERTIFICATE_CHAIN_EXPLICIT_CURVE: { status: 400, params: [] },
   /** The first certificate is a CA, or one is not issued by the next. */
   CERTIFICATE_CHAIN_ORDER: { status: 400, params: [] },
   /** Not yet valid or expired; the validity in UTC ("2026-10-02 12:00 UTC"). */
   CERTIFICATE_NOT_CURRENTLY_VALID: { status: 400, params: ["notBefore", "notAfter"] },
   CERTIFICATE_NO_DNS_NAMES: { status: 400, params: [] },
+  /** A leaf key other than RSA (2048 bits or more) or ECDSA P-256, P-384 or P-521. */
+  CERTIFICATE_KEY_TYPE_UNSUPPORTED: { status: 400, params: [] },
   /** A certificate chosen for a site that is not issued yet or has expired. */
   CERTIFICATE_UNAVAILABLE: { status: 409, params: [] },
   /** Names a certificate or DNS zone does not cover, or HTTP-01 names no site has (first 5). */

@@ -308,6 +308,8 @@ revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节�
 
 网站证书尚未覆盖的域名（证书正为新域名重签）在集群全部活动节点具备 `tls-pending-domains-v1` 时带 `Domain.tls_pending` 下发（proto v0.19.0），节点只以 HTTP 服务它们；否则这些域名在新证书签发前不下发。
 
+上传与签发结果都不接受 EC 密钥使用显式曲线参数的证书，节点（Go `crypto/tls`）无法加载它们。此前保存的上传证书由 worker 启动时的 `maintenance.check-certificates` 解开私钥检查：节点无法加载的标记为 `error`，`last_error` 为 `certificate_chain_explicit_curve` 或 `certificate_key_explicit_curve`，并写审计日志（`certificate.unloadable`）。网站 HTTPS 保存时直接检查所选证书，这类证书以 `CERTIFICATE_CHAIN_EXPLICIT_CURVE` / `CERTIFICATE_KEY_EXPLICIT_CURVE` 拒绝；已绑定它的网站不被自动改动，换绑其他证书或取消证书后，新 revision 才能在该集群的节点上应用。
+
 | 限制 | 值 |
 | --- | --- |
 | 单次调用时长 | `dns.*` 5 分钟，其他 8 分钟，超时 `SIGKILL` |
@@ -368,6 +370,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `traffic.rollup` | 每分钟 | 流量汇总与清理（含 L4 应用的分钟统计）、用量汇总与保留期清理、访问日志分区维护、升级任务到期；一项失败不影响其他各项 |
 | `certificates.sweep` | 每分钟 | 证书签发与续期 |
 | `maintenance.recompile` | 启动时；`system_setting` 的 `config_recompiled` 与当前标记一致时跳过 | 升级改变了已存数据的编译结果时，为每个集群重新发布一次 revision |
+| `maintenance.check-certificates` | 启动时 | 检查尚未标记的已上传证书，把节点无法加载的（EC 密钥使用显式曲线参数）标记为错误 |
 | `maintenance.prune-revisions` | 每小时第 17 分 | 删除超出保留数量的 revision 与 DNS 版本 |
 | `maintenance.prune-idempotency-keys` | 每小时第 29 分 | 删除过期（超过 24 小时）的幂等键 |
 | `maintenance.expire-cache-tasks` | 每小时第 43 分 | 把超期未完成的刷新预热交付记为失败；删除 90 天前的任务（节点仍需补发的刷新保留） |

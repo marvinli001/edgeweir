@@ -9,6 +9,7 @@ import { sweepAlerts } from "../services/alerts";
 import { pruneBans } from "../services/bans";
 import { expireCacheTasks, pruneCacheTasks } from "../services/cache-tasks";
 import { sweepCertificates } from "../services/certificate-worker";
+import { markUnloadableCertificates } from "../services/certificates";
 import { rotateChallengeKeys } from "../services/challenge-keys";
 import { pruneDnsRevisions, reconcileDns } from "../services/dns";
 import { recompileAfterUpgrade } from "../services/recompile";
@@ -27,6 +28,7 @@ export const QUEUES = {
   recompile: "maintenance.recompile",
   traffic: "traffic.rollup",
   certificates: "certificates.sweep",
+  checkCertificates: "maintenance.check-certificates",
   pruneRevisions: "maintenance.prune-revisions",
   expireEnrollmentTokens: "maintenance.expire-enrollment-tokens",
   expireCacheTasks: "maintenance.expire-cache-tasks",
@@ -84,6 +86,11 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   });
   await boss.schedule(QUEUES.certificates, "* * * * *");
   await boss.send(QUEUES.certificates, {}, { singletonKey: "certificate-sweep" });
+  // Once per start: uploads stored before keys nodes cannot load were refused.
+  await boss.work(QUEUES.checkCertificates, async () => {
+    await markUnloadableCertificates(ctx);
+  });
+  await boss.send(QUEUES.checkCertificates, {}, { singletonKey: "check-certificates" });
 
   await boss.work(QUEUES.pruneRevisions, async () => {
     const removed = await pruneRevisions(ctx.db);

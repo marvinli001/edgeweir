@@ -19,6 +19,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { certificateErrorText } from "@/lib/certificate-errors";
+import {
+  certificateDaysLeft,
+  certificateExpired,
+  certificateState,
+} from "@/lib/certificate-status";
 import { formatDateTime, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
@@ -44,6 +49,8 @@ function CertificatesPage() {
     issuing: m.cert_status_issuing,
     ready: m.cert_status_ready,
     error: m.cert_status_error,
+    expired: m.cert_status_expired,
+    unloadable: m.cert_status_unloadable,
   };
   return (
     <Page
@@ -76,8 +83,15 @@ function CertificatesPage() {
               <Card key={cert.id} className="animate-enter" data-testid="certificate-card">
                 <CardHeader className="flex-row items-center justify-between">
                   <CardTitle className="truncate">{cert.name}</CardTitle>
-                  <Badge variant={cert.status === "error" ? "destructive" : "secondary"}>
-                    {status[cert.status]()}
+                  <Badge
+                    variant={
+                      ["error", "expired", "unloadable"].includes(certificateState(cert))
+                        ? "destructive"
+                        : "secondary"
+                    }
+                    data-testid="certificate-status"
+                  >
+                    {status[certificateState(cert)]()}
                   </Badge>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -89,13 +103,12 @@ function CertificatesPage() {
                   ) : null}
                   {cert.notAfter ? (
                     <p className="text-sm text-muted-foreground">
-                      {m.cert_expires({
-                        date: formatDateTime(cert.notAfter),
-                        days: Math.max(
-                          0,
-                          Math.ceil((Date.parse(cert.notAfter) - Date.now()) / 86_400_000),
-                        ),
-                      })}
+                      {certificateExpired(cert.notAfter)
+                        ? m.cert_expired_at({ date: formatDateTime(cert.notAfter) })
+                        : m.cert_expires({
+                            date: formatDateTime(cert.notAfter),
+                            days: certificateDaysLeft(cert.notAfter),
+                          })}
                     </p>
                   ) : null}
                   <p className="text-sm text-muted-foreground">

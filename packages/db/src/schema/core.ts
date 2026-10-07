@@ -455,7 +455,7 @@ export const configRevision = pgTable(
 );
 
 /**
- * Configuration canary of a cluster: the policy (set in the admin area) and
+ * Configuration canary of a cluster: the policy (set on the clusters page) and
  * the current rollout. With the policy on, nodes in canary node groups get
  * `candidate_revision` while the others stay on `stable_revision`; without
  * it (or without a row) every node gets the latest revision.
