@@ -24,7 +24,8 @@ function toneOf(node: Node, latest: number): StatusTone {
  * still line that a signal pulse runs along once when the strip appears and again whenever the
  * node applies a new revision (the page polls, so nothing loops); an offline or disabled one
  * hangs on a dashed idle line. Each node shows its applied revision, a word for every state but
- * in sync (at every width; the light never says it alone) and its egress.
+ * in sync (at every width, in place of the egress where the strip is narrow; the light never says
+ * it alone) and its egress.
  */
 export function ClusterLinks({ cluster }: { cluster: Cluster }) {
   const nodes = useQuery({
@@ -108,7 +109,13 @@ export function ClusterLinks({ cluster }: { cluster: Cluster }) {
                 </span>
               ) : null}
               {state ? <span className="min-w-0 truncate text-foreground">{state}</span> : null}
-              <span className="shrink-0 text-right tabular-nums text-muted-foreground @min-[22rem]:w-[4.75rem]">
+              {/* A narrow strip shows a node's state word in place of its egress. */}
+              <span
+                className={cn(
+                  "shrink-0 text-right tabular-nums text-muted-foreground @min-[22rem]:w-[4.75rem]",
+                  state && "hidden @min-[22rem]:block",
+                )}
+              >
                 {node.online && node.metrics
                   ? formatBitRate(node.metrics.egressBps / 8)
                   : node.status === "disabled"
