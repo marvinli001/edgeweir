@@ -266,7 +266,7 @@ API：`GET /api/v1/overview` 的 `attention`，见 [集群与概览](../referenc
 | 页签 | 内容 |
 | --- | --- |
 | **通用** | 以下各节：系统信息、节点通道、源站地址允许清单、节点发布源、用量、平台错误页 |
-| **监控** | `/system?tab=probes`：区域探针列表（页面操作 **添加探针**）与 **探测设置** 卡片，见 [区域探针](scheduling.md#区域探针)；`/regions?tab=probes` 跳转到这里 |
+| **监控** | `/system?tab=probes`：区域探针列表（页面操作 **添加探针**）、**最近一轮** 卡片（探测方 × 节点的延迟矩阵）与 **探测设置** 卡片，见 [区域探针](scheduling.md#区域探针)；`/regions?tab=probes` 跳转到这里 |
 | **服务账号** | `/system?tab=service-accounts`，见 [服务账号](#服务账号) |
 
 ### 系统信息

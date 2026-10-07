@@ -266,7 +266,7 @@ Page: **System settings** (`/system`), with the tabs:
 | Tab | Content |
 | --- | --- |
 | **General** | The sections below: system information, node channel, origin allow list, node release source, usage, platform error pages |
-| **Monitoring** | `/system?tab=probes`: the regional probe list (page action **Add probe**) and the **Probe settings** card, see [Regional probes](scheduling.en.md#regional-probes); `/regions?tab=probes` redirects there |
+| **Monitoring** | `/system?tab=probes`: the regional probe list (page action **Add probe**), the **Last round** card (a latency matrix of probers × nodes) and the **Probe settings** card, see [Regional probes](scheduling.en.md#regional-probes); `/regions?tab=probes` redirects there |
 | **Service accounts** | `/system?tab=service-accounts`, see [Service accounts](#service-accounts) |
 
 ### System information
