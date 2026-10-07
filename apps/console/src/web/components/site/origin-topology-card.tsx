@@ -46,7 +46,8 @@ function graphOf(site: Site, health: OriginHealth[]) {
     {
       id: "edge",
       title: site.clusterName,
-      detail: m.clusters_nodes_count({ online: delivery.currentNodes, total: delivery.totalNodes }),
+      // Of the cluster's online nodes, those running the site's latest configuration.
+      detail: m.clusters_applied({ applied: delivery.currentNodes, total: delivery.totalNodes }),
       tone: delivery.state === "live" ? "good" : delivery.state === "disabled" ? "idle" : "warn",
       icon: icon(ServerStack01Icon),
     },
