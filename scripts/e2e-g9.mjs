@@ -329,6 +329,24 @@ async function createSite(name, domains, extra = {}, cluster = clusterId) {
 async function certificate() {
   const dir = await mkdtemp(join(tmpdir(), "g9-"));
   const names = [HOST_PORTS, HOST_OTHER, HOST_KEEP, HOST_TLS].map((n) => `DNS:${n}`).join(",");
+  // A leaf, not a CA: OpenSSL 3's default config marks req -x509 output
+  // CA:TRUE, which uploads refuse (CERTIFICATE_CHAIN_ORDER); LibreSSL's does not.
+  const config = join(dir, "leaf.cnf");
+  await writeFile(
+    config,
+    [
+      "[req]",
+      "distinguished_name = dn",
+      "x509_extensions = leaf",
+      "prompt = no",
+      "[dn]",
+      `CN = ${HOST_PORTS}`,
+      "[leaf]",
+      "basicConstraints = critical,CA:FALSE",
+      `subjectAltName = ${names}`,
+      "",
+    ].join("\n"),
+  );
   await execute("openssl", [
     "req",
     "-x509",
@@ -346,10 +364,8 @@ async function certificate() {
     join(dir, "cert.pem"),
     "-days",
     "7",
-    "-subj",
-    `/CN=${HOST_PORTS}`,
-    "-addext",
-    `subjectAltName=${names}`,
+    "-config",
+    config,
   ]);
   const pem = {
     chainPem: await readFile(join(dir, "cert.pem"), "utf8"),
