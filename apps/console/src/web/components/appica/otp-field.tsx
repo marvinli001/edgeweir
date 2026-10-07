@@ -1,7 +1,10 @@
 import { OTPField as AppicaOTPField, OTPFieldInput } from "@appica/ui-react/otp-field";
 import { AppicaScope } from "@/components/appica/scope";
 
-/** One-time code input (TOTP), one slot per digit. */
+/**
+ * One-time code input (TOTP), one slot per digit; each slot is a sunk field like the console's
+ * inputs (appica's soft variant over the well, input-well's inner shadow and hairline).
+ */
 export function OtpField({
   length = 6,
   value,
@@ -21,8 +24,9 @@ export function OtpField({
   autoFocus?: boolean;
 }) {
   return (
-    <AppicaScope>
+    <AppicaScope className="[--background-muted:var(--well)]">
       <AppicaOTPField
+        variant="soft"
         length={length}
         value={value}
         onValueChange={onValueChange}
@@ -36,6 +40,7 @@ export function OtpField({
           <OTPFieldInput
             // biome-ignore lint/suspicious/noArrayIndexKey: slots are positional
             key={index}
+            className="rounded-xl input-well"
             aria-invalid={invalid || undefined}
             autoFocus={autoFocus && index === 0}
           />

@@ -39,7 +39,8 @@ export function Meter({
         }}
         className={cn("w-full", className)}
       >
-        <MeterProgress className="h-1 bg-well" />
+        {/* The track is a shallow well, like a progress bar's. */}
+        <MeterProgress className="h-1.5 rounded-full bg-well seg-well" />
       </AppicaMeter>
     </AppicaScope>
   );

@@ -30,7 +30,7 @@ export function ResourceList({
     <>
       <span>{title}</span>
       {count !== undefined ? (
-        <span className="inline-flex h-5 min-w-5 items-center justify-center gap-1 rounded-full bg-well px-1.5 text-xs font-medium tabular-nums text-muted-foreground">
+        <span className="inline-flex h-5 min-w-5 items-center justify-center gap-1 rounded-full bg-wash px-1.5 text-xs font-medium tabular-nums text-muted-foreground">
           {count}
         </span>
       ) : null}
@@ -50,7 +50,7 @@ export function ResourceList({
         {link ? (
           <Link
             {...link}
-            className="inline-flex items-center gap-1.5 rounded-md outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+            className="inline-flex items-center gap-1.5 rounded-md outline-none transition-colors focus-lit hover:text-foreground"
           >
             {heading}
           </Link>
@@ -84,7 +84,7 @@ export function ResourceRow({
     <li>
       <Link
         {...link}
-        className={cn(rowClass, "hover:bg-foreground/[0.04] focus-visible:bg-foreground/[0.06]")}
+        className={cn(rowClass, "focus-lit hover:bg-wash focus-visible:bg-wash")}
         data-testid={testId}
       >
         <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground [&_svg]:size-4">

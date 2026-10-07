@@ -28,19 +28,22 @@ export function CopyButton({ value, iconOnly }: { value: string; iconOnly?: bool
         else toast.error(m.common_copy_failed());
       }}
     >
+      {/* Copied: the tick pops in, in the healthy green, beside the word (or as the label). */}
       <HugeiconsIcon
         key={copied ? "copied" : "copy"}
         icon={copied ? Tick02Icon : Copy01Icon}
         strokeWidth={2}
-        className="animate-in zoom-in-50 fade-in duration-200"
+        className={cn("animate-in zoom-in-50 fade-in duration-200", copied && "text-state-good")}
       />
       {iconOnly ? null : label}
     </Button>
   );
 }
 
-/** A monospace block with a copy button, for commands and fingerprints. */
-/** `wrap={false}` keeps columns (zone files) and scrolls sideways instead. */
+/**
+ * A monospace block in a well with a copy button, for commands and fingerprints. `wrap={false}`
+ * keeps columns (zone files) and scrolls sideways instead.
+ */
 export function CodeBlock({
   value,
   testId,
@@ -55,7 +58,7 @@ export function CodeBlock({
       <pre
         data-testid={testId}
         className={cn(
-          "max-h-48 overflow-auto rounded-2xl bg-muted p-3 pr-12 font-mono text-xs leading-relaxed shadow-inner",
+          "max-h-48 overflow-auto rounded-2xl p-3 pr-12 font-mono text-xs leading-relaxed sunk-well",
           wrap ? "break-all whitespace-pre-wrap" : "whitespace-pre",
         )}
       >

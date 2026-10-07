@@ -27,7 +27,13 @@ export function ThemeToggle({ className }: { className?: string }) {
           />
         }
       >
-        <HugeiconsIcon icon={resolvedTheme === "dark" ? Moon02Icon : Sun03Icon} strokeWidth={2} />
+        {/* The glyph turns in when the scheme changes (it only fades under reduced motion). */}
+        <HugeiconsIcon
+          key={resolvedTheme}
+          icon={resolvedTheme === "dark" ? Moon02Icon : Sun03Icon}
+          strokeWidth={2}
+          className="animate-in spin-in-45 fade-in duration-300 ease-lit"
+        />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-36">
         <DropdownMenuRadioGroup
