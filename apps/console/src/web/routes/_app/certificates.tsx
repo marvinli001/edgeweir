@@ -1,3 +1,4 @@
+import type { CertificateDto } from "@edgeweir/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
@@ -7,10 +8,11 @@ import { DnsCredentialDialog, type EditableCredential } from "@/components/dns/c
 import { providerLabel } from "@/components/dns/labels";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
-import { Page } from "@/components/page";
+import { enterDelay, Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
+import { Dot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +23,7 @@ import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { certificateErrorText } from "@/lib/certificate-errors";
 import { formatDateTime, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/certificates")({ component: CertificatesPage });
 
@@ -39,12 +42,6 @@ function CertificatesPage() {
   // A DNS credential is edited in the dialog that adds one ("dns").
   const dialog = useDialogState<"upload" | "request" | "dns" | EditableCredential>();
   const refresh = () => client.invalidateQueries();
-  const status = {
-    pending: m.cert_status_pending,
-    issuing: m.cert_status_issuing,
-    ready: m.cert_status_ready,
-    error: m.cert_status_error,
-  };
   return (
     <Page
       title={m.cert_title()}
@@ -71,42 +68,64 @@ function CertificatesPage() {
         }
       >
         {(list) => (
-          <div className="grid gap-4 lg:grid-cols-2">
-            {list.map((cert) => (
-              <Card key={cert.id} className="animate-enter" data-testid="certificate-card">
-                <CardHeader className="flex-row items-center justify-between">
-                  <CardTitle className="truncate">{cert.name}</CardTitle>
-                  <Badge variant={cert.status === "error" ? "destructive" : "secondary"}>
-                    {status[cert.status]()}
-                  </Badge>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <p className="break-all text-sm">{cert.names.join(", ")}</p>
-                  {cert.lastError ? (
-                    <SafetyNote className="text-destructive" data-testid="certificate-error">
-                      {certificateErrorText(cert.lastError)}
-                    </SafetyNote>
-                  ) : null}
-                  {cert.notAfter ? (
-                    <p className="text-sm text-muted-foreground">
-                      {m.cert_expires({
-                        date: formatDateTime(cert.notAfter),
-                        days: Math.max(
-                          0,
-                          Math.ceil((Date.parse(cert.notAfter) - Date.now()) / 86_400_000),
-                        ),
-                      })}
+          // One card, a flat row per certificate: name and state, the names it covers, expiry and
+          // renewal, then its actions.
+          <ul
+            className="flex flex-col divide-y rounded-2xl bg-card shadow-elev-1 edge-lit"
+            data-testid="certificate-list"
+          >
+            {list.map((cert, index) => {
+              const days = cert.notAfter
+                ? Math.max(0, Math.ceil((Date.parse(cert.notAfter) - Date.now()) / 86_400_000))
+                : null;
+              return (
+                <li
+                  key={cert.id}
+                  className="grid gap-x-6 gap-y-3 px-5 py-4 animate-enter @3xl/main:grid-cols-[minmax(0,1fr)_minmax(0,24rem)_9.5rem]"
+                  style={enterDelay(index)}
+                  data-testid="certificate-card"
+                >
+                  <div className="flex min-w-0 flex-col gap-1.5">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <span className="truncate font-medium">{cert.name}</span>
+                      <CertificateStatus status={cert.status} />
+                    </div>
+                    <p className="font-mono text-xs leading-5 break-all text-muted-foreground">
+                      {cert.names.join(", ")}
                     </p>
-                  ) : null}
-                  <p className="text-sm text-muted-foreground">
-                    {cert.autoRenew ? m.cert_auto_on() : m.cert_auto_off()}
-                  </p>
-                  {cert.renewAt && cert.autoRenew ? (
-                    <p className="text-xs text-muted-foreground">
-                      {m.cert_renew_at({ date: formatDateTime(cert.renewAt) })}
-                    </p>
-                  ) : null}
-                  <div className="flex justify-end gap-2">
+                    {cert.lastError ? (
+                      <SafetyNote className="text-destructive" data-testid="certificate-error">
+                        {certificateErrorText(cert.lastError)}
+                      </SafetyNote>
+                    ) : null}
+                  </div>
+                  <div className="flex min-w-0 flex-col gap-1 text-sm">
+                    {cert.notAfter && days !== null ? (
+                      <span
+                        className={cn(
+                          "relative",
+                          days <= 14 ? "ps-4 @3xl/main:ps-0" : "text-muted-foreground",
+                        )}
+                      >
+                        {/* Expiring within two weeks: a light before the days left (in the gap). */}
+                        {days <= 14 ? (
+                          <span className="absolute top-1.5 left-0 inline-flex @3xl/main:-left-4">
+                            <Dot tone={days === 0 ? "bad" : "warn"} />
+                          </span>
+                        ) : null}
+                        {m.cert_expires({ date: formatDateTime(cert.notAfter), days })}
+                      </span>
+                    ) : null}
+                    <span className="text-muted-foreground">
+                      {cert.autoRenew ? m.cert_auto_on() : m.cert_auto_off()}
+                    </span>
+                    {cert.renewAt && cert.autoRenew ? (
+                      <span className="text-xs text-muted-foreground">
+                        {m.cert_renew_at({ date: formatDateTime(cert.renewAt) })}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="flex shrink-0 gap-2 @3xl/main:justify-end">
                     {cert.source === "acme" ? (
                       <Button
                         variant="outline"
@@ -138,10 +157,10 @@ function CertificatesPage() {
                       }}
                     />
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </QueryView>
       <Card>
@@ -154,13 +173,13 @@ function CertificatesPage() {
               list.map((credential) => (
                 <div
                   key={credential.id}
-                  className="flex flex-wrap items-center justify-between gap-2 border-b py-3 last:border-0"
+                  className="flex flex-wrap items-center justify-between gap-2 border-b py-3 first:pt-0 last:border-0 last:pb-0"
                 >
                   <div className="min-w-48 flex-1">
                     <p className="font-medium break-words">{credential.name}</p>
                     <p className="text-sm break-words text-muted-foreground">{credential.zone}</p>
                   </div>
-                  <Badge variant="outline">{providerLabel(credential.provider)}</Badge>
+                  <Badge variant="secondary">{providerLabel(credential.provider)}</Badge>
                   <Button variant="ghost" size="sm" onClick={() => dialog.show(credential)}>
                     {m.common_edit()}
                   </Button>
@@ -206,6 +225,28 @@ function CertificatesPage() {
         />
       ) : null}
     </Page>
+  );
+}
+
+/**
+ * A certificate's state as a tinted chip with its light: ready (good), waiting (idle), issuing
+ * (the signal, live), failed (the destructive tint).
+ */
+function CertificateStatus({ status }: { status: CertificateDto["status"] }) {
+  if (status === "error") return <Badge variant="destructive">{m.cert_status_error()}</Badge>;
+  return (
+    <Badge variant="secondary">
+      {status === "issuing" ? (
+        <span className="lit-glow dot-pulse relative inline-flex size-1.5 shrink-0 rounded-full border border-transparent bg-signal" />
+      ) : (
+        <Dot tone={status === "ready" ? "good" : "idle"} small />
+      )}
+      {status === "ready"
+        ? m.cert_status_ready()
+        : status === "issuing"
+          ? m.cert_status_issuing()
+          : m.cert_status_pending()}
+    </Badge>
   );
 }
 
