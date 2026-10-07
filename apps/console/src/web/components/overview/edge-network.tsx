@@ -23,14 +23,25 @@ interface Location {
   total: number;
   egress: number;
   tone: GlobeTone;
+  /** Why the light is not green, in words (the light never says it alone). */
+  state: string | null;
 }
 
-/** Where a location stands: all serving, some down or behind, or none serving. */
-function toneOf(nodes: Node[], latest: number): GlobeTone {
-  const serving = nodes.filter((n) => n.online && n.dataPlaneHealthy);
-  if (serving.length === 0) return "bad";
-  const lagging = nodes.some((n) => n.online && n.appliedRevision < (n.targetRevision ?? latest));
-  return serving.length < nodes.length || lagging ? "warn" : "good";
+/**
+ * Where a location stands: all serving (good), some down or behind (warn), or none serving (bad),
+ * with the word for the worst cause: offline, data plane unhealthy, behind.
+ */
+function standingOf(nodes: Node[], latest: number): { tone: GlobeTone; state: string | null } {
+  const online = nodes.filter((n) => n.online);
+  const serving = online.filter((n) => n.dataPlaneHealthy);
+  const unhealthy = online.length > serving.length;
+  const lagging = online.some((n) => n.appliedRevision < (n.targetRevision ?? latest));
+  if (serving.length === 0)
+    return { tone: "bad", state: unhealthy ? m.nodes_unhealthy() : m.nodes_offline() };
+  if (unhealthy) return { tone: "warn", state: m.nodes_unhealthy() };
+  if (online.length < nodes.length) return { tone: "warn", state: m.nodes_offline() };
+  if (lagging) return { tone: "warn", state: m.nodes_behind() };
+  return { tone: "good", state: null };
 }
 
 function locationsOf(nodes: Node[], clusters: Cluster[]): Location[] {
@@ -52,15 +63,16 @@ function locationsOf(nodes: Node[], clusters: Cluster[]): Location[] {
       online: list.filter((n) => n.online).length,
       total: list.length,
       egress: list.reduce((sum, n) => sum + (n.online ? (n.metrics?.egressBps ?? 0) : 0), 0),
-      tone: toneOf(list, latest.get(first.clusterId) ?? 0),
+      ...standingOf(list, latest.get(first.clusterId) ?? 0),
     };
   });
 }
 
 /**
  * The edge network at a glance: every edge location on a globe, colored by its health, and the
- * locations listed with their nodes and egress (the list is the globe's text alternative). Side
- * by side where the card spans the row, stacked where it stands in a column of the bento.
+ * locations listed with their health in words, nodes and egress (the list is the globe's text
+ * alternative). Side by side where the card spans the row, stacked where it stands in a column
+ * of the bento.
  */
 export function EdgeNetworkCard({
   nodes,
@@ -140,9 +152,12 @@ export function EdgeNetworkCard({
                 <Dot tone={location.tone} glow={location.online > 0} />
                 <span className="flex min-w-0 items-baseline gap-2">
                   <span className="truncate font-medium">{location.region}</span>
-                  <span className="truncate text-xs text-muted-foreground">
+                  <span className="shrink-[4] truncate text-xs text-muted-foreground">
                     {location.clusterName}
                   </span>
+                  {location.state ? (
+                    <span className="truncate text-xs font-medium">{location.state}</span>
+                  ) : null}
                 </span>
                 <span className="text-xs tabular-nums text-muted-foreground">
                   {m.clusters_nodes_count({ online: location.online, total: location.total })}
