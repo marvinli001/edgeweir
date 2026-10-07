@@ -21,7 +21,7 @@ import {
   type SchedulingRule,
   type UpgradeJob,
 } from "@edgeweir/contract";
-import { ipLists } from "./access";
+import { certificates, ipLists } from "./access";
 import { type Fixtures, notFound } from "./define";
 import {
   ago,
@@ -108,6 +108,8 @@ interface AppSeed {
   portEnd?: number;
   /** Origins answer on the port the connection arrived on (their port is 0). */
   samePort?: boolean;
+  /** TLS terminated at the node with this certificate (by name). */
+  tls?: { certificate: string; minimumVersion: "1.2" | "1.3" };
   enabled?: boolean;
   origins: { address: string; port: number; weight?: number; backup?: boolean }[];
   acceptProxyProtocol?: boolean;
@@ -210,6 +212,8 @@ const appSeeds: AppSeed[] = [
     clusterId: EU,
     protocol: "tcp",
     port: 20883,
+    // Devices connect with TLS; the brokers speak plain MQTT.
+    tls: { certificate: "mqtt.example.org", minimumVersion: "1.2" },
     origins: [
       { address: "198.51.100.90", port: 1883, weight: 2 },
       { address: "2001:db8:b::90", port: 1883, weight: 1 },
@@ -970,6 +974,8 @@ function dnsNames(clusterId: string, target: string) {
   };
 }
 
+const certificateNamed = (name: string) => certificates.find((c) => c.name === name)?.id ?? null;
+
 const l4Apps: L4App[] = appSeeds.map((seed, index) => {
   const appIdValue = appId(index);
   return {
@@ -981,9 +987,9 @@ const l4Apps: L4App[] = appSeeds.map((seed, index) => {
     port: seed.port,
     portEnd: seed.portEnd ?? null,
     originPortMode: seed.samePort ? "same" : "fixed",
-    certificateId: null,
-    certificateName: null,
-    tlsMinimumVersion: "1.2",
+    certificateId: seed.tls ? certificateNamed(seed.tls.certificate) : null,
+    certificateName: seed.tls?.certificate ?? null,
+    tlsMinimumVersion: seed.tls?.minimumVersion ?? "1.2",
     enabled: seed.enabled ?? true,
     acceptProxyProtocol: seed.acceptProxyProtocol ?? false,
     proxyProtocolVersion: seed.proxyProtocolVersion ?? 0,

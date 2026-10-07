@@ -172,6 +172,24 @@ export const certificates: CertificateDto[] = [
     status: "error",
     lastError: "dns_auth_failed",
   }),
+  // Uploaded for the MQTT broker's TLS (layer 4, eu-edge).
+  certificate({
+    n: 12,
+    name: "mqtt.example.org",
+    source: "upload",
+    issued: 40 * DAY,
+    validFor: 397 * DAY,
+  }),
+  // Uploaded before explicit EC curve parameters were refused: nodes cannot load its key.
+  certificate({
+    n: 13,
+    name: "intranet.example.net",
+    source: "upload",
+    status: "error",
+    issued: 200 * DAY,
+    validFor: 365 * DAY,
+    lastError: "certificate_key_explicit_curve",
+  }),
 ];
 
 /** The issued certificate that covers every domain of a site, if any. */
