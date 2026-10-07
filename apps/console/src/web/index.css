@@ -398,9 +398,10 @@
 }
 
 /*
- * The pulse of a live status dot: a disc of the dot's own color grows and fades (transform and
- * opacity of a pseudo-element; the dot's lit-glow never animates). Live states only, beside a
- * word; off under reduced motion.
+ * The pulse of a status dot for work in progress (issuing, rolling out, awaiting a heartbeat): a
+ * disc of the dot's own color grows and fades (transform and opacity of a pseudo-element; the
+ * dot's lit-glow never animates). Only while the work runs, beside a word; steady live states
+ * (online, live views) keep lit-glow alone. Off under reduced motion.
  */
 @utility dot-pulse {
   &::after {

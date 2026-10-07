@@ -19,11 +19,11 @@ const LIT: Record<StatusTone, string> = {
 };
 
 /**
- * A state dot; `pulse` marks live states (something running now), which also glow and pulse (a
- * pseudo-element; not under reduced motion). `glow` lights a live state without the pulse, for
- * polled lists and pages where nothing loops (a node online in the node list). Always pair it
- * with a text label. The transparent border shows as a ring in forced colors, where the fill is
- * dropped.
+ * A state dot. `pulse` marks work in progress that ends (issuing, rolling out, a canary, awaiting a
+ * heartbeat): it glows and pulses (a pseudo-element; not under reduced motion) until the state
+ * changes. `glow` lights a steady live state without the pulse (online, live): polled lists and
+ * pages never loop for a state that does not end. Always pair it with a text label. The
+ * transparent border shows as a ring in forced colors, where the fill is dropped.
  */
 export function Dot({
   tone,
@@ -49,7 +49,10 @@ export function Dot({
   );
 }
 
-/** The signal light of a live view (data that refreshes by itself), with its word. */
+/**
+ * The signal light of a live view (data that refreshes by itself), with its word: lit, not
+ * pulsing, since live views poll and a steady state never loops.
+ */
 export function LiveDot({ label, className }: { label: string; className?: string }) {
   return (
     <span
@@ -58,7 +61,7 @@ export function LiveDot({ label, className }: { label: string; className?: strin
         className,
       )}
     >
-      <span className="lit-glow dot-pulse relative inline-flex size-1.5 shrink-0 rounded-full border border-transparent bg-signal" />
+      <span className="lit-glow relative inline-flex size-1.5 shrink-0 rounded-full border border-transparent bg-signal" />
       {label}
     </span>
   );

@@ -75,7 +75,7 @@ function ProbeStatus({ probe }: { probe: Probe }) {
       </StatusDot>
     );
   return probe.online ? (
-    <StatusDot tone="good" pulse data-testid="probe-online">
+    <StatusDot tone="good" glow data-testid="probe-online">
       {m.nodes_online()}
     </StatusDot>
   ) : (
