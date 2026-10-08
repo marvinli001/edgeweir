@@ -40,6 +40,13 @@ async function check(page: Page, name: string) {
       await page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"),
       `${name} overflows at 375 px (${scheme})`,
     ).toBe(true);
+    // Clipping hides content wider than its card (a PEM's long lines): the page itself does not overflow.
+    expect(
+      await page.evaluate(
+        `[...document.querySelectorAll('[data-slot="card"]')].every((card) => card.getBoundingClientRect().right <= window.innerWidth + 1 && card.scrollWidth <= card.clientWidth + 1)`,
+      ),
+      `${name}: a card's content is wider than the card at 375 px (${scheme})`,
+    ).toBe(true);
   }
   await page.emulateMedia({ colorScheme: "light" });
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -106,12 +113,11 @@ test("G11: certificate authorities, key types and ACME accounts", async ({ page 
   const pageErrors = errors(page);
   await login(page, ...ADMIN);
   await page.goto("/system");
-  const directory = page.getByTestId("acme-directory");
+  await expect(page.getByTestId("acme-directory")).toBeVisible();
   await expect(page.getByTestId("acme-directory-url")).toHaveValue(state.pebble);
   await expect(page.getByTestId("acme-directory-origin")).toHaveText("已保存");
   await expect(page.getByTestId("acme-directory-ca-origin")).toHaveText("已保存");
   await expect(page.getByTestId("acme-directory-ca")).toHaveValue(/BEGIN CERTIFICATE/);
-  await directory.scrollIntoViewIfNeeded();
   await check(page, "system-acme-directory");
 
   await page.goto("/certificates");
