@@ -142,11 +142,13 @@ const schema = z.object({
    */
   EDGEWEIR_DOWNLOADS_DIR: z.string().optional(),
   EDGEWEIR_CERTD_BIN: z.string().default("edgeweir-certd"),
+  /** Fallback URL of the custom ACME directory (system settings win). */
   EDGEWEIR_ACME_DIRECTORY: z.string().default(""),
   EDGEWEIR_OUTBOUND_ALLOW_CIDRS: z.string().default(""),
   /** Fallback PEM bundle for SMTP TLS when the SMTP settings carry no CA. */
   EDGEWEIR_SMTP_CA_FILE: z.string().default(""),
   EDGEWEIR_DNS_TEST_ENDPOINT: z.string().default(""),
+  /** Fallback CA certificates (PEM file) of the custom ACME directory. */
   EDGEWEIR_ACME_CA_FILE: z.string().default(""),
 });
 
