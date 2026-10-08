@@ -124,7 +124,15 @@ export const CNAME_RETIRE_HOURS = 24;
  * (including replaced ones still resolving) and never `all`, `all-<n>` or a
  * record name of a DNS binding (CNAME_PREFIX_CONFLICT).
  */
-export const cnamePrefixInput = z.object({ id: uuid, prefix: cnamePrefix.optional() });
+/**
+ * Without `prefix`: a new random one. A UUID is only accepted as the
+ * object's own prefix from before CNAME prefixes, while it still resolves
+ * (taking it back; CNAME_PREFIX_INVALID otherwise).
+ */
+export const cnamePrefixInput = z.object({
+  id: uuid,
+  prefix: z.union([cnamePrefix, uuid.transform((v) => v.toLowerCase())]).optional(),
+});
 
 /** The prefix and the replaced ones still in the DNS plan. */
 export const cnamePrefixState = z.object({

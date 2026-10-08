@@ -119,6 +119,34 @@ async function assertCluster(db: Executor, clusterId: string) {
   if (!cluster) fail("CLUSTER_NOT_FOUND", "cluster not found");
   return cluster;
 }
+/**
+ * Whether the cluster's automatic DNS has claimed `<prefix>.<domain>` at
+ * its provider (dns_managed_name: published or being published); null
+ * for bindings that are not automatic.
+ */
+export async function cnameClaimed(
+  db: Executor,
+  clusterId: string,
+  prefix: string,
+): Promise<boolean | null> {
+  const row = await loadBinding(db, clusterId);
+  if (row.mode !== "auto" || !row.providerId || !row.domain) return null;
+  const provider = await findProvider(db, row.providerId);
+  const absoluteName = `${prefix}.${row.domain}`;
+  if (absoluteName !== provider.zone && !absoluteName.endsWith(`.${provider.zone}`)) return null;
+  const [claimed] = await db
+    .select({ name: schema.dnsManagedName.name })
+    .from(schema.dnsManagedName)
+    .where(
+      and(
+        eq(schema.dnsManagedName.providerId, row.providerId),
+        eq(schema.dnsManagedName.clusterId, clusterId),
+        eq(schema.dnsManagedName.name, relative(absoluteName, provider.zone)),
+        eq(schema.dnsManagedName.type, "CNAME"),
+      ),
+    );
+  return claimed !== undefined;
+}
 /** The binding row, or an unsaved "off" binding. */
 export async function loadBinding(db: Executor, clusterId: string): Promise<BindingRow> {
   const [row] = await db
@@ -1509,10 +1537,17 @@ export async function siteDnsTarget(app: AppContext, siteId: string) {
   const provider = row.providerId ? await findProvider(app.db, row.providerId) : null;
   const revision = await revisionRow(app.db, site.clusterId, row.desiredRevision);
   const allName = provider ? relative(`${row.allLabel}.${row.domain}`, provider.zone) : "";
+  // The target itself must be in the applied records: a new prefix the
+  // mass removal protection holds back is not published yet.
+  const targetName = provider ? relative(target, provider.zone) : "";
+  const hasTarget = !!revision?.records.some(
+    (r) => r.type === "CNAME" && r.name === targetName && !lineOf(r),
+  );
   return {
     target,
     mode: "auto" as const,
-    published: row.appliedRevision === row.desiredRevision && revision?.status === "applied",
+    published:
+      row.appliedRevision === row.desiredRevision && revision?.status === "applied" && hasTarget,
     healthy: !!revision?.records.some((r) => r.name === allName && addressRecord(r)),
     lines,
     retired,

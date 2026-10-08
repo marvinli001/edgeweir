@@ -1,12 +1,12 @@
 import { randomInt } from "node:crypto";
-import { CNAME_RETIRE_HOURS, type CnamePrefixState } from "@edgeweir/contract";
+import { CNAME_PREFIX_RE, CNAME_RETIRE_HOURS, type CnamePrefixState } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { and, asc, eq, gt, inArray, lte, or } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { lockCnamePrefixes } from "../lib/locks";
 import { type Actor, recordAudit } from "./audit";
-import { publishClusterDns } from "./dns";
+import { cnameClaimed, publishClusterDns } from "./dns";
 import type { Executor, Tx } from "./revisions";
 
 const LETTERS = "abcdefghijklmnopqrstuvwxyz";
@@ -122,8 +122,11 @@ export async function retiredPrefixesOf(db: Executor, ids: string[], now = new D
 /**
  * Sets the CNAME prefix of a site or layer-4 application (a new random one
  * without `prefix`). The replaced prefix keeps resolving for 24 hours
- * (cname_retired); taking back a prefix of the same owner still resolving
- * ends that. Publishes the cluster's DNS (reason cname) and audits
+ * (cname_retired) unless the cluster's automatic DNS never published it;
+ * taking back a prefix of the same owner still resolving ends that, and
+ * is how an object from before CNAME prefixes gets its id back (the only
+ * prefix outside CNAME_PREFIX_RE it may take, CNAME_PREFIX_INVALID
+ * otherwise). Publishes the cluster's DNS (reason cname) and audits
  * site.cname_update / l4.cname_update.
  */
 export async function setCnamePrefix(
@@ -134,7 +137,8 @@ export async function setCnamePrefix(
   now = new Date(),
 ): Promise<CnamePrefixState> {
   return app.db.transaction(async (tx) => {
-    await lockCnamePrefixes(tx);
+    // The object's row first, then the prefixes (the order of site create
+    // and update, which lock domains before prefixes).
     const row =
       "site" in owner
         ? (
@@ -165,6 +169,13 @@ export async function setCnamePrefix(
       if ("site" in owner) fail("SITE_NOT_FOUND", "site not found");
       fail("L4_APP_NOT_FOUND", "layer-4 application not found");
     }
+    await lockCnamePrefixes(tx);
+    if (prefix !== undefined && !CNAME_PREFIX_RE.test(prefix)) {
+      const own =
+        prefix === row.id ||
+        (await retiredPrefixes(tx, owner, now)).some((retired) => retired.prefix === prefix);
+      if (!own) fail("CNAME_PREFIX_INVALID", `invalid CNAME prefix ${prefix}`, { prefix });
+    }
     let next = prefix;
     if (next === undefined) {
       for (let attempt = 0; next === undefined && attempt < 16; attempt++) {
@@ -187,18 +198,22 @@ export async function setCnamePrefix(
               : eq(schema.cnameRetired.l4AppId, owner.app),
           ),
         );
-      await tx
-        .insert(schema.cnameRetired)
-        .values({
-          clusterId: row.clusterId,
-          ...("site" in owner ? { siteId: owner.site } : { l4AppId: owner.app }),
-          prefix: row.prefix,
-          expiresAt: new Date(now.getTime() + RETIRE_MS),
-        })
-        .onConflictDoUpdate({
-          target: schema.cnameRetired.prefix,
-          set: { expiresAt: new Date(now.getTime() + RETIRE_MS) },
-        });
+      // A name the cluster's automatic DNS never published resolves
+      // nowhere: nothing depends on it, and one that collides with a record
+      // of the zone must not hold up the cluster's DNS for 24 hours.
+      if ((await cnameClaimed(tx, row.clusterId, row.prefix)) !== false)
+        await tx
+          .insert(schema.cnameRetired)
+          .values({
+            clusterId: row.clusterId,
+            ...("site" in owner ? { siteId: owner.site } : { l4AppId: owner.app }),
+            prefix: row.prefix,
+            expiresAt: new Date(now.getTime() + RETIRE_MS),
+          })
+          .onConflictDoUpdate({
+            target: schema.cnameRetired.prefix,
+            set: { expiresAt: new Date(now.getTime() + RETIRE_MS) },
+          });
       if ("site" in owner)
         await tx.update(schema.site).set({ cnamePrefix: next }).where(eq(schema.site.id, row.id));
       else
@@ -224,17 +239,37 @@ export async function setCnamePrefix(
 
 /**
  * Deletes replaced prefixes whose 24 hours are over and publishes the DNS
- * of their clusters (reason cname_expired), which drops their records.
- * Returns the clusters republished.
+ * of their clusters (reason cname_expired), which drops their records: one
+ * cluster at a time, so a cluster whose DNS cannot be published keeps its
+ * rows (and retries) without holding up the others. Returns the clusters
+ * republished.
  */
 export async function expireCnamePrefixes(app: AppContext, now = new Date()): Promise<string[]> {
-  return app.db.transaction(async (tx) => {
-    const expired = await tx
-      .delete(schema.cnameRetired)
-      .where(lte(schema.cnameRetired.expiresAt, now))
-      .returning({ clusterId: schema.cnameRetired.clusterId });
-    const clusters = [...new Set(expired.map((r) => r.clusterId))].sort();
-    for (const clusterId of clusters) await publishClusterDns(tx, clusterId, "cname_expired");
-    return clusters;
-  });
+  const due = await app.db
+    .selectDistinct({ clusterId: schema.cnameRetired.clusterId })
+    .from(schema.cnameRetired)
+    .where(lte(schema.cnameRetired.expiresAt, now));
+  const done: string[] = [];
+  for (const clusterId of due.map((r) => r.clusterId).sort()) {
+    try {
+      await app.db.transaction(async (tx) => {
+        await tx
+          .delete(schema.cnameRetired)
+          .where(
+            and(
+              eq(schema.cnameRetired.clusterId, clusterId),
+              lte(schema.cnameRetired.expiresAt, now),
+            ),
+          );
+        await publishClusterDns(tx, clusterId, "cname_expired");
+      });
+      done.push(clusterId);
+    } catch (error) {
+      app.log.warn("cannot drop the replaced CNAME prefixes of a cluster", {
+        clusterId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return done;
 }

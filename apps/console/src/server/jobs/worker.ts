@@ -60,9 +60,16 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   });
   await boss.schedule(QUEUES.rollouts, "* * * * *");
   await boss.work(QUEUES.dns, async () => {
-    // Replaced CNAME prefixes leave the plan after their 24 hours.
-    const expired = await expireCnamePrefixes(ctx);
-    if (expired.length) log.info("expired replaced CNAME prefixes", { clusters: expired });
+    // Replaced CNAME prefixes leave the plan after their 24 hours; the
+    // reconciliation runs whatever happens to them.
+    try {
+      const expired = await expireCnamePrefixes(ctx);
+      if (expired.length) log.info("expired replaced CNAME prefixes", { clusters: expired });
+    } catch (error) {
+      log.warn("cannot expire replaced CNAME prefixes", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
     await reconcileDns(ctx);
   });
   await boss.schedule(QUEUES.dns, "* * * * *");

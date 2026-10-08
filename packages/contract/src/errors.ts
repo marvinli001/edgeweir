@@ -156,6 +156,7 @@ export const errorDefs = {
   DOMAIN_INVALID: { status: 400, params: ["domain"] },
   /** The CNAME prefix is taken, still resolving for another site or application, or a DNS record name. */
   CNAME_PREFIX_CONFLICT: { status: 409, params: ["prefix"] },
+  CNAME_PREFIX_INVALID: { status: 400, params: ["prefix"] },
   /** The default site for unknown hosts is not an enabled site of the cluster. */
   DEFAULT_SITE_INVALID: { status: 400, params: [] },
   /** Unknown SNI can only get the default site's certificate when it has one. */
