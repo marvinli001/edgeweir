@@ -492,7 +492,8 @@ try {
     a: await upload("g11-a", await serverCertificate("g11-a", [A])),
     b: await upload("g11-b", await serverCertificate("g11-b", [B])),
     wild: await upload("g11-wild", await serverCertificate("g11-wild", ["*.g11.test"])),
-    rsa: await upload("g11-rsa", await serverCertificate("g11-rsa", [A, B, C], { rsa: true })),
+    // Exact names win over the wildcard before the key type: the RSA certificate leaves C to it.
+    rsa: await upload("g11-rsa", await serverCertificate("g11-rsa", [A, B], { rsa: true })),
     m: await upload("g11-m", await serverCertificate("g11-m", [M])),
   };
   const https = (id, settings) => admin.raw("PUT", `/sites/${id}/https`, { settings });
