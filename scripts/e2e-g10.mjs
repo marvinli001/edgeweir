@@ -17,7 +17,7 @@
 //   e. scan protection (threshold 10): client-b's 11th request to an unknown
 //      host bans it on every site of the node (403 on x.multi.g10.test); the
 //      console lists the platform ban (unknown_host_scan, node, trigger);
-//      lifting it lets client-b in again
+//      lifting it lets client-b in again, and a new scan bans it again
 //   f. CNAME prefixes on the cluster's DNS binding: a new site's target uses
 //      8 random characters; regenerating keeps the old name in the plan and
 //      the provider's zone for 24 hours; a custom prefix; a taken prefix and
@@ -555,14 +555,40 @@ try {
   const seconds = (Date.parse(ban.expiresAt) - Date.parse(ban.createdAt)) / 1000;
   assert.ok(Math.abs(seconds - SCAN.banSeconds) <= 2, `ban for ${seconds} s`);
   await admin.ok("DELETE", `/bans/${ban.id}`);
-  await unknownHosts({});
   await waitFor(
     "the lifted ban lets client-b in",
     async () => servedBy(await request({ target: "node", host: EXACT }, "client-b")) === "exact",
     60,
   );
+  // Lifted, client-b is counted afresh: scanning on bans it again.
+  const again = await requests(
+    [
+      ...Array.from({ length: SCAN.threshold + 1 }, (_, i) => ({
+        target: "node",
+        host: `rescan-${i}.g10.test`,
+      })),
+      { target: "node", host: EXACT },
+    ],
+    "client-b",
+  );
+  assert.ok(
+    again.slice(0, SCAN.threshold + 1).every((r) => servedBy(r) === "unknown-host"),
+    `the new scan: ${again.map(summary)}`,
+  );
+  assert.equal(again.at(-1).status, 403, `scanning again after the lift: ${summary(again.at(-1))}`);
+  const [rebanned] = await waitFor("the console lists the new scan ban", async () => {
+    const found = (await scanBans(scanner)).filter((b) => b.id !== ban.id);
+    return found.length ? found : null;
+  });
+  await admin.ok("DELETE", `/bans/${rebanned.id}`);
+  await unknownHosts({});
+  await waitFor(
+    "the second lift lets client-b in",
+    async () => servedBy(await request({ target: "node", host: EXACT }, "client-b")) === "exact",
+    60,
+  );
   pass(
-    `e. scan protection (${SCAN.threshold} in 60 s): client-b (${scanner}) passed ${SCAN.threshold} unknown hosts, request ${SCAN.threshold + 1} banned it on every site (403 on ${EXACT}, client-a served); the console lists the platform ban (unknown_host_scan, node ${ban.node.name}, observed ${ban.trigger.observed}, ${seconds} s); lifted, client-b is served again`,
+    `e. scan protection (${SCAN.threshold} in 60 s): client-b (${scanner}) passed ${SCAN.threshold} unknown hosts, request ${SCAN.threshold + 1} banned it on every site (403 on ${EXACT}, client-a served); the console lists the platform ban (unknown_host_scan, node ${ban.node.name}, observed ${ban.trigger.observed}, ${seconds} s); lifted, client-b is served again and counted afresh (a new scan banned it again, lifted)`,
   );
 
   // -------------------------------------------------------------- f. CNAME prefixes

@@ -101,6 +101,7 @@ Purges and prefetches find a site by Host with the same precedence.
 - Counted whatever the handling (handing to the default site included), per client IP (IPv4 by address, IPv6 by /64); where the client IP comes from: [client IP](../deploy/nodes.en.md#client-ip).
 - The ban is global (scope `platform`): every site of the node answers 403 (`X-Edgeweir-Error: ip-banned`). It is listed under **IP lists & bans → Bans** with the reason "Unknown host scan" and the trigger "Unknown host requests", and shared with the other nodes by the "share automatic bans" setting, see [bans](bans.en.md).
 - Addresses of allow entries in platform IP lists and trusted proxies are neither counted nor banned; loopback addresses are never banned.
+- A lifted ban counts the client afresh: if it keeps scanning, it is banned again.
 - Connections aborted during the TLS handshake (unknown SNI) are not counted.
 
 ## CNAME prefixes
