@@ -504,7 +504,10 @@ try {
       clusterId: clusterA,
       pools: pools.pools,
       apps: Object.fromEntries(
-        Object.entries(apps).map(([k, v]) => [k, { id: v.id, name: v.name, port: v.port }]),
+        Object.entries(apps).map(([k, v]) => [
+          k,
+          { id: v.id, name: v.name, port: v.port, cnamePrefix: v.cnamePrefix },
+        ]),
       ),
     }),
   );

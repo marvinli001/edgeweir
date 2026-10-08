@@ -10,7 +10,8 @@ import { login, logout, pick } from "./helpers";
  * `v1`) sends PROXY protocol v1 to its origin. Every test leaves them as it found them; an app
  * left behind by a failed run is named "g7-…", which the script's cleanup deletes.
  */
-type AppRef = { id: string; name: string; port: number };
+/** `cnamePrefix`: the first label of the app's DNS target. */
+type AppRef = { id: string; name: string; port: number; cnamePrefix: string };
 type Pool = { protocol: "tcp" | "udp" | "both"; from: number; to: number };
 const state = JSON.parse(readFileSync(resolve("../../.e2e/g7-state.json"), "utf8")) as {
   clusterId: string;
@@ -180,9 +181,9 @@ test("G7: the L4 apps list shows the e2e apps with their ports and DNS targets",
       await expect(line.getByTestId("l4-app-protocol")).toHaveText(protocol);
       await expect(line.getByTestId("l4-app-port")).toHaveText(String(app.port));
       await expect(line.getByTestId("l4-app-origins")).toHaveAttribute("data-count", /^[1-9]\d*$/);
-      // `<app id>.<the cluster's DNS domain>`.
+      // `<CNAME prefix>.<the cluster's DNS domain>`.
       await expect(line.getByTestId("l4-app-dns")).toHaveText(
-        new RegExp(`^${literal(app.id)}\\.\\S+$`),
+        new RegExp(`^${literal(app.cnamePrefix)}\\.\\S+$`),
       );
       await expect(line.getByTestId("l4-app-enabled")).toHaveAttribute("aria-checked", "true");
     }
@@ -280,7 +281,8 @@ test("G7: an L4 app is created in the UI, a port outside the pools refused, and 
     await expect(added.getByTestId("l4-app-port")).toHaveText(String(FREE_PORT));
     await expect(added.getByTestId("l4-app-origins")).toHaveAttribute("data-count", "1");
     await expect(added.getByTestId("l4-app-enabled")).toHaveAttribute("aria-checked", "true");
-    await expect(added.getByTestId("l4-app-dns")).toHaveText(/^[0-9a-f-]{36}\.\S+$/);
+    // A new app's CNAME prefix: 8 random characters.
+    await expect(added.getByTestId("l4-app-dns")).toHaveText(/^[a-z][a-z0-9]{7}\.\S+$/);
   });
 
   await test.step("deleted with confirmation", remove);
@@ -302,7 +304,7 @@ test("G7: an L4 app's statistics show its connections, traffic and nodes", async
     await expect(listen.getByTestId("l4-app-protocol")).toHaveText("TCP");
     await expect(listen).toContainText(String(app.port));
     await expect(overview.getByTestId("l4-app-dns")).toHaveText(
-      new RegExp(`^${literal(app.id)}\\.\\S+$`),
+      new RegExp(`^${literal(app.cnamePrefix)}\\.\\S+$`),
     );
     await expect(overview.getByTestId("l4-app-origin").first()).toBeVisible();
     await expect(overview.getByTestId("l4-app-state")).toContainText("已启用");
