@@ -96,7 +96,7 @@ test("G10: Unicode and suffix, wildcard and pattern domains", async ({ page }) =
 
   // The list shows Unicode and finds the site by either form.
   for (const search of ["bücher-ui", "xn--bcher-ui"]) {
-    await page.goto(`/sites?search=${encodeURIComponent(search)}`);
+    await page.goto(`/sites?q=${encodeURIComponent(search)}`);
     await expect(page.getByTestId("sites-table")).toContainText("bücher-ui.g10.test");
   }
   await check(page, "sites");
