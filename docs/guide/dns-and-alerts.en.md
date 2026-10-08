@@ -454,7 +454,7 @@ These alerts belong to a cluster, not to a site. They go only to channels with *
 | --- | --- | --- |
 | "CNAME domain is outside the DNS zone" | The cluster domain is not inside the account's zone | Use the zone itself or a subdomain of it |
 | "DNS name has an unmanaged record" | The target name already has a manual record | Delete the manual record, then **Repair records** |
-| "Another cluster's DNS binding uses these names" | Two clusters use the same cluster domain and line names in one zone | Use a different cluster domain or line name |
+| "Another cluster's DNS binding or a CNAME prefix of a site or L4 app uses …" | Two clusters use the same cluster domain and line names in one zone, or a line name equals a site's or L4 application's [CNAME prefix](domains.en.md#cname-prefixes) (old prefixes in their 24-hour transition included) | Use a different cluster domain or line name, or change that object's CNAME prefix |
 | "DNS provider is still in use" | A cluster binding still selects the account, or it still owns records | Select another account or switch to Not managed, wait for cleanup, then delete |
 | "Turn the cluster's DNS off and wait for its records to be removed" | The cluster to delete is still Automatic or still owns records | Switch to Not managed and wait for cleanup |
 | "The DNS provider rejected the credentials" | Wrong, expired, or under-privileged credentials; some providers also require the console's egress IP to be allowed | Check the permissions in [Providers and credentials](#providers-and-credentials), then **Test connection** |

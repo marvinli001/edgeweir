@@ -47,7 +47,7 @@ The list shows active bans only (neither expired nor lifted), newest first, and 
 | Address | IPv4 / IPv6 address or CIDR; a single address means `/32` or `/128`; host bits are cleared, IPv6 is lowercased and compressed; `::ffff:a.b.c.d` counts as the IPv4 address; leading zeros and zone IDs are refused |
 | Shortest prefix | IPv4 `/16`, IPv6 `/48` |
 | Expiry | 1 minute to 7 days (the UI offers 1 hour to 7 days); nodes drop a ban when it expires, the console deletes it an hour later |
-| Reason | Manual: abuse, attack, scanning, spam, other. Automatic: per-IP request rate |
+| Reason | Manual: abuse, attack, scanning, spam, other. Automatic: per-IP request rate, unknown host scan |
 | Banning again | One active manual ban per address for global bans, and per site and address for site bans; banning it again sets the new reason and expiry and does not add a ban |
 | Protected addresses | A site ban may not cover an address of a node in the site's cluster, a global ban no node address at all; neither may cover loopback (`127.0.0.0/8`, `::1`) or unspecified addresses (`0.0.0.0/8`, `::`), nor overlap an allow list |
 | Where it applies | At the edge layer once the site is known, before rules: global bans first, then site bans; addresses on an allow list are never banned |
@@ -59,7 +59,7 @@ The list shows active bans only (neither expired nor lifted), newest first, and 
 | Limit | Counts | Where |
 | --- | --- | --- |
 | Limit of manual bans | Active manual bans, global and site bans together | **Protection settings → Bans → Limit of manual bans**; 10000 by default, 100–100000 |
-| Automatic bans | Active automatic bans per cluster | Fixed at 10000; the oldest automatic bans lapse first |
+| Automatic bans | Active site-scope automatic bans per cluster; global automatic bans (scan protection) count separately | 10000 each, fixed; the oldest automatic bans lapse first |
 
 Automatic bans do not count toward the limit of manual bans. Once the limit is reached, a new ban gets `BAN_PLATFORM_LIMIT` ("At most N manual bans can be active"); banning an address that is still banned is not limited.
 
@@ -71,8 +71,8 @@ A node bans on its own on a trigger: the per-IP QPS of CC mitigation (site scope
 | --- | --- |
 | Sharing | **Protection settings → Bans → Share automatic bans in the cluster**, on by default: on, a site-scope ban goes to every node of the cluster and a global one to every node; off, it is kept for viewing only and marked "Not shared". A change applies to automatic bans added afterwards |
 | Merging | Site scope: one entry per node, site and address; global scope: one entry per address (none while an active manual global ban holds it); a repeated report extends the expiry |
-| Checks | A site-scope ban's site must belong to the node's cluster; global ones come from scan protection only; single addresses only; at most 7 days after creation; protected addresses (for global ones every node's addresses and the allow lists) are not stored |
-| Unban | Like a manual ban: click "Unban" in the row; a ban that was not shared is deleted within seconds by the node that created it (older nodes without support keep it until it expires), and a later ban of the same address by that node is not affected |
+| Checks | A site-scope ban's site must belong to the node's cluster; global ones come from scan protection only; single addresses only; at most 7 days after creation; protected addresses (for global ones every node's addresses, the allow lists and every cluster's trusted proxies) are not stored |
+| Unban | Like a manual ban: click "Unban" in the row; a ban that was not shared is deleted within seconds by the nodes that hold it (a global one goes to every node, as several may have banned the address; older nodes without support keep it until it expires), and a later ban of the same address by a node is not affected |
 
 ## Nodes
 

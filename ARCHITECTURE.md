@@ -257,11 +257,11 @@ TCP / UDP 的 L4 应用由节点的 stream 子系统转发，控制台负责端�
 
 proto `v0.25.0` 增加两项能力。`domains-v2`：`Domain.match`（`SUFFIX` 任意层级子域名、`REGEX` 整串匹配的正则）与 `Domain.order`（正则的优先级键：网站创建时间的毫秒数 × 16 + 网站内正则的序号），停用网站的 `OfflineHost.match`。`unknown-host-v1`：`NodeConfig.unknown_hosts`（未知域名与节点 IP 访问各自的处理：平台页、444、默认网站；未知 SNI 用默认网站的证书；扫描防护的阈值与封禁时长）与 `AutoBan.scope`（扫描防护的平台范围封禁）。精确与 `*.` 域名、默认设置不进入编码，没用到的配置与之前逐字节相同。
 
-1. 控制台保存域名时按 UTS #46（`tr46`，非过渡处理）把 Unicode 主机名转为 Punycode；正则使用规则引擎的正则子集，字母须小写。同一写法的同一名称只能属于一个网站；不同写法可以重叠，节点按「精确 > `*.` > 最长的 `.` 后缀 > 正则（按 `order`、网站 ID）」查找。控制台刷新 / 预热按 Host 找网站、节点 sitemap 预热按同一顺序（共享向量 `host_match_vectors.json`）。
-2. 节点 Lua 在共享字典里按 `host:`、`wild:`、`sfx:` 键查找，正则随站点表设置下发、每个版本编译一次（`ngx.re` 的 `jo`，有正则时 `lua_regex_cache_max_entries` 按数量放大）；`.` 与正则的命中放在单独的 LRU，不挤占精确域名的缓存。经后缀或正则找到的主机只在证书 DNS 名称覆盖它时完成 TLS 握手。
-3. 配置里有 `.` 或正则域名时，节点把 `*.x` 渲染为一级的正则 `server_name`，每个后缀（长者在前）与正则（按优先级）各一个 server 块排在所有网站之后，nginx 选中的 server 块与 Lua 路由到的网站一致；交给默认网站时它的 server 块为 `default_server`。
-4. 未知域名、节点 IP 访问（Host 为 IP 或空）与网站未绑定的端口按集群设置处理；停用网站的域名保持停用页。扫描防护按 `ip.src`（IPv4 地址、IPv6 /64）在 `edgeweir_cc` 中计数，超过阈值时节点建立平台范围的自动封禁并经 `ReportBans` 上报（原因 `unknown_host_scan`），控制台保存为 `scope = platform`、`cluster_id` 为空的自动封禁。
-5. CNAME 前缀：新建网站与 L4 应用随机 8 位，已有对象保持 UUID。修改后旧前缀写入 `cname_retired`，DNS 计划保留 24 小时（立即发布原因 `cname`），每分钟的 `dns.reconcile` 删除到期的旧前缀并发布（原因 `cname_expired`）。前缀在网站与 L4 应用之间全局唯一，不能是 `all`、`all-<n>` 或任一绑定的汇总记录名与线路名。
+1. 控制台保存域名时按 UTS #46（`tr46`，非过渡处理）把 Unicode 主机名转为 Punycode；正则使用规则引擎的正则子集，字母须小写，最多两个可重复的量词（控制台用回溯引擎匹配）。同一写法的同一名称只能属于一个网站；不同写法可以重叠，节点按「精确 > `*.` > 最长的 `.` 后缀 > 正则（按 `order`、网站 ID）」查找。控制台刷新 / 预热按 Host 找网站时与节点一致（每个集群的已启用网站，`inPatternOrder` 与编译器共用正则的顺序），节点 sitemap 预热按同一顺序（共享向量 `host_match_vectors.json`）。界面只把单一文字的标签显示为 Unicode。
+2. 节点 Lua 在共享字典里按 `host:`、`wild:`、`sfx:` 键查找，正则随站点表设置下发、每个版本编译一次（`ngx.re` 的 `jo`，有正则时 `lua_regex_cache_max_entries` 按数量放大）；`.` 与正则的命中放在单独的 LRU，不挤占精确域名的缓存。经后缀或正则找到的主机只在证书 DNS 名称覆盖它时完成 TLS 握手，证书不覆盖时也不做强制 HTTPS 跳转。
+3. 配置里有 `.` 或正则域名（或交给默认网站）时，节点把 `*.x` 渲染为一级的正则 `server_name`，每个后缀（长者在前）与正则（按优先级，带 PCRE 回溯上限、区分大小写）各一个 server 块排在所有网站之后，nginx 选中的 server 块与 Lua 路由到的网站一致；交给默认网站时它的 server 块为 `default_server`，第一个名称为 `_`（没有 Host 的请求仍是节点 IP 访问），明文监听保留 h2c。交给默认网站的请求的缓存键总是包含 Host。
+4. 未知域名、节点 IP 访问（Host 为 IP 或空）与网站未绑定的端口按集群设置处理；停用网站的域名保持停用页。扫描防护按 `ip.src`（IPv4 地址、IPv6 /64）在 `edgeweir_cc` 中计数，超过阈值时节点建立平台范围的自动封禁并经 `ReportBans` 上报（原因 `unknown_host_scan`），控制台保存为 `scope = platform`、`cluster_id` 为空的自动封禁（不覆盖任一集群的可信代理；未共享的封禁解封时发给全部节点）；节点的内核封禁不丢弃本集群的可信代理。
+5. CNAME 前缀：新建网站与 L4 应用随机 8 位，已有对象保持 UUID。修改后旧前缀写入 `cname_retired`（自动模式下从未写入服务商的不保留），DNS 计划保留 24 小时（立即发布原因 `cname`），每分钟的 `dns.reconcile` 按集群删除到期的旧前缀并发布（原因 `cname_expired`，一个集群失败不影响其他集群与之后的对账）；对象可以取回自己仍在过渡期内的旧前缀，包括升级前的 UUID。前缀在网站与 L4 应用之间全局唯一，不能是 `all`、`all-<n>` 或任一绑定的汇总记录名与线路名。
 
 | 管理操作 | 审计 |
 | --- | --- |

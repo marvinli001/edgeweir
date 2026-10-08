@@ -111,8 +111,8 @@ While a site has no usable certificate, its **HTTPS** tab shows only **Enable HT
 
 | Item | Value |
 | --- | --- |
-| Certificate name, names | The site's name and all of its domains |
-| Validation | HTTP-01; DNS-01 with the first DNS credential whose zone covers every name when the site has a wildcard domain |
+| Certificate name, names | The site's name; the site's exact and wildcard domains, `*.a.com` for a suffix domain `.a.com`, no names for pattern domains ([domains and unknown hosts](domains.en.md#limits-of-suffix-and-pattern-domains)) |
+| Validation | HTTP-01; DNS-01 with the first DNS credential whose zone covers every name when the site has a wildcard or suffix domain |
 | Account email | The email of the last ACME account or request, else the console account's email; editable under **Customize** |
 | Certificate authority | Let's Encrypt; ZeroSSL under **Customize** (needs EAB credentials) |
 | Once issued | The certificate is bound to the site (**Redirect HTTP to HTTPS** and the other settings stay as they are), the site's cluster is published, and the audit log records `site.https_update` (actor system); domains added to the site since the request are reissued right away. A site that has another usable certificate by then is left unchanged |
@@ -124,6 +124,7 @@ While a site has no usable certificate, its **HTTPS** tab shows only **Enable HT
 | "… has no DNS record yet", "… does not point to the nodes" | HTTP-01: the name has no A/AAAA record, or resolves to addresses that are not the cluster's nodes; nothing is reported when lookups time out or no node address is known. When the console resolves names differently from the CA (split-horizon DNS, a load balancer in front), turn on **Skip the DNS check** under **Customize**: these two no longer stop the request, and the issuance does not check them either |
 | "Wildcards need a DNS credential whose zone covers …" | DNS-01: there is no such DNS credential; click **Add DNS credential** |
 | "DNS credential …: …" | DNS-01: the credential's connection test failed |
+| "The site has only pattern domains: no name to issue for" | Every domain of the site is a pattern domain |
 | "CAA records of … do not allow …" | CAA records of the name or a parent domain do not allow the chosen CA (Let's Encrypt: `letsencrypt.org`; ZeroSSL: `sectigo.com`, `trust-provider.com`, `usertrust.com`), `issuewild` and `validationmethods` included; not checked when `EDGEWEIR_ACME_DIRECTORY` is set |
 
 While the certificate is issued, the tab refreshes its status every 3 seconds. A failure shows the classified reason (as on the certificate card) with **Retry** and **Cancel** (which deletes this certificate). When usable certificates already cover every domain of the site, the tab lists them under **Existing certificate**; **Use** selects one. When the site's ACME certificate is reissued or fails, the same status shows above the HTTPS settings.
@@ -152,7 +153,7 @@ With **Force HTTPS** on, the redirect options appear below the switches:
 | --- | --- | --- | --- |
 | Redirect status | 301, 302, 303, 307, 308 | 301 | Status of the redirect |
 | Redirect port | 443 or an HTTPS port the site is bound to | 443 | Port of the target URL; with 443 the URL has no port ("Redirect port {port} is not an HTTPS port of the site") |
-| Domains not redirected | Domains of the site, at most 50 | None | These domains are not redirected by **Force HTTPS**; a wildcard is written `*.example.com`, and an exact domain of the site is not covered by it |
+| Domains not redirected | Exact and wildcard domains of the site, at most 50 | None | These domains are not redirected by **Force HTTPS**; a wildcard is written `*.example.com`, and an exact domain of the site is not covered by it. Hosts of suffix and pattern domains the certificate does not name are never redirected |
 
 A [config rule](rules.en.md)'s `forceHttps` still turns the redirect on or off per request: when a rule turns it on, the status and port above apply and excluded domains are redirected too. Removing the HTTPS port the redirect goes to is refused; choosing no certificate sets the redirect port back to 443, and removing a domain from the site also removes it from the excluded domains. Configurations with values other than the defaults need `edge-ports-v1`.
 

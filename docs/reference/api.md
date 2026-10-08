@@ -646,7 +646,7 @@ DNS 绑定与记录的新增字段：
 
 ### 域名、未知域名与 CNAME 前缀
 
-网站的 `domains`（`POST /sites`、`PATCH /sites/{id}`）接受四种写法：`a.com`、`*.a.com`（最左一级）、`.a.com`（任意层级子域名，不含 `a.com`）、`~正则`（对小写 Host 整串匹配，最长 256 字符，字母小写，不含 `"`、`\\`、空白）；1–50 个，正则最多 10 个。Unicode 主机名按 UTS #46（非过渡处理）转为 Punycode 保存，响应只返回 Punycode；转换失败返回 400 `DOMAIN_INVALID`（`data.domain`）；写法不合法或正则超出共用子集（如前瞻 `(?=…)`）属于输入校验错误（400 `BAD_REQUEST`）。同一写法的同一名称只能属于一个网站（`DOMAIN_IN_USE`）。`sites.list` 的 `search` 对 Unicode 搜索词另按 Punycode 匹配。网站响应新增 `cnamePrefix`。
+网站的 `domains`（`POST /sites`、`PATCH /sites/{id}`）接受四种写法：`a.com`、`*.a.com`（最左一级）、`.a.com`（任意层级子域名，不含 `a.com`）、`~正则`（对小写 Host 整串匹配，最长 256 字符，字母小写，不含 `"`、`\\`、空白与 `{n,m}` 之外的逗号，最多两个可重复的量词）；1–50 个，正则最多 10 个。Unicode 主机名按 UTS #46（非过渡处理）转为 Punycode 保存，响应只返回 Punycode；转换失败返回 400 `DOMAIN_INVALID`（`data.domain`）；写法不合法或正则超出共用子集（如前瞻 `(?=…)`）属于输入校验错误（400 `BAD_REQUEST`）。同一写法的同一名称只能属于一个网站（`DOMAIN_IN_USE`）。`sites.list` 的 `search` 对 Unicode 搜索词另按 Punycode 与解码后名称的一部分匹配。网站响应新增 `cnamePrefix`；`GET /sites/{id}/features` 新增 `domainsV2`（集群的活动节点都支持 `domains-v2` 时可用）。刷新与预热任务按节点的方式找网站：在每个集群的已启用网站中按优先级查找，几个集群都服务一个主机名时任务包含每个集群的那个网站。
 
 | 过程 | 端点 | 说明 |
 | --- | --- | --- |
@@ -659,8 +659,8 @@ DNS 绑定与记录的新增字段：
 
 | 请求 | 字段 |
 | --- | --- |
-| `PUT /clusters/{clusterId}/unknown-hosts` | `settings`：`unknownHost`、`ipAccess`（`page` / `close` / `site`，默认 `page`）；`defaultSiteId`（选了 `site` 时必填，本集群已启用的网站，否则 `DEFAULT_SITE_INVALID`）；`defaultCertificate`（只在 `unknownHost` 为 `site` 时，默认网站须有证书，否则 `DEFAULT_SITE_CERTIFICATE_REQUIRED`）；`scan`：`enabled`（默认 `false`）、`threshold`（10–10000，默认 100）、`banSeconds`（60–86400，默认 3600） |
-| `PUT /sites/{id}/cname-prefix`、`PUT /l4-apps/{id}/cname-prefix` | `prefix`：1–30 位 `[a-z0-9-]`，不以 `-` 开头或结尾；省略时生成新的随机前缀。已被使用、仍在 24 小时过渡期内、为 `all` / `all-<n>` 或任一 DNS 绑定的汇总记录名与线路名时返回 409 `CNAME_PREFIX_CONFLICT`（`data.prefix`） |
+| `PUT /clusters/{clusterId}/unknown-hosts` | `settings`：`unknownHost`、`ipAccess`（`page` / `close` / `site`，默认 `page`）；`defaultSiteId`（选了 `site` 时必填，本集群已启用的网站，否则 `DEFAULT_SITE_INVALID`；没有 `site` 时不保存）；`defaultCertificate`（只在 `unknownHost` 为 `site` 时，默认网站须有证书，否则 `DEFAULT_SITE_CERTIFICATE_REQUIRED`）；`scan`：`enabled`（默认 `false`）、`threshold`（10–10000，默认 100）、`banSeconds`（60–86400，默认 3600） |
+| `PUT /sites/{id}/cname-prefix`、`PUT /l4-apps/{id}/cname-prefix` | `prefix`：1–30 位 `[a-z0-9-]`，不以 `-` 开头或结尾；省略时生成新的随机前缀；也可以是对象自己仍在过渡期内的旧前缀，包括升级前的 UUID 前缀（其他 UUID 返回 400 `CNAME_PREFIX_INVALID`）。已被使用、仍在 24 小时过渡期内、为 `all` / `all-<n>` 或任一 DNS 绑定的汇总记录名与线路名时返回 409 `CNAME_PREFIX_CONFLICT`（`data.prefix`）。自动模式下从未写入 DNS 服务商的旧前缀不进入过渡期 |
 
 `GET /sites/{siteId}/cname` 新增 `retired`（旧名称 `{ name, expiresAt }`）；DNS 版本的 `reason` 新增 `cname`（`reasonParams.name`）与 `cname_expired`。`GET /sites/{id}/https/check` 的 `blockers` 新增 `no_certificate_names`（网站只有正则域名）。自动封禁的 `reason` 新增 `unknown_host_scan`（`scope` 为 `platform`，`siteId` 为 `null`，`trigger.metric` 为 `unknown_host_requests`）。节点能力新增 `domains-v2`、`unknown-host-v1`。
 
