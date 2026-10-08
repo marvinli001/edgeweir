@@ -235,9 +235,10 @@ function banTarget(text: string) {
  * Creates a manual ban, or bans the same (scope, site, CIDR) again: that sets
  * the new reason and expiry and takes a new sequence number. Every manual
  * ban counts against the platform total. An expired entry, and the
- * automatic entry of a platform address (scan protection, shared or not),
- * start over as a new manual ban: checked against the limit, audited as
- * created and sent to the nodes like one.
+ * automatic entry of a platform address (scan protection), start over as a
+ * new manual ban: checked against the limit, audited as created and sent to
+ * the nodes like one; an active one never shared is lifted and the manual
+ * ban added as a new entry.
  */
 export async function createBan(
   db: Database,
@@ -260,7 +261,7 @@ export async function createBan(
     await lockBans(tx, "exclusive");
     const now = new Date();
     const expiresAt = new Date(now.getTime() + input.durationSeconds * 1000);
-    const [existing] = await tx
+    let [existing] = await tx
       .select()
       .from(schema.ipBan)
       .where(
@@ -277,6 +278,16 @@ export async function createBan(
         ),
       )
       .for("update");
+    // An active automatic platform ban never shared lives on the nodes as
+    // their own bans: it is lifted (each node releases its own on its next
+    // sync, however late; ownReleases) and the manual ban is a new entry.
+    if (existing?.source === "auto" && !existing.distributed && existing.expiresAt > now) {
+      await tx
+        .update(schema.ipBan)
+        .set({ removedAt: now, seq: await nextSeq(tx) })
+        .where(eq(schema.ipBan.id, existing.id));
+      existing = undefined;
+    }
     // Only an active manual ban is banned again; an automatic platform one
     // (scan protection, possibly never shared) becomes a manual ban.
     const renewal = !!existing && existing.source === "manual" && existing.expiresAt > now;
