@@ -120,6 +120,12 @@ async function protectedAddresses(tx: Executor, clusterId: string | null): Promi
   ];
 }
 
+/** The trusted proxies of every cluster's client address setting (client-ip-v1). */
+async function trustedProxies(tx: Executor): Promise<string[]> {
+  const rows = await tx.select({ clientIp: schema.cluster.clientIp }).from(schema.cluster);
+  return rows.flatMap((row) => row.clientIp?.trustedCidrs ?? []);
+}
+
 const active = (now: Date) =>
   and(isNull(schema.ipBan.removedAt), gt(schema.ipBan.expiresAt, now)) as ReturnType<typeof and>;
 
@@ -383,7 +389,11 @@ export interface BanPage {
   reset: boolean;
   bans: BanRow[];
   removedIds: string[];
-  /** The node's own automatic bans, never distributed, lifted on this page. */
+  /**
+   * Automatic bans never distributed, lifted on this page, that the node may
+   * hold on its own: its site bans, and every platform one (several nodes
+   * can have banned the address, the row names the first).
+   */
   liftedOwn: BanRow[];
   sequence: bigint;
   more: boolean;
@@ -418,7 +428,7 @@ export async function banChanges(
     );
     const ownLifted = and(
       eq(schema.ipBan.source, "auto"),
-      eq(schema.ipBan.nodeId, node.id),
+      or(eq(schema.ipBan.nodeId, node.id), eq(schema.ipBan.scope, "platform")),
       eq(schema.ipBan.distributed, false),
       isNotNull(schema.ipBan.removedAt),
     );
@@ -549,8 +559,10 @@ export async function reportAutoBans(
   // hold up every other ban writer and reader.
   const isProtected = protectedBanRanges(await protectedAddresses(db, node.clusterId));
   const values = [...items.values()];
+  // A platform ban reaches every cluster (and their kernel bans): no
+  // cluster's trusted proxies either.
   const isProtectedEverywhere = values.some((item) => item.scope === "platform")
-    ? protectedBanRanges(await protectedAddresses(db, null))
+    ? protectedBanRanges([...(await protectedAddresses(db, null)), ...(await trustedProxies(db))])
     : isProtected;
   const candidates = values.filter((item) =>
     item.scope === "platform"
