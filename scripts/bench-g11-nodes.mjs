@@ -4,9 +4,13 @@
 // site with a cache rule on / and a self-signed ECDSA P-256 certificate:
 //   g11-bench-base  edgeweir-node:pre-g11 (the node before G11, built from
 //                   E2E_PRE_G11_COMMIT when missing), base.tls-bench.g11.test,
-//                   :443 on 127.0.0.1:${E2E_G11_BENCH_BASE_PORT:-18943}
+//                   :443 on 127.0.0.1:${E2E_G11_BENCH_BASE_PORT:-18943}, :80 on
+//                   ${E2E_G11_BENCH_BASE_HTTP_PORT:-18945}
 //   g11-bench-new   the image of this stack (edgeweir-node:${E2E_TAG}),
-//                   new.tls-bench.g11.test, 127.0.0.1:${E2E_G11_BENCH_NEW_PORT:-18944}
+//                   new.tls-bench.g11.test, 127.0.0.1:${E2E_G11_BENCH_NEW_PORT:-18944} and
+//                   ${E2E_G11_BENCH_NEW_HTTP_PORT:-18946}
+// The HTTP ports serve BENCH_SCENARIO=cache on both (BENCH_URL=http://127.0.0.1:<port>/bench-cache.txt),
+// an A/B of the HTTP hot path with the same configuration.
 // `--multi` gives the new node's site four certificates (its own ECDSA one
 // first, then an RSA 2048 one for the same name, a wildcard and another
 // name's), `--single` goes back to one; `--cleanup` removes both nodes,
@@ -39,12 +43,14 @@ const BENCH = {
     host: "base.tls-bench.g11.test",
     image: OLD_IMAGE,
     port: Number(process.env.E2E_G11_BENCH_BASE_PORT ?? 18943),
+    httpPort: Number(process.env.E2E_G11_BENCH_BASE_HTTP_PORT ?? 18945),
   },
   new: {
     cluster: "g11-bench-new",
     host: "new.tls-bench.g11.test",
     image: NEW_IMAGE,
     port: Number(process.env.E2E_G11_BENCH_NEW_PORT ?? 18944),
+    httpPort: Number(process.env.E2E_G11_BENCH_NEW_HTTP_PORT ?? 18946),
   },
 };
 
@@ -237,6 +243,8 @@ for (const [which, bench] of Object.entries(BENCH)) {
     network,
     "-p",
     `127.0.0.1:${bench.port}:443`,
+    "-p",
+    `127.0.0.1:${bench.httpPort}:80`,
     "-v",
     `${project}_geoip-test-data:/etc/edgeweir-geoip:ro`,
     "-e",
