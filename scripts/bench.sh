@@ -20,18 +20,28 @@
 #   charset    cache HITs of a site that adds a charset (site-content-v1: gbk,
 #              forced over the origin's utf-8); checks that the warmed response
 #              carries charset=gbk.
+#   tls        cache HITs over HTTPS, a new TLS connection per request that never
+#              offers a session: a full handshake each (scripts/bench-tls.mjs,
+#              not oha, whose rustls resumes sessions itself). BENCH_TLS_VERSION=1.2
+#              caps the protocol at TLS 1.2 (default 1.3).
+#   tls-resume the same, each connection offering the previous one's session
+#              (session ID or ticket); fails when fewer than 90% are resumed.
 # pass and challenge default to ua-bench.test, which scripts/e2e-g2.mjs leaves
 # behind (whoami, cache rule on /, Under Attack js); headers to
 # hdr-bench.g8.test, which scripts/e2e-g8.mjs leaves behind; charset to
 # charset-bench.g15.test, which scripts/e2e-g15.mjs leaves behind; proxy and
-# proxy-plain to proxy-bench.g9.test, which scripts/e2e-g9.mjs sets up. The
+# proxy-plain to proxy-bench.g9.test, which scripts/e2e-g9.mjs sets up; tls and
+# tls-resume to the nodes scripts/bench-g11-nodes.mjs starts (BENCH_URL and
+# BENCH_HOST of the node to measure, BENCH_NODE_CONTAINER for its memory). The
 # full e2e removes it (and at its end the default cluster's node, which
 # e2e-g9.mjs needs): run e2e-g9.mjs on its own on a stack whose full e2e
 # stopped before the node lifecycle step, then bench.
 set -euo pipefail
 OHA_BIN="${OHA_BIN:-oha}"
-command -v "$OHA_BIN" >/dev/null || { echo 'Install oha or set OHA_BIN to its verified binary.' >&2; exit 1; }
 BENCH_SCENARIO="${BENCH_SCENARIO:-cache}"
+if [[ "$BENCH_SCENARIO" != tls* ]]; then
+  command -v "$OHA_BIN" >/dev/null || { echo 'Install oha or set OHA_BIN to its verified binary.' >&2; exit 1; }
+fi
 case "$BENCH_SCENARIO" in
   cache) DEFAULT_HOST=demo.test ;;
   pass | challenge) DEFAULT_HOST=ua-bench.test ;;
@@ -39,7 +49,8 @@ case "$BENCH_SCENARIO" in
   proxy) DEFAULT_HOST=proxy-bench.g9.test DEFAULT_URL="http://127.0.0.1:${E2E_G9_LB_PORT:-18990}/bench-cache.txt" ;;
   proxy-plain) DEFAULT_HOST=proxy-bench.g9.test DEFAULT_URL="http://127.0.0.1:${E2E_G9_LB_PLAIN_PORT:-18991}/bench-cache.txt" ;;
   charset) DEFAULT_HOST=charset-bench.g15.test ;;
-  *) echo "BENCH_SCENARIO must be cache, pass, challenge, headers, proxy, proxy-plain or charset, not $BENCH_SCENARIO" >&2; exit 2 ;;
+  tls | tls-resume) DEFAULT_HOST=new.tls-bench.g11.test DEFAULT_URL="https://127.0.0.1:${E2E_G11_BENCH_NEW_PORT:-18944}/bench-cache.txt" ;;
+  *) echo "BENCH_SCENARIO must be cache, pass, challenge, headers, proxy, proxy-plain, charset, tls or tls-resume, not $BENCH_SCENARIO" >&2; exit 2 ;;
 esac
 BENCH_URL="${BENCH_URL:-${DEFAULT_URL:-http://127.0.0.1:${E2E_NODE_PORT:-18080}/bench-cache.txt}}"
 BENCH_HOST="${BENCH_HOST:-$DEFAULT_HOST}"
@@ -108,7 +119,7 @@ if [[ "$BENCH_SCENARIO" == pass ]]; then
   CURL_HEADERS+=(-H "Cookie: $PASS")
   EXPECT_STATUS=200
 fi
-if [[ "$BENCH_SCENARIO" != challenge ]]; then
+if [[ "$BENCH_SCENARIO" != challenge && "$BENCH_SCENARIO" != tls* ]]; then
   for _ in 1 2; do curl -fsS "${CURL_HEADERS[@]}" "$BENCH_URL" -o /dev/null; done
   HEADERS="$(curl -fsS -D - -o /dev/null "${CURL_HEADERS[@]}" "$BENCH_URL")"
   if ! printf '%s\n' "$HEADERS" | tr -d '\r' | rg -qi '^x-cache: HIT$'; then
@@ -128,8 +139,15 @@ if [[ "$BENCH_SCENARIO" != challenge ]]; then
     exit 1
   fi
 fi
-"$OHA_BIN" --no-tui --output-format json -n "$BENCH_REQUESTS" -c "$BENCH_CONCURRENCY" -t 10s "${OHA_HEADERS[@]}" "$BENCH_URL" > "$BENCH_OUTPUT"
-NODE_CONTAINER="$(docker compose -f compose.e2e.yml ps -q node)"
+if [[ "$BENCH_SCENARIO" == tls* ]]; then
+  # Warms the cache, refuses a site that does not answer a HIT, and checks resumption.
+  BENCH_URL="$BENCH_URL" BENCH_HOST="$BENCH_HOST" BENCH_SCENARIO="$BENCH_SCENARIO" \
+    BENCH_REQUESTS="$BENCH_REQUESTS" BENCH_CONCURRENCY="$BENCH_CONCURRENCY" BENCH_OUTPUT="$BENCH_OUTPUT" \
+    node scripts/bench-tls.mjs
+else
+  "$OHA_BIN" --no-tui --output-format json -n "$BENCH_REQUESTS" -c "$BENCH_CONCURRENCY" -t 10s "${OHA_HEADERS[@]}" "$BENCH_URL" > "$BENCH_OUTPUT"
+fi
+NODE_CONTAINER="${BENCH_NODE_CONTAINER:-$(docker compose -f compose.e2e.yml ps -q node)}"
 # The proxy scenarios measure the edge node of cluster g9-proxy.
 if [[ "$BENCH_SCENARIO" == proxy* ]]; then
   NODE_CONTAINER="$(docker inspect -f '{{.Id}}' "${COMPOSE_PROJECT_NAME:-edgeweir-e2e}-g9-edge")"
