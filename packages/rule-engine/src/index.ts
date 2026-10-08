@@ -157,6 +157,12 @@ export const fields: Record<string, ValueType> = {
   // client-ip-v1: the TCP (QUIC: UDP) peer; ip.src is the client the cluster's client address
   // setting names (equal without one).
   "ip.peer": "ip",
+  // client-cert-v1: the visitor's client certificate (mutual TLS) verified against the site's
+  // client CA; the lowercase hex SHA-256 of its DER and its subject (RFC 2253), "" without a
+  // certificate. false / "" over plain HTTP.
+  "tls.client.verified": "boolean",
+  "tls.client.cert_sha256": "string",
+  "tls.client.subject": "string",
 };
 /** Fields of one request cookie and one query parameter by name (rules-v3), besides headers. */
 export const COOKIE_FIELD = "http.request.cookies";
@@ -190,6 +196,19 @@ export function needsClientIp(expression: Expression): boolean {
   return (
     (expression.op !== "call" && clientIpFields.has(expression.field)) ||
     expression.children.some(needsClientIp)
+  );
+}
+/** Fields only nodes with client-cert-v1 provide. */
+export const clientCertificateFields: ReadonlySet<string> = new Set([
+  "tls.client.verified",
+  "tls.client.cert_sha256",
+  "tls.client.subject",
+]);
+/** Whether the expression reads the visitor's client certificate (client-cert-v1). */
+export function needsClientCertificate(expression: Expression): boolean {
+  return (
+    (expression.op !== "call" && clientCertificateFields.has(expression.field)) ||
+    expression.children.some(needsClientCertificate)
   );
 }
 /** Whether `field` is a rules-v3 field: one of rulesV3Fields, a cookie or a query parameter. */

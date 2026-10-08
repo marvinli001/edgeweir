@@ -14041,5 +14041,193 @@
         }
       ]
     }
+  },
+  {
+    "source": "tls.client.verified eq true",
+    "phase": "waf-custom",
+    "request": {
+      "tls.client.verified": true
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "tls.client.verified",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "tls.client.verified eq false",
+    "phase": "waf-custom",
+    "request": {
+      "ssl": false
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "tls.client.verified",
+      "valueType": "boolean",
+      "value": "false",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "tls.client.verified eq false and tls.client.cert_sha256 eq \"\"",
+    "phase": "waf-custom",
+    "request": {
+      "ssl": true
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "and",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "eq",
+          "field": "tls.client.verified",
+          "valueType": "boolean",
+          "value": "false",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "eq",
+          "field": "tls.client.cert_sha256",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "tls.client.cert_sha256 eq \"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\"",
+    "phase": "waf-custom",
+    "request": {
+      "tls.client.verified": true,
+      "tls.client.cert_sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "tls.client.cert_sha256",
+      "valueType": "string",
+      "value": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "tls.client.subject contains \"OU=Ops\" and tls.client.verified eq true",
+    "phase": "waf-custom",
+    "request": {
+      "tls.client.verified": true,
+      "tls.client.subject": "CN=alice,OU=Ops,O=Example"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "and",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "contains",
+          "field": "tls.client.subject",
+          "valueType": "string",
+          "value": "OU=Ops",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "eq",
+          "field": "tls.client.verified",
+          "valueType": "boolean",
+          "value": "true",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "tls.client.subject matches \"^CN=[a-z]+,OU=Ops,\"",
+    "phase": "waf-custom",
+    "request": {
+      "tls.client.verified": false,
+      "tls.client.subject": "CN=mallory,OU=Ops,O=Example"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "tls.client.subject",
+      "valueType": "string",
+      "value": "^CN=[a-z]+,OU=Ops,",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "lower(tls.client.subject) eq \"cn=bob\"",
+    "phase": "waf-custom",
+    "request": {
+      "tls.client.subject": "CN=Bob"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "cn=bob",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "lower",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "tls.client.subject",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
   }
 ]

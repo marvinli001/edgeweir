@@ -1717,6 +1717,32 @@ const vectors = [
       true,
     ],
   ].map(accepted),
+  // client-cert-v1: the visitor's client certificate; false / "" without one (and over plain HTTP).
+  ...[
+    ["tls.client.verified eq true", { "tls.client.verified": true }, true],
+    ["tls.client.verified eq false", { ssl: false }, true],
+    ['tls.client.verified eq false and tls.client.cert_sha256 eq ""', { ssl: true }, true],
+    [
+      'tls.client.cert_sha256 eq "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"',
+      {
+        "tls.client.verified": true,
+        "tls.client.cert_sha256":
+          "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      },
+      true,
+    ],
+    [
+      'tls.client.subject contains "OU=Ops" and tls.client.verified eq true',
+      { "tls.client.verified": true, "tls.client.subject": "CN=alice,OU=Ops,O=Example" },
+      true,
+    ],
+    [
+      'tls.client.subject matches "^CN=[a-z]+,OU=Ops,"',
+      { "tls.client.verified": false, "tls.client.subject": "CN=mallory,OU=Ops,O=Example" },
+      true,
+    ],
+    ['lower(tls.client.subject) eq "cn=bob"', { "tls.client.subject": "CN=Bob" }, true],
+  ].map(accepted),
 ];
 writeFileSync(
   new URL("../test/vectors.json", import.meta.url),
