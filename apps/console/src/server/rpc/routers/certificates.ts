@@ -1,3 +1,4 @@
+import { deleteAcmeAccount, listAcmeAccounts } from "../../services/acme-accounts";
 import {
   certificateSettings,
   createDnsCredential,
@@ -32,6 +33,12 @@ export const certificatesRouter = {
     ),
     delete: authed.certificates.delete.handler(({ input, context }) =>
       deleteCertificate(context.app, input.id, context),
+    ),
+  },
+  acmeAccounts: {
+    list: authed.acmeAccounts.list.handler(({ context }) => listAcmeAccounts(context.app)),
+    delete: authed.acmeAccounts.delete.handler(({ input, context }) =>
+      deleteAcmeAccount(context.app, input.id, context.actor),
     ),
   },
   dnsCredentials: {

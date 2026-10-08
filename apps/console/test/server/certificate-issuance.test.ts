@@ -196,7 +196,11 @@ describe("certificate issuance", async () => {
     await issueCertificate(ctx, id);
     expect(await row(id)).toMatchObject({ status: "ready", names });
     // The CA chosen per certificate: no directory set for all.
-    expect(await api.certificates.settings()).toEqual({ acmeDirectory: null });
+    expect(await api.certificates.settings()).toEqual({
+      acmeDirectory: null,
+      acmeDirectoryEab: false,
+      defaultCa: "letsencrypt",
+    });
     expect((await row(id)).acme).toMatchObject({
       ca: "letsencrypt",
       directoryUrl: "https://acme-v02.api.letsencrypt.org/directory",

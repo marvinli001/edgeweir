@@ -1,12 +1,12 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { createInterface } from "node:readline";
 import type { CertificateErrorCode } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { ORPCError } from "@orpc/server";
 import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
+import { directoryRootCa, issuanceDirectory } from "./acme-directory";
 import { recordAudit, systemActor } from "./audit";
 import {
   acmeAccountBinding,
@@ -40,8 +40,12 @@ type AcmeAccount = {
   eabHmacKey?: string;
 };
 type CertificateRow = typeof schema.certificate.$inferSelect;
-/** An issuance attempt: the claimed row and the CA directory it uses. */
-type Issuance = { row: CertificateRow; directoryUrl: string };
+/**
+ * An issuance attempt: the claimed row, the CA directory it uses (empty
+ * when its custom directory is not configured) and the CA certificates
+ * certd trusts for it besides the system roots.
+ */
+type Issuance = { row: CertificateRow; directoryUrl: string; rootCa?: string; eabKid?: string };
 
 /**
  * A failed helper command. `code` classifies it: DNS provider errors
@@ -177,21 +181,6 @@ function attempt(certificate: CertificateRow) {
   );
 }
 
-/**
- * The ACME directory of a certificate's CA (EDGEWEIR_ACME_DIRECTORY replaces
- * every CA; the UI shows it instead of the CA choice: certificateSettings).
- */
-export function acmeDirectory(app: AppContext, ca: string | undefined) {
-  return (
-    app.env.EDGEWEIR_ACME_DIRECTORY ||
-    (ca === "zerossl"
-      ? "https://acme.zerossl.com/v2/DV90"
-      : "https://acme-v02.api.letsencrypt.org/directory")
-  );
-}
-const acmeRootCa = async (app: AppContext) =>
-  app.env.EDGEWEIR_ACME_CA_FILE ? await readFile(app.env.EDGEWEIR_ACME_CA_FILE, "utf8") : undefined;
-
 const sameOrigin = (a: string, b: string) => {
   try {
     return new URL(a).origin === new URL(b).origin;
@@ -199,6 +188,13 @@ const sameOrigin = (a: string, b: string) => {
     return false;
   }
 };
+/** Records the account a certificate is issued with (acmeAccounts.list counts them). */
+async function linkAccount(app: AppContext, certificateId: string, accountId: string) {
+  await app.db
+    .update(schema.certificate)
+    .set({ acmeAccountId: accountId })
+    .where(eq(schema.certificate.id, certificateId));
+}
 /** Keeps a registered account for every later certificate with its directory, EAB key id and email. */
 async function storeAccount(
   app: AppContext,
@@ -223,6 +219,17 @@ async function storeAccount(
     })
     // Registered meanwhile by another issuance: that one is kept, this one is not used again.
     .onConflictDoNothing();
+  const [stored] = await app.db
+    .select({ id: schema.acmeAccount.id })
+    .from(schema.acmeAccount)
+    .where(
+      and(
+        eq(schema.acmeAccount.directoryUrl, issuance.directoryUrl),
+        eq(schema.acmeAccount.eabKid, eabKid),
+        eq(schema.acmeAccount.email, issuance.row.acme.email ?? ""),
+      ),
+    );
+  if (stored) await linkAccount(app, issuance.row.id, stored.id);
 }
 /**
  * The account an issuance uses: the one shared by its directory, EAB key id
@@ -246,12 +253,14 @@ async function issuanceAccount(
         eq(schema.acmeAccount.email, issuance.row.acme.email ?? ""),
       ),
     );
-  if (shared)
+  if (shared) {
+    await linkAccount(app, issuance.row.id, shared.id);
     return JSON.parse(
       app.masterKey
         .open(JSON.parse(shared.accountEnvelope), acmeAccountBinding(shared.id))
         .toString("utf8"),
     );
+  }
   if (
     request.privateKeyPem &&
     request.registration?.uri &&
@@ -453,8 +462,7 @@ async function challengeEvent(app: AppContext, issuance: Issuance, event: Helper
       .from(schema.certificate)
       .where(attempt(certificate));
     if (!active.length) throw new Error("stale issuance attempt");
-    const request = openRequest(app, certificate);
-    await storeAccount(app, issuance, request.eabKid ?? "", account);
+    await storeAccount(app, issuance, issuance.eabKid ?? "", account);
     return;
   }
   if (event.event === "http01.present") {
@@ -534,8 +542,16 @@ async function issueNow(app: AppContext, id: string) {
     .where(and(eq(schema.certificate.id, id), eq(schema.certificate.source, "acme"), due()))
     .returning();
   if (!row) return;
-  const issuance: Issuance = { row, directoryUrl: acmeDirectory(app, row.acme.ca) };
+  const issuance: Issuance = { row, directoryUrl: "" };
   try {
+    const directory = await issuanceDirectory(app, row.acme.ca);
+    if (!directory)
+      throw new IssuanceError(
+        "acme_directory_not_configured",
+        "the certificate's custom ACME directory is not configured",
+      );
+    issuance.directoryUrl = directory.url;
+    issuance.rootCa = directory.rootCa;
     const names = await issuanceNames(app.db, row);
     // The CA would only find other servers: no order, no rate limit spent.
     if (row.acme.challenge === "http01" && row.acme.skipDnsCheck !== "true") {
@@ -546,7 +562,13 @@ async function issueNow(app: AppContext, id: string) {
           `names do not resolve to the nodes: ${failed.slice(0, 5).join(", ")}`,
         );
     }
-    const request = openRequest(app, row);
+    const opened = openRequest(app, row);
+    // A custom directory's EAB key applies when the request brought none.
+    const request =
+      !opened.eabKid && directory.eab
+        ? { ...opened, eabKid: directory.eab.kid, eabHmacKey: directory.eab.hmacKey }
+        : opened;
+    issuance.eabKid = request.eabKid;
     const account = await issuanceAccount(app, issuance, request);
     let dns: Record<string, unknown> | undefined;
     if (row.acme.dnsCredentialId) {
@@ -568,7 +590,8 @@ async function issueNow(app: AppContext, id: string) {
         account,
         dns,
         directoryUrl: issuance.directoryUrl,
-        rootCa: await acmeRootCa(app),
+        rootCa: issuance.rootCa,
+        keyType: row.acme.keyType === "rsa2048" ? "rsa2048" : "ec256",
         previousCertificate: row.chainPem,
       },
       (event) => challengeEvent(app, issuance, event),
@@ -623,7 +646,7 @@ async function issueNow(app: AppContext, id: string) {
           // Only the request stays with the certificate; the account is shared.
           accountEnvelope: JSON.stringify(
             app.masterKey.seal(
-              JSON.stringify({ eabKid: request.eabKid, eabHmacKey: request.eabHmacKey }),
+              JSON.stringify({ eabKid: opened.eabKid, eabHmacKey: opened.eabHmacKey }),
               certificateAccountBinding(id),
             ),
           ),
@@ -648,7 +671,18 @@ async function issueNow(app: AppContext, id: string) {
       const sites = await tx
         .selectDistinct({ clusterId: schema.site.clusterId })
         .from(schema.site)
-        .where(eq(schema.site.certificateId, id));
+        .where(
+          or(
+            eq(schema.site.certificateId, id),
+            inArray(
+              schema.site.id,
+              tx
+                .select({ siteId: schema.siteCertificate.siteId })
+                .from(schema.siteCertificate)
+                .where(eq(schema.siteCertificate.certificateId, id)),
+            ),
+          ),
+        );
       await publishClusters(
         tx,
         sites.map((s) => s.clusterId),
@@ -676,7 +710,7 @@ async function issueNow(app: AppContext, id: string) {
         status: "error",
         lastError: code,
         operationStartedAt: null,
-        acme: usedDirectory(issuance),
+        acme: issuance.directoryUrl ? usedDirectory(issuance) : row.acme,
         renewAt: new Date(grown ? Date.now() : Date.now() + retryDelay(row.notAfter)),
       })
       .where(attempt(row));
@@ -807,16 +841,21 @@ export async function checkRenewalInfo(app: AppContext, now = Date.now()) {
     .orderBy(sql`${schema.certificate.renewalInfoAt} asc nulls first`)
     .limit(50);
   // Asked of the CA that issued each certificate.
+  const urls = new Map<string, string>();
+  for (const row of rows) {
+    const url = row.acme.directoryUrl || (await issuanceDirectory(app, row.acme.ca))?.url;
+    if (url) urls.set(row.id, url);
+  }
   const directories = Map.groupBy(
-    rows,
-    (row) => row.acme.directoryUrl || acmeDirectory(app, row.acme.ca),
+    rows.filter((row) => urls.has(row.id)),
+    (row) => urls.get(row.id) as string,
   );
   for (const [directoryUrl, group] of directories) {
     let windows: unknown;
     try {
       windows = await runCertd(app, "renewal-info", {
         directoryUrl,
-        rootCa: await acmeRootCa(app),
+        rootCa: await directoryRootCa(app, directoryUrl),
         certificates: group.map((row) => row.chainPem),
       });
     } catch {

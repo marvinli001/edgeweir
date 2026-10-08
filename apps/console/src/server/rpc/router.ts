@@ -30,6 +30,7 @@ export const router = os.router({
   l4Apps: sitesRouter.l4Apps,
   https: sitesRouter.https,
   dnsCredentials: certificatesRouter.dnsCredentials,
+  acmeAccounts: certificatesRouter.acmeAccounts,
   system: systemRouter.system,
   account: systemRouter.account,
   overview: systemRouter.overview,

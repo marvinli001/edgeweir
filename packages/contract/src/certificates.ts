@@ -139,7 +139,10 @@ export const tlsSettings = z
       (s.certificateId !== null &&
         !s.additionalCertificateIds.includes(s.certificateId) &&
         new Set(s.additionalCertificateIds).size === s.additionalCertificateIds.length),
-    { message: "additional certificates need a first one and are distinct", path: ["additionalCertificateIds"] },
+    {
+      message: "additional certificates need a first one and are distinct",
+      path: ["additionalCertificateIds"],
+    },
   )
   .refine(
     (s) =>
@@ -196,6 +199,8 @@ export const certificateErrorDefs = {
   acme_directory_unreachable: { params: [] },
   /** EDGEWEIR_ACME_CA_FILE holds no certificate. */
   acme_ca_file_invalid: { params: [] },
+  /** The certificate's CA is the custom directory, and none is configured any more. */
+  acme_directory_not_configured: { params: [] },
   dns_propagation_timeout: { params: [] },
   dns_credential_not_found: { params: [] },
   /** HTTP-01: a name no site has (no cluster answers its challenge). */
@@ -581,3 +586,6 @@ export type CertificateSettings = z.infer<typeof certificateSettings>;
 export type HttpsBlocker = z.infer<typeof httpsBlocker>;
 export type HttpsCheck = z.infer<typeof httpsCheck>;
 export type DnsCredentialInput = z.infer<typeof dnsCredentialInput>;
+export type AcmeDirectorySetting = z.infer<typeof acmeDirectorySetting>;
+export type AcmeDirectoryInput = z.infer<typeof acmeDirectoryInput>;
+export type AcmeAccountDto = z.infer<typeof acmeAccountDto>;

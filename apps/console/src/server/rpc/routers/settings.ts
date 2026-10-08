@@ -1,3 +1,4 @@
+import { getAcmeDirectory, setAcmeDirectory } from "../../services/acme-directory";
 import { getBanSettings, setBanSettings } from "../../services/bans";
 import { getPlatformErrorPages, setPlatformErrorPages } from "../../services/error-pages";
 import { checkNodeChannel } from "../../services/node-channel-check";
@@ -38,6 +39,12 @@ export const settingsRouter = {
     ),
     setOriginAllowList: authed.settings.setOriginAllowList.handler(({ input, context }) =>
       setOriginAllowList(context.app.db, input, context.actor),
+    ),
+    acmeDirectory: authed.settings.acmeDirectory.handler(({ context }) =>
+      getAcmeDirectory(context.app),
+    ),
+    setAcmeDirectory: authed.settings.setAcmeDirectory.handler(({ input, context }) =>
+      setAcmeDirectory(context.app, input, context.actor),
     ),
     releaseSource: authed.settings.releaseSource.handler(({ context }) =>
       getReleaseSource(context.app),

@@ -53,12 +53,14 @@ export async function pointing(
 }
 
 /**
- * The issuer domain names each CA recognizes in CAA issue and issuewild
- * properties (ZeroSSL issues through Sectigo).
+ * The issuer domain names each built-in CA recognizes in CAA issue and
+ * issuewild properties (ZeroSSL issues through Sectigo; Google Trust
+ * Services: pki.goog).
  */
 export const CAA_ISSUERS = {
   letsencrypt: ["letsencrypt.org"],
   zerossl: ["sectigo.com", "trust-provider.com", "usertrust.com"],
+  google: ["pki.goog"],
 } as const;
 
 /** Property tags whose meaning is known (RFC 8659, RFC 9495); others with the critical flag forbid. */

@@ -228,7 +228,12 @@ describe("HTTP-01 preconditions", async () => {
   });
 
   it("shows the directory EDGEWEIR_ACME_DIRECTORY sets and keeps the one an attempt used", async () => {
-    expect(await api.certificates.settings()).toEqual({ acmeDirectory: directory });
+    // The environment's directory is the custom one, which requests without a CA use.
+    expect(await api.certificates.settings()).toEqual({
+      acmeDirectory: directory,
+      acmeDirectoryEab: false,
+      defaultCa: "custom",
+    });
     const used = await ctx.db
       .select({ acme: schema.certificate.acme, lastError: schema.certificate.lastError })
       .from(schema.certificate)

@@ -168,6 +168,10 @@ export const siteFeatures = z.object({
   siteContent: featureAvailability,
   /** Domains of the forms `.a.com` and `~pattern` (domains-v2). */
   domainsV2: featureAvailability,
+  /** More than one certificate (multi-certificate-v1). */
+  multiCertificate: featureAvailability,
+  /** Client certificates and the tls.client.* fields (client-cert-v1). */
+  clientCertificate: featureAvailability,
 });
 
 const idParam = z.object({ id: uuid });

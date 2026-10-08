@@ -7,6 +7,7 @@ import { lockEnvelopeUpgrade } from "../lib/locks";
 import type { Logger } from "../lib/logger";
 import { siteSecretBinding } from "../lib/site-secrets";
 import { caKeyBinding } from "../pki/store";
+import { ACME_DIRECTORY_KEY, acmeDirectoryBinding } from "./acme-directory";
 import {
   acmeAccountBinding,
   certificateAccountBinding,
@@ -17,6 +18,7 @@ import { challengeKeyBinding } from "./challenge-keys";
 import { providerBinding } from "./dns-providers";
 import { channelBinding, SMTP_KEY, smtpBinding } from "./notification-delivery";
 import type { Executor } from "./revisions";
+import { sessionTicketKeyBinding } from "./session-ticket-keys";
 import { SETUP_TOKEN_BINDING, SETUP_TOKEN_KEY } from "./setup";
 import { s3SecretBinding } from "./sites";
 
@@ -97,6 +99,12 @@ export const ENVELOPE_COLUMNS: EnvelopeColumn[] = [
     column: schema.challengeKey.secret,
     binding: challengeKeyBinding,
   },
+  {
+    table: schema.sessionTicketKey,
+    id: schema.sessionTicketKey.id,
+    column: schema.sessionTicketKey.secret,
+    binding: sessionTicketKeyBinding,
+  },
 ];
 
 /** Every system setting that stores an envelope. */
@@ -104,6 +112,7 @@ export const ENVELOPE_SETTINGS: EnvelopeSetting[] = [
   { key: SETUP_TOKEN_KEY, binding: SETUP_TOKEN_BINDING, form: "object" },
   { key: SMTP_KEY, binding: smtpBinding, form: "json" },
   { key: AUTH_SECRET_KEY, binding: AUTH_SECRET_BINDING, form: "object" },
+  { key: ACME_DIRECTORY_KEY, binding: acmeDirectoryBinding, form: "json" },
 ];
 
 /**

@@ -56,6 +56,23 @@ export function uncoveredDomains<T extends Domain>(chainPem: string, domains: re
   );
 }
 
+/**
+ * The site domains none of a site's certificate chains covers (as nodes
+ * check them: every domain needs at least one certificate).
+ */
+export function uncoveredByAll<T extends Domain>(
+  chainPems: readonly string[],
+  domains: readonly T[],
+): T[] {
+  let left = [...domains];
+  for (const chainPem of chainPems) {
+    if (!left.length) break;
+    const uncovered = new Set(uncoveredDomains(chainPem, left));
+    left = left.filter((domain) => uncovered.has(domain));
+  }
+  return left;
+}
+
 /** Fails with the domains a certificate does not cover, the first five named. */
 export function failUncovered(domains: readonly Domain[]): never {
   const list = domains.slice(0, 5).map(certificateName).join(", ");

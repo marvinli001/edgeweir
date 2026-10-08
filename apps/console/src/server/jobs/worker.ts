@@ -5,6 +5,7 @@ import type { AppContext } from "../lib/context";
 import { pruneIdempotencyKeys } from "../lib/idempotency";
 import { deleteInBatches } from "../lib/retention";
 import { maintainLogs } from "../services/access-logs";
+import { reconcileAcmeCertificates } from "../services/acme-accounts";
 import { sweepAlerts } from "../services/alerts";
 import { pruneBans } from "../services/bans";
 import { expireCacheTasks, pruneCacheTasks } from "../services/cache-tasks";
@@ -18,6 +19,7 @@ import { pruneRevisions } from "../services/revisions";
 import { evaluateRollouts } from "../services/rollout";
 import { SCHEDULING_INTERVAL_MS, schedulingTick } from "../services/scheduling";
 import { pruneSecurityEvents } from "../services/security";
+import { rotateSessionTicketKeys } from "../services/session-ticket-keys";
 import { maintainTraffic } from "../services/stats-rollup";
 import { expireUpgrades } from "../services/upgrades";
 import { maintainUsage } from "../services/usage";
@@ -30,12 +32,14 @@ export const QUEUES = {
   traffic: "traffic.rollup",
   certificates: "certificates.sweep",
   checkCertificates: "maintenance.check-certificates",
+  linkAcmeAccounts: "maintenance.link-acme-accounts",
   pruneRevisions: "maintenance.prune-revisions",
   expireEnrollmentTokens: "maintenance.expire-enrollment-tokens",
   expireCacheTasks: "maintenance.expire-cache-tasks",
   pruneIdempotencyKeys: "maintenance.prune-idempotency-keys",
   pruneBans: "maintenance.prune-bans",
   rotateChallengeKeys: "maintenance.rotate-challenge-keys",
+  rotateSessionTicketKeys: "maintenance.rotate-session-ticket-keys",
   pruneSecurityEvents: "maintenance.prune-security-events",
 } as const;
 
@@ -102,6 +106,13 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
     await markUnloadableCertificates(ctx);
   });
   await boss.send(QUEUES.checkCertificates, {}, { singletonKey: "check-certificates" });
+  // Once per start: ACME certificates issued before CAs were chosen per
+  // certificate (EDGEWEIR_ACME_DIRECTORY) and before accounts were linked.
+  await boss.work(QUEUES.linkAcmeAccounts, async () => {
+    const changed = await reconcileAcmeCertificates(ctx);
+    if (changed) log.info("reconciled ACME certificates", { changed });
+  });
+  await boss.send(QUEUES.linkAcmeAccounts, {}, { singletonKey: "link-acme-accounts" });
 
   await boss.work(QUEUES.pruneRevisions, async () => {
     const removed = await pruneRevisions(ctx.db);
@@ -145,6 +156,12 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
     if (rotated.length) log.info("rotated challenge keys", { clusters: rotated });
   });
 
+  // Hourly check; a cluster's keys rotate once they are 12 hours old.
+  await boss.work(QUEUES.rotateSessionTicketKeys, async () => {
+    const rotated = await rotateSessionTicketKeys(ctx);
+    if (rotated.length) log.info("rotated session ticket keys", { clusters: rotated });
+  });
+
   await boss.work(QUEUES.pruneSecurityEvents, async () => {
     const removed = await pruneSecurityEvents(ctx.db);
     if (removed) log.info("deleted old security events", { removed });
@@ -168,6 +185,7 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
 
   await boss.schedule(QUEUES.pruneBans, "*/10 * * * *");
   await boss.schedule(QUEUES.rotateChallengeKeys, "11 * * * *");
+  await boss.schedule(QUEUES.rotateSessionTicketKeys, "13 * * * *");
   await boss.schedule(QUEUES.pruneSecurityEvents, "37 * * * *");
   await boss.schedule(QUEUES.pruneRevisions, "17 * * * *");
   await boss.schedule(QUEUES.pruneIdempotencyKeys, "29 * * * *");

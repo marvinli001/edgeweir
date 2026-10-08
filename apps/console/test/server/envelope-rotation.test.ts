@@ -17,6 +17,10 @@ import {
   certificateKeyBinding,
   dnsCredentialBinding,
 } from "../../src/server/services/certificates";
+import {
+  ACME_DIRECTORY_KEY,
+  acmeDirectoryBinding,
+} from "../../src/server/services/acme-directory";
 import { challengeKeyBinding } from "../../src/server/services/challenge-keys";
 import { providerBinding } from "../../src/server/services/dns-providers";
 import {
@@ -36,6 +40,7 @@ import {
   SETUP_TOKEN_BINDING,
   SETUP_TOKEN_KEY,
 } from "../../src/server/services/setup";
+import { sessionTicketKeyBinding } from "../../src/server/services/session-ticket-keys";
 import { s3SecretBinding } from "../../src/server/services/sites";
 import { createTestDatabase, TEST_MASTER_KEY } from "./helpers";
 
@@ -83,7 +88,8 @@ describe("the re-seal pass knows every envelope", () => {
             (column) =>
               column.name.includes("envelope") ||
               // Named "secret", like better-auth's two_factor.secret, which is not ours.
-              (getTableName(table) === "challenge_key" && column.name === "secret"),
+              (["challenge_key", "session_ticket_key"].includes(getTableName(table)) &&
+                column.name === "secret"),
           )
           .map((column) => `${getTableName(table)}.${column.name}`),
       );
@@ -137,6 +143,8 @@ describe("master key rotation", () => {
       key: crypto.randomUUID(),
       pending: crypto.randomUUID(),
       siteSecret: crypto.randomUUID(),
+      ticketKey: crypto.randomUUID(),
+      ticketPending: crypto.randomUUID(),
     };
     await db.insert(schema.originCredential).values({
       id: ids.credential,
@@ -201,6 +209,15 @@ describe("master key rotation", () => {
       { id: ids.key, clusterId, role: "current", secret: seal(challengeKeyBinding(ids.key)) },
       { id: ids.pending, clusterId, role: "next", secret: null },
     ]);
+    await db.insert(schema.sessionTicketKey).values([
+      {
+        id: ids.ticketKey,
+        clusterId,
+        role: "current",
+        secret: seal(sessionTicketKeyBinding(ids.ticketKey)),
+      },
+      { id: ids.ticketPending, clusterId, role: "next", secret: null },
+    ]);
     await db.insert(schema.systemSetting).values([
       {
         key: SETUP_TOKEN_KEY,
@@ -212,6 +229,16 @@ describe("master key rotation", () => {
       },
       { key: SMTP_KEY, value: { envelope: seal(smtpBinding) } },
       { key: AUTH_SECRET_KEY, value: { envelope: before.seal("session", AUTH_SECRET_BINDING) } },
+      {
+        key: ACME_DIRECTORY_KEY,
+        value: {
+          url: "https://acme.example/directory",
+          eabKid: "kid",
+          envelope: seal(acmeDirectoryBinding),
+          caPem: "",
+          caaIdentities: [],
+        },
+      },
     ]);
     plaintexts.set(`${SETUP_TOKEN_BINDING.purpose}/${SETUP_TOKEN_KEY}`, "ews_token");
     plaintexts.set(`${AUTH_SECRET_BINDING.purpose}/${AUTH_SECRET_KEY}`, "session");

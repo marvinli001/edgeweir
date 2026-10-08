@@ -1,11 +1,17 @@
-import { certificateUnloadable, type HttpsBlocker, type HttpsCheck } from "@edgeweir/contract";
+import {
+  type AcmeCa,
+  certificateUnloadable,
+  type HttpsBlocker,
+  type HttpsCheck,
+} from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { ORPCError } from "@orpc/server";
 import { and, asc, desc, eq, gt, ne, sql } from "drizzle-orm";
 import { certificateName, uncoveredDomains } from "../lib/certificate-names";
 import type { AppContext } from "../lib/context";
-import { CAA_ISSUERS, caaPermits, defaultResolver } from "../lib/dns-check";
+import { caaPermits, defaultResolver } from "../lib/dns-check";
 import { fail } from "../lib/errors";
+import { caaIssuers, defaultAcmeCa } from "./acme-directory";
 import { outsideZone, testDnsCredential } from "./certificates";
 import { http01Pointing, http01Readiness } from "./http01-check";
 import type { Executor } from "./revisions";
@@ -46,8 +52,9 @@ export async function defaultAcmeEmail(db: Executor): Promise<string> {
 export async function checkHttps(
   app: AppContext,
   id: string,
-  ca: keyof typeof CAA_ISSUERS = "letsencrypt",
+  requested?: AcmeCa,
 ): Promise<HttpsCheck> {
+  const ca = requested ?? (await defaultAcmeCa(app));
   const [site] = await app.db
     .select({ id: schema.site.id, name: schema.site.name })
     .from(schema.site)
@@ -79,8 +86,9 @@ export async function checkHttps(
         ).find((c) => names.every((name) => !outsideZone(name, c.zone)))
       : undefined;
   const resolver = app.resolver ?? defaultResolver();
-  // A directory set for every certificate is no CA the CAA records can name.
-  const issuers = app.env.EDGEWEIR_ACME_DIRECTORY ? undefined : CAA_ISSUERS[ca];
+  // The custom directory's issuer domains come from its meta (caaIdentities); without them
+  // the CAA records cannot be checked against it.
+  const issuers = await caaIssuers(app, ca);
   const method = challenge === "http01" ? "http-01" : "dns-01";
 
   const nodeBlockers = async (): Promise<HttpsBlocker[]> => {
