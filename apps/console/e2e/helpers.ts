@@ -24,7 +24,9 @@ export async function login(page: Page, email: string, password: string) {
 
 export async function logout(page: Page) {
   await page.getByTestId("user-menu").click();
-  await page.getByTestId("logout").click();
+  // By keyboard: while the menu animates in, the pointer can come to rest on the language submenu's
+  // trigger, which opens on hover and then covers the item.
+  await page.getByTestId("logout").press("Enter");
   await expect(page).toHaveURL(/\/login/);
 }
 
