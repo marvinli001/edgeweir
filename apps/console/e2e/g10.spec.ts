@@ -90,6 +90,19 @@ test("G10: Unicode and suffix, wildcard and pattern domains", async ({ page }) =
   await page.getByTestId("domain-add").click();
   await saved(page, page.getByTestId("domains-save"), "sites/update");
   await expect(list.getByTestId("domain-kind-wildcard")).toBeVisible();
+  // A name the browser leaves to the console (ß) is saved as Punycode: the stored list replaces
+  // the draft, so nothing is left to save.
+  await input.fill("Straße-UI.g10.test");
+  await page.getByTestId("domain-add").click();
+  await saved(page, page.getByTestId("domains-save"), "sites/update");
+  await expect(list.getByTestId("domain-unicode")).toHaveCount(2);
+  await expect(page.getByTestId("domains-save")).toBeDisabled();
+  // A listed name typed in another form (upper case, ideographic full stop) is not added again.
+  await input.fill("BÜCHER-UI。g10.test");
+  await expect(page.getByTestId("domains-save")).toBeDisabled();
+  await page.getByTestId("domain-add").click();
+  await expect(input).toHaveValue("");
+  await expect(list.getByTestId("domain-unicode")).toHaveCount(2);
   // Suffix and pattern domains have nothing to check in DNS.
   await expect(page.getByTestId("domain-pointing")).toContainText("无法检查");
   await check(page, "domains");
@@ -118,7 +131,12 @@ test("G10: the cluster's unknown host handling", async ({ page }) => {
   await expect(card.getByTestId("unknown-hosts-site")).toBeVisible();
   // Handing requests over needs the site, found by name or domain.
   await expect(save).toBeDisabled();
-  await card.getByTestId("unknown-hosts-site-search").fill("default.g10");
+  const siteSearch = card.getByTestId("unknown-hosts-site-search");
+  await siteSearch.fill("no-such-site.g10");
+  await card.getByTestId("unknown-hosts-site").click();
+  await expect(page.getByTestId("unknown-hosts-site-none")).toHaveText("没有匹配的网站");
+  await page.keyboard.press("Escape");
+  await siteSearch.fill("default.g10");
   await pick(page, card.getByTestId("unknown-hosts-site"), "g10-default");
   await pick(page, card.getByTestId("unknown-hosts-ip"), "关闭连接（444）");
   await card.getByTestId("unknown-hosts-certificate").click();
@@ -131,6 +149,16 @@ test("G10: the cluster's unknown host handling", async ({ page }) => {
   await card.getByTestId("unknown-hosts-threshold").fill("50");
   await expect(card.getByTestId("unknown-hosts-scan-invalid")).toHaveCount(0);
   await expect(save).toBeEnabled();
+  // Enter in the site search searches; it does not save the settings.
+  let saves = 0;
+  page.on("request", (request) => {
+    if (request.url().includes("/rpc/clusters/setUnknownHosts")) saves++;
+  });
+  await siteSearch.press("Enter");
+  await page.waitForTimeout(500);
+  expect(saves).toBe(0);
+  await expect(save).toBeEnabled();
+  await expect(card.getByTestId("unknown-hosts-site")).toHaveText("g10-default");
   await check(page, "unknown-hosts");
   await saved(page, save, "clusters/setUnknownHosts");
 
@@ -167,6 +195,9 @@ test("G10: the CNAME card regenerates and customizes the prefix", async ({ page 
   // The two prefixes scripts/e2e-g10.mjs replaced keep resolving for 24 hours.
   await expect(card.getByTestId("cname-retired").locator("li")).toHaveCount(2);
   await expect(card.getByTestId("cname-retired-until").first()).toContainText("解析至");
+  // A domain added but not saved yet stays while the prefix changes the site.
+  await page.getByTestId("domain-input").fill("kept.multi.g10.test");
+  await page.getByTestId("domain-add").click();
 
   await card.getByTestId("cname-prefix-regenerate").click();
   await expect(page.getByText("旧名称继续解析 24 小时")).toBeVisible();
@@ -174,6 +205,10 @@ test("G10: the CNAME card regenerates and customizes the prefix", async ({ page 
   await expect(value).toHaveText(
     new RegExp(`^[a-z][a-z0-9]{7}\\.${state.domain.replaceAll(".", "\\.")}$`),
   );
+  // The dialog closes once the site has been read again.
+  await expect(page.getByTestId("confirm-action")).toHaveCount(0);
+  await expect(page.getByTestId("domain-list")).toContainText("kept.multi.g10.test");
+  await expect(page.getByTestId("domains-save")).toBeEnabled();
   await expect(card.getByTestId("cname-retired").locator("li")).toHaveCount(3);
   await expect(card.getByTestId("cname-retired")).toContainText(`g10-custom.${state.domain}`);
 

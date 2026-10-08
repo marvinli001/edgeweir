@@ -105,6 +105,80 @@ describe("localizeError", () => {
     expect(localizeError(error)).toBe("Invalid origin Host: [2001:db8::1]");
   });
 
+  it("shows the domain names of an error in Unicode with their Punycode", () => {
+    const failure = (code: string, data: Record<string, string>) => ({
+      code,
+      status: 409,
+      message: "x",
+      data,
+    });
+    expect(
+      localizeError(
+        failure("DOMAIN_IN_USE", {
+          domains: "xn--bcher-kva.example, *.xn--fiqs8s.example, a.test, ~xn--.*, a{1,2}.test",
+        }),
+      ),
+    ).toBe(
+      "Domain already in use: bücher.example (xn--bcher-kva.example), *.中国.example (*.xn--fiqs8s.example), a.test, ~xn--.*, a{1,2}.test",
+    );
+    // Look-alikes stay in Punycode, once.
+    expect(localizeError(failure("DOMAIN_IN_USE", { domains: "xn--pple-43d.com" }))).toBe(
+      "Domain already in use: xn--pple-43d.com",
+    );
+    // The certificate form and DNS bindings take Punycode only: the name as
+    // typed there is in the text too.
+    expect(
+      localizeError(failure("CERTIFICATE_DOMAIN_MISMATCH", { domains: "xn--fiqs8s.example" })),
+    ).toBe(
+      "Certificate domains do not match the site or DNS zone: 中国.example (xn--fiqs8s.example)",
+    );
+    expect(
+      localizeError(failure("CERTIFICATE_DOMAIN_MISMATCH", { domains: "*.xn--bcher-kva.example" })),
+    ).toBe(
+      "Certificate domains do not match the site or DNS zone: *.bücher.example (*.xn--bcher-kva.example)",
+    );
+    expect(
+      localizeError(failure("CERTIFICATE_DNS_NOT_POINTING", { names: "xn--fiqs8s.example" })),
+    ).toBe("These names do not resolve to the nodes: 中国.example (xn--fiqs8s.example)");
+    expect(
+      localizeError(failure("DNS_BINDING_CONFLICT", { name: "telecom.cdn.xn--fiqs8s.example" })),
+    ).toBe(
+      "Another cluster's DNS binding or a CNAME prefix of a site or L4 app uses telecom.cdn.中国.example (telecom.cdn.xn--fiqs8s.example)",
+    );
+    expect(localizeError(failure("DNS_RECORD_CONFLICT", { name: "www.xn--fiqs8s.example" }))).toBe(
+      "DNS name www.中国.example (www.xn--fiqs8s.example) has an unmanaged record",
+    );
+    expect(localizeError(failure("CACHE_TASK_HOST_UNKNOWN", { hosts: "xn--fiqs8s.example" }))).toBe(
+      "No site serves 中国.example (xn--fiqs8s.example)",
+    );
+    expect(
+      localizeError(failure("BULK_REDIRECT_HOST_UNKNOWN", { hosts: "xn--fiqs8s.example" })),
+    ).toBe("The site does not serve 中国.example (xn--fiqs8s.example)");
+    expect(
+      localizeError(failure("HTTPS_REDIRECT_DOMAIN_INVALID", { domains: "xn--fiqs8s.example" })),
+    ).toBe("The site has no such domains: 中国.example (xn--fiqs8s.example)");
+    // ASCII names as they are.
+    expect(localizeError(failure("DNS_RECORD_CONFLICT", { name: "www.a.test" }))).toBe(
+      "DNS name www.a.test has an unmanaged record",
+    );
+  });
+
+  it("puts the Punycode in full-width parentheses in Chinese", () => {
+    overwriteGetLocale(() => "zh-CN");
+    try {
+      expect(
+        localizeError({
+          code: "CERTIFICATE_DNS_NOT_POINTING",
+          status: 409,
+          message: "x",
+          data: { names: "xn--fiqs8s.example, a.test" },
+        }),
+      ).toBe("以下名称未解析到节点：中国.example（xn--fiqs8s.example）, a.test");
+    } finally {
+      overwriteGetLocale(() => "en");
+    }
+  });
+
   it("labels every capability nodes can be asked for", () => {
     const compiler = readFileSync(
       resolve(import.meta.dirname, "../../../../packages/config-compiler/src/index.ts"),

@@ -38,6 +38,32 @@ describe("one-click HTTPS blockers", () => {
     );
   });
 
+  it("shows certificate names in Unicode", () => {
+    overwriteGetLocale(() => "en");
+    const ca = "Let's Encrypt";
+    expect(
+      httpsBlockerText(
+        { code: "dns_not_pointing", name: "xn--bcher-kva.example", pointing: "unresolved" },
+        ca,
+      ),
+    ).toBe("bücher.example has no DNS record yet");
+    expect(
+      httpsBlockerText(
+        { code: "dns_not_pointing", name: "xn--bcher-kva.example", pointing: "elsewhere" },
+        ca,
+      ),
+    ).toBe("bücher.example does not point to the nodes");
+    expect(
+      httpsBlockerText(
+        { code: "dns_credential_missing", names: ["*.xn--fiqs8s.example", "xn--pple-43d.com"] },
+        ca,
+      ),
+    ).toBe("Wildcards need a DNS credential whose zone covers *.中国.example, xn--pple-43d.com");
+    expect(httpsBlockerText({ code: "caa_forbidden", name: "xn--fiqs8s.example" }, ca)).toBe(
+      "CAA records of 中国.example do not allow Let's Encrypt",
+    );
+  });
+
   it("lists names the Chinese way in Chinese", () => {
     overwriteGetLocale(() => "zh-CN");
     expect(httpsBlockerText({ code: "nodes_lack_http01", nodes: ["e1", "e2"] }, "ZeroSSL")).toBe(

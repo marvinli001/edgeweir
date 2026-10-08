@@ -1,7 +1,10 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
+import { domainPatternError, patternBranches } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { DomainMatch } from "@edgeweir/proto";
-import { eq } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import { banChanges, reportAutoBans } from "../../src/server/services/bans";
@@ -136,6 +139,24 @@ describe("domain forms, unknown hosts and CNAME prefixes (G10)", async () => {
     expect(await names("~(api")).toEqual(["forms"]);
   });
 
+  it("accepts the branch example of the pattern rules in the guide, with the product it states", () => {
+    for (const file of ["domains.md", "domains.en.md"]) {
+      const text = readFileSync(
+        resolve(import.meta.dirname, "../../../../docs/guide", file),
+        "utf8",
+      );
+      const row = text.split("\n").find((line) => /^\| (Branches|分支) \|/.test(line)) ?? "";
+      const example = /`([^`]*\([^`]*)` \S+ ([\d × ]+) = (\d+)/.exec(row);
+      expect(example, file).not.toBeNull();
+      const [, quoted = "", factors = "", product = ""] = example ?? [];
+      // The table escapes "|" as "\|".
+      const pattern = quoted.replaceAll("\\|", "|");
+      expect(domainPatternError(pattern), `${file}: ${pattern}`).toBeNull();
+      expect(patternBranches(pattern), `${file}: ${pattern}`).toBe(Number(product));
+      expect(factors.split("×").reduce((n, f) => n * Number(f), 1)).toBe(Number(product));
+    }
+  });
+
   it("compiles suffix and pattern domains with the order of the site's patterns (domains-v2)", async () => {
     const site = (await admin.sites.list({ search: "forms" })).items[0];
     if (!site) throw new Error("site missing");
@@ -195,23 +216,171 @@ describe("domain forms, unknown hosts and CNAME prefixes (G10)", async () => {
     const other = await admin.clusters.create({ name: "g10-purge" });
     const elsewhere = await createSite("elsewhere", ["~api\\.p\\.g10\\.test"], other.id);
     expect(await task("api.p.g10.test")).toEqual([on.id, elsewhere.id].sort());
-    // Patterns of sites created in the same millisecond go by site id, as on nodes.
-    const created = new Date("2026-01-01T00:00:00.000Z");
-    const first = await createSite("same-ms-1", ["~.*\\.q\\.g10\\.test"]);
-    const second = await createSite("same-ms-2", ["~shop\\.q\\.g10\\.test"]);
-    await ctx.db
-      .update(schema.site)
-      .set({ createdAt: new Date(created.getTime()) })
-      .where(eq(schema.site.id, first.id));
-    await ctx.db
-      .update(schema.site)
-      .set({ createdAt: new Date(created.getTime() + 0.7) })
-      .where(eq(schema.site.id, second.id));
-    const winner = first.id < second.id ? first.id : second.id;
-    expect(await task("shop.q.g10.test")).toEqual([winner]);
-    for (const id of [off.id, on.id, elsewhere.id, first.id, second.id])
-      await admin.sites.delete({ id });
+    for (const id of [off.id, on.id, elsewhere.id]) await admin.sites.delete({ id });
     await admin.clusters.delete({ id: other.id });
+  });
+
+  /**
+   * Sets sites' created_at in PostgreSQL's microseconds (a JavaScript Date
+   * holds whole milliseconds): `micros` within 2026-01-01T00:00:00.000Z.
+   */
+  const createdAtMicros = async (siteId: string, micros: number) => {
+    const stamp = `2026-01-01 00:00:00.${String(micros).padStart(6, "0")}+00`;
+    await ctx.db.execute(
+      sql`update site set created_at = ${stamp}::timestamptz where id = ${siteId}`,
+    );
+  };
+  const NEW_YEAR_MS = Date.parse("2026-01-01T00:00:00.000Z");
+  const hostTask = async (host: string) =>
+    (await admin.cacheTasks.create({ type: "host", hosts: [host] })).sites.map((s) => s.id);
+  /** The sites' ids by PostgreSQL's created_at, and their creation times in milliseconds. */
+  const creation = async (ids: string[]) => {
+    const rows = await ctx.db
+      .select({ id: schema.site.id, createdAt: schema.site.createdAt })
+      .from(schema.site)
+      .where(inArray(schema.site.id, ids))
+      .orderBy(asc(schema.site.createdAt));
+    return { order: rows.map((r) => r.id), ms: rows.map((r) => r.createdAt.getTime()) };
+  };
+
+  it("orders patterns of sites created in one millisecond by site id, as nodes do, not by microseconds", async () => {
+    const a = await createSite("same-ms-a", ["~.*\\.q\\.g10\\.test"]);
+    const b = await createSite("same-ms-b", ["~shop\\.q\\.g10\\.test"]);
+    const [low, high] = a.id < b.id ? [a, b] : [b, a];
+    // The site with the larger id was created earlier within the millisecond.
+    await createdAtMicros(high.id, 100);
+    await createdAtMicros(low.id, 700);
+    const created = await creation([a.id, b.id]);
+    expect(created.order).toEqual([high.id, low.id]);
+    expect(created.ms).toEqual([NEW_YEAR_MS, NEW_YEAR_MS]);
+    // Equal orders (creation millisecond × 16 + index 0): the smaller site id.
+    expect(await hostTask("shop.q.g10.test")).toEqual([low.id]);
+    for (const site of [a, b]) await admin.sites.delete({ id: site.id });
+  });
+
+  it("orders patterns of sites created in one millisecond by their index first, as nodes do", async () => {
+    // "early" (created first) names the host with its second pattern, "late" with its first.
+    const early = await createSite("same-ms-early", [
+      "~aaa\\.r2\\.g10\\.test",
+      "~sh.*\\.r2\\.g10\\.test",
+    ]);
+    const late = await createSite("same-ms-late", ["~shop\\.r2\\.g10\\.test"]);
+    await createdAtMicros(early.id, 100);
+    await createdAtMicros(late.id, 700);
+    const created = await creation([early.id, late.id]);
+    expect(created.order).toEqual([early.id, late.id]);
+    expect(created.ms).toEqual([NEW_YEAR_MS, NEW_YEAR_MS]);
+    // The first pattern of "late" (order ms × 16) before the second of "early" (ms × 16 + 1).
+    expect(await hostTask("shop.r2.g10.test")).toEqual([late.id]);
+    for (const site of [early, late]) await admin.sites.delete({ id: site.id });
+  });
+
+  it("purges every cluster that serves a host but prefetches from one site only", async () => {
+    // Cluster "pf" runs prefetch-v2; the main cluster's node does not.
+    const pf = await admin.clusters.create({ name: "g10-prefetch" });
+    const [pfNode] = await ctx.db
+      .insert(schema.node)
+      .values({
+        clusterId: pf.id,
+        name: "edge-pf",
+        supportedFeatures: ["tls-v1", "purge-tag-v1", "domains-v2", "prefetch-v2"],
+      })
+      .returning();
+    if (!pfNode) throw new Error("node missing");
+    const exact = await createSite(
+      "pf-exact",
+      ["pf.r3.g10.test", "~p\\d\\.r3\\.g10\\.test"],
+      pf.id,
+    );
+    const broad = await createSite("pf-broad", [".r3.g10.test"]);
+    const create = async (input: Parameters<typeof admin.cacheTasks.create>[0]) => {
+      const task = await admin.cacheTasks.create(input);
+      return {
+        sites: task.sites.map((s) => s.id).sort(),
+        nodes: task.nodes.map((n) => n.nodeName).sort(),
+      };
+    };
+    const both = [exact.id, broad.id].sort();
+    // Purges: each cluster's site that serves the host (too much purged is harmless).
+    expect((await create({ type: "host", hosts: ["pf.r3.g10.test"] })).sites).toEqual(both);
+    expect((await create({ type: "url", urls: ["http://pf.r3.g10.test/a"] })).sites).toEqual(both);
+    expect((await create({ type: "prefix", urls: ["http://p7.r3.g10.test/a/"] })).sites).toEqual(
+      both,
+    );
+    // Prefetches: the exact domain wins over the other cluster's suffix; only
+    // its cluster's nodes fetch, and only they need prefetch-v2.
+    const only = { sites: [exact.id], nodes: ["edge-pf"] };
+    expect(await create({ type: "prefetch", urls: ["http://pf.r3.g10.test/a"] })).toEqual(only);
+    expect(
+      await create({ type: "prefetch", urls: ["http://pf.r3.g10.test/b"], variants: ["mobile"] }),
+    ).toEqual(only);
+    expect(await create({ type: "sitemap", urls: ["http://pf.r3.g10.test/sitemap.xml"] })).toEqual(
+      only,
+    );
+    // The same precedence over every cluster: a suffix before a pattern.
+    expect(await create({ type: "prefetch", urls: ["http://p7.r3.g10.test/a"] })).toEqual({
+      sites: [broad.id],
+      nodes: ["edge-g10"],
+    });
+    // A sitemap the main cluster's site serves still needs prefetch-v2 there.
+    expect(
+      (
+        await rpcError(
+          admin.cacheTasks.create({ type: "sitemap", urls: ["http://p7.r3.g10.test/sitemap.xml"] }),
+        )
+      ).code,
+    ).toBe("NODE_CAPABILITY_REQUIRED");
+    for (const site of [exact, broad]) await admin.sites.delete({ id: site.id });
+    await ctx.db.delete(schema.node).where(eq(schema.node.id, pfNode.id));
+    await admin.clusters.delete({ id: pf.id });
+  });
+
+  it("keeps a prefetch in the cluster of the host's own site while that site is disabled", async () => {
+    // Another cluster serves the broad suffix; the main cluster the exact domain.
+    const elsewhere = await admin.clusters.create({ name: "g10-prefetch-off" });
+    const [elsewhereNode] = await ctx.db
+      .insert(schema.node)
+      .values({
+        clusterId: elsewhere.id,
+        name: "edge-s4",
+        supportedFeatures: ["tls-v1", "purge-tag-v1", "domains-v2", "prefetch-v2"],
+      })
+      .returning();
+    if (!elsewhereNode) throw new Error("node missing");
+    const own = await createSite("s4-own", ["www.s4.g10.test"]);
+    const broad = await createSite("s4-broad", [".s4.g10.test"], elsewhere.id);
+    const create = async (input: Parameters<typeof admin.cacheTasks.create>[0]) => {
+      const task = await admin.cacheTasks.create(input);
+      return { sites: task.sites.map((s) => s.id), nodes: task.nodes.map((n) => n.nodeName) };
+    };
+    const refused = async (input: Parameters<typeof admin.cacheTasks.create>[0]) =>
+      (await rpcError(admin.cacheTasks.create(input))).code;
+    const url = "http://www.s4.g10.test/a";
+    expect(await create({ type: "prefetch", urls: [url] })).toEqual({
+      sites: [own.id],
+      nodes: ["edge-g10"],
+    });
+    // Disabled, its exact domain still keeps the other cluster's nodes off the host.
+    await admin.sites.setEnabled({ id: own.id, enabled: false });
+    expect(await refused({ type: "prefetch", urls: [url] })).toBe("SITE_DISABLED");
+    expect(await refused({ type: "sitemap", urls: ["http://www.s4.g10.test/sitemap.xml"] })).toBe(
+      "SITE_DISABLED",
+    );
+    // Purges still go to every cluster that serves the host.
+    expect(await create({ type: "host", hosts: ["www.s4.g10.test"] })).toEqual({
+      sites: [broad.id],
+      nodes: ["edge-s4"],
+    });
+    // An enabled site of its own cluster that the nodes route the host to
+    // there takes the prefetch, although the other cluster's suffix comes first.
+    const same = await createSite("s4-same", ["~www\\.s4\\.g10\\.test"]);
+    expect(await create({ type: "prefetch", urls: [url] })).toEqual({
+      sites: [same.id],
+      nodes: ["edge-g10"],
+    });
+    for (const site of [own, broad, same]) await admin.sites.delete({ id: site.id });
+    await ctx.db.delete(schema.node).where(eq(schema.node.id, elsewhereNode.id));
+    await admin.clusters.delete({ id: elsewhere.id });
   });
 
   it("does not check suffix or pattern domains for DNS, certificates, HTTP-01 or redirect sources", async () => {
@@ -503,13 +672,18 @@ describe("domain forms, unknown hosts and CNAME prefixes (G10)", async () => {
     });
   });
 
-  it("lifts an unshared platform scan ban on every node and never bans a cluster's trusted proxies", async () => {
+  it("lifts an unshared platform scan ban on every node and never shares a cluster's trusted proxies", async () => {
     const settings = await admin.settings.bans();
     await admin.settings.setBans({ ...settings, shareAutoBans: false });
     const other = await admin.clusters.create({ name: "g10-other" });
     await admin.clusters.setClientIp({
       clusterId: other.id,
       settings: { mode: "header", trustedCidrs: ["192.0.2.0/24"], header: "x-forwarded-for" },
+    });
+    // Its nodes ban scanners only with scan protection on.
+    await admin.clusters.setUnknownHosts({
+      clusterId: other.id,
+      settings: { scan: { enabled: true, threshold: 10, banSeconds: 600 } },
     });
     const [peer] = await ctx.db
       .insert(schema.node)
@@ -532,8 +706,14 @@ describe("domain forms, unknown hosts and CNAME prefixes (G10)", async () => {
       threshold: 10,
       windowSeconds: 60,
     });
-    // Another cluster's trusted proxy is never banned at platform scope.
-    expect(await reportAutoBans(ctx.db, { id: nodeId, clusterId }, [scan("192.0.2.9/32")])).toBe(0);
+    // Another cluster's trusted proxy is kept to the node that banned it, never shared
+    // (scan-bans.test.ts covers sharing on).
+    expect(await reportAutoBans(ctx.db, { id: nodeId, clusterId }, [scan("192.0.2.9/32")])).toBe(1);
+    const [proxy] = await ctx.db
+      .select()
+      .from(schema.ipBan)
+      .where(eq(schema.ipBan.cidr, "192.0.2.9/32"));
+    expect(proxy).toMatchObject({ distributed: false, removedAt: null, nodeId });
     // Both nodes banned the same scanner on their own (sharing off).
     expect(await reportAutoBans(ctx.db, { id: nodeId, clusterId }, [scan("203.0.113.99/32")])).toBe(
       1,

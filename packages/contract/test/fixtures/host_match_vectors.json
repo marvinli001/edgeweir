@@ -1,5 +1,5 @@
 {
-  "description": "Site lookup by host (proto v0.25.0, domains-v2): exact > *. (one label over the parent) > . suffix (any depth, longest first) > patterns by (site creation time x 16 + the pattern's index in the site, site id). Shared with edgeweir-node test/lua/host-match-vectors.json (byte-identical).",
+  "description": "Site lookup by host (proto v0.25.0, domains-v2): exact > *. (one label over the parent) > . suffix (any depth, longest first) > patterns by (site creation time x 16 + the pattern's index in the site, site id); node IP access (\"_\", IPv4, [IPv6]) by exact names only; a host that starts with a dot has no parent; no pattern sees a host longer than 253 characters. Shared with edgeweir-node test/lua/host-match-vectors.json (byte-identical).",
   "sites": [
     { "id": "s-exact", "created": 1000, "domains": ["a.test", "www.b.test", "xn--bcher-kva.test"] },
     { "id": "s-wild", "created": 2000, "domains": ["*.a.test", "*.c.b.test"] },
@@ -12,7 +12,8 @@
       "domains": ["~(www|m)\\.e\\.test", "~api7\\.e\\.test", "~.*\\.e\\.test"]
     },
     { "id": "s-same-a", "created": 7000, "domains": ["~same\\.test"] },
-    { "id": "s-same-b", "created": 7000, "domains": ["~sam.\\.test"] }
+    { "id": "s-same-b", "created": 7000, "domains": ["~sam.\\.test"] },
+    { "id": "s-ip", "created": 9500, "domains": ["198.51.100.7", "~[0-9._]+"] }
   ],
   "cases": [
     { "host": "a.test", "site": "s-exact" },
@@ -41,6 +42,20 @@
     { "host": "same.test", "site": "s-same-a" },
     { "host": "samx.test", "site": "s-same-b" },
     { "host": "xsame.test", "site": null },
-    { "host": "same.test.evil", "site": null }
+    { "host": "same.test.evil", "site": null },
+    { "host": "198.51.100.7", "site": "s-ip" },
+    { "host": "203.0.113.5", "site": null },
+    { "host": "_", "site": null },
+    { "host": "1.2.3.4.5", "site": "s-ip" },
+    { "host": ".a.test", "site": null },
+    { "host": ".x.a.test", "site": null },
+    {
+      "host": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.org",
+      "site": "s-late"
+    },
+    {
+      "host": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.org",
+      "site": null
+    }
   ]
 }

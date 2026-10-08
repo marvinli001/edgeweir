@@ -12,6 +12,7 @@ import {
 } from "@edgeweir/contract";
 import { describe, expect, it } from "vitest";
 import { normalizeSiteDomain, toAsciiHost } from "../../src/server/lib/idna";
+import "../../src/server/lib/regexp-engine";
 
 const idna = JSON.parse(
   readFileSync(new URL("./fixtures/idna-vectors.json", import.meta.url), "utf8"),
@@ -116,6 +117,31 @@ describe("site domain forms", () => {
     expect(siteDomains.safeParse(Array.from({ length: 51 }, (_, i) => `a${i}.com`)).success).toBe(
       false,
     );
+  });
+
+  it("bounds pattern domains: repeats, branches; the console's engine falls back to linear time", () => {
+    expect(domainPatternError("a{3}\\.com")).toBeNull();
+    expect(domainPatternError("(www|m)\\.a\\.com")).toBeNull();
+    expect(domainPatternError("(a|a)(a|a)(a|a)(a|a)(a|a)x\\.com")).toBe("too_complex");
+    expect(domainPatternError("a?a?a?a?a?aaaaa\\.com")).toBe("too_complex");
+    expect(domainPatternError("(a|b|c|d|e|f|g|h|i|j|k|l|m|n|o|p|q)\\.com")).toBe("too_complex");
+    // A pattern past the rules (say stored before them) still cannot block the console.
+    const matcher = hostMatcher([
+      { kind: "regex" as const, name: `${"(a|a)".repeat(28)}\\.org`, value: "slow" },
+    ]);
+    const started = performance.now();
+    expect(matchHost(matcher, `${"a".repeat(28)}.com`)).toBeUndefined();
+    expect(performance.now() - started).toBeLessThan(500);
+    // Node IP access and hosts longer than a DNS name: exact names only.
+    const any = hostMatcher([
+      { kind: "regex" as const, name: "[0-9a-z._]+", value: "any" },
+      { kind: "exact" as const, name: "198.51.100.7", value: "ip" },
+    ]);
+    expect(matchHost(any, "203.0.113.5")).toBeUndefined();
+    expect(matchHost(any, "_")).toBeUndefined();
+    expect(matchHost(any, "198.51.100.7")).toBe("ip");
+    expect(matchHost(any, `${"a".repeat(249)}.com`)).toBe("any");
+    expect(matchHost(any, `${"a".repeat(250)}.com`)).toBeUndefined();
   });
 
   it("matches hosts by precedence: exact, *., the longest ., then regex in order", () => {
