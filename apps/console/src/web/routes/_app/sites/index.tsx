@@ -1,4 +1,11 @@
-import { type Site, type SiteCreateInput, siteCreateInput } from "@edgeweir/contract";
+import {
+  DOMAINS_V2_FEATURE,
+  nodeSupportsFeature,
+  type Site,
+  type SiteCreateInput,
+  siteCreateInput,
+  siteDomainKind,
+} from "@edgeweir/contract";
 import { MAX_HOST_HEADER_LENGTH, validHostHeader } from "@edgeweir/rule-engine";
 import { Add01Icon, GlobeIcon, Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -335,6 +342,14 @@ function CreateSiteDialog({
   const [hostInvalid, setHostInvalid] = React.useState(false);
   const cluster = clusters.some((c) => c.id === clusterId) ? clusterId : clusters[0]?.id;
   const pending = create.isPending || navigating;
+  // `.a.com` and `~pattern` need domains-v2 on every active node of the cluster.
+  const nodes = useQuery({
+    ...orpc.nodes.list.queryOptions({ input: { clusterId: cluster ?? "" } }),
+    enabled: open && !!cluster,
+  });
+  const formsAvailable = (nodes.data ?? [])
+    .filter((node) => node.status === "active")
+    .every((node) => nodeSupportsFeature(node.supportedFeatures, DOMAINS_V2_FEATURE));
   /** Puts an origin into the fields (a URL's protocol and port into theirs) and returns it. */
   const fill = (value: string) => {
     const next = fillOrigin(value, { scheme, port }, () => "");
@@ -392,6 +407,11 @@ function CreateSiteDialog({
             const checked = siteCreateInput.safeParse(input);
             setInvalid(checked.success ? null : errorMessage(checked.error));
             if (!checked.success) return;
+            const kinds = input.domains.map(siteDomainKind);
+            if (!formsAvailable && kinds.some((kind) => kind === "suffix" || kind === "regex")) {
+              setInvalid(m.feature_unavailable_nodes());
+              return;
+            }
             // Nodes would skip the origin: its Host header is checked as they check it.
             const host = text("hostHeader");
             const badHost = host !== "" && !validHostHeader(host);

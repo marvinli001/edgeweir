@@ -1,4 +1,10 @@
-import { analyticsRange, type Site, siteDomain } from "@edgeweir/contract";
+import {
+  analyticsRange,
+  displaySiteDomain,
+  type Site,
+  siteDomain,
+  siteDomainKind,
+} from "@edgeweir/contract";
 import { Add01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,6 +15,7 @@ import * as z from "zod";
 import { AnalyticsSection } from "@/components/analytics/analytics-section";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Page } from "@/components/page";
+import { SafetyNote } from "@/components/safety-note";
 import { BulkRedirectsTab } from "@/components/site/bulk-redirects-tab";
 import { CacheTab } from "@/components/site/cache-tab";
 import { DnsSetupCard } from "@/components/site/cname-target";
@@ -148,7 +155,8 @@ function SiteDetailPage() {
               />
             </TabsContent>
             <TabsContent value="domains" className="animate-enter">
-              <DomainsTab site={data} />
+              {/* A save stores Unicode names as Punycode: start again from the saved list. */}
+              <DomainsTab key={data.updatedAt} site={data} />
             </TabsContent>
             <TabsContent value="origins" className="animate-enter">
               <OriginsTab site={data} />
@@ -270,9 +278,7 @@ function OverviewTab({ site }: { site: Site }) {
                 <InfoRow label={m.sites_col_domains()}>
                   <span className="flex min-w-0 flex-col font-mono text-xs leading-5">
                     {site.domains.map((d) => (
-                      <span key={d} className="break-all">
-                        {d}
-                      </span>
+                      <DomainName key={d} domain={d} className="break-all" />
                     ))}
                   </span>
                 </InfoRow>
@@ -297,7 +303,7 @@ function OverviewTab({ site }: { site: Site }) {
             <ConfirmDialog
               trigger={<Button variant="outline">{m.sites_purge()}</Button>}
               title={m.sites_purge()}
-              note={site.domains.join(", ")}
+              note={site.domains.map(displaySiteDomain).join(", ")}
               onConfirm={async () => {
                 await purge.mutateAsync({ id: site.id });
                 toast.success(m.sites_purged(), {
@@ -343,14 +349,29 @@ function DomainsTab({ site }: { site: Site }) {
   const [input, setInput] = React.useState("");
   const [invalid, setInvalid] = React.useState<string | null>(null);
   const { save, error, pending } = useSaveSite(site.id);
+  const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
+  // `.a.com` and `~pattern` need domains-v2 on every node of the cluster.
+  const formsAvailable = features.data?.domainsV2.available ?? true;
+  // Typed names compare by their shown form (Unicode names are stored as Punycode).
+  const shown = (d: string) => displaySiteDomain(d.normalize("NFC").toLowerCase());
+  const known = new Set(domains.map(shown));
   // Domains typed but not added yet count as changes and are saved with the list.
-  const typed = domainList(input).filter((d) => !domains.includes(d));
+  const typed = domainList(input).filter((d) => !known.has(shown(d)));
   const dirty = listChanged || typed.length > 0;
-  /** The typed domains, or null (and the first invalid one shown) when one is invalid. */
+  /** The typed domains, or null (and the reason shown) when one cannot be added. */
   const take = () => {
     const bad = typed.find((d) => !siteDomain.safeParse(d).success);
-    setInvalid(bad ? m.site_domain_invalid({ domain: bad }) : null);
-    return bad ? null : typed;
+    if (bad) {
+      setInvalid(m.site_domain_invalid({ domain: bad }));
+      return null;
+    }
+    const kinds = typed.map(siteDomainKind);
+    if (!formsAvailable && kinds.some((kind) => kind === "suffix" || kind === "regex")) {
+      setInvalid(m.feature_unavailable_nodes());
+      return null;
+    }
+    setInvalid(null);
+    return typed;
   };
   const add = () => {
     const values = take();
@@ -423,6 +444,11 @@ function DomainsTab({ site }: { site: Site }) {
                 {m.site_domain_add()}
               </Button>
             </div>
+            {formsAvailable ? null : (
+              <SafetyNote data-testid="domain-forms-unavailable">
+                {m.site_domain_forms_unavailable()}
+              </SafetyNote>
+            )}
           </CardContent>
           <SaveBar dirty={dirty} pending={pending} error={invalid ?? error} testId="domains-save" />
         </form>

@@ -11,7 +11,7 @@ import { L4AppDialog } from "@/components/l4/app-dialog";
 import { L4AppStats } from "@/components/l4/app-stats";
 import { DnsTarget, L4NodesWarning, ProtocolBadge } from "@/components/l4/common";
 import { Page } from "@/components/page";
-import { CnamePrefixActions, RetiredNames } from "@/components/site/cname-prefix";
+import { CnamePrefixActions } from "@/components/site/cname-prefix";
 import { QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { NotFoundPage } from "@/components/status-page";
@@ -238,12 +238,7 @@ function Overview({ app }: { app: L4App }) {
                     </span>
                   </div>
                 ))}
-                {app.dnsTarget ? (
-                  <>
-                    <RetiredNames names={app.dnsRetired} />
-                    <L4CnamePrefix app={app} />
-                  </>
-                ) : null}
+                {app.dnsTarget ? <L4CnamePrefix app={app} /> : null}
               </div>
             </InfoRow>
             <InfoRow label={m.sites_col_origins()}>
@@ -346,6 +341,7 @@ function L4CnamePrefix({ app }: { app: L4App }) {
   return (
     <CnamePrefixActions
       prefix={app.cnamePrefix}
+      retired={app.dnsRetired}
       testId="l4-cname-prefix"
       change={async (prefix) => {
         const state = await setPrefix.mutateAsync({ id: app.id, prefix });

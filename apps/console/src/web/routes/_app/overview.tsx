@@ -3,6 +3,7 @@ import {
   type AttentionKind,
   analyticsRange,
   type Cluster,
+  displaySiteDomain,
   type Node,
   type Revision,
 } from "@edgeweir/contract";
@@ -285,8 +286,10 @@ function SitesList({
           testId="home-site"
         >
           <span className="truncate font-medium">{site.name}</span>
-          {site.domains[0] && site.domains[0] !== site.name ? (
-            <span className="truncate text-xs text-muted-foreground">{site.domains[0]}</span>
+          {site.domains[0] && displaySiteDomain(site.domains[0]) !== site.name ? (
+            <span className="truncate text-xs text-muted-foreground">
+              {displaySiteDomain(site.domains[0])}
+            </span>
           ) : null}
         </ResourceRow>
       ))}

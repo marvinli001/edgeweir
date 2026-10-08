@@ -11,7 +11,7 @@ import {
   type UnknownHostAction,
   unknownHostSettings,
 } from "@edgeweir/contract";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
 import { OptionSelect } from "@/components/form-select";
@@ -353,21 +353,46 @@ function UnknownHostsForm({ data }: { data: ClusterUnknownHosts }) {
   const [error, setError] = React.useState<string | null>(null);
   const save = useMutation(orpc.clusters.setUnknownHosts.mutationOptions());
   const handsOver = unknownHost === "site" || ipAccess === "site";
-  // Enabled sites of the cluster may take requests; the current one stays listed.
-  const sites = useQuery(
-    orpc.sites.list.queryOptions({
-      input: { clusterId: data.clusterId, pageSize: 100 },
-      enabled: handsOver,
-    }),
+  // Enabled sites of the cluster may take requests, found by name or domain
+  // (a cluster holds more sites than one page); the chosen one stays listed.
+  const [siteSearch, setSiteSearch] = React.useState("");
+  const [siteQuery, setSiteQuery] = React.useState("");
+  React.useEffect(() => {
+    const timer = setTimeout(() => setSiteQuery(siteSearch.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [siteSearch]);
+  const [chosen, setChosen] = React.useState(
+    data.defaultSite ? { value: data.defaultSite.id, label: data.defaultSite.name } : null,
   );
+  const sites = useQuery({
+    ...orpc.sites.list.queryOptions({
+      input: { clusterId: data.clusterId, search: siteQuery || undefined, pageSize: 100 },
+    }),
+    enabled: handsOver,
+    placeholderData: keepPreviousData,
+  });
+  const items = sites.data?.items ?? [];
   const options = [
-    ...(sites.data?.items ?? [])
+    ...(chosen && chosen.value === siteId && !items.some((site) => site.id === chosen.value)
+      ? [chosen]
+      : []),
+    ...items
       .filter((site) => site.enabled || site.id === saved.defaultSiteId)
       .map((site) => ({ value: site.id, label: site.name })),
-    ...(data.defaultSite && !sites.data?.items.some((site) => site.id === data.defaultSite?.id)
-      ? [{ value: data.defaultSite.id, label: data.defaultSite.name }]
-      : []),
   ];
+  const pickSite = (value: string) => {
+    setSiteId(value);
+    const site = items.find((item) => item.id === value);
+    if (site) setChosen({ value: site.id, label: site.name });
+  };
+  // Scan values the switch hides are not checked: back to the saved ones.
+  const toggleScan = (on: boolean) => {
+    setScan(on);
+    if (!on) {
+      setThreshold(String(saved.scan.threshold));
+      setBanSeconds(String(saved.scan.banSeconds));
+    }
+  };
   const settings = {
     unknownHost,
     ipAccess,
@@ -432,12 +457,19 @@ function UnknownHostsForm({ data }: { data: ClusterUnknownHosts }) {
           <div className="flex flex-col gap-4 animate-enter">
             <Field className="sm:max-w-xs" data-invalid={!siteId || undefined}>
               <FieldLabel htmlFor="unknown-hosts-site">{m.unknown_hosts_default_site()}</FieldLabel>
+              <Input
+                value={siteSearch}
+                onChange={(event) => setSiteSearch(event.target.value)}
+                aria-label={m.bans_site_search()}
+                placeholder={m.sites_search_placeholder()}
+                data-testid="unknown-hosts-site-search"
+              />
               <OptionSelect
                 id="unknown-hosts-site"
                 value={siteId || null}
                 options={options}
                 placeholder={m.unknown_hosts_choose_site()}
-                onChange={setSiteId}
+                onChange={pickSite}
                 testId="unknown-hosts-site"
               />
             </Field>
@@ -462,7 +494,7 @@ function UnknownHostsForm({ data }: { data: ClusterUnknownHosts }) {
           id="unknown-hosts-scan"
           label={m.unknown_hosts_scan()}
           checked={scan}
-          onCheckedChange={setScan}
+          onCheckedChange={toggleScan}
           className="self-start"
           testId="unknown-hosts-scan"
         />

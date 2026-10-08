@@ -13,14 +13,19 @@ import { errorMessage } from "@/lib/orpc";
 
 /**
  * Regenerates or sets the first label of a CNAME target (sites and layer-4
- * applications). `change(undefined)` asks for a new random prefix.
+ * applications), and lists replaced names still resolving with a way to
+ * take one back (also an id prefix from before CNAME prefixes).
+ * `change(undefined)` asks for a new random prefix.
  */
 export function CnamePrefixActions({
   prefix,
+  retired = [],
   change,
   testId = "cname-prefix",
 }: {
   prefix: string;
+  /** Replaced names that still resolve (`<prefix>.<cluster domain>`). */
+  retired?: { name: string; expiresAt: string }[];
   change: (prefix?: string) => Promise<CnamePrefixState>;
   testId?: string;
 }) {
@@ -32,6 +37,13 @@ export function CnamePrefixActions({
   const done = () => toast.success(m.cname_prefix_saved());
   return (
     <div className="flex flex-col gap-2" data-testid={testId}>
+      <RetiredNames
+        names={retired}
+        onRestore={async (name) => {
+          await change(name.split(".")[0] ?? "");
+          done();
+        }}
+      />
       <div className="flex flex-wrap items-center gap-2">
         <ConfirmDialog
           title={m.cname_prefix_regenerate_title()}
@@ -113,8 +125,15 @@ export function CnamePrefixActions({
   );
 }
 
-/** Names of replaced prefixes that still resolve, with the time they stop. */
-export function RetiredNames({ names }: { names: { name: string; expiresAt: string }[] }) {
+/** Names of replaced prefixes that still resolve, with the time they stop and a way back. */
+function RetiredNames({
+  names,
+  onRestore,
+}: {
+  names: { name: string; expiresAt: string }[];
+  onRestore: (name: string) => Promise<void>;
+}) {
+  const [pending, setPending] = React.useState<string | null>(null);
   if (!names.length) return null;
   return (
     <ul className="grid gap-1" data-testid="cname-retired">
@@ -126,6 +145,26 @@ export function RetiredNames({ names }: { names: { name: string; expiresAt: stri
           <span className="text-muted-foreground" data-testid="cname-retired-until">
             {m.cname_retired_until({ time: formatDateTime(retired.expiresAt) })}
           </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            disabled={pending !== null}
+            onClick={async () => {
+              setPending(retired.name);
+              try {
+                await onRestore(retired.name);
+              } catch (failure) {
+                toast.error(errorMessage(failure));
+              } finally {
+                setPending(null);
+              }
+            }}
+            data-testid="cname-retired-restore"
+          >
+            {pending === retired.name ? <Spinner /> : null}
+            {m.cname_prefix_restore()}
+          </Button>
         </li>
       ))}
     </ul>

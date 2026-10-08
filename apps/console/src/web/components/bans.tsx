@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, formatNumber, m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
+import { metricLabel } from "@/lib/protection";
 
 const PAGE_SIZE = 50;
 
@@ -49,7 +50,7 @@ function BanOrigin({ ban }: { ban: Ban }) {
         <span className="text-xs text-muted-foreground">
           {ban.node?.name || "—"}
           {ban.trigger
-            ? ` · ${ban.trigger.metric} ${m.bans_trigger({
+            ? ` · ${metricLabel(ban.trigger.metric)} ${m.bans_trigger({
                 observed: formatNumber(ban.trigger.observed),
                 threshold: formatNumber(ban.trigger.threshold),
                 window: ban.trigger.windowSeconds,

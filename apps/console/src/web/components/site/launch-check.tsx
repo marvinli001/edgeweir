@@ -1,4 +1,9 @@
-import type { DnsPointing, Site, SiteLaunch } from "@edgeweir/contract";
+import {
+  type DnsPointing,
+  displaySiteDomain,
+  type Site,
+  type SiteLaunch,
+} from "@edgeweir/contract";
 import { RefreshIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
@@ -90,8 +95,10 @@ export function PointingStatus({ pointing }: { pointing: DnsPointing }) {
 function dnsItem(launch: SiteLaunch) {
   // `.a.com` and `~pattern` domains name no host to look up: not counted.
   const total = launch.domains.filter((d) => d.pointing !== "unchecked").length;
+  // Only such domains: nothing was checked.
+  if (total === 0) return { tone: "idle" as const, label: m.dns_pointing_unchecked(), detail: "" };
   const ok = launch.domains.filter((d) => d.pointing === "ok").length;
-  const failing = notPointing(launch).map((d) => d.name);
+  const failing = notPointing(launch).map((d) => displaySiteDomain(d.name));
   const tone: StatusTone = ok === total ? "good" : failing.length ? "warn" : "idle";
   return { tone, label: m.site_launch_dns({ ok, total }), detail: failing.join(", ") };
 }

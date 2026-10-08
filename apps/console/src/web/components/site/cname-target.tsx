@@ -2,7 +2,7 @@ import type { SiteLaunch } from "@edgeweir/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type * as React from "react";
 import { CopyButton } from "@/components/copy-button";
-import { CnamePrefixActions, RetiredNames } from "@/components/site/cname-prefix";
+import { CnamePrefixActions } from "@/components/site/cname-prefix";
 import { DomainName } from "@/components/site/domain-name";
 import { PointingStatus, RecheckButton, useSiteLaunch } from "@/components/site/launch-check";
 import { type QueryResult, QueryView } from "@/components/states";
@@ -90,9 +90,9 @@ function DnsSetup({
                 <CopyButton iconOnly value={line.target} />
               </div>
             ))}
-            <RetiredNames names={target.retired} />
             <CnamePrefixActions
               prefix={cname.split(".")[0] ?? ""}
+              retired={target.retired}
               change={async (prefix) => {
                 const state = await setPrefix.mutateAsync({ id: siteId, prefix });
                 await Promise.all([

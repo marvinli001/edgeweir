@@ -191,6 +191,7 @@ const core: Fixtures = {
         edgePorts: on,
         clientIp: on,
         siteContent: on,
+        domainsV2: on,
       };
     },
   },

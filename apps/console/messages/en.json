@@ -719,7 +719,7 @@
   "cache_purge_entries": "Paths or URLs",
   "cache_purge_invalid": "Not a path or URL: {entries}",
   "cache_purge_too_many": "At most {max} URLs",
-  "cache_purge_no_domains": "The site has wildcard domains only; enter full URLs",
+  "cache_purge_no_domains": "The site has no exact domain; enter full URLs",
   "purge_title": "Purge & prefetch",
   "purge_type_url": "Purge URLs",
   "purge_type_prefix": "Purge directories",
@@ -1898,7 +1898,7 @@
   "dns_error_certd_failed": "Helper failed",
   "dns_error_certd_timeout": "Helper timed out",
   "dns_error_certd_invalid_output": "Invalid helper output",
-  "error_dns_binding_conflict": "Another cluster's DNS binding uses {name}",
+  "error_dns_binding_conflict": "Another cluster's DNS binding or a CNAME prefix of a site or L4 app uses {name}",
   "error_dns_binding_in_use": "Turn the cluster's DNS off and wait for its records to be removed",
   "error_dns_provider_auth_failed": "The DNS provider rejected the credentials",
   "error_dns_provider_zone_not_found": "The DNS provider has no such zone",
@@ -2353,6 +2353,7 @@
   "site_domain_regex": "Pattern",
   "error_domain_invalid": "Invalid domain: {domain}",
   "error_cname_prefix_conflict": "CNAME prefix {prefix} is taken or reserved",
+  "error_cname_prefix_invalid": "Invalid CNAME prefix {prefix}",
   "error_default_site_invalid": "The default site must be an enabled site of this cluster",
   "error_default_site_certificate_required": "The default site has no certificate",
   "revision_reason_unknown_hosts_updated": "Unknown host settings updated",
@@ -2388,5 +2389,7 @@
   "cname_prefix_grace": "The old name keeps resolving for 24 hours",
   "cname_prefix_invalid": "1–30 lowercase letters, digits or -, not starting or ending with -",
   "cname_prefix_saved": "CNAME prefix changed",
-  "cname_retired_until": "Resolves until {time}"
+  "cname_retired_until": "Resolves until {time}",
+  "cname_prefix_restore": "Take back",
+  "site_domain_forms_unavailable": "Some nodes of the site's cluster do not support suffix and pattern domains yet"
 }

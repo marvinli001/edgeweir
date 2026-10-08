@@ -676,7 +676,7 @@
   "cache_purge_entries": "路径或 URL",
   "cache_purge_invalid": "不是路径或 URL：{entries}",
   "cache_purge_too_many": "最多 {max} 个 URL",
-  "cache_purge_no_domains": "网站只有泛域名，请填写完整 URL",
+  "cache_purge_no_domains": "网站没有精确域名，请填写完整 URL",
   "purge_title": "刷新预热",
   "purge_type_url": "URL 刷新",
   "purge_type_prefix": "目录刷新",
@@ -1728,7 +1728,7 @@
   "dns_error_certd_failed": "辅助程序失败",
   "dns_error_certd_timeout": "辅助程序超时",
   "dns_error_certd_invalid_output": "辅助程序输出无效",
-  "error_dns_binding_conflict": "{name} 已被其他集群的 DNS 绑定使用",
+  "error_dns_binding_conflict": "{name} 已被其他集群的 DNS 绑定或网站、四层应用的 CNAME 前缀使用",
   "error_dns_binding_in_use": "先关闭该集群的 DNS，等待记录清理完成",
   "error_dns_provider_auth_failed": "DNS 服务商认证失败，请检查凭据与权限",
   "error_dns_provider_zone_not_found": "DNS 服务商中找不到该区域",
@@ -2165,6 +2165,7 @@
   "site_domain_regex": "正则",
   "error_domain_invalid": "域名无效：{domain}",
   "error_cname_prefix_conflict": "CNAME 前缀 {prefix} 已被使用或保留",
+  "error_cname_prefix_invalid": "CNAME 前缀 {prefix} 无效",
   "error_default_site_invalid": "默认网站须为本集群已启用的网站",
   "error_default_site_certificate_required": "默认网站没有证书",
   "revision_reason_unknown_hosts_updated": "修改未知域名设置",
@@ -2200,5 +2201,7 @@
   "cname_prefix_grace": "旧名称继续解析 24 小时",
   "cname_prefix_invalid": "1–30 位小写字母、数字或 -，不以 - 开头或结尾",
   "cname_prefix_saved": "CNAME 前缀已修改",
-  "cname_retired_until": "解析至 {time}"
+  "cname_retired_until": "解析至 {time}",
+  "cname_prefix_restore": "恢复",
+  "site_domain_forms_unavailable": "所在集群有节点不支持后缀与正则域名，暂时无法添加"
 }
