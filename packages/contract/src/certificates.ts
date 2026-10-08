@@ -28,9 +28,52 @@ const minLength = z
   .max(COMPRESSION_MIN_LENGTH_RANGE.max)
   .default(256);
 
+/** At most this many certificates per site: certificateId and 3 additional ones. */
+export const MAX_SITE_CERTIFICATES = 4;
+/** When a site asks visitors for a certificate (mutual TLS) on its HTTPS ports. */
+export const CLIENT_CERTIFICATE_MODES = ["off", "optional", "required"] as const;
+export type ClientCertificateMode = (typeof CLIENT_CERTIFICATE_MODES)[number];
+/** The client CA bundle: 1-10 CA certificates, at most 64 KiB of PEM. */
+export const CLIENT_CA_MAX_CERTIFICATES = 10;
+export const CLIENT_CA_MAX_BYTES = 65_536;
+export const CLIENT_CERTIFICATE_DEPTH_RANGE = { min: 1, max: 5 } as const;
+
+/**
+ * Client certificates (mutual TLS). `optional` verifies a certificate the
+ * visitor presents; `required` answers requests without a valid one (plain
+ * HTTP included) with the 403 error page. `caPem` is re-encoded by the
+ * server (CLIENT_CA_INVALID); not together with HTTP/3
+ * (CLIENT_CERTIFICATE_HTTP3). `forwardHeaders` sends X-Client-Verify,
+ * X-Client-Cert-SHA256, X-Client-Cert-Subject and X-Client-Cert-Serial to
+ * the origin; visitors' own headers of these names are always removed.
+ */
+export const clientCertificateSettings = z.object({
+  mode: z.enum(CLIENT_CERTIFICATE_MODES).default("off"),
+  caPem: z.string().max(CLIENT_CA_MAX_BYTES).default(""),
+  depth: z
+    .number()
+    .int()
+    .min(CLIENT_CERTIFICATE_DEPTH_RANGE.min)
+    .max(CLIENT_CERTIFICATE_DEPTH_RANGE.max)
+    .default(2),
+  forwardHeaders: z.boolean().default(false),
+});
+export type ClientCertificateSettings = z.infer<typeof clientCertificateSettings>;
+
 export const tlsSettings = z
   .object({
+    /** The site's first certificate; null for HTTP only. */
     certificateId: uuid.nullable().default(null),
+    /**
+     * Further certificates, at most 3, distinct from certificateId: every
+     * domain of the site is covered by at least one of the site's
+     * certificates. Handshakes use the one covering the SNI (exact names
+     * over wildcards, ECDSA when the client supports it).
+     */
+    additionalCertificateIds: z
+      .array(uuid)
+      .max(MAX_SITE_CERTIFICATES - 1)
+      .default([]),
     forceHttps: z.boolean().default(false),
     hstsMaxAge: z.number().int().min(0).max(63_072_000).default(0),
     hstsIncludeSubdomains: z.boolean().default(false),
@@ -84,11 +127,33 @@ export const tlsSettings = z
       .max(MAX_REDIRECT_EXCLUDED_DOMAINS)
       .default([])
       .transform((names) => [...new Set(names)].sort()),
+    clientCertificate: clientCertificateSettings.prefault({}),
   })
   .refine((s) => (!s.forceHttps && s.hstsMaxAge === 0) || s.certificateId !== null, {
     message: "HTTPS redirect and HSTS require a certificate",
     path: ["certificateId"],
-  });
+  })
+  .refine(
+    (s) =>
+      s.additionalCertificateIds.length === 0 ||
+      (s.certificateId !== null &&
+        !s.additionalCertificateIds.includes(s.certificateId) &&
+        new Set(s.additionalCertificateIds).size === s.additionalCertificateIds.length),
+    { message: "additional certificates need a first one and are distinct", path: ["additionalCertificateIds"] },
+  )
+  .refine(
+    (s) =>
+      s.clientCertificate.mode === "off" ||
+      (s.certificateId !== null && s.clientCertificate.caPem.trim() !== ""),
+    { message: "client certificates need a certificate and a CA", path: ["clientCertificate"] },
+  );
+export type TlsSettingsInput = z.input<typeof tlsSettings>;
+
+/** Every certificate of a site, the first one first. */
+export const siteCertificateIds = (s: {
+  certificateId: string | null;
+  additionalCertificateIds: readonly string[];
+}) => (s.certificateId ? [s.certificateId, ...s.additionalCertificateIds] : []);
 
 /**
  * Why the last issuance or renewal of an ACME certificate failed
@@ -195,12 +260,33 @@ export const certificateUpload = z.object({
   chainPem: z.string().min(32).max(131_072),
   privateKeyPem: z.string().min(32).max(32_768),
 });
+/**
+ * ACME certificate authorities: Let's Encrypt, ZeroSSL and Google Trust
+ * Services (EAB required by the last two), and the custom ACME directory of
+ * the system settings (settings.acmeDirectory).
+ */
+export const ACME_CAS = ["letsencrypt", "zerossl", "google", "custom"] as const;
+export type AcmeCa = (typeof ACME_CAS)[number];
+export const acmeCa = z.enum(ACME_CAS);
+/** Built-in CAs whose directories need external account binding. */
+export const EAB_REQUIRED_CAS: readonly AcmeCa[] = ["zerossl", "google"];
+/** Key of the certificates the console requests: ECDSA P-256 or RSA 2048. */
+export const ACME_KEY_TYPES = ["ec256", "rsa2048"] as const;
+export type AcmeKeyType = (typeof ACME_KEY_TYPES)[number];
+
 export const certificateRequest = z
   .object({
     name: label,
     names,
     email: z.email(),
-    ca: z.enum(["letsencrypt", "zerossl"]).default("letsencrypt"),
+    /**
+     * Unset: `custom` while the custom directory's URL comes from
+     * EDGEWEIR_ACME_DIRECTORY (certificates.settings defaultCa), else
+     * Let's Encrypt. `custom` needs a configured directory
+     * (ACME_DIRECTORY_NOT_CONFIGURED).
+     */
+    ca: acmeCa.optional(),
+    keyType: z.enum(ACME_KEY_TYPES).default("ec256"),
     challenge: z.enum(["http01", "dns01"]).default("http01"),
     dnsCredentialId: uuid.optional(),
     eabKid: z.string().max(256).optional(),
@@ -227,9 +313,13 @@ export const certificateRequest = z
     message: "wildcards require DNS-01",
     path: ["names"],
   })
-  .refine((s) => s.ca !== "zerossl" || (!!s.eabKid && !!s.eabHmacKey), {
-    message: "ZeroSSL requires EAB credentials",
+  .refine((s) => !s.ca || !EAB_REQUIRED_CAS.includes(s.ca) || (!!s.eabKid && !!s.eabHmacKey), {
+    message: "ZeroSSL and Google Trust Services require EAB credentials",
     path: ["eabKid"],
+  })
+  .refine((s) => !s.eabKid === !s.eabHmacKey, {
+    message: "EAB needs both the key id and the HMAC key",
+    path: ["eabHmacKey"],
   });
 
 /**
@@ -262,8 +352,11 @@ export const httpsBlocker = z.discriminatedUnion("code", [
 ]);
 export const httpsCheckInput = z.object({
   id: uuid,
-  /** The CA whose CAA permission is checked. */
-  ca: z.enum(["letsencrypt", "zerossl"]).default("letsencrypt"),
+  /**
+   * The CA whose CAA permission is checked (the custom directory's
+   * caaIdentities; none: not checked). Unset: certificates.settings defaultCa.
+   */
+  ca: acmeCa.optional(),
 });
 export const httpsCheck = z.object({
   /**
@@ -288,10 +381,80 @@ export const httpsCheck = z.object({
 /** How the console issues ACME certificates. */
 export const certificateSettings = z.object({
   /**
-   * The ACME directory EDGEWEIR_ACME_DIRECTORY sets for every certificate
-   * (the CA chosen per certificate is not used), or null.
+   * The custom ACME directory in effect (system setting, else
+   * EDGEWEIR_ACME_DIRECTORY), or null: `custom` cannot be chosen.
    */
   acmeDirectory: z.string().nullable(),
+  /** The custom directory has an EAB key: requests may leave EAB empty. */
+  acmeDirectoryEab: z.boolean(),
+  /** The CA a request without one uses. */
+  defaultCa: z.enum(["letsencrypt", "custom"]),
+});
+
+/** Where a value of the ACME directory setting comes from. */
+export const settingSource = z.enum(["setting", "environment", "default"]);
+
+/**
+ * The custom ACME directory (system settings). Each value is the saved one,
+ * else the environment's (url: EDGEWEIR_ACME_DIRECTORY, caPem:
+ * EDGEWEIR_ACME_CA_FILE), else none. The EAB HMAC key is write-only.
+ */
+export const acmeDirectorySetting = z.object({
+  /** Saved; empty when none is saved. */
+  url: z.string(),
+  /** In effect; empty when none. */
+  effectiveUrl: z.string(),
+  source: settingSource,
+  /** Saved EAB key id; empty without EAB. */
+  eabKid: z.string(),
+  /** An EAB HMAC key is saved with it. */
+  eabHmacKeySet: z.boolean(),
+  /** Saved CA certificates (PEM), empty when none is saved. */
+  caPem: z.string(),
+  /** Where the CA certificates in effect come from; default: the system roots. */
+  caSource: settingSource,
+  /** CAA issuer domains from the directory's meta; empty: CAA is not checked. */
+  caaIdentities: z.array(z.string()),
+});
+
+/** An `https://` ACME directory URL without credentials or fragment. */
+export const acmeDirectoryUrl = z
+  .url()
+  .max(2048)
+  .refine((value) => {
+    try {
+      const url = new URL(value);
+      return url.protocol === "https:" && !url.username && !url.password && !url.hash;
+    } catch {
+      return false;
+    }
+  });
+
+/**
+ * Empty url clears the whole setting (the environment or nothing applies).
+ * eabHmacKey: empty keeps the saved one for the same eabKid; an empty eabKid
+ * removes EAB. caPem (1-10 certificates): empty uses EDGEWEIR_ACME_CA_FILE
+ * when set, else the system roots. Saving reads the directory
+ * (ACME_DIRECTORY_INVALID).
+ */
+export const acmeDirectoryInput = z.object({
+  url: z.union([z.literal(""), acmeDirectoryUrl]),
+  eabKid: z.string().trim().max(256).default(""),
+  eabHmacKey: z.string().trim().max(1024).default(""),
+  caPem: z.string().max(CLIENT_CA_MAX_BYTES).default(""),
+});
+
+/** An ACME account of the console (acmeAccounts.list). */
+export const acmeAccountDto = z.object({
+  id: uuid,
+  directoryUrl: z.string(),
+  /** The built-in CA of the directory, `custom` for the custom one, null for another. */
+  ca: acmeCa.nullable(),
+  email: z.string(),
+  eabKid: z.string(),
+  createdAt: z.string(),
+  /** Certificates issued with the account. */
+  certificates: z.number().int(),
 });
 
 const id = z.object({ id: uuid });
@@ -316,6 +479,16 @@ export const certificatesContract = {
     .output(certificateDto),
   delete: oc
     .route({ method: "DELETE", path: "/certificates/{id}", tags: ["certificates"] })
+    .input(id)
+    .output(z.object({ ok: z.literal(true) })),
+};
+export const acmeAccountsContract = {
+  list: oc
+    .route({ method: "GET", path: "/acme-accounts", tags: ["certificates"] })
+    .output(z.array(acmeAccountDto)),
+  /** Only an account no certificate uses (ACME_ACCOUNT_IN_USE). */
+  delete: oc
+    .route({ method: "DELETE", path: "/acme-accounts/{id}", tags: ["certificates"] })
     .input(id)
     .output(z.object({ ok: z.literal(true) })),
 };

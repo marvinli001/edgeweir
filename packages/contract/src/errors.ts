@@ -118,6 +118,21 @@ export const errorDefs = {
   CERTIFICATE_DNS_NOT_POINTING: { status: 409, params: ["names"] },
   /** Clusters serving HTTP-01 names without an online node (first 5). */
   CERTIFICATE_NODES_OFFLINE: { status: 409, params: ["clusters"] },
+  /** A site's client CA bundle is not 1-10 current CA certificates in PEM. */
+  CLIENT_CA_INVALID: { status: 400, params: [] },
+  /** Client certificates and HTTP/3 cannot be on together. */
+  CLIENT_CERTIFICATE_HTTP3: { status: 400, params: [] },
+  /** A custom ACME directory that could not be read or is not an ACME directory. */
+  ACME_DIRECTORY_INVALID: { status: 400, params: [] },
+  /** The custom ACME directory's CA certificates are not 1-10 PEM certificates. */
+  ACME_DIRECTORY_CA_INVALID: { status: 400, params: [] },
+  /** An EAB key id without an HMAC key (none saved for it). */
+  ACME_DIRECTORY_EAB_INCOMPLETE: { status: 400, params: [] },
+  /** A request for the custom CA while no custom ACME directory is configured. */
+  ACME_DIRECTORY_NOT_CONFIGURED: { status: 409, params: [] },
+  ACME_ACCOUNT_NOT_FOUND: { status: 404, params: [] },
+  /** Certificates use the ACME account (the first 5 names). */
+  ACME_ACCOUNT_IN_USE: { status: 409, params: ["certificates"] },
 
   SETUP_DONE: { status: 403, params: [] },
   SETUP_IN_PROGRESS: { status: 409, params: [] },
@@ -263,6 +278,7 @@ export const revisionReasonDefs = {
   platform_protection_updated: { params: [], en: "global Under Attack updated" },
   cc_template_updated: { params: [], en: "CC template updated" },
   challenge_keys_rotated: { params: [], en: "challenge keys rotated" },
+  session_ticket_keys_rotated: { params: [], en: "TLS session ticket keys rotated" },
   site_waf_updated: { params: ["site"], en: "OWASP CRS of {site} updated" },
   site_error_pages_updated: { params: ["site"], en: "error pages of {site} updated" },
   site_maintenance_updated: { params: ["site"], en: "maintenance of {site} updated" },

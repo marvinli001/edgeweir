@@ -12,7 +12,14 @@ import { accessKeysContract } from "./access-keys";
 import { alertsContract } from "./alerts";
 import { banSettings, bansContract } from "./bans";
 import { bulkRedirectsContract } from "./bulk-redirects";
-import { certificatesContract, dnsCredentialsContract, httpsContract } from "./certificates";
+import {
+  acmeAccountsContract,
+  acmeDirectoryInput,
+  acmeDirectorySetting,
+  certificatesContract,
+  dnsCredentialsContract,
+  httpsContract,
+} from "./certificates";
 import { dnsContract } from "./dns";
 import { edgeProcedures } from "./edge";
 import { errorPagesContract, maintenanceContract, platformErrorPages } from "./error-pages";
@@ -95,6 +102,7 @@ export const contract = {
   /** A site's maintenance mode. */
   maintenance: maintenanceContract,
   certificates: certificatesContract,
+  acmeAccounts: acmeAccountsContract,
   /** Regional probes and their latest results. */
   probes: probesContract,
   /** Scheduling rules of a cluster: conditions on node and probe metrics, DNS actions. */
@@ -444,6 +452,15 @@ export const contract = {
       .route({ method: "PUT", path: "/settings/origin-allow-list", tags: ["settings"] })
       .input(s.originAllowListInput)
       .output(s.originAllowList),
+    /** The custom ACME directory certificates may be requested from (ca "custom"). */
+    acmeDirectory: oc
+      .route({ method: "GET", path: "/settings/acme-directory", tags: ["settings"] })
+      .output(acmeDirectorySetting),
+    /** Saves the custom ACME directory after reading it; empty url clears the setting. */
+    setAcmeDirectory: oc
+      .route({ method: "PUT", path: "/settings/acme-directory", tags: ["settings"] })
+      .input(acmeDirectoryInput)
+      .output(acmeDirectorySetting),
     /** Mirror the console reads node release manifests from. */
     releaseSource: oc
       .route({ method: "GET", path: "/settings/release-source", tags: ["settings"] })

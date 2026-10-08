@@ -22,6 +22,7 @@ export const auditActions = [
   "alert.unsubscribe",
   "api_key.create",
   "api_key.revoke",
+  "acme_account.delete",
   "auth.sign_in",
   "auth.sign_in_failed",
   "ban.create",
@@ -48,6 +49,7 @@ export const auditActions = [
   "cluster.rollout_abort",
   "cluster.rollout_direct",
   "cluster.rollout_policy_update",
+  "cluster.session_ticket_keys_rotate",
   "cluster.rollout_promote",
   "cluster.rollout_rollback",
   "cluster.unknown_hosts_update",
@@ -124,6 +126,7 @@ export const auditActions = [
   "site.rules_update",
   "site.update",
   "site.waf_update",
+  "system.acme_directory_update",
   "system.bans_update",
   "system.cc_template_update",
   "system.error_pages_update",
@@ -141,6 +144,7 @@ export type AuditAction = (typeof auditActions)[number];
 
 /** Types of the objects audit entries are about (`audit_target_<type>` in the web console). */
 export const auditTargetTypes = [
+  "acme_account",
   "alert_channel",
   "alert_subscription",
   "api_key",
