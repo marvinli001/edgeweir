@@ -47,7 +47,10 @@ export const ipBan = pgTable(
     /** platform | site */
     scope: text("scope").notNull(),
     siteId: uuid("site_id").references(() => site.id, { onDelete: "cascade" }),
-    /** Cluster of the site; null for platform bans (every cluster). */
+    /**
+     * Cluster of the site; null for platform bans (every cluster), except a
+     * scan ban stored lifted for the reporting node's cluster.
+     */
     clusterId: uuid("cluster_id").references(() => cluster.id, { onDelete: "cascade" }),
     /** Canonical CIDR: host bits zero, IPv6 lowercase and compressed. */
     cidr: text("cidr").notNull(),

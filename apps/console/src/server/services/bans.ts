@@ -15,9 +15,11 @@ import {
   banSettings,
   isAutoBanPrefix,
   MAX_AUTO_BANS_PER_CLUSTER,
+  nodeSupportsFeature,
   parseBanCidr,
   protectedBanOverlap,
   protectedBanRanges,
+  UNKNOWN_HOST_FEATURE,
   unicastAddress,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
@@ -391,8 +393,11 @@ export interface BanPage {
   removedIds: string[];
   /**
    * Automatic bans never distributed, lifted on this page, that the node may
-   * hold on its own: its site bans, and every platform one (several nodes
-   * can have banned the address, the row names the first).
+   * hold on its own: its site bans, and when the node has scan protection
+   * (unknown-host-v1) the platform ones lifted in the console (several nodes
+   * can have banned the address, the row names the first) and those its
+   * cluster must not ban (storeLiftedPlatformBans). A platform one's
+   * expiresAt is this node's release guard (ownReleases).
    */
   liftedOwn: BanRow[];
   sequence: bigint;
@@ -401,8 +406,10 @@ export interface BanPage {
 
 /**
  * One page of the ban changes a node sees: bans of its cluster and platform
- * bans that are distributed, and its own automatic bans that were never
- * distributed once they are lifted (only the node holds them). From 0, or
+ * bans that are distributed, and automatic bans that were never distributed
+ * once they are lifted (only nodes hold them): its own site bans, the
+ * platform ones lifted in the console and those lifted for its cluster
+ * (ownReleases). From 0, or
  * from a sequence ahead of the console's (a restored database), it is a
  * snapshot of the active distributed bans (`reset`). Otherwise it holds the
  * active bans and the lifted ones changed after `afterSequence`; expired
@@ -428,7 +435,14 @@ export async function banChanges(
     );
     const ownLifted = and(
       eq(schema.ipBan.source, "auto"),
-      or(eq(schema.ipBan.nodeId, node.id), eq(schema.ipBan.scope, "platform")),
+      or(
+        and(eq(schema.ipBan.scope, "site"), eq(schema.ipBan.nodeId, node.id)),
+        // A platform row with a cluster was lifted for that cluster's nodes only.
+        and(
+          eq(schema.ipBan.scope, "platform"),
+          or(isNull(schema.ipBan.clusterId), eq(schema.ipBan.clusterId, node.clusterId)),
+        ),
+      ),
       eq(schema.ipBan.distributed, false),
       isNotNull(schema.ipBan.removedAt),
     );
@@ -457,14 +471,93 @@ export async function banChanges(
       removedIds: page
         .filter((row) => row.removedAt !== null && row.distributed)
         .map((row) => row.id),
-      // Expired ones are gone from the node already.
-      liftedOwn: page.filter(
-        (row) => row.removedAt !== null && !row.distributed && row.expiresAt > now,
+      liftedOwn: await ownReleases(
+        tx,
+        node,
+        page.filter((row) => row.removedAt !== null && !row.distributed),
+        now,
       ),
       sequence: more ? (page.at(-1)?.seq ?? current) : current,
       more,
     };
   });
+}
+
+/**
+ * The lifted, never distributed automatic bans of a page as `node` gets
+ * them. Its own site bans as they are. Platform ones (scan protection) only
+ * with unknown-host-v1: older nodes hold no platform bans of their own and
+ * refuse such rows. The node deletes an own ban of the address that expires
+ * no later than the expiry it is sent (plus a second). One lifted for the
+ * node's cluster (storeLiftedPlatformBans) goes as it is: no node of the
+ * cluster may ban the address. One lifted in the console gets as expiry
+ * the lift plus the longest scan ban time the node's cluster has had
+ * (longestScanBanSeconds; an own ban made before the lift expires by then,
+ * one made after it with that time later), at most the row's own expiry:
+ * clusters ban for different times, and the row keeps the longest one
+ * reported. Ones expired (for this node) are left out: the node dropped
+ * those bans already.
+ */
+async function ownReleases(
+  tx: Executor,
+  node: { id: string; clusterId: string },
+  rows: BanRow[],
+  now: Date,
+): Promise<BanRow[]> {
+  let capable = false;
+  let banSeconds = 0;
+  if (rows.some((row) => row.scope === "platform")) {
+    const [self] = await tx
+      .select({ features: schema.node.supportedFeatures })
+      .from(schema.node)
+      .where(eq(schema.node.id, node.id));
+    capable = !!self && nodeSupportsFeature(self.features, UNKNOWN_HOST_FEATURE);
+    if (capable && rows.some((row) => row.scope === "platform" && row.clusterId === null))
+      banSeconds = await longestScanBanSeconds(tx, node.clusterId);
+  }
+  return rows.flatMap((row) => {
+    let expiresAt = row.expiresAt;
+    if (row.scope === "platform") {
+      if (!capable || !row.removedAt) return [];
+      if (row.clusterId === null)
+        expiresAt = new Date(
+          Math.min(row.expiresAt.getTime(), row.removedAt.getTime() + banSeconds * 1000),
+        );
+    }
+    return expiresAt > now ? [{ ...row, expiresAt }] : [];
+  });
+}
+
+/**
+ * The longest scan ban time a node of the cluster may hold a ban with: the
+ * current one and every one a change replaced (the audit log keeps the
+ * setting before each change), each while scan protection was on; 0 if it
+ * never was. A node's ban keeps the time it was made with, and a node can
+ * run an older setting for a while (not applied yet, a canary rollout), so
+ * a shortened ban time does not bound the bans made before.
+ */
+async function longestScanBanSeconds(tx: Executor, clusterId: string): Promise<number> {
+  const [cluster] = await tx
+    .select({ unknownHosts: schema.cluster.unknownHosts })
+    .from(schema.cluster)
+    .where(eq(schema.cluster.id, clusterId));
+  const scan = cluster?.unknownHosts?.scan;
+  const banSeconds = sql`${schema.auditLog.metadata} #> '{from,scan,banSeconds}'`;
+  const [earlier] = await tx
+    .select({
+      seconds: sql<
+        string | null
+      >`max(case when jsonb_typeof(${banSeconds}) = 'number' then (${banSeconds})::text::numeric end)::text`,
+    })
+    .from(schema.auditLog)
+    .where(
+      and(
+        eq(schema.auditLog.action, "cluster.unknown_hosts_update"),
+        eq(schema.auditLog.targetId, clusterId),
+        sql`${schema.auditLog.metadata} #> '{from,scan,enabled}' = 'true'::jsonb`,
+      ),
+    );
+  return Math.max(scan?.enabled ? scan.banSeconds : 0, Number(earlier?.seconds ?? 0) || 0);
 }
 
 export interface ReportedAutoBan {
@@ -489,12 +582,15 @@ const finite = (value: number) => (Number.isFinite(value) ? value : 0);
  * Stores automatic bans a node reported, keyed by (node, site, CIDR): an
  * active entry keeps the later expiry. Bans of sites outside the node's
  * cluster, prefixes other than an IPv4 address or an IPv6 /64 (or /128 of
- * older nodes), unknown reasons, protected addresses and
+ * older nodes), unknown reasons, protected addresses (site bans) and
  * expired bans are skipped; expiry is capped at 7 days after creation.
  * Platform bans (scan protection, reason unknown_host_scan, no site) are
  * keyed by CIDR alone, like manual platform bans: an active one (manual or
  * from another node) stays, an automatic one keeps the later expiry; they
- * hold back every node's address and apply to every cluster when shared.
+ * apply to every cluster when shared. One covering an address of another
+ * cluster's node or any cluster's trusted proxy is never shared; one
+ * covering an address of a node of the reporting node's cluster or an
+ * allow list is stored lifted for that cluster (storeLiftedPlatformBans).
  * Returns how many bans were accepted.
  */
 export async function reportAutoBans(
@@ -559,19 +655,30 @@ export async function reportAutoBans(
   // hold up every other ban writer and reader.
   const isProtected = protectedBanRanges(await protectedAddresses(db, node.clusterId));
   const values = [...items.values()];
-  // A platform ban reaches every cluster (and their kernel bans): no
-  // cluster's trusted proxies either.
-  const isProtectedEverywhere = values.some((item) => item.scope === "platform")
+  const siteBans = values.filter((item) => item.scope === "site" && !isProtected(item.cidr.cidr));
+  // A shared platform ban reaches every cluster (and their kernel bans):
+  // the addresses of every node and every cluster's trusted proxies hold it
+  // back. The reporting node holds it already, so it is stored all the
+  // same: kept to that node (not shared, but listed and liftable), or lifted
+  // at once when it covers an address that node must not ban either (a node
+  // of its cluster, an allow list), so that the nodes of its cluster delete
+  // it. Other clusters' nodes may hold a ban of it (listed, not shared).
+  const platformItems = values.filter((item) => item.scope === "platform");
+  const isProtectedElsewhere = platformItems.length
     ? protectedBanRanges([...(await protectedAddresses(db, null)), ...(await trustedProxies(db))])
     : isProtected;
-  const candidates = values.filter((item) =>
-    item.scope === "platform"
-      ? !isProtectedEverywhere(item.cidr.cidr)
-      : !isProtected(item.cidr.cidr),
-  );
-  if (candidates.length === 0) return 0;
-  const platform = candidates.filter((item) => item.scope === "platform");
-  const siteBans = candidates.filter((item) => item.scope === "site");
+  const builtIn = protectedBanRanges([]);
+  const platform = platformItems
+    .filter((item) => !builtIn(item.cidr.cidr))
+    .map((item) => ({
+      ...item,
+      handling: isProtected(item.cidr.cidr)
+        ? ("lift" as const)
+        : isProtectedElsewhere(item.cidr.cidr)
+          ? ("local" as const)
+          : ("share" as const),
+    }));
+  if (siteBans.length === 0 && platform.length === 0) return 0;
   return db.transaction(async (tx) => {
     await lockBans(tx, "exclusive");
     const { shareAutoBans } = await getBanSettings(tx);
@@ -672,22 +779,39 @@ export async function reportAutoBans(
  * Stores platform-wide automatic bans (scan protection) inside
  * reportAutoBans' transaction: one row per CIDR (ip_ban_platform_uq). An
  * active manual platform ban or a later-expiring automatic one stays; an
- * expired row is reused. Returns how many were accepted.
+ * expired row is reused. `handling` share follows the sharing setting;
+ * local is never shared (an active shared one is not extended over it);
+ * lift is stored as lifted at once for the node's cluster and never shared,
+ * reusing the address's lifted row of that cluster, so that its nodes
+ * delete their own ban of it (liftedOwn). Returns how many were accepted
+ * (lifted ones are not).
  */
 async function storePlatformAutoBans(
   tx: Executor,
   node: { id: string; clusterId: string },
-  items: {
+  all: {
     cidr: ReturnType<typeof parseBanCidr> & { ok: true };
     createdAt: Date;
     expiresAt: Date;
     reason: string;
     trigger: NonNullable<BanRow["trigger"]>;
+    handling: "share" | "local" | "lift";
   }[],
   shareAutoBans: boolean,
   now: Date,
 ): Promise<number> {
-  if (!items.length) return 0;
+  if (!all.length) return 0;
+  const lifted = await storeLiftedPlatformBans(
+    tx,
+    node,
+    all.filter((item) => item.handling === "lift"),
+    now,
+  );
+  const items = all.filter((item) => item.handling !== "lift");
+  if (!items.length) {
+    if (lifted) await notifyBans(tx, [node.clusterId]);
+    return 0;
+  }
   const existing = new Map(
     (
       await tx
@@ -710,33 +834,38 @@ async function storePlatformAutoBans(
   let added = false;
   for (const item of items) {
     const row = existing.get(item.cidr.text);
-    const values = {
-      reason: item.reason,
-      trigger: item.trigger,
-      seq: await nextSeq(tx),
-    };
+    const share = shareAutoBans && item.handling === "share";
     if (row && row.expiresAt > now) {
-      // Already banned on every site: a manual ban stays as it is.
+      // Already banned on every site: a manual ban stays as it is, and a
+      // shared one is not extended over a range other clusters protect.
       if (row.source !== "auto" || item.expiresAt <= row.expiresAt) continue;
+      if (row.distributed && item.handling === "local") continue;
       await tx
         .update(schema.ipBan)
-        .set({ ...values, expiresAt: item.expiresAt })
+        .set({
+          reason: item.reason,
+          trigger: item.trigger,
+          seq: await nextSeq(tx),
+          expiresAt: item.expiresAt,
+        })
         .where(eq(schema.ipBan.id, row.id));
       changed ||= row.distributed;
     } else if (row) {
       await tx
         .update(schema.ipBan)
         .set({
-          ...values,
+          reason: item.reason,
+          trigger: item.trigger,
+          seq: await nextSeq(tx),
           source: "auto",
           nodeId: node.id,
           createdBy: null,
           createdAt: item.createdAt,
           expiresAt: item.expiresAt,
-          distributed: shareAutoBans,
+          distributed: share,
         })
         .where(eq(schema.ipBan.id, row.id));
-      changed ||= shareAutoBans || row.distributed;
+      changed ||= share || row.distributed;
       added = true;
     } else {
       await tx.insert(schema.ipBan).values({
@@ -748,16 +877,89 @@ async function storePlatformAutoBans(
         nodeId: node.id,
         createdAt: item.createdAt,
         expiresAt: item.expiresAt,
-        distributed: shareAutoBans,
-        ...values,
+        distributed: share,
+        reason: item.reason,
+        trigger: item.trigger,
+        seq: await nextSeq(tx),
       });
-      changed ||= shareAutoBans;
+      changed ||= share;
       added = true;
     }
   }
   if (added) changed = (await capAutoBans(tx, null, now)) || changed;
   if (changed) await notifyBans(tx, null);
+  else if (lifted) await notifyBans(tx, [node.clusterId]);
   return items.length;
+}
+
+/**
+ * Stores reported platform bans that cover an address the reporting node
+ * must not ban as lifted at once (never shared) for the node's cluster
+ * (clusterId, null on every other platform row), so that liftedOwn tells
+ * the nodes of that cluster holding one to delete it; a node of another
+ * cluster may hold a ban of the address that stays. The address's latest
+ * such row of the cluster is reused (a node banning it again gets the
+ * release again, without a row per ban): lifted now, expiring with the
+ * later of both. Returns whether anything was stored.
+ */
+async function storeLiftedPlatformBans(
+  tx: Executor,
+  node: { id: string; clusterId: string },
+  items: {
+    cidr: ReturnType<typeof parseBanCidr> & { ok: true };
+    createdAt: Date;
+    expiresAt: Date;
+    reason: string;
+    trigger: NonNullable<BanRow["trigger"]>;
+  }[],
+  now: Date,
+): Promise<boolean> {
+  for (const item of items) {
+    const [row] = await tx
+      .select()
+      .from(schema.ipBan)
+      .where(
+        and(
+          eq(schema.ipBan.scope, "platform"),
+          eq(schema.ipBan.source, "auto"),
+          eq(schema.ipBan.distributed, false),
+          isNotNull(schema.ipBan.removedAt),
+          eq(schema.ipBan.clusterId, node.clusterId),
+          eq(schema.ipBan.cidr, item.cidr.text),
+        ),
+      )
+      .orderBy(desc(schema.ipBan.seq))
+      .limit(1)
+      .for("update");
+    const values = {
+      nodeId: node.id,
+      reason: item.reason,
+      trigger: item.trigger,
+      createdAt: item.createdAt,
+      removedAt: now,
+      seq: await nextSeq(tx),
+    };
+    if (row)
+      await tx
+        .update(schema.ipBan)
+        .set({
+          ...values,
+          expiresAt: row.expiresAt > item.expiresAt ? row.expiresAt : item.expiresAt,
+        })
+        .where(eq(schema.ipBan.id, row.id));
+    else
+      await tx.insert(schema.ipBan).values({
+        ...values,
+        scope: "platform",
+        siteId: null,
+        clusterId: node.clusterId,
+        cidr: item.cidr.text,
+        source: "auto",
+        expiresAt: item.expiresAt,
+        distributed: false,
+      });
+  }
+  return items.length > 0;
 }
 
 /**
