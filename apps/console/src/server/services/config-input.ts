@@ -33,7 +33,7 @@ import {
 import { and, asc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
 import { parseCacheCondition } from "../lib/cache-conditions";
 import { readCacheKey } from "../lib/cache-key";
-import { uncoveredDomains } from "../lib/certificate-names";
+import { uncoveredByAll } from "../lib/certificate-names";
 import { fail } from "../lib/errors";
 import { activeHealthCheckModel, sessionAffinityModel } from "../lib/pool-settings";
 import { readContentSettings, readMaintenance } from "../lib/site-content";
@@ -183,7 +183,17 @@ export async function loadSiteModels(
   const protection = await loadSiteProtectionModels(db, siteIds);
   const waf = await loadSiteWafModels(db, siteIds);
   const errorPages = await loadSiteErrorPages(db, siteIds);
-  const certificateIds = [...new Set(sites.flatMap((s) => s.certificateId ?? []))];
+  // Further certificates of each site, in the site's order (multi-certificate-v1).
+  const additional = new Map<string, string[]>();
+  for (const row of await db
+    .select()
+    .from(schema.siteCertificate)
+    .where(inArray(schema.siteCertificate.siteId, siteIds))
+    .orderBy(asc(schema.siteCertificate.position)))
+    additional.set(row.siteId, [...(additional.get(row.siteId) ?? []), row.certificateId]);
+  const certificatesOf = (site: (typeof sites)[number]) =>
+    site.certificateId ? [site.certificateId, ...(additional.get(site.id) ?? [])] : [];
+  const certificateIds = [...new Set(sites.flatMap(certificatesOf))];
   const chains = new Map(
     (certificateIds.length
       ? await db
@@ -205,10 +215,10 @@ export async function loadSiteModels(
     nodeSupportsFeature(node.features, TLS_PENDING_DOMAINS_FEATURE),
   );
   /**
-   * The domains a site serves. Nodes refuse a site whose certificate misses
-   * a domain, so a domain an ACME certificate is being reissued for
-   * (coverSiteDomains) is served over HTTP only until the new chain covers
-   * it (tlsPending), or, while a node of the cluster lacks
+   * The domains a site serves. Nodes refuse a site whose certificates miss
+   * a domain (none of them covers it), so a domain an ACME certificate is
+   * being reissued for (coverSiteDomains) is served over HTTP only until the
+   * new chain covers it (tlsPending), or, while a node of the cluster lacks
    * tls-pending-domains-v1, waits unserved. Its HTTP-01 challenge is
    * answered meanwhile either way.
    */
@@ -226,11 +236,11 @@ export async function loadSiteModels(
         ? { match: "regex" as const, order: patternOrder(site.createdAt.getTime(), pattern++) }
         : {}),
     }));
-    const chain = site.certificateId ? chains.get(site.certificateId) : undefined;
-    if (!chain) return all;
+    const siteChains = certificatesOf(site).flatMap((id) => chains.get(id) || []);
+    if (!siteChains.length) return all;
     try {
       // Suffix and pattern domains are never uncovered (nodes check each host).
-      const uncovered = new Set(uncoveredDomains(chain, rows));
+      const uncovered = new Set(uncoveredByAll(siteChains, rows));
       const pending = rows.map((row) => uncovered.has(row));
       return httpWhilePending
         ? all.map((domain, i) => (pending[i] ? { ...domain, tlsPending: true } : domain))
@@ -329,15 +339,33 @@ export async function loadSiteModels(
           purgeKeys.find((key) => key.siteId === s.id),
         ),
         certificateId: s.certificateId ?? "",
-        // Always compiled: the node's per-site server, which carries compression, exists only
-        // with it, and a site without a certificate or saved HTTPS settings is compressed with
-        // the defaults the HTTPS tab shows.
-        tls: (() => {
-          const { certificateId: _certificateId, ...tls } = tlsSettings.parse({
+        ...(() => {
+          const {
+            certificateId: _certificateId,
+            additionalCertificateIds: _additional,
+            clientCertificate,
+            ...tls
+          } = tlsSettings.parse({
             ...s.tlsSettings,
             certificateId: s.certificateId,
+            additionalCertificateIds: additional.get(s.id) ?? [],
           });
-          return tls;
+          return {
+            additionalCertificateIds: certificatesOf(s).slice(1),
+            clientCertificate:
+              s.certificateId && clientCertificate.mode !== "off"
+                ? {
+                    mode: clientCertificate.mode,
+                    caPem: clientCertificate.caPem,
+                    depth: clientCertificate.depth,
+                    forwardHeaders: clientCertificate.forwardHeaders,
+                  }
+                : null,
+            // Always compiled: the node's per-site server, which carries compression, exists
+            // only with it, and a site without a certificate or saved HTTPS settings is
+            // compressed with the defaults the HTTPS tab shows.
+            tls,
+          };
         })(),
       };
     })
@@ -695,7 +723,9 @@ export async function loadConfigInput(
   const l4Apps = await loadL4AppModels(tx, clusterId);
   const certIds = [
     ...new Set([
-      ...sites.filter((s) => s.enabled && s.certificateId).map((s) => s.certificateId as string),
+      ...sites
+        .filter((s) => s.enabled && s.certificateId)
+        .flatMap((s) => [s.certificateId as string, ...(s.additionalCertificateIds ?? [])]),
       // TCP applications that terminate TLS (l4-v2).
       ...l4Apps.filter((a) => a.enabled && a.certificateId).map((a) => a.certificateId as string),
     ]),

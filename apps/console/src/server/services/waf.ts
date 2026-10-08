@@ -1,8 +1,10 @@
 import {
   ACTIVE_HEALTH_FEATURE,
   BROTLI_FEATURE,
+  CLIENT_CERT_FEATURE,
   ERROR_PAGES_FEATURE,
   MODSECURITY_FEATURE,
+  MULTI_CERTIFICATE_FEATURE,
   ORIGIN_HTTP2_FEATURE,
   RULES_V2_FEATURE,
   RULES_V3_FEATURE,
@@ -185,6 +187,8 @@ export async function siteFeatures(db: Database, siteId: string): Promise<SiteFe
     clientIp: byNodes(CLIENT_IP_FEATURE),
     siteContent: byNodes(SITE_CONTENT_FEATURE),
     domainsV2: byNodes(DOMAINS_V2_FEATURE),
+    multiCertificate: byNodes(MULTI_CERTIFICATE_FEATURE),
+    clientCertificate: byNodes(CLIENT_CERT_FEATURE),
   };
 }
 

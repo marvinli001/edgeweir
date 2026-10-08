@@ -8,6 +8,7 @@ import {
   DEFAULT_SITE_PROTECTION,
   decodeNodeConfig,
   refreshDerived,
+  usesSessionTickets,
 } from "@edgeweir/config-compiler";
 import { certificateUnloadable, tlsSettings } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
@@ -20,11 +21,12 @@ import {
   NodeConfigSchema,
   PlatformProtectionSchema,
   type RuleExpression,
+  SessionTicketKeyRefSchema,
   SiteProtectionSchema,
 } from "@edgeweir/proto";
 import { listReferences } from "@edgeweir/rule-engine";
 import { eq, inArray } from "drizzle-orm";
-import { assertCertificateNames } from "../lib/certificate-names";
+import { failUncovered, uncoveredByAll } from "../lib/certificate-names";
 import { fail } from "../lib/errors";
 import { lockClusterPublish } from "../lib/locks";
 import { formatDomain, namesHosts, protoKind } from "../lib/site-domains";
@@ -50,6 +52,7 @@ import {
   type Tx,
   updateRollout,
 } from "./revisions";
+import { ensureSessionTicketKeys } from "./session-ticket-keys";
 
 /** Domain identity: name and form. */
 const rowKey = (domain: { name: string; kind: string }) => `${domain.name}\u0000${domain.kind}`;
@@ -93,7 +96,9 @@ async function restoreSites(
           ),
         )
     : [];
-  const certificateIds = [...new Set(out.sites.map((s) => s.certificateId).filter(Boolean))];
+  const siteCertificates = (site: (typeof out.sites)[number]) =>
+    site.certificateId ? [site.certificateId, ...site.additionalCertificateIds] : [];
+  const certificateIds = [...new Set(out.sites.flatMap(siteCertificates))];
   const certificates = certificateIds.length
     ? await tx
         .select()
@@ -124,22 +129,30 @@ async function restoreSites(
     site.logSampleRate = opts.strict
       ? current.logSampleRate
       : Math.min(site.logSampleRate, current.logSampleRate);
-    if (site.certificateId) {
-      const cert = certificates.find((c) => c.id === site.certificateId);
-      const ref = out.certificates.find((c) => c.id === site.certificateId);
-      if (opts.strict) {
+    const ids = siteCertificates(site);
+    if (opts.strict && ids.length) {
+      const chains: string[] = [];
+      for (const id of ids) {
+        const cert = certificates.find((c) => c.id === id);
         if (!cert?.notAfter || cert.notAfter.getTime() <= Date.now() || certificateUnloadable(cert))
           fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback certificate is unavailable or expired");
-        // Domains served over HTTP until the certificate covers them need no cover.
-        assertCertificateNames(
-          cert.chainPem,
-          site.domains
-            .filter((domain) => !domain.tlsPending)
-            .map((domain) => ({ name: domain.name, kind: protoKind(domain) })),
-        );
-        if (!ref)
+        if (!out.certificates.some((c) => c.id === id))
           fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback certificate reference is missing");
+        chains.push(cert.chainPem);
       }
+      // Every domain needs one of the site's certificates; domains served
+      // over HTTP until a certificate covers them need none.
+      const uncovered = uncoveredByAll(
+        chains,
+        site.domains
+          .filter((domain) => !domain.tlsPending)
+          .map((domain) => ({ name: domain.name, kind: protoKind(domain) })),
+      );
+      if (uncovered.length) failUncovered(uncovered);
+    }
+    for (const id of ids) {
+      const cert = certificates.find((c) => c.id === id);
+      const ref = out.certificates.find((c) => c.id === id);
       if (cert && ref) {
         ref.names = cert.names;
         ref.sha256Fingerprint = cert.fingerprint;
@@ -342,6 +355,11 @@ async function restoreProtection(
   const affinity = restored.sites.some((site) => site.originPool?.sessionAffinity);
   const keys = challenges || affinity ? await ensureChallengeKeys(tx, clusterId) : [];
   restored.challengeKeys = keys.map((key) => create(ChallengeKeyRefSchema, key));
+  // The cluster's ticket keys now, not those of the revision rolled back to.
+  const ticketKeys = usesSessionTickets(restored.sites)
+    ? await ensureSessionTicketKeys(tx, clusterId)
+    : [];
+  restored.sessionTicketKeys = ticketKeys.map((key) => create(SessionTicketKeyRefSchema, key));
   restored.platformProtection = challenges ? create(PlatformProtectionSchema, platform) : undefined;
   for (const site of restored.sites) {
     const logJa4 = current.get(site.id)?.logJa4 ?? false;

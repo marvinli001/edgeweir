@@ -70,6 +70,7 @@ import {
   reportSecurityEvents,
   toNodeSecurityState,
 } from "../services/security";
+import { sessionTicketKeySecrets } from "../services/session-ticket-keys";
 import { s3SecretBinding } from "../services/sites";
 import { ingestStatsBatch, MAX_STATS_PER_REPORT } from "../services/stats";
 import {
@@ -1060,6 +1061,14 @@ export function createNodeService(
       // Only keys of the node's own cluster; unknown ids are left out.
       const keys = await challengeKeySecrets(app, node.clusterId, req.ids);
       log.info("challenge keys delivered", { nodeId: node.id, keys: keys.map((k) => k.id) });
+      return { keys };
+    },
+
+    async getSessionTicketKeys(req, ctx) {
+      const node = await requireNode(ctx);
+      // Only keys of the node's own cluster; unknown ids are left out.
+      const keys = await sessionTicketKeySecrets(app, node.clusterId, req.ids);
+      log.info("session ticket keys delivered", { nodeId: node.id, keys: keys.map((k) => k.id) });
       return { keys };
     },
 

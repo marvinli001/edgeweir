@@ -1,10 +1,11 @@
 import { certificateUnloadable, type SiteLaunch } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
-import { asc, eq } from "drizzle-orm";
-import { uncoveredDomains } from "../lib/certificate-names";
+import { asc, eq, inArray } from "drizzle-orm";
+import { uncoveredByAll } from "../lib/certificate-names";
 import type { AppContext } from "../lib/context";
 import { defaultResolver, pointing } from "../lib/dns-check";
 import { formatDomain, namesHosts } from "../lib/site-domains";
+import { additionalCertificateIds } from "./certificates";
 import { clusterEdgeAddresses } from "./node-addresses";
 import { siteDeliveries } from "./site-delivery";
 import { findSite } from "./sites";
@@ -14,28 +15,36 @@ export const WILDCARD_PROBE_LABEL = "edgeweir-check";
 
 type Domain = { name: string; kind: string };
 
-/** Whether the site's certificate covers its domains (SiteLaunch["certificate"]). */
+/**
+ * Whether the site's certificates cover its domains (SiteLaunch["certificate"]):
+ * every domain one of them, as nodes check it. The first certificate names
+ * the result, unless another one is expired or cannot be loaded.
+ */
 async function certificateCoverage(
   app: AppContext,
-  certificateId: string | null,
+  site: { id: string; certificateId: string | null },
   domains: Domain[],
   now: number,
 ): Promise<SiteLaunch["certificate"]> {
   const none = { id: null, name: "", uncovered: [], error: "" };
-  if (!certificateId) return { state: "none", ...none };
-  const [cert] = await app.db
+  if (!site.certificateId) return { state: "none", ...none };
+  const ids = [site.certificateId, ...(await additionalCertificateIds(app.db, site.id))];
+  const rows = await app.db
     .select()
     .from(schema.certificate)
-    .where(eq(schema.certificate.id, certificateId));
-  if (!cert) return { state: "none", ...none };
-  const base = { id: cert.id, name: cert.name, error: cert.lastError };
+    .where(inArray(schema.certificate.id, ids));
+  const certs = ids.flatMap((id) => rows.filter((row) => row.id === id));
+  const cert = certs[0];
+  if (!cert || cert.id !== site.certificateId) return { state: "none", ...none };
+  const base = (c: typeof cert) => ({ id: c.id, name: c.name, error: c.lastError });
   const issuing = cert.status === "pending" || cert.status === "issuing";
   // Suffix and pattern domains are not checked: nodes complete the
-  // handshake for the hosts among them the certificate covers.
+  // handshake for the hosts among them a certificate covers.
   const named = domains.filter(namesHosts);
+  const chains = certs.flatMap((c) => c.chainPem || []);
   let uncovered: Domain[];
   try {
-    uncovered = cert.chainPem ? uncoveredDomains(cert.chainPem, named) : named;
+    uncovered = chains.length ? uncoveredByAll(chains, named) : named;
   } catch {
     uncovered = named;
   }
@@ -43,13 +52,14 @@ async function certificateCoverage(
   if (!cert.chainPem || uncovered.length) {
     const state =
       cert.status === "error" ? "failed" : issuing || !cert.chainPem ? "issuing" : "uncovered";
-    return { state, ...base, uncovered: names };
+    return { state, ...base(cert), uncovered: names };
   }
-  if (cert.notAfter && cert.notAfter.getTime() <= now)
-    return { state: "expired", ...base, uncovered: [] };
-  // Covers every domain, but nodes cannot load it.
-  if (certificateUnloadable(cert)) return { state: "failed", ...base, uncovered: [] };
-  return { state: "covered", ...base, uncovered: [] };
+  const expired = certs.find((c) => c.notAfter && c.notAfter.getTime() <= now);
+  if (expired) return { state: "expired", ...base(expired), uncovered: [] };
+  // Covers every domain, but nodes cannot load one of them.
+  const unloadable = certs.find(certificateUnloadable);
+  if (unloadable) return { state: "failed", ...base(unloadable), uncovered: [] };
+  return { state: "covered", ...base(cert), uncovered: [] };
 }
 
 /**
@@ -69,7 +79,7 @@ export async function siteLaunch(app: AppContext, siteId: string): Promise<SiteL
     .where(eq(schema.siteDomain.siteId, site.id))
     .orderBy(asc(schema.siteDomain.createdAt), asc(schema.siteDomain.name));
   const edge = await clusterEdgeAddresses(app.db, site.clusterId, now);
-  const certificate = await certificateCoverage(app, site.certificateId, domains, now);
+  const certificate = await certificateCoverage(app, site, domains, now);
   const delivery = (await siteDeliveries(app.db, [site], now)).get(site.id);
   if (!delivery) throw new Error("site delivery missing");
   const resolver = app.resolver ?? defaultResolver();

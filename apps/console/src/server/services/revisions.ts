@@ -28,6 +28,7 @@ import { ensureChallengeKeys } from "./challenge-keys";
 import { loadConfigInput } from "./config-input";
 import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
 import { currentStable } from "./rollback";
+import { ensureSessionTicketKeys } from "./session-ticket-keys";
 
 export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 export type Executor = Database | Tx;
@@ -229,7 +230,12 @@ export async function publishRevision(
   const challengeKeys = usesChallengeKeys(input)
     ? await ensureChallengeKeys(tx, opts.clusterId)
     : [];
-  const build = (revision: bigint) => compileNodeConfig({ ...input, challengeKeys }, revision);
+  // Its session ticket keys the first time it serves a site with a certificate.
+  const sessionTicketKeys = input.sites.some((site) => site.enabled && site.certificateId)
+    ? await ensureSessionTicketKeys(tx, opts.clusterId)
+    : [];
+  const build = (revision: bigint) =>
+    compileNodeConfig({ ...input, challengeKeys, sessionTicketKeys }, revision);
   const userId = publisher(opts.actor);
   const rollout = await loadRollout(tx, opts.clusterId);
   if (!rollout?.enabled) return insertRevision(tx, opts.clusterId, build, opts.reason, userId);

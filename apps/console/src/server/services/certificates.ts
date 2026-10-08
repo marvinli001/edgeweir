@@ -8,6 +8,7 @@ import {
   certificateUnloadable,
   type DnsCredentialInput,
   dnsProviderEntry,
+  siteCertificateIds,
   type TlsSettings,
   tlsSettings,
 } from "@edgeweir/contract";
@@ -18,11 +19,12 @@ import {
   certificateName,
   failUncovered,
   namesCover,
-  uncoveredDomains,
+  uncoveredByAll,
 } from "../lib/certificate-names";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { namesHosts } from "../lib/site-domains";
+import { customAcmeDirectory, defaultAcmeCa, readPemCertificates } from "./acme-directory";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import { certdDns, probe, validCredentials } from "./dns-providers";
 import { assertHttp01Ready } from "./http01-check";
@@ -247,6 +249,28 @@ export function inspectCertificate(chainPem: string, privateKeyPem: string) {
   };
 }
 
+/**
+ * A site's client CA bundle (mutual TLS) re-encoded: 1-10 current CA
+ * certificates (basicConstraints CA) with keys nodes load (servableKey,
+ * named curves), and nothing else (CLIENT_CA_INVALID).
+ */
+export function inspectClientCa(pem: string): string {
+  const certificates = readPemCertificates(pem, { ca: true });
+  const now = Date.now();
+  if (
+    !certificates ||
+    !chainNamesCurves(certificates) ||
+    certificates.some(
+      (cert) =>
+        !servableKey(cert.publicKey) ||
+        new Date(cert.validFrom).getTime() > now ||
+        new Date(cert.validTo).getTime() <= now,
+    )
+  )
+    fail("CLIENT_CA_INVALID", "the client CA must be 1 to 10 current CA certificates in PEM");
+  return certificates.map((cert) => cert.toString()).join("");
+}
+
 type CertificateRow = typeof schema.certificate.$inferSelect;
 
 /**
@@ -341,7 +365,7 @@ export async function markUnloadableCertificates(app: AppContext) {
       const sites = await tx
         .select({ name: schema.site.name })
         .from(schema.site)
-        .where(eq(schema.site.certificateId, row.id))
+        .where(usesCertificate(row.id))
         .orderBy(schema.site.name)
         .limit(20);
       const l4Apps = await tx
@@ -376,8 +400,13 @@ export async function listCertificates(app: AppContext) {
   return (await app.db.select().from(schema.certificate)).map(certificateDto);
 }
 
-export function certificateSettings(app: AppContext): CertificateSettings {
-  return { acmeDirectory: app.env.EDGEWEIR_ACME_DIRECTORY || null };
+export async function certificateSettings(app: AppContext): Promise<CertificateSettings> {
+  const custom = await customAcmeDirectory(app);
+  return {
+    acmeDirectory: custom?.url ?? null,
+    acmeDirectoryEab: !!custom?.eab,
+    defaultCa: await defaultAcmeCa(app),
+  };
 }
 
 export async function uploadCertificate(
@@ -426,6 +455,9 @@ export async function requestCertificate(
   ctx: CertificateContext,
 ) {
   const id = randomUUID();
+  const ca = input.ca ?? (await defaultAcmeCa(app));
+  if (ca === "custom" && !(await customAcmeDirectory(app)))
+    fail("ACME_DIRECTORY_NOT_CONFIGURED", "configure a custom ACME directory first");
   if (input.bindSiteId) await assertBindable(app.db, input.bindSiteId, input.names);
   if (input.challenge === "http01") {
     // An HTTP-01 challenge is answered by the nodes of the clusters that serve the name.
@@ -464,7 +496,8 @@ export async function requestCertificate(
         source: "acme",
         autoRenew: input.autoRenew,
         acme: {
-          ca: input.ca,
+          ca,
+          keyType: input.keyType,
           challenge: input.challenge,
           email: input.email,
           dnsCredentialId: input.dnsCredentialId ?? "",
@@ -517,7 +550,8 @@ async function assertBindable(db: Executor, siteId: string, names: readonly stri
 }
 
 /**
- * Checks that a site's certificate covers the site's new domains. An ACME
+ * Checks that a site's certificates cover the site's new domains (any of
+ * them; the further ones as they are). An ACME
  * certificate the console renews takes the domains it does not cover yet:
  * its names grow by them (a name below one of its wildcards needs none)
  * and it is reissued at once; an attempt already running is left alone and
@@ -533,7 +567,21 @@ export async function coverSiteDomains(
   ctx: CertificateContext & { site: { id: string; name: string } },
 ): Promise<{ id: string; name: string } | undefined> {
   const cert = await findCertificate(tx, certificateId);
-  const uncovered = uncoveredDomains(cert.chainPem, domains);
+  // Domains the site's other certificates cover need nothing from this one.
+  const others = (await additionalCertificateIds(tx, ctx.site.id)).filter(
+    (id) => id !== certificateId,
+  );
+  const otherChains = others.length
+    ? (
+        await tx
+          .select({ chainPem: schema.certificate.chainPem })
+          .from(schema.certificate)
+          .where(inArray(schema.certificate.id, others))
+      )
+        .map((row) => row.chainPem)
+        .filter(Boolean)
+    : [];
+  const uncovered = uncoveredByAll([cert.chainPem, ...otherChains], domains);
   if (!uncovered.length) return undefined;
   if (cert.source !== "acme" || !cert.autoRenew) failUncovered(uncovered);
   // Names the certificate already grew by wait for its reissue.
@@ -619,14 +667,19 @@ export async function bindIssuedCertificate(
       return undefined;
     throw error;
   }
-  const { certificateId, ...options } = tlsSettings.parse({
+  const settings = tlsSettings.parse({
     ...site.tlsSettings,
     certificateId: cert.id,
+    // A site bound now had no usable first certificate: further ones stay.
+    additionalCertificateIds: (await additionalCertificateIds(tx, site.id)).filter(
+      (id) => id !== cert.id,
+    ),
   });
   await tx
     .update(schema.site)
-    .set({ certificateId, tlsSettings: options })
+    .set({ certificateId: settings.certificateId, tlsSettings: storedTlsOptions(settings) })
     .where(eq(schema.site.id, site.id));
+  await writeAdditionalCertificates(tx, site.id, settings.additionalCertificateIds);
   await recordAudit(tx, systemActor, {
     action: "site.https_update",
     targetType: "site",
@@ -669,7 +722,7 @@ export async function deleteCertificate(app: AppContext, id: string, ctx: Certif
     const sites = await tx
       .select({ name: schema.site.name })
       .from(schema.site)
-      .where(eq(schema.site.certificateId, id))
+      .where(usesCertificate(id))
       .orderBy(schema.site.name)
       .limit(5);
     if (sites.length)
@@ -726,9 +779,57 @@ async function tlsSite(db: Executor, id: string, lock = false) {
   if (!row) fail("SITE_NOT_FOUND", "site not found");
   return row;
 }
+/** Sites that use a certificate, first or additional. */
+export const usesCertificate = (certificateId: string) =>
+  or(
+    eq(schema.site.certificateId, certificateId),
+    inArray(
+      schema.site.id,
+      sql`(select ${schema.siteCertificate.siteId} from ${schema.siteCertificate} where ${schema.siteCertificate.certificateId} = ${certificateId})`,
+    ),
+  );
+
+/** The ids of a site's certificates after the first, in the site's order. */
+export async function additionalCertificateIds(db: Executor, siteId: string) {
+  return (
+    await db
+      .select({ id: schema.siteCertificate.certificateId })
+      .from(schema.siteCertificate)
+      .where(eq(schema.siteCertificate.siteId, siteId))
+      .orderBy(asc(schema.siteCertificate.position))
+  ).map((row) => row.id);
+}
+
+/** A site's stored HTTPS settings with its certificates. */
+export async function siteTlsSettings(
+  db: Executor,
+  site: { id: string; certificateId: string | null; tlsSettings: Record<string, unknown> },
+): Promise<TlsSettings> {
+  return tlsSettings.parse({
+    ...site.tlsSettings,
+    certificateId: site.certificateId,
+    additionalCertificateIds: site.certificateId ? await additionalCertificateIds(db, site.id) : [],
+  });
+}
+
+/** What tls_settings stores: the settings without the certificates (site columns and rows). */
+export function storedTlsOptions(settings: TlsSettings): Record<string, unknown> {
+  const { certificateId: _first, additionalCertificateIds: _more, ...options } = settings;
+  return options;
+}
+
+/** Replaces a site's additional certificates (positions 1-3, in order). */
+async function writeAdditionalCertificates(tx: Executor, siteId: string, ids: readonly string[]) {
+  await tx.delete(schema.siteCertificate).where(eq(schema.siteCertificate.siteId, siteId));
+  if (ids.length)
+    await tx
+      .insert(schema.siteCertificate)
+      .values(ids.map((certificateId, i) => ({ siteId, certificateId, position: i + 1 })));
+}
+
 export async function getHttps(app: AppContext, id: string) {
   const site = await tlsSite(app.db, id);
-  return tlsSettings.parse({ ...site.tlsSettings, certificateId: site.certificateId });
+  return siteTlsSettings(app.db, site);
 }
 export async function updateHttps(
   app: AppContext,
@@ -737,25 +838,53 @@ export async function updateHttps(
   ctx: CertificateContext,
 ) {
   // Without a certificate the site has no HTTPS port to redirect to: a port
-  // kept from before would name one nodes no longer serve it on.
-  const settings = input.certificateId ? input : { ...input, redirectPort: 443 };
+  // kept from before would name one nodes no longer serve it on; and it has
+  // no further certificates and no client certificates.
+  const settings: TlsSettings = input.certificateId
+    ? input
+    : {
+        ...input,
+        redirectPort: 443,
+        additionalCertificateIds: [],
+        clientCertificate: { ...input.clientCertificate, mode: "off" },
+      };
+  if (settings.clientCertificate.mode !== "off") {
+    if (settings.http3)
+      fail("CLIENT_CERTIFICATE_HTTP3", "client certificates and HTTP/3 cannot be on together");
+    settings.clientCertificate = {
+      ...settings.clientCertificate,
+      caPem: inspectClientCa(settings.clientCertificate.caPem),
+    };
+  }
   return app.db.transaction(async (tx) => {
     const site = await tlsSite(tx, id, true);
-    if (settings.certificateId) {
-      const cert = await findCertificate(tx, settings.certificateId);
-      if (!cert.chainPem || !cert.notAfter || cert.notAfter.getTime() <= Date.now())
-        fail("CERTIFICATE_UNAVAILABLE", "certificate is not issued yet or expired");
-      // Also when the site has it already: no revision nodes cannot apply.
-      assertLoadable(app, cert);
+    const ids = siteCertificateIds(settings);
+    if (ids.length) {
+      const certs = [];
+      for (const certificateId of ids) {
+        const cert = await findCertificate(tx, certificateId);
+        if (!cert.chainPem || !cert.notAfter || cert.notAfter.getTime() <= Date.now())
+          fail("CERTIFICATE_UNAVAILABLE", "certificate is not issued yet or expired");
+        // Also when the site has it already: no revision nodes cannot apply.
+        assertLoadable(app, cert);
+        certs.push(cert);
+      }
       const domains = await tx
         .select()
         .from(schema.siteDomain)
         .where(eq(schema.siteDomain.siteId, id));
-      // The site's own ACME certificate may be being reissued for domains
-      // added since (coverSiteDomains): they wait for it, as before.
+      // The site's own first ACME certificate may be being reissued for
+      // domains added since (coverSiteDomains): they wait for it, as before.
+      const first = certs[0] as CertificateRow;
       const waiting = (domain: { name: string; kind: string }) =>
-        cert.id === site.certificateId && cert.source === "acme" && namesCover(cert.names, domain);
-      const uncovered = uncoveredDomains(cert.chainPem, domains).filter((d) => !waiting(d));
+        first.id === site.certificateId &&
+        first.source === "acme" &&
+        namesCover(first.names, domain);
+      // Every domain needs one of the site's certificates.
+      const uncovered = uncoveredByAll(
+        certs.map((cert) => cert.chainPem),
+        domains,
+      ).filter((d) => !waiting(d));
       if (uncovered.length) failUncovered(uncovered);
     }
     // Ports were checked when saved; without a certificate the site must
@@ -766,11 +895,11 @@ export async function updateHttps(
       portsOf(site),
       { checkPorts: false, tls: settings },
     );
-    const { certificateId, ...options } = settings;
     await tx
       .update(schema.site)
-      .set({ certificateId, tlsSettings: options })
+      .set({ certificateId: settings.certificateId, tlsSettings: storedTlsOptions(settings) })
       .where(eq(schema.site.id, id));
+    await writeAdditionalCertificates(tx, id, settings.additionalCertificateIds);
     await publishRevision(tx, {
       clusterId: site.clusterId,
       reason: { code: "certificate_updated", params: { site: site.name } },
