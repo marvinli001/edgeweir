@@ -48,7 +48,7 @@ The list shows active bans only (neither expired nor lifted), newest first, and 
 | Shortest prefix | IPv4 `/16`, IPv6 `/48` |
 | Expiry | 1 minute to 7 days (the UI offers 1 hour to 7 days); nodes drop a ban when it expires, the console deletes it an hour later |
 | Reason | Manual: abuse, attack, scanning, spam, other. Automatic: per-IP request rate, unknown host scan |
-| Banning again | One active manual ban per address for global bans, and per site and address for site bans; banning it again sets the new reason and expiry and does not add a ban |
+| Banning again | One active manual ban per address for global bans, and per site and address for site bans; banning it again sets the new reason and expiry and does not add a ban; a manual global ban on an address with an automatic ban (such as scan protection) takes it over, counted, audited and sent to every node as a new ban |
 | Protected addresses | A site ban may not cover an address of a node in the site's cluster, a global ban no node address at all; neither may cover loopback (`127.0.0.0/8`, `::1`) or unspecified addresses (`0.0.0.0/8`, `::`), nor overlap an allow list |
 | Where it applies | At the edge layer once the site is known, before rules: global bans first, then site bans; addresses on an allow list are never banned |
 | Delivery | No configuration revision, no configuration canary, no reload on the nodes |
@@ -61,7 +61,7 @@ The list shows active bans only (neither expired nor lifted), newest first, and 
 | Limit of manual bans | Active manual bans, global and site bans together | **Protection settings → Bans → Limit of manual bans**; 10000 by default, 100–100000 |
 | Automatic bans | Active site-scope automatic bans per cluster; global automatic bans (scan protection) count separately | 10000 each, fixed; the oldest automatic bans lapse first |
 
-Automatic bans do not count toward the limit of manual bans. Once the limit is reached, a new ban gets `BAN_PLATFORM_LIMIT` ("At most N manual bans can be active"); banning an address that is still banned is not limited.
+Automatic bans do not count toward the limit of manual bans. Once the limit is reached, a new ban gets `BAN_PLATFORM_LIMIT` ("At most N manual bans can be active"); banning an address again while its manual ban is active is not limited.
 
 ## Automatic bans
 
@@ -70,7 +70,7 @@ A node bans on its own on a trigger: the per-IP QPS of CC mitigation (site scope
 | Item | Behavior |
 | --- | --- |
 | Sharing | **Protection settings → Bans → Share automatic bans in the cluster**, on by default: on, a site-scope ban goes to every node of the cluster and a global one to every node; off, it is kept for viewing only and marked "Not shared". A change applies to automatic bans added afterwards |
-| Merging | Site scope: one entry per node, site and address; global scope: one entry per address (none while an active manual global ban holds it); a repeated report extends the expiry |
+| Merging | Site scope: one entry per node, site and address; global scope: one entry per address (none while an active manual global ban holds it, which stays as it is); a repeated report extends the expiry |
 | Checks | A site-scope ban's site must belong to the node's cluster; global ones come from scan protection only; single addresses only; at most 7 days after creation; a site-scope ban covering a protected address (the addresses of the cluster's nodes, the allow lists) is not stored |
 | Protected addresses, global scope | A ban covering an address of another cluster's node or any cluster's trusted proxy is stored but never shared: listed as "Not shared" and liftable. One covering an address of a node of the reporting node's cluster or an allow list is stored as lifted, not listed, and the nodes of that cluster delete their own bans of it within seconds; other clusters' nodes keep theirs |
 | Unban | Like a manual ban: click "Unban" in the row; a ban that was not shared is deleted within seconds by the nodes that hold it (older nodes without support keep it until it expires). A global one goes to every node with scan protection, as several may have banned the address, and each node deletes its own bans expiring no later than the unban plus the longest scan ban time its cluster has had (every ban from before the unban expires by then). A ban of the same address a node makes after it got the unban is not affected |
