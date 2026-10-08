@@ -48,7 +48,7 @@ The list shows active bans only (neither expired nor lifted), newest first, and 
 | Shortest prefix | IPv4 `/16`, IPv6 `/48` |
 | Expiry | 1 minute to 7 days (the UI offers 1 hour to 7 days); nodes drop a ban when it expires, the console deletes it an hour later |
 | Reason | Manual: abuse, attack, scanning, spam, other. Automatic: per-IP request rate, unknown host scan |
-| Banning again | One active manual ban per address for global bans, and per site and address for site bans; banning it again sets the new reason and expiry and does not add a ban; a manual global ban on an address with an automatic ban (such as scan protection) takes it over, counted, audited and sent to every node as a new ban |
+| Banning again | One active manual ban per address for global bans, and per site and address for site bans; banning it again sets the new reason and expiry and does not add a ban; a manual global ban of the same address or range as an automatic global ban (scan protection; /64 for IPv6) takes it over, counted, audited and sent to every node as a new ban; an unshared scan ban is lifted with it, and each node deletes its own |
 | Protected addresses | A site ban may not cover an address of a node in the site's cluster, a global ban no node address at all; neither may cover loopback (`127.0.0.0/8`, `::1`) or unspecified addresses (`0.0.0.0/8`, `::`), nor overlap an allow list |
 | Where it applies | At the edge layer once the site is known, before rules: global bans first, then site bans; addresses on an allow list are never banned |
 | Delivery | No configuration revision, no configuration canary, no reload on the nodes |
