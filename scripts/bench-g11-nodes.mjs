@@ -147,6 +147,7 @@ async function certificate(name, names, rsa = false) {
     join(dir, "key.pem"),
     "-out",
     join(dir, "cert.pem"),
+    "-sha256",
     "-days",
     "30",
     "-config",

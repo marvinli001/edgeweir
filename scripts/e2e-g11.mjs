@@ -292,6 +292,8 @@ async function createSite(key) {
 // ------------------------------------------------------- certificates (host openssl)
 const work = await mkdtemp(join(tmpdir(), "g11-"));
 let serials = 0;
+// Every signature is SHA-256: macOS LibreSSL signs with SHA-1 by default, which
+// the node's OpenSSL refuses in client certificate chains ("ca md too weak").
 async function openssl(...args) {
   await execute("openssl", args, { cwd: work });
 }
@@ -340,6 +342,7 @@ async function serverCertificate(name, names, { rsa = false } = {}) {
     `${name}.key`,
     "-out",
     `${name}.pem`,
+    "-sha256",
     "-days",
     "7",
     "-config",
@@ -371,6 +374,7 @@ async function clientCa(name) {
     `${name}.key`,
     "-out",
     `${name}.pem`,
+    "-sha256",
     "-days",
     "7",
     "-config",
@@ -410,6 +414,7 @@ async function clientCertificate(name, ca) {
     `${ca}.key`,
     "-set_serial",
     `0x${(0x6a11c0de + ++serials).toString(16)}`,
+    "-sha256",
     "-days",
     "7",
     "-extfile",
