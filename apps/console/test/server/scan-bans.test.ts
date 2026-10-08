@@ -298,7 +298,7 @@ describe("platform scan bans", async () => {
     ]);
   });
 
-  it("takes over an active scan ban as a manual ban that reaches every node", async () => {
+  it("replaces an active unshared scan ban with a manual ban that reaches every node", async () => {
     await share(true);
     await admin.clusters.setClientIp({
       clusterId: clusterB,
@@ -322,9 +322,14 @@ describe("platform scan bans", async () => {
       reason: "abuse",
       durationSeconds: 86_400,
     });
-    // The entry becomes a manual ban as a new one would be: no trusted proxy holds that back.
+    // A manual ban as a new one would be (no trusted proxy holds that back), in an entry of its
+    // own: the scan ban is lifted, so the nodes holding it release their own bans, however late
+    // they sync.
+    expect(manual.id).not.toBe(auto?.id);
+    const [lifted] = (await rowOf("192.0.2.19/32")).filter((row) => row.id === auto?.id);
+    expect(lifted).toMatchObject({ source: "auto", distributed: false });
+    expect(lifted?.removedAt).not.toBeNull();
     expect(manual).toMatchObject({
-      id: auto?.id,
       scope: "platform",
       cidr: "192.0.2.19/32",
       reason: "abuse",
@@ -343,6 +348,7 @@ describe("platform scan bans", async () => {
     ] as const) {
       const page = await banChanges(ctx.db, { id: node, clusterId: cluster }, before, 1000);
       expect(page.bans.map((b) => [b.id, b.source])).toEqual([[manual.id, "manual"]]);
+      expect(page.liftedOwn.map((b) => b.id)).toEqual([auto?.id]);
     }
     const audit = await ctx.db
       .select()
@@ -356,7 +362,7 @@ describe("platform scan bans", async () => {
     });
 
     // Later scan reports leave it alone: a later expiry, and one lifted for the reporting cluster.
-    const [held] = await rowOf("192.0.2.19/32");
+    const held = (await rowOf("192.0.2.19/32")).find((row) => row.id === manual.id);
     const later = new Date(Date.now() + 2 * 86_400_000);
     expect(
       await reportAutoBans(ctx.db, { id: nodes.a, clusterId: clusterA }, [
@@ -374,7 +380,7 @@ describe("platform scan bans", async () => {
       .where(and(eq(schema.nodeIp.nodeId, nodes.a2), eq(schema.nodeIp.address, "192.0.2.19")));
     const rows = await rowOf("192.0.2.19/32");
     expect(rows.find((row) => row.id === manual.id)).toEqual(held);
-    const others = rows.filter((row) => row.id !== manual.id);
+    const others = rows.filter((row) => row.id !== manual.id && row.id !== auto?.id);
     expect(others).toMatchObject([{ source: "auto", clusterId: clusterA, distributed: false }]);
     expect(others[0]?.removedAt).not.toBeNull();
     expect(
