@@ -343,7 +343,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 
 ## 网站 TLS：多证书、客户端证书与会话复用
 
-1. 网站的第一张证书在 `site.certificate_id`，其余最多 3 张在 `site_certificate`（位置 1–3，外键 `restrict`）；保存时网站每个域名至少被一张覆盖。IR 的 `Site.additional_certificate_ids` 按网站的顺序下发，有其他证书的配置要求 `multi-certificate-v1`。节点在 `ssl_client_hello_by_lua` 按 ClientHello 每次只设置一张证书（精确名称优先于泛域名，客户端支持时 ECDSA 优先于 RSA），OCSP 装订随所选证书。
+1. 网站的第一张证书在 `site.certificate_id`，其余最多 3 张在 `site_certificate`（位置 1–3，外键 `restrict`）；保存时网站每个域名至少被一张覆盖。IR 的 `Site.additional_certificate_ids` 按网站的顺序下发，有其他证书的配置要求 `multi-certificate-v1`。节点在 `ssl_client_hello_by_lua` 按 ClientHello 每次只设置一张证书（只考虑客户端能用的密钥类型，其中精确名称优先于泛域名，再优先 ECDSA，最后按网站中的顺序），OCSP 装订随所选证书。
 2. 客户端证书在 `site.tls_settings`（模式、CA PEM、深度、是否传递），IR 为 `Site.client_certificate`，要求 `client-cert-v1`；规则读取 `tls.client.*` 时同样要求。节点用 `ngx.ssl.verify_client` 请求证书，握手不中止，结果在请求阶段判定（「必须」时 403 `client-cert-required`）。访客自带的 `X-Client-*` 请求头在所有网站删除。与 HTTP/3 互斥（`CLIENT_CERTIFICATE_HTTP3`）。
 3. 会话复用：节点的 HTTPS 监听使用 `ssl_session_cache shared:edgeweir_tls:16m`、`ssl_session_timeout 1h`，`ssl_early_data off` 显式写出；每个网站有自己的会话上下文（`SSL_set_session_id_context`），会话只在同一网站复用。票据密钥按集群（`session_ticket_key`，`next`、`current`、`previous`），有网站使用证书的集群在发布时创建；IR 只含 id 与角色（`NodeConfig.session_ticket_keys`，按 id 排序，不要求能力，旧节点忽略），节点以 `GetSessionTicketKeys` 取得 80 字节密钥，密钥在第一次被取用时生成，信封加密保存（用途 `session_ticket_key.secret`）。
 4. `maintenance.rotate-session-ticket-keys` 每小时检查一次，最新的密钥满 12 小时就轮换（与挑战密钥相同的方式）；最新 revision 带票据密钥的集群发布新 revision（原因 `session_ticket_keys_rotated`），审计 `cluster.session_ticket_keys_rotate`。节点按 current、previous、next 的顺序写 `ssl_session_ticket_key`，文件名随密钥变化，轮换时 reload。

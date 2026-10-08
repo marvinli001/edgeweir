@@ -226,7 +226,7 @@ A site has up to 4 certificates: **Certificates** is the first, **Add certificat
 | Item | Behavior |
 | --- | --- |
 | Coverage | Every domain must be covered by at least one of them; each need not cover all. Otherwise saving is refused with the uncovered domains ("Certificate domains do not match the site or DNS zone: …"). For example one certificate for `a.example.com` and one for `b.example.com` |
-| Choice per handshake | Each handshake presents one: among the certificates covering the SNI, an exact name wins over a wildcard; then an ECDSA certificate if the client supports ECDSA (its signature algorithms include the scheme of the certificate's curve, and it uses TLS 1.3 or offers an `ECDHE-ECDSA-*` suite of the profile), an RSA certificate otherwise |
+| Choice per handshake | Each handshake presents one: among the certificates covering the SNI, only key types the client can use count (ECDSA needs the scheme of the certificate's curve among its signature algorithms, and TLS 1.3 or an `ECDHE-ECDSA-*` suite of the profile; all of them when it can use none); of those an exact name wins over a wildcard, then ECDSA, then the site's order. Without a certificate covering the SNI, the first one |
 | ECDSA and RSA | With an ECDSA and an RSA certificate for the same names, modern clients get the ECDSA one and old RSA-only clients the RSA one |
 | OCSP stapling | Staples the chosen certificate's own OCSP response |
 | Adding domains | New domains only grow the first certificate (when the console requested it with automatic renewal), see [Adding domains](#adding-domains-to-an-https-site) |
