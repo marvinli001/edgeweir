@@ -7,6 +7,7 @@ import {
   type DomainKind,
   hostMatcher,
   hostName,
+  inPatternOrder,
   matchHost,
   normalizeCacheTag,
   PREFETCH_V2_FEATURE,
@@ -161,9 +162,12 @@ async function assertTaskFeatures(tx: Executor, clusterIds: string[], features: 
 }
 
 /**
- * Maps host names to the sites that serve them, by the nodes' precedence:
- * exact, `*.` over the parent, the longest `.` suffix, then patterns by
- * site creation time and the site's order.
+ * Maps host names to the sites that serve them as the nodes route: in
+ * each cluster, among its enabled sites, by precedence (exact, `*.` over
+ * the parent, the longest `.` suffix, then patterns in the nodes' order,
+ * inPatternOrder); one site per cluster that serves the host. A host only
+ * a disabled site names maps to that site (SITE_DISABLED for the caller),
+ * as nodes give it the disabled page only when no enabled site matches.
  */
 async function resolveHosts(db: Executor, hosts: string[]) {
   const ancestors = [
@@ -201,19 +205,32 @@ async function resolveHosts(db: Executor, hosts: string[]) {
         eq(schema.siteDomain.kind, "regex"),
       ),
     )
-    .orderBy(
-      asc(schema.site.createdAt),
-      asc(schema.site.id),
-      asc(schema.siteDomain.createdAt),
-      asc(schema.siteDomain.name),
+    // Each site's domains in its domain order (the compiler's).
+    .orderBy(asc(schema.site.id), asc(schema.siteDomain.createdAt), asc(schema.siteDomain.name));
+  type Row = (typeof rows)[number];
+  const matcherOf = (list: Row[]) =>
+    hostMatcher(
+      inPatternOrder(
+        list.map((row) => ({
+          kind: row.kind as DomainKind,
+          name: row.name,
+          value: row,
+          siteId: row.siteId,
+          siteCreatedMs: row.siteCreatedAt.getTime(),
+        })),
+      ),
     );
-  const matcher = hostMatcher(
-    rows.map((row) => ({ kind: row.kind as DomainKind, name: row.name, value: row })),
-  );
-  const resolved = new Map<string, (typeof rows)[number]>();
+  const clusters = new Map<string, Row[]>();
+  for (const row of rows)
+    if (row.enabled) clusters.set(row.clusterId, [...(clusters.get(row.clusterId) ?? []), row]);
+  const enabled = [...clusters.values()].map(matcherOf);
+  const disabled = matcherOf(rows.filter((row) => !row.enabled));
+  const resolved = new Map<string, Row[]>();
   for (const host of hosts) {
-    const match = matchHost(matcher, host);
-    if (match) resolved.set(host, match);
+    const served = enabled.map((m) => matchHost(m, host)).filter((row) => row !== undefined);
+    const offline = served.length ? undefined : matchHost(disabled, host);
+    if (served.length) resolved.set(host, served);
+    else if (offline) resolved.set(host, [offline]);
   }
   return resolved;
 }
@@ -350,19 +367,21 @@ export async function createCacheTask(
         const list = unknown.slice(0, 5).join(", ");
         fail("CACHE_TASK_HOST_UNKNOWN", `no site serves: ${list}`, { hosts: list });
       }
-      for (const site of resolved.values()) assertServing(site);
+      for (const site of [...resolved.values()].flat()) assertServing(site);
       for (const host of hosts) {
-        const site = resolved.get(host);
-        if (!site) continue;
-        siteNames.set(site.siteId, site.siteName);
+        const sites = resolved.get(host);
+        if (!sites) continue;
         targets.push(host);
-        items.push({
-          siteId: site.siteId,
-          clusterId: site.clusterId,
-          type: "host",
-          ...blank,
-          host,
-        });
+        for (const site of sites) {
+          siteNames.set(site.siteId, site.siteName);
+          items.push({
+            siteId: site.siteId,
+            clusterId: site.clusterId,
+            type: "host",
+            ...blank,
+            host,
+          });
+        }
       }
     } else {
       const parsed: ParsedTarget[] = [];
@@ -382,31 +401,43 @@ export async function createCacheTask(
         const hosts = unknown.slice(0, 5).join(", ");
         fail("CACHE_TASK_HOST_UNKNOWN", `no site serves: ${hosts}`, { hosts });
       }
-      for (const site of resolved.values()) assertServing(site);
       // A PURGE request purges URLs of its own site only.
-      if (ctx.siteId && [...resolved.values()].some((site) => site.siteId !== ctx.siteId)) {
-        const hosts = [...resolved.keys()].join(", ");
-        fail("CACHE_TASK_HOST_UNKNOWN", `the site does not serve: ${hosts}`, { hosts });
+      if (ctx.siteId) {
+        const foreign = [...resolved.entries()]
+          .filter(([, sites]) => !sites.some((site) => site.siteId === ctx.siteId))
+          .map(([host]) => host);
+        if (foreign.length) {
+          const hosts = foreign.join(", ");
+          fail("CACHE_TASK_HOST_UNKNOWN", `the site does not serve: ${hosts}`, { hosts });
+        }
+        for (const [host, sites] of resolved)
+          resolved.set(
+            host,
+            sites.filter((site) => site.siteId === ctx.siteId),
+          );
       }
+      for (const site of [...resolved.values()].flat()) assertServing(site);
       const seen = new Set<string>();
       for (const target of parsed) {
-        const site = resolved.get(target.host);
-        if (!site || seen.has(target.url)) continue;
+        const sites = resolved.get(target.host);
+        if (!sites || seen.has(target.url)) continue;
         seen.add(target.url);
-        siteNames.set(site.siteId, site.siteName);
         targets.push(target.url);
         const prefetch = input.type === "prefetch" || input.type === "sitemap";
-        items.push({
-          siteId: site.siteId,
-          clusterId: site.clusterId,
-          type: input.type,
-          host: target.host,
-          path: target.path,
-          query: input.type === "url" || input.type === "sitemap" ? target.query : "",
-          url: prefetch ? target.url : "",
-          ...(prefetch ? { variants } : {}),
-          ...(input.type === "sitemap" ? { maxUrls } : {}),
-        });
+        for (const site of sites) {
+          siteNames.set(site.siteId, site.siteName);
+          items.push({
+            siteId: site.siteId,
+            clusterId: site.clusterId,
+            type: input.type,
+            host: target.host,
+            path: target.path,
+            query: input.type === "url" || input.type === "sitemap" ? target.query : "",
+            url: prefetch ? target.url : "",
+            ...(prefetch ? { variants } : {}),
+            ...(input.type === "sitemap" ? { maxUrls } : {}),
+          });
+        }
       }
     }
 

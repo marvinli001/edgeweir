@@ -127,11 +127,78 @@ export function punycodeDecode(input: string): string | null {
   return String.fromCodePoint(...output);
 }
 
-/** A host name with its `xn--` labels decoded for display; labels that do not decode stay as they are. */
+/** Scripts told apart when deciding whether a label is shown in Unicode. */
+const SCRIPTS = [
+  "Latin",
+  "Greek",
+  "Cyrillic",
+  "Armenian",
+  "Hebrew",
+  "Arabic",
+  "Syriac",
+  "Thaana",
+  "Devanagari",
+  "Bengali",
+  "Gurmukhi",
+  "Gujarati",
+  "Oriya",
+  "Tamil",
+  "Telugu",
+  "Kannada",
+  "Malayalam",
+  "Sinhala",
+  "Thai",
+  "Lao",
+  "Tibetan",
+  "Myanmar",
+  "Georgian",
+  "Hangul",
+  "Ethiopic",
+  "Khmer",
+  "Mongolian",
+  "Hiragana",
+  "Katakana",
+  "Bopomofo",
+  "Han",
+].map((name) => ({ name, re: new RegExp(`\\p{Script=${name}}`, "u") }));
+/** Script combinations a label may mix (UTS #39 "highly restrictive"). */
+const MIXES = [
+  ["Latin", "Han", "Hiragana", "Katakana"],
+  ["Latin", "Han", "Bopomofo"],
+  ["Latin", "Han", "Hangul"],
+];
+
+/**
+ * Whether a decoded label is shown in Unicode: no control, format or
+ * space characters, and its letters in one script or a combination
+ * browsers also allow (Latin with Han and Japanese kana, Bopomofo or
+ * Hangul). Others (say Latin mixed with Cyrillic look-alikes) stay in
+ * Punycode, as browsers show them.
+ */
+export function displayableLabel(label: string): boolean {
+  if (/[\p{Cc}\p{Cf}\p{Z}]/u.test(label)) return false;
+  const scripts = new Set<string>();
+  for (const ch of label) {
+    if (!/\p{L}/u.test(ch)) continue;
+    const script = SCRIPTS.find((s) => s.re.test(ch));
+    scripts.add(script ? script.name : `other:${ch}`);
+  }
+  if (scripts.size <= 1) return !(scripts.size === 1 && [...scripts][0]?.startsWith("other:"));
+  return MIXES.some((mix) => [...scripts].every((script) => mix.includes(script)));
+}
+
+/**
+ * A host name with its `xn--` labels decoded for display; labels that do
+ * not decode, or that mix scripts (displayableLabel), stay as they are.
+ */
 export function unicodeHost(host: string): string {
   return host
     .split(".")
-    .map((label) => (label.startsWith("xn--") ? (punycodeDecode(label.slice(4)) ?? label) : label))
+    .map((label) => {
+      if (!label.startsWith("xn--")) return label;
+      const decoded = punycodeDecode(label.slice(4));
+      return decoded !== null && displayableLabel(decoded) ? decoded : label;
+    })
     .join(".");
 }
 
@@ -145,6 +212,13 @@ export function domainPatternError(pattern: string): string | null {
   if (!pattern) return "empty";
   if (pattern.length > MAX_DOMAIN_PATTERN_LENGTH) return "too_long";
   if (/["\s]/.test(pattern) || pattern.includes("\\\\")) return "character";
+  // A Host never holds a comma: one outside a {n,m} quantifier (say, a list
+  // typed into one field) would make the pattern match nothing.
+  if (pattern.replace(/\{\d+,\d*\}/g, "").includes(",")) return "character";
+  // The console matches patterns with JavaScript's backtracking engine
+  // (purge resolution): more than two repeating quantifiers can take
+  // seconds on a long host, two stay within a fraction of a millisecond.
+  if (repeatingQuantifiers(pattern) > MAX_PATTERN_REPEATS) return "too_complex";
   try {
     validatePattern(pattern);
   } catch (error) {
@@ -153,6 +227,42 @@ export function domainPatternError(pattern: string): string | null {
   }
   if (/[A-Z]/.test(pattern.replace(/\\x[0-9a-fA-F]{2}|\\./g, ""))) return "uppercase";
   return null;
+}
+
+/** Repeating quantifiers (*, +, {n,} and {n,m} with m > 1) a domain pattern may hold. */
+export const MAX_PATTERN_REPEATS = 2;
+
+/** The quantifiers of a pattern that repeat (*, +, {n,}, {n,m} with m > 1), outside classes and escapes. */
+export function repeatingQuantifiers(pattern: string): number {
+  let count = 0;
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === "\\") {
+      i++;
+      continue;
+    }
+    if (c === "[") {
+      // Skip the class (a "]" right after "[" or "[^" is a literal).
+      i++;
+      if (pattern[i] === "^") i++;
+      if (pattern[i] === "]") i++;
+      while (i < pattern.length && pattern[i] !== "]") {
+        if (pattern[i] === "\\") i++;
+        i++;
+      }
+      continue;
+    }
+    if (c === "*" || c === "+") count++;
+    else if (c === "{") {
+      const m = /^\{(\d+)(,(\d*))?\}/.exec(pattern.slice(i));
+      if (m) {
+        const max = m[2] === undefined ? Number(m[1]) : m[3] === "" ? Infinity : Number(m[3]);
+        if (max > 1) count++;
+        i += m[0].length - 1;
+      }
+    }
+  }
+  return count;
 }
 
 /** Splits and normalizes a domain as typed; null when it is not valid. */
@@ -228,6 +338,46 @@ export const siteDomains = z
   );
 
 /** Compiled host matchers by precedence; see matchHost. */
+/**
+ * Domain.order of a site's pattern domain, the nodes' precedence among
+ * patterns: the site's creation time in milliseconds × 16 + the pattern's
+ * index among the site's patterns (in the site's domain order); equal
+ * orders go by site id.
+ */
+export function patternOrder(siteCreatedMs: number, index: number): number {
+  return siteCreatedMs * 16 + index;
+}
+
+/**
+ * Site domains with the nodes' pattern precedence: each site's patterns
+ * numbered in the order given (patternOrder), then every pattern sorted
+ * by (order, site id); the other forms come first, in the order given.
+ * The input lists each site's domains in its domain order.
+ */
+export function inPatternOrder<
+  T extends { kind: DomainKind; siteId: string; siteCreatedMs: number },
+>(domains: Iterable<T>): (T & { order: number })[] {
+  const next = new Map<string, number>();
+  const out: (T & { order: number })[] = [];
+  for (const d of domains) {
+    if (d.kind !== "regex") {
+      out.push({ ...d, order: 0 });
+      continue;
+    }
+    const index = next.get(d.siteId) ?? 0;
+    next.set(d.siteId, index + 1);
+    out.push({ ...d, order: patternOrder(d.siteCreatedMs, index) });
+  }
+  const rank = (d: { kind: DomainKind }) => (d.kind === "regex" ? 1 : 0);
+  return out.sort(
+    (a, b) =>
+      rank(a) - rank(b) ||
+      (rank(a) === 1
+        ? a.order - b.order || (a.siteId < b.siteId ? -1 : a.siteId > b.siteId ? 1 : 0)
+        : 0),
+  );
+}
+
 export interface HostMatcher<T> {
   exact: Map<string, T>;
   wildcard: Map<string, T>;

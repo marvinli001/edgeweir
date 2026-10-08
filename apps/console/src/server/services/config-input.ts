@@ -14,7 +14,13 @@ import {
   type SiteModel,
   TLS_PENDING_DOMAINS_FEATURE,
 } from "@edgeweir/config-compiler";
-import { nodeSupportsFeature, normalizeCidr, ruleAction, tlsSettings } from "@edgeweir/contract";
+import {
+  nodeSupportsFeature,
+  normalizeCidr,
+  patternOrder,
+  ruleAction,
+  tlsSettings,
+} from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { CertificateRefSchema, HttpChallengeSchema, type NodeConfig } from "@edgeweir/proto";
 import {
@@ -217,7 +223,7 @@ export async function loadSiteModels(
       wildcard: row.kind === "wildcard",
       ...(row.kind === "suffix" ? { match: "suffix" as const } : {}),
       ...(row.kind === "regex"
-        ? { match: "regex" as const, order: site.createdAt.getTime() * 16 + pattern++ }
+        ? { match: "regex" as const, order: patternOrder(site.createdAt.getTime(), pattern++) }
         : {}),
     }));
     const chain = site.certificateId ? chains.get(site.certificateId) : undefined;
