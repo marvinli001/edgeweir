@@ -43,6 +43,8 @@ import { deleteInBatches } from "../lib/retention";
 import { assertServing } from "../lib/site-state";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import { type Executor, publisher } from "./revisions";
+// Pattern domains run with V8's linear fallback (resolveHosts).
+import "../lib/regexp-engine";
 
 type CreateInput = z.output<typeof cacheTaskCreateInput>;
 /** The parsed input; the fields added with host, tag and sitemap tasks may be omitted. */
@@ -168,8 +170,16 @@ async function assertTaskFeatures(tx: Executor, clusterIds: string[], features: 
  * inPatternOrder); one site per cluster that serves the host. A host only
  * a disabled site names maps to that site (SITE_DISABLED for the caller),
  * as nodes give it the disabled page only when no enabled site matches.
+ *
+ * With `single` (tasks that make nodes fetch from origins: prefetches and
+ * sitemaps) one cluster only: the one whose site comes first by the same
+ * precedence over the sites of every cluster, disabled ones included, and
+ * in it the site its nodes route the host to (that disabled site when no
+ * enabled one there matches). A broad suffix or pattern domain of another
+ * cluster must not send its nodes to that site's origins, not even while
+ * the host's own site is disabled (a purge there only purges too much).
  */
-async function resolveHosts(db: Executor, hosts: string[]) {
+async function resolveHosts(db: Executor, hosts: string[], { single = false } = {}) {
   const ancestors = [
     ...new Set(
       hosts.flatMap((host) => {
@@ -223,11 +233,24 @@ async function resolveHosts(db: Executor, hosts: string[]) {
   const clusters = new Map<string, Row[]>();
   for (const row of rows)
     if (row.enabled) clusters.set(row.clusterId, [...(clusters.get(row.clusterId) ?? []), row]);
-  const enabled = [...clusters.values()].map(matcherOf);
-  const disabled = matcherOf(rows.filter((row) => !row.enabled));
+  const enabled = new Map([...clusters].map(([id, list]) => [id, matcherOf(list)]));
   const resolved = new Map<string, Row[]>();
+  if (single) {
+    // A name in one form belongs to one site, enabled or not: it picks the cluster.
+    const owners = matcherOf(rows);
+    for (const host of hosts) {
+      const owner = matchHost(owners, host);
+      if (!owner) continue;
+      const cluster = enabled.get(owner.clusterId);
+      resolved.set(host, [(cluster && matchHost(cluster, host)) ?? owner]);
+    }
+    return resolved;
+  }
+  const disabled = matcherOf(rows.filter((row) => !row.enabled));
   for (const host of hosts) {
-    const served = enabled.map((m) => matchHost(m, host)).filter((row) => row !== undefined);
+    const served = [...enabled.values()]
+      .map((m) => matchHost(m, host))
+      .filter((row) => row !== undefined);
     const offline = served.length ? undefined : matchHost(disabled, host);
     if (served.length) resolved.set(host, served);
     else if (offline) resolved.set(host, [offline]);
@@ -312,10 +335,11 @@ async function toTaskDtos(db: Executor, rows: TaskRow[]): Promise<CacheTask[]> {
 
 /**
  * Creates a purge or prefetch task: resolves URLs, hosts and site ids to
- * sites, fans the task out to every node of the affected clusters and wakes
- * their watch streams. Host and tag purges, sitemaps and mobile prefetches
- * need every active node of those clusters to run them (purge-tag-v1,
- * prefetch-v2).
+ * sites (a purge to each cluster's site that serves a host, a prefetch to
+ * one site: resolveHosts), fans the task out to every node of their
+ * clusters and wakes their watch streams. Host and tag purges, sitemaps
+ * and mobile prefetches need every active node of those clusters to run
+ * them (purge-tag-v1, prefetch-v2).
  */
 export async function createCacheTask(
   db: Database,
@@ -395,7 +419,10 @@ export async function createCacheTask(
         const urls = invalid.slice(0, 5).join(", ");
         fail("CACHE_TASK_URL_INVALID", `invalid URL: ${urls}`, { urls });
       }
-      const resolved = await resolveHosts(tx, [...new Set(parsed.map((p) => p.host))]);
+      const fetches = input.type === "prefetch" || input.type === "sitemap";
+      const resolved = await resolveHosts(tx, [...new Set(parsed.map((p) => p.host))], {
+        single: fetches,
+      });
       const unknown = [...new Set(parsed.map((p) => p.host).filter((h) => !resolved.has(h)))];
       if (unknown.length) {
         const hosts = unknown.slice(0, 5).join(", ");
@@ -423,7 +450,6 @@ export async function createCacheTask(
         if (!sites || seen.has(target.url)) continue;
         seen.add(target.url);
         targets.push(target.url);
-        const prefetch = input.type === "prefetch" || input.type === "sitemap";
         for (const site of sites) {
           siteNames.set(site.siteId, site.siteName);
           items.push({
@@ -433,8 +459,8 @@ export async function createCacheTask(
             host: target.host,
             path: target.path,
             query: input.type === "url" || input.type === "sitemap" ? target.query : "",
-            url: prefetch ? target.url : "",
-            ...(prefetch ? { variants } : {}),
+            url: fetches ? target.url : "",
+            ...(fetches ? { variants } : {}),
             ...(input.type === "sitemap" ? { maxUrls } : {}),
           });
         }
