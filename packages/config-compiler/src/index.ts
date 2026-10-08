@@ -18,6 +18,8 @@ import {
   CharsetSchema,
   type ClientAddress,
   ClientAddressSchema,
+  ClientCertificateMode,
+  ClientCertificateSchema,
   DomainMatch,
   DomainSchema,
   type EdgeRule,
@@ -58,6 +60,8 @@ import {
   type RuleExpression,
   S3AuthSchema,
   SessionAffinitySchema,
+  type SessionTicketKeyRef,
+  SessionTicketKeyRefSchema,
   type Site,
   SiteErrorPagesSchema,
   SiteProtectionSchema,
@@ -70,6 +74,7 @@ import {
 } from "@edgeweir/proto";
 import {
   type Expression,
+  needsClientCertificate,
   needsClientIp,
   needsRulesV2,
   needsRulesV3,
@@ -303,6 +308,22 @@ export type DomainMatchModel = "suffix" | "regex";
 export const DOMAINS_V2_FEATURE = "domains-v2";
 /** Feature of the cluster's unknown host handling and scan protection (proto v0.25.0). */
 export const UNKNOWN_HOST_FEATURE = "unknown-host-v1";
+/** Feature of sites with more than one certificate (proto v0.26.0, Site.additional_certificate_ids). */
+export const MULTI_CERTIFICATE_FEATURE = "multi-certificate-v1";
+/**
+ * Feature of client certificates (mutual TLS) and the tls.client.* fields
+ * (proto v0.26.0, Site.client_certificate).
+ */
+export const CLIENT_CERT_FEATURE = "client-cert-v1";
+
+/** A site's client certificates (config.proto ClientCertificate); off is omitted. */
+export interface ClientCertificateModel {
+  mode: "optional" | "required";
+  /** Re-encoded PEM of the CA certificates. */
+  caPem: string;
+  depth: number;
+  forwardHeaders: boolean;
+}
 
 /**
  * The cluster's unknown host handling (config.proto UnknownHosts):
@@ -388,6 +409,10 @@ export interface SiteModel {
   /** Defaults to true. */
   websocket?: boolean;
   certificateId?: string;
+  /** Further certificates in the site's order (needs certificateId); omitted: none. */
+  additionalCertificateIds?: string[];
+  /** Omitted or null: off. Needs certificateId. */
+  clientCertificate?: ClientCertificateModel | null;
   tls?: TlsModel;
   rules?: RuleModel[];
   /** Omitted or null: CRS off. */
@@ -937,6 +962,11 @@ export interface CompileInput {
    * compiled only then, sorted by id.
    */
   challengeKeys?: ChallengeKeyModel[];
+  /**
+   * The cluster's TLS session ticket keys. Compiled only when a served
+   * site has a certificate (usesSessionTickets), sorted by id.
+   */
+  sessionTicketKeys?: ChallengeKeyModel[];
   /** Omitted, or every template empty: the nodes' built-in pages. */
   platformErrorPages?: PlatformErrorPagesModel;
   /** Domains of the cluster's disabled sites; any order. */
@@ -1376,6 +1406,21 @@ function compileSite(model: SiteModel, challenges: boolean, edge?: EdgeModel): S
     rangeSlice: model.rangeSlice ?? false,
     websocketDisabled: model.websocket === false,
     certificateId: model.certificateId ?? "",
+    additionalCertificateIds: model.certificateId
+      ? [...(model.additionalCertificateIds ?? [])]
+      : [],
+    clientCertificate:
+      model.certificateId && model.clientCertificate
+        ? create(ClientCertificateSchema, {
+            mode:
+              model.clientCertificate.mode === "required"
+                ? ClientCertificateMode.REQUIRED
+                : ClientCertificateMode.OPTIONAL,
+            caPem: model.clientCertificate.caPem,
+            depth: model.clientCertificate.depth,
+            forwardHeaders: model.clientCertificate.forwardHeaders,
+          })
+        : undefined,
     tls: model.tls
       ? compileTls(model.tls, {
           certificate: !!model.certificateId,
@@ -1536,6 +1581,7 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
   out.httpChallenges.sort(byString((c) => `${c.domain}/${c.token}`));
   out.ipLists.sort(byString((list: IpList) => list.id));
   out.challengeKeys.sort(byString((key: ChallengeKeyRef) => key.id));
+  out.sessionTicketKeys.sort(byString((key: SessionTicketKeyRef) => key.id));
   out.offlineHosts.sort(byString(offlineHostKey));
   // v0.15.0: layer-4 applications by id (UTF-8 bytes), their origins by id
   // and the list ids as sets.
@@ -1783,8 +1829,29 @@ export function derivedFeatures(config: NodeConfig): string[] {
     ...(config.l4Apps.length ? [L4_FEATURE] : []),
     ...edgeFeatures(config),
     ...domainFeatures(config),
+    ...certificateFeatures(config),
   ];
 }
+
+/** Features of sites with several certificates or client certificates (proto v0.26.0). */
+export function certificateFeatures(config: NodeConfig): string[] {
+  return [
+    ...(config.sites.some((site) => site.additionalCertificateIds.length)
+      ? [MULTI_CERTIFICATE_FEATURE]
+      : []),
+    ...(config.sites.some((site) => site.clientCertificate) ||
+    configExpressions(config).some(needsClientCertificate)
+      ? [CLIENT_CERT_FEATURE]
+      : []),
+  ];
+}
+
+/**
+ * Whether the configuration carries the cluster's session ticket keys: a
+ * served site has a certificate. Others keep their content hash.
+ */
+export const usesSessionTickets = (sites: readonly Site[]) =>
+  sites.some((site) => site.certificateId !== "");
 
 /**
  * Recomputes what a compiled configuration derives from its sites after
@@ -1801,11 +1868,13 @@ export function refreshDerived(config: NodeConfig, edge?: EdgeModel): NodeConfig
   out.clientAddress = compileClientAddress(current.clientIp);
   out.unknownHosts = compileUnknownHosts(current.unknownHosts, out.sites);
   const used = new Set(
-    [...out.sites.map((s) => s.certificateId), ...out.l4Apps.map((a) => a.certificateId)].filter(
-      Boolean,
-    ),
+    [
+      ...out.sites.flatMap((s) => [s.certificateId, ...s.additionalCertificateIds]),
+      ...out.l4Apps.map((a) => a.certificateId),
+    ].filter(Boolean),
   );
   out.certificates = out.certificates.filter((c) => used.has(c.id));
+  if (!usesSessionTickets(out.sites)) out.sessionTicketKeys = [];
   out.requiredFeatures = derivedFeatures(out);
   const canonical = canonicalize(out);
   canonical.contentHash = contentHash(canonical);
@@ -1859,6 +1928,9 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
     challengeKeys: usesChallengeKeys(input)
       ? (input.challengeKeys ?? []).map((key) => create(ChallengeKeyRefSchema, key))
       : [],
+    sessionTicketKeys: usesSessionTickets(sites)
+      ? (input.sessionTicketKeys ?? []).map((key) => create(SessionTicketKeyRefSchema, key))
+      : [],
     platformErrorPages: compilePlatformErrorPages(input.platformErrorPages),
     offlineHosts: compileOfflineHosts(input.offlineHosts),
     l4Apps: compileL4Apps(input.l4Apps),
@@ -1911,6 +1983,7 @@ export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfig
     l4Apps: target.l4Apps,
     clientAddress: target.clientAddress,
     unknownHosts: target.unknownHosts,
+    sessionTicketKeys: target.sessionTicketKeys,
     upsertedSites: target.sites.filter((s) => baseSites.get(s.id) !== siteBytes(s)),
     removedSiteIds: base.sites
       .filter((s) => !targetIds.has(s.id))
@@ -1948,6 +2021,7 @@ export function applyNodeConfigDiff(base: NodeConfig, diff: NodeConfigDiff): Nod
       l4Apps: diff.l4Apps,
       clientAddress: diff.clientAddress,
       unknownHosts: diff.unknownHosts,
+      sessionTicketKeys: diff.sessionTicketKeys,
       sites,
     }),
   );

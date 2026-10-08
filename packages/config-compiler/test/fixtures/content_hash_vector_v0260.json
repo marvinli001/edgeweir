@@ -1,0 +1,173 @@
+{
+  "description": "proto v0.26.0: site a with an ECDSA, an RSA and a third certificate (additional_certificate_ids in the site's order), required client certificates with a CA and header forwarding and a rule reading tls.client.verified; site b with one certificate; session ticket keys next, previous, current; sites, session ticket keys and required_features in reverse order",
+  "config": {
+    "revision": "12",
+    "contentHash": "46fb29afb57a7aace1bca255f511fb44ed542fc75de9eb9d2b1de4b5a50b21c8",
+    "clusterId": "c1",
+    "listeners": [
+      {
+        "port": 80,
+        "protocol": "LISTENER_PROTOCOL_HTTP"
+      },
+      {
+        "port": 443,
+        "protocol": "LISTENER_PROTOCOL_HTTPS",
+        "http2": true
+      }
+    ],
+    "cacheZones": [
+      {
+        "name": "default",
+        "maxSizeMb": "10240",
+        "keysZoneMb": 64,
+        "inactiveSeconds": 604800
+      }
+    ],
+    "sites": [
+      {
+        "id": "b",
+        "name": "b",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "b.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-b",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-b",
+              "address": "origin.test",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ]
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "certificateId": "cert-site-b",
+        "tls": {
+          "minimumVersion": "1.2",
+          "http2": true,
+          "gzip": true,
+          "gzipMinLength": 256,
+          "gzipTypes": ["text/html"],
+          "cipherProfile": "modern"
+        }
+      },
+      {
+        "id": "a",
+        "name": "a",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "a.test"
+          },
+          {
+            "name": "b-a.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-a",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-a",
+              "address": "origin.test",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ]
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "certificateId": "cert-ec",
+        "tls": {
+          "minimumVersion": "1.2",
+          "http2": true,
+          "gzip": true,
+          "gzipMinLength": 256,
+          "gzipTypes": ["text/html"],
+          "cipherProfile": "modern"
+        },
+        "rules": [
+          {
+            "id": "mtls",
+            "phase": "waf-custom",
+            "expression": {
+              "op": "and",
+              "children": [
+                {
+                  "op": "eq",
+                  "field": "tls.client.verified",
+                  "valueType": "boolean",
+                  "value": "false"
+                },
+                {
+                  "op": "ne",
+                  "field": "http.request.uri.path",
+                  "valueType": "string",
+                  "value": "/public"
+                }
+              ]
+            },
+            "action": {
+              "kind": "block",
+              "statusCode": 403
+            }
+          }
+        ],
+        "additionalCertificateIds": ["cert-rsa", "cert-b"],
+        "clientCertificate": {
+          "mode": "CLIENT_CERTIFICATE_MODE_REQUIRED",
+          "caPem": "-----BEGIN CERTIFICATE-----\nMIIBVzCB/qADAgECAgILETAKBggqhkjOPQQDAjAhMR8wHQYDVQQDExZFZGdld2Vp\nciBHMTEgdmVjdG9yIENBMB4XDTI2MDEwMTAwMDAwMFoXDTQ2MDEwMTAwMDAwMFow\nITEfMB0GA1UEAxMWRWRnZXdlaXIgRzExIHZlY3RvciBDQTBZMBMGByqGSM49AgEG\nCCqGSM49AwEHA0IABNIvw6o2z+Y6TdXLM3Zg8ho9YLAkLylVVArzoR4CaByEcafl\nTd2x94FNKW76LHSCeMl3y1+7y9HFKjkPxtgVHDCjJjAkMBIGA1UdEwEB/wQIMAYB\nAf8CAQAwDgYDVR0PAQH/BAQDAgEGMAoGCCqGSM49BAMCA0gAMEUCIQDNW4suHpPe\n2oyav7yguz8JNo1fe2082+r9KO6vrHQR9AIgV7mT2XiwYAeaNu/AUDm5eDSIpVxq\n/13mwC976EolPR4=\n-----END CERTIFICATE-----\n",
+          "depth": 2,
+          "forwardHeaders": true
+        }
+      }
+    ],
+    "certificates": [
+      {
+        "id": "cert-b",
+        "names": ["b-a.test"],
+        "sha256Fingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      {
+        "id": "cert-ec",
+        "names": ["a.test"],
+        "sha256Fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "id": "cert-rsa",
+        "names": ["a.test"],
+        "sha256Fingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      {
+        "id": "cert-site-b",
+        "names": ["b.test"],
+        "sha256Fingerprint": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      }
+    ],
+    "requiredFeatures": ["tls-v1", "rules-v1", "multi-certificate-v1", "client-cert-v1"],
+    "sessionTicketKeys": [
+      {
+        "id": "k3",
+        "role": "next"
+      },
+      {
+        "id": "k2",
+        "role": "current"
+      },
+      {
+        "id": "k1",
+        "role": "previous"
+      }
+    ]
+  },
+  "canonical_hex": "1a026331220408501001220708bb03100218012a120a0764656661756c7410805018402080f52432a5060a0161120161180122080a06612e74657374220a0a08622d612e746573742a210a03702d6110011a180a036f2d61120b6f726967696e2e746573741850200128013a0764656661756c7440014a07636572742d65636a1f2a03312e32300138014080024a09746578742f68746d6c5a066d6f6465726e727e0a046d746c73120a7761662d637573746f6d1a5e0a03616e6432290a0265711213746c732e636c69656e742e76657269666965641a07626f6f6c65616e220566616c7365322c0a026e651215687474702e726571756573742e7572692e706174681a06737472696e6722072f7075626c6963220a0a05626c6f636b209303da0108636572742d727361da0106636572742d62e20197040802128e042d2d2d2d2d424547494e2043455254494649434154452d2d2d2d2d0a4d494942567a43422f714144416745434167494c4554414b42676771686b6a4f50515144416a41684d523877485159445651514445785a465a47646c643256700a636942484d544567646d566a6447397949454e424d423458445449324d4445774d5441774d4441774d466f58445451324d4445774d5441774d4441774d466f770a495445664d4230474131554541784d575257526e5a58646c61584967527a457849485a6c59335276636942445154425a4d424d4742797147534d3439416745470a43437147534d34394177454841304941424e497677366f327a2b59365464584c4d335a6738686f39594c416b4c796c565641727a6f523443614279456361666c0a546432783934464e4b5737364c485343654d6c3379312b37793948464b6a6b50787467564844436a4a6a416b4d42494741315564457745422f7751494d4159420a416638434151417744675944565230504151482f42415144416745474d416f4743437147534d343942414d43413067414d4555434951444e57347375487050650a326f796176377967757a384a4e6f316665323038322b72394b4f3676724851523941496756376d5432586977594165614e752f4155446d3565445349705678710a2f31336d7743393736456f6c5052343d0a2d2d2d2d2d454e442043455254494649434154452d2d2d2d2d0a18022001326e0a0162120162180122080a06622e746573742a210a03702d6210011a180a036f2d62120b6f726967696e2e746573741850200128013a0764656661756c7440014a0b636572742d736974652d626a1f2a03312e32300138014080024a09746578742f68746d6c5a066d6f6465726e3a540a06636572742d621208622d612e746573741a40636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363633a530a07636572742d65631206612e746573741a40616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161613a540a08636572742d7273611206612e746573741a40626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262623a570a0b636572742d736974652d621206622e746573741a40646464646464646464646464646464646464646464646464646464646464646464646464646464646464646464646464646464646464646464646464646464644a0e636c69656e742d636572742d76314a146d756c74692d63657274696669636174652d76314a0872756c65732d76314a06746c732d7631a2010e0a026b31120870726576696f7573a2010d0a026b32120763757272656e74a2010a0a026b3312046e657874",
+  "content_hash": "46fb29afb57a7aace1bca255f511fb44ed542fc75de9eb9d2b1de4b5a50b21c8"
+}
