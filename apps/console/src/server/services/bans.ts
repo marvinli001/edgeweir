@@ -234,7 +234,10 @@ function banTarget(text: string) {
 /**
  * Creates a manual ban, or bans the same (scope, site, CIDR) again: that sets
  * the new reason and expiry and takes a new sequence number. Every manual
- * ban counts against the platform total.
+ * ban counts against the platform total. An expired entry, and the
+ * automatic entry of a platform address (scan protection, shared or not),
+ * start over as a new manual ban: checked against the limit, audited as
+ * created and sent to the nodes like one.
  */
 export async function createBan(
   db: Database,
@@ -274,7 +277,9 @@ export async function createBan(
         ),
       )
       .for("update");
-    const renewal = !!existing && existing.expiresAt > now;
+    // Only an active manual ban is banned again; an automatic platform one
+    // (scan protection, possibly never shared) becomes a manual ban.
+    const renewal = !!existing && existing.source === "manual" && existing.expiresAt > now;
     if (!renewal) {
       const { maxTotal } = await getBanSettings(tx);
       const [total] = await tx
@@ -296,8 +301,17 @@ export async function createBan(
           reason: input.reason,
           expiresAt,
           seq,
-          // An expired entry that is banned again starts over.
-          ...(renewal ? {} : { createdAt: now, createdBy }),
+          // An expired or automatic entry starts over as a new manual ban.
+          ...(renewal
+            ? {}
+            : {
+                source: "manual",
+                nodeId: null,
+                trigger: null,
+                createdAt: now,
+                createdBy,
+                distributed: true,
+              }),
         })
         .where(eq(schema.ipBan.id, existing.id))
         .returning();
