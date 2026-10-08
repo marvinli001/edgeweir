@@ -11,16 +11,13 @@ import { assertMasterKey, MASTER_KEY_MISMATCH } from "../../src/server/lib/maste
 import { siteSecretBinding } from "../../src/server/lib/site-secrets";
 import { generateCa } from "../../src/server/pki/ca";
 import { caKeyBinding, loadOrCreateNodeCa, NODE_CA_ID } from "../../src/server/pki/store";
+import { ACME_DIRECTORY_KEY, acmeDirectoryBinding } from "../../src/server/services/acme-directory";
 import {
   acmeAccountBinding,
   certificateAccountBinding,
   certificateKeyBinding,
   dnsCredentialBinding,
 } from "../../src/server/services/certificates";
-import {
-  ACME_DIRECTORY_KEY,
-  acmeDirectoryBinding,
-} from "../../src/server/services/acme-directory";
 import { challengeKeyBinding } from "../../src/server/services/challenge-keys";
 import { providerBinding } from "../../src/server/services/dns-providers";
 import {
@@ -35,12 +32,12 @@ import {
   SMTP_KEY,
   smtpBinding,
 } from "../../src/server/services/notification-delivery";
+import { sessionTicketKeyBinding } from "../../src/server/services/session-ticket-keys";
 import {
   ensureSetupToken,
   SETUP_TOKEN_BINDING,
   SETUP_TOKEN_KEY,
 } from "../../src/server/services/setup";
-import { sessionTicketKeyBinding } from "../../src/server/services/session-ticket-keys";
 import { s3SecretBinding } from "../../src/server/services/sites";
 import { createTestDatabase, TEST_MASTER_KEY } from "./helpers";
 
