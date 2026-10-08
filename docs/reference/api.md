@@ -646,7 +646,7 @@ DNS 绑定与记录的新增字段：
 
 ### 域名、未知域名与 CNAME 前缀
 
-网站的 `domains`（`POST /sites`、`PATCH /sites/{id}`）接受四种写法：`a.com`、`*.a.com`（最左一级）、`.a.com`（任意层级子域名，不含 `a.com`）、`~正则`（对小写 Host 整串匹配，最长 256 字符，字母小写，不含 `"`、`\\`、空白）；1–50 个，正则最多 10 个。Unicode 主机名按 UTS #46（非过渡处理）转为 Punycode 保存，响应只返回 Punycode；转换失败返回 400 `DOMAIN_INVALID`（`data.domain`）。同一写法的同一名称只能属于一个网站（`DOMAIN_IN_USE`）。`sites.list` 的 `search` 对 Unicode 搜索词另按 Punycode 匹配。网站响应新增 `cnamePrefix`。
+网站的 `domains`（`POST /sites`、`PATCH /sites/{id}`）接受四种写法：`a.com`、`*.a.com`（最左一级）、`.a.com`（任意层级子域名，不含 `a.com`）、`~正则`（对小写 Host 整串匹配，最长 256 字符，字母小写，不含 `"`、`\\`、空白）；1–50 个，正则最多 10 个。Unicode 主机名按 UTS #46（非过渡处理）转为 Punycode 保存，响应只返回 Punycode；转换失败返回 400 `DOMAIN_INVALID`（`data.domain`）；写法不合法或正则超出共用子集（如前瞻 `(?=…)`）属于输入校验错误（400 `BAD_REQUEST`）。同一写法的同一名称只能属于一个网站（`DOMAIN_IN_USE`）。`sites.list` 的 `search` 对 Unicode 搜索词另按 Punycode 匹配。网站响应新增 `cnamePrefix`。
 
 | 过程 | 端点 | 说明 |
 | --- | --- | --- |

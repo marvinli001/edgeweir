@@ -407,8 +407,20 @@ try {
     origins: [{ address: "whoami" }],
     clusterId,
   });
+  // The contract refuses a pattern outside the shared subset as input.
   assert.equal(badPattern.status, 400, `a lookahead pattern: ${badPattern.text}`);
-  assert.equal(badPattern.json.code, "DOMAIN_INVALID");
+  assert.equal(badPattern.json.code, "BAD_REQUEST");
+  // A Unicode host reaches the console's UTS #46 conversion: a joiner outside
+  // its context (CheckJoiners) is refused there.
+  const badUnicode = await admin.raw("POST", "/sites", {
+    name: "g10-bad",
+    domains: ["a\u200db.g10.test"],
+    origins: [{ address: "whoami" }],
+    clusterId,
+  });
+  assert.equal(badUnicode.status, 400, `a joiner out of context: ${badUnicode.text}`);
+  assert.equal(badUnicode.json.code, "DOMAIN_INVALID");
+  assert.equal(badUnicode.json.data?.domain, "a\u200db.g10.test");
   await synced("G10 sites published");
   const ROUTES = [
     ["a.multi.g10.test", "suffix"],
@@ -431,7 +443,7 @@ try {
       assert.equal(servedBy(answers[i]), want, `${target} ${host}: ${summary(answers[i])}`);
   }
   pass(
-    `b. on both nodes: ${SUFFIX} serves a. and a.b.c. but not its apex; ${EXACT} and ${WILDCARD} win over it (a.b.w. falls back to the suffix); ${PATTERN} matches r42 only as the whole host; ${IDN} stored as ${IDN_ASCII}, served by that Host and found by both forms; a duplicate suffix (409) and a lookahead pattern (DOMAIN_INVALID) refused`,
+    `b. on both nodes: ${SUFFIX} serves a. and a.b.c. but not its apex; ${EXACT} and ${WILDCARD} win over it (a.b.w. falls back to the suffix); ${PATTERN} matches r42 only as the whole host; ${IDN} stored as ${IDN_ASCII}, served by that Host and found by both forms; a duplicate suffix (409), a lookahead pattern (BAD_REQUEST) and a joiner out of context (DOMAIN_INVALID, UTS #46) refused`,
   );
 
   // -------------------------------------------------------------- c. close

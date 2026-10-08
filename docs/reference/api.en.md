@@ -646,7 +646,7 @@ A site's ports change with `ports` (`{ http, https }`) in `PATCH /sites/{id}`, a
 
 ### Domains, unknown hosts and CNAME prefixes
 
-A site's `domains` (`POST /sites`, `PATCH /sites/{id}`) take four forms: `a.com`, `*.a.com` (one label), `.a.com` (subdomains at any depth, not `a.com`), `~pattern` (the whole lowercase Host, at most 256 characters, lowercase letters, no `"`, `\\` or whitespace); 1–50 domains, at most 10 patterns. Unicode host names are stored as Punycode by UTS #46 (nontransitional processing), and responses return Punycode only; a name the conversion refuses returns 400 `DOMAIN_INVALID` (`data.domain`). A name in one form belongs to one site only (`DOMAIN_IN_USE`). The `search` of `sites.list` also matches a Unicode term's Punycode. Site responses add `cnamePrefix`.
+A site's `domains` (`POST /sites`, `PATCH /sites/{id}`) take four forms: `a.com`, `*.a.com` (one label), `.a.com` (subdomains at any depth, not `a.com`), `~pattern` (the whole lowercase Host, at most 256 characters, lowercase letters, no `"`, `\\` or whitespace); 1–50 domains, at most 10 patterns. Unicode host names are stored as Punycode by UTS #46 (nontransitional processing), and responses return Punycode only; a name the conversion refuses returns 400 `DOMAIN_INVALID` (`data.domain`); a malformed domain or a pattern outside the shared subset (such as a lookahead `(?=…)`) is an input validation error (400 `BAD_REQUEST`). A name in one form belongs to one site only (`DOMAIN_IN_USE`). The `search` of `sites.list` also matches a Unicode term's Punycode. Site responses add `cnamePrefix`.
 
 | Procedure | Endpoint | Description |
 | --- | --- | --- |
