@@ -854,7 +854,10 @@ const page = <T>(items: T[], pageInput: unknown, sizeInput: unknown, fallback: n
 export const accessFixtures: Fixtures = {
   certificates: {
     list: () => certificates,
-    settings: () => ({ acmeDirectory: null }),
+    settings: () => ({ acmeDirectory: null, acmeDirectoryEab: false, defaultCa: "letsencrypt" }),
+  },
+  acmeAccounts: {
+    list: () => [],
   },
   dnsCredentials: {
     list: () => dnsCredentials,

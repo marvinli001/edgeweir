@@ -1775,6 +1775,7 @@ function httpsOf(site: Site): TlsSettings {
   const certificateId = siteCertificateId(site.id);
   const base: TlsSettings = {
     certificateId,
+    additionalCertificateIds: [],
     forceHttps: false,
     hstsMaxAge: 0,
     hstsIncludeSubdomains: false,
@@ -1800,6 +1801,7 @@ function httpsOf(site: Site): TlsSettings {
     redirectStatus: 301,
     redirectPort: 443,
     redirectExcludedDomains: [],
+    clientCertificate: { mode: "off", caPem: "", depth: 2, forwardHeaders: false },
   };
   if (!certificateId) return base;
   if (isShop(site))

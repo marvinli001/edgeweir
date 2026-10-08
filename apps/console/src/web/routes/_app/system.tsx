@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
+import { AcmeDirectoryCard } from "@/components/acme-directory";
 import { CopyButton } from "@/components/copy-button";
 import { NodeChannelCard } from "@/components/node-channel";
 import { UrlScopeBadge } from "@/components/node-enrollment";
@@ -176,6 +177,7 @@ function GeneralSettings() {
       <NodeChannelCard />
       <OriginAllowListCard />
       <ReleaseSourceCard />
+      <AcmeDirectoryCard />
       <UsageSettingsCard />
       <PlatformErrorPagesCard />
     </>

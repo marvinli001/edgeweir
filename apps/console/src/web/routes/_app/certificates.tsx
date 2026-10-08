@@ -1,9 +1,12 @@
+import type { AcmeCa, AcmeKeyType, CertificateSettings } from "@edgeweir/contract";
 import { Add01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
+import { AcmeAccountsCard } from "@/components/acme-accounts";
+import { AcmeCaFields, type Eab, eabMissing, eabParams } from "@/components/acme-ca";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DnsCredentialDialog, type EditableCredential } from "@/components/dns/credential-dialog";
 import { providerLabel } from "@/components/dns/labels";
@@ -17,7 +20,7 @@ import { Dot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldError, FieldLabel, FieldTitle } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
@@ -203,13 +206,14 @@ function CertificatesPage() {
           </QueryView>
         </CardContent>
       </Card>
+      <AcmeAccountsCard />
       {dialog.value === "upload" ? (
         <UploadDialog key={dialog.key} open={dialog.open} onOpenChange={dialog.onOpenChange} />
       ) : dialog.value === "request" ? (
         <RequestDialog
           key={dialog.key}
           credentials={credentials.data ?? []}
-          acmeDirectory={settings.data?.acmeDirectory ?? null}
+          settings={settings.data}
           open={dialog.open}
           onOpenChange={dialog.onOpenChange}
         />
@@ -339,17 +343,19 @@ function UploadDialog({ open, onOpenChange }: DialogProps) {
 }
 function RequestDialog({
   credentials,
-  acmeDirectory,
+  settings,
   open,
   onOpenChange,
 }: {
   credentials: { id: string; name: string }[];
-  /** EDGEWEIR_ACME_DIRECTORY: every certificate uses it, whatever CA is chosen. */
-  acmeDirectory: string | null;
+  /** The custom ACME directory, and the CA a request without one uses. */
+  settings: CertificateSettings | undefined;
 } & DialogProps) {
   const client = useQueryClient();
   const request = useMutation(orpc.certificates.request.mutationOptions());
-  const [ca, setCa] = React.useState("letsencrypt");
+  const [ca, setCa] = React.useState<AcmeCa>(settings?.defaultCa ?? "letsencrypt");
+  const [eab, setEab] = React.useState<Eab>({ kid: "", key: "" });
+  const [keyType, setKeyType] = React.useState<AcmeKeyType>("ec256");
   const [challenge, setChallenge] = React.useState("http01");
   const [credential, setCredential] = React.useState(credentials[0]?.id ?? "");
   const [skipDnsCheck, setSkipDnsCheck] = React.useState(false);
@@ -365,17 +371,16 @@ function RequestDialog({
       submitLabel={m.cert_request()}
       submitTestId="cert-request-submit"
       onSubmit={async (data) => {
-        if (wildcard) return;
+        if (wildcard || eabMissing(ca, eab)) return;
         await request.mutateAsync({
           name: String(data.get("certName")),
           names: parsedNames,
           email: String(data.get("email")),
-          ca: acmeDirectory ? "letsencrypt" : (ca as "letsencrypt" | "zerossl"),
+          ca,
+          keyType,
           challenge: challenge as "http01" | "dns01",
           ...(challenge === "dns01" ? { dnsCredentialId: credential } : { skipDnsCheck }),
-          ...(ca === "zerossl" && !acmeDirectory
-            ? { eabKid: String(data.get("eabKid")), eabHmacKey: String(data.get("eabHmacKey")) }
-            : {}),
+          ...eabParams(ca, eab),
         });
         await client.invalidateQueries();
         onOpenChange(false);
@@ -400,25 +405,24 @@ function RequestDialog({
         ) : null}
       </Field>
       <TextField id="email" label={m.cert_email()} type="email" />
-      {acmeDirectory ? (
-        <Field>
-          <FieldTitle>{m.cert_acme_directory()}</FieldTitle>
-          <p className="font-mono text-sm break-all" data-testid="cert-acme-directory">
-            {acmeDirectory}
-          </p>
-        </Field>
-      ) : (
-        <FormSelect
-          id="certCa"
-          label={m.cert_ca()}
-          value={ca}
-          onChange={setCa}
-          options={[
-            { value: "letsencrypt", label: m.cert_ca_letsencrypt() },
-            { value: "zerossl", label: m.cert_ca_zerossl() },
-          ]}
-        />
-      )}
+      <AcmeCaFields
+        idPrefix="cert"
+        ca={ca}
+        onCaChange={setCa}
+        eab={eab}
+        onEabChange={setEab}
+        settings={settings}
+      />
+      <FormSelect
+        id="certKeyType"
+        label={m.cert_key_type()}
+        value={keyType}
+        onChange={(value) => setKeyType(value as AcmeKeyType)}
+        options={[
+          { value: "ec256", label: m.cert_key_ec256() },
+          { value: "rsa2048", label: m.cert_key_rsa2048() },
+        ]}
+      />
       <FormSelect
         id="certChallenge"
         label={m.cert_challenge()}
@@ -446,12 +450,6 @@ function RequestDialog({
           className="self-start"
         />
       )}
-      {ca === "zerossl" && !acmeDirectory ? (
-        <>
-          <TextField id="eabKid" label={m.cert_eab_kid()} />
-          <TextField id="eabHmacKey" label={m.cert_eab_key()} type="password" />
-        </>
-      ) : null}
     </FormDialog>
   );
 }

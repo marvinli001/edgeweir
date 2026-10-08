@@ -192,6 +192,8 @@ const core: Fixtures = {
         clientIp: on,
         siteContent: on,
         domainsV2: on,
+        multiCertificate: on,
+        clientCertificate: on,
       };
     },
   },

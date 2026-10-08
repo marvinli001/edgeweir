@@ -1,19 +1,25 @@
 import {
+  type AcmeCa,
   type CertificateDto,
+  CLIENT_CERTIFICATE_DEPTH_RANGE,
+  CLIENT_CERTIFICATE_MODES,
+  type ClientCertificateMode,
   certificateUnloadable,
   displaySiteDomain,
   HTTPS_REDIRECT_STATUSES,
   type HttpsCheck,
+  MAX_SITE_CERTIFICATES,
   type Site,
   siteDomainKind,
   type TlsSettings,
   tlsSettings,
 } from "@edgeweir/contract";
-import { Alert02Icon, ArrowDown01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, Alert02Icon, ArrowDown01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
+import { AcmeCaFields, caLabel, type Eab, eabMissing, eabParams } from "@/components/acme-ca";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DnsCredentialDialog } from "@/components/dns/credential-dialog";
 import { FormSelect, OptionSelect } from "@/components/form-select";
@@ -26,15 +32,22 @@ import { combineQueries, ErrorState, QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Field, FieldError, FieldLabel, FieldTitle } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { Textarea } from "@/components/ui/textarea";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { certificateErrorText } from "@/lib/certificate-errors";
 import { httpsBlockerText } from "@/lib/https-blockers";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
+
+const CLIENT_MODE_LABEL = {
+  off: m.https_client_cert_off,
+  optional: m.https_client_cert_optional,
+  required: m.https_client_cert_required,
+};
 
 /** How often the tab looks at a certificate being issued. */
 const POLL = 3000;
@@ -194,33 +207,32 @@ function RequestedCertificate({ cert }: { cert: CertificateDto }) {
   );
 }
 
-const caLabel = (ca: string) => (ca === "zerossl" ? m.cert_ca_zerossl() : m.cert_ca_letsencrypt());
-
 /**
  * One click: a certificate for the site's domains, bound to it once issued.
  * The button waits for https.check; its blockers are listed instead.
  */
 function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
   const client = useQueryClient();
-  const [ca, setCa] = React.useState<"letsencrypt" | "zerossl">("letsencrypt");
+  const settings = useQuery(orpc.certificates.settings.queryOptions());
+  const [chosenCa, setCa] = React.useState<AcmeCa | null>(null);
+  // Until one is chosen: the default (custom while EDGEWEIR_ACME_DIRECTORY sets it).
+  const ca = chosenCa ?? settings.data?.defaultCa ?? "letsencrypt";
   // The DNS-01 check asks the provider: not again on every focus.
   const check = useQuery({
     ...orpc.https.check.queryOptions({ input: { id: site.id, ca } }),
     staleTime: 30_000,
+    enabled: settings.isSuccess,
   });
-  const settings = useQuery(orpc.certificates.settings.queryOptions());
   const request = useMutation(orpc.certificates.request.mutationOptions());
   const update = useMutation(orpc.https.update.mutationOptions());
   const [email, setEmail] = React.useState<string | null>(null);
-  const [eab, setEab] = React.useState({ kid: "", key: "" });
+  const [eab, setEab] = React.useState<Eab>({ kid: "", key: "" });
   const [existing, setExisting] = React.useState<string | null>(null);
   const addCredential = useDialogState();
   const [customize, setCustomize] = React.useState(false);
   const [skipDns, setSkipDns] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [pending, setPending] = React.useState(false);
-  const acmeDirectory = settings.data?.acmeDirectory ?? null;
-  const zerossl = ca === "zerossl" && !acmeDirectory;
   const data = check.data;
   const blockers = data?.blockers ?? [];
   const http01 = data?.request.challenge === "http01";
@@ -244,10 +256,10 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
         name: data.request.name.slice(0, 100),
         names: data.request.names,
         email: (email ?? data.request.email).trim(),
-        ca: acmeDirectory ? "letsencrypt" : ca,
+        ca,
         challenge: data.request.challenge,
         ...(data.request.dnsCredentialId ? { dnsCredentialId: data.request.dnsCredentialId } : {}),
-        ...(zerossl ? { eabKid: eab.kid, eabHmacKey: eab.key } : {}),
+        ...eabParams(ca, eab),
         ...(data.request.challenge === "http01" && skipDns ? { skipDnsCheck: true } : {}),
         autoRenew: true,
         bindSiteId: site.id,
@@ -296,23 +308,14 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
             </ul>
           ) : null}
           <CollapsibleContent className="grid gap-4 sm:grid-cols-2">
-            {acmeDirectory ? (
-              <Field>
-                <FieldTitle>{m.cert_acme_directory()}</FieldTitle>
-                <p className="font-mono text-sm break-all">{acmeDirectory}</p>
-              </Field>
-            ) : (
-              <FormSelect
-                id="httpsCa"
-                label={m.cert_ca()}
-                value={ca}
-                onChange={(value) => setCa(value === "zerossl" ? "zerossl" : "letsencrypt")}
-                options={[
-                  { value: "letsencrypt", label: m.cert_ca_letsencrypt() },
-                  { value: "zerossl", label: m.cert_ca_zerossl() },
-                ]}
-              />
-            )}
+            <AcmeCaFields
+              idPrefix="https"
+              ca={ca}
+              onCaChange={setCa}
+              eab={eab}
+              onEabChange={setEab}
+              settings={settings.data}
+            />
             <Field>
               <FieldLabel htmlFor="httpsEmail">{m.cert_email()}</FieldLabel>
               <Input
@@ -323,29 +326,6 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
                 onChange={(event) => setEmail(event.target.value)}
               />
             </Field>
-            {zerossl ? (
-              <>
-                <Field>
-                  <FieldLabel htmlFor="httpsEabKid">{m.cert_eab_kid()}</FieldLabel>
-                  <Input
-                    id="httpsEabKid"
-                    autoComplete="off"
-                    value={eab.kid}
-                    onChange={(event) => setEab({ ...eab, kid: event.target.value })}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="httpsEabKey">{m.cert_eab_key()}</FieldLabel>
-                  <Input
-                    id="httpsEabKey"
-                    type="password"
-                    autoComplete="off"
-                    value={eab.key}
-                    onChange={(event) => setEab({ ...eab, key: event.target.value })}
-                  />
-                </Field>
-              </>
-            ) : null}
             {http01 ? (
               <SwitchField
                 id="httpsSkipDns"
@@ -420,7 +400,9 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
             </Button>
           ) : null}
           <Button
-            disabled={!data || blocking.length > 0 || pending || check.isFetching}
+            disabled={
+              !data || blocking.length > 0 || pending || check.isFetching || eabMissing(ca, eab)
+            }
             data-testid="https-enable-submit"
             onClick={() => data && enable(data)}
           >
@@ -445,6 +427,9 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
 /** What to check when the settings fail the contract, by the first issue's field. */
 function settingsError(field: PropertyKey | undefined): string {
   if (field === "hstsMaxAge") return m.common_check_field({ field: m.cert_hsts_age() });
+  if (field === "clientCertificate") return m.common_check_field({ field: m.https_client_ca() });
+  if (field === "additionalCertificateIds")
+    return m.common_check_field({ field: m.https_certificates() });
   return m.error_bad_request();
 }
 
@@ -472,6 +457,27 @@ function HttpsEditor({
   const client = useQueryClient();
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
   const redirectAvailable = features.data?.edgePorts.available ?? true;
+  const multiAvailable = features.data?.multiCertificate.available ?? true;
+  const clientAvailable = features.data?.clientCertificate.available ?? true;
+  const clientCert = settings.clientCertificate;
+  const setClient = (change: Partial<TlsSettings["clientCertificate"]>) =>
+    setSettings((old) => ({ ...old, clientCertificate: { ...old.clientCertificate, ...change } }));
+  // Certificates the site may get: usable ones, and those it has already.
+  const offered = certificates.filter(
+    (c) =>
+      c.id === initial.certificateId ||
+      initial.additionalCertificateIds.includes(c.id) ||
+      usable(c),
+  );
+  const chosen = [settings.certificateId, ...settings.additionalCertificateIds];
+  const optionsFor = (current: string | null) =>
+    offered
+      .filter((c) => c.id === current || !chosen.includes(c.id))
+      .map((c) => ({ value: c.id, label: c.name }));
+  const canAdd =
+    !!settings.certificateId &&
+    settings.additionalCertificateIds.length < MAX_SITE_CERTIFICATES - 1 &&
+    optionsFor(null).length > 0;
   // The redirect leaves host names alone: exact and `*.` domains, not suffixes or patterns.
   const hostDomains = site.domains.filter((domain) => {
     const kind = siteDomainKind(domain);
@@ -520,18 +526,89 @@ function HttpsEditor({
             value={settings.certificateId ?? "none"}
             options={[
               { value: "none", label: m.cert_none() },
-              ...certificates
-                .filter((c) => c.id === initial.certificateId || usable(c))
-                .map((c) => ({ value: c.id, label: c.name })),
+              ...optionsFor(settings.certificateId),
             ]}
             onChange={(value) =>
               setSettings((old) =>
                 value === "none"
-                  ? { ...old, certificateId: null, forceHttps: false, hstsMaxAge: 0 }
+                  ? {
+                      ...old,
+                      certificateId: null,
+                      additionalCertificateIds: [],
+                      forceHttps: false,
+                      hstsMaxAge: 0,
+                      clientCertificate: { ...old.clientCertificate, mode: "off" },
+                    }
                   : { ...old, certificateId: value },
               )
             }
           />
+          {settings.additionalCertificateIds.map((id, index) => (
+            <div key={id} className="flex items-end gap-2 animate-enter">
+              <div className="min-w-0 flex-1">
+                <FormSelect
+                  id={`siteCertificate${index + 2}`}
+                  label={m.https_certificate_n({ n: index + 2 })}
+                  value={id}
+                  options={optionsFor(id)}
+                  onChange={(value) =>
+                    setSettings((old) => ({
+                      ...old,
+                      additionalCertificateIds: old.additionalCertificateIds.map((other, i) =>
+                        i === index ? value : other,
+                      ),
+                    }))
+                  }
+                />
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={m.https_certificate_remove()}
+                data-testid={`https-certificate-remove-${index + 2}`}
+                onClick={() =>
+                  setSettings((old) => ({
+                    ...old,
+                    additionalCertificateIds: old.additionalCertificateIds.filter(
+                      (_, i) => i !== index,
+                    ),
+                  }))
+                }
+              >
+                <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+              </Button>
+            </div>
+          ))}
+          {canAdd ? (
+            <div className="flex flex-col gap-2 self-end sm:col-span-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="self-start"
+                disabled={!multiAvailable}
+                data-testid="https-certificate-add"
+                onClick={() =>
+                  setSettings((old) => ({
+                    ...old,
+                    additionalCertificateIds: [
+                      ...old.additionalCertificateIds,
+                      optionsFor(null)[0]?.value ?? "",
+                    ],
+                  }))
+                }
+              >
+                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+                {m.https_certificate_add()}
+              </Button>
+              {multiAvailable ? null : (
+                <SafetyNote data-testid="https-certificates-unavailable">
+                  {m.feature_unavailable_nodes()}
+                </SafetyNote>
+              )}
+            </div>
+          ) : null}
           <FormSelect
             id="minimumTls"
             label={m.cert_min_tls()}
@@ -644,9 +721,68 @@ function HttpsEditor({
               id={key}
               label={label}
               checked={settings[key]}
+              // HTTP/3 and client certificates exclude each other.
+              disabled={key === "http3" && clientCert.mode !== "off" && !settings.http3}
               onCheckedChange={(value) => setSettings({ ...settings, [key]: value })}
             />
           ))}
+          <div
+            className="grid gap-4 border-t pt-5 sm:col-span-2 sm:grid-cols-2"
+            data-testid="https-client-cert"
+          >
+            <FormSelect
+              id="clientCertMode"
+              label={m.https_client_cert()}
+              value={clientCert.mode}
+              disabled={
+                clientCert.mode === "off" &&
+                (!settings.certificateId || !clientAvailable || settings.http3)
+              }
+              options={CLIENT_CERTIFICATE_MODES.map((mode) => ({
+                value: mode,
+                label: CLIENT_MODE_LABEL[mode](),
+              }))}
+              onChange={(mode) => setClient({ mode: mode as ClientCertificateMode })}
+            />
+            {clientCert.mode === "off" ? null : (
+              <>
+                <NumberField
+                  id="clientCertDepth"
+                  label={m.https_client_depth()}
+                  value={String(clientCert.depth)}
+                  min={CLIENT_CERTIFICATE_DEPTH_RANGE.min}
+                  max={CLIENT_CERTIFICATE_DEPTH_RANGE.max}
+                  onChange={(value) => setClient({ depth: Number(value) })}
+                />
+                <Field className="sm:col-span-2">
+                  <FieldLabel htmlFor="clientCertCa">{m.https_client_ca()}</FieldLabel>
+                  <Textarea
+                    id="clientCertCa"
+                    rows={6}
+                    spellCheck={false}
+                    autoComplete="off"
+                    className="font-mono text-xs"
+                    value={clientCert.caPem}
+                    onChange={(event) => setClient({ caPem: event.target.value })}
+                    data-testid="https-client-ca"
+                  />
+                </Field>
+                <SwitchField
+                  id="clientCertForward"
+                  label={m.https_client_forward()}
+                  checked={clientCert.forwardHeaders}
+                  onCheckedChange={(forwardHeaders) => setClient({ forwardHeaders })}
+                />
+              </>
+            )}
+            {settings.http3 && clientCert.mode === "off" && settings.certificateId ? (
+              <SafetyNote className="sm:col-span-2">{m.https_client_cert_http3()}</SafetyNote>
+            ) : clientCert.mode === "off" && settings.certificateId && !clientAvailable ? (
+              <SafetyNote className="sm:col-span-2" data-testid="https-client-cert-unavailable">
+                {m.feature_unavailable_nodes()}
+              </SafetyNote>
+            ) : null}
+          </div>
         </CardContent>
         <SaveBar
           dirty={JSON.stringify(httpsOf(settings)) !== JSON.stringify(httpsOf(initial))}
