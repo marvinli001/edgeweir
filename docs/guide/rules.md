@@ -253,6 +253,9 @@ substring(sha256(http.request.uri.path), 0, 8) eq "a1b2c3d4"
 | `ip.geoip.asnum` | 整数 | ASN；无记录时为 0 |
 | `ip.geoip.as_name` | 字符串 | AS 名称：来自与 ASN 相同的数据库，IPinfo Lite 的 `as_name` 或 ASN MMDB 的 `autonomous_system_organization`；无记录时为空字符串 |
 | `tls.ja4` | 字符串 | 连接的 JA4 TLS 客户端指纹；明文 HTTP 为空字符串，见 [JA4](challenges.md#ja4) |
+| `tls.client.verified` | 布尔 | 访客出示了网站 CA 签发并通过验证的客户端证书时为 `true`，见[客户端证书](https.md#客户端证书)；网站没有开启客户端证书或明文 HTTP 时为 `false` |
+| `tls.client.cert_sha256` | 字符串 | 通过验证的客户端证书 DER 的 SHA-256（小写十六进制）；否则为空字符串 |
+| `tls.client.subject` | 字符串 | 通过验证的客户端证书的主体（RFC 2253，如 `CN=svc,O=Example`）；否则为空字符串 |
 
 ### 运算符与字面量
 
@@ -410,7 +413,7 @@ API：`GET`、`POST /api/v1/ip-lists`，`PUT`、`DELETE /api/v1/ip-lists/{id}`�
 
 | 项目 | 行为 |
 | --- | --- |
-| 能力 | 规则和放行/拦截名单需要节点能力 `rules-v1`；`ip.geoip.country`、`ip.geoip.subdivision` 需要 `geoip-city-v1`；`ip.geoip.asnum` 需要 `geoip-asn-v1`；挑战动作需要 `challenge-v1`；`tls.ja4`（字段或限速键）需要 `ja4-v1`；使用 `ip.geoip.subdivision` 时控制台另外检查 `geoip-subdivision-v1`（不写入配置） |
+| 能力 | 规则和放行/拦截名单需要节点能力 `rules-v1`；`ip.geoip.country`、`ip.geoip.subdivision` 需要 `geoip-city-v1`；`ip.geoip.asnum` 需要 `geoip-asn-v1`；挑战动作需要 `challenge-v1`；`tls.ja4`（字段或限速键）需要 `ja4-v1`；`tls.client.*` 需要 `client-cert-v1`；使用 `ip.geoip.subdivision` 时控制台另外检查 `geoip-subdivision-v1`（不写入配置） |
 | 规则扩展 | 以下任何一项需要 `rules-v2`：函数与 `http.request.full_uri`、`http.request.uri.path.extension`、`http.response.content_type.media_type`；表达式目标、查询参数编辑，以及重定向打开或改写路径关闭「保留查询参数」；源站覆盖；压缩阶段；只在配置阶段可用的覆盖项与 Gzip「开启」；不是[构建器](origins-and-cache.md#请求条件)形状的缓存规则条件与「浏览器 TTL（秒）」；批量重定向；默认组以外的源站组 |
 | 表达式变量与报头值 | 以下任何一项需要 `rules-v3`：`http.request.cookies[…]`、`http.request.uri.args[…]`、`http.referer`、`http.user_agent`、`http.request.version`、`http.request.scheme`、`http.request.id`、`http.request.timestamp.sec`、`edge.server_port`、`ip.geoip.as_name`（另需 `geoip-asn-v1`）、`http.response.cache_status`；`url_encode`、`base64_encode`、`base64_decode`、`md5`、`sha1`、`sha256`、`substring`、`to_string`；`wildcard`、`strict wildcard`；请求头、响应头与查询参数的表达式值；响应头「追加」；重定向 303；[错误页](error-pages.md)的 `{{time}}`、`{{path}}` |
 | 直连对端 | 读取 `ip.peer` 的配置需要 `client-ip-v1` |

@@ -270,7 +270,7 @@ Page: **System settings** (`/system`), with the tabs:
 
 | Tab | Content |
 | --- | --- |
-| **General** | The sections below: system information, node channel, origin allow list, node release source, usage, platform error pages |
+| **General** | The sections below: system information, node channel, certificate authorities, origin allow list, node release source, usage, platform error pages |
 | **Monitoring** | `/system?tab=probes`: the regional probe list (page action **Add probe**), the **Last round** card (a latency matrix of probers × nodes) and the **Probe settings** card, see [Regional probes](scheduling.en.md#regional-probes); `/regions?tab=probes` redirects there |
 | **Service accounts** | `/system?tab=service-accounts`, see [Service accounts](#service-accounts) |
 
@@ -299,6 +299,18 @@ Read-only (card **System**).
 | Clearing | Saving an empty value falls back to the environment variable or the default |
 
 A localhost, loopback, or private address is marked "This machine only" or "Private address": nodes on other networks cannot enroll. Below the URL is the result of the [connection check](../deploy/nodes.en.md#node-channel-connection-check): **Reachable**, **The console cannot connect to this URL**, **Certificate mismatch: a proxy or CDN may be in front**, or **The outbound policy does not allow this address** (the saved URL is a private, loopback, or other special-purpose address that `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` does not allow, so the console does not connect). Changes are audited as `system.node_channel_update`. For the certificate names, see [Node channel URL and certificate](../deploy/networking.en.md#node-channel-url-and-certificate).
+
+### Certificate authorities
+
+The custom ACME directory: besides Let's Encrypt, ZeroSSL and Google Trust Services, **Certificate authority** of a certificate request offers **Custom ACME directory**, for example a private PKI or a staging CA.
+
+| Field | Values | Notes |
+| --- | --- | --- |
+| **Custom ACME directory** | `https://` URL, at most 2048 characters, no credentials or fragment; empty | The ACME directory URL. Before saving, the console reads it (10 seconds, at most 1 MiB, no redirects) and refuses an answer that is not an ACME directory (no `newNonce`, `newAccount` or `newOrder`): "The URL does not answer with an ACME directory". Private addresses are allowed; `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` does not apply. Saving an empty value falls back to the environment variable or to none |
+| **EAB key ID** / **EAB HMAC key** | Both or neither | The external account binding the directory requires; a request with empty EAB fields uses these. The HMAC key is envelope-encrypted and write-only: once saved the placeholder reads "Saved", and leaving it empty with the same key ID keeps it |
+| **CA certificates (PEM)** | 1–10 certificates, at most 64 KiB; empty | Issuers of the directory's HTTPS certificate, trusted in addition to the system trust store; empty: the system trust store only |
+
+The URL and the CA certificates each show their source badge (**Saved**, **Environment** or **Default**): a value saved here wins over `EDGEWEIR_ACME_DIRECTORY` and `EDGEWEIR_ACME_CA_FILE`. The directory's `meta.caaIdentities` show as **CAA issuers** and requests check CAA against them; without them CAA is not checked. Changes are audited as `system.acme_directory_update`. Requests and ACME accounts: [HTTPS and certificates](https.en.md#certificate-authorities).
 
 ### Origin allow list
 
@@ -343,6 +355,9 @@ A value saved in the console wins over the environment variable, which wins over
 | --- | --- | --- | --- |
 | Node channel | **System settings → Node channel** | `EDGEWEIR_NODE_API_URL` | `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>` |
 | Node release source | **System settings → Node release source** | `EDGEWEIR_NODE_RELEASE_BASE_URL` | `https://github.com/marvinli001/edgeweir-node/releases/download` |
+| Custom ACME directory | **System settings → Certificate authorities** | `EDGEWEIR_ACME_DIRECTORY` | None |
+| CA certificates of the ACME directory | **System settings → Certificate authorities → CA certificates (PEM)** | `EDGEWEIR_ACME_CA_FILE` (path to a PEM file) | System trust store |
+| EAB of the ACME directory | **System settings → Certificate authorities** | None | None |
 | SMTP CA certificates | **Alerts → SMTP → CA certificates (PEM)** | `EDGEWEIR_SMTP_CA_FILE` (path to a PEM file) | System trust store |
 | SMTP server and account | **Alerts → SMTP** | None | Not configured |
 | Origin allow list | **System settings → Origin allow list** | None | Empty |
@@ -350,7 +365,7 @@ A value saved in the console wins over the environment variable, which wins over
 | Bans | **Protection settings → Bans** | None | Limit 10000, automatic bans shared |
 | Protection | **Protection settings → Protection** | None | Global Under Attack off, challenge type JavaScript, events kept 30 days |
 
-The badges of **Node channel** and **Node release source** show where the value in effect comes from: **Saved**, **Environment**, or **Default**. Release source addresses saved in system settings are bounded by `EDGEWEIR_OUTBOUND_ALLOW_CIDRS`; values in environment variables are set by the operator and skip that check. For every environment variable, see [Environment variables](../reference/environment.en.md).
+The badges of **Node channel**, **Node release source** and **Certificate authorities** show where the value in effect comes from: **Saved**, **Environment**, or **Default**. Release source addresses saved in system settings are bounded by `EDGEWEIR_OUTBOUND_ALLOW_CIDRS`; values in environment variables are set by the operator and skip that check. For every environment variable, see [Environment variables](../reference/environment.en.md).
 
 ## Protection settings
 

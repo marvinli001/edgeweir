@@ -253,6 +253,9 @@ substring(sha256(http.request.uri.path), 0, 8) eq "a1b2c3d4"
 | `ip.geoip.asnum` | Integer | ASN; 0 without a record |
 | `ip.geoip.as_name` | String | AS name from the database that gave the ASN: IPinfo Lite's `as_name` or the ASN MMDB's `autonomous_system_organization`; empty string without a record |
 | `tls.ja4` | String | JA4 TLS client fingerprint of the connection; empty string over plain HTTP, see [JA4](challenges.en.md#ja4) |
+| `tls.client.verified` | Boolean | `true` when the visitor presented a client certificate the site's CA issued and it passed verification, see [Client certificates](https.en.md#client-certificates); `false` on sites without client certificates and over plain HTTP |
+| `tls.client.cert_sha256` | String | SHA-256 of the verified client certificate's DER (lowercase hex); empty string otherwise |
+| `tls.client.subject` | String | Subject of the verified client certificate (RFC 2253, such as `CN=svc,O=Example`); empty string otherwise |
 
 ### Operators and literals
 
@@ -410,7 +413,7 @@ API: `GET` and `POST /api/v1/ip-lists`, `PUT` and `DELETE /api/v1/ip-lists/{id}`
 
 | Item | Behavior |
 | --- | --- |
-| Capabilities | Rules and block/allow lists need the node capability `rules-v1`; `ip.geoip.country` and `ip.geoip.subdivision` need `geoip-city-v1`; `ip.geoip.asnum` needs `geoip-asn-v1`; the challenge action needs `challenge-v1`; `tls.ja4` (field or rate limit key) needs `ja4-v1`; when `ip.geoip.subdivision` is used, the console also checks `geoip-subdivision-v1` (not written into the configuration) |
+| Capabilities | Rules and block/allow lists need the node capability `rules-v1`; `ip.geoip.country` and `ip.geoip.subdivision` need `geoip-city-v1`; `ip.geoip.asnum` needs `geoip-asn-v1`; the challenge action needs `challenge-v1`; `tls.ja4` (field or rate limit key) needs `ja4-v1`; `tls.client.*` needs `client-cert-v1`; when `ip.geoip.subdivision` is used, the console also checks `geoip-subdivision-v1` (not written into the configuration) |
 | Rule engine extensions | Any of these needs `rules-v2`: functions and `http.request.full_uri`, `http.request.uri.path.extension`, `http.response.content_type.media_type`; expression targets, query parameter edits, and a redirect with **Keep query string** on or a rewrite with it off; origin overrides; the compression phase; the overrides available only in the configuration phase and **Gzip** On; cache rule conditions not in the [builder](origins-and-cache.en.md#request-conditions)'s shape and **Browser TTL (s)**; bulk redirects; origin groups other than the default group |
 | Expression fields and header values | Any of these needs `rules-v3`: `http.request.cookies[…]`, `http.request.uri.args[…]`, `http.referer`, `http.user_agent`, `http.request.version`, `http.request.scheme`, `http.request.id`, `http.request.timestamp.sec`, `edge.server_port`, `ip.geoip.as_name` (also `geoip-asn-v1`), `http.response.cache_status`; `url_encode`, `base64_encode`, `base64_decode`, `md5`, `sha1`, `sha256`, `substring`, `to_string`; `wildcard` and `strict wildcard`; expression values of request headers, response headers, and query parameters; response header **Append**; redirect status 303; `{{time}}` and `{{path}}` in [error pages](error-pages.en.md) |
 | Direct peer | Configurations that read `ip.peer` need `client-ip-v1` |

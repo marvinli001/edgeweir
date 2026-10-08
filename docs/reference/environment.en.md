@@ -72,8 +72,8 @@ The ClickHouse variables apply only with `EDGEWEIR_ANALYTICS=clickhouse`. The `a
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `EDGEWEIR_ACME_DIRECTORY` | Empty | ACME directory URL for every certificate; overrides the CA chosen per certificate. When set, **Request certificate** shows this directory instead of the CA and EAB fields, the console logs a warning at startup, and each certificate records the directory it was issued from, which its ARI renewal windows are read from. Private PKI and tests only; ACME accounts do not move between directories. Empty: Let's Encrypt or ZeroSSL, chosen per certificate ([HTTPS and certificates](../guide/https.en.md)). |
-| `EDGEWEIR_ACME_CA_FILE` | Empty | Path of a PEM file the certificate helper uses to verify the ACME directory's TLS certificate. Used with `EDGEWEIR_ACME_DIRECTORY`. |
+| `EDGEWEIR_ACME_DIRECTORY` | Empty | Fallback URL of the custom ACME directory: the URL saved in **System settings → Certificate authorities** wins. While only this variable gives a URL, requests without a CA use the custom directory (deployments that only used it renew as before). Each certificate records the directory it was issued from, which its ARI renewal windows are read from; ACME accounts do not move between directories. See [system settings](../guide/system.en.md#certificate-authorities) and [HTTPS and certificates](../guide/https.en.md#certificate-authorities). |
+| `EDGEWEIR_ACME_CA_FILE` | Empty | Path of a PEM file: fallback issuers of the custom ACME directory's TLS certificate (trusted in addition to the system trust store); CA certificates saved in system settings win. |
 | `EDGEWEIR_SMTP_CA_FILE` | Empty | **Fallback** for **Alerts → SMTP** → "CA certificates (PEM)". CA for SMTP TLS (path of a PEM file), used only when the SMTP settings hold no CA. Empty: the system trust store. |
 | `EDGEWEIR_DNS_TEST_ENDPOINT` | Empty | Address of the local DNS simulator for integration tests; enables the `test` DNS provider. Never set it for real providers. |
 

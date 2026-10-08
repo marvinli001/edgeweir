@@ -24,7 +24,7 @@
 └── 子进程 stdin/stdout ──▶ edgeweir-certd ──▶ ACME CA、DNS 服务商 API
 ```
 
-控制台与节点之间唯一的契约是 `proto/` 中的 `edgeweir.node.v1`（当前 tag `proto/v0.25.0`）。开源核心与商业产品的边界见 [LICENSING.md](LICENSING.md)。
+控制台与节点之间唯一的契约是 `proto/` 中的 `edgeweir.node.v1`（当前 tag `proto/v0.26.0`）。开源核心与商业产品的边界见 [LICENSING.md](LICENSING.md)。
 
 ## 仓库布局
 
@@ -306,7 +306,8 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 | `ReportLogs` | 采样访问日志；按批次序号去重 |
 | `GetOriginCredentials` | 本集群网站引用的 S3 源站密钥与 PURGE 密钥（`site_secret`，`access_key_id` 为空） |
 | `SubmitPurge` | 节点转交的 PURGE 请求（`site-content-v1`）：控制台确认节点所在集群服务该网站、网站开启了 PURGE 且 URL 属于网站，以节点身份创建 URL 刷新任务（来源 `purge_method`），每个网站每分钟至多 120 个 |
-| `GetCertificates` | 本集群网站引用的证书链与私钥 |
+| `GetCertificates` | 本集群网站引用的证书链与私钥（含网站的其他证书） |
+| `GetSessionTicketKeys` | 本集群的 TLS 会话票据密钥（80 字节），只能取到本集群的 |
 | `PullTasks`、`ReportTaskResult` | 刷新预热与升级任务 |
 | `GetBans`、`ReportBans` | 按序号增量拉取本集群的封禁；上报节点的自动封禁 |
 | `EnrollProbe`（`ProbeService`） | 用一次性探针 token（`ewp_`）和 CSR 换取探针证书；与 `Enroll` 相同的请求大小限制，token 只在注册成功时消耗 |
@@ -321,9 +322,9 @@ revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节�
 `edgeweir-certd` 负责 ACME 签发、续期、吊销与 DNS 记录操作。
 
 1. pg-boss 队列 `certificates.sweep` 每分钟选出待签发与到达 `renew_at` 的证书（新申请与手动续期在前，其余按 `renew_at`，同时处理 3 张）。失败后按剩余有效期退避（十分之一，10 分钟到 12 小时；首次签发 1 小时）；因名称未解析到节点（`http01_dns_not_pointing`）失败的 HTTP-01 证书，每 5 分钟重新解析一次，解析正确后立即重试。已签发的证书按 CA 的 Retry-After（1 到 24 小时，默认 6 小时）查询 ARI 续期窗口，窗口早于 `renew_at` 时提前续期。
-2. worker 启动 `EDGEWEIR_CERTD_BIN`（镜像内为 `/usr/local/bin/edgeweir-certd`），环境变量只保留 `PATH` 与 `EDGEWEIR_DNS_TEST_ENDPOINT`。
+2. worker 启动 `EDGEWEIR_CERTD_BIN`（镜像内为 `/usr/local/bin/edgeweir-certd`），环境变量只保留 `PATH` 与 `EDGEWEIR_DNS_TEST_ENDPOINT`。目录 URL、它的 CA 证书（`rootCa`，与系统信任库一起使用）、EAB 与密钥类型（`ec256` / `rsa2048`）都在请求参数中：内置 CA（Let's Encrypt、ZeroSSL、Google Trust Services）的目录写在 `ACME_CA_DIRECTORIES`，`custom` 取系统设置 `acme_directory`（URL、EAB key id、信封加密的 HMAC 密钥，用途 `system_setting.acme_directory`；CA 证书；保存时读取目录得到的 `meta.caaIdentities`），各字段没有保存时取 `EDGEWEIR_ACME_DIRECTORY` / `EDGEWEIR_ACME_CA_FILE`。
 3. 向 stdin 写一行 JSON 请求（命令与参数，含 ACME 账户与 DNS 凭据）。certd 在 stdout 上逐行输出 JSON 事件（`account`、`http01.present`、`http01.cleanup`、`dns01.prepare`、`dns01.cleanup`），控制台处理后在 stdin 回复确认；最后一行为结果。
-4. `http01.present` 一次带上订单的全部 HTTP-01 挑战：写入 `acme_challenge`，每个相关集群只发布一个 revision，等节点应用后 certd 再请 CA 验证（同时 4 个）；`http01.cleanup` 只删行，不发布（挑战到期或本次操作结束后，节点与下一个 revision 都不再带它）。挑战 revision 不计入 200 个保留数，一小时后删除。`dns01.prepare` 在 certd 写入 TXT 记录之前把清理责任登记到 `dns_challenge_lease`；完成、失败或重启后只清理本次操作写入的值。`account` 事件的 ACME 账户信封加密后写入 `acme_account`，同一目录、EAB key id 与邮箱的证书共用一个账户。
+4. `http01.present` 一次带上订单的全部 HTTP-01 挑战：写入 `acme_challenge`，每个相关集群只发布一个 revision，等节点应用后 certd 再请 CA 验证（同时 4 个）；`http01.cleanup` 只删行，不发布（挑战到期或本次操作结束后，节点与下一个 revision 都不再带它）。挑战 revision 不计入 200 个保留数，一小时后删除。`dns01.prepare` 在 certd 写入 TXT 记录之前把清理责任登记到 `dns_challenge_lease`；完成、失败或重启后只清理本次操作写入的值。`account` 事件的 ACME 账户信封加密后写入 `acme_account`，同一目录、EAB key id 与邮箱的证书共用一个账户；证书记下所用账户（`certificate.acme_account_id`），账户列表据此计数，仍被证书使用的账户不能删除（`ACME_ACCOUNT_IN_USE`）。worker 启动时 `maintenance.link-acme-accounts` 为此前签发的证书补上账户，并把环境变量时代签发（最近目录不是所选内置 CA 的目录）的证书记为 `custom`。
 5. 结果写回 `certificate`：证书链（只存证书）、指纹、到期时间、下次续期时间与信封加密的私钥（PKCS #8）；带 `bindSiteId` 的申请（网站 HTTPS 页签的一键启用，之前由 `https.check` 一次列出节点、解析、DNS 凭据与 CAA 的全部阻碍）在同一事务内绑定到网站（不改强制 HTTPS 等其他设置）；引用该证书的集群发布新 revision。
 
 网站证书尚未覆盖的域名（证书正为新域名重签）在集群全部活动节点具备 `tls-pending-domains-v1` 时带 `Domain.tls_pending` 下发（proto v0.19.0），节点只以 HTTP 服务它们；否则这些域名在新证书签发前不下发。
@@ -339,6 +340,13 @@ revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节�
 | DNS 服务商 | 服务商目录 `helpers/certd/catalog.json`，见 [服务商与凭据](docs/guide/dns-and-alerts.md#服务商与凭据) |
 
 DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动）：`dns.reconcile` 每分钟按健康节点与网站域名计算每个自动模式集群的记录（每个集群一份地址记录，`all.<域名>` 按解析线路各一组，每个网站一条 CNAME；节点地址与备用节点组见[区域探针与智能调度](#区域探针与智能调度)），生成该集群的 `dns_revision`，写入绑定所选服务商账号（`platform_dns_provider`）的区域；各集群各自发布与对账，一个服务商不可用不影响其他集群；同一集群同一时间只有一个进程在写（`dns_lease`）。节点在新版本发布后 2 分钟内应用期间保留在记录中。写入外部记录之前先在 `dns_managed_name` 登记名称，部分写入可修复；新记录先于被替换的记录写入。手动模式只生成需要手动创建的记录与 zone 文件，不写 DNS。DNS 调度的服务商账号与 DNS-01 凭据使用同一份服务商目录。网站的域名保存后即参与路由，一个域名只属于一个网站。行为说明见 [HTTPS 与证书](docs/guide/https.md) 与 [DNS 调度与告警](docs/guide/dns-and-alerts.md)。
+
+## 网站 TLS：多证书、客户端证书与会话复用
+
+1. 网站的第一张证书在 `site.certificate_id`，其余最多 3 张在 `site_certificate`（位置 1–3，外键 `restrict`）；保存时网站每个域名至少被一张覆盖。IR 的 `Site.additional_certificate_ids` 按网站的顺序下发，有其他证书的配置要求 `multi-certificate-v1`。节点在 `ssl_client_hello_by_lua` 按 ClientHello 每次只设置一张证书（精确名称优先于泛域名，客户端支持时 ECDSA 优先于 RSA），OCSP 装订随所选证书。
+2. 客户端证书在 `site.tls_settings`（模式、CA PEM、深度、是否传递），IR 为 `Site.client_certificate`，要求 `client-cert-v1`；规则读取 `tls.client.*` 时同样要求。节点用 `ngx.ssl.verify_client` 请求证书，握手不中止，结果在请求阶段判定（「必须」时 403 `client-cert-required`）。访客自带的 `X-Client-*` 请求头在所有网站删除。与 HTTP/3 互斥（`CLIENT_CERTIFICATE_HTTP3`）。
+3. 会话复用：节点的 HTTPS 监听使用 `ssl_session_cache shared:edgeweir_tls:16m`、`ssl_session_timeout 1h`，`ssl_early_data off` 显式写出；每个网站有自己的会话上下文（`SSL_set_session_id_context`），会话只在同一网站复用。票据密钥按集群（`session_ticket_key`，`next`、`current`、`previous`），有网站使用证书的集群在发布时创建；IR 只含 id 与角色（`NodeConfig.session_ticket_keys`，按 id 排序，不要求能力，旧节点忽略），节点以 `GetSessionTicketKeys` 取得 80 字节密钥，密钥在第一次被取用时生成，信封加密保存（用途 `session_ticket_key.secret`）。
+4. `maintenance.rotate-session-ticket-keys` 每小时检查一次，最新的密钥满 12 小时就轮换（与挑战密钥相同的方式）；最新 revision 带票据密钥的集群发布新 revision（原因 `session_ticket_keys_rotated`），审计 `cluster.session_ticket_keys_rotate`。节点按 current、previous、next 的顺序写 `ssl_session_ticket_key`，文件名随密钥变化，轮换时 reload。
 
 ## 区域探针与智能调度
 
@@ -391,12 +399,14 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `certificates.sweep` | 每分钟 | 证书签发与续期 |
 | `maintenance.recompile` | 启动时；`system_setting` 的 `config_recompiled` 与当前标记一致时跳过 | 升级改变了已存数据的编译结果时，为每个集群重新发布一次 revision |
 | `maintenance.check-certificates` | 启动时 | 检查尚未标记的已上传证书，把节点无法加载的（EC 密钥使用显式曲线参数）标记为错误 |
+| `maintenance.link-acme-accounts` | 启动时 | 为证书补上签发所用的 ACME 账户；环境变量时代签发的证书记为自定义 ACME 目录 |
 | `maintenance.prune-revisions` | 每小时第 17 分 | 删除超出保留数量的 revision 与 DNS 版本 |
 | `maintenance.prune-idempotency-keys` | 每小时第 29 分 | 删除过期（超过 24 小时）的幂等键 |
 | `maintenance.expire-cache-tasks` | 每小时第 43 分 | 把超期未完成的刷新预热交付记为失败；删除 90 天前的任务（节点仍需补发的刷新保留） |
 | `maintenance.expire-enrollment-tokens` | 每 30 分钟 | 删除过期或使用超过 7 天的注册 token |
 | `maintenance.prune-bans` | 每 10 分钟 | 删除到期超过一小时的封禁 |
 | `maintenance.rotate-challenge-keys` | 每小时第 11 分 | 轮换满一天的挑战密钥 |
+| `maintenance.rotate-session-ticket-keys` | 每小时第 13 分 | 轮换满 12 小时的 TLS 会话票据密钥 |
 | `maintenance.prune-security-events` | 每小时第 37 分 | 删除超过保留天数的安全事件 |
 | 调度求值（进程内定时器，不是 pg-boss 队列） | 每 10 秒；同一时间一个进程（租约），上一次未完成时跳过 | 探针判定的地址可达性与智能调度规则，见 [区域探针与智能调度](#区域探针与智能调度) |
 
@@ -462,6 +472,8 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `site_waf` | 网站的 OWASP CRS：模式（关闭 / 仅检测 / 拦截）、paranoia level、异常分数阈值、排除的规则 id、请求体检查上限；没有行即关闭 |
 | `site_error_page` | 网站错误页：每个状态码（403、429、502、503、504）一个模板 |
 | `challenge_key` | 集群的挑战密钥（`next`、`current`、`previous`），密钥信封加密 |
+| `site_certificate` | 网站的其他证书（位置 1–3，第一张在 `site.certificate_id`）；证书被引用时不能删除 |
+| `session_ticket_key` | 集群的 TLS 会话票据密钥（`next`、`current`、`previous`），密钥信封加密，第一次被取用时生成 |
 | `config_revision` | 每个集群的 revision：序号、内容哈希、二进制 IR、原因码 |
 | `node_config_status` | 节点应用回执与心跳，含回执验证标记 |
 | `cluster_rollout` | 集群的配置金丝雀：策略（开关、观察窗口、自动推进、5xx 阈值）与当前发布（稳定版本、候选版本、窗口、结果） |
@@ -470,7 +482,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 
 | 表 | 内容 |
 | --- | --- |
-| `certificate` | 证书链、指纹、到期与续期状态；私钥与申请时的 EAB 密钥信封加密 |
+| `certificate` | 证书链、指纹、到期与续期状态、签发所用的 ACME 账户；私钥与申请时的 EAB 密钥信封加密 |
 | `acme_account` | ACME 账户（按目录、EAB key id、邮箱共用），账户密钥信封加密 |
 | `acme_challenge` | 短期公开的 HTTP-01 响应 |
 | `dns_credential` | ACME DNS-01 使用的 DNS 服务商凭据与区域，信封加密 |
@@ -573,6 +585,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0054_edge_ports` | `cluster.extra_http_ports`、`cluster.extra_https_ports`（80 / 443 之外的监听端口）、`cluster.client_ip`（访客 IP 来源，jsonb，null 为直连）；`site.http_ports`、`site.https_ports`（网站绑定的端口，默认 80 / 443）；`l4_app.port_end`（端口段）、`l4_app.origin_port_mode`（`fixed` / `same`）、`l4_app.certificate_id`、`l4_app.tls_minimum_version`（TLS 卸载） |
 | `0055_site_content` | `site_secret`；`cluster.cache_max_size_gb`、`cluster.cache_inactive_days`（缓存区）；`node.cache_max_size_gb`（节点容量覆盖）、`node.cache_usage`（上报的用量）；`site.hide_x_cache`、`site.purge_method`、`site.maintenance`、`site.maintenance_updated_at`、`site.charset`、`site.request_body_limit`；`origin_pool.tries`、`origin_pool.status_retry`；`cache_rule.cache_set_cookie`；`site_error_page.redirect_url`、`site_error_page.response_status` |
 | `0056_domain_forms_cname_prefix` | `site_domain.kind` 取代 `wildcard`，唯一索引改为 `(name, kind)`；`site.cname_prefix`、`l4_app.cname_prefix`（已有行为其 ID，CNAME 不变）；`cname_retired`；`cluster.unknown_hosts`、`cluster.default_site_id` |
+| `0057_g11_certificates_sessions` | `site_certificate`、`session_ticket_key`；`certificate.acme_account_id` |
 
 ## 构建产物
 

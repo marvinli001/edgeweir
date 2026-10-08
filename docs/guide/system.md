@@ -270,7 +270,7 @@ API：`GET /api/v1/overview` 的 `attention`，见 [集群与概览](../referenc
 
 | 页签 | 内容 |
 | --- | --- |
-| **通用** | 以下各节：系统信息、节点通道、源站地址允许清单、节点发布源、用量、平台错误页 |
+| **通用** | 以下各节：系统信息、节点通道、证书颁发机构、源站地址允许清单、节点发布源、用量、平台错误页 |
 | **监控** | `/system?tab=probes`：区域探针列表（页面操作 **添加探针**）、**最近一轮** 卡片（探测方 × 节点的延迟矩阵）与 **探测设置** 卡片，见 [区域探针](scheduling.md#区域探针)；`/regions?tab=probes` 跳转到这里 |
 | **服务账号** | `/system?tab=service-accounts`，见 [服务账号](#服务账号) |
 
@@ -299,6 +299,18 @@ API：`GET /api/v1/overview` 的 `attention`，见 [集群与概览](../referenc
 | 清空 | 保存空值后回退到环境变量或默认值 |
 
 地址为 localhost、回环或内网地址时标「仅本机可达」或「内网地址」：其他网络的节点无法注册。地址下方显示 [连接检查](../deploy/nodes.md#节点通道连接检查) 的结果：**连接正常**、**控制台无法连接该地址**、**证书不符，前面可能有代理或 CDN**，或 **出站策略不允许连接该地址**（保存的地址是内网、回环等特殊用途地址，`EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 未放行，控制台不连接）。修改写审计 `system.node_channel_update`。证书名称见 [节点通道地址与证书](../deploy/networking.md#节点通道地址与证书)。
+
+### 证书颁发机构
+
+自定义 ACME 目录：申请证书时「证书颁发机构」除 Let's Encrypt、ZeroSSL、Google Trust Services 外可选的「自定义 ACME 目录」，例如私有 PKI 或测试 CA。
+
+| 字段 | 取值 | 说明 |
+| --- | --- | --- |
+| **自定义 ACME 目录** | `https://` URL，最长 2048 字符，不含账号或片段；空 | ACME 目录地址。保存前控制台读取该地址（10 秒、最大 1 MiB、不跟随跳转），返回的不是 ACME 目录（缺少 `newNonce`、`newAccount`、`newOrder`）时拒绝（「该地址没有返回 ACME 目录」）。允许内网地址，不受 `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 限制。保存空值后回退到环境变量或不配置 |
+| **EAB 密钥 ID** / **EAB HMAC 密钥** | 两者同时填写或都留空 | 该目录要求的外部账户绑定；申请证书时留空即使用这里的值。HMAC 密钥信封加密保存，只写不读：已保存时占位文字为「已保存」，不改密钥 ID 时留空保留原密钥 |
+| **CA 证书（PEM）** | 1–10 张证书，最大 64 KiB；空 | 目录 HTTPS 证书的签发者，与系统信任库一起使用；空时只用系统信任库 |
+
+URL 与 CA 证书分别显示来源标签（**已保存**、**环境变量** 或 **默认**）：界面保存的值优先，其次是 `EDGEWEIR_ACME_DIRECTORY` 与 `EDGEWEIR_ACME_CA_FILE`。目录的 `meta.caaIdentities` 显示为「CAA 签发者」，申请时据此检查 CAA；目录没有提供时不检查。修改写审计 `system.acme_directory_update`。申请与 ACME 账户见 [HTTPS 与证书](https.md#证书颁发机构)。
 
 ### 源站地址允许清单
 
@@ -343,6 +355,9 @@ API：`GET /api/v1/overview` 的 `attention`，见 [集群与概览](../referenc
 | --- | --- | --- | --- |
 | 节点通道 | **系统设置 → 节点通道** | `EDGEWEIR_NODE_API_URL` | `https://<EDGEWEIR_PUBLIC_URL 的主机名>:<NODE_API_PORT>` |
 | 节点发布源 | **系统设置 → 节点发布源** | `EDGEWEIR_NODE_RELEASE_BASE_URL` | `https://github.com/marvinli001/edgeweir-node/releases/download` |
+| 自定义 ACME 目录 | **系统设置 → 证书颁发机构** | `EDGEWEIR_ACME_DIRECTORY` | 不配置 |
+| ACME 目录的 CA 证书 | **系统设置 → 证书颁发机构 → CA 证书（PEM）** | `EDGEWEIR_ACME_CA_FILE`（PEM 文件路径） | 系统信任库 |
+| ACME 目录的 EAB | **系统设置 → 证书颁发机构** | 无 | 无 |
 | SMTP CA 证书 | **告警 → SMTP → CA 证书（PEM）** | `EDGEWEIR_SMTP_CA_FILE`（PEM 文件路径） | 系统信任库 |
 | SMTP 服务器与账户 | **告警 → SMTP** | 无 | 未配置 |
 | 源站地址允许清单 | **系统设置 → 源站地址允许清单** | 无 | 空 |
@@ -350,7 +365,7 @@ API：`GET /api/v1/overview` 的 `attention`，见 [集群与概览](../referenc
 | 封禁 | **防护设置 → 封禁** | 无 | 上限 10000，共享自动封禁 |
 | 防护 | **防护设置 → 防护** | 无 | 全局 Under Attack 关闭，挑战类型 JS 计算，事件保留 30 天 |
 
-**节点通道** 与 **节点发布源** 的标签显示当前生效值的来源：**已保存**、**环境变量** 或 **默认**。系统设置中保存的发布源地址受 `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 约束；环境变量中的值由运维设置，不经该检查。全部环境变量见 [环境变量](../reference/environment.md)。
+**节点通道**、**节点发布源** 与 **证书颁发机构** 的标签显示当前生效值的来源：**已保存**、**环境变量** 或 **默认**。系统设置中保存的发布源地址受 `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 约束；环境变量中的值由运维设置，不经该检查。全部环境变量见 [环境变量](../reference/environment.md)。
 
 ## 防护设置
 

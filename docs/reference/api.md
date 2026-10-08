@@ -282,7 +282,7 @@ curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicati
 | `PUT /sites/{id}/https` | `settings` 替换网站的全部 HTTPS 设置，缺省字段取默认值；先 `GET` 再修改。压缩字段：`brotli`、`brotliLevel`（1–11，默认 6）、`brotliMinLength`、`brotliTypes`，`zstd`、`zstdLevel`（1–19，默认 3）、`zstdMinLength`、`zstdTypes`，`gzip`、`gzipMinLength`、`gzipTypes`；最小长度 1–1048576（默认 256），类型为 MIME 类型数组（最多 32 个） |
 | `PATCH /sites/{id}/waf` | 只修改给出的字段：`mode`（`off` / `detect` / `block`）、`paranoiaLevel`（1–4）、`anomalyThreshold`（1–1000）、`excludedRuleIds`（900000–999999，不重复，最多 200 个；初始化与拦截判定规则 901xxx、949xxx、959xxx、980xxx 返回 400 `WAF_RULE_NOT_EXCLUDABLE`，`data.ids` 列出它们）、`requestBodyLimit`（0–134217728 字节） |
 | `GET /sites/{id}/waf/rules` | 查询参数 `range`（`1h` / `6h` / `24h` / `7d` / `30d`，默认 `24h`）、`limit`（1–50，默认 10） |
-| `GET /sites/{id}/https/check` | 查询参数 `ca`（`letsencrypt` / `zerossl`，默认 `letsencrypt`）：检查其 CAA 许可的 CA |
+| `GET /sites/{id}/https/check` | 查询参数 `ca`（`letsencrypt` / `zerossl` / `google` / `custom`，默认为 `GET /certificates/settings` 的 `defaultCa`）：检查其 CAA 许可的 CA |
 
 响应：
 
@@ -663,6 +663,25 @@ DNS 绑定与记录的新增字段：
 | `PUT /sites/{id}/cname-prefix`、`PUT /l4-apps/{id}/cname-prefix` | `prefix`：1–30 位 `[a-z0-9-]`，不以 `-` 开头或结尾；省略时生成新的随机前缀；也可以是对象自己仍在过渡期内的旧前缀。UUID 只接受对象自己升级前的 UUID 前缀，且须仍在解析：当前前缀（不修改）或仍在过渡期内的旧前缀（取回）；其他 UUID（例如以随机前缀新建的对象自己的 ID）返回 400 `CNAME_PREFIX_INVALID`。已被使用、仍在 24 小时过渡期内、为 `all` / `all-<n>` 或任一 DNS 绑定的汇总记录名与线路名时返回 409 `CNAME_PREFIX_CONFLICT`（`data.prefix`）；自动模式下，DNS 服务商区域中该名称（打开「保留站点线路别名」时含 `<线路名称>.<前缀>.<集群域名>`）已有非本集群管理的记录时同样返回（区域读取失败或 15 秒内无响应时不检查）。自动模式下从未写入 DNS 服务商（含切换前的服务商）的旧前缀不进入过渡期 |
 
 `GET /sites/{siteId}/cname` 新增 `retired`（旧名称 `{ name, expiresAt }`）；DNS 版本的 `reason` 新增 `cname`（`reasonParams.name`）与 `cname_expired`。`GET /sites/{id}/https/check` 的 `blockers` 新增 `no_certificate_names`（网站只有正则域名）。自动封禁的 `reason` 新增 `unknown_host_scan`（`scope` 为 `platform`，`siteId` 为 `null`，`trigger.metric` 为 `unknown_host_requests`）。节点能力新增 `domains-v2`、`unknown-host-v1`。
+
+### 多证书、客户端证书、会话复用与 ACME CA
+
+| 过程 | 端点 | 说明 |
+| --- | --- | --- |
+| `acmeAccounts.list` | `GET /acme-accounts` | ACME 账户：`{ id, directoryUrl, ca, email, eabKid, createdAt, certificates }`；`ca` 为内置 CA、`custom`（自定义目录）或 `null`（其他目录），`certificates` 为使用它签发的证书数 |
+| `acmeAccounts.delete` | `DELETE /acme-accounts/{id}` | 删除没有证书使用的账户（只删控制台保存的账户与私钥），审计 `acme_account.delete`；仍被使用时 409 `ACME_ACCOUNT_IN_USE`（`data.certificates`，最多 5 张），不存在时 404 `ACME_ACCOUNT_NOT_FOUND` |
+| `settings.acmeDirectory` | `GET /settings/acme-directory` | `{ url, effectiveUrl, source, eabKid, eabHmacKeySet, caPem, caSource, caaIdentities }`：`url`、`eabKid`、`caPem` 为保存的值（未保存为空字符串），`effectiveUrl` 为生效的目录，`source` 与 `caSource` 为 `setting`、`environment`（`EDGEWEIR_ACME_DIRECTORY` / `EDGEWEIR_ACME_CA_FILE`）或 `default`；HMAC 密钥只返回是否已保存 |
+| `settings.setAcmeDirectory` | `PUT /settings/acme-directory` | 见下表；响应同 `settings.acmeDirectory`，审计 `system.acme_directory_update` |
+
+服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
+
+| 请求 | 字段 |
+| --- | --- |
+| `PUT /settings/acme-directory` | `url`：`https://` URL（不含账号、片段，最长 2048），空字符串清除保存的设置；保存前读取目录（10 秒、最大 1 MiB），不是 ACME 目录时 400 `ACME_DIRECTORY_INVALID`，允许内网地址。`eabKid`、`eabHmacKey`：同时提供或都为空；只提供与已保存相同的 `eabKid` 时保留原密钥，否则 400 `ACME_DIRECTORY_EAB_INCOMPLETE`。`caPem`：1–10 张 PEM 证书（最大 64 KiB），否则 400 `ACME_DIRECTORY_CA_INVALID` |
+| `POST /certificates/request` | 新增 `ca`（`letsencrypt` / `zerossl` / `google` / `custom`；省略时取 `GET /certificates/settings` 的 `defaultCa`）、`keyType`（`ec256` / `rsa2048`，默认 `ec256`）。`zerossl`、`google` 须带 `eabKid` 与 `eabHmacKey`；`custom` 可省略它们而使用系统设置中的 EAB；没有配置自定义目录时 409 `ACME_DIRECTORY_NOT_CONFIGURED` |
+| `PUT /sites/{id}/https` | `settings` 新增 `additionalCertificateIds`（0–3 个证书 ID，不重复、不含 `certificateId`；`certificateId` 为 `null` 时清空）与 `clientCertificate`：`mode`（`off` / `optional` / `required`，默认 `off`）、`caPem`（最多 65536 字节，非 `off` 时须为 1–10 张当前有效的 CA 证书，否则 400 `CLIENT_CA_INVALID`）、`depth`（1–5，默认 2）、`forwardHeaders`（默认 `false`）。网站每个域名须被这些证书之一覆盖（400 `CERTIFICATE_DOMAIN_MISMATCH`）；每张证书须已签发、未过期（409 `CERTIFICATE_UNAVAILABLE`）；客户端证书与 `http3` 同时开启时 400 `CLIENT_CERTIFICATE_HTTP3` |
+
+`GET /certificates/settings` 新增 `acmeDirectory`（生效的自定义目录，没有时为 `null`）、`acmeDirectoryEab`（自定义目录保存了 EAB）与 `defaultCa`（`letsencrypt`，自定义目录只来自环境变量时为 `custom`）；`GET /sites/{id}/https/check` 的 `ca` 增加 `google`、`custom`，省略时为 `defaultCa`。`GET /sites/{id}/features` 新增 `multiCertificate`、`clientCertificate`。证书的 `lastError` 新增 `acme_directory_not_configured`。配置版本的原因新增 `session_ticket_keys_rotated`，审计新增 `cluster.session_ticket_keys_rotate`。节点能力新增 `multi-certificate-v1`、`client-cert-v1`；节点通道新增 `GetSessionTicketKeys`。
 
 ### 端口池与 L4 应用
 

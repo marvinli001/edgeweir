@@ -1,15 +1,17 @@
 # HTTPS 与证书
 
-证书的上传、ACME 申请与续期，以及网站的 HTTPS、TLS、HTTP/2、HTTP/3 和压缩设置。
+证书的上传、ACME 申请与续期，以及网站的 HTTPS、多证书、客户端证书、TLS 会话复用、HTTP/2、HTTP/3 和压缩设置。
 
 ## 概念
 
 | 术语 | 定义 |
 | --- | --- |
 | 证书 | 证书链与私钥。覆盖网站全部域名的证书可被该网站选用。 |
-| ACME 证书 | 控制台向 Let's Encrypt 或 ZeroSSL 申请、自动续期的证书。 |
+| ACME 证书 | 控制台向 Let's Encrypt、ZeroSSL、Google Trust Services 或自定义 ACME 目录申请、自动续期的证书。 |
+| ACME 账户 | 控制台在 CA 注册的账户，按目录、EAB 密钥 ID 与邮箱区分，同一组合的证书共用。 |
 | DNS 凭据 | DNS 服务商凭据，供 DNS-01 验证写入 TXT 记录。与 DNS 调度的服务商凭据相互独立。 |
-| HTTPS 设置 | 网站「HTTPS」页签中的证书选择、跳转、HSTS、TLS、HTTP/2 与 HTTP/3 选项；压缩在「缓存」页签的「压缩」卡片中设置。 |
+| HTTPS 设置 | 网站「HTTPS」页签中的证书（最多 4 张）、跳转、HSTS、TLS、HTTP/2、HTTP/3 与客户端证书选项；压缩在「缓存」页签的「压缩」卡片中设置。 |
+| 客户端证书 | 访客在 TLS 握手中出示、由网站配置的 CA 签发的证书（双向 TLS）。 |
 | 监听端口 | 节点接收 HTTP / HTTPS 流量的端口：80、443 与集群的附加端口；网站在「端口」卡片中选择其中一部分。 |
 
 ## 上传证书
@@ -55,7 +57,7 @@ DNS-01 验证需要先添加凭据。
 
 1. 打开 **证书**，点击「申请证书」。
 2. 填写「名称」「域名」「账户邮箱」。
-3. 选择「证书颁发机构」和「验证方式」。选择 DNS-01 时选择「DNS 凭据」；选择 ZeroSSL 时填写「EAB 密钥 ID」和「EAB HMAC 密钥」。
+3. 选择「证书颁发机构」「密钥类型」和「验证方式」。选择 DNS-01 时选择「DNS 凭据」；选择 ZeroSSL 或 Google Trust Services 时填写「EAB 密钥 ID」和「EAB HMAC 密钥」。
 4. 点击「申请证书」。
 5. 验证：证书卡片状态依次变为「等待签发」「签发中」「可用」，并显示「已开启自动续期」和「下次续期：…」。
 
@@ -66,13 +68,29 @@ DNS-01 验证需要先添加凭据。
 | 名称 | 1–100 字符 | 无 | 证书在控制台中的名称 |
 | 域名 | 1–100 个域名，逗号或空格分隔，不重复；可含 `*.` 泛域名 | 无 | 证书 SAN |
 | 账户邮箱 | 邮箱地址 | 无 | ACME 账户联系邮箱 |
-| 证书颁发机构 | Let's Encrypt / ZeroSSL | Let's Encrypt | ACME 目录；设置了 `EDGEWEIR_ACME_DIRECTORY` 时改为只读的「ACME 目录（EDGEWEIR_ACME_DIRECTORY）」 |
+| 证书颁发机构 | Let's Encrypt / ZeroSSL / Google Trust Services / 自定义 ACME 目录 | Let's Encrypt；自定义目录的地址只来自 `EDGEWEIR_ACME_DIRECTORY` 时为自定义 ACME 目录 | 签发证书的 CA，见[证书颁发机构](#证书颁发机构)；「自定义 ACME 目录」在[系统设置](system.md#证书颁发机构)配置后才出现，选择后表单显示目录地址 |
+| 密钥类型 | ECDSA P-256 / RSA 2048 | ECDSA P-256 | 证书私钥的类型，续期沿用。需要同时服务只支持 RSA 的旧客户端时，另申请一张 RSA 证书加入网站，见[多张证书](#多张证书) |
 | 验证方式 | HTTP-01 / DNS-01 | HTTP-01 | 域名控制验证方式；泛域名必须使用 DNS-01，选择 HTTP-01 时表单在「域名」下提示「泛域名需要 DNS-01 验证」 |
 | DNS 凭据 | 已添加的 DNS 凭据 | 第一个凭据 | DNS-01 写入 TXT 所用的账户；每张证书一个区域 |
 | 跳过解析检查 | 开 / 关 | 关 | 仅 HTTP-01：不检查域名是否解析到节点（申请时与每次签发前），例如节点前面还有负载均衡 |
-| EAB 密钥 ID / EAB HMAC 密钥 | ZeroSSL 提供的 EAB 凭据 | 无 | ZeroSSL 必填，加密保存 |
+| EAB 密钥 ID / EAB HMAC 密钥 | CA 提供的 EAB 凭据 | 无 | ZeroSSL 与 Google Trust Services 必填，两者同时填写或都留空；自定义目录留空时使用系统设置中的 EAB（占位文字「留空则用系统设置中的 EAB」）。加密保存 |
 
-同一证书颁发机构、EAB 密钥 ID 与账户邮箱的证书共用一个 ACME 账户：CA 限制每个 IP 新注册的账户数（Let's Encrypt 为 3 小时 10 个）。
+同一 ACME 目录、EAB 密钥 ID 与账户邮箱的证书共用一个 ACME 账户：CA 限制每个 IP 新注册的账户数（Let's Encrypt 为 3 小时 10 个）。账户列在「ACME 账户」卡片中，见 [ACME 账户](#acme-账户)。
+
+### 证书颁发机构
+
+| CA | ACME 目录 | EAB | CAA 签发者 |
+| --- | --- | --- | --- |
+| Let's Encrypt | `https://acme-v02.api.letsencrypt.org/directory` | 不需要 | `letsencrypt.org` |
+| ZeroSSL | `https://acme.zerossl.com/v2/DV90` | 必填（ZeroSSL 控制台生成） | `sectigo.com`、`trust-provider.com`、`usertrust.com` |
+| Google Trust Services | `https://dv.acme-v02.api.pki.goog/directory` | 必填（`gcloud publicca external-account-keys create` 生成，7 天内使用、只能注册一次） | `pki.goog` |
+| 自定义 ACME 目录 | **系统设置 → 证书颁发机构** 中的地址，或 `EDGEWEIR_ACME_DIRECTORY` | 目录要求时填写；申请时留空则用系统设置中的 EAB | 目录 `meta.caaIdentities` 列出的名称；没有时不检查 CAA |
+
+自定义目录的地址、EAB 与 CA 证书见[系统设置](system.md#证书颁发机构)，界面保存的值优先于 `EDGEWEIR_ACME_DIRECTORY` 与 `EDGEWEIR_ACME_CA_FILE`。没有指定 CA 的 API 申请在自定义目录的地址只来自环境变量时使用自定义目录，其余情况使用 Let's Encrypt：只用环境变量的已有部署升级后行为不变；此前用环境变量签发的证书在后台任务启动时记为「自定义 ACME 目录」，续期仍向该目录申请。删除自定义目录的配置后，选择它的证书续期失败（「已不再配置自定义 ACME 目录」）。
+
+### ACME 账户
+
+**证书** 页面的「ACME 账户」卡片列出控制台注册的账户：邮箱、CA、目录地址、EAB 密钥 ID、创建时间与「使用中的证书」数量。没有证书使用的账户可以删除（确认「删除 ACME 账户 {email}？」）：只删除控制台保存的账户与私钥，不在 CA 注销账户；仍有证书使用时删除按钮不可用，API 返回「ACME 账户仍被证书使用：…」。删除写审计 `acme_account.delete`。之后用同一目录、EAB 与邮箱申请时重新注册账户。
 
 ### 验证方式
 
@@ -114,7 +132,8 @@ DNS-01 验证需要先添加凭据。
 | 证书名称、域名 | 网站名称；网站的精确与泛域名，后缀域名 `.a.com` 申请 `*.a.com`，正则域名不申请（[域名与未知域名](domains.md#后缀与正则域名的限制)） |
 | 验证方式 | HTTP-01；网站有泛域名或后缀域名时用 DNS-01 和第一个区域覆盖全部域名的 DNS 凭据 |
 | 账户邮箱 | 最近一个 ACME 账户或申请的邮箱，否则为控制台账户的邮箱；可在「自定义」中修改 |
-| 证书颁发机构 | Let's Encrypt；可在「自定义」中改为 ZeroSSL（需要 EAB 凭据） |
+| 证书颁发机构 | 与「申请证书」的默认值相同；可在「自定义」中改选（ZeroSSL、Google Trust Services 需要 EAB 凭据） |
+| 密钥类型 | ECDSA P-256 |
 | 签发后 | 证书绑定到网站（「强制 HTTPS」等其他设置不变），发布网站所在集群，写审计 `site.https_update`（操作者 system）；申请后网站新增的域名随即重新签发。网站此时已有其他可用证书时不改动 |
 
 | 检查提示 | 原因 |
@@ -125,14 +144,14 @@ DNS-01 验证需要先添加凭据。
 | 「泛域名需要区域覆盖 … 的 DNS 凭据」 | DNS-01：没有这样的 DNS 凭据，点击「添加 DNS 凭据」 |
 | 「DNS 凭据 …：…」 | DNS-01：凭据的连接测试失败 |
 | 「网站只有正则域名，没有可签发的名称」 | 网站的域名全部是正则域名 |
-| 「… 的 CAA 记录不允许 … 签发」 | 名称或其上级域名的 CAA 记录不允许所选 CA（Let's Encrypt：`letsencrypt.org`；ZeroSSL：`sectigo.com`、`trust-provider.com`、`usertrust.com`），含 `issuewild` 与 `validationmethods`；设置了 `EDGEWEIR_ACME_DIRECTORY` 时不检查 |
+| 「… 的 CAA 记录不允许 … 签发」 | 名称或其上级域名的 CAA 记录不允许所选 CA（签发者见[证书颁发机构](#证书颁发机构)），含 `issuewild` 与 `validationmethods`；自定义目录没有提供 `meta.caaIdentities` 时不检查 |
 
 签发中页签每 3 秒刷新状态。签发失败时显示分类后的原因（与证书卡片相同），可「重试」或「取消」（删除这张证书）。已有覆盖网站全部域名的可用证书时，页签列出「已有证书」，点击「使用」直接选用。网站使用的 ACME 证书重新签发或签发失败时，HTTPS 设置上方显示同样的状态。
 
 ## 配置网站 HTTPS
 
 1. 打开 **网站**，选择网站，进入「HTTPS」页签（网站还没有证书时见[一键启用 HTTPS](#一键启用-https)）。
-2. 在「证书」中选择证书。列表包含全部已签发、未过期且节点能加载的证书；「仅 HTTP」表示不启用 HTTPS。
+2. 在「证书」中选择证书。列表包含全部已签发、未过期且节点能加载的证书；「仅 HTTP」表示不启用 HTTPS。需要更多证书时点击「添加证书」，见[多张证书](#多张证书)。
 3. 设置「最低 TLS 版本」「密码套件」「HSTS 有效期（秒）」和各开关。
 4. 点击「保存」。控制台提示「已保存」，并发布新的配置版本。
 5. 验证：节点应用该版本后：
@@ -171,8 +190,8 @@ curl -sI -H 'Host: www.example.com' http://<节点 IP>:8081/a
 
 | 网站的证书 | 行为 |
 | --- | --- |
-| 已覆盖新域名（含上一级的泛域名 `*.example.com`） | 直接保存 |
-| 控制台申请且开启自动续期的证书 | 保存，证书的域名列表加入新域名并立即重新签发（提示「证书 … 正在为新域名重新签发」，写审计 `certificate.names_extended`）。签发完成前新域名先走 HTTP：不接受 TLS 握手、不跳转 HTTPS、没有 HSTS，其他域名照常使用当前证书；新证书签发后新域名改为 HTTPS。集群有活动节点缺少 `tls-pending-domains-v1` 时，新域名在新证书签发后才生效。HTTP-01 挑战在此期间照常应答。证书正在签发时，本次签发结束后立即再签发一次 |
+| 网站的某一张证书已覆盖新域名（含上一级的泛域名 `*.example.com`） | 直接保存 |
+| 第一张证书是控制台申请且开启自动续期的证书 | 保存，证书的域名列表加入新域名并立即重新签发（提示「证书 … 正在为新域名重新签发」，写审计 `certificate.names_extended`）。签发完成前新域名先走 HTTP：不接受 TLS 握手、不跳转 HTTPS、没有 HSTS，其他域名照常使用当前证书；新证书签发后新域名改为 HTTPS。集群有活动节点缺少 `tls-pending-domains-v1` 时，新域名在新证书签发后才生效。HTTP-01 挑战在此期间照常应答。证书正在签发时，本次签发结束后立即再签发一次 |
 | 上传的证书，或未开启自动续期的证书 | 拒绝，返回「证书域名与网站或 DNS 区域不匹配：…」，列出未覆盖的域名 |
 
 HTTP-01 证书不能扩展到泛域名，DNS-01 证书只能扩展到其 DNS 凭据区域内的名称；一张证书最多 100 个名称。`.` 后缀与正则域名不扩展证书：节点只为证书覆盖的主机名（同名或上一级 `*.`）完成握手，其余主机名中止握手，见[后缀与正则域名的限制](domains.md#后缀与正则域名的限制)。
@@ -181,7 +200,8 @@ HTTP-01 证书不能扩展到泛域名，DNS-01 证书只能扩展到其 DNS 凭
 
 | 字段 | 取值 | 默认值 | 作用 |
 | --- | --- | --- | --- |
-| 证书 | 未过期的证书 / 仅 HTTP | 仅 HTTP | 证书须覆盖网站全部域名；网站的泛域名 `*.example.com` 要求证书含相同的 `*.example.com`。之后为网站添加的域名见[添加域名](#为-https-网站添加域名) |
+| 证书 | 未过期的证书 / 仅 HTTP | 仅 HTTP | 网站的第一张证书。网站的每个域名都须被网站的某一张证书覆盖；网站的泛域名 `*.example.com` 要求证书含相同的 `*.example.com`。之后为网站添加的域名见[添加域名](#为-https-网站添加域名) |
+| 证书 2–4 | 未过期的证书 | 无 | 「添加证书」加入的其他证书，不能重复，见[多张证书](#多张证书) |
 | 最低 TLS 版本 | TLS 1.2 / TLS 1.3 | TLS 1.2 | 握手接受的最低版本 |
 | 密码套件 | 现代 / 兼容 | 现代 | TLS 1.2 密码套件档位，见下表 |
 | HSTS 有效期（秒） | 0–63072000 | 0 | 大于 0 时在 HTTPS 响应中发送 `Strict-Transport-Security`；需要证书 |
@@ -192,14 +212,85 @@ HTTP-01 证书不能扩展到泛域名，DNS-01 证书只能扩展到其 DNS 凭
 | HSTS 预加载 | 开 / 关 | 关 | HSTS 附加 `preload` |
 | OCSP 装订 | 开 / 关 | 关 | 在握手中附带 OCSP 响应 |
 
-选择「仅 HTTP」时，「强制 HTTPS」关闭、HSTS 有效期归零。
+选择「仅 HTTP」时，「强制 HTTPS」关闭、HSTS 有效期归零，其他证书与客户端证书一并去掉。
 
 | 密码套件 | TLS 1.2 套件 |
 | --- | --- |
 | 现代 | `ECDHE-ECDSA-AES128-GCM-SHA256`、`ECDHE-RSA-AES128-GCM-SHA256`、`ECDHE-ECDSA-CHACHA20-POLY1305`、`ECDHE-RSA-CHACHA20-POLY1305` |
 | 兼容 | 现代档位加 `ECDHE-ECDSA-AES256-GCM-SHA384`、`ECDHE-RSA-AES256-GCM-SHA384` |
 
-TLS 会话复用未启用：节点不保存会话缓存（TLS 1.2），也不发会话票据（TLS 1.2 与 TLS 1.3），每个连接都完整握手。
+### 多张证书
+
+一个网站最多 4 张证书：「证书」为第一张，「添加证书」加入其余 3 张（「证书 2」…「证书 4」），每张旁的移除按钮去掉它。
+
+| 项目 | 行为 |
+| --- | --- |
+| 覆盖 | 每个域名至少被其中一张证书覆盖，不要求每张都覆盖全部域名；否则保存被拒绝，列出未覆盖的域名（「证书域名与网站或 DNS 区域不匹配：…」）。例如 `a.example.com` 与 `b.example.com` 各用一张证书 |
+| 握手选证书 | 每次握手只出示一张：在覆盖 SNI 的证书中，精确名称优先于泛域名；同等时客户端支持 ECDSA（签名算法含该证书曲线的方案，且使用 TLS 1.3 或提供档位内的 `ECDHE-ECDSA-*` 套件）则用 ECDSA 证书，否则用 RSA 证书 |
+| ECDSA 与 RSA | 同一组名称各有一张 ECDSA 与 RSA 证书时，现代客户端得到 ECDSA，只支持 RSA 的旧客户端得到 RSA |
+| OCSP 装订 | 按所选证书装订其自己的 OCSP 响应 |
+| 添加域名 | 新域名只扩展第一张证书（控制台申请且自动续期时），见[为 HTTPS 网站添加域名](#为-https-网站添加域名) |
+| 删除证书 | 网站的任一证书都算被使用，删除返回「证书仍被网站使用：…」 |
+| 节点能力 | 多于一张证书需要 `multi-certificate-v1`；集群有活动节点缺少它时「添加证书」不可用，显示「所在集群有节点不支持，暂时无法开启」 |
+
+验证（节点应用该版本后）：
+
+```bash
+openssl s_client -connect <节点 IP>:443 -servername a.example.com </dev/null 2>/dev/null | grep -E 'subject=|Server public key'
+openssl s_client -connect <节点 IP>:443 -servername a.example.com -tls1_2 -cipher ECDHE-RSA-AES128-GCM-SHA256 -sigalgs 'rsa_pss_rsae_sha256:RSA+SHA256' </dev/null 2>/dev/null | grep 'Server public key'
+```
+
+第一条显示覆盖 `a.example.com` 的证书（ECDSA 为 `256 bit`），第二条模拟只支持 RSA 的客户端，显示 `2048 bit`。
+
+### 客户端证书
+
+「HTTPS」页签的「客户端证书」要求访客在握手中出示网站信任的 CA 签发的证书（双向 TLS），例如只给内部系统或合作方访问的网站。
+
+| 字段 | 取值 | 默认值 | 作用 |
+| --- | --- | --- | --- |
+| 客户端证书 | 关闭 / 可选 / 必须 | 关闭 | 可选：握手时请求证书，没有或无法验证时照常处理请求，结果可在规则中使用；必须：没有通过验证的证书时返回 403 |
+| CA 证书（PEM） | 1–10 张当前有效的 CA 证书，最大 64 KiB | 无 | 签发客户端证书的 CA；只保存重新编码的证书 |
+| 校验深度 | 1–5 | 2 | 客户端证书链的最大深度 |
+| 向源站传递证书信息 | 开 / 关 | 关 | 向源站发送下表的请求头 |
+
+| 项目 | 行为 |
+| --- | --- |
+| 「必须」 | 没有证书、证书不是该 CA 签发或已过期时返回 403 错误页，`X-Edgeweir-Error: client-cert-required`，在网站其他逻辑之前。握手本身不中止，浏览器能看到错误页 |
+| 明文 HTTP | 「必须」的网站经 HTTP 到达的请求：开启「强制 HTTPS」时照常跳转，否则返回同样的 403；HTTP-01 挑战照常应答 |
+| 请求头 | `X-Client-Verify`（`SUCCESS`、`FAILED` 或 `NONE`）总是发送；`X-Client-Cert-SHA256`（DER 的 SHA-256，小写十六进制）、`X-Client-Cert-Subject`（RFC 2253 格式的主体）与 `X-Client-Cert-Serial`（大写十六进制序列号）只在证书通过验证时发送 |
+| 访客自带的头 | 所有网站都删除访客请求中的这四个头，源站收到的值只来自节点 |
+| 规则字段 | `tls.client.verified`（布尔）、`tls.client.cert_sha256`、`tls.client.subject`（字符串），未通过验证时为 `false` 与空字符串，见[规则字段](rules.md) |
+| 会话复用 | 复用的会话保留首次握手的验证结果 |
+| HTTP/3 | 与 HTTP/3 不能同时开启（「客户端证书与 HTTP/3 不能同时开启」）：开启客户端证书后 HTTP/3 开关不可用 |
+| 节点能力 | `client-cert-v1`；集群有活动节点缺少它时选择不可用 |
+
+验证：
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' --resolve m.example.com:443:<节点 IP> https://m.example.com/
+curl -s --cert client.pem --key client.key --resolve m.example.com:443:<节点 IP> https://m.example.com/
+```
+
+「必须」时第一条返回 403，第二条返回源站内容；开启传递时源站收到 `X-Client-Verify: SUCCESS`。
+
+### TLS 会话复用
+
+| 项目 | 行为 |
+| --- | --- |
+| 会话缓存 | 每个节点 16 MiB 共享内存（约 6.4 万个会话），会话有效 1 小时；TLS 1.2 的会话 ID 只在同一节点复用 |
+| 会话票据 | TLS 1.2 与 TLS 1.3 的票据用集群共享的密钥加密，同一集群的节点都能复用；密钥每 12 小时轮换（发布原因「轮换 TLS 会话票据密钥」，审计 `cluster.session_ticket_keys_rotate`），轮换前签发的票据在下一次轮换前仍可复用 |
+| 网站隔离 | 会话只在创建它的网站复用：带着 A 网站的会话以 B 网站的 SNI 连接时完整握手 |
+| 0-RTT | 不接受 TLS 1.3 early data：票据不允许 early data，节点配置显式关闭 |
+| 票据密钥 | 控制台生成、信封加密保存，节点经 mTLS 获取后写入状态目录（0600）；旧节点忽略它们，不复用会话 |
+
+验证：
+
+```bash
+openssl s_client -connect <节点 IP>:443 -servername www.example.com -sess_out sess.pem </dev/null
+openssl s_client -connect <节点 IP>:443 -servername www.example.com -sess_in sess.pem </dev/null | grep -E '^(New|Reused)'
+```
+
+第二条输出 `Reused, TLSv1.3`（加 `-tls1_2` 时为 `TLSv1.2`）。
 
 ### 压缩
 
@@ -288,13 +379,14 @@ HTTPS 请求的 SNI 必须与 `Host` 一致，否则返回 421（交给[默认�
 | 校验 | 节点检查指纹、私钥匹配和域名覆盖（等待新证书、先走 HTTP 的域名除外）；有一张证书无法加载时整个配置版本不应用，节点继续使用上一份配置，每次同步重试 |
 | 存储 | 节点状态目录的 `certificates.json`（0600）；节点上的私钥不加密，主机管理员可读取 |
 | 热更新 | 证书内容与最低 TLS 版本变化不重载 nginx |
+| 票据密钥 | 轮换时节点写入新密钥文件并重载 nginx |
 | 重载 | HTTP/2、HTTP/3、压缩、密码套件、是否有证书、域名列表或网站集合变化时，先执行配置测试再重载；失败时恢复原配置 |
 | 应用成功 | 配置持久化成功后才报告已应用；当前与上一份 last-known-good 配置引用的密钥都保留 |
 | 回滚 | 配置回滚使用仍可用的当前证书材料；证书已删除、过期、节点无法加载或不覆盖目标域名时拒绝回滚 |
 
 ## 密钥处理
 
-ACME 账户私钥、证书私钥和 DNS 凭据分别使用绑定记录 ID 的主密钥信封加密。证书助手 `edgeweir-certd` 由后台任务启动，凭据只经 stdin/stdout 传递，不出现在命令行、日志或节点配置中。
+ACME 账户私钥、证书私钥、EAB HMAC 密钥（证书的与系统设置中自定义目录的）、DNS 凭据和 TLS 会话票据密钥分别使用绑定记录 ID 的主密钥信封加密。证书助手 `edgeweir-certd` 由后台任务启动，凭据只经 stdin/stdout 传递，不出现在命令行、日志或节点配置中。
 
 ## 节点能力
 
@@ -307,6 +399,8 @@ ACME 账户私钥、证书私钥和 DNS 凭据分别使用绑定记录 ID 的主
 | `zstd-v1` | 任一网站开启 Zstandard |
 | `tls-pending-domains-v1` | HTTPS 网站新增的域名在证书覆盖前先走 HTTP；缺少时这些域名在新证书签发前不生效，不阻止发布 |
 | `edge-ports-v1` | 集群有附加监听端口、网站绑定了非默认端口，或 HTTPS 跳转用了非默认的状态码、端口或不跳转的域名 |
+| `multi-certificate-v1` | 任一网站有多于一张证书 |
+| `client-cert-v1` | 任一网站开启客户端证书，或规则用到 `tls.client.*` 字段 |
 
 在控制台或用 AccessKey 保存的改动，即使需要集群中部分活动节点缺少的能力也会发布；缺少能力的节点保留 last-known-good 配置，**集群与节点** 中显示「需要升级」，见[节点升级](node-upgrades.md)。服务账号与后台任务发布的配置引入活动节点缺少的能力时被拒绝（`NODE_CAPABILITY_REQUIRED`），原配置不变。
 
@@ -314,7 +408,11 @@ ACME 账户私钥、证书私钥和 DNS 凭据分别使用绑定记录 ID 的主
 
 | 项目 | 说明 |
 | --- | --- |
-| 证书颁发机构 | 界面只提供 Let's Encrypt 和 ZeroSSL。`EDGEWEIR_ACME_DIRECTORY` 和 `EDGEWEIR_ACME_CA_FILE` 可把全部证书改到私有或测试 ACME 目录，此时「申请证书」显示该目录而不是 CA 与 EAB 字段，见[环境变量](../reference/environment.md) |
+| 证书颁发机构 | 内置 Let's Encrypt、ZeroSSL 与 Google Trust Services；其他 CA 通过一个自定义 ACME 目录使用，见[系统设置](system.md#证书颁发机构) |
+| 证书数量 | 每个网站最多 4 张；ACME 密钥类型只有 ECDSA P-256 与 RSA 2048 |
+| 客户端证书 | 不能与 HTTP/3 同时开启；不检查吊销（CRL、OCSP） |
+| 会话复用 | TLS 1.2 会话用同一网站的另一个域名复用时返回 421（`sni-host-mismatch`），浏览器按主机名保存会话，不受影响；L4 应用的 TLS 终结不复用会话 |
+| 0-RTT | 不支持 TLS 1.3 early data |
 | TLS 版本 | 不支持 TLS 1.0 和 1.1 |
 | 密码套件 | 只有「现代」「兼容」两档，不能写入任意 nginx 配置 |
 | 压缩 | Gzip、Brotli、Zstandard |
@@ -344,9 +442,9 @@ ACME 账户私钥、证书私钥和 DNS 凭据分别使用绑定记录 ID 的主
 | 证书状态「签发失败」 | 卡片上的原因，见下面几行 | 修正后点击「立即续期」；否则按[重试间隔](#续期)自动重试 |
 | 「CA 未通过域名验证」「CA 收到的挑战应答不正确」「CA 无法连接到该域名」 | HTTP-01：域名未解析到节点、80 端口不通，或前面还有其他代理；DNS-01：TXT 记录写到了别的区域 | 核对 DNS 解析与 80 端口 |
 | 「CA 无法解析该域名」 | 域名没有解析记录，或权威 DNS 不可用 | 添加解析记录 |
-| 「CAA 记录不允许该 CA 签发」 | 域名的 CAA 记录未列出所选 CA | 在 CAA 中加入 `letsencrypt.org` 或 `sectigo.com`（ZeroSSL），或删除 CAA |
+| 「CAA 记录不允许该 CA 签发」 | 域名的 CAA 记录未列出所选 CA | 在 CAA 中加入该 CA 的签发者（见[证书颁发机构](#证书颁发机构)），或删除 CAA |
 | 「触发 CA 频率限制」 | 同一域名或账户短时间内申请过多 | 等待 CA 的限制窗口结束 |
-| 「CA 要求 EAB 凭据」 | ZeroSSL 等 CA 需要 EAB | 填写 EAB 密钥 ID 与 HMAC 密钥后重新申请 |
+| 「CA 要求 EAB 凭据」 | ZeroSSL、Google Trust Services 或自定义目录需要 EAB | 填写 EAB 密钥 ID 与 HMAC 密钥后重新申请；自定义目录可在系统设置中保存 |
 | 「TXT 记录 3 分钟内未生效」 | DNS 服务商同步慢，或凭据区域不是域名的权威区域 | 稍后重试；核对凭据区域 |
 | 「服务商认证失败」等 DNS 服务商原因 | DNS-01 写入 TXT 时服务商返回错误 | 编辑 DNS 凭据，重新填写凭据后会立即重试 |
 | 「没有能应答 HTTP-01（http01-v1）的在线节点」「节点未在 40 秒内应用挑战」 | 服务该域名的集群没有在线节点、节点缺少 `http01-v1` 或应用配置过慢 | 检查集群节点状态，必要时升级节点 |
@@ -355,7 +453,15 @@ ACME 账户私钥、证书私钥和 DNS 凭据分别使用绑定记录 ID 的主
 | 「签发失败，详见控制台日志」 | 未分类的错误 | 在运行后台任务的控制台进程日志中查找 `certificate operation failed`，按 `reason` 处理 |
 | 证书长期停在「等待签发」 | 没有运行后台任务的控制台进程 | 确认存在 `ROLE=worker` 或 `ROLE=all` 的进程 |
 | 「证书正在处理中」 | 证书处于「签发中」；或网站已有一个等待绑定的申请 | 等待签发结束；在网站的「HTTPS」页签重试或取消该申请 |
-| 「证书仍被网站使用：…」 | 列出的网站选择了该证书 | 先在这些网站的「HTTPS」页签改选证书 |
+| 「证书仍被网站使用：…」 | 列出的网站选择了该证书（第一张或其他证书） | 先在这些网站的「HTTPS」页签改选或移除证书 |
+| 403，`X-Edgeweir-Error: client-cert-required` | 网站的客户端证书为「必须」，请求没有出示该 CA 签发的有效证书，或经明文 HTTP 到达 | 用 `curl --cert … --key …` 出示证书；核对 CA 证书与校验深度；需要 HTTP 时开启「强制 HTTPS」 |
+| 「客户端 CA 须为 1–10 张当前有效的 CA 证书（PEM）」 | CA 证书栏为空、不是 CA 证书（`CA:TRUE`）、已过期或超过 10 张 | 粘贴签发客户端证书的 CA |
+| 「客户端证书与 HTTP/3 不能同时开启」 | 网站开启了 HTTP/3 | 先关闭 HTTP/3 |
+| 「请先在系统设置中配置自定义 ACME 目录」「已不再配置自定义 ACME 目录」 | 选择了自定义 ACME 目录，但系统设置与环境变量中都没有它的地址 | 在 **系统设置 → 证书颁发机构** 填写地址，或改选其他 CA |
+| 「该地址没有返回 ACME 目录」 | 控制台读取不到该地址的 ACME 目录：地址错误、TLS 证书不受信任（未填写 CA 证书）、超时或返回的不是目录 | 用 `curl` 核对地址；私有 CA 时在「CA 证书（PEM）」中粘贴签发者 |
+| 「请同时填写 EAB 密钥 ID 和 HMAC 密钥」 | 只填了 EAB 密钥 ID，且没有已保存的同一 ID 的密钥 | 同时填写两者，或都留空 |
+| 「ACME 账户仍被证书使用：…」 | 列出的证书用该账户签发 | 先删除这些证书 |
+| `openssl s_client -sess_in` 总是 `New` | 用了另一个网站的 SNI；节点版本早于会话复用；会话超过 1 小时；TLS 1.2 会话 ID（`-no_ticket`）换了节点 | 用同一 SNI 并核对节点版本 |
 | 「DNS 凭据仍被证书使用：…」 | 列出的证书使用该凭据做 DNS-01 验证 | 先删除这些证书 |
 | 节点显示「需要升级」 | 节点缺少配置所需能力（如 `http3-v1`），保留 last-known-good 配置 | 升级节点，见[节点升级](node-upgrades.md) |
 | 404，`X-Edgeweir-Error: unknown-host`（网站已配置） | 请求到达网站未绑定的端口 | 在「域名」页签的「端口」卡片绑定该端口，或改用网站的端口 |

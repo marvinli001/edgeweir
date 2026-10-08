@@ -24,7 +24,7 @@ Console (ROLE=app|worker|all)
 └── child process stdin/stdout ──▶ edgeweir-certd ──▶ ACME CA, DNS provider APIs
 ```
 
-The only contract between the console and the nodes is `edgeweir.node.v1` in `proto/` (current tag `proto/v0.25.0`). The boundary between the open core and commercial products is defined in [LICENSING.en.md](LICENSING.en.md).
+The only contract between the console and the nodes is `edgeweir.node.v1` in `proto/` (current tag `proto/v0.26.0`). The boundary between the open core and commercial products is defined in [LICENSING.en.md](LICENSING.en.md).
 
 ## Repository layout
 
@@ -306,7 +306,8 @@ Every RPC other than `Enroll` and `EnrollProbe` requires a client certificate ve
 | `ReportLogs` | Sampled access logs; deduplicated by batch sequence |
 | `GetOriginCredentials` | S3 origin keys and PURGE keys (`site_secret`, empty `access_key_id`) referenced by the cluster's sites |
 | `SubmitPurge` | A PURGE request the node hands on (`site-content-v1`): the console checks that the node's cluster serves the site, that the site has PURGE on and that the URL belongs to it, then creates a URL purge task as the node (source `purge_method`), at most 120 per site and minute |
-| `GetCertificates` | Certificate chains and private keys referenced by the cluster's sites |
+| `GetCertificates` | Certificate chains and private keys referenced by the cluster's sites (further certificates included) |
+| `GetSessionTicketKeys` | The cluster's TLS session ticket keys (80 bytes); a node only gets its own cluster's |
 | `PullTasks`, `ReportTaskResult` | Purge, prefetch, and upgrade tasks |
 | `GetBans`, `ReportBans` | Incremental ban changes of the node's cluster by sequence; upload of the node's automatic bans |
 | `EnrollProbe` (`ProbeService`) | Exchange a single-use probe token (`ewp_`) and a CSR for a probe certificate; the same request size limit as `Enroll`, and the token is used up only by a successful enrollment |
@@ -321,9 +322,9 @@ A revision receipt is sealed with the master key (purpose `node.revision_receipt
 `edgeweir-certd` performs ACME issuance, renewal, and revocation and DNS record operations.
 
 1. The pg-boss queue `certificates.sweep` selects, every minute, certificates waiting for issuance and certificates past `renew_at` (new requests and manual renewals first, then by `renew_at`, three at a time). A failure backs off by the remaining validity (a tenth, 10 minutes to 12 hours; one hour for a first issuance); an HTTP-01 certificate that failed because names did not resolve to the nodes (`http01_dns_not_pointing`) has its names looked up again every 5 minutes and is retried once they point to the nodes. Issued certificates read their ARI renewal window after the CA's Retry-After (1 to 24 hours, 6 by default) and renew earlier when the window ends before `renew_at`.
-2. The worker starts `EDGEWEIR_CERTD_BIN` (`/usr/local/bin/edgeweir-certd` in the image) with only `PATH` and `EDGEWEIR_DNS_TEST_ENDPOINT` in its environment.
+2. The worker starts `EDGEWEIR_CERTD_BIN` (`/usr/local/bin/edgeweir-certd` in the image) with only `PATH` and `EDGEWEIR_DNS_TEST_ENDPOINT` in its environment. The directory URL, its CA certificates (`rootCa`, trusted with the system roots), EAB and key type (`ec256` / `rsa2048`) are request parameters: the built-in CAs' directories (Let's Encrypt, ZeroSSL, Google Trust Services) are in `ACME_CA_DIRECTORIES`; `custom` takes the system setting `acme_directory` (URL, EAB key id, the envelope-encrypted HMAC key with purpose `system_setting.acme_directory`, CA certificates, and the `meta.caaIdentities` read from the directory when saved), each field falling back to `EDGEWEIR_ACME_DIRECTORY` / `EDGEWEIR_ACME_CA_FILE` when not saved.
 3. It writes one JSON request line to stdin (command and parameters, including the ACME account and DNS credentials). certd writes JSON event lines to stdout (`account`, `http01.present`, `http01.cleanup`, `dns01.prepare`, `dns01.cleanup`); the console handles each one and acknowledges it on stdin. The last line is the result.
-4. One `http01.present` carries all HTTP-01 challenges of an order: they are written to `acme_challenge`, each cluster involved publishes one revision, and once nodes apply it certd has the CA validate them (four at a time); `http01.cleanup` only deletes the rows and publishes nothing (nodes and the next revision drop a challenge once it expires or its operation ends). Challenge revisions do not count toward the 200 kept revisions and are deleted after an hour. `dns01.prepare` records the cleanup obligation in `dns_challenge_lease` before certd writes the TXT record; after completion, failure, or a restart, only the values written by that operation are removed. The ACME account from an `account` event is envelope-encrypted into `acme_account`; certificates with the same directory, EAB key id, and email share one account.
+4. One `http01.present` carries all HTTP-01 challenges of an order: they are written to `acme_challenge`, each cluster involved publishes one revision, and once nodes apply it certd has the CA validate them (four at a time); `http01.cleanup` only deletes the rows and publishes nothing (nodes and the next revision drop a challenge once it expires or its operation ends). Challenge revisions do not count toward the 200 kept revisions and are deleted after an hour. `dns01.prepare` records the cleanup obligation in `dns_challenge_lease` before certd writes the TXT record; after completion, failure, or a restart, only the values written by that operation are removed. The ACME account from an `account` event is envelope-encrypted into `acme_account`; certificates with the same directory, EAB key id, and email share one account. Certificates record their account (`certificate.acme_account_id`), which the account list counts, and an account certificates use cannot be deleted (`ACME_ACCOUNT_IN_USE`). At worker start `maintenance.link-acme-accounts` links the certificates issued before, and records those issued in the environment-variable era (whose last directory is not the chosen built-in CA's) as `custom`.
 5. The result is written back to `certificate`: chain (certificates only), fingerprint, expiry, next renewal time, and the envelope-encrypted private key (PKCS #8); a request with `bindSiteId` (one-click HTTPS on a site's HTTPS tab, preceded by `https.check`, which lists every blocker at once: nodes, DNS, the DNS credential and CAA) is bound to the site in the same transaction (the HTTPS redirect and other settings unchanged); clusters that reference the certificate publish a new revision.
 
 Domains a site's certificate does not cover yet (the certificate is being reissued for them) are published with `Domain.tls_pending` (proto v0.19.0) when every active node of the cluster has `tls-pending-domains-v1`, and nodes serve them over HTTP only; otherwise they are left out until the new certificate is issued.
@@ -339,6 +340,13 @@ Uploads and issued certificates with EC keys that spell out the curve's paramete
 | DNS providers | The provider catalog `helpers/certd/catalog.json`, see [Providers and credentials](docs/guide/dns-and-alerts.en.md#providers-and-credentials) |
 
 DNS steering is bound per cluster (`dns_binding`, mode Not managed, Manual, or Automatic): `dns.reconcile` computes, every minute, the records of each cluster in Automatic mode from healthy nodes and site domains (one set of address records per cluster, `all.<domain>` once per resolution line, one CNAME per site; node addresses and backup node groups as in [Regional probes and scheduling](#regional-probes-and-scheduling)), creates a `dns_revision` for that cluster, and writes it to the zone of the binding's provider account (`platform_dns_provider`); clusters publish and reconcile on their own, so an unavailable provider does not affect other clusters, and one process at a time writes a cluster (`dns_lease`). Nodes keep their records while they apply a revision published less than 2 minutes ago. Names are recorded in `dns_managed_name` before external records are written, so partial writes can be repaired; new records are written before the records they replace. Manual mode only produces the records to create and a zone file and writes no DNS. DNS steering provider accounts and DNS-01 credentials use the same provider catalog. A site's domains route as soon as they are saved; a domain belongs to one site. Behavior: [HTTPS and certificates](docs/guide/https.en.md), [DNS steering and alerts](docs/guide/dns-and-alerts.en.md).
+
+## Site TLS: several certificates, client certificates, and session resumption
+
+1. A site's first certificate is `site.certificate_id`, up to 3 more are in `site_certificate` (positions 1–3, foreign key `restrict`); on save every domain of the site must be covered by one of them. The IR carries `Site.additional_certificate_ids` in the site's order, and a configuration with further certificates requires `multi-certificate-v1`. Nodes set one certificate per handshake in `ssl_client_hello_by_lua` from the ClientHello (exact names before wildcards, ECDSA before RSA when the client supports it), and staple the OCSP response of that certificate.
+2. Client certificates live in `site.tls_settings` (mode, CA PEM, depth, forwarding); the IR has `Site.client_certificate` and requires `client-cert-v1`, as do rules reading `tls.client.*`. Nodes ask for a certificate with `ngx.ssl.verify_client` without aborting the handshake and decide in the request phase (403 `client-cert-required` when Required). Visitors' own `X-Client-*` request headers are removed on every site. Not together with HTTP/3 (`CLIENT_CERTIFICATE_HTTP3`).
+3. Session resumption: nodes' HTTPS listeners use `ssl_session_cache shared:edgeweir_tls:16m` and `ssl_session_timeout 1h`, with `ssl_early_data off` written out; each site has its own session context (`SSL_set_session_id_context`), so sessions resume on the same site only. Ticket keys are per cluster (`session_ticket_key`: `next`, `current`, `previous`), created when a cluster with a site using a certificate publishes; the IR holds ids and roles only (`NodeConfig.session_ticket_keys`, sorted by id, no capability required, ignored by older nodes), and nodes fetch the 80-byte keys with `GetSessionTicketKeys`. A key is generated the first time it is fetched and stored envelope-encrypted (purpose `session_ticket_key.secret`).
+4. `maintenance.rotate-session-ticket-keys` checks hourly and rotates once the newest key is 12 hours old (the same way as challenge keys); clusters whose latest revision carries ticket keys publish a new revision (reason `session_ticket_keys_rotated`), audited as `cluster.session_ticket_keys_rotate`. Nodes write `ssl_session_ticket_key` in the order current, previous, next; file names follow the keys, so a rotation reloads.
 
 ## Regional probes and scheduling
 
@@ -391,12 +399,14 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificate
 | `certificates.sweep` | Every minute | Certificate issuance and renewal |
 | `maintenance.recompile` | At start; skipped while `config_recompiled` in `system_setting` matches the current marker | Republishes every cluster once when an upgrade changes what stored data compiles to |
 | `maintenance.check-certificates` | At start | Checks uploaded certificates not marked yet and marks those nodes cannot load (EC keys with explicit curve parameters) as failed |
+| `maintenance.link-acme-accounts` | At start | Links certificates to the ACME account that issued them; records certificates of the environment-variable era as the custom ACME directory |
 | `maintenance.prune-revisions` | Minute 17 of every hour | Deletes revisions and DNS revisions beyond the retention count |
 | `maintenance.prune-idempotency-keys` | Minute 29 of every hour | Deletes expired idempotency keys (older than 24 hours) |
 | `maintenance.expire-cache-tasks` | Minute 43 of every hour | Fails purge and prefetch deliveries past their deadline; deletes tasks older than 90 days (purges a node has yet to make up stay) |
 | `maintenance.expire-enrollment-tokens` | Every 30 minutes | Deletes enrollment tokens expired or used more than 7 days ago |
 | `maintenance.prune-bans` | Every 10 minutes | Deletes bans that expired more than an hour ago |
 | `maintenance.rotate-challenge-keys` | Hourly at minute 11 | Rotates challenge keys that are a day old |
+| `maintenance.rotate-session-ticket-keys` | Hourly at minute 13 | Rotates TLS session ticket keys that are 12 hours old |
 | `maintenance.prune-security-events` | Hourly at minute 37 | Deletes security events past the retention |
 | Scheduling evaluation (an in-process timer, not a pg-boss queue) | Every 10 seconds; one process at a time (lease), a tick is skipped while the previous run is busy | Probe-driven address reachability and scheduling rules, see [Regional probes and scheduling](#regional-probes-and-scheduling) |
 
@@ -462,6 +472,8 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `site_waf` | A site's OWASP CRS: mode (off, detect, block), paranoia level, anomaly threshold, excluded rule ids, request body limit; no row means off |
 | `site_error_page` | A site's error pages: one template per status (403, 429, 502, 503, 504) |
 | `challenge_key` | Challenge keys of a cluster (`next`, `current`, `previous`), secrets envelope-encrypted |
+| `site_certificate` | A site's further certificates (positions 1–3; the first is `site.certificate_id`); a referenced certificate cannot be deleted |
+| `session_ticket_key` | TLS session ticket keys of a cluster (`next`, `current`, `previous`), secrets envelope-encrypted and generated when first fetched |
 | `config_revision` | Revisions per cluster: number, content hash, binary IR, reason code |
 | `node_config_status` | Node apply receipts and heartbeats, with the receipt verification flag |
 | `cluster_rollout` | Configuration canary of a cluster: policy (switch, observation window, auto promotion, 5xx thresholds) and the current rollout (stable and candidate revisions, window, outcome) |
@@ -470,7 +482,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 
 | Table | Contents |
 | --- | --- |
-| `certificate` | Chain, fingerprint, expiry, and renewal state; private key and the request's EAB key envelope-encrypted |
+| `certificate` | Chain, fingerprint, expiry, renewal state, and the ACME account that issued it; private key and the request's EAB key envelope-encrypted |
 | `acme_account` | ACME accounts (shared per directory, EAB key id, and email), account key envelope-encrypted |
 | `acme_challenge` | Short-lived public HTTP-01 responses |
 | `dns_credential` | DNS provider credentials and zone for ACME DNS-01, envelope-encrypted |
@@ -573,6 +585,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0054_edge_ports` | `cluster.extra_http_ports`, `cluster.extra_https_ports` (listener ports besides 80 / 443), `cluster.client_ip` (the client address source, jsonb, null for direct); `site.http_ports`, `site.https_ports` (the ports a site is bound to, default 80 / 443); `l4_app.port_end` (port ranges), `l4_app.origin_port_mode` (`fixed` / `same`), `l4_app.certificate_id`, `l4_app.tls_minimum_version` (TLS termination) |
 | `0055_site_content` | `site_secret`; `cluster.cache_max_size_gb`, `cluster.cache_inactive_days` (cache zone); `node.cache_max_size_gb` (node size override), `node.cache_usage` (reported usage); `site.hide_x_cache`, `site.purge_method`, `site.maintenance`, `site.maintenance_updated_at`, `site.charset`, `site.request_body_limit`; `origin_pool.tries`, `origin_pool.status_retry`; `cache_rule.cache_set_cookie`; `site_error_page.redirect_url`, `site_error_page.response_status` |
 | `0056_domain_forms_cname_prefix` | `site_domain.kind` replaces `wildcard`, unique by `(name, kind)`; `site.cname_prefix`, `l4_app.cname_prefix` (their id for existing rows: CNAMEs do not change); `cname_retired`; `cluster.unknown_hosts`, `cluster.default_site_id` |
+| `0057_g11_certificates_sessions` | `site_certificate`, `session_ticket_key`; `certificate.acme_account_id` |
 
 ## Build output
 

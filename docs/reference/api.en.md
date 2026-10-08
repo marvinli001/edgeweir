@@ -282,7 +282,7 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | `PUT /sites/{id}/https` | `settings` replaces all HTTPS settings of the site; missing fields take their defaults, so `GET` first and change what you need. Compression fields: `brotli`, `brotliLevel` (1–11, default 6), `brotliMinLength`, `brotliTypes`; `zstd`, `zstdLevel` (1–19, default 3), `zstdMinLength`, `zstdTypes`; `gzip`, `gzipMinLength`, `gzipTypes`; minimum lengths 1–1048576 (default 256), types are arrays of MIME types (up to 32) |
 | `PATCH /sites/{id}/waf` | Changes only the fields given: `mode` (`off` / `detect` / `block`), `paranoiaLevel` (1–4), `anomalyThreshold` (1–1000), `excludedRuleIds` (900000–999999, unique, up to 200; initialization and evaluation rules 901xxx, 949xxx, 959xxx, 980xxx return 400 `WAF_RULE_NOT_EXCLUDABLE` with them in `data.ids`), `requestBodyLimit` (0–134217728 bytes) |
 | `GET /sites/{id}/waf/rules` | Query parameters `range` (`1h` / `6h` / `24h` / `7d` / `30d`, default `24h`), `limit` (1–50, default 10) |
-| `GET /sites/{id}/https/check` | Query parameter `ca` (`letsencrypt` / `zerossl`, default `letsencrypt`): the CA whose CAA permission is checked |
+| `GET /sites/{id}/https/check` | Query parameter `ca` (`letsencrypt` / `zerossl` / `google` / `custom`, default: `defaultCa` of `GET /certificates/settings`): the CA whose CAA permission is checked |
 
 Responses:
 
@@ -663,6 +663,25 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | `PUT /sites/{id}/cname-prefix`, `PUT /l4-apps/{id}/cname-prefix` | `prefix`: 1–30 of `[a-z0-9-]`, not starting or ending with `-`; without it a new random prefix; or an old prefix of the object itself still in its transition. A UUID is accepted only as the object's own UUID prefix from before the upgrade while it still resolves: its current prefix (no change) or an old one still in its transition (taking it back); any other UUID (such as the id of an object created with a random prefix) returns 400 `CNAME_PREFIX_INVALID`. A prefix in use, still in its 24-hour transition, `all` / `all-<n>`, or an all-lines record or line name of a DNS binding returns 409 `CNAME_PREFIX_CONFLICT` (`data.prefix`); in Automatic mode so does a name (with **Keep per-site line targets** also `<line name>.<prefix>.<cluster domain>`) that already holds a record in the DNS provider's zone the cluster does not manage (not checked when the zone cannot be read within 15 seconds). In Automatic mode an old prefix never written to a DNS provider (the one before a switch included) gets no transition |
 
 `GET /sites/{siteId}/cname` adds `retired` (old names `{ name, expiresAt }`); DNS revision `reason` adds `cname` (`reasonParams.name`) and `cname_expired`. The `blockers` of `GET /sites/{id}/https/check` add `no_certificate_names` (a site with pattern domains only). Automatic bans add the `reason` `unknown_host_scan` (`scope` `platform`, `siteId` `null`, `trigger.metric` `unknown_host_requests`). Node capabilities add `domains-v2` and `unknown-host-v1`.
+
+### Several certificates, client certificates, session resumption, and ACME CAs
+
+| Procedure | Endpoint | Notes |
+| --- | --- | --- |
+| `acmeAccounts.list` | `GET /acme-accounts` | ACME accounts: `{ id, directoryUrl, ca, email, eabKid, createdAt, certificates }`; `ca` is a built-in CA, `custom` (the custom directory) or `null` (another directory), `certificates` counts the certificates issued with it |
+| `acmeAccounts.delete` | `DELETE /acme-accounts/{id}` | Deletes an account no certificate uses (only the account and key the console stores), audited as `acme_account.delete`; 409 `ACME_ACCOUNT_IN_USE` (`data.certificates`, at most 5) while used, 404 `ACME_ACCOUNT_NOT_FOUND` when missing |
+| `settings.acmeDirectory` | `GET /settings/acme-directory` | `{ url, effectiveUrl, source, eabKid, eabHmacKeySet, caPem, caSource, caaIdentities }`: `url`, `eabKid` and `caPem` are the saved values (empty strings when none), `effectiveUrl` the directory in effect, `source` and `caSource` are `setting`, `environment` (`EDGEWEIR_ACME_DIRECTORY` / `EDGEWEIR_ACME_CA_FILE`) or `default`; for the HMAC key only whether one is saved |
+| `settings.setAcmeDirectory` | `PUT /settings/acme-directory` | See below; the response is that of `settings.acmeDirectory`, audited as `system.acme_directory_update` |
+
+Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys can only call `GET`.
+
+| Request | Fields |
+| --- | --- |
+| `PUT /settings/acme-directory` | `url`: an `https://` URL (no credentials or fragment, at most 2048), an empty string clears the saved setting; read before saving (10 seconds, at most 1 MiB), 400 `ACME_DIRECTORY_INVALID` when it is not an ACME directory, private addresses allowed. `eabKid`, `eabHmacKey`: both or neither; the saved `eabKid` alone keeps its key, another one alone is 400 `ACME_DIRECTORY_EAB_INCOMPLETE`. `caPem`: 1–10 PEM certificates (at most 64 KiB), else 400 `ACME_DIRECTORY_CA_INVALID` |
+| `POST /certificates/request` | Adds `ca` (`letsencrypt` / `zerossl` / `google` / `custom`; omitted: `defaultCa` of `GET /certificates/settings`) and `keyType` (`ec256` / `rsa2048`, default `ec256`). `zerossl` and `google` need `eabKid` and `eabHmacKey`; `custom` may omit them to use the system settings' EAB; 409 `ACME_DIRECTORY_NOT_CONFIGURED` without a custom directory |
+| `PUT /sites/{id}/https` | `settings` adds `additionalCertificateIds` (0–3 certificate IDs, distinct, without `certificateId`; cleared when `certificateId` is `null`) and `clientCertificate`: `mode` (`off` / `optional` / `required`, default `off`), `caPem` (at most 65536 bytes; unless `off`, 1–10 current CA certificates, else 400 `CLIENT_CA_INVALID`), `depth` (1–5, default 2), `forwardHeaders` (default `false`). Every domain of the site must be covered by one of the certificates (400 `CERTIFICATE_DOMAIN_MISMATCH`); each must be issued and unexpired (409 `CERTIFICATE_UNAVAILABLE`); client certificates together with `http3` are 400 `CLIENT_CERTIFICATE_HTTP3` |
+
+`GET /certificates/settings` adds `acmeDirectory` (the custom directory in effect, `null` without one), `acmeDirectoryEab` (the custom directory has a saved EAB) and `defaultCa` (`letsencrypt`, or `custom` while the custom directory comes from the environment only); `ca` of `GET /sites/{id}/https/check` adds `google` and `custom` and defaults to `defaultCa`. `GET /sites/{id}/features` adds `multiCertificate` and `clientCertificate`. A certificate's `lastError` adds `acme_directory_not_configured`. Revision reasons add `session_ticket_keys_rotated`, audit actions `cluster.session_ticket_keys_rotate`. Node capabilities add `multi-certificate-v1` and `client-cert-v1`; the node channel adds `GetSessionTicketKeys`.
 
 ### Port pools and L4 apps
 
