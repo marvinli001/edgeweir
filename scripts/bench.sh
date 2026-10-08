@@ -26,6 +26,10 @@
 #              caps the protocol at TLS 1.2 (default 1.3).
 #   tls-resume the same, each connection offering the previous one's session
 #              (session ID or ticket); fails when fewer than 90% are resumed.
+#              BENCH_TLS_NETWORK=<docker network> runs the client in a Node.js
+#              container on that network (BENCH_URL then names the node's
+#              container, e.g. https://<project>-g11-bench-new/bench-cache.txt),
+#              which keeps the host's port forwarding out of the measurement.
 # pass and challenge default to ua-bench.test, which scripts/e2e-g2.mjs leaves
 # behind (whoami, cache rule on /, Under Attack js); headers to
 # hdr-bench.g8.test, which scripts/e2e-g8.mjs leaves behind; charset to
@@ -139,7 +143,16 @@ if [[ "$BENCH_SCENARIO" != challenge && "$BENCH_SCENARIO" != tls* ]]; then
     exit 1
   fi
 fi
-if [[ "$BENCH_SCENARIO" == tls* ]]; then
+if [[ "$BENCH_SCENARIO" == tls* && -n "${BENCH_TLS_NETWORK:-}" ]]; then
+  # The image of the e2e clients (compose.e2e.yml client-a).
+  docker run --rm --network "$BENCH_TLS_NETWORK" -v "$PWD/scripts:/scripts:ro" \
+    -v "$(cd "$(dirname "$BENCH_OUTPUT")" && pwd):/out" \
+    -e BENCH_URL="$BENCH_URL" -e BENCH_HOST="$BENCH_HOST" -e BENCH_SCENARIO="$BENCH_SCENARIO" \
+    -e BENCH_REQUESTS="$BENCH_REQUESTS" -e BENCH_CONCURRENCY="$BENCH_CONCURRENCY" \
+    -e BENCH_TLS_VERSION="${BENCH_TLS_VERSION:-}" -e BENCH_OUTPUT="/out/$(basename "$BENCH_OUTPUT")" \
+    node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 \
+    node /scripts/bench-tls.mjs
+elif [[ "$BENCH_SCENARIO" == tls* ]]; then
   # Warms the cache, refuses a site that does not answer a HIT, and checks resumption.
   BENCH_URL="$BENCH_URL" BENCH_HOST="$BENCH_HOST" BENCH_SCENARIO="$BENCH_SCENARIO" \
     BENCH_REQUESTS="$BENCH_REQUESTS" BENCH_CONCURRENCY="$BENCH_CONCURRENCY" BENCH_OUTPUT="$BENCH_OUTPUT" \

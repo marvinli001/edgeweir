@@ -10,7 +10,8 @@
 // `--multi` gives the new node's site four certificates (its own ECDSA one
 // first, then an RSA 2048 one for the same name, a wildcard and another
 // name's), `--single` goes back to one; `--cleanup` removes both nodes,
-// clusters, sites and certificates. Prints the bench.sh variables of each.
+// clusters, sites and certificates. Prints the bench.sh variables of each
+// (BENCH_TLS_NETWORK runs the client on the stack's network, see bench.sh).
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -278,6 +279,6 @@ for (const [which, bench] of Object.entries(BENCH)) {
   await synced(cluster);
   const node = (await api("GET", `/nodes?clusterId=${cluster.id}`))[0];
   console.log(
-    `${which}: BENCH_URL=https://127.0.0.1:${bench.port}/bench-cache.txt BENCH_HOST=${bench.host} BENCH_NODE_CONTAINER=${container(which)} (${bench.image}, ${node.version ?? "?"}, features ${node.supportedFeatures.filter((f) => /certificate|cert-/.test(f)).join(",") || "-"})`,
+    `${which}: BENCH_URL=https://127.0.0.1:${bench.port}/bench-cache.txt (or BENCH_TLS_NETWORK=${network} BENCH_URL=https://${container(which)}/bench-cache.txt) BENCH_HOST=${bench.host} BENCH_NODE_CONTAINER=${container(which)} (${bench.image}, ${node.version ?? "?"}, features ${node.supportedFeatures.filter((f) => /certificate|cert-/.test(f)).join(",") || "-"})`,
   );
 }
