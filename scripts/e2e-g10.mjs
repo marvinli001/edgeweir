@@ -560,7 +560,7 @@ try {
     async () => servedBy(await request({ target: "node", host: EXACT }, "client-b")) === "exact",
     60,
   );
-  // Lifted, client-b is counted afresh: scanning on bans it again.
+  // Lifted, client-b is counted on: scanning on bans it again.
   const again = await requests(
     [
       ...Array.from({ length: SCAN.threshold + 1 }, (_, i) => ({
@@ -588,7 +588,7 @@ try {
     60,
   );
   pass(
-    `e. scan protection (${SCAN.threshold} in 60 s): client-b (${scanner}) passed ${SCAN.threshold} unknown hosts, request ${SCAN.threshold + 1} banned it on every site (403 on ${EXACT}, client-a served); the console lists the platform ban (unknown_host_scan, node ${ban.node.name}, observed ${ban.trigger.observed}, ${seconds} s); lifted, client-b is served again and counted afresh (a new scan banned it again, lifted)`,
+    `e. scan protection (${SCAN.threshold} in 60 s): client-b (${scanner}) passed ${SCAN.threshold} unknown hosts, request ${SCAN.threshold + 1} banned it on every site (403 on ${EXACT}, client-a served); the console lists the platform ban (unknown_host_scan, node ${ban.node.name}, observed ${ban.trigger.observed}, ${seconds} s); lifted, client-b is served again; scanning on banned it again (lifted)`,
   );
 
   // -------------------------------------------------------------- f. CNAME prefixes
