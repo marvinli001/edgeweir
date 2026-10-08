@@ -89,6 +89,12 @@ message NodeConfig {
   // for unknown SNI, 421 without SNI), no scan protection. Added in v0.25.0
   // (feature unknown-host-v1).
   UnknownHosts unknown_hosts = 19;
+  // TLS session ticket keys of the cluster, sorted by id: nodes encrypt
+  // tickets with current and decrypt with all three. Secrets are fetched
+  // with NodeService.GetSessionTicketKeys and never travel here. Present
+  // when the cluster serves a site with a certificate. Added in v0.26.0;
+  // older nodes ignore it and resume no sessions (no feature required).
+  repeated SessionTicketKeyRef session_ticket_keys = 20;
 }
 
 // UnknownHosts is the cluster's handling of requests no site serves.
@@ -200,6 +206,8 @@ message NodeConfigDiff {
   ClientAddress client_address = 20;
   // Always sent in full (NodeConfig field 19). Added in v0.25.0.
   UnknownHosts unknown_hosts = 21;
+  // Always sent in full (NodeConfig field 20). Added in v0.26.0.
+  repeated SessionTicketKeyRef session_ticket_keys = 22;
 }
 
 // L4Protocol is the transport of a layer-4 application.
@@ -378,6 +386,41 @@ message Site {
   // (100 MiB), 0 no limit, at most 10737418240 (10 GiB). Requests over it
   // get 413. Config rules may override it (RuleAction.request_body_limit).
   optional uint64 request_body_limit = 26;
+  // Further certificates of the site after certificate_id, at most 3, in
+  // the site's order, ids of NodeConfig.certificates distinct from
+  // certificate_id; empty without certificate_id. Every domain is covered by
+  // at least one of them; the handshake uses the one covering the SNI,
+  // exact names over wildcards, ECDSA when the client supports it, else the
+  // first. Added in v0.26.0 (feature multi-certificate-v1).
+  repeated string additional_certificate_ids = 27;
+  // Client certificates (mutual TLS) on the site's HTTPS listeners; unset
+  // means off. Needs certificate_id. Added in v0.26.0 (feature
+  // client-cert-v1).
+  ClientCertificate client_certificate = 28;
+}
+
+// ClientCertificateMode is when a site asks visitors for a certificate.
+enum ClientCertificateMode {
+  CLIENT_CERTIFICATE_MODE_UNSPECIFIED = 0;
+  // Requested and verified; requests without a valid one are served.
+  CLIENT_CERTIFICATE_MODE_OPTIONAL = 1;
+  // Requests without a valid certificate get the 403 error page
+  // (X-Edgeweir-Error: client-cert-required), plain HTTP ones included.
+  CLIENT_CERTIFICATE_MODE_REQUIRED = 2;
+}
+
+// ClientCertificate verifies visitors' certificates against a CA bundle.
+// A failed or missing certificate never aborts the handshake.
+message ClientCertificate {
+  ClientCertificateMode mode = 1;
+  // 1-10 PEM CA certificates, at most 65536 bytes, re-encoded by the console.
+  string ca_pem = 2;
+  // Verification depth 1-5.
+  uint32 depth = 3;
+  // Send X-Client-Verify, X-Client-Cert-SHA256, X-Client-Cert-Subject and
+  // X-Client-Cert-Serial to the origin. Visitors' own headers of these names
+  // are removed on every site regardless.
+  bool forward_headers = 4;
 }
 
 // PurgeMethod names the key of a site's PURGE method. The key itself is
@@ -560,6 +603,14 @@ message CcPolicy {
 message PlatformProtection {
   bool under_attack = 1;
   string under_attack_challenge = 2;
+}
+
+// SessionTicketKeyRef names one TLS session ticket key of the cluster.
+message SessionTicketKeyRef {
+  string id = 1;
+  // next, current or previous. Nodes encrypt with current and decrypt with
+  // all three.
+  string role = 2;
 }
 
 // ChallengeKeyRef names one HMAC key for challenge passes.

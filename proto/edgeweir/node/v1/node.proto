@@ -70,6 +70,9 @@ service NodeService {
   // message is "retry after <seconds>"). Added in v0.24.0 (feature
   // site-content-v1).
   rpc SubmitPurge(SubmitPurgeRequest) returns (SubmitPurgeResponse);
+  // GetSessionTicketKeys returns the TLS session ticket keys named by
+  // NodeConfig.session_ticket_keys. Added in v0.26.0.
+  rpc GetSessionTicketKeys(GetSessionTicketKeysRequest) returns (GetSessionTicketKeysResponse);
 }
 
 // SubmitPurgeRequest names the URL a PURGE request asked to purge.
@@ -765,6 +768,26 @@ message ChallengeKey {
 // ids and keys of other clusters are left out.
 message GetChallengeKeysResponse {
   repeated ChallengeKey keys = 1;
+}
+
+// GetSessionTicketKeysRequest names the keys to fetch.
+message GetSessionTicketKeysRequest {
+  // Ids from NodeConfig.session_ticket_keys.
+  repeated string ids = 1;
+}
+
+// SessionTicketKey is one key file of nginx's ssl_session_ticket_key.
+message SessionTicketKey {
+  string id = 1;
+  // 80 random bytes: 16 bytes key name, 32 bytes AES-256 key, 32 bytes
+  // HMAC-SHA256 key.
+  bytes secret = 2;
+}
+
+// GetSessionTicketKeysResponse carries the keys of the node's cluster;
+// unknown ids and keys of other clusters are left out.
+message GetSessionTicketKeysResponse {
+  repeated SessionTicketKey keys = 1;
 }
 
 // SecurityEventKind is what a CC mitigation event records.
