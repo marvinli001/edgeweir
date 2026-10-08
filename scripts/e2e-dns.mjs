@@ -269,6 +269,7 @@ assert.deepEqual(targetB, {
   published: true,
   healthy: true,
   lines: [{ name: "west", target: "west.edge.cdn-b.dns.test" }],
+  retired: [],
 });
 pass(
   `two clusters on two accounts and domains: cluster A ${sitesA} site CNAMEs + 4 address records, cluster B ${zoneB.length} records; zones listed and connection tested through certd`,
