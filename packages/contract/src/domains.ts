@@ -322,10 +322,15 @@ export function repeatingQuantifiers(pattern: string): number {
 export function patternBranches(pattern: string): number {
   let product = 1;
   const alternatives = [1];
+  // Whether the previous token is a quantifier (*, +, ?, {n}, {n,}, {n,m}): a
+  // "?" after one only makes it lazy. Tokens, not characters: "\+?" and
+  // "[*]?" are optional parts.
+  let quantified = false;
   for (let i = 0; i < pattern.length; i++) {
     const c = pattern[i];
     if (c === "\\") {
       i++;
+      quantified = false;
       continue;
     }
     if (c === "[") {
@@ -336,8 +341,29 @@ export function patternBranches(pattern: string): number {
         if (pattern[i] === "\\") i++;
         i++;
       }
+      quantified = false;
       continue;
     }
+    if (c === "?") {
+      if (!quantified) product *= 2;
+      // A lazy "?" is no quantifier a further "?" could make lazy.
+      quantified = !quantified;
+      continue;
+    }
+    if (c === "*" || c === "+") {
+      quantified = true;
+      continue;
+    }
+    if (c === "{") {
+      const m = /^\{\d+(,\d*)?\}/.exec(pattern.slice(i));
+      if (m) {
+        if (m[0] === "{0,1}") product *= 2;
+        i += m[0].length - 1;
+        quantified = true;
+        continue;
+      }
+    }
+    quantified = false;
     if (c === "(") {
       // "(?:" and other group modifiers: not an optional part.
       if (pattern[i + 1] === "?") i++;
@@ -346,12 +372,6 @@ export function patternBranches(pattern: string): number {
       alternatives[alternatives.length - 1] = (alternatives.at(-1) ?? 1) + 1;
     } else if (c === ")") {
       if (alternatives.length > 1) product *= alternatives.pop() ?? 1;
-    } else if (c === "?") {
-      // After a quantifier it only makes the quantifier lazy.
-      const prev = pattern[i - 1];
-      if (prev !== "*" && prev !== "+" && prev !== "}" && prev !== "?") product *= 2;
-    } else if (c === "{" && /^\{0,1\}/.test(pattern.slice(i))) {
-      product *= 2;
     }
   }
   for (const count of alternatives) product *= count;
