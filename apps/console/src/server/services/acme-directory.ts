@@ -175,7 +175,12 @@ export async function readAcmeDirectory(url: string, caPem: string): Promise<str
   const body = await new Promise<string>((resolve, reject) => {
     const request = https.get(
       url,
-      { ca, timeout: 10_000, headers: { accept: "application/json" } },
+      // RFC 8555 6.1: ACME clients MUST send a User-Agent (Pebble refuses requests without one).
+      {
+        ca,
+        timeout: 10_000,
+        headers: { accept: "application/json", "user-agent": "edgeweir-console" },
+      },
       (response) => {
         if (response.statusCode !== 200) {
           response.resume();

@@ -97,6 +97,11 @@ async function acmeDirectoryServer(
       res.writeHead(404).end();
       return;
     }
+    // RFC 8555 6.1, as Pebble enforces it.
+    if (!req.headers["user-agent"]) {
+      res.writeHead(400, { "content-type": "application/problem+json" }).end();
+      return;
+    }
     res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(body()));
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
