@@ -125,6 +125,12 @@ describe("site domain forms", () => {
     expect(domainPatternError("(a|a)(a|a)(a|a)(a|a)(a|a)x\\.com")).toBe("too_complex");
     expect(domainPatternError("a?a?a?a?a?aaaaa\\.com")).toBe("too_complex");
     expect(domainPatternError("(a|b|c|d|e|f|g|h|i|j|k|l|m|n|o|p|q)\\.com")).toBe("too_complex");
+    // An escaped character or a class takes "?" like a letter; it is lazy only after a quantifier.
+    expect(domainPatternError(`${"a?".repeat(24)}a{24}\\.a\\.com`)).toBe("too_complex");
+    expect(domainPatternError(`${"\\+?".repeat(24)}\\+{24}\\.a\\.com`)).toBe("too_complex");
+    expect(domainPatternError("\\??\\*?[?]?\\}?\\-?\\.a\\.com")).toBe("too_complex");
+    expect(domainPatternError("\\??\\*?[?]?\\}?\\.a\\.com")).toBeNull();
+    expect(domainPatternError("a+?b*?\\.a\\.com")).toBeNull();
     // A pattern past the rules (say stored before them) still cannot block the console.
     const matcher = hostMatcher([
       { kind: "regex" as const, name: `${"(a|a)".repeat(28)}\\.org`, value: "slow" },

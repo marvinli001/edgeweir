@@ -1,5 +1,5 @@
 import { schema } from "@edgeweir/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import {
@@ -9,7 +9,14 @@ import {
   listBans,
   reportAutoBans,
 } from "../../src/server/services/bans";
-import { type ApiClient, createTestContext, rpcClient, setupPlatform, signIn } from "./helpers";
+import {
+  type ApiClient,
+  createTestContext,
+  rpcClient,
+  rpcError,
+  setupPlatform,
+  signIn,
+} from "./helpers";
 
 // Scan protection's platform-wide automatic bans: which nodes a lifted,
 // never shared one reaches and with which expiry, and how bans covering
@@ -289,5 +296,185 @@ describe("platform scan bans", async () => {
     expect((await releases(nodeShort, short, before)).map((b) => b.expiresAt.getTime())).toEqual([
       removedAt + 600_000,
     ]);
+  });
+
+  it("takes over an active scan ban as a manual ban that reaches every node", async () => {
+    await share(true);
+    await admin.clusters.setClientIp({
+      clusterId: clusterB,
+      settings: {
+        mode: "header",
+        trustedCidrs: ["192.0.2.0/24", "203.0.113.0/24"],
+        header: "x-forwarded-for",
+      },
+    });
+    // Cluster B's proxy: kept to node a, not shared.
+    expect(
+      await reportAutoBans(ctx.db, { id: nodes.a, clusterId: clusterA }, [scan("192.0.2.19")]),
+    ).toBe(1);
+    const [auto] = await rowOf("192.0.2.19/32");
+    expect(auto).toMatchObject({ source: "auto", distributed: false, nodeId: nodes.a });
+    const before = await currentBanSequence(ctx.db);
+    const start = Date.now();
+    const manual = await admin.bans.create({
+      scope: "platform",
+      cidr: "192.0.2.19",
+      reason: "abuse",
+      durationSeconds: 86_400,
+    });
+    // The entry becomes a manual ban as a new one would be: no trusted proxy holds that back.
+    expect(manual).toMatchObject({
+      id: auto?.id,
+      scope: "platform",
+      cidr: "192.0.2.19/32",
+      reason: "abuse",
+      source: "manual",
+      node: null,
+      trigger: null,
+      createdBy: { type: "user", name: "Platform Admin" },
+      distributed: true,
+    });
+    expect(Date.parse(manual.createdAt)).toBeGreaterThanOrEqual(start);
+    expect(Date.parse(manual.expiresAt) - Date.parse(manual.createdAt)).toBe(86_400_000);
+    for (const [node, cluster] of [
+      [nodes.a, clusterA],
+      [nodes.a2, clusterA],
+      [nodes.b, clusterB],
+    ] as const) {
+      const page = await banChanges(ctx.db, { id: node, clusterId: cluster }, before, 1000);
+      expect(page.bans.map((b) => [b.id, b.source])).toEqual([[manual.id, "manual"]]);
+    }
+    const audit = await ctx.db
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.targetId, manual.id));
+    expect(audit.map((a) => a.action)).toEqual(["ban.create"]);
+    expect(audit[0]?.metadata).toMatchObject({
+      scope: "platform",
+      cidr: "192.0.2.19/32",
+      reason: "abuse",
+    });
+
+    // Later scan reports leave it alone: a later expiry, and one lifted for the reporting cluster.
+    const [held] = await rowOf("192.0.2.19/32");
+    const later = new Date(Date.now() + 2 * 86_400_000);
+    expect(
+      await reportAutoBans(ctx.db, { id: nodes.a, clusterId: clusterA }, [
+        scan("192.0.2.19", later),
+      ]),
+    ).toBe(1);
+    await ctx.db.insert(schema.nodeIp).values({ nodeId: nodes.a2, address: "192.0.2.19" });
+    expect(
+      await reportAutoBans(ctx.db, { id: nodes.a, clusterId: clusterA }, [
+        scan("192.0.2.19", later),
+      ]),
+    ).toBe(0);
+    await ctx.db
+      .delete(schema.nodeIp)
+      .where(and(eq(schema.nodeIp.nodeId, nodes.a2), eq(schema.nodeIp.address, "192.0.2.19")));
+    const rows = await rowOf("192.0.2.19/32");
+    expect(rows.find((row) => row.id === manual.id)).toEqual(held);
+    const others = rows.filter((row) => row.id !== manual.id);
+    expect(others).toMatchObject([{ source: "auto", clusterId: clusterA, distributed: false }]);
+    expect(others[0]?.removedAt).not.toBeNull();
+    expect(
+      (await listBans(ctx.db, { scope: "platform", page: 1, pageSize: 50 })).items.find(
+        (b) => b.cidr === "192.0.2.19/32",
+      ),
+    ).toMatchObject({ id: manual.id, source: "manual", distributed: true });
+
+    // Lifted like any manual ban: every node drops it.
+    const beforeLift = await currentBanSequence(ctx.db);
+    await deleteBan(ctx.db, manual.id, { actor });
+    const page = await banChanges(ctx.db, { id: nodes.b, clusterId: clusterB }, beforeLift, 1000);
+    expect(page.removedIds).toEqual([manual.id]);
+  });
+
+  it("takes over a scan ban only where a new manual ban may go", async () => {
+    await share(true);
+    // Another cluster's node: a manual ban of it is refused, and so is the takeover.
+    await ctx.db.insert(schema.nodeIp).values({ nodeId: nodes.b, address: "198.51.100.79" });
+    expect(
+      await reportAutoBans(ctx.db, { id: nodes.a, clusterId: clusterA }, [scan("198.51.100.79")]),
+    ).toBe(1);
+    const [node] = await rowOf("198.51.100.79/32");
+    expect(node).toMatchObject({ source: "auto", distributed: false });
+    expect(
+      await rpcError(
+        admin.bans.create({
+          scope: "platform",
+          cidr: "198.51.100.79",
+          reason: "abuse",
+          durationSeconds: 3600,
+        }),
+      ),
+    ).toMatchObject({ code: "BAN_PROTECTED_ADDRESS", data: { address: "198.51.100.79" } });
+    expect(await rowOf("198.51.100.79/32")).toEqual([node]);
+
+    // At the limit of manual bans, as a new ban.
+    expect(
+      await reportAutoBans(ctx.db, { id: nodes.a, clusterId: clusterA }, [scan("192.0.2.29")]),
+    ).toBe(1);
+    const [auto] = await rowOf("192.0.2.29/32");
+    await admin.settings.setBans({ maxTotal: 100, shareAutoBans: true });
+    const { total } = await listBans(ctx.db, { source: "manual", page: 1, pageSize: 1 });
+    const filler = await ctx.db
+      .insert(schema.ipBan)
+      .values(
+        Array.from({ length: 100 - total }, (_, i) => ({
+          scope: "platform",
+          cidr: `10.77.${Math.floor(i / 250)}.${i % 250}/32`,
+          reason: "abuse",
+          source: "manual",
+          expiresAt: new Date(Date.now() + HOUR),
+          seq: sql`nextval('ip_ban_seq')`,
+        })),
+      )
+      .returning({ id: schema.ipBan.id });
+    expect(
+      await rpcError(
+        admin.bans.create({
+          scope: "platform",
+          cidr: "192.0.2.29",
+          reason: "abuse",
+          durationSeconds: 3600,
+        }),
+      ),
+    ).toMatchObject({ code: "BAN_PLATFORM_LIMIT", data: { limit: 100 } });
+    expect(await rowOf("192.0.2.29/32")).toEqual([auto]);
+    await ctx.db
+      .update(schema.ipBan)
+      .set({ removedAt: new Date() })
+      .where(
+        inArray(
+          schema.ipBan.id,
+          filler.map((row) => row.id),
+        ),
+      );
+    await admin.settings.setBans({ maxTotal: 10000, shareAutoBans: true });
+
+    // An expired automatic entry banned again starts over as a manual ban.
+    await ctx.db
+      .update(schema.ipBan)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(eq(schema.ipBan.id, auto?.id ?? ""));
+    const before = await currentBanSequence(ctx.db);
+    const again = await admin.bans.create({
+      scope: "platform",
+      cidr: "192.0.2.29",
+      reason: "spam",
+      durationSeconds: 3600,
+    });
+    expect(again).toMatchObject({
+      id: auto?.id,
+      source: "manual",
+      reason: "spam",
+      node: null,
+      trigger: null,
+      distributed: true,
+    });
+    const page = await banChanges(ctx.db, { id: nodes.b, clusterId: clusterB }, before, 1000);
+    expect(page.bans.map((b) => b.id)).toEqual([again.id]);
+    await deleteBan(ctx.db, again.id, { actor });
   });
 });

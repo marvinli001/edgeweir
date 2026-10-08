@@ -3,7 +3,12 @@ import { schema } from "@edgeweir/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
-import { pruneBans, reportAutoBans } from "../../src/server/services/bans";
+import {
+  banChanges,
+  currentBanSequence,
+  pruneBans,
+  reportAutoBans,
+} from "../../src/server/services/bans";
 import {
   type ApiClient,
   createTestContext,
@@ -697,5 +702,51 @@ describe("dynamic bans", async () => {
     expect(
       await ctx.db.select().from(schema.ipBan).where(eq(schema.ipBan.id, ban.id)),
     ).toHaveLength(0);
+  });
+
+  it("keeps a manual site ban beside an unshared automatic one of the same address", async () => {
+    const [edge] = await ctx.db
+      .insert(schema.node)
+      .values({ clusterId, name: "edge-cc", supportedFeatures: ["bans-v1"] })
+      .returning();
+    const nodeId = edge?.id ?? "";
+    await admin.settings.setBans({ maxTotal: 10000, shareAutoBans: false });
+    expect(
+      await reportAutoBans(ctx.db, { id: nodeId, clusterId }, [
+        {
+          scope: "site",
+          siteId,
+          cidr: "198.51.100.120",
+          createdAt: new Date(),
+          expiresAt: new Date(Date.now() + 600_000),
+          reason: "cc_ip_rate",
+          metric: "ip_qps",
+          observed: 250,
+          threshold: 100,
+          windowSeconds: 10,
+        },
+      ]),
+    ).toBe(1);
+    const byCidr = () =>
+      ctx.db.select().from(schema.ipBan).where(eq(schema.ipBan.cidr, "198.51.100.120/32"));
+    const [auto] = await byCidr();
+    expect(auto).toMatchObject({ source: "auto", distributed: false, nodeId });
+    const before = await currentBanSequence(ctx.db);
+    // Its own entry, sent to the site's cluster; the automatic one stays as it is.
+    const manual = await admin.bans.create({
+      scope: "site",
+      siteId,
+      cidr: "198.51.100.120",
+      reason: "abuse",
+      durationSeconds: HOUR,
+    });
+    expect(manual).toMatchObject({ source: "manual", distributed: true, node: null });
+    expect(manual.id).not.toBe(auto?.id);
+    const page = await banChanges(ctx.db, { id: nodeId, clusterId }, before, 1000);
+    expect(page.bans.map((b) => b.id)).toEqual([manual.id]);
+    expect((await byCidr()).find((row) => row.id === auto?.id)).toEqual(auto);
+    await admin.settings.setBans({ maxTotal: 10000, shareAutoBans: true });
+    await liftAll();
+    await ctx.db.delete(schema.node).where(eq(schema.node.id, nodeId));
   });
 });
