@@ -32,7 +32,7 @@ export function AcmeDirectoryCard() {
         acmeDirectoryInput.safeParse(input).success ? null : m.system_acme_invalid()
       }
       noValidate
-      contentClassName="grid gap-4 sm:grid-cols-2"
+      contentClassName="grid grid-cols-1 gap-4 sm:grid-cols-2"
       saveTestId="acme-directory-save"
       errorTestId="acme-directory-error"
     >
@@ -93,7 +93,7 @@ export function AcmeDirectoryCard() {
               rows={5}
               spellCheck={false}
               autoComplete="off"
-              className="font-mono text-xs"
+              className="font-mono text-xs break-all"
               value={draft.caPem}
               onChange={(event) => set({ caPem: event.target.value })}
               data-testid="acme-directory-ca"

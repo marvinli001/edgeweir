@@ -519,7 +519,7 @@ function HttpsEditor({
         <CardHeader>
           <CardTitle>{m.site_tab_https()}</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-5 sm:grid-cols-2">
+        <CardContent className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <FormSelect
             id="siteCertificate"
             label={m.cert_title()}
@@ -727,7 +727,7 @@ function HttpsEditor({
             />
           ))}
           <div
-            className="grid gap-4 border-t pt-5 sm:col-span-2 sm:grid-cols-2"
+            className="grid grid-cols-1 gap-4 border-t pt-5 sm:col-span-2 sm:grid-cols-2"
             data-testid="https-client-cert"
           >
             <FormSelect
@@ -761,7 +761,7 @@ function HttpsEditor({
                     rows={6}
                     spellCheck={false}
                     autoComplete="off"
-                    className="font-mono text-xs"
+                    className="font-mono text-xs break-all"
                     value={clientCert.caPem}
                     onChange={(event) => setClient({ caPem: event.target.value })}
                     data-testid="https-client-ca"
