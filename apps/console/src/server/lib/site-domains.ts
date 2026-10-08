@@ -1,4 +1,9 @@
-import { type DomainKind, formatSiteDomain, MAX_REGEX_DOMAINS } from "@edgeweir/contract";
+import {
+  type DomainKind,
+  formatSiteDomain,
+  MAX_REGEX_DOMAINS,
+  punycodeDecode,
+} from "@edgeweir/contract";
 import { DomainMatch } from "@edgeweir/proto";
 import { toASCII } from "tr46";
 import { fail } from "./errors";
@@ -47,6 +52,19 @@ export function normalizeDomains(domains: string[]): DomainRow[] {
 }
 
 /** The Punycode form of a search term with Unicode letters (lenient: parts of names too); null otherwise. */
+/**
+ * Whether a stored domain name holds a search term in its Unicode form
+ * (every `xn--` label decoded, look-alikes too): Punycode encodes whole
+ * labels, so part of a Unicode label is no substring of the stored name.
+ */
+export function unicodeNameHolds(name: string, term: string): boolean {
+  const decoded = name
+    .split(".")
+    .map((label) => (label.startsWith("xn--") ? (punycodeDecode(label.slice(4)) ?? label) : label))
+    .join(".");
+  return decoded.includes(term.normalize("NFC").toLowerCase());
+}
+
 export function asciiSearch(term: string): string | null {
   if (/^[\x20-\x7e]*$/.test(term)) return null;
   const ascii = toASCII(term.toLowerCase(), { transitionalProcessing: false });

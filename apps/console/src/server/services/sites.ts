@@ -19,6 +19,7 @@ import {
   exists,
   ilike,
   inArray,
+  like as like_,
   ne,
   notExists,
   or,
@@ -44,6 +45,7 @@ import {
   formatDomain,
   namesHosts,
   normalizeDomains,
+  unicodeNameHolds,
 } from "../lib/site-domains";
 import { PURGE_KEY, siteSecret, storeSiteSecret } from "../lib/site-secrets";
 import { assertUpdatedAt } from "../lib/updated-at";
@@ -243,11 +245,27 @@ export async function listSites(
     // Unicode host names are stored as Punycode: search both forms.
     const ascii = asciiSearch(query.search);
     const patterns = [like(query.search), ...(ascii ? [like(ascii)] : [])];
+    // Part of a Unicode label: decode the Punycode names and look in them.
+    const unicodeIds = ascii
+      ? [
+          ...new Set(
+            (
+              await db
+                .select({ siteId: schema.siteDomain.siteId, name: schema.siteDomain.name })
+                .from(schema.siteDomain)
+                .where(like_(schema.siteDomain.name, "%xn--%"))
+            )
+              .filter((row) => unicodeNameHolds(row.name, query.search ?? ""))
+              .map((row) => row.siteId),
+          ),
+        ]
+      : [];
     // Domains are stored without "*.", "." or "~" but match searches like "*.demo".
     const formatted = sql`case ${schema.siteDomain.kind} when 'wildcard' then '*.' || ${schema.siteDomain.name} when 'suffix' then '.' || ${schema.siteDomain.name} when 'regex' then '~' || ${schema.siteDomain.name} else ${schema.siteDomain.name} end`;
     filters.push(
       or(
         ilike(schema.site.name, like(query.search)),
+        unicodeIds.length ? inArray(schema.site.id, unicodeIds) : undefined,
         exists(
           db
             .select({ one: sql`1` })
