@@ -45,7 +45,8 @@ The four forms of site domains, internationalized domain names, how unknown host
 | Match | The whole lowercase Host, as `^(?:pattern)$`: no `^` or `$` needed |
 | Syntax | The subset of [the `matches` operator of rule expressions](rules.en.md): printable ASCII, at most 256 characters; `.` matches any one character |
 | Letters | Lowercase only (escapes such as `\d`, `\W`, `\x2A` aside): the Host is lowercased |
-| Repetition | At most two repeating quantifiers (`*`, `+`, `{n,}`, `{n,m}` with m above 1): the console matches patterns with a backtracking engine when it finds a site by Host, and more quantifiers can take seconds on a long host name |
+| Repetition | At most two repeating quantifiers: `*`, `+`, `{n,}` and `{n,m}` with m above 1 (a fixed count `{n}` does not count) |
+| Branches | The alternatives of each group (and of the whole pattern) and the optional parts (`?`, `{0,1}`, 2 each) multiply to at most 16; `(a\|b)(c\|d)e?` makes 2 × 2 × 2 = 8 (groups take no quantifier) |
 | Not allowed | `"`, `\\`, whitespace, a comma outside `{n,m}` (a Host holds none) |
 
 ### Precedence
@@ -59,7 +60,9 @@ A Host goes to one site only, found in this order (the first hit wins):
 
 Example: site A has `.example.com`, site B `.img.example.com`, site C `*.example.com`. `x.example.com` goes to C (`*.` comes before `.`), `a.img.example.com` to B (the longer suffix), `a.b.example.com` to A.
 
-Purges and prefetches find sites by Host as nodes do: among each cluster's enabled sites, with the same precedence; when several clusters serve the host, each one's site is purged; when only a disabled site's domain matches, the console says the site is disabled.
+A Host that is an IP address or empty (node IP access) matches exact domains only; a Host longer than 253 characters matches no pattern domain.
+
+Purges find sites by Host as nodes do: among each cluster's enabled sites, with the same precedence; when several clusters serve the host, each one's site is purged. Prefetches and sitemap prefetches go to one cluster only: that of the site the same precedence picks among the sites of every cluster, disabled ones included (say an exact domain in one cluster over a suffix or pattern domain in another). Its nodes fetch from the origin of the site they route the Host to. When only a disabled site's domain matches (for prefetches: in that cluster), the console says the site is disabled.
 
 ### Limits of suffix and pattern domains
 
@@ -71,7 +74,7 @@ Purges and prefetches find sites by Host as nodes do: among each cluster's enabl
 | HTTPS | Handshakes complete only for host names the certificate covers (the same name, or `*.` one label up); other names abort the handshake |
 | Bulk redirects | A source's host must be an exact domain or one label below a `*.` domain; hosts only a suffix or pattern matches are refused with `BULK_REDIRECT_HOST_UNKNOWN` |
 | HTTPS redirect | **Excluded domains** lists exact and `*.` domains only; Force HTTPS does not redirect suffix or pattern hosts the certificate does not name (their handshake would fail) |
-| Ports | A site not bound to the port a request arrived on handles it as an unknown host; in clusters with suffix or pattern domains, such a request may get the server-level settings (HTTP/2, compression, ciphers) of another site on that port whose domain also matches the host |
+| Ports | A site not bound to the port a request arrived on handles it as an unknown host. In a cluster with suffix or pattern domains or a default site, such a request gets the server-level settings (HTTP/2, compression, ciphers) of the default site (when unknown hosts are handed to it and it listens on that port) or the node's defaults; otherwise it may get those of another site on that port whose `*.` domain matches the host |
 | Purge paths | A path alone expands to URLs on the exact domains only |
 
 ## Unknown hosts and node IP access
@@ -92,8 +95,9 @@ Purges and prefetches find sites by Host as nodes do: among each cluster's enabl
 - While the default site is disabled, requests handed to it get the unknown host page and the card shows "The default site is disabled: the unknown host page is shown meanwhile"; deleting the default site clears it from the setting.
 - When the default site is not bound to the port the request arrived on ([site ports](https.en.md#site-ports)), the unknown host page answers.
 - The default site must be an enabled site of this cluster (`DEFAULT_SITE_INVALID`); **Default site's certificate for unknown SNI** needs a default site with a certificate (`DEFAULT_SITE_CERTIFICATE_REQUIRED`).
-- With **Hand to the default site**, nodes answer these requests with the default site's HTTP/2, compression and cipher settings.
-- Requests handed to the default site keep their Host, and their cache key always holds it (also where the site's cache key leaves the host out): no Host can write into the cache the default site's visitors read. Force HTTPS redirects them only where the default site's certificate names the host.
+- With **Hand to the default site**, nodes answer the requests handed to it with the default site's HTTP/2, compression and cipher settings (requests without a Host with the node's defaults).
+- Requests handed to the default site keep their Host, and their cache key always holds it (also where the site's cache key leaves the host out): no Host can write into the cache the default site's visitors read.
+- With Force HTTPS on the default site, handed requests get 503 while it has no certificate; they are redirected to HTTPS only with **Default site's certificate for unknown SNI** on and a certificate that names the host, and otherwise answered over HTTP.
 - **Default site** can be searched by name or domain.
 
 ### Scan protection
@@ -105,8 +109,10 @@ Purges and prefetches find sites by Host as nodes do: among each cluster's enabl
 | Ban seconds | 60–86400 | 3600 | How long the ban lasts |
 
 - Counted whatever the handling (handing to the default site included), per client IP (IPv4 by address, IPv6 by /64); where the client IP comes from: [client IP](../deploy/nodes.en.md#client-ip).
+- Behind a load balancer or proxy, first set **Client IP** to **PROXY protocol**, or to **Trusted proxy header** with the proxies' addresses in **Trusted CIDRs**; otherwise the load balancer's address is counted and banned, and every client behind it is refused.
 - The ban is global (scope `platform`): every site of the node answers 403 (`X-Edgeweir-Error: ip-banned`). It is listed under **IP lists & bans → Bans** with the reason "Unknown host scan" and the trigger "Unknown host requests", and shared with the other nodes by the "share automatic bans" setting, see [bans](bans.en.md).
-- Addresses of allow entries in platform IP lists and the cluster's trusted proxies are not counted; a global scan ban never covers any cluster's trusted proxies, allow entries or node addresses, and nodes' kernel bans never drop their cluster's trusted proxies; loopback addresses are never banned.
+- Addresses of allow entries in platform IP lists and the cluster's trusted proxies are not counted; loopback addresses are never banned; nodes' kernel bans never drop their cluster's trusted proxies.
+- A ban that covers another cluster's trusted proxy applies on the node that made it only: it is not shared with other nodes.
 - A client whose ban was lifted is banned again if it keeps scanning.
 - Connections aborted during the TLS handshake (unknown SNI) are not counted.
 
@@ -132,8 +138,9 @@ Once the cluster has [DNS scheduling](dns-and-alerts.en.md), the CNAME target of
 | Unique | Unique across all sites and L4 applications; an old prefix of another object still in its transition is taken too |
 | Reserved | `all`, `all-<digits>`, and every all-lines record name and line name of the clusters' DNS bindings |
 | Conflict | `CNAME_PREFIX_CONFLICT` ("CNAME prefix … is taken or reserved"); a malformed prefix is a validation error |
+| Records already in the zone | In Automatic mode a custom prefix whose `<prefix>.<cluster domain>` (with **Keep per-site line targets** also `<line name>.<prefix>.<cluster domain>`) already holds a record in the DNS provider's zone that the cluster does not manage is `CNAME_PREFIX_CONFLICT` too; not checked when the zone cannot be read within 15 seconds |
 | Transition | The old prefix keeps resolving for 24 hours: the DNS plan keeps both CNAMEs (and the old name's line targets with **Keep per-site line targets**); afterwards the per-minute DNS job deletes the old name, and in Automatic mode publishes a DNS revision (reason "Replaced CNAME prefixes expired"); in Manual mode delete the old record yourself |
-| Names never published | In Automatic mode a prefix never written to the DNS provider (say it collided with a record already in the zone) is not kept when replaced: it leaves the plan at once |
+| Names never published | In Automatic mode a prefix never written to the DNS provider (say the zone could not be read when it was saved, and syncing then failed on a record already there) is not kept when replaced: it leaves the plan at once |
 | Taking back | The object can take its old prefix back during the transition: click **Take back** next to the old name, or fill it in under **Customize**; the UUID prefix from before the upgrade can be taken back with **Take back** too |
 | Audit | `site.cname_update`, `l4.cname_update` (`from`, `to`) |
 
@@ -146,7 +153,7 @@ Saving a DNS binding whose line name equals a prefix (old prefixes in their tran
 | `domains-v2` | A site (disabled ones included) has suffix or pattern domains |
 | `unknown-host-v1` | The unknown host settings are not the defaults (a handling other than the unknown host page, or scan protection on) |
 
-While an active node of the cluster lacks `domains-v2`, the **Domains** tab and new sites show "Some nodes of the site's cluster do not support suffix and pattern domains yet"; while one lacks `unknown-host-v1`, the **Unknown hosts** card shows "Some nodes of the site's cluster do not support it yet". Service accounts and background tasks get `NODE_CAPABILITY_REQUIRED`. Upgrading nodes: [node upgrades](node-upgrades.en.md).
+While an active node of the cluster lacks `domains-v2`, the **Domains** tab and the **New site** dialog show "Some nodes of the site's cluster do not support suffix and pattern domains yet"; while one lacks `unknown-host-v1`, the **Unknown hosts** card shows "Some nodes of the site's cluster do not support it yet". Service accounts and background tasks get `NODE_CAPABILITY_REQUIRED`. Upgrading nodes: [node upgrades](node-upgrades.en.md).
 
 | Change | How it applies |
 | --- | --- |
@@ -168,7 +175,7 @@ Fields: [API reference](../reference/api.en.md).
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| Saving domains shows "Invalid domain: …" | A Unicode name UTS #46 refuses, or a pattern with uppercase letters, `"`, whitespace or a comma, more than two repeating quantifiers, or outside the syntax subset | Correct the name; write the letters of patterns in lowercase; enter several domains separately; use fewer `*` or `+` quantifiers, or a suffix domain |
+| Saving domains shows "Invalid domain: …" | A Unicode name UTS #46 refuses, or a pattern with uppercase letters, `"`, whitespace or a comma, more than two repeating quantifiers, branches multiplying to more than 16, or outside the syntax subset | Correct the name; write the letters of patterns in lowercase; enter several domains separately; use fewer `*` or `+` quantifiers and `\|` or `?` branches, or a suffix domain |
 | Force HTTPS does not redirect a suffix or pattern host | The site's certificate does not name the host | Use a certificate that names it |
 | `x.a.com` goes to another site | Another site has `x.a.com`, `*.a.com` or a longer suffix | Check the sites' domains against the [precedence](#precedence) |
 | HTTPS handshakes fail below a suffix domain | The certificate covers one level (`*.a.com`); deeper host names are not in it | Use a certificate covering the deeper host names that need HTTPS, or exact domains |
