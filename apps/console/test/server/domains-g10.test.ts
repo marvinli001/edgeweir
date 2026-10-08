@@ -4,7 +4,7 @@ import { DomainMatch } from "@edgeweir/proto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
-import { reportAutoBans } from "../../src/server/services/bans";
+import { banChanges, reportAutoBans } from "../../src/server/services/bans";
 import { expireCnamePrefixes } from "../../src/server/services/cname-prefixes";
 import { bindingPolicy, compileBindingPlan, loadBinding } from "../../src/server/services/dns";
 import { latestRevision } from "../../src/server/services/revisions";
@@ -128,6 +128,10 @@ describe("domain forms, unknown hosts and CNAME prefixes (G10)", async () => {
     expect(await names("bücher")).toEqual(["forms"]);
     expect(await names("xn--bcher")).toEqual(["forms"]);
     expect(await names("中国")).toEqual(["forms"]);
+    // Part of a Unicode label too (Punycode encodes whole labels).
+    expect(await names("büch")).toEqual(["forms"]);
+    expect(await names("ÜCHER.G10")).toEqual(["forms"]);
+    expect(await names("国")).toEqual(["forms"]);
     expect(await names(".deep.")).toEqual(["forms"]);
     expect(await names("~(api")).toEqual(["forms"]);
   });
@@ -170,6 +174,44 @@ describe("domain forms, unknown hosts and CNAME prefixes (G10)", async () => {
     expect(await task("y.x.deep.g10.test")).toEqual([deeper.id]);
     expect(await task("cdn7.g10.test")).toEqual([forms]);
     await admin.sites.delete({ id: deeper.id });
+  });
+
+  it("resolves purges as nodes route: enabled sites per cluster, disabled ones last, patterns in node order", async () => {
+    const task = async (host: string) =>
+      (await admin.cacheTasks.create({ type: "host", hosts: [host] })).sites
+        .map((s) => s.id)
+        .sort();
+    // A disabled site's exact domain under an enabled suffix: nodes serve the suffix site.
+    const off = await createSite("off", ["api.p.g10.test", "only-off.p2.g10.test"]);
+    const on = await createSite("on", [".p.g10.test"]);
+    await admin.sites.setEnabled({ id: off.id, enabled: false });
+    expect(await task("api.p.g10.test")).toEqual([on.id]);
+    // Only the disabled site names it: refused as disabled.
+    expect(
+      (await rpcError(admin.cacheTasks.create({ type: "host", hosts: ["only-off.p2.g10.test"] })))
+        .code,
+    ).toBe("SITE_DISABLED");
+    // Another cluster serving the host too: each cluster's site is purged.
+    const other = await admin.clusters.create({ name: "g10-purge" });
+    const elsewhere = await createSite("elsewhere", ["~api\\.p\\.g10\\.test"], other.id);
+    expect(await task("api.p.g10.test")).toEqual([on.id, elsewhere.id].sort());
+    // Patterns of sites created in the same millisecond go by site id, as on nodes.
+    const created = new Date("2026-01-01T00:00:00.000Z");
+    const first = await createSite("same-ms-1", ["~.*\\.q\\.g10\\.test"]);
+    const second = await createSite("same-ms-2", ["~shop\\.q\\.g10\\.test"]);
+    await ctx.db
+      .update(schema.site)
+      .set({ createdAt: new Date(created.getTime()) })
+      .where(eq(schema.site.id, first.id));
+    await ctx.db
+      .update(schema.site)
+      .set({ createdAt: new Date(created.getTime() + 0.7) })
+      .where(eq(schema.site.id, second.id));
+    const winner = first.id < second.id ? first.id : second.id;
+    expect(await task("shop.q.g10.test")).toEqual([winner]);
+    for (const id of [off.id, on.id, elsewhere.id, first.id, second.id])
+      await admin.sites.delete({ id });
+    await admin.clusters.delete({ id: other.id });
   });
 
   it("does not check suffix or pattern domains for DNS, certificates, HTTP-01 or redirect sources", async () => {
@@ -360,6 +402,31 @@ describe("domain forms, unknown hosts and CNAME prefixes (G10)", async () => {
     await admin.clusters.delete({ id: elsewhere.id });
   });
 
+  it("saves unknown host settings once and keeps a default site only while it is handed requests", async () => {
+    const site = await createSite("idle-default", ["idle-default.g10.test"]);
+    const settings = {
+      unknownHost: "close" as const,
+      ipAccess: "page" as const,
+      defaultSiteId: site.id,
+      defaultCertificate: false,
+      scan: { enabled: true, threshold: 50, banSeconds: 600 },
+    };
+    const saved = await admin.clusters.setUnknownHosts({ clusterId, settings });
+    // No handling hands requests to it: no default site is kept.
+    expect(saved.settings.defaultSiteId).toBeNull();
+    const revision = (await latestRevision(ctx.db, clusterId))?.revision;
+    const audits = (await admin.auditLogs.list({ action: "cluster.unknown_hosts_update" })).items
+      .length;
+    // The same settings again change nothing: no revision, no audit entry.
+    await admin.clusters.setUnknownHosts({ clusterId, settings });
+    expect((await latestRevision(ctx.db, clusterId))?.revision).toBe(revision);
+    expect(
+      (await admin.auditLogs.list({ action: "cluster.unknown_hosts_update" })).items.length,
+    ).toBe(audits);
+    await admin.clusters.setUnknownHosts({ clusterId, settings: {} });
+    await admin.sites.delete({ id: site.id });
+  });
+
   it("lists nodes without unknown-host-v1", async () => {
     await ctx.db
       .update(schema.node)
@@ -436,6 +503,63 @@ describe("domain forms, unknown hosts and CNAME prefixes (G10)", async () => {
     });
   });
 
+  it("lifts an unshared platform scan ban on every node and never bans a cluster's trusted proxies", async () => {
+    const settings = await admin.settings.bans();
+    await admin.settings.setBans({ ...settings, shareAutoBans: false });
+    const other = await admin.clusters.create({ name: "g10-other" });
+    await admin.clusters.setClientIp({
+      clusterId: other.id,
+      settings: { mode: "header", trustedCidrs: ["192.0.2.0/24"], header: "x-forwarded-for" },
+    });
+    const [peer] = await ctx.db
+      .insert(schema.node)
+      .values({
+        clusterId: other.id,
+        name: "edge-g10-other",
+        supportedFeatures: ["unknown-host-v1"],
+      })
+      .returning();
+    if (!peer) throw new Error("node missing");
+    const scan = (cidr: string) => ({
+      scope: "platform" as const,
+      siteId: "",
+      cidr,
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 600_000),
+      reason: "unknown_host_scan",
+      metric: "unknown_host_requests",
+      observed: 11,
+      threshold: 10,
+      windowSeconds: 60,
+    });
+    // Another cluster's trusted proxy is never banned at platform scope.
+    expect(await reportAutoBans(ctx.db, { id: nodeId, clusterId }, [scan("192.0.2.9/32")])).toBe(0);
+    // Both nodes banned the same scanner on their own (sharing off).
+    expect(await reportAutoBans(ctx.db, { id: nodeId, clusterId }, [scan("203.0.113.99/32")])).toBe(
+      1,
+    );
+    expect(
+      await reportAutoBans(ctx.db, { id: peer.id, clusterId: other.id }, [scan("203.0.113.99/32")]),
+    ).toBe(1);
+    const before = (await banChanges(ctx.db, { id: peer.id, clusterId: other.id }, 0n, 100))
+      .sequence;
+    const [row] = await ctx.db
+      .select()
+      .from(schema.ipBan)
+      .where(eq(schema.ipBan.cidr, "203.0.113.99/32"));
+    expect(row).toMatchObject({ distributed: false, nodeId });
+    await admin.bans.delete({ id: row?.id ?? "" });
+    // The release reaches the node the row names and the other one alike.
+    for (const node of [
+      { id: nodeId, clusterId },
+      { id: peer.id, clusterId: other.id },
+    ]) {
+      const page = await banChanges(ctx.db, node, before, 100);
+      expect(page.liftedOwn.map((b) => b.cidr)).toContain("203.0.113.99/32");
+    }
+    await admin.settings.setBans(settings);
+  });
+
   it("gives new sites and applications a random prefix and keeps a replaced one for 24 hours", async () => {
     await admin.clusters.setPortPools({
       clusterId,
@@ -507,10 +631,20 @@ describe("domain forms, unknown hosts and CNAME prefixes (G10)", async () => {
         (await rpcError(admin.sites.setCnamePrefix({ id: site.id, prefix }))).code,
         prefix,
       ).toBe("BAD_REQUEST");
-    // An older site's id is longer than a prefix may be; it cannot be chosen anyway.
-    expect(
-      (await rpcError(admin.sites.setCnamePrefix({ id: site.id, prefix: legacy.id }))).code,
-    ).toBe("BAD_REQUEST");
+    // A UUID is only an object's own prefix from before CNAME prefixes.
+    const foreign = await rpcError(admin.sites.setCnamePrefix({ id: site.id, prefix: legacy.id }));
+    expect([foreign.code, foreign.data]).toEqual(["CNAME_PREFIX_INVALID", { prefix: legacy.id }]);
+    // The older site takes its id back while it still resolves.
+    const legacyNew = await admin.sites.setCnamePrefix({ id: legacy.id });
+    expect(legacyNew.retired.map((r) => r.prefix)).toEqual([legacy.id]);
+    const legacyBack = await admin.sites.setCnamePrefix({
+      id: legacy.id,
+      prefix: legacy.id.toUpperCase(),
+    });
+    expect(legacyBack).toEqual({
+      prefix: legacy.id,
+      retired: [{ prefix: legacyNew.prefix, expiresAt: expect.any(String) }],
+    });
     // Another object's prefix and the all-lines names are taken.
     for (const prefix of [l4.cnamePrefix, "all", "all-2"]) {
       const error = await rpcError(admin.sites.setCnamePrefix({ id: site.id, prefix }));
@@ -598,6 +732,47 @@ describe("domain forms, unknown hosts and CNAME prefixes (G10)", async () => {
     await admin.dns.saveBinding({ clusterId, binding: { mode: "off" } });
     await admin.l4Apps.delete({ id: l4.id });
     await admin.sites.delete({ id: legacy.id });
+  });
+
+  it("keeps a replaced prefix only where the automatic DNS published it", async () => {
+    const site = await createSite("unpublished", ["unpublished.g10.test"]);
+    const [provider] = await ctx.db
+      .insert(schema.platformDnsProvider)
+      .values({ name: "Zone", provider: "test", zone: "g10.test", credentialEnvelope: "unused" })
+      .returning();
+    if (!provider) throw new Error("provider missing");
+    await ctx.db
+      .insert(schema.dnsBinding)
+      .values({ clusterId, mode: "auto", providerId: provider.id, domain: "edge.g10.test" })
+      .onConflictDoUpdate({
+        target: schema.dnsBinding.clusterId,
+        set: { mode: "auto", providerId: provider.id, domain: "edge.g10.test" },
+      });
+    // Never claimed at the provider (say it collided with a record): gone at once.
+    const first = await admin.sites.setCnamePrefix({ id: site.id, prefix: "www" });
+    expect(first.retired).toEqual([]);
+    // Claimed (published): it keeps resolving for 24 hours.
+    await ctx.db.insert(schema.dnsManagedName).values({
+      providerId: provider.id,
+      clusterId,
+      name: "www.edge",
+      type: "CNAME",
+    });
+    const second = await admin.sites.setCnamePrefix({ id: site.id });
+    expect(second.retired.map((r) => r.prefix)).toEqual(["www"]);
+    await ctx.db
+      .delete(schema.dnsManagedName)
+      .where(eq(schema.dnsManagedName.providerId, provider.id));
+    await ctx.db.delete(schema.cnameRetired).where(eq(schema.cnameRetired.siteId, site.id));
+    await ctx.db
+      .update(schema.dnsBinding)
+      .set({ mode: "off", providerId: null, domain: "" })
+      .where(eq(schema.dnsBinding.clusterId, clusterId));
+    await ctx.db.delete(schema.dnsRevision).where(eq(schema.dnsRevision.clusterId, clusterId));
+    await ctx.db
+      .delete(schema.platformDnsProvider)
+      .where(eq(schema.platformDnsProvider.id, provider.id));
+    await admin.sites.delete({ id: site.id });
   });
 
   it("keeps the 403 matrix: read-only AccessKeys cannot write, service accounts get nothing", async () => {

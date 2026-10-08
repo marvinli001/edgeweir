@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import {
   displaySiteDomain,
+  domainPatternError,
   hostMatcher,
   matchHost,
   parseSiteDomain,
@@ -41,6 +42,14 @@ describe("site domain forms", () => {
     expect(displaySiteDomain("*.xn--fiqs8s.example")).toBe("*.中国.example");
     expect(displaySiteDomain(".xn--fiqs8s.example")).toBe(".中国.example");
     expect(displaySiteDomain("~xn--.*")).toBe("~xn--.*");
+    // Mixed scripts (look-alikes) and invisible characters stay in Punycode.
+    expect(unicodeHost("xn--pple-43d.com")).toBe("xn--pple-43d.com");
+    expect(unicodeHost("xn--pypal-4ve.com")).toBe("xn--pypal-4ve.com");
+    expect(unicodeHost("xn--b-ugn.test")).toBe("xn--b-ugn.test");
+    // One script, or Latin with Han and kana, Bopomofo or Hangul, is shown.
+    expect(unicodeHost("xn--fiqs8s.g10.test")).toBe("中国.g10.test");
+    expect(unicodeHost("xn--wgv71a119e.jp")).toBe("日本語.jp");
+    expect(displaySiteDomain("*.xn--bcher-kva.example")).toBe("*.bücher.example");
   });
 
   it("parses the four forms", () => {
@@ -91,6 +100,16 @@ describe("site domain forms", () => {
     expect(siteDomain.parse("*.WWW.A.com")).toBe("*.www.a.com");
     expect(siteDomain.safeParse("a/b.com").success).toBe(false);
     expect(parseSiteDomain("~a.com")).toEqual({ kind: "regex", name: "a.com" });
+    // At most two repeating quantifiers (the console's backtracking engine),
+    // no comma outside {n,m} (a Host never holds one).
+    expect(domainPatternError("[a-z]+-\\d+\\.a\\.com")).toBeNull();
+    expect(domainPatternError("\\d{1,3}\\.\\d{1,3}\\.a\\.com")).toBeNull();
+    expect(domainPatternError(".*.*.*\\.a\\.com")).toBe("too_complex");
+    expect(domainPatternError("[a-z0-9-]*-[a-z0-9-]*-[a-z0-9-]*\\.a\\.com")).toBe("too_complex");
+    expect(domainPatternError("[*+]x\\.a\\.com")).toBeNull();
+    expect(domainPatternError("(www|m)\\.a\\.com,shop\\.b\\.com")).toBe("character");
+    expect(domainPatternError("a{1,3}\\.com")).toBeNull();
+    expect(siteDomain.safeParse("~.*.*.*\\.a\\.com").success).toBe(false);
     const patterns = Array.from({ length: 11 }, (_, i) => `~a${i}\\.com`);
     expect(siteDomains.safeParse(patterns.slice(0, 10)).success).toBe(true);
     expect(siteDomains.safeParse(patterns).success).toBe(false);

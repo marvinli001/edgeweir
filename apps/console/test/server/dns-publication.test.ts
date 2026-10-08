@@ -1,5 +1,5 @@
 import { schema } from "@edgeweir/db";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/server/app";
 import { systemActor } from "../../src/server/services/audit";
@@ -274,6 +274,30 @@ describe("DNS publication", async () => {
     expect(touches("dns.set", "AAAA")).toBeGreaterThanOrEqual(0);
     expect(touches("dns.cleanup", "A")).toBeGreaterThan(touches("dns.set", "AAAA"));
     await admin.dns.setProtection({ massRemovalRatio: 0.5 });
+  });
+
+  it("shows a new CNAME target as published only once its record is applied", async () => {
+    const current = await latest();
+    for (const nodeId of nodes) await report(nodeId, current);
+    await reconcileDns(ctx);
+    expect((await admin.dns.siteTarget({ siteId })).published).toBe(true);
+    // Every node offline: the mass removal protection holds the next plans back.
+    await ctx.db
+      .update(schema.node)
+      .set({ lastSeenAt: new Date(Date.now() - 600_000) })
+      .where(inArray(schema.node.id, nodes));
+    await reconcileDns(ctx);
+    expect(await blocked()).not.toBeNull();
+    const changed = await admin.sites.setCnamePrefix({ id: siteId });
+    await reconcileDns(ctx);
+    const held = await admin.dns.siteTarget({ siteId });
+    expect(held.target).toBe(`${changed.prefix}.edge.p.test`);
+    expect(held.published).toBe(false);
+    // Back online, the plan goes out and the new name is published.
+    for (const nodeId of nodes) await report(nodeId, current);
+    await reconcileDns(ctx);
+    expect(await blocked()).toBeNull();
+    expect((await admin.dns.siteTarget({ siteId })).published).toBe(true);
   });
 
   it("keeps the newest DNS revisions of each binding, and the desired, applied and blocked ones", async () => {

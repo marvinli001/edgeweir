@@ -116,8 +116,9 @@ test("G10: the cluster's unknown host handling", async ({ page }) => {
 
   await pick(page, card.getByTestId("unknown-hosts-unknown"), "交给默认网站");
   await expect(card.getByTestId("unknown-hosts-site")).toBeVisible();
-  // Handing requests over needs the site.
+  // Handing requests over needs the site, found by name or domain.
   await expect(save).toBeDisabled();
+  await card.getByTestId("unknown-hosts-site-search").fill("default.g10");
   await pick(page, card.getByTestId("unknown-hosts-site"), "g10-default");
   await pick(page, card.getByTestId("unknown-hosts-ip"), "关闭连接（444）");
   await card.getByTestId("unknown-hosts-certificate").click();
@@ -191,6 +192,12 @@ test("G10: the CNAME card regenerates and customizes the prefix", async ({ page 
   await save.click();
   await expect(value).toHaveText(`g10-ui-custom.${state.domain}`);
   await expect(input).toHaveCount(0);
+  // A replaced name still resolving is taken back.
+  const retired = card
+    .getByTestId("cname-retired")
+    .locator("li", { hasText: `g10-custom.${state.domain}` });
+  await retired.getByTestId("cname-retired-restore").click();
+  await expect(value).toHaveText(`g10-custom.${state.domain}`);
   await check(page, "cname");
   expect(pageErrors).toEqual([]);
 });

@@ -41,6 +41,7 @@ const ALL_FEATURES = [
   "edge-ports-v1",
   "client-ip-v1",
   "site-content-v1",
+  "domains-v2",
 ];
 
 /** A change without the operator behind it (service accounts, background jobs). */
@@ -139,6 +140,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       edgePorts: available,
       clientIp: available,
       siteContent: available,
+      domainsV2: available,
     });
     const https = await admin.https.get({ id: siteId });
     expect(https).toMatchObject({ brotli: false, brotliLevel: 6, zstd: false, zstdLevel: 3 });
@@ -297,6 +299,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       edgePorts: unavailable,
       clientIp: unavailable,
       siteContent: unavailable,
+      domainsV2: unavailable,
     });
     const before = (await config()).revision;
     for (const [call, feature] of [
