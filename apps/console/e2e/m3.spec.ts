@@ -20,6 +20,8 @@ test("M3: request a certificate and configure HTTPS in both themes and mobile", 
   await dialog.getByLabel("名称", { exact: true }).fill(name);
   await dialog.getByLabel("域名", { exact: true }).fill("https.m3.test");
   await dialog.getByLabel("账户邮箱").fill("acme@e2e.test");
+  // Pebble: the custom ACME directory of the system settings.
+  await pick(page, dialog.getByLabel("证书颁发机构", { exact: true }), "自定义 ACME 目录");
   await page.getByTestId("cert-request-submit").click();
   await expect(dialog).toBeHidden();
   const card = page.getByTestId("certificate-card").filter({ hasText: name });

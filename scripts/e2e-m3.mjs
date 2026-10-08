@@ -103,7 +103,8 @@ if (!site)
 // is bound to the site once issued (a site bound by an earlier run keeps
 // its certificate).
 const unbound = !(await api("GET", `/sites/${site.id}/https`)).certificateId;
-const check = await api("GET", `/sites/${site.id}/https/check`);
+// Pebble is the custom ACME directory of the system settings (scripts/e2e.sh).
+const check = await api("GET", `/sites/${site.id}/https/check?ca=custom`);
 assert.deepEqual(check.blockers, [], `HTTPS blockers: ${JSON.stringify(check.blockers)}`);
 assert.deepEqual(check.request.names, [domain]);
 assert.equal(check.request.challenge, "http01");
@@ -111,6 +112,7 @@ const requested = await api("POST", "/certificates/request", {
   name: "Pebble M3",
   names: check.request.names,
   email: "acme@e2e.test",
+  ca: "custom",
   challenge: check.request.challenge,
   ...(unbound ? { bindSiteId: site.id } : {}),
 });

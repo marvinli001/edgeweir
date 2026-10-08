@@ -149,6 +149,16 @@
 #   N+1 at platform scope, listed and lifted; a new site's 8-character CNAME
 #   prefix, the old name kept in the DNS zone after regenerating, a custom
 #   prefix and conflicts; Playwright e2e/g10.spec.ts.
+#   Site parity G11 (scripts/e2e-g11.mjs, after G10): both nodes report
+#   multi-certificate-v1 and client-cert-v1; union coverage of a site's
+#   certificates, SNI picking exact over wildcard names and an RSA-only
+#   client the RSA certificate (openssl s_client); client certificates
+#   required (403 client-cert-required, X-Client-* to the origin, the
+#   visitor's own stripped) and optional with tls.client.* rules; TLS 1.2
+#   session IDs and tickets and TLS 1.3 tickets reused, tickets on the other
+#   node too, never with another site's SNI; no early data; Pebble from the
+#   system settings issuing an RSA 2048 certificate, its ACME account
+#   listed; Playwright e2e/g11.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -323,6 +333,15 @@ API_KEY="$(rpc accessKeys/create '{"name":"e2e"}' | jq -r .key)"
 [[ "$API_KEY" == ewk_* ]] || fail "no API key returned"
 export API_KEY
 pass "API key ${API_KEY:0:10}… (the public API /api/v1 only accepts x-api-key)"
+
+step "certificate authority: Pebble as the custom ACME directory of the system settings"
+# No EDGEWEIR_ACME_DIRECTORY / EDGEWEIR_ACME_CA_FILE in compose.e2e.yml: the console reads the
+# directory with the CA certificate of Pebble's listener before saving it.
+ACME_SETTING="$(api PUT /settings/acme-directory "$(jq -nc --rawfile ca docker/e2e/pebble/test-only.crt \
+  '{url:"https://pebble:14000/dir", caPem:$ca}')")"
+[[ "$(jq -r '.source + " " + .caSource' <<<"$ACME_SETTING")" == "setting setting" ]] \
+  || fail "Pebble directory not saved: $ACME_SETTING"
+pass "Pebble directory saved in the system settings ($(jq -r .effectiveUrl <<<"$ACME_SETTING"))"
 
 CLUSTER="$(api GET /clusters | jq -c '.[0]')"
 CLUSTER_ID="$(jq -r .id <<<"$CLUSTER")"
@@ -1218,6 +1237,14 @@ if ! $SKIP_UI; then
 fi
 node scripts/e2e-g10.mjs --cleanup || fail "G10 cleanup failed"
 pass "G10 checks passed"
+
+step "G11: several certificates by SNI and key type, client certificates, TLS session resumption across nodes and sites, Pebble as the custom ACME directory"
+node scripts/e2e-g11.mjs || fail "G11 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g11.spec.ts || fail "G11 browser checks failed"
+fi
+node scripts/e2e-g11.mjs --cleanup || fail "G11 cleanup failed"
+pass "G11 checks passed"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"

@@ -53,13 +53,10 @@ services:
       LOG_LEVEL: debug
       EDGEWEIR_OUTBOUND_ALLOW_CIDRS: ${E2E_SUBNET:-172.28.213.0/24}
       EDGEWEIR_DNS_TEST_ENDPOINT: http://mock-services:8080
-      EDGEWEIR_ACME_DIRECTORY: https://pebble:14000/dir
-      EDGEWEIR_ACME_CA_FILE: /e2e/pebble/test-only.crt
     ports:
       - "${E2E_CONSOLE_PORT:-13000}:3000"
     volumes:
       - downloads:/srv/downloads:ro
-      - ./docker/e2e/pebble/test-only.crt:/e2e/pebble/test-only.crt:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -317,7 +314,8 @@ services:
       - origin-ca:/etc/edgeweir-e2e:ro
     networks:
       default:
-        aliases: [demo.test, https.m3.test]
+        # acme.g11.test: Pebble's HTTP-01 for scripts/e2e-g11.mjs.
+        aliases: [demo.test, https.m3.test, acme.g11.test]
       isolated: {}
     depends_on:
       geoip-fixture:
