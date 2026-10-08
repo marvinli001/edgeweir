@@ -11,20 +11,29 @@ import {
   type UnknownHostAction,
   unknownHostSettings,
 } from "@edgeweir/contract";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
 import { OptionSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { ListInput, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
-import { QueryView } from "@/components/states";
+import { ErrorState, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { defaultSiteChoices, loadedSites, nextSitePage, SITE_PAGE_SIZE } from "@/lib/default-site";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
@@ -334,6 +343,15 @@ function ClientIpForm({ data }: { data: ClusterClientIp }) {
   );
 }
 
+/** The default-site popup without sites to pick. */
+function NoSite({ text }: { text: string }) {
+  return (
+    <p className="px-3 py-2 text-sm text-muted-foreground" data-testid="unknown-hosts-site-none">
+      {text}
+    </p>
+  );
+}
+
 const ACTIONS: { value: UnknownHostAction; label: () => string }[] = [
   { value: "page", label: m.unknown_hosts_action_page },
   { value: "close", label: m.unknown_hosts_action_close },
@@ -364,25 +382,30 @@ function UnknownHostsForm({ data }: { data: ClusterUnknownHosts }) {
   const [chosen, setChosen] = React.useState(
     data.defaultSite ? { value: data.defaultSite.id, label: data.defaultSite.name } : null,
   );
-  const sites = useQuery({
-    ...orpc.sites.list.queryOptions({
-      input: { clusterId: data.clusterId, search: siteQuery || undefined, pageSize: 100 },
+  // Matches come a page at a time (oldest site first); `more`: the next page can be loaded.
+  const sites = useInfiniteQuery({
+    ...orpc.sites.list.infiniteOptions({
+      input: (page: number) => ({
+        clusterId: data.clusterId,
+        search: siteQuery || undefined,
+        page,
+        pageSize: SITE_PAGE_SIZE,
+      }),
+      initialPageParam: 1,
+      getNextPageParam: nextSitePage,
     }),
     enabled: handsOver,
     placeholderData: keepPreviousData,
   });
-  const items = sites.data?.items ?? [];
-  const options = [
-    ...(chosen && chosen.value === siteId && !items.some((site) => site.id === chosen.value)
-      ? [chosen]
-      : []),
-    ...items
-      .filter((site) => site.enabled || site.id === saved.defaultSiteId)
-      .map((site) => ({ value: site.id, label: site.name })),
-  ];
+  const loaded = loadedSites(sites.data?.pages);
+  const { options, more } = defaultSiteChoices(loaded, {
+    siteId,
+    chosen,
+    savedId: saved.defaultSiteId,
+  });
   const pickSite = (value: string) => {
     setSiteId(value);
-    const site = items.find((item) => item.id === value);
+    const site = loaded?.items.find((item) => item.id === value);
     if (site) setChosen({ value: site.id, label: site.name });
   };
   // Scan values the switch hides are not checked: back to the saved ones.
@@ -460,6 +483,13 @@ function UnknownHostsForm({ data }: { data: ClusterUnknownHosts }) {
               <Input
                 value={siteSearch}
                 onChange={(event) => setSiteSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  // Enter searches at once; it does not submit (and save) the settings.
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    setSiteQuery(siteSearch.trim());
+                  }
+                }}
                 aria-label={m.bans_site_search()}
                 placeholder={m.sites_search_placeholder()}
                 data-testid="unknown-hosts-site-search"
@@ -471,7 +501,35 @@ function UnknownHostsForm({ data }: { data: ClusterUnknownHosts }) {
                 placeholder={m.unknown_hosts_choose_site()}
                 onChange={pickSite}
                 testId="unknown-hosts-site"
+                empty={
+                  <QueryView
+                    query={sites}
+                    loadingClassName="min-h-16"
+                    error={() => <NoSite text={m.common_error_title()} />}
+                  >
+                    {() => <NoSite text={m.sites_no_match()} />}
+                  </QueryView>
+                }
               />
+              {sites.isLoadingError ? (
+                <ErrorState error={sites.error} onRetry={() => void sites.refetch()} />
+              ) : null}
+              {sites.isFetchNextPageError ? (
+                <ErrorState error={sites.error} onRetry={() => void sites.fetchNextPage()} />
+              ) : more && sites.hasNextPage && !sites.isPlaceholderData ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="self-start"
+                  disabled={sites.isFetchingNextPage}
+                  onClick={() => void sites.fetchNextPage()}
+                  data-testid="unknown-hosts-site-more"
+                >
+                  {sites.isFetchingNextPage ? <Spinner /> : null}
+                  {m.unknown_hosts_site_more()}
+                </Button>
+              ) : null}
             </Field>
             {data.defaultSite && !data.defaultSite.enabled && siteId === data.defaultSite.id ? (
               <SafetyNote data-testid="unknown-hosts-site-disabled">

@@ -1,9 +1,4 @@
-import {
-  type DnsPointing,
-  displaySiteDomain,
-  type Site,
-  type SiteLaunch,
-} from "@edgeweir/contract";
+import type { DnsPointing, Site, SiteLaunch } from "@edgeweir/contract";
 import { RefreshIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
@@ -16,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAction } from "@/hooks/use-action";
 import { certificateErrorText } from "@/lib/certificate-errors";
+import { domainsDetail } from "@/lib/domain-list";
 import { formatClockTime, m } from "@/lib/i18n";
 import { notPointing } from "@/lib/launch";
 import { orpc } from "@/lib/orpc";
@@ -92,26 +88,37 @@ export function PointingStatus({ pointing }: { pointing: DnsPointing }) {
   );
 }
 
-function dnsItem(launch: SiteLaunch) {
+type LaunchItem = {
+  tone: StatusTone;
+  label: string;
+  detail: string;
+  /** The detail on hover: with the Punycode names when it shows Unicode ones. */
+  title?: string;
+};
+
+function dnsItem(launch: SiteLaunch): LaunchItem {
   // `.a.com` and `~pattern` domains name no host to look up: not counted.
   const total = launch.domains.filter((d) => d.pointing !== "unchecked").length;
   // Only such domains: nothing was checked.
   if (total === 0) return { tone: "idle" as const, label: m.dns_pointing_unchecked(), detail: "" };
   const ok = launch.domains.filter((d) => d.pointing === "ok").length;
-  const failing = notPointing(launch).map((d) => displaySiteDomain(d.name));
+  const failing = notPointing(launch).map((d) => d.name);
   const tone: StatusTone = ok === total ? "good" : failing.length ? "warn" : "idle";
-  return { tone, label: m.site_launch_dns({ ok, total }), detail: failing.join(", ") };
+  return { tone, label: m.site_launch_dns({ ok, total }), ...domainsDetail(failing) };
 }
 
-function certificateItem({ certificate }: SiteLaunch) {
-  const uncovered = certificate.uncovered.join(", ");
+function certificateItem({ certificate }: SiteLaunch): LaunchItem {
   switch (certificate.state) {
     case "none":
       return { tone: "idle" as const, label: m.site_launch_cert_none(), detail: "" };
     case "covered":
       return { tone: "good" as const, label: m.site_launch_cert_covered(), detail: "" };
     case "uncovered":
-      return { tone: "warn" as const, label: m.site_launch_cert_uncovered(), detail: uncovered };
+      return {
+        tone: "warn" as const,
+        label: m.site_launch_cert_uncovered(),
+        ...domainsDetail(certificate.uncovered),
+      };
     case "issuing":
       return { tone: "warn" as const, label: m.site_launch_cert_issuing(), detail: "" };
     case "failed":
@@ -151,7 +158,7 @@ function LaunchRow({
   testId,
   pulse,
 }: {
-  item: { tone: StatusTone; label: string; detail: string };
+  item: LaunchItem;
   link: LinkProps;
   testId: string;
   pulse?: boolean;
@@ -166,7 +173,7 @@ function LaunchRow({
       {item.detail ? (
         <span
           className="ml-auto min-w-0 truncate text-xs text-muted-foreground"
-          title={item.detail}
+          title={item.title ?? item.detail}
         >
           {item.detail}
         </span>

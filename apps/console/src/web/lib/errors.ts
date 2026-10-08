@@ -1,4 +1,10 @@
-import { errorDefs, expressionIssue, isErrorCode } from "@edgeweir/contract";
+import {
+  displaySiteDomain,
+  type ErrorCode,
+  errorDefs,
+  expressionIssue,
+  isErrorCode,
+} from "@edgeweir/contract";
 import type * as z from "zod";
 // Relative on purpose: the module is unit-tested outside Vite's "@" alias.
 import { m } from "../paraglide/messages.js";
@@ -86,6 +92,38 @@ const fieldLabels: Record<string, () => string> = {
   ttl: () => m.dns_ttl(),
 };
 
+/**
+ * Params that list host names or site domains as the server stores them
+ * (Punycode, ", " between them). Some pages show names in Unicode (sites),
+ * others take and show Punycode only (certificate requests, DNS bindings):
+ * a name is shown in Unicode with its Punycode after it (domainWithAscii).
+ */
+const domainParams: Partial<Record<ErrorCode, readonly string[]>> = {
+  DOMAIN_IN_USE: ["domains"],
+  CERTIFICATE_DOMAIN_MISMATCH: ["domains"],
+  CERTIFICATE_DNS_NOT_POINTING: ["names"],
+  CACHE_TASK_HOST_UNKNOWN: ["hosts"],
+  BULK_REDIRECT_HOST_UNKNOWN: ["hosts"],
+  HTTPS_REDIRECT_DOMAIN_INVALID: ["domains"],
+  DNS_RECORD_CONFLICT: ["name"],
+  DNS_BINDING_CONFLICT: ["name"],
+};
+
+/**
+ * "xn--bcher-kva.example, a.test" → "bücher.example (xn--bcher-kva.example), a.test":
+ * names the console shows in Unicode keep their Punycode next to them;
+ * patterns and look-alikes (kept in Punycode) stay as they are.
+ */
+function domainWithAscii(list: string): string {
+  return list
+    .split(", ")
+    .map((domain) => {
+      const shown = displaySiteDomain(domain);
+      return shown === domain ? domain : m.common_domain_ascii({ domain: shown, ascii: domain });
+    })
+    .join(", ");
+}
+
 /** A node capability id ("tls-v1") by its label, or the id itself when it has none. */
 export function nodeFeatureLabel(feature: string): string {
   const fn = messages[`node_feature_${feature.replaceAll("-", "_")}`];
@@ -169,6 +207,8 @@ export function localizeError(error: unknown, fallback: string = m.common_unknow
       params[name] = typeof value === "number" ? value : String(value ?? "");
     }
     if (code === "NODE_CAPABILITY_REQUIRED") params.features = featureList(String(params.features));
+    for (const name of domainParams[code] ?? [])
+      params[name] = domainWithAscii(String(params[name]));
     const fn = messages[`error_${code.toLowerCase()}`];
     if (fn) return fn(params);
   }

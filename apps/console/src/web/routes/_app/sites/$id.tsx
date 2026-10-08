@@ -1,10 +1,4 @@
-import {
-  analyticsRange,
-  displaySiteDomain,
-  type Site,
-  siteDomain,
-  siteDomainKind,
-} from "@edgeweir/contract";
+import { analyticsRange, displaySiteDomain, type Site, siteDomain } from "@edgeweir/contract";
 import { Add01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -43,11 +37,11 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDraft } from "@/hooks/use-draft";
 import { useTabBar } from "@/hooks/use-tab-bar";
-import { domainList } from "@/lib/address-input";
 import { DEFAULT_RANGE } from "@/lib/analytics";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { recordRecent } from "@/lib/recents";
+import { needsDomainForms, newDomains } from "@/lib/site-domains";
 import { SITE_TABS, type SiteTab, siteTabLabel } from "@/lib/site-tabs";
 
 export const Route = createFileRoute("/_app/sites/$id")({
@@ -155,8 +149,7 @@ function SiteDetailPage() {
               />
             </TabsContent>
             <TabsContent value="domains" className="animate-enter">
-              {/* A save stores Unicode names as Punycode: start again from the saved list. */}
-              <DomainsTab key={data.updatedAt} site={data} />
+              <DomainsTab site={data} />
             </TabsContent>
             <TabsContent value="origins" className="animate-enter">
               <OriginsTab site={data} />
@@ -345,29 +338,36 @@ function OverviewTab({ site }: { site: Site }) {
 }
 
 function DomainsTab({ site }: { site: Site }) {
+  const queryClient = useQueryClient();
   const { draft: domains, setDraft: setDomains, dirty: listChanged } = useDraft(site.domains);
+  // The draft as last rendered: a save that answers after it changed leaves it alone.
+  const latest = React.useRef(domains);
+  React.useEffect(() => {
+    latest.current = domains;
+  });
   const [input, setInput] = React.useState("");
   const [invalid, setInvalid] = React.useState<string | null>(null);
   const { save, error, pending } = useSaveSite(site.id);
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
   // `.a.com` and `~pattern` need domains-v2 on every node of the cluster.
   const formsAvailable = features.data?.domainsV2.available ?? true;
-  // Typed names compare by their shown form (Unicode names are stored as Punycode).
-  const shown = (d: string) => displaySiteDomain(d.normalize("NFC").toLowerCase());
-  const known = new Set(domains.map(shown));
-  // Domains typed but not added yet count as changes and are saved with the list.
-  const typed = domainList(input).filter((d) => !known.has(shown(d)));
+  const formsUnavailable = m.site_domain_forms_unavailable();
+  // Domains typed but not added yet count as changes and are saved with the list. They compare
+  // with the listed ones in their stored form: Unicode names are stored as Punycode.
+  const typed = newDomains(input, domains);
   const dirty = listChanged || typed.length > 0;
-  /** The typed domains, or null (and the reason shown) when one cannot be added. */
-  const take = () => {
+  /**
+   * The typed domains, or null (and the reason shown) when one cannot be added. `added` are the
+   * other domains not saved yet, checked with them.
+   */
+  const take = (added: readonly string[] = []) => {
     const bad = typed.find((d) => !siteDomain.safeParse(d).success);
     if (bad) {
       setInvalid(m.site_domain_invalid({ domain: bad }));
       return null;
     }
-    const kinds = typed.map(siteDomainKind);
-    if (!formsAvailable && kinds.some((kind) => kind === "suffix" || kind === "regex")) {
-      setInvalid(m.feature_unavailable_nodes());
+    if (!formsAvailable && needsDomainForms([...added, ...typed])) {
+      setInvalid(formsUnavailable);
       return null;
     }
     setInvalid(null);
@@ -386,14 +386,20 @@ function DomainsTab({ site }: { site: Site }) {
       <Card>
         <form
           className="flex flex-col gap-(--card-spacing)"
-          onSubmit={(event) => {
+          onSubmit={async (event) => {
             event.preventDefault();
-            const values = take();
+            const values = take(domains.filter((d) => !site.domains.includes(d)));
             if (!values) return;
             const next = [...domains, ...values];
             setDomains(next);
             setInput("");
-            void save({ domains: next });
+            if (!(await save({ domains: next }))) return;
+            // The stored list (Punycode, without duplicates) replaces the draft it was saved from.
+            const stored = queryClient.getQueryData(
+              orpc.sites.get.queryKey({ input: { id: site.id } }),
+            );
+            if (stored && JSON.stringify(latest.current) === JSON.stringify(next))
+              setDomains(stored.domains);
           }}
         >
           <CardHeader>
@@ -444,10 +450,8 @@ function DomainsTab({ site }: { site: Site }) {
                 {m.site_domain_add()}
               </Button>
             </div>
-            {formsAvailable ? null : (
-              <SafetyNote data-testid="domain-forms-unavailable">
-                {m.site_domain_forms_unavailable()}
-              </SafetyNote>
+            {formsAvailable || invalid === formsUnavailable ? null : (
+              <SafetyNote data-testid="domain-forms-unavailable">{formsUnavailable}</SafetyNote>
             )}
           </CardContent>
           <SaveBar dirty={dirty} pending={pending} error={invalid ?? error} testId="domains-save" />

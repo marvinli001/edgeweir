@@ -1,11 +1,4 @@
-import {
-  DOMAINS_V2_FEATURE,
-  nodeSupportsFeature,
-  type Site,
-  type SiteCreateInput,
-  siteCreateInput,
-  siteDomainKind,
-} from "@edgeweir/contract";
+import { type Site, type SiteCreateInput, siteCreateInput } from "@edgeweir/contract";
 import { MAX_HOST_HEADER_LENGTH, validHostHeader } from "@edgeweir/rule-engine";
 import { Add01Icon, GlobeIcon, Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -18,6 +11,7 @@ import { type Columns, DataTable, FilterBar } from "@/components/data-table";
 import { FilterSelect, FormSelect, OptionSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
+import { SafetyNote } from "@/components/safety-note";
 import { SearchBox } from "@/components/search-box";
 import { followSiteDelivery } from "@/components/site/delivery-toast";
 import { DomainName } from "@/components/site/domain-name";
@@ -43,6 +37,7 @@ import { useOpenKey } from "@/hooks/use-open-key";
 import { domainList, fillOrigin, replacesField } from "@/lib/address-input";
 import { formatCompact, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
+import { domainFormsAvailable, needsDomainForms } from "@/lib/site-domains";
 
 const PAGE_SIZE = 20;
 /** The most sites one traffic breakdown returns (the contract's limit). */
@@ -332,8 +327,10 @@ function CreateSiteDialog({
   // The address, port and protocol fields; a pasted URL or "host:port" fills all three.
   const [address, setAddress] = React.useState("");
   const [port, setPort] = React.useState("");
-  // The name defaults to the first domain.
-  const [firstDomain, setFirstDomain] = React.useState("");
+  // The domains as typed; the name defaults to the first one.
+  const [domainsText, setDomainsText] = React.useState("");
+  const typedDomains = domainList(domainsText);
+  const firstDomain = typedDomains[0] ?? "";
   const [cacheEnabled, setCacheEnabled] = React.useState(true);
   const [respectOrigin, setRespectOrigin] = React.useState(true);
   const [navigating, setNavigating] = React.useState(false);
@@ -347,9 +344,8 @@ function CreateSiteDialog({
     ...orpc.nodes.list.queryOptions({ input: { clusterId: cluster ?? "" } }),
     enabled: open && !!cluster,
   });
-  const formsAvailable = (nodes.data ?? [])
-    .filter((node) => node.status === "active")
-    .every((node) => nodeSupportsFeature(node.supportedFeatures, DOMAINS_V2_FEATURE));
+  const formsAvailable = domainFormsAvailable(nodes.data ?? []);
+  const formsUnavailable = m.site_domain_forms_unavailable();
   /** Puts an origin into the fields (a URL's protocol and port into theirs) and returns it. */
   const fill = (value: string) => {
     const next = fillOrigin(value, { scheme, port }, () => "");
@@ -407,9 +403,9 @@ function CreateSiteDialog({
             const checked = siteCreateInput.safeParse(input);
             setInvalid(checked.success ? null : errorMessage(checked.error));
             if (!checked.success) return;
-            const kinds = input.domains.map(siteDomainKind);
-            if (!formsAvailable && kinds.some((kind) => kind === "suffix" || kind === "regex")) {
-              setInvalid(m.feature_unavailable_nodes());
+            // Classified as stored: a leading 。 makes a suffix too.
+            if (!formsAvailable && needsDomainForms(checked.data.domains)) {
+              setInvalid(formsUnavailable);
               return;
             }
             // Nodes would skip the origin: its Host header is checked as they check it.
@@ -462,8 +458,16 @@ function CreateSiteDialog({
                 required
                 rows={2}
                 placeholder={"demo.test\n*.demo.test\n.demo.test"}
-                onChange={(event) => setFirstDomain(domainList(event.target.value)[0] ?? "")}
+                onChange={(event) => {
+                  setDomainsText(event.target.value);
+                  if (invalid === formsUnavailable) setInvalid(null);
+                }}
               />
+              {!formsAvailable && invalid !== formsUnavailable && needsDomainForms(typedDomains) ? (
+                <SafetyNote data-testid="site-domain-forms-unavailable">
+                  {formsUnavailable}
+                </SafetyNote>
+              ) : null}
             </Field>
             <div className="grid gap-4 sm:grid-cols-[1fr_7rem_8rem]">
               <Field>
