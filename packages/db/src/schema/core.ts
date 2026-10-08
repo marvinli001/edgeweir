@@ -345,6 +345,30 @@ export const siteSecret = pgTable(
   (t) => [uniqueIndex("site_secret_site_kind_uq").on(t.siteId, t.kind)],
 );
 
+/**
+ * A site's certificates after the first (site.certificate_id), at most 3,
+ * in the site's order (position 1-3). Every domain of the site is covered by
+ * at least one of its certificates; nodes pick the one covering the SNI.
+ */
+export const siteCertificate = pgTable(
+  "site_certificate",
+  {
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => site.id, { onDelete: "cascade" }),
+    certificateId: uuid("certificate_id")
+      .notNull()
+      .references(() => certificate.id, { onDelete: "restrict" }),
+    /** 1-3 */
+    position: integer("position").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.siteId, t.certificateId] }),
+    uniqueIndex("site_certificate_position_uq").on(t.siteId, t.position),
+    index("site_certificate_certificate_idx").on(t.certificateId),
+  ],
+);
+
 /** Sites a user starred; they lead the site list on the console home. */
 export const siteStar = pgTable(
   "site_star",

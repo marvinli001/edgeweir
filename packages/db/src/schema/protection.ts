@@ -104,6 +104,32 @@ export const challengeKey = pgTable(
   (t) => [uniqueIndex("challenge_key_cluster_role_uq").on(t.clusterId, t.role)],
 );
 
+/**
+ * TLS session ticket keys of a cluster: next, current and previous. Nodes
+ * encrypt tickets with current and decrypt with all three; the rotation
+ * every 12 hours shifts the roles and creates a new next. The secret (80
+ * random bytes: key name, AES-256 key, HMAC-SHA256 key, the format of
+ * nginx's ssl_session_ticket_key) is envelope-encrypted with purpose
+ * "session_ticket_key.secret" bound to the row id; it is generated when a
+ * node first fetches the key (GetSessionTicketKeys) and never travels in a
+ * configuration.
+ */
+export const sessionTicketKey = pgTable(
+  "session_ticket_key",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clusterId: uuid("cluster_id")
+      .notNull()
+      .references(() => cluster.id, { onDelete: "cascade" }),
+    /** next | current | previous */
+    role: text("role").notNull(),
+    /** JSON envelope of the secret, null until a node first fetches the key. Never plaintext. */
+    secret: text("secret"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("session_ticket_key_cluster_role_uq").on(t.clusterId, t.role)],
+);
+
 /** One of the heaviest addresses or paths of a CC window (approximate). */
 export interface TopCount {
   value: string;

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   integer,
   jsonb,
@@ -39,6 +40,10 @@ export const certificate = pgTable("certificate", {
   acme: jsonb("acme").$type<Record<string, string>>().notNull().default({}),
   /** The request's EAB key (`{ eabKid, eabHmacKey }`); the account is in acme_account. */
   accountEnvelope: text("account_envelope").notNull().default(""),
+  /** The ACME account the certificate was last issued with or stored for. */
+  acmeAccountId: uuid("acme_account_id").references((): AnyPgColumn => acmeAccount.id, {
+    onDelete: "set null",
+  }),
   lastError: text("last_error").notNull().default(""),
   operationStartedAt: timestamp("operation_started_at", { withTimezone: true }),
   /** When to ask the CA for its suggested renewal window again (ARI, RFC 9773). */
