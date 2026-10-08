@@ -42,7 +42,22 @@ type acmeParams struct {
 	Account             acmeAccount `json:"account"`
 	DNS                 *dnsParams  `json:"dns,omitempty"`
 	PreviousCertificate string      `json:"previousCertificate,omitempty"`
+	// KeyType of the certificate's key: "ec256" (ECDSA P-256, the default) or
+	// "rsa2048". The account key is ECDSA P-256 either way.
+	KeyType string `json:"keyType,omitempty"`
 }
+
+// certificateKeyType maps the request's key type to lego's.
+func certificateKeyType(keyType string) (certcrypto.KeyType, error) {
+	switch keyType {
+	case "", "ec256":
+		return certcrypto.EC256, nil
+	case "rsa2048":
+		return certcrypto.RSA2048, nil
+	}
+	return "", fmt.Errorf("unsupported certificate key type")
+}
+
 type acmeUser struct {
 	email        string
 	key          crypto.PrivateKey
@@ -97,6 +112,10 @@ func acmeCommand(ctx context.Context, command string, raw json.RawMessage, sessi
 	if len(p.Domains) == 0 || len(p.Domains) > 100 || p.Email == "" {
 		return nil, fmt.Errorf("email and 1-100 domains are required")
 	}
+	keyType, err := certificateKeyType(p.KeyType)
+	if err != nil {
+		return nil, err
+	}
 	u, err := url.Parse(p.DirectoryURL)
 	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil {
 		return nil, coded("acme_directory_invalid", errors.New("ACME directory must be HTTPS"))
@@ -126,7 +145,7 @@ func acmeCommand(ctx context.Context, command string, raw json.RawMessage, sessi
 	config := lego.NewConfig(user)
 	config.CADirURL = p.DirectoryURL
 	config.UserAgent = "edgeweir-certd/" + Version
-	config.Certificate.KeyType = certcrypto.EC256
+	config.Certificate.KeyType = keyType
 	config.Certificate.Timeout = 2 * time.Minute
 	if config.HTTPClient, err = acmeHTTPClient(p.RootCA); err != nil {
 		return nil, err
