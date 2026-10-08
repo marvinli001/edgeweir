@@ -16,6 +16,7 @@ import {
   CLIENT_IP_FEATURE,
   CRS_EVALUATION_FILES,
   crsDetectionRule,
+  DOMAINS_V2_FEATURE,
   EDGE_PORTS_FEATURE,
   type FeatureAvailability,
   nodeSupportsFeature,
@@ -183,6 +184,7 @@ export async function siteFeatures(db: Database, siteId: string): Promise<SiteFe
     edgePorts: byNodes(EDGE_PORTS_FEATURE),
     clientIp: byNodes(CLIENT_IP_FEATURE),
     siteContent: byNodes(SITE_CONTENT_FEATURE),
+    domainsV2: byNodes(DOMAINS_V2_FEATURE),
   };
 }
 

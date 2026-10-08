@@ -166,6 +166,8 @@ export const siteFeatures = z.object({
    * request body limits and origin tries.
    */
   siteContent: featureAvailability,
+  /** Domains of the forms `.a.com` and `~pattern` (domains-v2). */
+  domainsV2: featureAvailability,
 });
 
 const idParam = z.object({ id: uuid });
