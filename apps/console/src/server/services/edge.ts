@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import type { EdgeModel } from "@edgeweir/config-compiler";
 import {
   CLIENT_IP_FEATURE,
@@ -242,7 +243,8 @@ export async function setClientIp(
             dropForwardedFor: s.mode === "direct" && s.dropForwardedFor,
           };
     const before = clientIpOf(cluster);
-    if (JSON.stringify(stored) === JSON.stringify(cluster.clientIp ?? null)) return;
+    // jsonb returns keys in its own order: compare values, not text.
+    if (isDeepStrictEqual(stored, cluster.clientIp ?? null)) return;
     await tx
       .update(schema.cluster)
       .set({ clientIp: stored, updatedAt: new Date() })
@@ -303,7 +305,10 @@ export async function setUnknownHosts(
   await db.transaction(async (tx) => {
     const cluster = await findCluster(tx, input.clusterId, true);
     const s = input.settings;
-    if (s.defaultSiteId) {
+    // The default site only counts while a handling hands requests to it.
+    const handsOver = s.unknownHost === "site" || s.ipAccess === "site";
+    const defaultSiteId = handsOver ? s.defaultSiteId : null;
+    if (defaultSiteId) {
       const [site] = await tx
         .select({
           clusterId: schema.site.clusterId,
@@ -311,7 +316,7 @@ export async function setUnknownHosts(
           certificateId: schema.site.certificateId,
         })
         .from(schema.site)
-        .where(eq(schema.site.id, s.defaultSiteId))
+        .where(eq(schema.site.id, defaultSiteId))
         .for("update");
       if (!site || site.clusterId !== cluster.id || !site.enabled)
         fail("DEFAULT_SITE_INVALID", "the default site must be an enabled site of this cluster");
@@ -334,14 +339,15 @@ export async function setUnknownHosts(
           scan: { ...s.scan },
         };
     const before = unknownHostsOf(cluster);
+    // jsonb returns keys in its own order: compare values, not text.
     if (
-      JSON.stringify(stored) === JSON.stringify(cluster.unknownHosts ?? null) &&
-      s.defaultSiteId === cluster.defaultSiteId
+      isDeepStrictEqual(stored, cluster.unknownHosts ?? null) &&
+      defaultSiteId === cluster.defaultSiteId
     )
       return;
     await tx
       .update(schema.cluster)
-      .set({ unknownHosts: stored, defaultSiteId: s.defaultSiteId, updatedAt: new Date() })
+      .set({ unknownHosts: stored, defaultSiteId, updatedAt: new Date() })
       .where(eq(schema.cluster.id, cluster.id));
     const { row: revision } = await publishRevision(tx, {
       clusterId: cluster.id,
@@ -355,7 +361,7 @@ export async function setUnknownHosts(
       targetName: cluster.name,
       metadata: {
         from: before,
-        to: unknownHostsOf({ unknownHosts: stored, defaultSiteId: s.defaultSiteId }),
+        to: unknownHostsOf({ unknownHosts: stored, defaultSiteId }),
         revision: revision.revision,
       },
     });
