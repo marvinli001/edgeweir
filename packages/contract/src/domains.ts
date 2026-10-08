@@ -127,7 +127,7 @@ export function punycodeDecode(input: string): string | null {
   return String.fromCodePoint(...output);
 }
 
-/** Scripts told apart when deciding whether a label is shown in Unicode. */
+/** Scripts a label shown in Unicode may be written in. */
 const SCRIPTS = [
   "Latin",
   "Greek",
@@ -160,8 +160,23 @@ const SCRIPTS = [
   "Katakana",
   "Bopomofo",
   "Han",
-].map((name) => ({ name, re: new RegExp(`\\p{Script=${name}}`, "u") }));
-/** Script combinations a label may mix (UTS #39 "highly restrictive"). */
+].map((name) => ({
+  name,
+  script: new RegExp(`\\p{Script=${name}}`, "u"),
+  extensions: new RegExp(`\\p{Script_Extensions=${name}}`, "u"),
+}));
+/** Characters without a script of their own (Script Common or Inherited). */
+const COMMON_CHARACTER = /[\p{Script=Common}\p{Script=Inherited}]/u;
+/** Of those, the ones every script uses (Script_Extensions Common or Inherited: 0-9, "-", most combining marks). */
+const SHARED_CHARACTER = /[\p{Script_Extensions=Common}\p{Script_Extensions=Inherited}]/u;
+/** Characters that do not show: controls, format and space characters, default ignorables. */
+const HIDDEN_CHARACTER = /[\p{Cc}\p{Cf}\p{Z}\p{Default_Ignorable_Code_Point}]/u;
+/** Quote look-alikes browsers never show in Unicode (U+02BB, U+02BC, U+02EC). */
+const QUOTE_LIKE = /[\u02bb\u02bc\u02ec]/u;
+/** The prolonged sound mark ー (and its halfwidth form): shown only right after kana. */
+const PROLONGED_SOUND_MARK = /[\u30fc\uff70]/u;
+const KANA = /[\p{Script_Extensions=Hiragana}\p{Script_Extensions=Katakana}]/u;
+/** Script mixes UTS #39 "highly restrictive" allows. */
 const MIXES = [
   ["Latin", "Han", "Hiragana", "Katakana"],
   ["Latin", "Han", "Bopomofo"],
@@ -169,22 +184,49 @@ const MIXES = [
 ];
 
 /**
- * Whether a decoded label is shown in Unicode: no control, format or
- * space characters, and its letters in one script or a combination
- * browsers also allow (Latin with Han and Japanese kana, Bopomofo or
- * Hangul). Others (say Latin mixed with Cyrillic look-alikes) stay in
- * Punycode, as browsers show them.
+ * Whether a decoded label is shown in Unicode, by the UTS #39 rules
+ * browsers apply and Chromium's rules for ー and quote look-alikes:
+ * - no control, format, space or default-ignorable characters;
+ * - its characters with a script of their own (letters, digits and marks
+ *   alike) in one script or a mix browsers also allow (Latin with Han and
+ *   Japanese kana, Bopomofo or Hangul): Latin mixed with Cyrillic
+ *   look-alikes or with another script's digits (`g০০gle`) stays in
+ *   Punycode;
+ * - a character several scripts share (Script_Extensions: ー, 〆, the
+ *   Arabic tatweel) only in a label with characters of one of them, where
+ *   a letter among them never counts as Latin (`abˍcd`, `abˇcd`); letters
+ *   no script claims (`abːcd`) stay in Punycode, and so does ー unless
+ *   kana come right before it (`paypalーlogin`, `ーabc`).
+ * A label all in one script that looks like a Latin word (Cyrillic `аре`)
+ * is still shown in Unicode.
  */
 export function displayableLabel(label: string): boolean {
-  if (/[\p{Cc}\p{Cf}\p{Z}]/u.test(label)) return false;
-  const scripts = new Set<string>();
+  if (HIDDEN_CHARACTER.test(label) || QUOTE_LIKE.test(label)) return false;
+  const own = new Set<string>();
+  const shared: string[][] = [];
+  let previous = "";
   for (const ch of label) {
-    if (!/\p{L}/u.test(ch)) continue;
-    const script = SCRIPTS.find((s) => s.re.test(ch));
-    scripts.add(script ? script.name : `other:${ch}`);
+    if (PROLONGED_SOUND_MARK.test(ch) && !KANA.test(previous)) return false;
+    previous = ch;
+    const script = SCRIPTS.find((s) => s.script.test(ch));
+    if (script) own.add(script.name);
+    // A script none of the sets has (or an unassigned code point).
+    else if (!COMMON_CHARACTER.test(ch)) return false;
+    else if (SHARED_CHARACTER.test(ch)) {
+      if (/\p{L}/u.test(ch)) return false;
+    } else {
+      const letter = /\p{L}/u.test(ch);
+      shared.push(
+        SCRIPTS.filter((s) => s.extensions.test(ch) && !(letter && s.name === "Latin")).map(
+          (s) => s.name,
+        ),
+      );
+    }
   }
-  if (scripts.size <= 1) return !(scripts.size === 1 && [...scripts][0]?.startsWith("other:"));
-  return MIXES.some((mix) => [...scripts].every((script) => mix.includes(script)));
+  const scripts = [...own];
+  if (scripts.length > 1 && !MIXES.some((mix) => scripts.every((s) => mix.includes(s))))
+    return false;
+  return shared.every((names) => names.some((name) => own.has(name)));
 }
 
 /**
@@ -215,10 +257,13 @@ export function domainPatternError(pattern: string): string | null {
   // A Host never holds a comma: one outside a {n,m} quantifier (say, a list
   // typed into one field) would make the pattern match nothing.
   if (pattern.replace(/\{\d+,\d*\}/g, "").includes(",")) return "character";
-  // The console matches patterns with JavaScript's backtracking engine
-  // (purge resolution): more than two repeating quantifiers can take
-  // seconds on a long host, two stay within a fraction of a millisecond.
+  // Nodes match patterns with PCRE's backtracking engine on every Host no
+  // exact or wildcard name takes (nginx without a match limit): its shape
+  // bounds the work on a host of at most 253 characters. More than two
+  // repeating quantifiers grow it by another power of the host's length,
+  // and every alternative or optional part multiplies it.
   if (repeatingQuantifiers(pattern) > MAX_PATTERN_REPEATS) return "too_complex";
+  if (patternBranches(pattern) > MAX_PATTERN_BRANCHES) return "too_complex";
   try {
     validatePattern(pattern);
   } catch (error) {
@@ -231,6 +276,8 @@ export function domainPatternError(pattern: string): string | null {
 
 /** Repeating quantifiers (*, +, {n,} and {n,m} with m > 1) a domain pattern may hold. */
 export const MAX_PATTERN_REPEATS = 2;
+/** The product of a pattern's alternatives and optional parts (patternBranches) may reach this. */
+export const MAX_PATTERN_BRANCHES = 16;
 
 /** The quantifiers of a pattern that repeat (*, +, {n,}, {n,m} with m > 1), outside classes and escapes. */
 export function repeatingQuantifiers(pattern: string): number {
@@ -256,13 +303,59 @@ export function repeatingQuantifiers(pattern: string): number {
     else if (c === "{") {
       const m = /^\{(\d+)(,(\d*))?\}/.exec(pattern.slice(i));
       if (m) {
-        const max = m[2] === undefined ? Number(m[1]) : m[3] === "" ? Infinity : Number(m[3]);
+        // A fixed count {n} never backtracks.
+        const max = m[2] === undefined ? 0 : m[3] === "" ? Infinity : Number(m[3]);
         if (max > 1) count++;
         i += m[0].length - 1;
       }
     }
   }
   return count;
+}
+
+/**
+ * The product of a pattern's branches: each group or the whole pattern
+ * counts its alternatives, each optional part (?, {0,1}) counts 2; classes
+ * and escapes count 1. It bounds how often a backtracking engine tries a
+ * position again on top of the repeating quantifiers.
+ */
+export function patternBranches(pattern: string): number {
+  let product = 1;
+  const alternatives = [1];
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === "\\") {
+      i++;
+      continue;
+    }
+    if (c === "[") {
+      i++;
+      if (pattern[i] === "^") i++;
+      if (pattern[i] === "]") i++;
+      while (i < pattern.length && pattern[i] !== "]") {
+        if (pattern[i] === "\\") i++;
+        i++;
+      }
+      continue;
+    }
+    if (c === "(") {
+      // "(?:" and other group modifiers: not an optional part.
+      if (pattern[i + 1] === "?") i++;
+      alternatives.push(1);
+    } else if (c === "|") {
+      alternatives[alternatives.length - 1] = (alternatives.at(-1) ?? 1) + 1;
+    } else if (c === ")") {
+      if (alternatives.length > 1) product *= alternatives.pop() ?? 1;
+    } else if (c === "?") {
+      // After a quantifier it only makes the quantifier lazy.
+      const prev = pattern[i - 1];
+      if (prev !== "*" && prev !== "+" && prev !== "}" && prev !== "?") product *= 2;
+    } else if (c === "{" && /^\{0,1\}/.test(pattern.slice(i))) {
+      product *= 2;
+    }
+  }
+  for (const count of alternatives) product *= count;
+  return product;
 }
 
 /** Splits and normalizes a domain as typed; null when it is not valid. */
@@ -378,6 +471,9 @@ export function inPatternOrder<
   );
 }
 
+/** The longest host name patterns are tried on (a DNS name). */
+export const MAX_PATTERN_HOST = 253;
+
 export interface HostMatcher<T> {
   exact: Map<string, T>;
   wildcard: Map<string, T>;
@@ -417,6 +513,9 @@ export function hostMatcher<T>(domains: Iterable<SiteDomainParts & { value: T }>
 export function matchHost<T>(matcher: HostMatcher<T>, host: string): T | undefined {
   const exact = matcher.exact.get(host);
   if (exact !== undefined) return exact;
+  // Node IP access ("_", an IPv4 address, an IPv6 address in brackets) is
+  // matched by exact names only.
+  if (host === "_" || host.startsWith("[") || /^\d+\.\d+\.\d+\.\d+$/.test(host)) return undefined;
   let dot = host.indexOf(".");
   if (dot > 0) {
     const wildcard = matcher.wildcard.get(host.slice(dot + 1));
@@ -428,5 +527,7 @@ export function matchHost<T>(matcher: HostMatcher<T>, host: string): T | undefin
     if (suffix !== undefined) return suffix;
     dot = host.indexOf(".", dot + 1);
   }
+  // No pattern sees a host longer than a DNS name (nodes: a guard server).
+  if (host.length > MAX_PATTERN_HOST) return undefined;
   return matcher.regex.find((r) => r.re.test(host))?.value;
 }
