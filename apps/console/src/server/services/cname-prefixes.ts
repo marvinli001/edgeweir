@@ -6,7 +6,7 @@ import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { lockCnamePrefixes } from "../lib/locks";
 import { type Actor, recordAudit } from "./audit";
-import { cnameClaimed, publishClusterDns } from "./dns";
+import { cnameClaimed, cnameZoneConflict, publishClusterDns } from "./dns";
 import type { Executor, Tx } from "./revisions";
 
 const LETTERS = "abcdefghijklmnopqrstuvwxyz";
@@ -124,10 +124,14 @@ export async function retiredPrefixesOf(db: Executor, ids: string[], now = new D
  * without `prefix`). The replaced prefix keeps resolving for 24 hours
  * (cname_retired) unless the cluster's automatic DNS never published it;
  * taking back a prefix of the same owner still resolving ends that, and
- * is how an object from before CNAME prefixes gets its id back (the only
- * prefix outside CNAME_PREFIX_RE it may take, CNAME_PREFIX_INVALID
- * otherwise). Publishes the cluster's DNS (reason cname) and audits
- * site.cname_update / l4.cname_update.
+ * is how an object from before CNAME prefixes gets its id back: a prefix
+ * outside CNAME_PREFIX_RE (a UUID) is accepted only as the object's
+ * current prefix (no change) or one of its replaced prefixes still
+ * resolving, CNAME_PREFIX_INVALID otherwise. A custom prefix whose name
+ * already holds a record in the zone of the cluster's automatic DNS that
+ * the cluster does not manage is CNAME_PREFIX_CONFLICT (checked best
+ * effort before the change). Publishes the cluster's DNS (reason cname)
+ * and audits site.cname_update / l4.cname_update.
  */
 export async function setCnamePrefix(
   app: AppContext,
@@ -136,6 +140,26 @@ export async function setCnamePrefix(
   actor: Actor,
   now = new Date(),
 ): Promise<CnamePrefixState> {
+  if (prefix !== undefined) {
+    // Outside the transaction: a provider call must not hold the locks.
+    const [current] =
+      "site" in owner
+        ? await app.db
+            .select({ clusterId: schema.site.clusterId, prefix: schema.site.cnamePrefix })
+            .from(schema.site)
+            .where(eq(schema.site.id, owner.site))
+        : await app.db
+            .select({ clusterId: schema.l4App.clusterId, prefix: schema.l4App.cnamePrefix })
+            .from(schema.l4App)
+            .where(eq(schema.l4App.id, owner.app));
+    if (current && current.prefix !== prefix) {
+      const name = await cnameZoneConflict(app, current.clusterId, prefix);
+      if (name !== null)
+        fail("CNAME_PREFIX_CONFLICT", `${name} already holds a record in the DNS zone`, {
+          prefix,
+        });
+    }
+  }
   return app.db.transaction(async (tx) => {
     // The object's row first, then the prefixes (the order of site create
     // and update, which lock domains before prefixes).
@@ -171,8 +195,11 @@ export async function setCnamePrefix(
     }
     await lockCnamePrefixes(tx);
     if (prefix !== undefined && !CNAME_PREFIX_RE.test(prefix)) {
+      // A UUID: the object's own prefix from before CNAME prefixes, only
+      // while it still resolves (its current one, or replaced and in its
+      // transition), never merely because it is the object's id.
       const own =
-        prefix === row.id ||
+        prefix === row.prefix ||
         (await retiredPrefixes(tx, owner, now)).some((retired) => retired.prefix === prefix);
       if (!own) fail("CNAME_PREFIX_INVALID", `invalid CNAME prefix ${prefix}`, { prefix });
     }

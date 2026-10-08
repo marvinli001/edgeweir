@@ -17,7 +17,7 @@ import {
   withLineDefaults,
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
-import { and, desc, eq, gt, inArray, isNotNull, lte, ne, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, lte, ne, notInArray, or, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { lockCnamePrefixes } from "../lib/locks";
@@ -120,9 +120,12 @@ async function assertCluster(db: Executor, clusterId: string) {
   return cluster;
 }
 /**
- * Whether the cluster's automatic DNS has claimed `<prefix>.<domain>` at
- * its provider (dns_managed_name: published or being published); null
- * for bindings that are not automatic.
+ * Whether the cluster's automatic DNS has claimed a CNAME for `prefix`
+ * (dns_managed_name: published or being published) at any provider: the
+ * binding's own and, until a switch is applied, the one it left (whose
+ * records stay until then), under the current domain or a former one (a
+ * managed name `<prefix>` or `<prefix>.…` relative to its zone). Null for
+ * bindings that are not automatic.
  */
 export async function cnameClaimed(
   db: Executor,
@@ -131,21 +134,88 @@ export async function cnameClaimed(
 ): Promise<boolean | null> {
   const row = await loadBinding(db, clusterId);
   if (row.mode !== "auto" || !row.providerId || !row.domain) return null;
-  const provider = await findProvider(db, row.providerId);
-  const absoluteName = `${prefix}.${row.domain}`;
-  if (absoluteName !== provider.zone && !absoluteName.endsWith(`.${provider.zone}`)) return null;
   const [claimed] = await db
     .select({ name: schema.dnsManagedName.name })
     .from(schema.dnsManagedName)
     .where(
       and(
-        eq(schema.dnsManagedName.providerId, row.providerId),
         eq(schema.dnsManagedName.clusterId, clusterId),
-        eq(schema.dnsManagedName.name, relative(absoluteName, provider.zone)),
         eq(schema.dnsManagedName.type, "CNAME"),
+        or(
+          eq(schema.dnsManagedName.name, prefix),
+          sql`starts_with(${schema.dnsManagedName.name}, ${`${prefix}.`})`,
+        ),
       ),
-    );
+    )
+    .limit(1);
   return claimed !== undefined;
+}
+/** How long a CNAME prefix save waits for the provider zone's records. */
+const CNAME_ZONE_CHECK_MS = 15_000;
+/**
+ * Best effort before a custom CNAME prefix is saved: the first name it
+ * would add to an automatic binding's plan (`<prefix>.<domain>`, and
+ * `<line>.<prefix>.<domain>` with line aliases) that the provider zone
+ * already holds a record at the cluster does not manage (or another
+ * cluster manages). Reconciliation would fail the whole binding on such a
+ * name (DNS_RECORD_CONFLICT). Null when there is none, the binding is not
+ * automatic, or the zone cannot be read within CNAME_ZONE_CHECK_MS (a
+ * provider error or a slow provider never blocks the save).
+ */
+export async function cnameZoneConflict(
+  app: AppContext,
+  clusterId: string,
+  prefix: string,
+): Promise<string | null> {
+  const row = await loadBinding(app.db, clusterId);
+  if (row.mode !== "auto" || !row.providerId || !row.domain) return null;
+  try {
+    const provider = await findProvider(app.db, row.providerId);
+    const targets = (await cnameTargets(app.db, clusterId))?.names(prefix);
+    if (!targets) return null;
+    const names = [
+      targets.target,
+      ...(row.lineAliases ? targets.lines.map((line) => line.target) : []),
+    ].map((name) => relative(name, provider.zone));
+    const claims = await app.db
+      .select({ name: schema.dnsManagedName.name, clusterId: schema.dnsManagedName.clusterId })
+      .from(schema.dnsManagedName)
+      .where(
+        and(
+          eq(schema.dnsManagedName.providerId, provider.id),
+          inArray(schema.dnsManagedName.name, names),
+        ),
+      );
+    const listed = certdDns<ProviderRecord[]>(app, "dns.list", {
+      provider: provider.provider,
+      zone: provider.zone,
+      credentials: openProvider(app, provider),
+    });
+    listed.catch(() => {});
+    // A slow provider does not hold up the save for minutes.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const records = await Promise.race([
+      listed,
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), CNAME_ZONE_CHECK_MS);
+      }),
+    ]).finally(() => clearTimeout(timer));
+    if (records === null) throw new Error("dns.list timed out");
+    const actual = new Set(records.map((record) => normalizeRecord(record).name));
+    const conflict = names.find((name) => {
+      const owners = claims.filter((claim) => claim.name === name);
+      if (owners.some((claim) => claim.clusterId !== clusterId)) return true;
+      return owners.length === 0 && actual.has(name);
+    });
+    return conflict === undefined ? null : absolute(conflict, provider.zone);
+  } catch (error) {
+    app.log.warn("cannot check the DNS zone for a CNAME prefix", {
+      clusterId,
+      prefix,
+      code: errorCode(error),
+    });
+    return null;
+  }
 }
 /** The binding row, or an unsaved "off" binding. */
 export async function loadBinding(db: Executor, clusterId: string): Promise<BindingRow> {

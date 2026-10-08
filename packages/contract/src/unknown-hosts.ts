@@ -121,13 +121,14 @@ export const CNAME_RETIRE_HOURS = 24;
 /**
  * Sets the CNAME prefix of a site or layer-4 application; without `prefix`
  * a new random one. A prefix is unique across sites and applications
- * (including replaced ones still resolving) and never `all`, `all-<n>` or a
- * record name of a DNS binding (CNAME_PREFIX_CONFLICT).
- */
-/**
- * Without `prefix`: a new random one. A UUID is only accepted as the
- * object's own prefix from before CNAME prefixes, while it still resolves
- * (taking it back; CNAME_PREFIX_INVALID otherwise).
+ * (including replaced ones still resolving), never `all`, `all-<n>` or a
+ * record name of a DNS binding, and, with automatic DNS, not a name the
+ * provider zone already holds a record at that the cluster does not manage
+ * (checked best effort; CNAME_PREFIX_CONFLICT). A UUID is accepted only as
+ * the object's own prefix from before CNAME prefixes while it still
+ * resolves: its current prefix, or a replaced one still in its 24-hour
+ * transition (taking it back). Any other UUID, such as the id of an
+ * object created with a random prefix, is CNAME_PREFIX_INVALID.
  */
 export const cnamePrefixInput = z.object({
   id: uuid,
