@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   type ActionIr,
   bindLists,
+  bodyFields,
+  bodyFunctions,
+  botFields,
   cookieValue,
   type Expression,
   ExpressionError,
@@ -17,6 +20,7 @@ import {
   parseValueExpression,
   pathExtension,
   queryArgValue,
+  requestPhases,
   rulesV3Fields,
   rulesV3Functions,
   type StructuredCacheCondition,
@@ -47,6 +51,8 @@ type Accepted = {
   lists: Record<string, string[]>;
   action?: ActionIr;
   actionRejected?: true;
+  /** A platform rule's action (only those may ban at platform scope). */
+  platform?: true;
   reason?: string;
   structured?: StructuredCacheCondition;
 } & (
@@ -117,8 +123,8 @@ it.each(rejected.filter((v) => v.irRejected))(
 );
 it.each(accepted.flatMap((v) => (v.action ? [v] : [])))(
   "shared action vector: $phase $action.kind ($reason)",
-  ({ phase, action, actionRejected }) => {
-    expect(validActionIr(phase, action as ActionIr)).toBe(!actionRejected);
+  ({ phase, action, actionRejected, platform }) => {
+    expect(validActionIr(phase, action as ActionIr, platform === true)).toBe(!actionRejected);
   },
 );
 it.each(vectors.flatMap((v) => (v.derive ? [v] : [])))(
@@ -169,6 +175,9 @@ describe("rules-v2 coverage", () => {
         "sha256",
         "substring",
         "to_string",
+        // rules-body-v1
+        "form_value",
+        "json_value",
       ]),
     );
     expect(rejected.filter((v) => v.irRejected).length).toBeGreaterThanOrEqual(20);
@@ -272,4 +281,48 @@ describe("rules-v3 coverage", () => {
   });
   const needsRulesV3OrShape = (e: Expression): boolean =>
     needsRulesV3(e) || isRulesV3Field(e.field) || e.op === "strict_contains";
+});
+
+describe("G14 coverage", () => {
+  const reads = (e: Expression, names: ReadonlySet<string>): boolean =>
+    names.has(e.field) || e.children.some((c) => reads(c, names));
+  it("covers the body and crawler fields in every request phase and refuses them elsewhere", () => {
+    const body = accepted.filter(
+      (v) => !v.value && reads(v.ir, new Set([...bodyFields, ...bodyFunctions])),
+    );
+    expect(new Set(body.map((v) => v.phase))).toEqual(requestPhases);
+    for (const field of [...bodyFields, ...botFields])
+      expect(
+        accepted.some((v) => reads(v.ir, new Set([field]))),
+        field,
+      ).toBe(true);
+    const refused = rejected.filter((v) => v.irRejected).map((v) => v.phase);
+    for (const phase of ["cache", "response-transform", "compression"])
+      expect(refused, phase).toContain(phase);
+  });
+  it("covers every waf-v2 action, accepted and refused", () => {
+    const actions = accepted.flatMap((v) => (v.action ? [v] : []));
+    const kinds = (list: typeof actions) => new Set(list.map((v) => (v.action as ActionIr).kind));
+    for (const kind of ["ban", "respond", "close", "skip"]) {
+      expect(kinds(actions.filter((v) => !v.actionRejected)), kind).toContain(kind);
+      expect(kinds(actions.filter((v) => v.actionRejected)), kind).toContain(kind);
+    }
+    expect(actions.some((v) => v.platform && !v.actionRejected)).toBe(true);
+    const ok = new Set(
+      actions.filter((v) => !v.actionRejected).flatMap((v) => Object.keys(v.action as ActionIr)),
+    );
+    for (const field of [
+      "banSeconds",
+      "banPrefixV4",
+      "banPrefixV6",
+      "banScope",
+      "contentType",
+      "body",
+      "errorPage",
+      "skip",
+      "accessLog",
+      "crs",
+    ])
+      expect(ok, field).toContain(field);
+  });
 });

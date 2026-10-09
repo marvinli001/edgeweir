@@ -1543,6 +1543,301 @@ const rejectedV3Actions = [
     "parameter expressions are strings",
   ],
 ];
+
+// ---- G14: request body fields, verified crawlers and the waf-v2 actions ----
+const FORM_CT = "application/x-www-form-urlencoded";
+const JSON_CT = "application/json";
+const MP_CT = "multipart/form-data; boundary=b1";
+const body = (raw, contentType, extra = {}) => ({
+  "http.request.body.raw": raw,
+  "http.request.headers.content-type": contentType,
+  "http.request.body.size": raw.length,
+  "http.request.body.truncated": false,
+  ...extra,
+});
+const MP_BODY =
+  '--b1\r\nContent-Disposition: form-data; name="title"\r\n\r\nhi\r\n' +
+  '--b1\r\nContent-Disposition: form-data; name="f"; filename="shell.php"\r\n\r\n<?php\r\n--b1--';
+function g14Cases() {
+  return [
+    ['form_value("user") eq "admin"', body("user=admin&x=1", FORM_CT), true],
+    ['form_value("user") eq "admin"', body("user=root&user=admin", FORM_CT), false],
+    ['json_value("cmd.0") contains "rm"', body('{"cmd":["rm -rf /"]}', JSON_CT), true],
+    ['json_value("cmd.0") contains "rm"', body('{"cmd":["rm -rf /"],}', JSON_CT), false],
+    ['http.request.body.filenames contains ".php"', body(MP_BODY, MP_CT), true],
+    ['form_value("title") eq "hi"', body(MP_BODY, MP_CT), true],
+    ['form_value("f") eq ""', body(MP_BODY, MP_CT), true],
+    [
+      "http.request.body.truncated eq true",
+      { "http.request.body.truncated": true, "http.request.body.size": 2000000 },
+      true,
+    ],
+    ["http.request.body.size gt 1024", { "http.request.body.size": 2048 }, true],
+    ["http.request.body.size eq -1", { "http.request.body.size": -1 }, true],
+    [
+      'http.request.method eq "POST" and form_value("q") eq ""',
+      { "http.request.method": "POST", ...body("", FORM_CT) },
+      true,
+    ],
+    ['http.request.body.raw contains "<script"', body("a=<script>", FORM_CT), true],
+    ['len(form_value("q")) gt 3', body("q=abcd", FORM_CT), true],
+    ['lower(json_value("a.b")) eq "x"', body('{"a":{"b":"X"}}', JSON_CT), true],
+    ['json_value("n") eq "1.0"', body('{"n":1.0}', JSON_CT), true],
+    ['form_value("q") eq "1"', body("q=1", FORM_CT), true, "config"],
+    ['form_value("u") eq "x"', body("u=x", FORM_CT), true, "ratelimit"],
+    ['json_value("t") eq "a"', body('{"t":"a"}', JSON_CT), true, "origin"],
+    ['form_value("q") eq "1"', body("q=1", FORM_CT), true, "request-transform"],
+    ['form_value("q") eq "1"', body("q=1", FORM_CT), true, "redirect"],
+    [
+      'http.request.bot.verified eq true and http.request.bot.name eq "googlebot"',
+      { "http.request.bot.verified": true, "http.request.bot.name": "googlebot" },
+      true,
+    ],
+    ["not http.request.bot.verified eq true", {}, true],
+    [
+      'http.request.bot.name in {"bingbot" "baiduspider"}',
+      { "http.request.bot.name": "bingbot" },
+      true,
+    ],
+  ];
+}
+function g14ValueCases() {
+  return [
+    ['concat("u-", form_value("user"))', body("user=bob", FORM_CT), "u-bob", "redirect"],
+    ['json_value("next")', body('{"next":"/home"}', JSON_CT), "/home", "redirect"],
+  ];
+}
+function g14HeaderCases() {
+  return [
+    ['json_value("tenant")', body('{"tenant":"a"}', JSON_CT), "a", "origin"],
+    ['form_value("t")', body("t=%0Abad", FORM_CT), null, "request-transform"],
+  ];
+}
+function g14ActionCases() {
+  return [
+    ["true", {}, true, "waf-custom", { kind: "ban", banSeconds: 3600 }],
+    [
+      "true",
+      {},
+      true,
+      "waf-custom",
+      { kind: "ban", banSeconds: 60, banPrefixV4: 24, banPrefixV6: 48 },
+    ],
+    [
+      "true",
+      {},
+      true,
+      "waf-custom",
+      { kind: "ban", banSeconds: 604800, banPrefixV4: 32, banPrefixV6: 64 },
+    ],
+    [
+      "true",
+      {},
+      true,
+      "waf-custom",
+      { kind: "respond", statusCode: 200, contentType: "application/json", body: '{"ok":true}' },
+    ],
+    [
+      "true",
+      {},
+      true,
+      "waf-custom",
+      { kind: "respond", statusCode: 204, contentType: "text/plain" },
+    ],
+    ["true", {}, true, "waf-custom", { kind: "respond", statusCode: 418, errorPage: true }],
+    [
+      "true",
+      {},
+      true,
+      "waf-custom",
+      { kind: "respond", statusCode: 503, contentType: "text/html", body: "<h1>维护中</h1>\n\t" },
+    ],
+    ["true", {}, true, "waf-custom", { kind: "close" }],
+    [
+      "true",
+      {},
+      true,
+      "waf-custom",
+      { kind: "skip", skip: ["challenges", "crs", "rate_limits", "rules"] },
+    ],
+    ["true", {}, true, "waf-custom", { kind: "skip", skip: ["crs"] }],
+    ["true", {}, true, "waf-custom", { kind: "log", accessLog: true }],
+    [
+      "true",
+      {},
+      true,
+      "ratelimit",
+      {
+        kind: "rate_limit",
+        statusCode: 429,
+        limit: 10,
+        windowSeconds: 60,
+        key: "ip.src",
+        banSeconds: 600,
+      },
+    ],
+    ["true", {}, true, "config", { kind: "config", crs: "off" }],
+    ["true", {}, true, "config", { kind: "config", crs: "detect", cacheBypass: true }],
+    ["true", {}, true, "config", { kind: "config", crs: "block" }],
+  ];
+}
+// Platform rules (validActionIr's `platform`): only they may ban at platform scope.
+const g14PlatformActions = [{ kind: "ban", banSeconds: 3600, banScope: "platform" }];
+const rejectedG14Actions = [
+  [{ kind: "ban", banSeconds: 59 }, "waf-custom", "ban shorter than a minute"],
+  [{ kind: "ban", banSeconds: 604801 }, "waf-custom", "ban longer than a week"],
+  [
+    { kind: "ban", banSeconds: 600, banScope: "platform" },
+    "waf-custom",
+    "platform scope in a site rule",
+  ],
+  [{ kind: "ban", banSeconds: 600, banScope: "site" }, "waf-custom", "site scope is empty"],
+  [{ kind: "ban", banSeconds: 600, banPrefixV4: 15 }, "waf-custom", "IPv4 prefix below /16"],
+  [{ kind: "ban", banSeconds: 600, banPrefixV4: 33 }, "waf-custom", "IPv4 prefix above /32"],
+  [{ kind: "ban", banSeconds: 600, banPrefixV6: 47 }, "waf-custom", "IPv6 prefix below /48"],
+  [{ kind: "ban", banSeconds: 600, banPrefixV6: 65 }, "waf-custom", "IPv6 prefix above /64"],
+  [{ kind: "ban", banSeconds: 600 }, "ratelimit", "ban only in waf-custom"],
+  [{ kind: "ban" }, "waf-custom", "ban needs a duration"],
+  [
+    { kind: "respond", statusCode: 302, contentType: "text/plain" },
+    "waf-custom",
+    "redirect status",
+  ],
+  [
+    { kind: "respond", statusCode: 600, contentType: "text/plain" },
+    "waf-custom",
+    "status above 599",
+  ],
+  [{ kind: "respond", statusCode: 201, contentType: "text/plain" }, "waf-custom", "status 201"],
+  [{ kind: "respond", statusCode: 200, errorPage: true }, "waf-custom", "error page for 200"],
+  [
+    { kind: "respond", statusCode: 403, errorPage: true, body: "x" },
+    "waf-custom",
+    "error page with a body",
+  ],
+  [
+    { kind: "respond", statusCode: 403, errorPage: true, contentType: "text/plain" },
+    "waf-custom",
+    "error page with a type",
+  ],
+  [{ kind: "respond", statusCode: 200, contentType: "text/xml" }, "waf-custom", "unknown type"],
+  [{ kind: "respond", statusCode: 200 }, "waf-custom", "a static body needs a type"],
+  [
+    { kind: "respond", statusCode: 200, contentType: "text/plain", body: "x".repeat(8193) },
+    "waf-custom",
+    "body over 8192 bytes",
+  ],
+  [
+    { kind: "respond", statusCode: 200, contentType: "text/plain", body: "中".repeat(2731) },
+    "waf-custom",
+    "body over 8192 bytes of UTF-8",
+  ],
+  [
+    { kind: "respond", statusCode: 200, contentType: "text/plain", body: "a\u0001b" },
+    "waf-custom",
+    "control character in the body",
+  ],
+  [
+    { kind: "respond", statusCode: 204, contentType: "text/plain", body: "x" },
+    "waf-custom",
+    "204 has no body",
+  ],
+  [{ kind: "close" }, "config", "close only in waf-custom"],
+  [{ kind: "skip", skip: [] }, "waf-custom", "skip needs a target"],
+  [{ kind: "skip", skip: ["rules", "crs"] }, "waf-custom", "skip targets sorted"],
+  [{ kind: "skip", skip: ["crs", "crs"] }, "waf-custom", "skip targets unique"],
+  [{ kind: "skip", skip: ["cache"] }, "waf-custom", "unknown skip target"],
+  [{ kind: "allow", skip: ["crs"] }, "waf-custom", "skip belongs to skip"],
+  [{ kind: "block", statusCode: 403, accessLog: true }, "waf-custom", "access_log belongs to log"],
+  [
+    {
+      kind: "rate_limit",
+      statusCode: 429,
+      limit: 10,
+      windowSeconds: 60,
+      key: "ip.src",
+      banSeconds: 30,
+    },
+    "ratelimit",
+    "rate limit ban below a minute",
+  ],
+  [
+    {
+      kind: "rate_limit",
+      statusCode: 429,
+      limit: 10,
+      windowSeconds: 60,
+      key: "ip.src",
+      banSeconds: 86401,
+    },
+    "ratelimit",
+    "rate limit ban above a day",
+  ],
+  [{ kind: "config", crs: "on" }, "config", "unknown CRS mode"],
+  [{ kind: "config", crs: "off" }, "cache", "CRS override only in the config phase"],
+  [
+    { kind: "config", cacheBypass: true, crs: "off" },
+    "cache",
+    "CRS override only in the config phase",
+  ],
+];
+// Request body and crawler fields outside the request phases, and bad literal arguments.
+const rejectedG14Ir = [
+  [
+    'form_value("q") eq "1"',
+    "cache",
+    n3("eq", "", "1", "string", [call("form_value", "string", c("q"))]),
+    "body functions not in the cache phase",
+  ],
+  [
+    'http.request.body.raw contains "x"',
+    "response-transform",
+    n3("contains", "http.request.body.raw", "x"),
+    "body fields not in response phases",
+  ],
+  [
+    "http.request.bot.verified eq true",
+    "compression",
+    n3("eq", "http.request.bot.verified", "true", "boolean"),
+    "crawler fields not in response phases",
+  ],
+  [
+    "http.request.body.size gt 1",
+    "cache",
+    n3("gt", "http.request.body.size", "1", "number"),
+    "body fields not in the cache phase",
+  ],
+  [
+    'form_value(http.request.uri.path) eq "x"',
+    "waf-custom",
+    n3("eq", "", "x", "string", [call("form_value", "string", PATH)]),
+    "form_value takes a literal",
+  ],
+  [
+    'form_value("") eq "x"',
+    "waf-custom",
+    n3("eq", "", "x", "string", [call("form_value", "string", c(""))]),
+    "empty form name",
+  ],
+  [
+    'json_value("a..b") eq "x"',
+    "waf-custom",
+    n3("eq", "", "x", "string", [call("json_value", "string", c("a..b"))]),
+    "empty JSON path segment",
+  ],
+  [
+    'json_value("a", "b") eq ""',
+    "waf-custom",
+    n3("eq", "", "", "string", [call("json_value", "string", c("a"), c("b"))]),
+    "json_value takes one argument",
+  ],
+  [
+    'json_value("a") gt 1',
+    "waf-custom",
+    n3("gt", "", "1", "number", [call("json_value", "number", c("a"))]),
+    "json_value returns a string",
+  ],
+];
 const derivedV3 = [
   ["cookie", "role=admin", "role", "admin"],
   ["cookie", "a=1; role=admin; role=root", "role", "admin"],
@@ -1586,6 +1881,44 @@ const vectors = [
     return vector;
   }),
   ...v3ActionCases().map(accepted),
+  ...g14Cases().map((v) => {
+    const vector = accepted(v);
+    if (evaluate(vector.ir, vector.request, vector.lists) !== vector.expected)
+      throw new Error(`G14 mismatch: ${vector.source}`);
+    return vector;
+  }),
+  ...g14ActionCases().map(accepted),
+  ...g14PlatformActions.map((action) => {
+    if (validActionIr("waf-custom", action) || !validActionIr("waf-custom", action, true))
+      throw new Error(`platform action: ${JSON.stringify(action)}`);
+    return { ...accepted(["true", {}, true, "waf-custom"]), action, platform: true };
+  }),
+  ...g14ValueCases().map(([source, request, expected, phase]) => {
+    const ir = parseValueExpression(source, phase);
+    if (evaluateValue(ir, request) !== expected) throw new Error(`value mismatch: ${source}`);
+    if (!validExpressionIr(ir, phase, true)) throw new Error(`value IR refused: ${source}`);
+    return { source, phase, request, lists: {}, ir, value: true, expected };
+  }),
+  ...g14HeaderCases().map(([source, request, expected, phase]) => {
+    const ir = parseValueExpression(source, phase);
+    if (evaluateHeaderValue(ir, request) !== expected)
+      throw new Error(`header mismatch: ${source}`);
+    if (!validExpressionIr(ir, phase, true)) throw new Error(`header IR refused: ${source}`);
+    return { source, phase, request, lists: {}, ir, value: true, header: true, expected };
+  }),
+  ...rejectedG14Actions.map(([action, phase, reason]) => {
+    if (validActionIr(phase, action)) throw new Error(`action not rejected: ${reason}`);
+    return { ...accepted(["true", {}, true, phase]), action, actionRejected: true, reason };
+  }),
+  ...rejectedG14Ir.map(([source, phase, ir, reason]) => {
+    try {
+      parseExpression(source, phase);
+    } catch {
+      if (validExpressionIr(ir, phase)) throw new Error(`IR not rejected: ${source}`);
+      return { source, phase, rejected: true, irRejected: true, reason, ir };
+    }
+    throw new Error(`not rejected: ${source}`);
+  }),
   ...v3ValueCases().map(([source, request, expected, phase = "redirect"]) => {
     const ir = parseValueExpression(source, phase);
     if (evaluateValue(ir, request) !== expected) throw new Error(`value mismatch: ${source}`);

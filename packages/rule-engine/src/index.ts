@@ -1,4 +1,5 @@
 import ipaddr from "ipaddr.js";
+import { bodyFilenames, formValue, jsonValue, validFormName, validJsonPath } from "./body.ts";
 import { md5Hex, sha1Hex, sha256Hex } from "./digest.ts";
 import { validHostHeader } from "./host-header.ts";
 
@@ -24,6 +25,28 @@ export {
   validUserAgentPattern,
   websocketOriginAllowed,
 } from "./access-control.ts";
+export {
+  bodyFilenames,
+  bodyMediaType,
+  formValue,
+  headerParams,
+  isJsonMediaType,
+  type JsonValue,
+  jsonPathValue,
+  jsonValue,
+  MAX_FORM_NAME_BYTES,
+  MAX_JSON_DEPTH,
+  MAX_JSON_PATH_BYTES,
+  MAX_JSON_PATH_SEGMENTS,
+  MAX_MULTIPART_PARTS,
+  type Multipart,
+  multipartBoundary,
+  parseJson,
+  parseMultipart,
+  RULES_BODY_LIMIT,
+  validFormName,
+  validJsonPath,
+} from "./body.ts";
 export { MAX_HOST_HEADER_LENGTH, validHostHeader } from "./host-header.ts";
 export {
   checkSignedUri,
@@ -89,6 +112,12 @@ export const expressionErrorDefs = {
   argument_name: { params: [], en: "invalid query parameter name" },
   unknown_field: { params: [], en: "unknown field" },
   response_field: { params: [], en: "response field is unavailable in this phase" },
+  request_field: {
+    params: [],
+    en: "request body and crawler fields are only available in the request phases",
+  },
+  form_name: { params: [], en: "invalid form field name" },
+  json_path: { params: [], en: "invalid JSON path" },
   unknown_operator: { params: [], en: "unknown operator" },
   ordered_comparison: { params: [], en: "ordered comparison needs integers" },
   string_operator: { params: [], en: "operator needs a string field" },
@@ -204,6 +233,15 @@ export const fields: Record<string, ValueType> = {
   "tls.client.verified": "boolean",
   "tls.client.cert_sha256": "string",
   "tls.client.subject": "string",
+  // rules-body-v1: Content-Length (-1 without), the body read (requests up to the site's limit),
+  // whether it was not read, and the file names of a multipart body joined by "\n".
+  "http.request.body.size": "number",
+  "http.request.body.raw": "string",
+  "http.request.body.truncated": "boolean",
+  "http.request.body.filenames": "string",
+  // challenge-v2: a search engine crawler the node verified by reverse and forward DNS.
+  "http.request.bot.verified": "boolean",
+  "http.request.bot.name": "string",
 };
 /** Fields of one request cookie and one query parameter by name (rules-v3), besides headers. */
 export const COOKIE_FIELD = "http.request.cookies";
@@ -271,6 +309,51 @@ export function usesRulesV3Placeholders(template: string): boolean {
 }
 /** Phases that may read response fields. */
 export const responsePhases: ReadonlySet<string> = new Set(["response-transform", "compression"]);
+/**
+ * Phases that may read the request body and crawler fields (and call form_value and
+ * json_value): the request phases, not cache (cache rules judge the client's original request)
+ * nor the response phases (the node cannot wait for the body or DNS there).
+ */
+export const requestPhases: ReadonlySet<string> = new Set([
+  "request-transform",
+  "redirect",
+  "config",
+  "waf-custom",
+  "ratelimit",
+  "origin",
+]);
+/** Fields only nodes with rules-body-v1 provide; they read the request body. */
+export const bodyFields: ReadonlySet<string> = new Set([
+  "http.request.body.size",
+  "http.request.body.raw",
+  "http.request.body.truncated",
+  "http.request.body.filenames",
+]);
+/** Functions over the request body (rules-body-v1). */
+export const bodyFunctions: ReadonlySet<string> = new Set(["form_value", "json_value"]);
+/** Fields only nodes with challenge-v2 provide (verified crawlers). */
+export const botFields: ReadonlySet<string> = new Set([
+  "http.request.bot.verified",
+  "http.request.bot.name",
+]);
+/** Whether a field or function is only available in the request phases. */
+const requestOnly = (op: string, name: string) =>
+  op === "call" ? bodyFunctions.has(name) : bodyFields.has(name) || botFields.has(name);
+/** Whether the expression reads the request body (rules-body-v1). */
+export function needsRulesBody(expression: Expression): boolean {
+  return (
+    (expression.op === "call"
+      ? bodyFunctions.has(expression.field)
+      : bodyFields.has(expression.field)) || expression.children.some(needsRulesBody)
+  );
+}
+/** Whether the expression reads the verified crawler fields (challenge-v2). */
+export function needsBotFields(expression: Expression): boolean {
+  return (
+    (expression.op !== "call" && botFields.has(expression.field)) ||
+    expression.children.some(needsBotFields)
+  );
+}
 
 /** Challenge types of the `challenge` action and of Under Attack, levels 1 to 4. */
 export const challengeTypes = ["cookie302", "js", "pow", "captcha"] as const;
@@ -282,6 +365,11 @@ export const actionPhases: Record<string, readonly Phase[]> = {
   log: ["waf-custom"],
   allow: ["waf-custom"],
   challenge: ["waf-custom"],
+  // waf-v2
+  ban: ["waf-custom"],
+  respond: ["waf-custom"],
+  close: ["waf-custom"],
+  skip: ["waf-custom"],
   redirect: ["redirect"],
   rewrite: ["request-transform"],
   request_header: ["request-transform", "origin"],
@@ -341,7 +429,39 @@ export interface ActionIr {
   compression?: string[];
   // rules-v3: a response header line added next to the response's own
   append?: boolean;
+  // site-content-v1: config (phase config only)
+  requestBodyLimit?: bigint | number;
+  // waf-v2: ban (also rate_limit: banSeconds), respond, skip, log and config (crs)
+  banSeconds?: number;
+  banScope?: string;
+  banPrefixV4?: number;
+  banPrefixV6?: number;
+  contentType?: string;
+  body?: string;
+  errorPage?: boolean;
+  skip?: string[];
+  accessLog?: boolean;
+  crs?: string;
 }
+
+/** What a skip action may skip (waf-v2), in canonical order. */
+export const skipTargets = ["challenges", "crs", "rate_limits", "rules"] as const;
+/** Content types of a custom response (waf-v2). */
+export const respondContentTypes = ["text/plain", "text/html", "application/json"] as const;
+/** CRS modes a config rule may set for a request (waf-v2). */
+export const crsOverrides = ["off", "detect", "block"] as const;
+/** Bounds of the ban action and of the rate limit's ban (waf-v2). */
+export const RULE_BAN = {
+  seconds: { min: 60, max: 604_800 },
+  rateLimitSeconds: { min: 60, max: 86_400 },
+  prefixV4: { min: 16, max: 32 },
+  prefixV6: { min: 48, max: 64 },
+} as const;
+/** Largest static body of a custom response, in bytes. */
+export const MAX_RESPOND_BODY_BYTES = 8192;
+/** Whether a status code may be answered by a custom response: 200, 204, 4xx, 5xx. */
+export const respondStatus = (status: number) =>
+  status === 200 || status === 204 || (status >= 400 && status <= 599);
 
 /** Codings of compression rules and of the config switches, node names. */
 export const compressionCodings = ["zstd", "br", "gzip"] as const;
@@ -388,9 +508,13 @@ export function validRedirectTarget(value: string): boolean {
 /** Fields each action kind may carry besides `kind` (everything else must stay empty). */
 const actionFields: Record<string, readonly (keyof ActionIr)[]> = {
   block: ["statusCode"],
-  log: [],
+  log: ["accessLog"],
   allow: [],
   challenge: ["challenge"],
+  ban: ["banSeconds", "banScope", "banPrefixV4", "banPrefixV6"],
+  respond: ["statusCode", "contentType", "body", "errorPage"],
+  close: [],
+  skip: ["skip"],
   redirect: ["value", "statusCode", "target", "preserveQuery", "setQuery", "removeQuery"],
   rewrite: ["value", "target", "preserveQuery", "setQuery", "removeQuery"],
   request_header: ["header", "value", "remove", "target"],
@@ -409,8 +533,10 @@ const actionFields: Record<string, readonly (keyof ActionIr)[]> = {
     "originSendTimeoutMs",
     "originReadTimeoutMs",
     "logSampleRate",
+    "requestBodyLimit",
+    "crs",
   ],
-  rate_limit: ["statusCode", "limit", "windowSeconds", "key"],
+  rate_limit: ["statusCode", "limit", "windowSeconds", "key", "banSeconds"],
   origin: ["originGroup", "hostHeader", "sni", "port"],
   compression: ["compression"],
 };
@@ -453,12 +579,21 @@ function validQueryEdits(action: ActionIr, phase: string): boolean {
   );
 }
 
+/** Whether a custom response body is valid: at most 8192 bytes, no control characters but tab and newlines. */
+export const validRespondBody = (body: string) =>
+  byteLength(body) <= MAX_RESPOND_BODY_BYTES &&
+  ![...body].some((c) => {
+    const code = c.charCodeAt(0);
+    return (code < 32 && code !== 9 && code !== 10 && code !== 13) || code === 127;
+  });
+
 /**
  * Whether a compiled action is valid in `phase`, as the node validates it
- * (edgeweir-node configir/rules.go). The console validates its own input with
- * the stricter ruleAction schema of @edgeweir/contract.
+ * (edgeweir-node configir/rules.go); `platform` for platform rules (only they
+ * may ban at platform scope). The console validates its own input with the
+ * stricter ruleAction schema of @edgeweir/contract.
  */
-export function validActionIr(phase: string, action: ActionIr): boolean {
+export function validActionIr(phase: string, action: ActionIr, platform = false): boolean {
   if (!(actionPhases[action.kind] as readonly string[] | undefined)?.includes(phase)) return false;
   const allowed = actionFields[action.kind] ?? [];
   for (const [field, value] of Object.entries(action))
@@ -481,7 +616,46 @@ export function validActionIr(phase: string, action: ActionIr): boolean {
       return status === 403 || status === 451;
     case "log":
     case "allow":
+    case "close":
       return true;
+    case "ban": {
+      const seconds = action.banSeconds ?? 0;
+      const v4 = action.banPrefixV4 ?? 0;
+      const v6 = action.banPrefixV6 ?? 0;
+      const scope = action.banScope ?? "";
+      return (
+        Number.isInteger(seconds) &&
+        seconds >= RULE_BAN.seconds.min &&
+        seconds <= RULE_BAN.seconds.max &&
+        (scope === "" || (scope === "platform" && platform)) &&
+        Number.isInteger(v4) &&
+        (v4 === 0 || (v4 >= RULE_BAN.prefixV4.min && v4 <= RULE_BAN.prefixV4.max)) &&
+        Number.isInteger(v6) &&
+        (v6 === 0 || (v6 >= RULE_BAN.prefixV6.min && v6 <= RULE_BAN.prefixV6.max))
+      );
+    }
+    case "respond": {
+      const body = action.body ?? "";
+      const type = action.contentType ?? "";
+      if (!Number.isInteger(status) || !respondStatus(status)) return false;
+      if (action.errorPage) return status >= 400 && type === "" && body === "";
+      return (
+        (respondContentTypes as readonly string[]).includes(type) &&
+        validRespondBody(body) &&
+        (status !== 204 || body === "")
+      );
+    }
+    case "skip": {
+      const list = action.skip ?? [];
+      return (
+        list.length > 0 &&
+        list.every(
+          (item, i) =>
+            (skipTargets as readonly string[]).includes(item) &&
+            (i === 0 || (list[i - 1] ?? "") < item),
+        )
+      );
+    }
     case "challenge":
       return (challengeTypes as readonly string[]).includes(action.challenge ?? "");
     case "redirect": {
@@ -509,6 +683,10 @@ export function validActionIr(phase: string, action: ActionIr): boolean {
     case "config": {
       if (phase !== "config" && configV2Fields.some((field) => action[field] !== undefined))
         return false;
+      const crs = action.crs ?? "";
+      if (crs !== "" && (phase !== "config" || !(crsOverrides as readonly string[]).includes(crs)))
+        return false;
+      if (phase !== "config" && action.requestBodyLimit !== undefined) return false;
       const level = action.ccMaxLevel ?? "";
       const timeout = (ms: number | undefined, max: number) =>
         ms === undefined || ms === 0 || (Number.isInteger(ms) && ms >= 100 && ms <= max);
@@ -522,6 +700,8 @@ export function validActionIr(phase: string, action: ActionIr): boolean {
         (action.cacheBypass !== undefined ||
           action.forceHttps !== undefined ||
           action.gzip !== undefined ||
+          action.requestBodyLimit !== undefined ||
+          crs !== "" ||
           configV2Fields.some(
             (field) =>
               action[field] !== undefined &&
@@ -555,13 +735,17 @@ export function validActionIr(phase: string, action: ActionIr): boolean {
     case "rate_limit": {
       const limit = action.limit ?? 0;
       const window = action.windowSeconds ?? 0;
+      const ban = action.banSeconds ?? 0;
       return (
         (status === 403 || status === 429) &&
         limit >= 1 &&
         limit <= 100000 &&
         window >= 1 &&
         window <= 3600 &&
-        isRateLimitKey(action.key ?? "")
+        isRateLimitKey(action.key ?? "") &&
+        Number.isInteger(ban) &&
+        (ban === 0 ||
+          (ban >= RULE_BAN.rateLimitSeconds.min && ban <= RULE_BAN.rateLimitSeconds.max))
       );
     }
   }
@@ -849,7 +1033,8 @@ function stringOffset(source: string, start: number, index: number): number {
 interface FunctionSpec {
   /**
    * Argument kinds: "string" a string value, "any" a value of any type; "pattern", "wildcard",
-   * "replacement" and "flags" are string literals, "start" and "length" integer literals.
+   * "replacement", "flags", "formname" and "jsonpath" are string literals, "start" and
+   * "length" integer literals.
    */
   args: readonly string[];
   /** Extra trailing optional arguments of the last listed kind... see variadic. */
@@ -883,6 +1068,9 @@ export const functions: Record<string, FunctionSpec> = {
   sha256: { args: ["string"], returns: "string" },
   substring: { args: ["string", "start", "length"], optional: 1, returns: "string" },
   to_string: { args: ["any"], returns: "string" },
+  // rules-body-v1: request phases only (requestPhases)
+  form_value: { args: ["formname"], returns: "string" },
+  json_value: { args: ["jsonpath"], returns: "string" },
 };
 /** Functions only nodes with rules-v3 run. */
 export const rulesV3Functions: ReadonlySet<string> = new Set([
@@ -1066,6 +1254,8 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
     if (!type || token.kind !== "word") throw new ExpressionError("unknown_field", token.position);
     if (field.startsWith("http.response.") && !responsePhases.has(phase))
       throw new ExpressionError("response_field", token.position);
+    if (requestOnly("field", field) && !requestPhases.has(phase))
+      throw new ExpressionError("request_field", token.position);
     return { name: field, type, position: token.position };
   };
   /** A literal argument of `kind` (pattern, wildcard, replacement or flags). */
@@ -1078,6 +1268,10 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
       if (kind === "wildcard") wildcardSegments(token.text);
       if (kind === "replacement") checkReplacement(token.text, captures);
       if (kind === "flags" && token.text !== "s") throw new ExpressionError("flags", 0);
+      if (kind === "formname" && !validFormName(toBytes(token.text)))
+        throw new ExpressionError("form_name", 0);
+      if (kind === "jsonpath" && !validJsonPath(toBytes(token.text)))
+        throw new ExpressionError("json_path", 0);
     } catch (error) {
       if (!(error instanceof ExpressionError)) throw error;
       throw error.at(stringOffset(source, start, error.position));
@@ -1104,6 +1298,8 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
     if (!spec) throw new ExpressionError("unknown_function", token.position);
     if (spec.valueOnly && !valueContext)
       throw new ExpressionError("value_only_function", token.position);
+    if (requestOnly("call", token.text) && !requestPhases.has(phase))
+      throw new ExpressionError("request_field", token.position);
     if (spec.valueOnly) {
       if (replaceCalls.has(token.text))
         throw new ExpressionError("function_repeated", token.position);
@@ -1375,8 +1571,11 @@ export function validExpressionIr(e: Expression, phase: string, valueExpression 
   let budget = 256;
   const replaceCalls = new Set<string>();
   const responseOk = responsePhases.has(phase);
+  const requestOk = requestPhases.has(phase);
   const fieldOk = (field: string, type: string) =>
-    irFieldType(field) === type && (!field.startsWith("http.response.") || responseOk);
+    irFieldType(field) === type &&
+    (!field.startsWith("http.response.") || responseOk) &&
+    (!requestOnly("field", field) || requestOk);
   const empty = (x: Expression, keep: (keyof Expression)[]) =>
     (keep.includes("field") || x.field === "") &&
     (keep.includes("value") || x.value === "") &&
@@ -1400,6 +1599,7 @@ export function validExpressionIr(e: Expression, phase: string, valueExpression 
       return undefined;
     const spec = Object.hasOwn(functions, x.field) ? functions[x.field] : undefined;
     if (!spec || spec.returns !== x.valueType) return undefined;
+    if (requestOnly("call", x.field) && !requestOk) return undefined;
     if (spec.valueOnly) {
       if (!inValue || replaceCalls.has(x.field)) return undefined;
       replaceCalls.add(x.field);
@@ -1439,6 +1639,8 @@ export function validExpressionIr(e: Expression, phase: string, valueExpression 
         if (kind === "wildcard") captures = wildcardSegments(arg.value).length - 1;
         if (kind === "replacement") checkReplacement(arg.value, captures);
         if (kind === "flags" && arg.value !== "s") return undefined;
+        if (kind === "formname" && !validFormName(toBytes(arg.value))) return undefined;
+        if (kind === "jsonpath" && !validJsonPath(toBytes(arg.value))) return undefined;
       } catch {
         return undefined;
       }
@@ -1659,7 +1861,19 @@ export function regexReplaceBytes(source: string, pattern: string, replacement: 
 
 type Request = Record<string, string | number | boolean>;
 
+const BODY_RAW = "http.request.body.raw";
+const CONTENT_TYPE = "http.request.headers.content-type";
+const bodyOf = (request: Request) => [
+  toBytes(String(request[BODY_RAW] ?? "")),
+  toBytes(String(request[CONTENT_TYPE] ?? "")),
+];
+
 function fieldValue(field: string, type: string, request: Request): string | number | boolean {
+  // Derived from the body like the node does, unless the request names it.
+  if (field === "http.request.body.filenames" && request[field] === undefined) {
+    const [body = "", contentType = ""] = bodyOf(request);
+    return bodyFilenames(body, contentType);
+  }
   const actual = request[field];
   if (actual === undefined) return type === "number" ? 0 : type === "boolean" ? false : "";
   return typeof actual === "string" ? toBytes(actual) : actual;
@@ -1721,6 +1935,15 @@ function evaluateNode(e: Expression, request: Request): string | number | boolea
     case "substring":
       result = substringBytes(a, Number(b), e.children[2] ? Number(c) : undefined);
       break;
+    // rules-body-v1: like reading a field, not bounded by MAX_VALUE_BYTES.
+    case "form_value": {
+      const [body = "", contentType = ""] = bodyOf(request);
+      return formValue(body, contentType, a);
+    }
+    case "json_value": {
+      const [body = "", contentType = ""] = bodyOf(request);
+      return jsonValue(body, contentType, a);
+    }
     default:
       throw new ExpressionError("unknown_function", 0);
   }

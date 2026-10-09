@@ -1,0 +1,779 @@
+{
+  "form": [
+    {
+      "contentType": "application/x-www-form-urlencoded",
+      "body": "a=1&b=2",
+      "name": "b",
+      "expected": "2"
+    },
+    {
+      "contentType": "application/x-www-form-urlencoded",
+      "body": "a=1&a=2",
+      "name": "a",
+      "expected": "1"
+    },
+    {
+      "contentType": "application/x-www-form-urlencoded",
+      "body": "user+name=J%C3%B6rg+X",
+      "name": "user name",
+      "expected": "Jörg X"
+    },
+    {
+      "contentType": "application/x-www-form-urlencoded",
+      "body": "a&b=2",
+      "name": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/x-www-form-urlencoded",
+      "body": "a&a=2",
+      "name": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/x-www-form-urlencoded",
+      "body": "&&a=1&&",
+      "name": "a",
+      "expected": "1"
+    },
+    {
+      "contentType": "application/x-www-form-urlencoded",
+      "body": "a=%zz%4",
+      "name": "a",
+      "expected": "%zz%4"
+    },
+    {
+      "contentType": "application/x-www-form-urlencoded",
+      "body": "a=1=2",
+      "name": "a",
+      "expected": "1=2"
+    },
+    {
+      "contentType": "application/x-www-form-urlencoded",
+      "body": "%61=x",
+      "name": "a",
+      "expected": "x"
+    },
+    {
+      "contentType": "application/x-www-form-urlencoded",
+      "body": "a=",
+      "name": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/x-www-form-urlencoded",
+      "body": "q=%E4%B8%AD",
+      "name": "q",
+      "expected": "中"
+    },
+    {
+      "contentType": "application/x-www-form-urlencoded",
+      "body": "q=1",
+      "name": "Q",
+      "expected": ""
+    },
+    {
+      "contentType": "application/x-www-form-urlencoded",
+      "body": "a=1&b=2",
+      "name": "c",
+      "expected": ""
+    },
+    {
+      "contentType": "application/x-www-form-urlencoded; charset=UTF-8",
+      "body": "q=1",
+      "name": "q",
+      "expected": "1"
+    },
+    {
+      "contentType": " APPLICATION/X-WWW-FORM-URLENCODED;charset=utf-8",
+      "body": "q=1",
+      "name": "q",
+      "expected": "1"
+    },
+    {
+      "contentType": "text/plain",
+      "body": "q=1",
+      "name": "q",
+      "expected": ""
+    },
+    {
+      "contentType": "",
+      "body": "q=1",
+      "name": "q",
+      "expected": ""
+    },
+    {
+      "contentType": "application/x-www-form-urlencoded",
+      "body": "",
+      "name": "q",
+      "expected": ""
+    },
+    {
+      "contentType": "application/x-www-form-urlencoded",
+      "body": "q=a%26b&r=1",
+      "name": "q",
+      "expected": "a&b"
+    },
+    {
+      "contentType": "application/x-www-form-urlencoded",
+      "body": "名=值",
+      "name": "名",
+      "expected": "值"
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "--XyZ\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nhello\r\n--XyZ\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.php\"\r\nContent-Type: application/octet-stream\r\n\r\n<?php ?>\r\n--XyZ\r\ncontent-disposition: FORM-DATA; NAME=title\r\n\r\nsecond\r\n--XyZ\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nline1\r\nline2\r\n--XyZ--\r\n",
+      "name": "title",
+      "expected": "hello"
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "--XyZ\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nhello\r\n--XyZ\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.php\"\r\nContent-Type: application/octet-stream\r\n\r\n<?php ?>\r\n--XyZ\r\ncontent-disposition: FORM-DATA; NAME=title\r\n\r\nsecond\r\n--XyZ\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nline1\r\nline2\r\n--XyZ--\r\n",
+      "name": "file",
+      "expected": ""
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "--XyZ\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nhello\r\n--XyZ\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.php\"\r\nContent-Type: application/octet-stream\r\n\r\n<?php ?>\r\n--XyZ\r\ncontent-disposition: FORM-DATA; NAME=title\r\n\r\nsecond\r\n--XyZ\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nline1\r\nline2\r\n--XyZ--\r\n",
+      "name": "note",
+      "expected": "line1\r\nline2"
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "preamble\r\n--XyZ\r\nContent-Disposition: form-data; name=\"q\"\r\n\r\nv\r\n--XyZ\r\nContent-Disposition: form-data; name=\"up\"; filename=\"\"\r\n\r\n\r\n--XyZ\r\nContent-Disposition: form-data; name=\"up\"; filename=\"b.jpg\"\r\n\r\nJFIF\r\n--XyZ\r\nContent-Disposition: form-data; name=\"up2\"; filename=\"x\\\"y.txt\"\r\n\r\nz\r\n--XyZ--",
+      "name": "q",
+      "expected": "v"
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "preamble\r\n--XyZ\r\nContent-Disposition: form-data; name=\"q\"\r\n\r\nv\r\n--XyZ\r\nContent-Disposition: form-data; name=\"up\"; filename=\"\"\r\n\r\n\r\n--XyZ\r\nContent-Disposition: form-data; name=\"up\"; filename=\"b.jpg\"\r\n\r\nJFIF\r\n--XyZ\r\nContent-Disposition: form-data; name=\"up2\"; filename=\"x\\\"y.txt\"\r\n\r\nz\r\n--XyZ--",
+      "name": "up",
+      "expected": ""
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "--XyZ\r\nContent-Disposition: form-data; name=\"q\"\r\n\r\nv\r\n--XyZ\r\nContent-Disposition: form-data; name=\"r\"\r\n\r\nunterminated",
+      "name": "q",
+      "expected": "v"
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "--XyZ\r\nContent-Disposition: form-data; name=\"q\"\r\n\r\nv\r\n--XyZ\r\nContent-Disposition: form-data; name=\"r\"\r\n\r\nunterminated",
+      "name": "r",
+      "expected": ""
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "--XyZjunk\r\nContent-Disposition: form-data; name=\"q\"\r\n\r\nv\r\n--XyZ--",
+      "name": "q",
+      "expected": ""
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "--XyZ \t\r\n\r\nno headers\r\n--XyZ\r\nContent-Disposition: attachment; name=\"q\"\r\n\r\nskip\r\n--XyZ\r\nContent-Disposition: form-data; name=\"a;b\"\r\n\r\nsemi\r\n--XyZ\r\nContent-Disposition: form-data; name=\"q\"\r\n\r\nv\r\n--XyZ--",
+      "name": "q",
+      "expected": "v"
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "--XyZ \t\r\n\r\nno headers\r\n--XyZ\r\nContent-Disposition: attachment; name=\"q\"\r\n\r\nskip\r\n--XyZ\r\nContent-Disposition: form-data; name=\"a;b\"\r\n\r\nsemi\r\n--XyZ\r\nContent-Disposition: form-data; name=\"q\"\r\n\r\nv\r\n--XyZ--",
+      "name": "a;b",
+      "expected": "semi"
+    },
+    {
+      "contentType": "multipart/form-data; boundary=\"a b\"",
+      "body": "--a b\r\nContent-Disposition: form-data; name=q\r\n\r\nspaced\r\n--a b--",
+      "name": "q",
+      "expected": "spaced"
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "--XyZ\r\nContent-Disposition: form-data; name=\"q\"\r\n\r\nv--XyZ\r\n--XyZ--",
+      "name": "q",
+      "expected": "v--XyZ"
+    },
+    {
+      "contentType": "multipart/form-data",
+      "body": "--XyZ\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nhello\r\n--XyZ\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.php\"\r\nContent-Type: application/octet-stream\r\n\r\n<?php ?>\r\n--XyZ\r\ncontent-disposition: FORM-DATA; NAME=title\r\n\r\nsecond\r\n--XyZ\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nline1\r\nline2\r\n--XyZ--\r\n",
+      "name": "title",
+      "expected": ""
+    },
+    {
+      "contentType": "multipart/mixed; boundary=XyZ",
+      "body": "--XyZ\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nhello\r\n--XyZ\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.php\"\r\nContent-Type: application/octet-stream\r\n\r\n<?php ?>\r\n--XyZ\r\ncontent-disposition: FORM-DATA; NAME=title\r\n\r\nsecond\r\n--XyZ\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nline1\r\nline2\r\n--XyZ--\r\n",
+      "name": "title",
+      "expected": ""
+    },
+    {
+      "contentType": "application/x-www-form-urlencoded",
+      "body": "--XyZ\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nhello\r\n--XyZ\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.php\"\r\nContent-Type: application/octet-stream\r\n\r\n<?php ?>\r\n--XyZ\r\ncontent-disposition: FORM-DATA; NAME=title\r\n\r\nsecond\r\n--XyZ\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nline1\r\nline2\r\n--XyZ--\r\n",
+      "name": "title",
+      "expected": ""
+    }
+  ],
+  "json": [
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":{\"b\":[{\"c\":\"x\"}]},\"n\":1.50,\"e\":-2E+3,\"t\":true,\"f\":false,\"z\":null,\"i\":-0,\"big\":123456789012345678901234567890}",
+      "path": "a.b.0.c",
+      "expected": "x"
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":{\"b\":[{\"c\":\"x\"}]},\"n\":1.50,\"e\":-2E+3,\"t\":true,\"f\":false,\"z\":null,\"i\":-0,\"big\":123456789012345678901234567890}",
+      "path": "a.b.1.c",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":{\"b\":[{\"c\":\"x\"}]},\"n\":1.50,\"e\":-2E+3,\"t\":true,\"f\":false,\"z\":null,\"i\":-0,\"big\":123456789012345678901234567890}",
+      "path": "a.b.00.c",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":{\"b\":[{\"c\":\"x\"}]},\"n\":1.50,\"e\":-2E+3,\"t\":true,\"f\":false,\"z\":null,\"i\":-0,\"big\":123456789012345678901234567890}",
+      "path": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":{\"b\":[{\"c\":\"x\"}]},\"n\":1.50,\"e\":-2E+3,\"t\":true,\"f\":false,\"z\":null,\"i\":-0,\"big\":123456789012345678901234567890}",
+      "path": "a.b",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":{\"b\":[{\"c\":\"x\"}]},\"n\":1.50,\"e\":-2E+3,\"t\":true,\"f\":false,\"z\":null,\"i\":-0,\"big\":123456789012345678901234567890}",
+      "path": "n",
+      "expected": "1.50"
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":{\"b\":[{\"c\":\"x\"}]},\"n\":1.50,\"e\":-2E+3,\"t\":true,\"f\":false,\"z\":null,\"i\":-0,\"big\":123456789012345678901234567890}",
+      "path": "e",
+      "expected": "-2E+3"
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":{\"b\":[{\"c\":\"x\"}]},\"n\":1.50,\"e\":-2E+3,\"t\":true,\"f\":false,\"z\":null,\"i\":-0,\"big\":123456789012345678901234567890}",
+      "path": "t",
+      "expected": "true"
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":{\"b\":[{\"c\":\"x\"}]},\"n\":1.50,\"e\":-2E+3,\"t\":true,\"f\":false,\"z\":null,\"i\":-0,\"big\":123456789012345678901234567890}",
+      "path": "f",
+      "expected": "false"
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":{\"b\":[{\"c\":\"x\"}]},\"n\":1.50,\"e\":-2E+3,\"t\":true,\"f\":false,\"z\":null,\"i\":-0,\"big\":123456789012345678901234567890}",
+      "path": "z",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":{\"b\":[{\"c\":\"x\"}]},\"n\":1.50,\"e\":-2E+3,\"t\":true,\"f\":false,\"z\":null,\"i\":-0,\"big\":123456789012345678901234567890}",
+      "path": "i",
+      "expected": "-0"
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":{\"b\":[{\"c\":\"x\"}]},\"n\":1.50,\"e\":-2E+3,\"t\":true,\"f\":false,\"z\":null,\"i\":-0,\"big\":123456789012345678901234567890}",
+      "path": "big",
+      "expected": "123456789012345678901234567890"
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":{\"b\":[{\"c\":\"x\"}]},\"n\":1.50,\"e\":-2E+3,\"t\":true,\"f\":false,\"z\":null,\"i\":-0,\"big\":123456789012345678901234567890}",
+      "path": "missing",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":\"1\",\"a\":\"2\"}",
+      "path": "a",
+      "expected": "2"
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"s\":\"\\u4e2d\\n\\\"\\\\\\/\\b\\f\\r\\t\"}",
+      "path": "s",
+      "expected": "中\n\"\\/\b\f\r\t"
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"s\":\"\\ud83d\\ude00\"}",
+      "path": "s",
+      "expected": "😀"
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"s\":\"\\ud800x\"}",
+      "path": "s",
+      "expected": "�x"
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"s\":\"\\udc00\\ud800\\u0041\"}",
+      "path": "s",
+      "expected": "��A"
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"s\":\"\\uD83D\\uDE00\"}",
+      "path": "s",
+      "expected": "😀"
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":1,}",
+      "path": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":01}",
+      "path": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "[1 2]",
+      "path": "0",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":\"1\"} x",
+      "path": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":\"1\"}}",
+      "path": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "\n\t {\"a\" : \"1\" }\r\n",
+      "path": "a",
+      "expected": "1"
+    },
+    {
+      "contentType": "application/json",
+      "body": "[ \"a\", \"b\" ]",
+      "path": "1",
+      "expected": "b"
+    },
+    {
+      "contentType": "application/json",
+      "body": "[ \"a\", \"b\" ]",
+      "path": "01",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "[ \"a\", \"b\" ]",
+      "path": "-1",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "[ \"a\", \"b\" ]",
+      "path": "0",
+      "expected": "a"
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a.b\":\"1\"}",
+      "path": "a.b",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"中\":\"值\"}",
+      "path": "中",
+      "expected": "值"
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":\"x\ty\"}",
+      "path": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":\"\\x\"}",
+      "path": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":\"\\u12\"}",
+      "path": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":-}",
+      "path": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":1.}",
+      "path": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":.5}",
+      "path": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":1e5}",
+      "path": "a",
+      "expected": "1e5"
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":TRUE}",
+      "path": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":nul}",
+      "path": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\" \"1\"}",
+      "path": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{a:\"1\"}",
+      "path": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "\"just a string\"",
+      "path": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "",
+      "path": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":{}}",
+      "path": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":[]}",
+      "path": "a.0",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"a\":\"unterminated",
+      "path": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"k\":\"v\",\"a\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+      "path": "k",
+      "expected": "v"
+    },
+    {
+      "contentType": "application/json",
+      "body": "{\"k\":\"v\",\"a\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+      "path": "k",
+      "expected": ""
+    },
+    {
+      "contentType": "application/problem+json",
+      "body": "{\"a\":\"1\"}",
+      "path": "a",
+      "expected": "1"
+    },
+    {
+      "contentType": "Application/JSON; charset=utf-8",
+      "body": "{\"a\":\"1\"}",
+      "path": "a",
+      "expected": "1"
+    },
+    {
+      "contentType": "text/json",
+      "body": "{\"a\":\"1\"}",
+      "path": "a",
+      "expected": ""
+    },
+    {
+      "contentType": "application/x-www-form-urlencoded",
+      "body": "{\"a\":\"1\"}",
+      "path": "a",
+      "expected": ""
+    }
+  ],
+  "filenames": [
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "--XyZ\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nhello\r\n--XyZ\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.php\"\r\nContent-Type: application/octet-stream\r\n\r\n<?php ?>\r\n--XyZ\r\ncontent-disposition: FORM-DATA; NAME=title\r\n\r\nsecond\r\n--XyZ\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nline1\r\nline2\r\n--XyZ--\r\n",
+      "expected": "a.php"
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "--XyZ\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nhello\r\n--XyZ\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.php\"\r\nContent-Type: application/octet-stream\r\n\r\n<?php ?>\r\n--XyZ\r\ncontent-disposition: FORM-DATA; NAME=title\r\n\r\nsecond\r\n--XyZ\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nline1\r\nline2\r\n--XyZ--\r\n",
+      "expected": "a.php"
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "--XyZ\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nhello\r\n--XyZ\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.php\"\r\nContent-Type: application/octet-stream\r\n\r\n<?php ?>\r\n--XyZ\r\ncontent-disposition: FORM-DATA; NAME=title\r\n\r\nsecond\r\n--XyZ\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nline1\r\nline2\r\n--XyZ--\r\n",
+      "expected": "a.php"
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "preamble\r\n--XyZ\r\nContent-Disposition: form-data; name=\"q\"\r\n\r\nv\r\n--XyZ\r\nContent-Disposition: form-data; name=\"up\"; filename=\"\"\r\n\r\n\r\n--XyZ\r\nContent-Disposition: form-data; name=\"up\"; filename=\"b.jpg\"\r\n\r\nJFIF\r\n--XyZ\r\nContent-Disposition: form-data; name=\"up2\"; filename=\"x\\\"y.txt\"\r\n\r\nz\r\n--XyZ--",
+      "expected": "b.jpg\nx\"y.txt"
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "preamble\r\n--XyZ\r\nContent-Disposition: form-data; name=\"q\"\r\n\r\nv\r\n--XyZ\r\nContent-Disposition: form-data; name=\"up\"; filename=\"\"\r\n\r\n\r\n--XyZ\r\nContent-Disposition: form-data; name=\"up\"; filename=\"b.jpg\"\r\n\r\nJFIF\r\n--XyZ\r\nContent-Disposition: form-data; name=\"up2\"; filename=\"x\\\"y.txt\"\r\n\r\nz\r\n--XyZ--",
+      "expected": "b.jpg\nx\"y.txt"
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "--XyZ\r\nContent-Disposition: form-data; name=\"q\"\r\n\r\nv\r\n--XyZ\r\nContent-Disposition: form-data; name=\"r\"\r\n\r\nunterminated",
+      "expected": ""
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "--XyZ\r\nContent-Disposition: form-data; name=\"q\"\r\n\r\nv\r\n--XyZ\r\nContent-Disposition: form-data; name=\"r\"\r\n\r\nunterminated",
+      "expected": ""
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "--XyZjunk\r\nContent-Disposition: form-data; name=\"q\"\r\n\r\nv\r\n--XyZ--",
+      "expected": ""
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "--XyZ \t\r\n\r\nno headers\r\n--XyZ\r\nContent-Disposition: attachment; name=\"q\"\r\n\r\nskip\r\n--XyZ\r\nContent-Disposition: form-data; name=\"a;b\"\r\n\r\nsemi\r\n--XyZ\r\nContent-Disposition: form-data; name=\"q\"\r\n\r\nv\r\n--XyZ--",
+      "expected": ""
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "--XyZ \t\r\n\r\nno headers\r\n--XyZ\r\nContent-Disposition: attachment; name=\"q\"\r\n\r\nskip\r\n--XyZ\r\nContent-Disposition: form-data; name=\"a;b\"\r\n\r\nsemi\r\n--XyZ\r\nContent-Disposition: form-data; name=\"q\"\r\n\r\nv\r\n--XyZ--",
+      "expected": ""
+    },
+    {
+      "contentType": "multipart/form-data; boundary=\"a b\"",
+      "body": "--a b\r\nContent-Disposition: form-data; name=q\r\n\r\nspaced\r\n--a b--",
+      "expected": ""
+    },
+    {
+      "contentType": "multipart/form-data; boundary=XyZ",
+      "body": "--XyZ\r\nContent-Disposition: form-data; name=\"q\"\r\n\r\nv--XyZ\r\n--XyZ--",
+      "expected": ""
+    },
+    {
+      "contentType": "multipart/form-data",
+      "body": "--XyZ\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nhello\r\n--XyZ\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.php\"\r\nContent-Type: application/octet-stream\r\n\r\n<?php ?>\r\n--XyZ\r\ncontent-disposition: FORM-DATA; NAME=title\r\n\r\nsecond\r\n--XyZ\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nline1\r\nline2\r\n--XyZ--\r\n",
+      "expected": ""
+    },
+    {
+      "contentType": "multipart/mixed; boundary=XyZ",
+      "body": "--XyZ\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nhello\r\n--XyZ\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.php\"\r\nContent-Type: application/octet-stream\r\n\r\n<?php ?>\r\n--XyZ\r\ncontent-disposition: FORM-DATA; NAME=title\r\n\r\nsecond\r\n--XyZ\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nline1\r\nline2\r\n--XyZ--\r\n",
+      "expected": ""
+    },
+    {
+      "contentType": "application/x-www-form-urlencoded",
+      "body": "--XyZ\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nhello\r\n--XyZ\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.php\"\r\nContent-Type: application/octet-stream\r\n\r\n<?php ?>\r\n--XyZ\r\ncontent-disposition: FORM-DATA; NAME=title\r\n\r\nsecond\r\n--XyZ\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nline1\r\nline2\r\n--XyZ--\r\n",
+      "expected": ""
+    }
+  ],
+  "hex": [
+    {
+      "kind": "form",
+      "contentType": "application/x-www-form-urlencoded",
+      "bodyHex": "713d2566662672",
+      "arg": "q",
+      "expectedHex": "ff"
+    },
+    {
+      "kind": "form",
+      "contentType": "application/x-www-form-urlencoded",
+      "bodyHex": "713dff",
+      "arg": "q",
+      "expectedHex": "ff"
+    },
+    {
+      "kind": "json",
+      "contentType": "application/json",
+      "bodyHex": "7b2261223a22ff227d",
+      "arg": "a",
+      "expectedHex": "ff"
+    },
+    {
+      "kind": "json",
+      "contentType": "application/json",
+      "bodyHex": "efbbbf7b2261223a2231227d",
+      "arg": "a",
+      "expectedHex": ""
+    }
+  ],
+  "boundary": [
+    {
+      "contentType": "multipart/form-data; boundary=abc",
+      "expected": "abc"
+    },
+    {
+      "contentType": "multipart/form-data;boundary=\"a;b\"",
+      "expected": "a;b"
+    },
+    {
+      "contentType": "multipart/form-data; charset=utf-8; BOUNDARY=x",
+      "expected": "x"
+    },
+    {
+      "contentType": "multipart/form-data; boundary=",
+      "expected": null
+    },
+    {
+      "contentType": "multipart/form-data; boundary=\"a\\\"b\"",
+      "expected": "a\"b"
+    },
+    {
+      "contentType": "multipart/form-data; boundary=abc ; x=1",
+      "expected": "abc"
+    },
+    {
+      "contentType": "multipart/form-data",
+      "expected": null
+    },
+    {
+      "contentType": "multipart/form-data; boundary=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "expected": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "contentType": "multipart/form-data; boundary=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "expected": null
+    },
+    {
+      "contentType": "multipart/form-data; boundary=\"unterminated",
+      "expected": "unterminated"
+    },
+    {
+      "contentType": "multipart/form-data; x; boundary=y",
+      "expected": "y"
+    },
+    {
+      "contentType": "multipart/form-data; boundary=a; boundary=b",
+      "expected": "a"
+    }
+  ],
+  "validFormName": [
+    {
+      "input": "q",
+      "valid": true
+    },
+    {
+      "input": "",
+      "valid": false
+    },
+    {
+      "input": "a b",
+      "valid": true
+    },
+    {
+      "input": "名",
+      "valid": true
+    },
+    {
+      "input": "a\tb",
+      "valid": false
+    },
+    {
+      "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "valid": true
+    },
+    {
+      "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "valid": false
+    },
+    {
+      "input": "中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中",
+      "valid": true
+    },
+    {
+      "input": "中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中",
+      "valid": false
+    }
+  ],
+  "validJsonPath": [
+    {
+      "input": "a",
+      "valid": true
+    },
+    {
+      "input": "a.b.0.c",
+      "valid": true
+    },
+    {
+      "input": "",
+      "valid": false
+    },
+    {
+      "input": "a..b",
+      "valid": false
+    },
+    {
+      "input": ".a",
+      "valid": false
+    },
+    {
+      "input": "a.",
+      "valid": false
+    },
+    {
+      "input": "s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s",
+      "valid": true
+    },
+    {
+      "input": "s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s",
+      "valid": false
+    },
+    {
+      "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "valid": true
+    },
+    {
+      "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "valid": false
+    },
+    {
+      "input": "a\nb",
+      "valid": false
+    },
+    {
+      "input": "中.文",
+      "valid": true
+    }
+  ]
+}

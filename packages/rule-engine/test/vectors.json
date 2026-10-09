@@ -5543,6 +5543,2381 @@
     }
   },
   {
+    "source": "form_value(\"user\") eq \"admin\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.body.raw": "user=admin&x=1",
+      "http.request.headers.content-type": "application/x-www-form-urlencoded",
+      "http.request.body.size": 14,
+      "http.request.body.truncated": false
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "admin",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "form_value",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "user",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "form_value(\"user\") eq \"admin\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.body.raw": "user=root&user=admin",
+      "http.request.headers.content-type": "application/x-www-form-urlencoded",
+      "http.request.body.size": 20,
+      "http.request.body.truncated": false
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "admin",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "form_value",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "user",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "json_value(\"cmd.0\") contains \"rm\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.body.raw": "{\"cmd\":[\"rm -rf /\"]}",
+      "http.request.headers.content-type": "application/json",
+      "http.request.body.size": 20,
+      "http.request.body.truncated": false
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "contains",
+      "field": "",
+      "valueType": "string",
+      "value": "rm",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "json_value",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "cmd.0",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "json_value(\"cmd.0\") contains \"rm\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.body.raw": "{\"cmd\":[\"rm -rf /\"],}",
+      "http.request.headers.content-type": "application/json",
+      "http.request.body.size": 21,
+      "http.request.body.truncated": false
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "contains",
+      "field": "",
+      "valueType": "string",
+      "value": "rm",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "json_value",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "cmd.0",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "http.request.body.filenames contains \".php\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.body.raw": "--b1\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nhi\r\n--b1\r\nContent-Disposition: form-data; name=\"f\"; filename=\"shell.php\"\r\n\r\n<?php\r\n--b1--",
+      "http.request.headers.content-type": "multipart/form-data; boundary=b1",
+      "http.request.body.size": 143,
+      "http.request.body.truncated": false
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "contains",
+      "field": "http.request.body.filenames",
+      "valueType": "string",
+      "value": ".php",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "form_value(\"title\") eq \"hi\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.body.raw": "--b1\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nhi\r\n--b1\r\nContent-Disposition: form-data; name=\"f\"; filename=\"shell.php\"\r\n\r\n<?php\r\n--b1--",
+      "http.request.headers.content-type": "multipart/form-data; boundary=b1",
+      "http.request.body.size": 143,
+      "http.request.body.truncated": false
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "hi",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "form_value",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "title",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "form_value(\"f\") eq \"\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.body.raw": "--b1\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nhi\r\n--b1\r\nContent-Disposition: form-data; name=\"f\"; filename=\"shell.php\"\r\n\r\n<?php\r\n--b1--",
+      "http.request.headers.content-type": "multipart/form-data; boundary=b1",
+      "http.request.body.size": 143,
+      "http.request.body.truncated": false
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "form_value",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "f",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "http.request.body.truncated eq true",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.body.truncated": true,
+      "http.request.body.size": 2000000
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.body.truncated",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.body.size gt 1024",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.body.size": 2048
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "gt",
+      "field": "http.request.body.size",
+      "valueType": "number",
+      "value": "1024",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.body.size eq -1",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.body.size": -1
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.body.size",
+      "valueType": "number",
+      "value": "-1",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.method eq \"POST\" and form_value(\"q\") eq \"\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.method": "POST",
+      "http.request.body.raw": "",
+      "http.request.headers.content-type": "application/x-www-form-urlencoded",
+      "http.request.body.size": 0,
+      "http.request.body.truncated": false
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "and",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "eq",
+          "field": "http.request.method",
+          "valueType": "string",
+          "value": "POST",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "eq",
+          "field": "",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "call",
+              "field": "form_value",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": [
+                {
+                  "op": "const",
+                  "field": "",
+                  "valueType": "string",
+                  "value": "q",
+                  "values": [],
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "http.request.body.raw contains \"<script\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.body.raw": "a=<script>",
+      "http.request.headers.content-type": "application/x-www-form-urlencoded",
+      "http.request.body.size": 10,
+      "http.request.body.truncated": false
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "contains",
+      "field": "http.request.body.raw",
+      "valueType": "string",
+      "value": "<script",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "len(form_value(\"q\")) gt 3",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.body.raw": "q=abcd",
+      "http.request.headers.content-type": "application/x-www-form-urlencoded",
+      "http.request.body.size": 6,
+      "http.request.body.truncated": false
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "gt",
+      "field": "",
+      "valueType": "number",
+      "value": "3",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "len",
+          "valueType": "number",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "call",
+              "field": "form_value",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": [
+                {
+                  "op": "const",
+                  "field": "",
+                  "valueType": "string",
+                  "value": "q",
+                  "values": [],
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "lower(json_value(\"a.b\")) eq \"x\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.body.raw": "{\"a\":{\"b\":\"X\"}}",
+      "http.request.headers.content-type": "application/json",
+      "http.request.body.size": 15,
+      "http.request.body.truncated": false
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "x",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "lower",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "call",
+              "field": "json_value",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": [
+                {
+                  "op": "const",
+                  "field": "",
+                  "valueType": "string",
+                  "value": "a.b",
+                  "values": [],
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "json_value(\"n\") eq \"1.0\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.body.raw": "{\"n\":1.0}",
+      "http.request.headers.content-type": "application/json",
+      "http.request.body.size": 9,
+      "http.request.body.truncated": false
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "1.0",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "json_value",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "n",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "form_value(\"q\") eq \"1\"",
+    "phase": "config",
+    "request": {
+      "http.request.body.raw": "q=1",
+      "http.request.headers.content-type": "application/x-www-form-urlencoded",
+      "http.request.body.size": 3,
+      "http.request.body.truncated": false
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "1",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "form_value",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "q",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "form_value(\"u\") eq \"x\"",
+    "phase": "ratelimit",
+    "request": {
+      "http.request.body.raw": "u=x",
+      "http.request.headers.content-type": "application/x-www-form-urlencoded",
+      "http.request.body.size": 3,
+      "http.request.body.truncated": false
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "x",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "form_value",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "u",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "json_value(\"t\") eq \"a\"",
+    "phase": "origin",
+    "request": {
+      "http.request.body.raw": "{\"t\":\"a\"}",
+      "http.request.headers.content-type": "application/json",
+      "http.request.body.size": 9,
+      "http.request.body.truncated": false
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "a",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "json_value",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "t",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "form_value(\"q\") eq \"1\"",
+    "phase": "request-transform",
+    "request": {
+      "http.request.body.raw": "q=1",
+      "http.request.headers.content-type": "application/x-www-form-urlencoded",
+      "http.request.body.size": 3,
+      "http.request.body.truncated": false
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "1",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "form_value",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "q",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "form_value(\"q\") eq \"1\"",
+    "phase": "redirect",
+    "request": {
+      "http.request.body.raw": "q=1",
+      "http.request.headers.content-type": "application/x-www-form-urlencoded",
+      "http.request.body.size": 3,
+      "http.request.body.truncated": false
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "1",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "form_value",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "q",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "http.request.bot.verified eq true and http.request.bot.name eq \"googlebot\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.bot.verified": true,
+      "http.request.bot.name": "googlebot"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "and",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "eq",
+          "field": "http.request.bot.verified",
+          "valueType": "boolean",
+          "value": "true",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "eq",
+          "field": "http.request.bot.name",
+          "valueType": "string",
+          "value": "googlebot",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "not http.request.bot.verified eq true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "not",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "eq",
+          "field": "http.request.bot.verified",
+          "valueType": "boolean",
+          "value": "true",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "http.request.bot.name in {\"bingbot\" \"baiduspider\"}",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.bot.name": "bingbot"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "http.request.bot.name",
+      "valueType": "string",
+      "value": "",
+      "values": ["baiduspider", "bingbot"],
+      "children": []
+    }
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "ban",
+      "banSeconds": 3600
+    }
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "ban",
+      "banSeconds": 60,
+      "banPrefixV4": 24,
+      "banPrefixV6": 48
+    }
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "ban",
+      "banSeconds": 604800,
+      "banPrefixV4": 32,
+      "banPrefixV6": 64
+    }
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "respond",
+      "statusCode": 200,
+      "contentType": "application/json",
+      "body": "{\"ok\":true}"
+    }
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "respond",
+      "statusCode": 204,
+      "contentType": "text/plain"
+    }
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "respond",
+      "statusCode": 418,
+      "errorPage": true
+    }
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "respond",
+      "statusCode": 503,
+      "contentType": "text/html",
+      "body": "<h1>维护中</h1>\n\t"
+    }
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "close"
+    }
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "skip",
+      "skip": ["challenges", "crs", "rate_limits", "rules"]
+    }
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "skip",
+      "skip": ["crs"]
+    }
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "log",
+      "accessLog": true
+    }
+  },
+  {
+    "source": "true",
+    "phase": "ratelimit",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "rate_limit",
+      "statusCode": 429,
+      "limit": 10,
+      "windowSeconds": 60,
+      "key": "ip.src",
+      "banSeconds": 600
+    }
+  },
+  {
+    "source": "true",
+    "phase": "config",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "config",
+      "crs": "off"
+    }
+  },
+  {
+    "source": "true",
+    "phase": "config",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "config",
+      "crs": "detect",
+      "cacheBypass": true
+    }
+  },
+  {
+    "source": "true",
+    "phase": "config",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "config",
+      "crs": "block"
+    }
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "ban",
+      "banSeconds": 3600,
+      "banScope": "platform"
+    },
+    "platform": true
+  },
+  {
+    "source": "concat(\"u-\", form_value(\"user\"))",
+    "phase": "redirect",
+    "request": {
+      "http.request.body.raw": "user=bob",
+      "http.request.headers.content-type": "application/x-www-form-urlencoded",
+      "http.request.body.size": 8,
+      "http.request.body.truncated": false
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "concat",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "u-",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "call",
+          "field": "form_value",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "user",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    "value": true,
+    "expected": "u-bob"
+  },
+  {
+    "source": "json_value(\"next\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.body.raw": "{\"next\":\"/home\"}",
+      "http.request.headers.content-type": "application/json",
+      "http.request.body.size": 16,
+      "http.request.body.truncated": false
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "json_value",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "next",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/home"
+  },
+  {
+    "source": "json_value(\"tenant\")",
+    "phase": "origin",
+    "request": {
+      "http.request.body.raw": "{\"tenant\":\"a\"}",
+      "http.request.headers.content-type": "application/json",
+      "http.request.body.size": 14,
+      "http.request.body.truncated": false
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "json_value",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "tenant",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "header": true,
+    "expected": "a"
+  },
+  {
+    "source": "form_value(\"t\")",
+    "phase": "request-transform",
+    "request": {
+      "http.request.body.raw": "t=%0Abad",
+      "http.request.headers.content-type": "application/x-www-form-urlencoded",
+      "http.request.body.size": 8,
+      "http.request.body.truncated": false
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "form_value",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "t",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "header": true,
+    "expected": null
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "ban",
+      "banSeconds": 59
+    },
+    "actionRejected": true,
+    "reason": "ban shorter than a minute"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "ban",
+      "banSeconds": 604801
+    },
+    "actionRejected": true,
+    "reason": "ban longer than a week"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "ban",
+      "banSeconds": 600,
+      "banScope": "platform"
+    },
+    "actionRejected": true,
+    "reason": "platform scope in a site rule"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "ban",
+      "banSeconds": 600,
+      "banScope": "site"
+    },
+    "actionRejected": true,
+    "reason": "site scope is empty"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "ban",
+      "banSeconds": 600,
+      "banPrefixV4": 15
+    },
+    "actionRejected": true,
+    "reason": "IPv4 prefix below /16"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "ban",
+      "banSeconds": 600,
+      "banPrefixV4": 33
+    },
+    "actionRejected": true,
+    "reason": "IPv4 prefix above /32"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "ban",
+      "banSeconds": 600,
+      "banPrefixV6": 47
+    },
+    "actionRejected": true,
+    "reason": "IPv6 prefix below /48"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "ban",
+      "banSeconds": 600,
+      "banPrefixV6": 65
+    },
+    "actionRejected": true,
+    "reason": "IPv6 prefix above /64"
+  },
+  {
+    "source": "true",
+    "phase": "ratelimit",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "ban",
+      "banSeconds": 600
+    },
+    "actionRejected": true,
+    "reason": "ban only in waf-custom"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "ban"
+    },
+    "actionRejected": true,
+    "reason": "ban needs a duration"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "respond",
+      "statusCode": 302,
+      "contentType": "text/plain"
+    },
+    "actionRejected": true,
+    "reason": "redirect status"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "respond",
+      "statusCode": 600,
+      "contentType": "text/plain"
+    },
+    "actionRejected": true,
+    "reason": "status above 599"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "respond",
+      "statusCode": 201,
+      "contentType": "text/plain"
+    },
+    "actionRejected": true,
+    "reason": "status 201"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "respond",
+      "statusCode": 200,
+      "errorPage": true
+    },
+    "actionRejected": true,
+    "reason": "error page for 200"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "respond",
+      "statusCode": 403,
+      "errorPage": true,
+      "body": "x"
+    },
+    "actionRejected": true,
+    "reason": "error page with a body"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "respond",
+      "statusCode": 403,
+      "errorPage": true,
+      "contentType": "text/plain"
+    },
+    "actionRejected": true,
+    "reason": "error page with a type"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "respond",
+      "statusCode": 200,
+      "contentType": "text/xml"
+    },
+    "actionRejected": true,
+    "reason": "unknown type"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "respond",
+      "statusCode": 200
+    },
+    "actionRejected": true,
+    "reason": "a static body needs a type"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "respond",
+      "statusCode": 200,
+      "contentType": "text/plain",
+      "body": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    "actionRejected": true,
+    "reason": "body over 8192 bytes"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "respond",
+      "statusCode": 200,
+      "contentType": "text/plain",
+      "body": "中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中"
+    },
+    "actionRejected": true,
+    "reason": "body over 8192 bytes of UTF-8"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "respond",
+      "statusCode": 200,
+      "contentType": "text/plain",
+      "body": "a\u0001b"
+    },
+    "actionRejected": true,
+    "reason": "control character in the body"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "respond",
+      "statusCode": 204,
+      "contentType": "text/plain",
+      "body": "x"
+    },
+    "actionRejected": true,
+    "reason": "204 has no body"
+  },
+  {
+    "source": "true",
+    "phase": "config",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "close"
+    },
+    "actionRejected": true,
+    "reason": "close only in waf-custom"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "skip",
+      "skip": []
+    },
+    "actionRejected": true,
+    "reason": "skip needs a target"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "skip",
+      "skip": ["rules", "crs"]
+    },
+    "actionRejected": true,
+    "reason": "skip targets sorted"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "skip",
+      "skip": ["crs", "crs"]
+    },
+    "actionRejected": true,
+    "reason": "skip targets unique"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "skip",
+      "skip": ["cache"]
+    },
+    "actionRejected": true,
+    "reason": "unknown skip target"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "allow",
+      "skip": ["crs"]
+    },
+    "actionRejected": true,
+    "reason": "skip belongs to skip"
+  },
+  {
+    "source": "true",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "block",
+      "statusCode": 403,
+      "accessLog": true
+    },
+    "actionRejected": true,
+    "reason": "access_log belongs to log"
+  },
+  {
+    "source": "true",
+    "phase": "ratelimit",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "rate_limit",
+      "statusCode": 429,
+      "limit": 10,
+      "windowSeconds": 60,
+      "key": "ip.src",
+      "banSeconds": 30
+    },
+    "actionRejected": true,
+    "reason": "rate limit ban below a minute"
+  },
+  {
+    "source": "true",
+    "phase": "ratelimit",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "rate_limit",
+      "statusCode": 429,
+      "limit": 10,
+      "windowSeconds": 60,
+      "key": "ip.src",
+      "banSeconds": 86401
+    },
+    "actionRejected": true,
+    "reason": "rate limit ban above a day"
+  },
+  {
+    "source": "true",
+    "phase": "config",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "config",
+      "crs": "on"
+    },
+    "actionRejected": true,
+    "reason": "unknown CRS mode"
+  },
+  {
+    "source": "true",
+    "phase": "cache",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "config",
+      "crs": "off"
+    },
+    "actionRejected": true,
+    "reason": "CRS override only in the config phase"
+  },
+  {
+    "source": "true",
+    "phase": "cache",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "config",
+      "cacheBypass": true,
+      "crs": "off"
+    },
+    "actionRejected": true,
+    "reason": "CRS override only in the config phase"
+  },
+  {
+    "source": "form_value(\"q\") eq \"1\"",
+    "phase": "cache",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "body functions not in the cache phase",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "1",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "form_value",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "q",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "http.request.body.raw contains \"x\"",
+    "phase": "response-transform",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "body fields not in response phases",
+    "ir": {
+      "op": "contains",
+      "field": "http.request.body.raw",
+      "valueType": "string",
+      "value": "x",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.bot.verified eq true",
+    "phase": "compression",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "crawler fields not in response phases",
+    "ir": {
+      "op": "eq",
+      "field": "http.request.bot.verified",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.body.size gt 1",
+    "phase": "cache",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "body fields not in the cache phase",
+    "ir": {
+      "op": "gt",
+      "field": "http.request.body.size",
+      "valueType": "number",
+      "value": "1",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "form_value(http.request.uri.path) eq \"x\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "form_value takes a literal",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "x",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "form_value",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "form_value(\"\") eq \"x\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "empty form name",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "x",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "form_value",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "json_value(\"a..b\") eq \"x\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "empty JSON path segment",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "x",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "json_value",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "a..b",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "json_value(\"a\", \"b\") eq \"\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "json_value takes one argument",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "json_value",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "a",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "b",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "json_value(\"a\") gt 1",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "json_value returns a string",
+    "ir": {
+      "op": "gt",
+      "field": "",
+      "valueType": "number",
+      "value": "1",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "json_value",
+          "valueType": "number",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "a",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
     "source": "url_encode(\"a b/é~-._\")",
     "phase": "redirect",
     "request": {},
