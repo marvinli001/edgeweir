@@ -36,7 +36,7 @@
 #              signs BENCH_URL with BENCH_URL_AUTH_KEY and checks that the
 #              unsigned URL is refused (403) and the signed one is a HIT.
 #              Defaults to the new node of scripts/bench-g12-nodes.mjs; its
-#              cache.bench.g12.test with BENCH_SCENARIO=cache is the baseline.
+#              new.cache.bench.g12.test with BENCH_SCENARIO=cache is the baseline.
 # pass and challenge default to ua-bench.test, which scripts/e2e-g2.mjs leaves
 # behind (whoami, cache rule on /, Under Attack js); headers to
 # hdr-bench.g8.test, which scripts/e2e-g8.mjs leaves behind; charset to

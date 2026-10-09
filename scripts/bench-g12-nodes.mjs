@@ -1,7 +1,7 @@
 // Two edge nodes for the access authentication comparison of scripts/bench.sh
 // (BENCH_SCENARIO=cache and url-auth), on a compose.e2e stack after the full
 // e2e (or after setup). Each is the only node of its own cluster serving
-// cache.bench.g12.test (whoami, a cache rule on /):
+// <base|new>.cache.bench.g12.test (whoami, a cache rule on /):
 //   g12-bench-base  edgeweir-node:pre-g12 (the node before G12, built from
 //                   E2E_PRE_G12_COMMIT when missing), :80 on
 //                   127.0.0.1:${E2E_G12_BENCH_BASE_PORT:-18947}
@@ -45,7 +45,8 @@ const BENCH = {
     httpPort: Number(process.env.E2E_G12_BENCH_NEW_PORT ?? 18948),
   },
 };
-const CACHE_HOST = "cache.bench.g12.test";
+/** One site per node: a domain belongs to one site. */
+const cacheHost = (which) => `${which}.cache.bench.g12.test`;
 const URL_HOST = "url.bench.g12.test";
 
 async function waitFor(label, fn, seconds = 180, interval = 1000) {
@@ -192,7 +193,7 @@ for (const [which, bench] of Object.entries(BENCH)) {
       origins: [{ address: "whoami" }],
       cacheRules: [{ pathPrefixes: ["/"], edgeTtlSeconds: 3600, originCacheControl: "override" }],
     });
-  await site(CACHE_HOST);
+  await site(cacheHost(which));
   if (which === "new") {
     const { site: signed } = await site(URL_HOST);
     await api("PUT", `/sites/${signed.id}/auth-rules`, {
@@ -202,6 +203,6 @@ for (const [which, bench] of Object.entries(BENCH)) {
   await synced(cluster);
   const node = (await api("GET", `/nodes?clusterId=${cluster.id}`))[0];
   console.log(
-    `${which}: BENCH_URL=http://127.0.0.1:${bench.httpPort}/bench-cache.txt BENCH_HOST=${CACHE_HOST}${which === "new" ? ` (url-auth: BENCH_HOST=${URL_HOST})` : ""} BENCH_NODE_CONTAINER=${container(which)} (${bench.image}, ${node.version ?? "?"}, access-auth-v1 ${node.supportedFeatures.includes("access-auth-v1") ? "yes" : "no"})`,
+    `${which}: BENCH_URL=http://127.0.0.1:${bench.httpPort}/bench-cache.txt BENCH_HOST=${cacheHost(which)}${which === "new" ? ` (url-auth: BENCH_HOST=${URL_HOST})` : ""} BENCH_NODE_CONTAINER=${container(which)} (${bench.image}, ${node.version ?? "?"}, access-auth-v1 ${node.supportedFeatures.includes("access-auth-v1") ? "yes" : "no"})`,
   );
 }
