@@ -179,7 +179,7 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 | 请求 | 字段 |
 | --- | --- |
 | `POST /bans` | `scope`（`site` / `platform`）、`siteId`（`site` 必须带，`platform` 不能带）、`cidr`（IP 地址或 CIDR）、`reason`（`abuse`、`attack`、`scanner`、`spam`、`other`）、`durationSeconds`（60–604800） |
-| `GET /bans` | 查询参数 `scope`、`siteId`、`source`（`manual` / `auto`）、`address`（IP 或 CIDR，列出覆盖它或在它之内的封禁；无效时 400 `BAN_INVALID_CIDR`）、`page`、`pageSize`（1–100，默认 50） |
+| `GET /bans` | 查询参数 `scope`、`siteId`、`source`（`manual` / `auto` / `rule`）、`address`（IP 或 CIDR，列出覆盖它或在它之内的封禁；无效时 400 `BAN_INVALID_CIDR`）、`page`、`pageSize`（1–100，默认 50） |
 | `PUT /settings/bans` | `maxTotal`（100–100000，默认 10000）、`shareAutoBans`（默认 `true`） |
 
 列表响应 `{ items, total }`，只含有效的封禁（未到期、未解封），按创建时间倒序。封禁字段：
@@ -187,9 +187,10 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 | 字段 | 说明 |
 | --- | --- |
 | `id`、`scope`、`cidr` | `cidr` 为规范化的 CIDR，如 `203.0.113.7/32` |
-| `reason`、`source` | `source` 为 `manual` 或 `auto`；自动封禁的 `reason` 为 `cc_ip_rate` |
+| `reason`、`source` | `source` 为 `manual`、`auto` 或 `rule`（规则做出的封禁）；自动封禁的 `reason` 为 `cc_ip_rate`、`unknown_host_scan` 或 `challenge_failures`，规则封禁为 `waf_rule` 或 `rate_limit` |
 | `siteId`、`siteName` | `platform` 封禁为 `null` |
-| `node`、`trigger` | 自动封禁的来源节点 `{ id, name }` 与触发条件 `{ metric, observed, threshold, windowSeconds }`；手动封禁为 `null` |
+| `node`、`trigger` | 自动与规则封禁的来源节点 `{ id, name }` 与触发条件 `{ metric, observed, threshold, windowSeconds, ruleId? }`；手动封禁为 `null` |
+| `rule` | 规则封禁的规则 `{ id, name, platform }`（规则已删除时 `name` 为 `null`）；其他为 `null` |
 | `createdBy` | 手动封禁的操作者 `{ type, id, name }` |
 | `createdAt`、`expiresAt` | ISO 8601 |
 | `seq` | 封禁变化序号（十进制字符串） |
@@ -280,7 +281,7 @@ curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicati
 | 请求 | 字段 |
 | --- | --- |
 | `PUT /sites/{id}/https` | `settings` 替换网站的全部 HTTPS 设置，缺省字段取默认值；先 `GET` 再修改。压缩字段：`brotli`、`brotliLevel`（1–11，默认 6）、`brotliMinLength`、`brotliTypes`，`zstd`、`zstdLevel`（1–19，默认 3）、`zstdMinLength`、`zstdTypes`，`gzip`、`gzipMinLength`、`gzipTypes`；最小长度 1–1048576（默认 256），类型为 MIME 类型数组（最多 32 个） |
-| `PATCH /sites/{id}/waf` | 只修改给出的字段：`mode`（`off` / `detect` / `block`）、`paranoiaLevel`（1–4）、`anomalyThreshold`（1–1000）、`excludedRuleIds`（900000–999999，不重复，最多 200 个；初始化与拦截判定规则 901xxx、949xxx、959xxx、980xxx 返回 400 `WAF_RULE_NOT_EXCLUDABLE`，`data.ids` 列出它们）、`requestBodyLimit`（0–134217728 字节） |
+| `PATCH /sites/{id}/waf` | 只修改给出的字段：`mode`（`off` / `detect` / `block`）、`paranoiaLevel`（1–4）、`anomalyThreshold`（1–1000）、`exclusions`（排除条目，见 [WAF 动作、请求体字段、CRS 按路径与已验证爬虫](#waf-动作请求体字段crs-按路径与已验证爬虫)；初始化与拦截判定规则 901xxx、949xxx、959xxx、980xxx 返回 400 `WAF_RULE_NOT_EXCLUDABLE`，`data.ids` 列出它们）、`requestBodyLimit`（0–134217728 字节） |
 | `GET /sites/{id}/waf/rules` | 查询参数 `range`（`1h` / `6h` / `24h` / `7d` / `30d`，默认 `24h`）、`limit`（1–50，默认 10） |
 | `GET /sites/{id}/https/check` | 查询参数 `ca`（`letsencrypt` / `zerossl` / `google` / `custom`，默认为 `GET /certificates/settings` 的 `defaultCa`）：检查其 CAA 许可的 CA |
 
@@ -289,7 +290,7 @@ curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicati
 | 过程 | 内容 |
 | --- | --- |
 | `sites.features` | `brotli`、`zstd`、`crs`，各为 `{ available, reason }`；集群有活动节点缺少 `brotli-v1` / `zstd-v1` / `modsecurity-v1` 时 `available` 为 `false`、`reason` 为 `nodes`，否则 `reason` 为 `null` |
-| `waf.get`、`waf.update` | `siteId`、上述字段（`excludedRuleIds` 升序）、`updatedAt`（从未保存时为 `null`，此时为默认值：`off`、1、5、`[]`、131072） |
+| `waf.get`、`waf.update` | `siteId`、上述字段、`updatedAt`（从未保存时为 `null`，此时为默认值：`off`、1、5、`[]`、131072） |
 | `waf.topRules` | `{ approximate: true, items: [{ ruleId, requests }] }`，按命中次数倒序；只含检测规则，不含 901xxx、949xxx、959xxx、980xxx |
 | `https.check` | `request`：一键启用 HTTPS 发送的申请（`name`、`names`、`email`、`challenge`、`dnsCredentialId`）；`blockers`：全部阻碍，每项为 `code` 与参数：`nodes_offline`（`cluster`）、`nodes_lack_http01`（`nodes`）、`dns_not_pointing`（`name`、`pointing`：`unresolved` / `elsewhere`）、`dns_credential_missing`（`names`）、`dns_credential_failed`（`credential`、`error`：API 错误代码）、`caa_forbidden`（`name`）；`certificates`：已签发、未过期且覆盖网站全部域名的证书 `{ id, name }` |
 
@@ -300,7 +301,7 @@ curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicati
 
 ```bash
 curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
-  -d '{"mode":"block","paranoiaLevel":1,"excludedRuleIds":[920350]}' \
+  -d '{"mode":"block","paranoiaLevel":1,"exclusions":[{"ruleIds":[920350]}]}' \
   https://cdn-admin.example.com/api/v1/sites/<网站 ID>/waf
 curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
   'https://cdn-admin.example.com/api/v1/sites/<网站 ID>/waf/rules?range=1h'
@@ -728,6 +729,48 @@ DNS 绑定与记录的新增字段：
 `ipCheck.check` 的 `ip` 为 IPv4 或 IPv6 地址（不是 CIDR，否则 400 `IP_ADDRESS_INVALID`），IPv4 映射地址按 IPv4 返回。`lists`：含有该地址的名单 `{ id, name, kind, entries, siteRole }`（`entries` 为命中的条目，`siteRole` 为 `block` / `allow` / `null`）；`bans`：覆盖该地址的有效封禁（与 `GET /bans` 的元素相同；带 `siteId` 时只有全局与该网站的）；`clusters`：`{ id, name, clientIp, trustedProxy, nodeAddress }`；`verdict`：带 `siteId` 时为 `{ outcome, platformAllowed, siteAllowed }`，`outcome` 为 `platform_banned`、`site_banned`、`platform_blocked`、`site_blocked`、`allowed` 或 `none`，否则为 `null`。
 
 `GET /sites/{id}/features` 新增 `accessControl`。配置版本原因新增 `site_access_control_updated`，审计新增 `site.access_control_update`。节点能力新增 `access-control-v1`；配置新增 `Site.access_control`（proto `v0.28.0`）。
+
+### WAF 动作、请求体字段、CRS 按路径与已验证爬虫
+
+规则、CRS 与防护沿用上文的过程（`rules.*`、`platformRules.*`、`waf.*`、`protection.*`、`sites.update`），新增的字段如下。服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
+
+| 请求 | 字段 |
+| --- | --- |
+| `action`（`kind: "ban"`） | `waf-custom` 阶段。`banSeconds`（60–604800，默认 3600）、`banScope`（`site`，默认；`platform` 只用于全局规则，网站规则 400）、`banPrefixV4`（16–32，默认 32）、`banPrefixV6`（48–64，默认 64） |
+| `action`（`kind: "respond"`） | `waf-custom` 阶段。`statusCode`（200、204、400–599，默认 403）、`contentType`（`text/plain`（默认）、`text/html`、`application/json`）、`body`（≤ 8192 字节，不含制表符与换行以外的控制字符；204 时为空）、`errorPage`（默认 `false`；只用于 4xx、5xx，开启时 `body` 为空） |
+| `action`（`kind: "close"`） | `waf-custom` 阶段，没有字段 |
+| `action`（`kind: "skip"`） | `waf-custom` 阶段。`skip`：`rules`、`rate_limits`、`crs`、`challenges` 中不重复的若干个，至少一个 |
+| `action`（`kind: "log"`） | 增加 `accessLog`（默认 `false`）：不论采样率写一条访问日志 |
+| `action`（`kind: "rate_limit"`） | 增加 `banSeconds`（0 或 60–86400，默认 0）：超额后封禁该地址 |
+| `action`（`kind: "config"`） | 增加 `crs`（`off`、`detect`、`block`），只在 `config` 阶段 |
+| `PATCH /sites/{id}/waf` | `exclusions` 取代 `excludedRuleIds`，整体替换：最多 100 个 `{ path, exact, ruleIds, targets }`；`path` 空为整站，或以 `/` 开头（≤ 1024 字节，不含 `?`、`#`、空白与控制字符）；`exact`（默认 `false`，前缀）；`ruleIds` 1–200 个（900000–999999，不重复；901xxx、949xxx、959xxx、980xxx 返回 400 `WAF_RULE_NOT_EXCLUDABLE`）；`targets` ≤ 16 个，`ARGS:名称`、`REQUEST_COOKIES:名称`（名称 1–64 个 `[A-Za-z0-9_.-[]]`）或 `REQUEST_HEADERS:名称`（`[A-Za-z0-9-]`） |
+| `PATCH /sites/{id}/protection` | 增加 `allowVerifiedBots`；`challengeText`（`{ titleZh, hintZh, titleEn, hintEn }`，各 ≤ 200 个字符，去掉首尾空白，不含控制字符，空为内置文案；整体替换）；`failureBan`（`{ enabled, threshold, banSeconds }`，`threshold` 3–100、`banSeconds` 60–86400，默认 10、600） |
+| `POST /sites`、`PATCH /sites/{id}` | `contentSettings.rulesBodyLimit`（1024–1048576 字节，默认 65536）；`PATCH` 省略时保持原值 |
+| `GET /bans` | `source` 增加 `rule` |
+
+响应：
+
+| 过程 | 内容 |
+| --- | --- |
+| `rules.*`、`platformRules.*` | 上述动作字段，`ban` 的默认值写出 |
+| `waf.get`、`waf.update` | `exclusions` 按保存顺序，`ruleIds` 升序、`targets` 排序，`path` 为空时 `exact` 为 `false`；从未保存时为 `[]` |
+| `protection.get`、`protection.update` | 增加 `allowVerifiedBots`、`challengeText`、`failureBan`（关闭时也返回保存的阈值与时长） |
+| `bans.list` | `source` 增加 `rule`（原因 `waf_rule`、`rate_limit`），自动封禁的原因增加 `challenge_failures`；`trigger` 增加 `ruleId`；新字段 `rule`：规则做出的封禁为 `{ id, name, platform }`（规则已删除时 `name` 为 `null`），其他为 `null` |
+| `logs.query`、`logs.export` | 日志增加 `ruleIds`：要求「写入访问日志」的记录规则 ID（至多 8 个）；CSV 末尾增加 `ruleIds` 列（空格分隔） |
+| `sites.features` | 增加 `wafV2`、`rulesBody`、`challengeV2`（能力 `waf-v2`、`rules-body-v1`、`challenge-v2`） |
+| `rules.validate` | `code` 增加 `request_field`（请求体与爬虫字段只能用于请求阶段）、`form_name`、`json_path` |
+
+- 用到新动作、`accessLog`、限速的 `banSeconds`、`config` 的 `crs` 或带路径、目标的 CRS 排除的配置要求节点能力 `waf-v2`；用到请求体字段与 `form_value`、`json_value` 的要求 `rules-body-v1`；`allowVerifiedBots`、`challengeText`、`failureBan` 与 `http.request.bot.*` 要求 `challenge-v2`。没有用到的配置不变。
+- 整站、不带目标的排除条目下发给节点时合并为原来的「排除的规则 ID」，旧节点照常执行。
+- 原有的 `excludedRuleIds` 已迁移为一个不带路径的条目，API 不再接受该字段。
+
+```bash
+curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"exclusions":[{"path":"/api/","ruleIds":[942100]},{"path":"/login","exact":true,"ruleIds":[941100],"targets":["ARGS:password"]}]}' \
+  https://cdn-admin.example.com/api/v1/sites/<网站 ID>/waf
+```
+
+行为见 [规则](../guide/rules.md)、[OWASP CRS 托管规则](../guide/waf.md)、[挑战与 CC 防护](../guide/challenges.md) 与 [封禁](../guide/bans.md)。
 
 ### 端口池与 L4 应用
 

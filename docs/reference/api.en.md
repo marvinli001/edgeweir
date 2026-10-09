@@ -179,7 +179,7 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | Request | Fields |
 | --- | --- |
 | `POST /bans` | `scope` (`site` / `platform`), `siteId` (required with `site`, not allowed with `platform`), `cidr` (IP address or CIDR), `reason` (`abuse`, `attack`, `scanner`, `spam`, `other`), `durationSeconds` (60–604800) |
-| `GET /bans` | Query parameters `scope`, `siteId`, `source` (`manual` / `auto`), `address` (an IP or CIDR: the bans that cover it or lie inside it; 400 `BAN_INVALID_CIDR` when invalid), `page`, `pageSize` (1–100, default 50) |
+| `GET /bans` | Query parameters `scope`, `siteId`, `source` (`manual` / `auto` / `rule`), `address` (an IP or CIDR: the bans that cover it or lie inside it; 400 `BAN_INVALID_CIDR` when invalid), `page`, `pageSize` (1–100, default 50) |
 | `PUT /settings/bans` | `maxTotal` (100–100000, default 10000), `shareAutoBans` (default `true`) |
 
 Lists answer `{ items, total }` with active bans only (neither expired nor lifted), newest first. Ban fields:
@@ -187,9 +187,10 @@ Lists answer `{ items, total }` with active bans only (neither expired nor lifte
 | Field | Description |
 | --- | --- |
 | `id`, `scope`, `cidr` | `cidr` is canonical, e.g. `203.0.113.7/32` |
-| `reason`, `source` | `source` is `manual` or `auto`; automatic bans have the `reason` `cc_ip_rate` |
+| `reason`, `source` | `source` is `manual`, `auto` or `rule` (bans made by rules); automatic bans have the `reason` `cc_ip_rate`, `unknown_host_scan` or `challenge_failures`, rule bans `waf_rule` or `rate_limit` |
 | `siteId`, `siteName` | `null` for `platform` bans |
-| `node`, `trigger` | The node `{ id, name }` and trigger `{ metric, observed, threshold, windowSeconds }` of an automatic ban; `null` for manual bans |
+| `node`, `trigger` | The node `{ id, name }` and trigger `{ metric, observed, threshold, windowSeconds, ruleId? }` of an automatic or rule ban; `null` for manual bans |
+| `rule` | The rule `{ id, name, platform }` of a rule ban (`name` `null` once the rule is deleted); `null` otherwise |
 | `createdBy` | Who created a manual ban `{ type, id, name }` |
 | `createdAt`, `expiresAt` | ISO 8601 |
 | `seq` | Ban change sequence (decimal string) |
@@ -280,7 +281,7 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | Request | Fields |
 | --- | --- |
 | `PUT /sites/{id}/https` | `settings` replaces all HTTPS settings of the site; missing fields take their defaults, so `GET` first and change what you need. Compression fields: `brotli`, `brotliLevel` (1–11, default 6), `brotliMinLength`, `brotliTypes`; `zstd`, `zstdLevel` (1–19, default 3), `zstdMinLength`, `zstdTypes`; `gzip`, `gzipMinLength`, `gzipTypes`; minimum lengths 1–1048576 (default 256), types are arrays of MIME types (up to 32) |
-| `PATCH /sites/{id}/waf` | Changes only the fields given: `mode` (`off` / `detect` / `block`), `paranoiaLevel` (1–4), `anomalyThreshold` (1–1000), `excludedRuleIds` (900000–999999, unique, up to 200; initialization and evaluation rules 901xxx, 949xxx, 959xxx, 980xxx return 400 `WAF_RULE_NOT_EXCLUDABLE` with them in `data.ids`), `requestBodyLimit` (0–134217728 bytes) |
+| `PATCH /sites/{id}/waf` | Changes only the fields given: `mode` (`off` / `detect` / `block`), `paranoiaLevel` (1–4), `anomalyThreshold` (1–1000), `exclusions` (exclusion entries, see [WAF actions, request body fields, CRS by path and verified crawlers](#waf-actions-request-body-fields-crs-by-path-and-verified-crawlers); initialization and evaluation rules 901xxx, 949xxx, 959xxx, 980xxx return 400 `WAF_RULE_NOT_EXCLUDABLE` with them in `data.ids`), `requestBodyLimit` (0–134217728 bytes) |
 | `GET /sites/{id}/waf/rules` | Query parameters `range` (`1h` / `6h` / `24h` / `7d` / `30d`, default `24h`), `limit` (1–50, default 10) |
 | `GET /sites/{id}/https/check` | Query parameter `ca` (`letsencrypt` / `zerossl` / `google` / `custom`, default: `defaultCa` of `GET /certificates/settings`): the CA whose CAA permission is checked |
 
@@ -289,7 +290,7 @@ Responses:
 | Procedure | Content |
 | --- | --- |
 | `sites.features` | `brotli`, `zstd`, `crs`, each `{ available, reason }`; when an active node of the cluster lacks `brotli-v1` / `zstd-v1` / `modsecurity-v1`, `available` is `false` and `reason` is `nodes`; otherwise `reason` is `null` |
-| `waf.get`, `waf.update` | `siteId`, the fields above (`excludedRuleIds` ascending), `updatedAt` (`null` until first saved, with the defaults `off`, 1, 5, `[]`, 131072) |
+| `waf.get`, `waf.update` | `siteId`, the fields above, `updatedAt` (`null` until first saved, with the defaults `off`, 1, 5, `[]`, 131072) |
 | `waf.topRules` | `{ approximate: true, items: [{ ruleId, requests }] }`, most matched first; detection rules only, without 901xxx, 949xxx, 959xxx, 980xxx |
 | `https.check` | `request`: the request one-click HTTPS sends (`name`, `names`, `email`, `challenge`, `dnsCredentialId`); `blockers`: everything in the way, each a `code` with parameters: `nodes_offline` (`cluster`), `nodes_lack_http01` (`nodes`), `dns_not_pointing` (`name`, `pointing`: `unresolved` / `elsewhere`), `dns_credential_missing` (`names`), `dns_credential_failed` (`credential`, `error`: an API error code), `caa_forbidden` (`name`); `certificates`: issued, unexpired certificates covering every domain of the site, `{ id, name }` |
 
@@ -300,7 +301,7 @@ Responses:
 
 ```bash
 curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
-  -d '{"mode":"block","paranoiaLevel":1,"excludedRuleIds":[920350]}' \
+  -d '{"mode":"block","paranoiaLevel":1,"exclusions":[{"ruleIds":[920350]}]}' \
   https://cdn-admin.example.com/api/v1/sites/<site ID>/waf
 curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
   'https://cdn-admin.example.com/api/v1/sites/<site ID>/waf/rules?range=1h'
@@ -728,6 +729,48 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 The `ip` of `ipCheck.check` is an IPv4 or IPv6 address (not a CIDR: 400 `IP_ADDRESS_INVALID`); an IPv4-mapped address comes back as IPv4. `lists`: the lists holding it, `{ id, name, kind, entries, siteRole }` (`entries` the matching entries, `siteRole` `block` / `allow` / `null`); `bans`: active bans covering it (the elements of `GET /bans`; with `siteId` global bans and that site's only); `clusters`: `{ id, name, clientIp, trustedProxy, nodeAddress }`; `verdict`: with `siteId` `{ outcome, platformAllowed, siteAllowed }`, `outcome` one of `platform_banned`, `site_banned`, `platform_blocked`, `site_blocked`, `allowed`, `none`; else `null`.
 
 `GET /sites/{id}/features` adds `accessControl`. New revision reason `site_access_control_updated` and audit action `site.access_control_update`. New node capability `access-control-v1`; the configuration adds `Site.access_control` (proto `v0.28.0`).
+
+### WAF actions, request body fields, CRS by path and verified crawlers
+
+Rules, CRS and protection keep the procedures above (`rules.*`, `platformRules.*`, `waf.*`, `protection.*`, `sites.update`) with these fields. Service accounts cannot call them (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys only call `GET`.
+
+| Request | Fields |
+| --- | --- |
+| `action` (`kind: "ban"`) | Phase `waf-custom`. `banSeconds` (60–604800, default 3600), `banScope` (`site`, the default; `platform` for platform rules only, 400 in site rules), `banPrefixV4` (16–32, default 32), `banPrefixV6` (48–64, default 64) |
+| `action` (`kind: "respond"`) | Phase `waf-custom`. `statusCode` (200, 204, 400–599, default 403), `contentType` (`text/plain` (default), `text/html`, `application/json`), `body` (≤ 8192 bytes, no control characters but tab and line breaks; empty for 204), `errorPage` (default `false`; 4xx and 5xx only, `body` empty with it) |
+| `action` (`kind: "close"`) | Phase `waf-custom`, no fields |
+| `action` (`kind: "skip"`) | Phase `waf-custom`. `skip`: distinct values of `rules`, `rate_limits`, `crs`, `challenges`, at least one |
+| `action` (`kind: "log"`) | Adds `accessLog` (default `false`): write an access log line whatever the sample rate |
+| `action` (`kind: "rate_limit"`) | Adds `banSeconds` (0 or 60–86400, default 0): ban the address over the limit |
+| `action` (`kind: "config"`) | Adds `crs` (`off`, `detect`, `block`), phase `config` only |
+| `PATCH /sites/{id}/waf` | `exclusions` replaces `excludedRuleIds` as a whole: at most 100 `{ path, exact, ruleIds, targets }`; `path` empty for the whole site, or starting with `/` (≤ 1024 bytes, without `?`, `#`, whitespace or control characters); `exact` (default `false`, a prefix); `ruleIds` 1–200 (900000–999999, unique; 901xxx, 949xxx, 959xxx, 980xxx return 400 `WAF_RULE_NOT_EXCLUDABLE`); `targets` ≤ 16, `ARGS:name`, `REQUEST_COOKIES:name` (1–64 of `[A-Za-z0-9_.-[]]`) or `REQUEST_HEADERS:name` (`[A-Za-z0-9-]`) |
+| `PATCH /sites/{id}/protection` | Adds `allowVerifiedBots`; `challengeText` (`{ titleZh, hintZh, titleEn, hintEn }`, ≤ 200 characters each, trimmed, no control characters, empty for the built-in text; replaced as a whole); `failureBan` (`{ enabled, threshold, banSeconds }`, `threshold` 3–100, `banSeconds` 60–86400, defaults 10 and 600) |
+| `POST /sites`, `PATCH /sites/{id}` | `contentSettings.rulesBodyLimit` (1024–1048576 bytes, default 65536); `PATCH` keeps it when omitted |
+| `GET /bans` | `source` adds `rule` |
+
+Responses:
+
+| Procedure | Content |
+| --- | --- |
+| `rules.*`, `platformRules.*` | The action fields above, with the defaults of `ban` written out |
+| `waf.get`, `waf.update` | `exclusions` in the order saved, `ruleIds` ascending, `targets` sorted, `exact` `false` without a path; `[]` until first saved |
+| `protection.get`, `protection.update` | Adds `allowVerifiedBots`, `challengeText`, `failureBan` (its threshold and duration are returned while it is off too) |
+| `bans.list` | `source` adds `rule` (reasons `waf_rule`, `rate_limit`), automatic bans add the reason `challenge_failures`; `trigger` adds `ruleId`; new field `rule`: `{ id, name, platform }` for bans made by rules (`name` `null` once the rule is deleted), `null` otherwise |
+| `logs.query`, `logs.export` | Entries add `ruleIds`: the log rules that asked for the line (at most 8); the CSV ends with a `ruleIds` column (space separated) |
+| `sites.features` | Adds `wafV2`, `rulesBody`, `challengeV2` (capabilities `waf-v2`, `rules-body-v1`, `challenge-v2`) |
+| `rules.validate` | `code` adds `request_field` (request body and crawler fields only in the request phases), `form_name`, `json_path` |
+
+- Configurations using the new actions, `accessLog`, a rate limit's `banSeconds`, the config action's `crs` or CRS exclusions with a path or targets need the node capability `waf-v2`; request body fields and `form_value`, `json_value` need `rules-body-v1`; `allowVerifiedBots`, `challengeText`, `failureBan` and `http.request.bot.*` need `challenge-v2`. Configurations without them do not change.
+- Whole-site exclusions without targets reach the nodes merged into the former excluded rule ids, which older nodes run as before.
+- The former `excludedRuleIds` migrated to one exclusion without a path; the API no longer accepts the field.
+
+```bash
+curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"exclusions":[{"path":"/api/","ruleIds":[942100]},{"path":"/login","exact":true,"ruleIds":[941100],"targets":["ARGS:password"]}]}' \
+  https://cdn-admin.example.com/api/v1/sites/<site id>/waf
+```
+
+Behaviour: [Rules](../guide/rules.en.md), [OWASP CRS managed rules](../guide/waf.en.md), [Challenges and CC protection](../guide/challenges.en.md) and [Bans](../guide/bans.en.md).
 
 ### Port pools and L4 apps
 
