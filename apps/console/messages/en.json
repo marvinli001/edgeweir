@@ -2593,5 +2593,8 @@
   "ip_check_site_role_allow": "Site allow",
   "ip_check_trusted_proxy": "Trusted proxy",
   "ip_check_node_address": "Node address",
-  "ip_check_geoip_note": "GeoIP is not checked"
+  "ip_check_geoip_note": "GeoIP is not checked",
+  "bans_rule_deleted": "Deleted rule",
+  "metric_rate_limit": "Rate-limited requests",
+  "metric_challenge_failures": "Failed challenges"
 }

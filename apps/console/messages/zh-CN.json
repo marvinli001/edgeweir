@@ -2405,5 +2405,8 @@
   "ip_check_site_role_allow": "本站放行",
   "ip_check_trusted_proxy": "可信代理",
   "ip_check_node_address": "节点地址",
-  "ip_check_geoip_note": "不检查地区（GeoIP）"
+  "ip_check_geoip_note": "不检查地区（GeoIP）",
+  "bans_rule_deleted": "已删除的规则",
+  "metric_rate_limit": "限速请求",
+  "metric_challenge_failures": "挑战失败"
 }

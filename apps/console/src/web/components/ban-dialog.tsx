@@ -25,6 +25,9 @@ export const BAN_REASON_LABELS: Record<BanReason, () => string> = {
   other: () => m.bans_reason_other(),
   cc_ip_rate: () => m.bans_reason_cc_ip_rate(),
   unknown_host_scan: () => m.bans_reason_unknown_host_scan(),
+  challenge_failures: () => m.bans_reason_challenge_failures(),
+  waf_rule: () => m.bans_reason_waf_rule(),
+  rate_limit: () => m.bans_reason_rate_limit(),
 };
 
 export const BAN_SCOPE_LABELS: Record<BanScope, () => string> = {
@@ -32,7 +35,8 @@ export const BAN_SCOPE_LABELS: Record<BanScope, () => string> = {
   site: () => m.bans_scope_site(),
 };
 
-function durationLabel(seconds: number): string {
+/** A ban duration of whole hours or days, as the duration selects name it. */
+export function durationLabel(seconds: number): string {
   return seconds % 86400 === 0
     ? m.bans_duration_days({ count: seconds / 86400 })
     : m.bans_duration_hours({ count: seconds / 3600 });

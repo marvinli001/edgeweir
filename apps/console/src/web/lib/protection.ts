@@ -34,6 +34,9 @@ export const metricLabel = (metric: string) =>
       origin_error_rate: m.metric_origin_error_rate,
       cooldown: m.metric_cooldown,
       unknown_host_requests: m.metric_unknown_host_requests,
+      // waf-v2 and challenge-v2 bans.
+      rate_limit: m.metric_rate_limit,
+      challenge_failures: m.metric_challenge_failures,
     }) as Record<string, (() => string) | undefined>
   )[metric]?.() ?? metric;
 

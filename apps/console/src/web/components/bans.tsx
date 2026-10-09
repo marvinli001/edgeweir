@@ -26,6 +26,7 @@ const PAGE_SIZE = 50;
 const SOURCES: Record<BanSource, () => string> = {
   manual: () => m.bans_source_manual(),
   auto: () => m.bans_source_auto(),
+  rule: () => m.bans_source_rule(),
 };
 
 /** Time left until `iso`, rounded down ("3 h left"). */
@@ -36,29 +37,57 @@ export function timeLeft(iso: string, now = Date.now()): string {
   return m.bans_left_days({ count: Math.floor(seconds / 86400) });
 }
 
-/** Who or what created the ban: the operator, or the node and its trigger. */
+/** "ip_qps 412 / 40, 10 s window": what the node counted; a rate limit's own count has no metric. */
+function triggerText(trigger: NonNullable<Ban["trigger"]>): string {
+  const counted = m.bans_trigger({
+    observed: formatNumber(trigger.observed),
+    threshold: formatNumber(trigger.threshold),
+    window: trigger.windowSeconds,
+  });
+  return trigger.metric ? `${metricLabel(trigger.metric)} ${counted}` : counted;
+}
+
+/** The rule that banned: its name (a platform rule's marked), or its id once it is deleted. */
+function BanRule({ rule }: { rule: NonNullable<Ban["rule"]> }) {
+  return rule.name === null ? (
+    <span className="min-w-0 text-xs break-all" data-testid="ban-rule" data-rule-id={rule.id}>
+      <span className="text-muted-foreground">{m.bans_rule_deleted()}</span>{" "}
+      <span className="font-mono">{rule.id}</span>
+    </span>
+  ) : (
+    <span
+      className="min-w-0 text-sm font-medium break-all"
+      data-testid="ban-rule"
+      data-rule-id={rule.id}
+    >
+      {rule.platform ? m.rules_logged_platform({ name: rule.name }) : rule.name}
+    </span>
+  );
+}
+
+/**
+ * Who or what created the ban: the operator, the node and its trigger, or the rule (with the
+ * node, and a rate limit's count).
+ */
 function BanOrigin({ ban }: { ban: Ban }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
       <div className="flex flex-wrap items-center gap-1">
-        <Badge variant={ban.source === "auto" ? "secondary" : "outline"} data-testid="ban-source">
+        <Badge variant={ban.source === "manual" ? "outline" : "secondary"} data-testid="ban-source">
           {SOURCES[ban.source]()}
         </Badge>
         {ban.distributed ? null : <Badge variant="outline">{m.bans_not_shared()}</Badge>}
       </div>
-      {ban.source === "auto" ? (
-        <span className="text-xs text-muted-foreground">
+      {ban.source === "rule" && ban.rule ? <BanRule rule={ban.rule} /> : null}
+      {ban.source === "manual" ? (
+        <span className="text-xs text-muted-foreground">{ban.createdBy?.name || "—"}</span>
+      ) : (
+        <span className="text-xs text-muted-foreground" data-testid="ban-node">
           {ban.node?.name || "—"}
-          {ban.trigger
-            ? ` · ${metricLabel(ban.trigger.metric)} ${m.bans_trigger({
-                observed: formatNumber(ban.trigger.observed),
-                threshold: formatNumber(ban.trigger.threshold),
-                window: ban.trigger.windowSeconds,
-              })}`
+          {ban.trigger && (ban.source === "auto" || ban.reason === "rate_limit")
+            ? ` · ${triggerText(ban.trigger)}`
             : ""}
         </span>
-      ) : (
-        <span className="text-xs text-muted-foreground">{ban.createdBy?.name || "—"}</span>
       )}
     </div>
   );
@@ -241,7 +270,7 @@ export function BansPage({
             value={source}
             onChange={filter((value) => setSource(value as BanSource | undefined))}
             allLabel={m.bans_all_sources()}
-            options={(["manual", "auto"] as const).map((value) => ({
+            options={(["manual", "auto", "rule"] as const).map((value) => ({
               value,
               label: SOURCES[value](),
             }))}
