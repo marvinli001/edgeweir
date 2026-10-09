@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { schema } from "@edgeweir/db";
 import { eq, getTableColumns, getTableName, is, Table } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
+import { accessAuthSecretBinding } from "../../src/server/lib/access-auth-secrets";
 import { AUTH_SECRET_BINDING, AUTH_SECRET_KEY } from "../../src/server/lib/auth-secret";
 import { type EnvelopeBinding, MasterKey } from "../../src/server/lib/envelope";
 import type { Logger } from "../../src/server/lib/logger";
@@ -140,6 +141,8 @@ describe("master key rotation", () => {
       key: crypto.randomUUID(),
       pending: crypto.randomUUID(),
       siteSecret: crypto.randomUUID(),
+      authRule: crypto.randomUUID(),
+      authForward: crypto.randomUUID(),
       ticketKey: crypto.randomUUID(),
       ticketPending: crypto.randomUUID(),
     };
@@ -155,6 +158,18 @@ describe("master key rotation", () => {
       kind: "purge_key",
       secretEnvelope: seal(siteSecretBinding(ids.siteSecret)),
     });
+    // An access authentication rule with a secret, and one without (forward authentication).
+    await db.insert(schema.siteAuthRule).values([
+      {
+        id: ids.authRule,
+        siteId: site?.id ?? "",
+        position: 0,
+        kind: "url_a",
+        secretEnvelope: seal(accessAuthSecretBinding(ids.authRule)),
+        secretVersion: 1,
+      },
+      { id: ids.authForward, siteId: site?.id ?? "", position: 1, kind: "forward" },
+    ]);
     const ca = await generateCa("Rotation CA");
     await db.insert(schema.pkiAuthority).values({
       id: NODE_CA_ID,

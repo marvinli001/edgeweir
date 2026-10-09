@@ -1,6 +1,7 @@
 import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import {
+  type AuthRuleModel,
   type CacheRuleModel,
   type CacheZoneModel,
   type CompileInput,
@@ -15,6 +16,8 @@ import {
   TLS_PENDING_DOMAINS_FEATURE,
 } from "@edgeweir/config-compiler";
 import {
+  type DomainKind,
+  formatSiteDomain,
   nodeSupportsFeature,
   normalizeCidr,
   patternOrder,
@@ -31,6 +34,7 @@ import {
   parseValueExpression,
 } from "@edgeweir/rule-engine";
 import { and, asc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
+import { toAuthRuleDto } from "../lib/auth-rule-dto";
 import { parseCacheCondition } from "../lib/cache-conditions";
 import { readCacheKey } from "../lib/cache-key";
 import { uncoveredByAll } from "../lib/certificate-names";
@@ -148,6 +152,12 @@ export async function loadSiteModels(
     })
     .from(schema.siteSecret)
     .where(and(inArray(schema.siteSecret.siteId, siteIds), eq(schema.siteSecret.kind, PURGE_KEY)));
+
+  const authRules = await db
+    .select()
+    .from(schema.siteAuthRule)
+    .where(and(inArray(schema.siteAuthRule.siteId, siteIds), eq(schema.siteAuthRule.enabled, true)))
+    .orderBy(asc(schema.siteAuthRule.position));
 
   const edgeRules = await db
     .select()
@@ -338,6 +348,12 @@ export async function loadSiteModels(
           s,
           purgeKeys.find((key) => key.siteId === s.id),
         ),
+        authRules: authRuleModels(
+          authRules.filter((rule) => rule.siteId === s.id),
+          domains
+            .filter((d) => d.siteId === s.id)
+            .map((d) => formatSiteDomain({ kind: d.kind as DomainKind, name: d.name })),
+        ),
         certificateId: s.certificateId ?? "",
         ...(() => {
           const {
@@ -370,6 +386,48 @@ export async function loadSiteModels(
       };
     })
     .filter((site) => site.domains.length > 0);
+}
+
+/**
+ * The enabled access authentication rules of a site (access-auth-v1) in
+ * their order. A scope domain the site no longer has is left out: when that
+ * empties the list, the rule covers every domain of the site (more requests
+ * authenticated, never fewer); nodes never see a domain the site lacks.
+ */
+export function authRuleModels(
+  rows: (typeof schema.siteAuthRule.$inferSelect)[],
+  siteDomains: readonly string[],
+): AuthRuleModel[] {
+  const current = new Set(siteDomains);
+  return rows.map((row) => {
+    const dto = toAuthRuleDto(row);
+    return {
+      id: row.id,
+      kind: dto.kind,
+      scope: { ...dto.scope, domains: dto.scope.domains.filter((d) => current.has(d)) },
+      ...(row.secretEnvelope ? { credential: { id: row.id, version: row.secretVersion } } : {}),
+      ...(dto.basic
+        ? {
+            basic: {
+              realm: dto.basic.realm,
+              keepAuthorization: dto.basic.keepAuthorization,
+              userHeader: dto.basic.userHeader,
+            },
+          }
+        : {}),
+      ...(dto.forward ? { forward: dto.forward } : {}),
+      ...(dto.url
+        ? {
+            url: {
+              validitySeconds: dto.url.validitySeconds,
+              skewSeconds: dto.url.skewSeconds,
+              signParam: dto.url.signParam,
+              timeParam: dto.url.timeParam,
+            },
+          }
+        : {}),
+    };
+  });
 }
 
 /**

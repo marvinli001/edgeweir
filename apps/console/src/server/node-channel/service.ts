@@ -39,7 +39,8 @@ import {
   SecurityEventKind,
   TaskState,
 } from "@edgeweir/proto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { accessAuthSecretBinding } from "../lib/access-auth-secrets";
 import type { AppContext } from "../lib/context";
 import { PURGE_KEY, siteSecretBinding } from "../lib/site-secrets";
 import { NODE_CERT_LIFETIME_DAYS, NODE_ORGANIZATION } from "../pki/ca";
@@ -488,6 +489,7 @@ export function createNodeService(
                 loggedRules: Object.fromEntries(
                   s.loggedRules.map((v) => [v.value, Number(v.count)]),
                 ),
+                authFailures: Number(s.authFailures),
                 statusCodes: Object.fromEntries(
                   Object.entries(s.statusCodes).map(([code, n]) => [code, Number(n)]),
                 ),
@@ -896,6 +898,34 @@ export function createNodeService(
           });
         } catch (error) {
           log.error("cannot open site secret", { secretId: secret.id, error });
+        }
+      }
+      // Secrets of access authentication rules (Basic users and hashes, URL keys) as JSON.
+      const authRules = await app.db
+        .select({ rule: schema.siteAuthRule })
+        .from(schema.siteAuthRule)
+        .innerJoin(schema.site, eq(schema.site.id, schema.siteAuthRule.siteId))
+        .where(
+          and(
+            inArray(schema.siteAuthRule.id, ids),
+            isNotNull(schema.siteAuthRule.secretEnvelope),
+            eq(schema.site.clusterId, node.clusterId),
+          ),
+        );
+      for (const { rule } of authRules) {
+        try {
+          const value = app.masterKey.open(
+            JSON.parse(rule.secretEnvelope as string),
+            accessAuthSecretBinding(rule.id),
+          );
+          credentials.push({
+            id: rule.id,
+            version: BigInt(rule.secretVersion),
+            accessKeyId: "",
+            secretAccessKey: value.toString("utf8"),
+          });
+        } catch (error) {
+          log.error("cannot open access authentication secret", { ruleId: rule.id, error });
         }
       }
       log.info("origin credentials delivered", {

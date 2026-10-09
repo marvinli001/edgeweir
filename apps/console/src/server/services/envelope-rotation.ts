@@ -1,6 +1,7 @@
 import { type Database, schema } from "@edgeweir/db";
 import { eq, sql } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
+import { accessAuthSecretBinding } from "../lib/access-auth-secrets";
 import { AUTH_SECRET_BINDING, AUTH_SECRET_KEY } from "../lib/auth-secret";
 import type { Envelope, EnvelopeBinding, MasterKey } from "../lib/envelope";
 import { lockEnvelopeUpgrade } from "../lib/locks";
@@ -50,6 +51,12 @@ export const ENVELOPE_COLUMNS: EnvelopeColumn[] = [
     id: schema.siteSecret.id,
     column: schema.siteSecret.secretEnvelope,
     binding: siteSecretBinding,
+  },
+  {
+    table: schema.siteAuthRule,
+    id: schema.siteAuthRule.id,
+    column: schema.siteAuthRule.secretEnvelope,
+    binding: accessAuthSecretBinding,
   },
   {
     table: schema.pkiAuthority,

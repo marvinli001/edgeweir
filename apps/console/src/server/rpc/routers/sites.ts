@@ -6,6 +6,12 @@ import {
   trafficBreakdown,
   trafficSeries,
 } from "../../services/analytics";
+import {
+  authFailures,
+  getAuthRules,
+  signAuthUrl,
+  updateAuthRules,
+} from "../../services/auth-rules";
 import { getBulkRedirects, saveBulkRedirects } from "../../services/bulk-redirects";
 import { createCacheTask, getCacheTask, listCacheTasks } from "../../services/cache-tasks";
 import { getHttps, updateHttps } from "../../services/certificates";
@@ -61,6 +67,20 @@ export const sitesRouter = {
     ),
     update: authed.maintenance.update.handler(({ input, context }) =>
       updateSiteMaintenance(context.app.db, input, { actor: context.actor }),
+    ),
+  },
+  authRules: {
+    get: authed.authRules.get.handler(({ input, context }) =>
+      getAuthRules(context.app.db, input.id),
+    ),
+    update: authed.authRules.update.handler(({ input, context }) =>
+      updateAuthRules(context.app.db, context.app.masterKey, input, { actor: context.actor }),
+    ),
+    signUrl: authed.authRules.signUrl.handler(({ input, context }) =>
+      signAuthUrl(context.app.db, context.app.masterKey, input, { actor: context.actor }),
+    ),
+    failures: authed.authRules.failures.handler(({ input, context }) =>
+      authFailures(context.app.db, input),
     ),
   },
   https: {

@@ -79,7 +79,7 @@ export async function ensureClickHouse(env: Env) {
         minute DateTime('UTC'), node_id UUID, site_id UUID, revision UInt64,
         requests UInt64, bytes_sent UInt64, bytes_received UInt64, cache_hits UInt64, cache_misses UInt64,
         status_codes Map(String, UInt64), top_urls Map(String, UInt64), top_ips Map(String, UInt64),
-        waf_rules Map(String, UInt64), logged_rules Map(String, UInt64)
+        waf_rules Map(String, UInt64), logged_rules Map(String, UInt64), auth_failures UInt64
       ) ENGINE = ReplacingMergeTree(revision) ORDER BY (site_id, minute, node_id)
         PARTITION BY toDate(minute) TTL minute + INTERVAL 7 DAY`,
       );
@@ -90,6 +90,10 @@ export async function ensureClickHouse(env: Env) {
       await clickhouse(
         env,
         "ALTER TABLE minute_stats ADD COLUMN IF NOT EXISTS logged_rules Map(String, UInt64)",
+      );
+      await clickhouse(
+        env,
+        "ALTER TABLE minute_stats ADD COLUMN IF NOT EXISTS auth_failures UInt64 DEFAULT 0",
       );
     })();
     ready.set(env, job);
@@ -176,7 +180,7 @@ export async function mirrorMinuteStats(
   const result = await tx.execute<Record<string, unknown>>(sql`
     select to_char(s.minute AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') AS minute,
       s.node_id, s.site_id, s.requests, s.bytes_sent, s.bytes_received, s.cache_hits, s.cache_misses,
-      s.status_codes, s.top_urls, s.top_ips, s.waf_rules, s.logged_rules
+      s.status_codes, s.top_urls, s.top_ips, s.waf_rules, s.logged_rules, s.auth_failures
     from node_minute_stats s inner join (
       select distinct x."siteId", date_trunc('minute', x.minute::timestamptz, 'UTC') AS minute
       from jsonb_to_recordset(${JSON.stringify(keys)}::jsonb) AS x("siteId" text, minute text)

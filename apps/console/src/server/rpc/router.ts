@@ -23,6 +23,7 @@ export const router = os.router({
   waf: accessControlRouter.waf,
   errorPages: sitesRouter.errorPages,
   maintenance: sitesRouter.maintenance,
+  authRules: sitesRouter.authRules,
   security: accessControlRouter.security,
   certificates: certificatesRouter.certificates,
   probes: clustersRouter.probes,
