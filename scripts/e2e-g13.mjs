@@ -28,7 +28,8 @@
 //      Permissions-Policy; no Server and no X-Powered-By
 //   i. IP check: client-a's address on g13-lists (allowed by the site allow
 //      list), client-b's (geo applies, nothing decides earlier)
-// `node scripts/e2e-g13.mjs --cleanup` removes its sites and IP list.
+// `node scripts/e2e-g13.mjs --cleanup` removes its sites and IP list, and
+// those apps/console/e2e/g13.spec.ts leaves (g13-ui-*, g13_ui_*).
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -233,8 +234,6 @@ const siteNamed = async (name) =>
   (await admin.ok("GET", `/sites?search=${encodeURIComponent(name)}&pageSize=100`)).items.find(
     (s) => s.name === name,
   );
-const listNamed = async (name) =>
-  (await admin.ok("GET", "/ip-lists")).find((list) => list.name === name);
 
 async function cleanup() {
   let removed = 0;
@@ -245,9 +244,17 @@ async function cleanup() {
       removed++;
     }
   }
-  const list = await listNamed(LIST);
-  if (list) await admin.ok("DELETE", `/ip-lists/${list.id}`);
-  console.log(`G13 cleanup: ${removed} site(s)${list ? ` and ${LIST}` : ""}`);
+  // apps/console/e2e/g13.spec.ts leaves g13-ui-<run> and its list g13_ui_<run>.
+  for (const site of (await admin.ok("GET", "/sites?search=g13-ui-&pageSize=100")).items)
+    if (site.name.startsWith("g13-ui-")) {
+      await admin.ok("DELETE", `/sites/${site.id}`);
+      removed++;
+    }
+  const lists = (await admin.ok("GET", "/ip-lists")).filter(
+    (l) => l.name === LIST || l.name.startsWith("g13_ui_"),
+  );
+  for (const list of lists) await admin.ok("DELETE", `/ip-lists/${list.id}`);
+  console.log(`G13 cleanup: ${removed} site(s), ${lists.length} IP list(s)`);
 }
 
 if (process.argv.includes("--cleanup")) {
