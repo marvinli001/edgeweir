@@ -3,6 +3,25 @@ import { md5Hex, sha1Hex, sha256Hex } from "./digest.ts";
 import { validHostHeader } from "./host-header.ts";
 
 export { MAX_HOST_HEADER_LENGTH, validHostHeader } from "./host-header.ts";
+export {
+  checkSignedUri,
+  DEFAULT_SIGN_PARAM,
+  DEFAULT_TIME_PARAM,
+  type ParsedSignature,
+  parseSignedUri,
+  signUri,
+  splitRequestUri,
+  URL_AUTH_KEY,
+  URL_AUTH_KINDS,
+  URL_AUTH_PARAM,
+  URL_AUTH_RAND,
+  type UrlAuthCheck,
+  type UrlAuthKind,
+  type UrlAuthNames,
+  type UrlAuthOutcome,
+  type UrlAuthSigning,
+  urlAuthHash,
+} from "./url-auth.ts";
 
 export const phases = [
   "request-transform",
