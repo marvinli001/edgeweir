@@ -6,6 +6,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MasterKey } from "../../src/server/lib/envelope";
 import type { Actor } from "../../src/server/services/audit";
+import { reportAutoBans } from "../../src/server/services/bans";
 import { createCluster } from "../../src/server/services/clusters";
 import { replaceOriginHealth } from "../../src/server/services/origin-health";
 import { createSite, deleteSite } from "../../src/server/services/sites";
@@ -182,5 +183,48 @@ describe.skipIf(!url)("site deletion against concurrent writers (PostgreSQL)", (
       { status: "fulfilled" },
     ]);
     expect(await healthOf(siteId)).toEqual([]);
+  });
+
+  it("deletes a site while a node's automatic bans of it are stored", async () => {
+    const { siteId } = await seedSite("bans");
+    const now = Date.now();
+    // An expired automatic ban of the node is reused, a new address inserted.
+    await db.insert(schema.ipBan).values({
+      scope: "site",
+      siteId,
+      clusterId,
+      cidr: "198.51.100.10/32",
+      reason: "cc_ip_rate",
+      source: "auto",
+      nodeId: node.id,
+      createdAt: new Date(now - 7_200_000),
+      expiresAt: new Date(now - 3_600_000),
+      seq: 0n,
+      distributed: true,
+    });
+    const ban = (cidr: string) => ({
+      scope: "site" as const,
+      siteId,
+      cidr,
+      createdAt: new Date(now),
+      expiresAt: new Date(now + 600_000),
+      reason: "cc_ip_rate",
+      metric: "requests",
+      observed: 900,
+      threshold: 600,
+      windowSeconds: 60,
+    });
+    const report = await connection(/^select .* from "ip_ban" .*for update$/i);
+    const deletion = await connection();
+    const storing = reportAutoBans(report.db, node, [ban("198.51.100.10"), ban("198.51.100.11")]);
+    await report.paused;
+    const deleting = deleteSite(deletion.db, siteId, { actor });
+    await waitsForLock(deletion.pid);
+    report.release();
+    expect(await Promise.allSettled([storing, deleting])).toMatchObject([
+      { status: "fulfilled", value: 2 },
+      { status: "fulfilled" },
+    ]);
+    expect(await db.select().from(schema.ipBan).where(eq(schema.ipBan.siteId, siteId))).toEqual([]);
   });
 });

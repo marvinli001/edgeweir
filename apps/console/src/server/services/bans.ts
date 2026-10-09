@@ -45,7 +45,7 @@ import { deleteInBatches } from "../lib/retention";
 import { type Actor, recordAudit } from "./audit";
 import type { Executor } from "./revisions";
 import { defineSetting } from "./settings";
-import { findSite } from "./sites";
+import { findSite, shareSites } from "./sites";
 
 type BanRow = typeof schema.ipBan.$inferSelect;
 
@@ -709,13 +709,14 @@ export async function reportAutoBans(
     const { shareAutoBans } = await getBanSettings(tx);
     const platformAccepted = await storePlatformAutoBans(tx, node, platform, shareAutoBans, now);
     const siteIds = [...new Set(siteBans.map((item) => item.siteId))];
-    const sites = new Map(
-      (
-        await tx
-          .select({ id: schema.site.id })
-          .from(schema.site)
-          .where(and(inArray(schema.site.id, siteIds), eq(schema.site.clusterId, node.clusterId)))
-      ).map((site) => [site.id, site]),
+    // Lock order with site deletion (shareSites): the sites before the
+    // node's bans of them below; a site deleted while this waited is skipped.
+    const sites = await shareSites(
+      tx,
+      tx
+        .select({ id: schema.site.id })
+        .from(schema.site)
+        .where(and(inArray(schema.site.id, siteIds), eq(schema.site.clusterId, node.clusterId))),
     );
     const accepted = siteBans.filter((item) => sites.has(item.siteId));
     if (accepted.length === 0) return platformAccepted;
