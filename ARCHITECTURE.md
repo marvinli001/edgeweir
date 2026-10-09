@@ -603,6 +603,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0057_g11_certificates_sessions` | `site_certificate`、`session_ticket_key`；`certificate.acme_account_id` |
 | `0058_g12_access_auth` | `site_auth_rule`；`site.auth_updated_at`；`node_minute_stats`、`node_hour_stats`、`node_day_stats` 的 `auth_failures`（`traffic_hour_stats` 视图随之重建） |
 | `0059_g13_access_control` | `site.access_control`、`site.block_list_ids`、`site.allow_list_ids`、`site.access_control_updated_at` |
+| `0060_g14_waf_actions` | `site.rules_body_limit`；`site_waf.exclusions`（替换 `excluded_rule_ids`，原有的整站排除迁移为一个不带路径的条目）；`site_protection` 的 `allow_verified_bots`、`challenge_text`、`failure_ban_enabled`、`failure_threshold`、`failure_ban_seconds`；`access_log.rule_ids`；`ip_ban_auto_uq` 改为按（节点、网站、CIDR、来源）唯一，包含来源 `rule` |
 
 ## 构建产物
 

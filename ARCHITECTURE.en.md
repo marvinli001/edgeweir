@@ -603,6 +603,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0057_g11_certificates_sessions` | `site_certificate`, `session_ticket_key`; `certificate.acme_account_id` |
 | `0058_g12_access_auth` | `site_auth_rule`; `site.auth_updated_at`; `auth_failures` in `node_minute_stats`, `node_hour_stats`, `node_day_stats` (the `traffic_hour_stats` view rebuilt) |
 | `0059_g13_access_control` | `site.access_control`, `site.block_list_ids`, `site.allow_list_ids`, `site.access_control_updated_at` |
+| `0060_g14_waf_actions` | `site.rules_body_limit`; `site_waf.exclusions` (replacing `excluded_rule_ids`; the site-wide exclusions migrate to one exclusion without a path); `allow_verified_bots`, `challenge_text`, `failure_ban_enabled`, `failure_threshold`, `failure_ban_seconds` of `site_protection`; `access_log.rule_ids`; `ip_ban_auto_uq` unique per (node, site, CIDR, source), including source `rule` |
 
 ## Build output
 
