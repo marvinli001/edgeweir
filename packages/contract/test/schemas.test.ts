@@ -110,6 +110,7 @@ describe("siteCreateInput", () => {
     expect(parsed.contentSettings).toEqual({
       charset: { name: "off", force: false, uppercase: false },
       requestBodyLimit: 104_857_600,
+      rulesBodyLimit: 65_536,
     });
   });
 
