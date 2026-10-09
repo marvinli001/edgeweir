@@ -1,0 +1,372 @@
+{
+  "description": "proto v0.29.0: site a with every G14 feature (the ban, respond (static and error page), close and skip actions, a log rule writing access log lines, a rate limit ban, the config rules' CRS override, rules reading form_value, json_value, the body fields and the crawler fields, a rules body limit of 128 KiB, CRS exclusions whole-site, by path prefix, by exact path with targets and whole-site with a target, Under Attack with verified crawlers, challenge texts and failure bans); site b without, but a platform rule reading json_value gives it the default body limit; a platform rule bans at platform scope. Sites, skip targets, the exclusions' rule ids and targets, challenge keys and required features given out of canonical order (reversed); exclusions keep their order. Canonical encoding (revision 0, content_hash empty) and SHA-256. edgeweir-node keeps an identical copy in internal/configir/testdata.",
+  "config": {
+    "revision": "12",
+    "contentHash": "522d27bcf291210b352184545a905ec99592f4b0486b2b7b3fc95c1973d8c666",
+    "clusterId": "c1",
+    "listeners": [
+      {
+        "port": 80,
+        "protocol": "LISTENER_PROTOCOL_HTTP"
+      }
+    ],
+    "cacheZones": [
+      {
+        "name": "default",
+        "maxSizeMb": "10240",
+        "keysZoneMb": 64,
+        "inactiveSeconds": 604800
+      }
+    ],
+    "sites": [
+      {
+        "id": "b",
+        "name": "b",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "b.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-b",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-b",
+              "address": "origin.test",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ]
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "tls": {
+          "minimumVersion": "1.2",
+          "http2": true,
+          "gzip": true,
+          "gzipMinLength": 256,
+          "gzipTypes": ["text/html"],
+          "cipherProfile": "modern"
+        },
+        "protection": {
+          "underAttackChallenge": "js",
+          "passTtlSeconds": 1800,
+          "powDifficulty": 16,
+          "powHighDifficulty": 20
+        },
+        "rulesBodyLimit": 65536
+      },
+      {
+        "id": "a",
+        "name": "a",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "a.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-a",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-a",
+              "address": "origin.test",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ]
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "tls": {
+          "minimumVersion": "1.2",
+          "http2": true,
+          "gzip": true,
+          "gzipMinLength": 256,
+          "gzipTypes": ["text/html"],
+          "cipherProfile": "modern"
+        },
+        "rules": [
+          {
+            "id": "r-crs",
+            "phase": "config",
+            "expression": {
+              "op": "call",
+              "field": "starts_with",
+              "valueType": "boolean",
+              "children": [
+                {
+                  "op": "field",
+                  "field": "http.request.uri.path",
+                  "valueType": "string"
+                },
+                {
+                  "op": "const",
+                  "valueType": "string",
+                  "value": "/upload/"
+                }
+              ]
+            },
+            "action": {
+              "kind": "config",
+              "crs": "detect"
+            }
+          },
+          {
+            "id": "r-ban",
+            "phase": "waf-custom",
+            "expression": {
+              "op": "eq",
+              "valueType": "string",
+              "value": "admin",
+              "children": [
+                {
+                  "op": "call",
+                  "field": "form_value",
+                  "valueType": "string",
+                  "children": [
+                    {
+                      "op": "const",
+                      "valueType": "string",
+                      "value": "user"
+                    }
+                  ]
+                }
+              ]
+            },
+            "action": {
+              "kind": "ban",
+              "banSeconds": 3600,
+              "banPrefixV4": 24
+            }
+          },
+          {
+            "id": "r-respond",
+            "phase": "waf-custom",
+            "expression": {
+              "op": "contains",
+              "valueType": "string",
+              "value": "rm",
+              "children": [
+                {
+                  "op": "call",
+                  "field": "json_value",
+                  "valueType": "string",
+                  "children": [
+                    {
+                      "op": "const",
+                      "valueType": "string",
+                      "value": "cmd.0"
+                    }
+                  ]
+                }
+              ]
+            },
+            "action": {
+              "kind": "respond",
+              "statusCode": 200,
+              "contentType": "application/json",
+              "body": "{\"ok\":false}"
+            }
+          },
+          {
+            "id": "r-page",
+            "phase": "waf-custom",
+            "expression": {
+              "op": "eq",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "/teapot"
+            },
+            "action": {
+              "kind": "respond",
+              "statusCode": 418,
+              "errorPage": true
+            }
+          },
+          {
+            "id": "r-close",
+            "phase": "waf-custom",
+            "expression": {
+              "op": "eq",
+              "field": "http.request.body.truncated",
+              "valueType": "boolean",
+              "value": "true"
+            },
+            "action": {
+              "kind": "close"
+            }
+          },
+          {
+            "id": "r-skip",
+            "phase": "waf-custom",
+            "expression": {
+              "op": "and",
+              "children": [
+                {
+                  "op": "eq",
+                  "field": "http.request.bot.verified",
+                  "valueType": "boolean",
+                  "value": "true"
+                },
+                {
+                  "op": "eq",
+                  "field": "http.request.bot.name",
+                  "valueType": "string",
+                  "value": "googlebot"
+                }
+              ]
+            },
+            "action": {
+              "kind": "skip",
+              "skip": ["rules", "crs", "challenges"]
+            }
+          },
+          {
+            "id": "r-log",
+            "phase": "waf-custom",
+            "expression": {
+              "op": "contains",
+              "field": "http.request.body.filenames",
+              "valueType": "string",
+              "value": ".php"
+            },
+            "action": {
+              "kind": "log",
+              "accessLog": true
+            }
+          },
+          {
+            "id": "r-rate",
+            "phase": "ratelimit",
+            "expression": {
+              "op": "call",
+              "field": "starts_with",
+              "valueType": "boolean",
+              "children": [
+                {
+                  "op": "field",
+                  "field": "http.request.uri.path",
+                  "valueType": "string"
+                },
+                {
+                  "op": "const",
+                  "valueType": "string",
+                  "value": "/login"
+                }
+              ]
+            },
+            "action": {
+              "kind": "rate_limit",
+              "statusCode": 429,
+              "limit": 10,
+              "windowSeconds": 60,
+              "key": "ip.src",
+              "banSeconds": 600
+            }
+          }
+        ],
+        "protection": {
+          "underAttack": true,
+          "underAttackChallenge": "js",
+          "passTtlSeconds": 1800,
+          "powDifficulty": 16,
+          "powHighDifficulty": 20,
+          "allowVerifiedBots": true,
+          "challengeText": {
+            "titleZh": "访问验证",
+            "hintZh": "请稍候，验证完成后自动继续。",
+            "titleEn": "Checking your browser"
+          },
+          "failureThreshold": 5,
+          "failureBanSeconds": 900
+        },
+        "waf": {
+          "mode": "block",
+          "paranoiaLevel": 1,
+          "anomalyThreshold": 5,
+          "excludedRuleIds": [942100, 920350],
+          "requestBodyLimit": 131072,
+          "exclusions": [
+            {
+              "path": "/api/",
+              "ruleIds": [942100, 941100]
+            },
+            {
+              "path": "/login",
+              "exact": true,
+              "ruleIds": [942100],
+              "targets": ["ARGS:password", "ARGS:next"]
+            },
+            {
+              "ruleIds": [932100],
+              "targets": ["REQUEST_COOKIES:session"]
+            }
+          ]
+        },
+        "rulesBodyLimit": 131072
+      }
+    ],
+    "requiredFeatures": [
+      "waf-v2",
+      "tls-v1",
+      "rules-v2",
+      "rules-v1",
+      "rules-body-v1",
+      "modsecurity-v1",
+      "challenge-v2",
+      "challenge-v1"
+    ],
+    "platformRules": [
+      {
+        "id": "p-ban",
+        "phase": "waf-custom",
+        "expression": {
+          "op": "eq",
+          "valueType": "string",
+          "value": "1",
+          "children": [
+            {
+              "op": "call",
+              "field": "json_value",
+              "valueType": "string",
+              "children": [
+                {
+                  "op": "const",
+                  "valueType": "string",
+                  "value": "probe"
+                }
+              ]
+            }
+          ]
+        },
+        "action": {
+          "kind": "ban",
+          "banSeconds": 86400,
+          "banScope": "platform",
+          "banPrefixV6": 48
+        }
+      }
+    ],
+    "platformProtection": {
+      "underAttackChallenge": "js"
+    },
+    "challengeKeys": [
+      {
+        "id": "k2",
+        "role": "next"
+      },
+      {
+        "id": "k1",
+        "role": "current"
+      }
+    ]
+  },
+  "canonical_hex": "1a0263312204085010012a120a0764656661756c7410805018402080f52432810a0a0161120161180122080a06612e746573742a210a03702d6110011a180a036f2d61120b6f726967696e2e746573741850200128013a0764656661756c7440016a1f2a03312e32300138014080024a09746578742f68746d6c5a066d6f6465726e7283010a05722d6372731206636f6e6669671a5f0a0463616c6c120b7374617274735f776974681a07626f6f6c65616e32260a056669656c641215687474702e726571756573742e7572692e706174681a06737472696e6732190a05636f6e73741a06737472696e6722082f75706c6f61642f22110a06636f6e666967da020664657465637472690a05722d62616e120a7761662d637573746f6d1a460a0265711a06737472696e67220561646d696e32310a0463616c6c120a666f726d5f76616c75651a06737472696e6732150a05636f6e73741a06737472696e67220475736572220c0a0362616e9002901ca002187293010a09722d726573706f6e64120a7761662d637573746f6d1a4a0a08636f6e7461696e731a06737472696e672202726d32320a0463616c6c120a6a736f6e5f76616c75651a06737472696e6732160a05636f6e73741a06737472696e672205636d642e30222e0a07726573706f6e6420c801b202106170706c69636174696f6e2f6a736f6eba020c7b226f6b223a66616c73657d72530a06722d70616765120a7761662d637573746f6d1a2c0a0265711215687474702e726571756573742e7572692e706174681a06737472696e6722072f746561706f74220f0a07726573706f6e6420a203c0020172500a07722d636c6f7365120a7761662d637573746f6d1a300a026571121b687474702e726571756573742e626f64792e7472756e63617465641a07626f6f6c65616e22047472756522070a05636c6f7365729e010a06722d736b6970120a7761662d637573746f6d1a650a03616e64322e0a0265711219687474702e726571756573742e626f742e76657269666965641a07626f6f6c65616e220474727565322e0a0265711215687474702e726571756573742e626f742e6e616d651a06737472696e672209676f6f676c65626f7422210a04736b6970ca020a6368616c6c656e676573ca0203637273ca020572756c657372540a05722d6c6f67120a7761662d637573746f6d1a350a08636f6e7461696e73121b687474702e726571756573742e626f64792e66696c656e616d65731a06737472696e6722042e70687022080a036c6f67d002017293010a06722d726174651209726174656c696d69741a5d0a0463616c6c120b7374617274735f776974681a07626f6f6c65616e32260a056669656c641215687474702e726571756573742e7572692e706174681a06737472696e6732170a05636f6e73741a06737472696e6722062f6c6f67696e221f0a0a726174655f6c696d697420ad03280a303c3a0669702e7372639002d804820167080112026a7318880e2010281440014a510a0ce8aebfe997aee9aa8ce8af81122ae8afb7e7a88de58099efbc8ce9aa8ce8af81e5ae8ce68890e5908ee887aae58aa8e7bba7e7bbade380821a15436865636b696e6720796f75722062726f7773657250055884078a01730a05626c6f636b1001180522069e963894c03928808008320f0a052f6170692f1a06acb83994c03932290a062f6c6f67696e10011a0394c0392209415247533a6e657874220d415247533a70617373776f7264321e1a0384f2382217524551554553545f434f4f4b4945533a73657373696f6ef80180800832740a0162120162180122080a06622e746573742a210a03702d6210011a180a036f2d62120b6f726967696e2e746573741850200128013a0764656661756c7440016a1f2a03312e32300138014080024a09746578742f68746d6c5a066d6f6465726e82010b12026a7318880e20102814f8018080044a0c6368616c6c656e67652d76314a0c6368616c6c656e67652d76324a0e6d6f6473656375726974792d76314a0d72756c65732d626f64792d76314a0872756c65732d76314a0872756c65732d76324a06746c732d76314a067761662d763262720a05702d62616e120a7761662d637573746f6d1a430a0265711a06737472696e6722013132320a0463616c6c120a6a736f6e5f76616c75651a06737472696e6732160a05636f6e73741a06737472696e67220570726f626522180a0362616e900280a3059a0208706c6174666f726da802306a0412026a73720d0a026b31120763757272656e74720a0a026b3212046e657874",
+  "content_hash": "522d27bcf291210b352184545a905ec99592f4b0486b2b7b3fc95c1973d8c666"
+}

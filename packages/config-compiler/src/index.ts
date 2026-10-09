@@ -19,6 +19,7 @@ import {
   type CertificateRef,
   type ChallengeKeyRef,
   ChallengeKeyRefSchema,
+  ChallengeTextSchema,
   CharsetSchema,
   type ClientAddress,
   ClientAddressSchema,
@@ -83,18 +84,22 @@ import {
   UrlAuthSchema,
   UserAgentRuleSchema,
   UserAgentRulesSchema,
+  WafExclusionSchema,
   WebSocketAccessSchema,
 } from "@edgeweir/proto";
 import {
   type Expression,
+  needsBotFields,
   needsClientCertificate,
   needsClientIp,
+  needsRulesBody,
   needsRulesV2,
   needsRulesV3,
   type Phase,
   parseExpression,
   parseValueExpression,
   phases,
+  RULES_BODY_LIMIT,
   structuredCacheCondition,
   usesRulesV3Placeholders,
 } from "@edgeweir/rule-engine";
@@ -375,6 +380,10 @@ const AUTH_KINDS: Record<AuthRuleKind, AuthKind> = {
 
 /** Feature of a site's access control (proto v0.28.0, Site.access_control; ADR-0039). */
 export const ACCESS_CONTROL_FEATURE = "access-control-v1";
+/** G14 (proto v0.29.0, ADR-0040). */
+export const WAF_V2_FEATURE = "waf-v2";
+export const RULES_BODY_FEATURE = "rules-body-v1";
+export const CHALLENGE_V2_FEATURE = "challenge-v2";
 
 /**
  * A site's access control (config.proto AccessControl). Parts that are off
@@ -479,13 +488,26 @@ export type TlsModel = Omit<TlsFields, CompressionField | RedirectField> &
     compressMaxLength?: number;
   };
 
+/** A CRS exclusion (config.proto WafExclusion); path "" is the whole site. */
+export interface WafExclusionModel {
+  path: string;
+  exact: boolean;
+  /** Any order; compiled ascending without duplicates. */
+  ruleIds: number[];
+  /** Any order; compiled sorted without duplicates. */
+  targets: string[];
+}
+
 /** OWASP CRS of a site that runs it (config.proto SiteWaf). */
 export interface SiteWafModel {
   mode: "detect" | "block";
   paranoiaLevel: number;
   anomalyThreshold: number;
-  /** Any order; compiled ascending without duplicates. */
-  excludedRuleIds: number[];
+  /**
+   * In the site's order. Whole-site ones without targets compile into
+   * excluded_rule_ids (as before waf-v2), the others into exclusions.
+   */
+  exclusions: WafExclusionModel[];
   requestBodyLimit: number;
 }
 
@@ -563,6 +585,11 @@ export interface SiteModel {
   authRules?: AuthRuleModel[];
   /** Access control (access-control-v1); omitted or null: none. */
   accessControl?: AccessControlModel | null;
+  /**
+   * Largest request body the rules read (rules-body-v1); compiled only when the site's or
+   * the platform's rules read the body. Omitted: RULES_BODY_LIMIT.default.
+   */
+  rulesBodyLimit?: number;
 }
 
 /** A site's listener ports. */
@@ -630,6 +657,13 @@ export interface SiteProtectionModel {
   /** The effective thresholds (template or the site's own); null while CC is off. */
   cc: CcPolicyModel | null;
   logJa4: boolean;
+  // challenge-v2; omitted compiles as before.
+  /** Skip Under Attack and CC challenges for verified crawlers. */
+  allowVerifiedBots?: boolean;
+  /** Title and hint of the challenge pages; empty values keep the built-in text. */
+  challengeText?: { titleZh: string; hintZh: string; titleEn: string; hintEn: string };
+  /** Ban after repeated challenge failures; omitted or null: off. */
+  failureBan?: { threshold: number; banSeconds: number } | null;
 }
 
 export const DEFAULT_SITE_PROTECTION: SiteProtectionModel = {
@@ -706,6 +740,24 @@ export interface RuleModel {
     // site-content-v1: config (phase config only)
     /** The request's body limit in bytes (0: none); omitted keeps the site's. */
     requestBodyLimit?: number;
+    // waf-v2
+    /** ban; rate_limit (0: no ban). */
+    banSeconds?: number;
+    /** ban: site (default) or platform (platform rules only). */
+    banScope?: string;
+    /** ban: IPv4 /16-/32 and IPv6 /48-/64; /32 and /64 compile as 0 (the default). */
+    banPrefixV4?: number;
+    banPrefixV6?: number;
+    /** respond */
+    contentType?: string;
+    body?: string;
+    errorPage?: boolean;
+    /** skip: any order; compiled sorted. */
+    skip?: string[];
+    /** log: write an access log line whatever the sample rate. */
+    accessLog?: boolean;
+    /** config (phase config only): the request's CRS mode. */
+    crs?: string;
   };
   /** A rule compiled earlier: compileRules keeps it as it is (see ruleModelOf). */
   compiled?: EdgeRule;
@@ -778,6 +830,17 @@ function compileAction(phase: string, a: RuleModel["action"]): RuleAction {
       a.kind === "config" && a.requestBodyLimit !== undefined
         ? BigInt(a.requestBodyLimit)
         : undefined,
+    // waf-v2: only the kind's own fields, defaults as zero values.
+    banSeconds: a.kind === "ban" || a.kind === "rate_limit" ? (a.banSeconds ?? 0) : 0,
+    banScope: a.kind === "ban" && a.banScope === "platform" ? "platform" : "",
+    banPrefixV4: a.kind === "ban" && a.banPrefixV4 && a.banPrefixV4 !== 32 ? a.banPrefixV4 : 0,
+    banPrefixV6: a.kind === "ban" && a.banPrefixV6 && a.banPrefixV6 !== 64 ? a.banPrefixV6 : 0,
+    contentType: a.kind === "respond" && !a.errorPage ? (a.contentType ?? "") : "",
+    body: a.kind === "respond" && !a.errorPage ? (a.body ?? "") : "",
+    errorPage: a.kind === "respond" && a.errorPage === true,
+    skip: a.kind === "skip" ? sortedSet(a.skip) : [],
+    accessLog: a.kind === "log" && a.accessLog === true,
+    crs: a.kind === "config" ? (a.crs ?? "") : "",
   });
 }
 
@@ -1142,6 +1205,7 @@ export function usesChallengeKeys(input: CompileInput): boolean {
 }
 
 function compileSiteProtection(model: SiteProtectionModel) {
+  const text = model.challengeText;
   return create(SiteProtectionSchema, {
     underAttack: model.underAttack,
     underAttackChallenge: model.underAttackChallenge,
@@ -1150,7 +1214,51 @@ function compileSiteProtection(model: SiteProtectionModel) {
     powHighDifficulty: model.powHighDifficulty,
     cc: model.cc ? create(CcPolicySchema, { enabled: true, ...model.cc }) : undefined,
     logJa4: model.logJa4,
+    // challenge-v2: absent unless used, so that other sites encode as before.
+    allowVerifiedBots: model.allowVerifiedBots === true,
+    challengeText:
+      text && (text.titleZh || text.hintZh || text.titleEn || text.hintEn)
+        ? create(ChallengeTextSchema, text)
+        : undefined,
+    failureThreshold: model.failureBan?.threshold ?? 0,
+    failureBanSeconds: model.failureBan ? model.failureBan.banSeconds : 0,
   });
+}
+
+/** Whether compiled rules read the request body (rules-body-v1). */
+export function rulesReadBody(rules: readonly EdgeRule[]): boolean {
+  return rules.some((rule) =>
+    [
+      rule.expression,
+      rule.action?.target,
+      ...(rule.action?.setQuery ?? []).map((p) => p.expression),
+    ]
+      .filter((e): e is RuleExpression => !!e)
+      .some((e) => needsRulesBody(expressionOf(e))),
+  );
+}
+
+/**
+ * Exclusions of a site's CRS: whole-site ones without targets merge into
+ * excluded_rule_ids (understood by every node with modsecurity-v1), the
+ * others stay entries in the site's order (waf-v2).
+ */
+export function splitWafExclusions(exclusions: readonly WafExclusionModel[]): {
+  excludedRuleIds: number[];
+  exclusions: WafExclusionModel[];
+} {
+  const whole = exclusions.filter((e) => e.path === "" && e.targets.length === 0);
+  return {
+    excludedRuleIds: sortedSet(whole.flatMap((e) => e.ruleIds)),
+    exclusions: exclusions
+      .filter((e) => !(e.path === "" && e.targets.length === 0))
+      .map((e) => ({
+        path: e.path,
+        exact: e.path !== "" && e.exact,
+        ruleIds: sortedSet(e.ruleIds),
+        targets: sortedSet(e.targets),
+      })),
+  };
 }
 
 /**
@@ -1403,7 +1511,14 @@ export function compileSitePorts(
   return !extra && out.join() === defaults.join() ? [] : out;
 }
 
-function compileSite(model: SiteModel, challenges: boolean, edge?: EdgeModel): Site {
+function compileSite(
+  model: SiteModel,
+  challenges: boolean,
+  edge?: EdgeModel,
+  platformReadsBody = false,
+): Site {
+  const rules = compileRules(model.rules);
+  const waf = model.waf ? splitWafExclusions(model.waf.exclusions) : undefined;
   const settings = model.originPool.settings;
   const health = model.originPool.activeHealthCheck;
   const affinity = model.originPool.sessionAffinity;
@@ -1555,16 +1670,23 @@ function compileSite(model: SiteModel, challenges: boolean, edge?: EdgeModel): S
           ),
         })
       : undefined,
-    rules: compileRules(model.rules),
-    waf: model.waf
-      ? create(SiteWafSchema, {
-          mode: model.waf.mode,
-          paranoiaLevel: model.waf.paranoiaLevel,
-          anomalyThreshold: model.waf.anomalyThreshold,
-          excludedRuleIds: sortedSet(model.waf.excludedRuleIds),
-          requestBodyLimit: model.waf.requestBodyLimit,
-        })
-      : undefined,
+    rules,
+    // rules-body-v1: only for sites whose rules (or the platform's) read the body.
+    rulesBodyLimit:
+      platformReadsBody || rulesReadBody(rules)
+        ? (model.rulesBodyLimit ?? RULES_BODY_LIMIT.default)
+        : 0,
+    waf:
+      model.waf && waf
+        ? create(SiteWafSchema, {
+            mode: model.waf.mode,
+            paranoiaLevel: model.waf.paranoiaLevel,
+            anomalyThreshold: model.waf.anomalyThreshold,
+            excludedRuleIds: waf.excludedRuleIds,
+            requestBodyLimit: model.waf.requestBodyLimit,
+            exclusions: waf.exclusions.map((e) => create(WafExclusionSchema, e)),
+          })
+        : undefined,
     // Sites in clusters with challenges get their protection (defaults included);
     // elsewhere only a site that records JA4 carries it.
     protection:
@@ -1780,6 +1902,7 @@ function canonicalizeAction(action: RuleAction | undefined) {
   if (!action) return;
   action.setQuery.sort(byString((param) => param.name));
   action.removeQuery = sortedSet(action.removeQuery);
+  action.skip = sortedSet(action.skip);
 }
 
 /** Sorts every repeated field into the canonical order defined in config.proto. */
@@ -1815,7 +1938,14 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
       site.tls.brotliTypes = sortedSet(site.tls.brotliTypes);
       site.tls.zstdTypes = sortedSet(site.tls.zstdTypes);
     }
-    if (site.waf) site.waf.excludedRuleIds = sortedSet(site.waf.excludedRuleIds);
+    if (site.waf) {
+      site.waf.excludedRuleIds = sortedSet(site.waf.excludedRuleIds);
+      // Exclusions keep the site's order; their lists are sets.
+      for (const exclusion of site.waf.exclusions) {
+        exclusion.ruleIds = sortedSet(exclusion.ruleIds);
+        exclusion.targets = sortedSet(exclusion.targets);
+      }
+    }
     // v0.23.0: listener ports and excluded domains as sets.
     site.ports = sortedSet(site.ports);
     if (site.tls)
@@ -2093,6 +2223,48 @@ export function derivedFeatures(config: NodeConfig): string[] {
     ...certificateFeatures(config),
     ...(config.sites.some((site) => site.authRules.length) ? [ACCESS_AUTH_FEATURE] : []),
     ...accessControlFeatures(config),
+    ...g14Features(config),
+  ];
+}
+
+/** Whether a compiled action uses the waf-v2 actions or fields. */
+function actionNeedsWafV2(action: RuleAction | undefined): boolean {
+  if (!action) return false;
+  return (
+    ["ban", "respond", "close", "skip"].includes(action.kind) ||
+    action.accessLog ||
+    action.banSeconds > 0 ||
+    action.crs !== ""
+  );
+}
+
+/**
+ * Features of G14 (proto v0.29.0): waf-v2 (the ban, respond, close and skip
+ * actions, access log lines from log rules, rate limit bans, the CRS
+ * override and exclusions by path or target), rules-body-v1 (request body
+ * fields and functions, the rules' body limit) and challenge-v2 (verified
+ * crawlers, their fields, challenge page texts and failure bans).
+ */
+export function g14Features(config: NodeConfig): string[] {
+  const rules = [...config.platformRules, ...config.sites.flatMap((site) => site.rules)];
+  const expressions = configExpressions(config).map(expressionOf);
+  return [
+    ...(rules.some((rule) => actionNeedsWafV2(rule.action)) ||
+    config.sites.some((site) => (site.waf?.exclusions.length ?? 0) > 0)
+      ? [WAF_V2_FEATURE]
+      : []),
+    ...(expressions.some(needsRulesBody) || config.sites.some((site) => site.rulesBodyLimit > 0)
+      ? [RULES_BODY_FEATURE]
+      : []),
+    ...(expressions.some(needsBotFields) ||
+    config.sites.some(
+      (site) =>
+        site.protection?.allowVerifiedBots ||
+        site.protection?.challengeText ||
+        (site.protection?.failureThreshold ?? 0) > 0,
+    )
+      ? [CHALLENGE_V2_FEATURE]
+      : []),
   ];
 }
 
@@ -2164,10 +2336,12 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
   if (input.sites.filter((site) => site.enabled).length > MAX_SITES_PER_CLUSTER)
     throw new ConfigCapacityError();
   const challenges = usesChallenges(input);
+  const platformRules = compileRules(input.platformRules);
+  const platformReadsBody = rulesReadBody(platformRules);
   // Disabled sites are not shipped to nodes; their domains are offline hosts.
   const sites = input.sites
     .filter((s) => s.enabled)
-    .map((s) => compileSite(s, challenges, input.edge));
+    .map((s) => compileSite(s, challenges, input.edge, platformReadsBody));
   const listeners = (input.listeners ?? listenersFor(sites, input.edge)).map(compileListener);
   const cacheZones = (input.cacheZones ?? defaultCacheZones).map((z) =>
     create(CacheZoneSchema, {
@@ -2195,7 +2369,7 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
     ipLists: (input.ipLists ?? []).map((list) =>
       create(IpListSchema, { ...list, entries: sortedSet(list.entries) }),
     ),
-    platformRules: compileRules(input.platformRules),
+    platformRules,
     originAllowedCidrs: [...(input.originAllowedCidrs ?? [])],
     platformProtection: challenges
       ? create(PlatformProtectionSchema, {

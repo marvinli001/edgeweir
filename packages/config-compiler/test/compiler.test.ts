@@ -556,7 +556,11 @@ describe("Brotli, Zstandard and OWASP CRS", () => {
     mode: "block" as const,
     paranoiaLevel: 2,
     anomalyThreshold: 7,
-    excludedRuleIds: [942100, 920350, 942100],
+    // Whole-site exclusions without targets merge into excluded_rule_ids.
+    exclusions: [
+      { path: "", exact: false, ruleIds: [942100, 920350], targets: [] },
+      { path: "", exact: false, ruleIds: [942100], targets: [] },
+    ],
     requestBodyLimit: 65536,
   };
 
