@@ -30,7 +30,7 @@
 | 状态码 | 使用该页面的响应 | `X-Edgeweir-Error` |
 | --- | --- | --- |
 | 401 需要认证 | [访问鉴权](access-control.md)的 Basic 认证没有凭据或凭据错误（带 `WWW-Authenticate`；跳转页面与响应状态码不生效）；也用于替换源站返回的 401 | `auth-required`；源站的为 `origin-error` |
-| 403 拒绝访问 | 规则拒绝与 IP 名单（含限速规则选 403 时）、封禁与 CC 自动封禁、OWASP CRS 拦截、关闭 WebSocket 时的升级请求、URL 鉴权失败、转发鉴权拒绝 | `policy-denied`、`ip-banned`、`waf-blocked`、`websocket-disabled`、`auth-denied`、`auth-expired` |
+| 403 拒绝访问 | 规则拒绝与 IP 名单（含限速规则选 403 时）、封禁与 CC 自动封禁、OWASP CRS 拦截、关闭 WebSocket 时的升级请求、URL 鉴权失败、转发鉴权拒绝、[访问控制](access-control.md)的拒绝 | `policy-denied`、`ip-banned`、`waf-blocked`、`websocket-disabled`、`auth-denied`、`auth-expired`、`ip-blocked`、`geo-denied`、`cors-origin-denied`、`hotlink-denied`、`ua-denied`、`websocket-origin-denied` |
 | 429 请求过多 | 限速规则、Basic 认证失败限速 | `policy-denied`、`auth-rate-limited` |
 | 502 网关错误 | 节点连不上源站、全部源站在尝试前被剔除、回源签名失败 | `origin-unreachable`、`no-origin` 等 |
 | 503 服务不可用 | 节点暂时无法完成检查（例如挑战密钥尚未下发）、转发鉴权的鉴权服务不可用 | `challenge-unavailable`、`policy-unavailable`、`auth-unavailable` |

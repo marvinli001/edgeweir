@@ -705,6 +705,30 @@ DNS 绑定与记录的新增字段：
 
 签名 URL 的错误：规则不是 URL 鉴权 400 `AUTH_RULE_NOT_URL`；网址不是路径或网站域名的 `http(s)` 网址 400 `AUTH_SIGN_URL_INVALID`；`validitySeconds` 超过规则的有效期 400 `AUTH_SIGN_VALIDITY`（`data.max`）。`GET /sites/{id}/features` 新增 `accessAuth`。节点能力新增 `access-auth-v1`；节点通道的 `GetOriginCredentials` 同时返回鉴权规则的密钥，`ReportStats` 的 `MinuteStats.auth_failures` 为被拒绝的请求数。
 
+### 访问控制
+
+| 过程 | 端点 | 说明 |
+| --- | --- | --- |
+| `accessControl.get` | `GET /sites/{id}/access-control` | `{ siteId, siteLists, hotlink, userAgents, cors, geo, websocket, securityHeaders, updatedAt }`；从未保存过的网站返回各项默认值，`updatedAt` 为 `null` |
+| `accessControl.update` | `PATCH /sites/{id}/access-control` | 只替换请求中出现的项，其余不变；可带 `expectedUpdatedAt`（不一致 409 `UPDATED_AT_MISMATCH`）。发布配置版本（原因 `site_access_control_updated`），审计 `site.access_control_update` |
+| `ipCheck.check` | `GET /ip-check?ip=&siteId=` | `{ ip, site, lists, bans, clusters, verdict }`，见下 |
+
+服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
+
+| 项 | 字段 |
+| --- | --- |
+| `siteLists` | `blockListIds`、`allowListIds`：IP 名单 ID，各 ≤ 16；名单不存在 404 `IP_LIST_NOT_FOUND`，同一名单在两边 400 `SITE_LIST_CONFLICT`（`data.lists`） |
+| `hotlink` | `enabled`、`allowEmpty`（默认 `true`）、`allowSiteDomains`（默认 `true`）、`allowed`、`denied`（各 ≤ 200，`a.com`、`*.a.com`、`.a.com` 或 `*`）、`checkOrigin`、`extensions`（≤ 64，默认 49 个常见类型）、`pathPrefixes`、`excludePathPrefixes`（各 ≤ 32）、`action`（`deny` / `redirect`）、`redirectUrl`（`redirect` 时必填，本站路径或 `http(s)` URL，≤ 2048） |
+| `userAgents` | `rules`：≤ 200 个 `{ pattern, action }`（`action` 为 `allow` / `deny`，`pattern` 为 `wildcard` 模式，≤ 512 个可打印 ASCII 字符，可为空）；`pathPrefixes`、`excludePathPrefixes` |
+| `cors` | `enabled`、`allowedOrigins`（≤ 100，`scheme://host[:port]`、`https://*.a.com` 或 `*`；开启时至少一个）、`allowCredentials`（与 `*` 同时出现 400 `CORS_CREDENTIALS_WILDCARD`）、`allowedMethods`（1–16，默认 7 个）、`allowedHeaders`、`exposedHeaders`（各 ≤ 64）、`echoRequestHeaders`、`maxAgeSeconds`（0–86400，默认 600）、`preflightToOrigin`、`keepOriginHeaders`、`pathPrefixes` |
+| `geo` | `enabled`、`mode`（`deny` / `allow`）、`countries`（二位代码）、`subdivisions`（`CC-行政区`）、`asns`（各 ≤ 256；开启时至少一项）、`pathPrefixes`、`exceptPathPrefixes` |
+| `websocket` | `allowAllOrigins`（默认 `true`）、`origins`（≤ 100，不允许时至少一个，不能用单独的 `*`）、`idleTimeoutSeconds`（60–86400，默认 3600） |
+| `securityHeaders` | `nosniff`、`frameOptions`（`off` / `DENY` / `SAMEORIGIN`）、`referrerPolicy`（`off` 或 8 个标准值）、`permissionsPolicy`（≤ 1024 个可打印 ASCII 字符，空为不设置）、`hideServer`、`removePoweredBy` |
+
+`ipCheck.check` 的 `ip` 为 IPv4 或 IPv6 地址（不是 CIDR，否则 400 `IP_ADDRESS_INVALID`），IPv4 映射地址按 IPv4 返回。`lists`：含有该地址的名单 `{ id, name, kind, entries, siteRole }`（`entries` 为命中的条目，`siteRole` 为 `block` / `allow` / `null`）；`bans`：覆盖该地址的有效封禁（与 `GET /bans` 的元素相同；带 `siteId` 时只有全局与该网站的）；`clusters`：`{ id, name, clientIp, trustedProxy, nodeAddress }`；`verdict`：带 `siteId` 时为 `{ outcome, platformAllowed, siteAllowed }`，`outcome` 为 `platform_banned`、`site_banned`、`platform_blocked`、`site_blocked`、`allowed` 或 `none`，否则为 `null`。
+
+`GET /sites/{id}/features` 新增 `accessControl`。配置版本原因新增 `site_access_control_updated`，审计新增 `site.access_control_update`。节点能力新增 `access-control-v1`；配置新增 `Site.access_control`（proto `v0.28.0`）。
+
 ### 端口池与 L4 应用
 
 | 过程 | 端点 | 说明 |

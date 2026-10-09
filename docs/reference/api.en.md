@@ -705,6 +705,30 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 
 Signing errors: a rule that is not a signed URL rule answers 400 `AUTH_RULE_NOT_URL`; a URL that is neither a path nor an `http(s)` URL of the site's domains 400 `AUTH_SIGN_URL_INVALID`; `validitySeconds` above the rule's validity 400 `AUTH_SIGN_VALIDITY` (`data.max`). `GET /sites/{id}/features` adds `accessAuth`. Nodes add the capability `access-auth-v1`; the node channel's `GetOriginCredentials` also returns the rules' secrets, and `ReportStats` carries `MinuteStats.auth_failures`, the refused requests.
 
+### Access control
+
+| Procedure | Endpoint | Notes |
+| --- | --- | --- |
+| `accessControl.get` | `GET /sites/{id}/access-control` | `{ siteId, siteLists, hotlink, userAgents, cors, geo, websocket, securityHeaders, updatedAt }`; a site never saved returns the defaults with `updatedAt` `null` |
+| `accessControl.update` | `PATCH /sites/{id}/access-control` | Replaces the parts in the request only; accepts `expectedUpdatedAt` (409 `UPDATED_AT_MISMATCH` when it differs). Publishes a revision (reason `site_access_control_updated`), audit `site.access_control_update` |
+| `ipCheck.check` | `GET /ip-check?ip=&siteId=` | `{ ip, site, lists, bans, clusters, verdict }`, see below |
+
+Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys only the `GET` ones.
+
+| Part | Fields |
+| --- | --- |
+| `siteLists` | `blockListIds`, `allowListIds`: IP list ids, at most 16 each; an unknown list 404 `IP_LIST_NOT_FOUND`, one list on both sides 400 `SITE_LIST_CONFLICT` (`data.lists`) |
+| `hotlink` | `enabled`, `allowEmpty` (default `true`), `allowSiteDomains` (default `true`), `allowed`, `denied` (at most 200 each: `a.com`, `*.a.com`, `.a.com` or `*`), `checkOrigin`, `extensions` (at most 64, 49 common types by default), `pathPrefixes`, `excludePathPrefixes` (at most 32 each), `action` (`deny` / `redirect`), `redirectUrl` (required for `redirect`: a site path or an `http(s)` URL, at most 2048) |
+| `userAgents` | `rules`: at most 200 `{ pattern, action }` (`action` `allow` / `deny`, `pattern` a `wildcard` pattern of at most 512 printable ASCII characters, possibly empty); `pathPrefixes`, `excludePathPrefixes` |
+| `cors` | `enabled`, `allowedOrigins` (at most 100: `scheme://host[:port]`, `https://*.a.com` or `*`; at least one while on), `allowCredentials` (with `*`: 400 `CORS_CREDENTIALS_WILDCARD`), `allowedMethods` (1–16, 7 by default), `allowedHeaders`, `exposedHeaders` (at most 64 each), `echoRequestHeaders`, `maxAgeSeconds` (0–86400, default 600), `preflightToOrigin`, `keepOriginHeaders`, `pathPrefixes` |
+| `geo` | `enabled`, `mode` (`deny` / `allow`), `countries` (two-letter codes), `subdivisions` (`CC-subdivision`), `asns` (at most 256 each; at least one entry while on), `pathPrefixes`, `exceptPathPrefixes` |
+| `websocket` | `allowAllOrigins` (default `true`), `origins` (at most 100; at least one when not every origin is allowed; no `*` alone), `idleTimeoutSeconds` (60–86400, default 3600) |
+| `securityHeaders` | `nosniff`, `frameOptions` (`off` / `DENY` / `SAMEORIGIN`), `referrerPolicy` (`off` or one of 8 standard values), `permissionsPolicy` (at most 1024 printable ASCII characters, empty: not set), `hideServer`, `removePoweredBy` |
+
+The `ip` of `ipCheck.check` is an IPv4 or IPv6 address (not a CIDR: 400 `IP_ADDRESS_INVALID`); an IPv4-mapped address comes back as IPv4. `lists`: the lists holding it, `{ id, name, kind, entries, siteRole }` (`entries` the matching entries, `siteRole` `block` / `allow` / `null`); `bans`: active bans covering it (the elements of `GET /bans`; with `siteId` global bans and that site's only); `clusters`: `{ id, name, clientIp, trustedProxy, nodeAddress }`; `verdict`: with `siteId` `{ outcome, platformAllowed, siteAllowed }`, `outcome` one of `platform_banned`, `site_banned`, `platform_blocked`, `site_blocked`, `allowed`, `none`; else `null`.
+
+`GET /sites/{id}/features` adds `accessControl`. New revision reason `site_access_control_updated` and audit action `site.access_control_update`. New node capability `access-control-v1`; the configuration adds `Site.access_control` (proto `v0.28.0`).
+
 ### Port pools and L4 apps
 
 | Procedure | Endpoint | Notes |

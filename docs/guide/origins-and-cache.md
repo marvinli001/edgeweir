@@ -188,7 +188,7 @@
 
 WebSocket 升级请求（`Upgrade: websocket`）默认透传，不经过缓存。关闭「WebSocket」后，升级请求返回 403，响应头 `X-Edgeweir-Error: websocket-disabled`。
 
-升级后的连接空闲 3600 秒后关闭，网站的「发送」「读取」超时不作用于它；只有配置阶段规则的「回源发送超时」「回源读取超时」能改变它，见[覆盖设置](rules.md#覆盖设置)。
+升级后的连接空闲 3600 秒（网站「访问控制」页签的[空闲超时](access-control.md#websocket-来源与空闲超时)，60–86400 秒）后关闭，网站的「发送」「读取」超时不作用于它；配置阶段规则的「回源发送超时」「回源读取超时」优先于它，见[覆盖设置](rules.md#覆盖设置)。只接受指定来源的升级请求见 [WebSocket 来源](access-control.md#websocket-来源与空闲超时)。
 
 ### HTTP/2 与 gRPC
 

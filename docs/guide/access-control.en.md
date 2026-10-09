@@ -1,6 +1,6 @@
 # Access control
 
-Access authentication of a site: Basic authentication, forward authentication (an external service decides) and signed URLs of kinds A–D. Authentication runs before the rules and the cache, and cache hits are checked too.
+Access authentication of a site (Basic authentication, forward authentication, signed URLs of kinds A–D), its access control (site lists, geo, CORS, hotlink protection, user agents, WebSocket origins, security response headers) and the IP check. All of them run before the rules and the cache, and apply to cache hits too.
 
 ## Concepts
 
@@ -12,6 +12,8 @@ Access authentication of a site: Basic authentication, forward authentication (a
 | Forward authentication | The node sends some of the request's headers to an authentication service and lets the request through or refuses it by the answer. |
 | Signed URL | The link carries a timestamp and a signature that the node checks with a key, with a validity; typical for paid or time-limited downloads and videos. |
 | Signature | A lowercase hexadecimal `md5` digest (32 characters) of the path, the timestamp and the key. |
+| Site lists | IP lists a site chooses: addresses on its block lists get 403 on that site; addresses on its allow lists skip some of its checks. |
+| Access control | The settings of the sections "Site lists" to "Security headers" below, each with its own switch and Save. |
 
 ## Add a rule
 
@@ -39,14 +41,20 @@ While an active node of the cluster lacks the capability `access-auth-v1`, the t
 
 | Order | Step |
 | --- | --- |
-| 1 | The probes' health endpoint, CDN-Loop, the node certificates' HTTP-01, the site by Host, SNI check, client certificates, dynamic bans, the PURGE method |
-| 2 | The rule is chosen; signed URLs are parsed and **their signature removed** (maintenance, CC, the rules, the cache key, purges and the origin then see the URI without it) |
+| 1 | The probes' health endpoint, CDN-Loop, the node certificates' HTTP-01, the site by Host, SNI check, client certificates, dynamic bans (global bans always; site bans not for addresses on the site's allow lists), the PURGE method |
+| 2 | The authentication rule is chosen; signed URLs are parsed and **their signature removed** (maintenance, CC, the rules, the cache key, purges and the origin then see the URI without it) |
 | 3 | Maintenance, CC counting, the reserved prefix `/.edgeweir/` |
 | 4 | The global allow and block lists |
-| 5 | **Authentication**: a plain HTTP request the site's Force HTTPS redirects is redirected first (with its URL and signature), so credentials never travel unencrypted; then the kind's check |
-| 6 | Rule phases, Under Attack and CC challenges, cache lookup and the origin |
+| 5 | [Site block lists](#site-lists) |
+| 6 | [Geo access](#geo-access) |
+| 7 | [CORS](#cors) preflights answered (before authentication: browsers send preflights without credentials) |
+| 8 | [Hotlink protection](#hotlink-protection) |
+| 9 | [User agents](#user-agents) |
+| 10 | **Authentication**: a plain HTTP request the site's Force HTTPS redirects is redirected first (with its URL and signature), so credentials never travel unencrypted; then the kind's check |
+| 11 | Rule phases, CC bans of single clients, Under Attack and CC challenges, [WebSocket origins](#websocket-origins-and-idle-timeout), cache lookup and the origin |
+| 12 | Responses: [CORS](#cors) headers, [security headers](#security-headers), then the rules of the response-transform and compression phases (rules may change or remove both) |
 
-ACME HTTP-01 requests, the reserved prefix `/.edgeweir/` and the node's local prefetch requests are not authenticated (a prefetched signed URL loses its signature too and fills the same cached object). Config rules that override Force HTTPS run after authentication, so they do not apply to requests a rule checks.
+ACME HTTP-01 requests, the reserved prefix `/.edgeweir/` and the node's local prefetch requests are not authenticated (a prefetched signed URL loses its signature too and fills the same cached object), and skip steps 5–9 and the WebSocket origin check; their responses get the headers as usual. Config rules that override Force HTTPS run after authentication, so they do not apply to requests a rule checks.
 
 ## Basic authentication
 
@@ -162,6 +170,149 @@ echo "https://www.example.com${path}?sign=${sign}&t=${ts}"
 
 Each signed URL is audited as `site.auth_sign_url` (rule, path and expiry, never the signature).
 
+## Site lists
+
+1. Create the lists under **IP lists** first (any action, see [IP lists](rules.en.md#ip-lists)).
+2. Open **Sites → (site) → Access control**, choose "Block lists" and "Allow lists" (at most 16 each) on the "Site lists" card and click "Save".
+
+| Item | Behavior |
+| --- | --- |
+| Site block lists | A client address (`ip.src`) on any of them gets 403 (`X-Edgeweir-Error: ip-blocked`) on this site only; addresses on a global allow list or on the site's allow lists excepted |
+| Site allow lists | Skip the site's block lists, the site's bans (CC bans of single clients included), geo, hotlink protection, user agents, and Under Attack and CC challenges |
+| Not skipped | Global block lists, global bans, CORS, WebSocket origins, authentication, rules and maintenance |
+| One list | Cannot be both a site block and allow list ("A list cannot be both a site block and allow list: …") |
+| List changes | When a list's entries change, every site that chose it follows |
+| Deleting a list | A list a site chose cannot be deleted: "The IP list is used by …" names the site |
+
+## Geo access
+
+Turn on the switch on the "Geo access" card, choose the mode, fill in the lists and click "Save".
+
+| Field | Values | Default |
+| --- | --- | --- |
+| Mode | Deny: clients matching the lists get 403; Allow only: clients not matching them get 403 | Deny |
+| Countries | ISO 3166-1 alpha-2 codes, one per line, at most 256 | Empty |
+| Subdivisions | `country-subdivision`, the subdivision as `ip.geoip.subdivision` reads it (the City MMDB code, else its English name), e.g. `US-CA`; compared ASCII case-insensitively; at most 256 | Empty |
+| ASNs | 1–4294967295, at most 256 | Empty |
+| Path prefixes | One per line, at most 32; empty: every path | Empty |
+| Exception path prefixes | Paths starting with one of them are not checked, at most 32 | Empty |
+
+| Item | Behavior |
+| --- | --- |
+| Match | The country is listed, `country-subdivision` is listed, or the ASN is listed |
+| No record | An address the GeoIP data does not know (no country, ASN 0) matches nothing: Allow only answers 403 |
+| Denied | 403 with the site's 403 error page, `X-Edgeweir-Error: geo-denied` |
+| GeoIP unavailable | 503 (`X-Edgeweir-Error: policy-unavailable`), as for rules; only requests in scope look GeoIP up |
+| Data | The node's local MMDB files, see [GeoIP databases](rules.en.md#configure-geoip-databases); subdivisions need a City MMDB |
+
+## CORS
+
+Turn on the switch on the "CORS" card, fill in the allowed origins and the rest, and click "Save".
+
+| Field | Values | Default |
+| --- | --- | --- |
+| Allowed origins | `https://a.com`, `https://a.com:8443`, `https://*.a.com` (one label below) or `*` alone, one per line, at most 100; saved with lowercase scheme and host and without the default port | Empty (at least one while on) |
+| Allow credentials | Responses carry `Access-Control-Allow-Credentials: true` and `Access-Control-Allow-Origin` always echoes the request's `Origin`; origins cannot be `*` | Off |
+| Allowed methods | At most 16, sent in this order | GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS |
+| Allowed request headers | A list (at most 64), or "Echo the preflight's headers" | Empty |
+| Exposed headers | At most 64 | Empty |
+| Max-Age (s) | 0–86400 | 600 |
+| Preflights to the origin | Preflights go to the origin as usual instead of being answered at the edge | Off |
+| Keep the origin's CORS headers | When the origin's response has `Access-Control-Allow-Origin`, no `Access-Control-*` header is changed | Off |
+| Path prefixes | At most 32; empty: every path | Empty |
+
+| Item | Behavior |
+| --- | --- |
+| Origin match | The request's `Origin`, normalized (lowercase, no default port), against the list; `*.a.com` matches one label below `a.com` only; `null` and origins that cannot be parsed match nothing but `*` |
+| Preflights | `OPTIONS` with `Origin` and `Access-Control-Request-Method`: for an allowed origin the node answers 204 itself with `Access-Control-Allow-Origin` (and credentials), `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers`, `Access-Control-Max-Age`, `Vary: Origin, Access-Control-Request-Method, Access-Control-Request-Headers` and `Cache-Control: no-store`, without asking the origin; other origins get 403 (`X-Edgeweir-Error: cors-origin-denied`) |
+| Other responses | Cache hits, origin responses and responses the node makes (error pages, redirects): the origin's `Access-Control-*` headers are removed by default; a request with an allowed `Origin` gets `Access-Control-Allow-Origin` (and credentials) and `Access-Control-Expose-Headers` |
+| `Vary` | Responses in scope always get `Origin` in `Vary` (unless it has `Origin` or `*` already), also for requests without `Origin`; cached objects are not split by `Origin` |
+| Rules | Response header rules run after CORS and may change these headers |
+
+## Hotlink protection
+
+Turn on the switch on the "Hotlink protection" card, adjust the sources and scope, and click "Save".
+
+| Field | Values | Default |
+| --- | --- | --- |
+| Allow empty sources | Requests without `Referer` (and without `Origin` when it is checked) pass | On |
+| Allow the site's domains | A `Referer` whose host this site serves (exact, wildcard, suffix and pattern domains) passes | On |
+| Allowed sources | `a.com` (exact), `*.a.com` (one label below), `.a.com` (any depth below, not `a.com`) or `*` alone (any host), one per line, at most 200 | Empty |
+| Denied sources | The same forms, at most 200; a match is refused, before allowed sources and the site's domains | Empty |
+| Also check Origin | A request's `Origin` is checked the same way | Off |
+| Extensions | At most 64 | Common image, audio, video and download types (jpg, png, webp, mp4, m3u8, zip, apk, pdf and others, 49) |
+| Path prefixes | At most 32 | Empty |
+| Excluded path prefixes | At most 32 | Empty |
+| Action | 403 (error page) or a 302 to a target (a site path or an `http(s)` URL, at most 2048 characters) | 403 |
+
+| Item | Behavior |
+| --- | --- |
+| Scope | Every request when extensions and path prefixes are both empty; else an extension in the list or a path under a prefix; minus the excluded prefixes |
+| Parsing | Only `http://` and `https://` URLs: their host (lowercase, without user, port and a trailing `.`); a `Referer` that cannot be parsed (`android-app://…`, `Origin: null`) is not allowed, even with empty sources allowed |
+| Decision | Every value present must be allowed: denied sources first, then the site's domains and the allowed sources |
+| Refused | 403, `X-Edgeweir-Error: hotlink-denied`; or a 302 with `Cache-Control: no-store` |
+| Redirect target | A request for a target that is a site path is not checked itself; a full URL of this site in scope would redirect in a loop: exclude its path |
+| Limits | Visitors and browsers can drop `Referer` (e.g. `Referrer-Policy: no-referrer`); turn empty sources off to refuse them |
+
+## User agents
+
+Add entries (a pattern with "Allow" or "Deny") on the "User agents" card and click "Save". Without entries nothing is checked.
+
+| Field | Values |
+| --- | --- |
+| Pattern | Like the rule operator `wildcard`: the whole value, `*` any bytes (at most 8), `\*` and `\\` literals; ASCII case-insensitive; at most 512 printable ASCII characters; an empty pattern matches an empty or missing User-Agent |
+| Entries | At most 200, in their order |
+| Path prefixes, excluded path prefixes | At most 32 each |
+
+| Item | Behavior |
+| --- | --- |
+| Decision | A matching "Allow" entry lets the request through without looking at "Deny" entries; else a matching "Deny" entry answers 403 (`X-Edgeweir-Error: ua-denied`) |
+| Substrings | Write `*word*`, e.g. `*curl*` |
+| Only listed user agents | Add a "Deny" entry `*` |
+| Several User-Agent headers | Matched joined with `, `, like `http.user_agent` |
+
+## WebSocket origins and idle timeout
+
+Choose "Allow every origin" or list the origins on the "WebSocket" card, adjust the idle timeout and click "Save". The site's WebSocket switch is on the Origins tab, see [WebSocket](origins-and-cache.en.md#websocket).
+
+| Field | Values | Default |
+| --- | --- | --- |
+| Origins | Every origin, or a list (the CORS forms without `*` alone, at most 100) | Every origin |
+| Idle timeout (s) | 60–86400 | 3600 |
+
+| Item | Behavior |
+| --- | --- |
+| Refused | An upgrade without `Origin`, with an `Origin` that cannot be parsed or is not listed gets 403 (`X-Edgeweir-Error: websocket-origin-denied`); site allow lists do not skip it |
+| Idle timeout | An upgraded connection closes after being idle this long; config rules' origin send and read timeouts still win |
+
+## Security headers
+
+Turn on what you need on the "Security headers" card and click "Save".
+
+| Field | Response header |
+| --- | --- |
+| No MIME sniffing | `X-Content-Type-Options: nosniff` |
+| X-Frame-Options | Not set / `DENY` / `SAMEORIGIN` |
+| Referrer-Policy | Not set, or `no-referrer`, `no-referrer-when-downgrade`, `origin`, `origin-when-cross-origin`, `same-origin`, `strict-origin`, `strict-origin-when-cross-origin`, `unsafe-url` |
+| Permissions-Policy | The value (at most 1024 printable ASCII characters); empty: not set |
+| Hide Server | Removes the `Server` header |
+| Remove X-Powered-By | Removes the origin's `X-Powered-By` |
+
+The headers replace the origin's headers of the same name on cache hits, origin responses and responses the node makes. Rules of the response-transform phase run afterwards: a rule that sets or removes one of these headers wins.
+
+## IP check
+
+**Sites → (site) → Access control → IP check** (for that site) or **IP lists → IP check** (a site is optional): enter an IP address and click "Check".
+
+| Result | Content |
+| --- | --- |
+| Outcome (with a site) | The first step in the order above that decides: a global ban, a site ban, a global block list, a site block list, an exemption by a global or site allow list, or "none" (geo, hotlink and the rest still apply) |
+| Lists | Every IP list holding the address, the matching entries, the list's action, and whether it is one of the site's block or allow lists |
+| Bans | Active bans covering the address (with a site: global bans and that site's) |
+| Client address | Each cluster's client address mode (with a site: its cluster's), and whether the address is a trusted proxy (trusted proxy header mode) or a node |
+
+An IPv4-mapped IPv6 address (`::ffff:a.b.c.d`) is checked as the IPv4 address, like nodes do. The console has no GeoIP database, so the IP check does not evaluate geo access.
+
 ## Failure counts and error codes
 
 Requests authentication refused (401, 403, 429, 503, a browser's first request without credentials included) are counted per site and minute; the "Authentication failures" card of the site's Security tab shows the count over the chosen range (`GET /sites/{id}/auth-rules/failures`). Requests let through (also when the service fails) are not counted.
@@ -174,6 +325,17 @@ Requests authentication refused (401, 403, 429, 503, a browser's first request w
 | `auth-rate-limited` | 429 | Basic failure limit |
 | `auth-unavailable` | 503 | The authentication service is unavailable |
 
+Access control refusals do not count as authentication failures:
+
+| `X-Edgeweir-Error` | Status | Cause |
+| --- | --- | --- |
+| `ip-blocked` | 403 | A site block list |
+| `geo-denied` | 403 | Geo access |
+| `cors-origin-denied` | 403 | A CORS preflight from an origin not allowed |
+| `hotlink-denied` | 403 | Hotlink protection |
+| `ua-denied` | 403 | User agents |
+| `websocket-origin-denied` | 403 | WebSocket origins |
+
 ## Security and audit
 
 | Item | Behavior |
@@ -181,7 +343,7 @@ Requests authentication refused (401, 403, 429, 503, a browser's first request w
 | Storage | Password hashes and signing keys are envelope-encrypted with `EDGEWEIR_MASTER_KEY` (bound to their rule) and sealed again when the master key rotates |
 | Delivery | Only to nodes of the site's cluster, over the mTLS node channel; nodes keep them in their state directory (`credentials.json`, 0600); configuration revisions carry references only |
 | Never in | Configuration revisions, snapshots, audit entries, logs and API answers |
-| Audit | `site.auth_update`: each rule's kind, state, number of users or keys and whether its secret changed (no credentials beyond user names); `site.auth_sign_url` |
+| Audit | `site.auth_update`: each rule's kind, state, number of users or keys and whether its secret changed (no credentials beyond user names); `site.auth_sign_url`; `site.access_control_update`: which parts changed with their switches and entry counts (not the sources, patterns or other list contents); revision reason "Access control of {site} updated" |
 
 ## Node requirements
 
@@ -189,6 +351,8 @@ Requests authentication refused (401, 403, 429, 503, a browser's first request w
 | --- | --- |
 | Authentication rules | Node capability `access-auth-v1`; while an active node of the cluster lacks it the UI cannot turn rules on, publishes by service accounts and background jobs answer `NODE_CAPABILITY_REQUIRED`, and nodes without it keep their last-known-good configuration |
 | Hot updates | Rules, users and keys are hot-updated; upgrading a node to a version with the capability adds one shared dictionary and one internal location to its nginx configuration (one structural reload that keeps open connections) |
+| Access control | Node capability `access-control-v1` (any part on or a site list chosen); geo access with countries or subdivisions also needs `geoip-city-v1`, with subdivisions the console also checks `geoip-subdivision-v1`, with ASNs `geoip-asn-v1`. While an active node of the cluster lacks it the cards show "Some nodes of the site's cluster do not support it yet", and publishes by service accounts and background jobs answer `NODE_CAPABILITY_REQUIRED`. Sites without any access control setting compile byte for byte as before |
+| Access control updates | Every setting is hot-updated without an nginx reload; upgrading a node to a version with the capability raises the timeouts of the edge layer's hop to the origin layer to 86400 seconds for longer WebSocket idle timeouts (one structural reload that keeps open connections) |
 
 ## API
 
@@ -198,6 +362,11 @@ Requests authentication refused (401, 403, 429, 503, a browser's first request w
 | PUT | `/sites/{id}/auth-rules` | Replaces them; rules with an `id` keep their passwords and keys, see [API](../reference/api.en.md) |
 | POST | `/sites/{id}/auth-rules/{ruleId}/sign` | Signs a URL |
 | GET | `/sites/{id}/auth-rules/failures` | Refused requests |
+| GET | `/sites/{id}/access-control` | Every access control setting |
+| PATCH | `/sites/{id}/access-control` | Changes the parts in the request only (`siteLists`, `hotlink`, `userAgents`, `cors`, `geo`, `websocket`, `securityHeaders`), see [API](../reference/api.en.md) |
+| GET | `/ip-check?ip=…&siteId=…` | The IP check |
+
+Read-only AccessKeys can call the `GET` ones only; service accounts none of them (`SERVICE_ACCOUNT_FORBIDDEN`).
 
 ## Troubleshooting
 
@@ -209,3 +378,10 @@ Requests authentication refused (401, 403, 429, 503, a browser's first request w
 | The browser does not ask for credentials | The site's 401 page redirects | Basic ignores redirects; check whether another rule matches first |
 | Forward authentication always answers 503 | The URL is a private address outside the origin allow list, DNS fails or the service times out | Add the network to the origin allow list in the system settings; check the URL and the timeout |
 | Asked to sign in again after signing in | A 401 answer is cached | Cache answers for less time, or not at all |
+| "A list cannot be both a site block and allow list: …" | The same list on both sides | Remove it from one side |
+| "With credentials, origins cannot be *" | CORS allows credentials and lists `*` | List the origins, or turn credentials off |
+| The browser reports a CORS error; no `Access-Control-Allow-Origin` | The request's `Origin` is not allowed (`*.a.com` matches neither `a.com` nor deeper names) or the path is out of scope | Add the origin or adjust the path prefixes |
+| Images on your own pages get 403 `hotlink-denied` | The page's host is neither served by this site nor allowed, or the page sends `Referrer-Policy: no-referrer` while empty sources are refused | Allow the page's domain; allow empty sources |
+| Every request 503 `policy-unavailable` | Geo access is on and the node's GeoIP service is unavailable | Check the node's GeoIP setup, see [GeoIP databases](rules.en.md#configure-geoip-databases) |
+| WebSocket connections get 403 `websocket-origin-denied` | The origin is not listed, or the client sends no `Origin` | Add the origin; have non-browser clients send an allowed `Origin` |
+| A security header is missing or different | A response-transform rule changed or removed it | Check the site's and the global rules |

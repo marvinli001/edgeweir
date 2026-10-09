@@ -24,7 +24,7 @@
 └── 子进程 stdin/stdout ──▶ edgeweir-certd ──▶ ACME CA、DNS 服务商 API
 ```
 
-控制台与节点之间唯一的契约是 `proto/` 中的 `edgeweir.node.v1`（当前 tag `proto/v0.27.0`）。开源核心与商业产品的边界见 [LICENSING.md](LICENSING.md)。
+控制台与节点之间唯一的契约是 `proto/` 中的 `edgeweir.node.v1`（当前 tag `proto/v0.28.0`）。开源核心与商业产品的边界见 [LICENSING.md](LICENSING.md)。
 
 ## 仓库布局
 
@@ -354,6 +354,13 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 2. 节点以 `GetOriginCredentials` 取得本集群网站的规则密钥（与 S3、PURGE 密钥同一条路径），存进状态目录的 `credentials.json`（0600），解析后附到站点表进入数据面共享内存；密钥缺失时规则照常生效但没有用户或密钥，范围内的请求全部拒绝。
 3. 边缘层 access 阶段：PURGE 方法之后选出第一条命中范围的启用规则，URL 鉴权立即解析并去掉签名（A、D 删查询参数，B、C 从规范化后的 `$uri` 去掉两段）；平台放行与拦截名单之后、规则阶段之前判定（明文 HTTP 且网站强制 HTTPS 时先跳转）。Basic 在 worker 内缓存结果（成功 60 秒、失败 10 秒），失败按网站与客户端网络限速（共享字典 `edgeweir_auth`）。转发鉴权以 `ngx.location.capture` 发子请求到内部 location `/./edgeweir-auth`，经回源层发往鉴权服务（源站地址策略、TLS 校验、规则的超时、只发转发列表中的请求头）；2xx 与 401 / 403 的应答可缓存在 `edgeweir_auth`。
 4. 被拒绝的请求计入 `MinuteStats.auth_failures`（`node_minute_stats.auth_failures` 及小时、天汇总与 ClickHouse 镜像），网站「安全」页签显示。控制台的「生成签名 URL」用主密钥在服务端计算，不保存、不下发。详见 [访问控制](docs/guide/access-control.md)。
+
+## 访问控制
+
+1. 网站的访问控制存在 `site.access_control`（jsonb：防盗链、UA 名单、CORS、地区、WebSocket、安全响应头六项，各项关闭时保留设置）与 `site.block_list_ids`、`site.allow_list_ids`（引用 `ip_list`，被引用的名单不能删除）；`accessControl.update` 只替换请求中出现的项并发布网站所在集群。
+2. 编译器只把开启的项写进 `Site.access_control`（proto `v0.28.0`），能力 `access-control-v1`；地区访问控制按列表另要求 `geoip-city-v1` / `geoip-asn-v1`（行政区由控制台检查 `geoip-subdivision-v1`）。没有任何设置的网站编码与之前逐字节相同。来源、主机写法、Referer 解析、UA 通配与各项判定在 `@edgeweir/rule-engine` 有参考实现，与节点 Lua 共用测试向量。
+3. 边缘层 access 阶段：确定网站后先算出「本站放行」（`ip.src` 在本站放行名单中），网站封禁与 CC 单 IP 封禁、本站拦截名单、地区、防盗链、UA 名单与 Under Attack / CC 挑战对它不生效；平台放行与拦截名单之后依次执行本站拦截名单 → 地区 → CORS 预检应答（204 / 403，不回源）→ 防盗链 → UA 名单 → 访问鉴权 → 规则阶段；WebSocket 升级在规则之后检查来源。响应头过滤阶段先加 CORS 响应头与安全响应头，再运行响应阶段的规则（规则优先），缓存命中同样生效。回源层对升级后的连接使用网站的 WebSocket 空闲超时，边缘层到回源层的本地一跳超时为 86400 秒。
+4. `ipCheck.check` 只读：列出含有该地址的名单、覆盖它的有效封禁、各集群访客 IP 设置下的身份（可信代理、节点地址），并按边缘的顺序给出选定网站的结论；不查 GeoIP。详见 [访问控制](docs/guide/access-control.md)。
 
 ## 区域探针与智能调度
 

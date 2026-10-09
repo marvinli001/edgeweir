@@ -167,7 +167,7 @@ wildcard_replace(http.request.full_uri, "https://*.example.com/*", "https://exam
 
 | Item | Behavior |
 | --- | --- |
-| Allow and block lists | Run first. An address in a block list gets 403; an address in an allow list is exempt from the block lists but not from rules; an address in both is allowed |
+| Allow and block lists | Run first. An address in a block list gets 403; an address in an allow list is exempt from the block lists but not from rules; an address in both is allowed. The site's [access control](access-control.en.md#order) (site lists, geo, CORS preflights, hotlink protection, user agents) and access authentication follow, and only then the rule phases |
 | Access authentication | The site's [access authentication](access-control.en.md) runs after the lists and before every phase; refused requests run no rules. Signed URLs have lost their signature before: expressions never see the signature parameters or path segments |
 | Scope | In each phase, global rules run before site rules; within a scope, in list order |
 | Terminating actions | Block, redirect (bulk redirects included), and exceeding a rate limit end the request |
@@ -400,10 +400,10 @@ A site's table of exact-match redirects: each entry redirects one source to one 
 | Item | Behavior |
 | --- | --- |
 | Name | All lists share one namespace and names are unique; a name cannot change after creation; saving rules binds names to list IDs |
-| References | Any site rule, global rule, or cache rule condition can reference any list, block and allow lists included; the **Allow lists** and **Block lists** of [L4 apps](l4.en.md#ip-lists-and-connection-limits) can use any list as well |
+| References | Any site rule, global rule, or cache rule condition can reference any list, block and allow lists included; the **Allow lists** and **Block lists** of [L4 apps](l4.en.md#ip-lists-and-connection-limits) and the [site lists](access-control.en.md#site-lists) of sites can use any list as well |
 | L4 apps | The **Block** and **Allow** actions apply to sites only; L4 apps check only the lists they selected |
 | Changes | Entries and **Action** can change at any time; creating, changing, or deleting a list publishes a new revision to every cluster ("Rules and IP lists updated"); nodes apply it without reload |
-| Deletion | A list referenced by a rule, a cache rule condition, or an L4 app cannot be deleted ("The IP list is used by …", naming the first 5 users: rule names, site rules with their site; sites whose cache rules use it; L4 app names) |
+| Deletion | A list referenced by a rule, a cache rule condition, an L4 app or chosen by a site as a site list cannot be deleted ("The IP list is used by …", naming the first 5 users: rule names, site rules with their site; sites whose cache rules use it or that chose it; L4 app names) |
 | Entries | IPv4 / IPv6 addresses or CIDRs; host bits cleared, deduplicated, sorted; leading zeros and zone IDs refused |
 | Quota | Up to 128 lists and 50,000 entries in total; up to 10,000 entries per list; a change that does not add entries always saves |
 | Rollback | Site configuration rollbacks keep the current lists and global rules; a rollback that references a deleted list is refused |
@@ -502,7 +502,7 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 | "Some nodes of the site's cluster do not support the rule extensions yet" | An active node of the cluster lacks `rules-v2` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
 | "No such IP list: …" | The referenced lists (named) do not exist | Create the list in **IP lists** first, or fix the name |
 | "IP list name already exists" | A list with that name exists | Use another name |
-| "The IP list is used by …" | Deleting a list the listed rules, sites' cache rule conditions, or L4 apps still reference | Remove the reference from those rules and L4 apps first |
+| "The IP list is used by …" | Deleting a list the listed rules, sites' cache rule conditions or L4 apps still reference, or sites chose as a site list | Remove the reference from those rules, L4 apps and site lists first |
 | "IP list limit reached (128 lists, 50,000 entries)" | Over quota | Merge or delete lists |
 | A node shows **Upgrade required** | The node lacks a capability the configuration needs (`rules-v1`, `rules-v2`, a GeoIP capability, and so on) and keeps its last-known-good configuration | Upgrade the node or configure the GeoIP databases |
 | "Some nodes don't support … yet: {nodes}" | A configuration published by a service account or a background job needs `rules-v1`, `rules-v2`, or a GeoIP capability that an active node of the cluster lacks | Upgrade the nodes or configure the GeoIP databases |

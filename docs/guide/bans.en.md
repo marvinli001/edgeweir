@@ -50,7 +50,7 @@ The list shows active bans only (neither expired nor lifted), newest first, and 
 | Reason | Manual: abuse, attack, scanning, spam, other. Automatic: per-IP request rate, unknown host scan |
 | Banning again | One active manual ban per address for global bans, and per site and address for site bans; banning it again sets the new reason and expiry and does not add a ban; a manual global ban of the same address or range as an automatic global ban (scan protection; /64 for IPv6) takes it over, counted, audited and sent to every node as a new ban; an unshared scan ban is lifted with it, and each node deletes its own |
 | Protected addresses | A site ban may not cover an address of a node in the site's cluster, a global ban no node address at all; neither may cover loopback (`127.0.0.0/8`, `::1`) or unspecified addresses (`0.0.0.0/8`, `::`), nor overlap an allow list |
-| Where it applies | At the edge layer once the site is known, before rules: global bans first, then site bans; addresses on an allow list are never banned |
+| Where it applies | At the edge layer once the site is known, before rules: global bans first, then site bans; addresses on an allow list are never banned; addresses on a site's [allow lists](access-control.en.md#site-lists) are not banned on that site (CC bans of single clients included), global bans still apply |
 | Delivery | No configuration revision, no configuration canary, no reload on the nodes |
 | Audit | `ban.create`, `ban.update` (banned again), `ban.delete`; automatic bans are not audited |
 
@@ -176,5 +176,5 @@ Read-only AccessKeys can call only `bans.list`; service accounts cannot call the
 | "Choose a site" | The scope is "Site" but no site is picked | Pick a site, or set the scope to "Global" |
 | "Ban not found or no longer active" | The ban expired or was lifted | Refresh the list |
 | The list shows "Not applied on N nodes" | Node ban capacity or memory exhausted | Raise the node's `--ban-capacity` and `--ban-dict-mb`, or ban less |
-| A banned client still gets through | The node lacks `bans-v1`; the address is on an allow list | Upgrade the node; check the allow lists |
+| A banned client still gets through | The node lacks `bans-v1`; the address is on an allow list; a site ban's address is on that site's allow lists | Upgrade the node; check the allow lists and the site lists |
 | Global bans do not apply in the kernel | The node lacks `kernel-ban-v1` | Grant `CAP_NET_ADMIN` and install nftables as in [Kernel bans](#kernel-bans) |

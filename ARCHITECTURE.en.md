@@ -24,7 +24,7 @@ Console (ROLE=app|worker|all)
 └── child process stdin/stdout ──▶ edgeweir-certd ──▶ ACME CA, DNS provider APIs
 ```
 
-The only contract between the console and the nodes is `edgeweir.node.v1` in `proto/` (current tag `proto/v0.27.0`). The boundary between the open core and commercial products is defined in [LICENSING.en.md](LICENSING.en.md).
+The only contract between the console and the nodes is `edgeweir.node.v1` in `proto/` (current tag `proto/v0.28.0`). The boundary between the open core and commercial products is defined in [LICENSING.en.md](LICENSING.en.md).
 
 ## Repository layout
 
@@ -354,6 +354,13 @@ DNS steering is bound per cluster (`dns_binding`, mode Not managed, Manual, or A
 2. Nodes fetch the rules' secrets of their cluster's sites with `GetOriginCredentials` (the path of S3 and PURGE keys), keep them in `credentials.json` in the state directory (0600) and attach them, parsed, to the site table in the data plane's shared memory; a rule without its secret stays but has no users or keys and refuses every request in its scope.
 3. In the edge layer's access phase the first enabled rule whose scope the request matches is chosen after the PURGE method, and a signed URL loses its signature at once (A and D their query parameters, B and C two segments of the normalized `$uri`); the check runs after the platform allow and block lists and before the rule phases (a plain HTTP request the site forces to HTTPS is redirected first). Basic keeps results per worker (successes 60 s, failures 10 s) and limits failures per site and client network (shared dictionary `edgeweir_auth`). Forward authentication sends an `ngx.location.capture` subrequest to the internal location `/./edgeweir-auth`, which goes through the origin layer to the service (origin address policy, TLS verification, the rule's timeout, only the forwarded request headers); 2xx and 401/403 answers may be cached in `edgeweir_auth`.
 4. Refused requests are counted in `MinuteStats.auth_failures` (`node_minute_stats.auth_failures`, the hourly and daily rollups and the ClickHouse mirror) and shown on the site's Security tab. The console's "Sign a URL" computes with the primary key on the server and neither stores nor sends the result. See [Access control](docs/guide/access-control.en.md).
+
+## Access control
+
+1. A site's access control lives in `site.access_control` (jsonb: hotlink protection, user agents, CORS, geo, WebSocket and security headers, each keeping its settings while off) and `site.block_list_ids`, `site.allow_list_ids` (referencing `ip_list`; a list in use cannot be deleted); `accessControl.update` replaces the parts in the request only and publishes the site's cluster.
+2. The compiler writes only the parts that are on into `Site.access_control` (proto `v0.28.0`), capability `access-control-v1`; geo access also needs `geoip-city-v1` / `geoip-asn-v1` by its lists (subdivisions: the console checks `geoip-subdivision-v1`). A site without any setting encodes byte for byte as before. Origins, host forms, Referer parsing, user agent wildcards and every decision have a reference implementation in `@edgeweir/rule-engine` that shares its test vectors with the node's Lua.
+3. Edge access phase: once the site is known the node works out "site allowed" (`ip.src` on a site allow list), which skips site bans and CC bans of single clients, site block lists, geo, hotlink, user agents and Under Attack / CC challenges; after the platform allow and block lists come site block lists → geo → CORS preflights answered at the edge (204 / 403, never sent to the origin) → hotlink → user agents → access authentication → rule phases; WebSocket upgrades have their origin checked after the rules. The header filter adds CORS and security headers before the response phase rules run (rules win), cache hits included. The origin layer gives upgraded connections the site's WebSocket idle timeout; the edge layer's local hop to it allows 86400 seconds.
+4. `ipCheck.check` is read-only: the lists holding the address, the active bans covering it, what each cluster's client address setting makes of it (trusted proxy, node address), and for a chosen site the outcome in the edge's order; no GeoIP. See [Access control](docs/guide/access-control.en.md).
 
 ## Regional probes and scheduling
 

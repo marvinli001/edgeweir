@@ -188,7 +188,7 @@ When every origin is down, the node still tries primaries, then backups (fail op
 
 WebSocket upgrades (`Upgrade: websocket`) are proxied by default and never cached. With **WebSocket** off, upgrade requests get 403 with `X-Edgeweir-Error: websocket-disabled`.
 
-An upgraded connection closes after 3600 seconds idle; the site's **Send** and **Read** timeouts do not apply to it. Only the **Origin send timeout** and **Origin read timeout** of configuration-phase rules change it, see [Override settings](rules.en.md#override-settings).
+An upgraded connection closes after 3600 seconds idle (the [idle timeout](access-control.en.md#websocket-origins-and-idle-timeout) of the site's Access control tab, 60–86400 seconds); the site's **Send** and **Read** timeouts do not apply to it. The **Origin send timeout** and **Origin read timeout** of configuration-phase rules take precedence, see [Override settings](rules.en.md#override-settings). To accept upgrades from some origins only, see [WebSocket origins](access-control.en.md#websocket-origins-and-idle-timeout).
 
 ### HTTP/2 and gRPC
 

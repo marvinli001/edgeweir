@@ -30,7 +30,7 @@ The error pages nodes answer with: a site's templates and redirects, maintenance
 | Status | Responses that use the page | `X-Edgeweir-Error` |
 | --- | --- | --- |
 | 401 Unauthorized | [Access authentication](access-control.en.md) by Basic without or with wrong credentials (with `WWW-Authenticate`; redirect pages and response statuses do not apply); also to replace the origin's 401 | `auth-required`; the origin's `origin-error` |
-| 403 Forbidden | Rule and IP list denials (including rate limit rules set to 403), bans and automatic CC bans, OWASP CRS blocks, WebSocket upgrades while WebSocket is off, signed URLs that fail, forward authentication refusals | `policy-denied`, `ip-banned`, `waf-blocked`, `websocket-disabled`, `auth-denied`, `auth-expired` |
+| 403 Forbidden | Rule and IP list denials (including rate limit rules set to 403), bans and automatic CC bans, OWASP CRS blocks, WebSocket upgrades while WebSocket is off, signed URLs that fail, forward authentication refusals, [access control](access-control.en.md) refusals | `policy-denied`, `ip-banned`, `waf-blocked`, `websocket-disabled`, `auth-denied`, `auth-expired`, `ip-blocked`, `geo-denied`, `cors-origin-denied`, `hotlink-denied`, `ua-denied`, `websocket-origin-denied` |
 | 429 Too Many Requests | Rate limit rules, the Basic failure limit | `policy-denied`, `auth-rate-limited` |
 | 502 Bad Gateway | The node cannot connect to the origin, every origin was dropped before the attempt, origin signing failed | `origin-unreachable`, `no-origin`, and others |
 | 503 Service Unavailable | The node cannot complete a check for now (for example, challenge keys not delivered yet), the forward authentication service is unavailable | `challenge-unavailable`, `policy-unavailable`, `auth-unavailable` |
