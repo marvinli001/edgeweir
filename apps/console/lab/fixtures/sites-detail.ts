@@ -19,6 +19,7 @@ import {
   type RuleDto,
   type SecurityEvent,
   type Site,
+  type SiteAuthRules,
   type SiteErrorPages,
   type SiteMaintenance,
   type SiteProtection,
@@ -1264,6 +1265,51 @@ function errorPagesOf(site: Site): SiteErrorPages {
  * Maintenance mode: the shop keeps its settings for the next release window (off now; the office
  * network and the payment provider's callbacks pass); other sites never set it.
  */
+/** The shop protects its admin area with Basic and its videos with signed URLs. */
+function authRulesOf(site: Site): SiteAuthRules {
+  const scope = { domains: [], pathPrefixes: [], extensions: [], excludePathPrefixes: [] };
+  if (!isShop(site)) return { siteId: site.id, rules: [], updatedAt: null };
+  return {
+    siteId: site.id,
+    rules: [
+      {
+        id: id(0xa12, 1),
+        kind: "basic",
+        enabled: true,
+        scope: { ...scope, pathPrefixes: ["/admin/"] },
+        basic: {
+          realm: site.name,
+          keepAuthorization: false,
+          userHeader: true,
+          users: [{ name: "ops" }, { name: "auditor" }],
+        },
+        forward: null,
+        url: null,
+      },
+      {
+        id: id(0xa12, 2),
+        kind: "url_b",
+        enabled: true,
+        scope: {
+          ...scope,
+          extensions: ["mp4", "m3u8"],
+          excludePathPrefixes: ["/videos/trailers/"],
+        },
+        basic: null,
+        forward: null,
+        url: {
+          validitySeconds: 1800,
+          skewSeconds: 300,
+          signParam: "sign",
+          timeParam: "t",
+          backupKey: true,
+        },
+      },
+    ],
+    updatedAt: ago(4 * DAY),
+  };
+}
+
 function maintenanceOf(site: Site): SiteMaintenance {
   if (isShop(site))
     return {
@@ -1964,6 +2010,13 @@ export const siteDetailFixtures: Fixtures = {
   },
   maintenance: {
     get: ({ id: siteId }) => maintenanceOf(siteOf(siteId)),
+  },
+  authRules: {
+    get: ({ id: siteId }) => authRulesOf(siteOf(siteId)),
+    failures: (input) => ({
+      requests: isShop(siteOf(input.id)) ? 1284 : 0,
+      unsupportedNodes: 0,
+    }),
   },
   logs: {
     settings: ({ siteId }) => ({ sampleRate: sampleRateOf(siteOf(siteId)), storage: "lite" }),

@@ -139,6 +139,7 @@ export function SecurityTab({ siteId }: { siteId: string }) {
       <TopCard siteId={siteId} />
       <WafRulesCard siteId={siteId} />
       <LoggedRulesCard siteId={siteId} />
+      <AuthFailuresCard siteId={siteId} />
       <EventsCard siteId={siteId} />
     </div>
   );
@@ -824,6 +825,55 @@ function LoggedRulesCard({ siteId }: { siteId: string }) {
               {unsupportedNodes > 0 ? (
                 <SafetyNote data-testid="logged-rules-partial">
                   {m.rules_logged_partial()}
+                </SafetyNote>
+              ) : null}
+            </>
+          )}
+        </QueryView>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Requests the site's access authentication refused over a range. */
+function AuthFailuresCard({ siteId }: { siteId: string }) {
+  const [range, setRange] = React.useState<AnalyticsRange>("24h");
+  const failures = useQuery({
+    ...orpc.authRules.failures.queryOptions({ input: { id: siteId, range } }),
+    placeholderData: keepPreviousData,
+  });
+  return (
+    <Card
+      className="animate-enter"
+      style={{ animationDelay: "300ms" }}
+      data-testid="auth-failures-card"
+    >
+      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+        <CardTitle>{m.auth_failures_title()}</CardTitle>
+        <div className="w-full sm:w-44">
+          <FormSelect
+            id="auth-failures-range"
+            label={m.security_hours()}
+            value={range}
+            testId="auth-failures-range"
+            options={ANALYTICS_RANGES.map((value) => ({ value, label: rangeLabel(value) }))}
+            onChange={(value) => setRange(value as AnalyticsRange)}
+          />
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <QueryView query={failures}>
+          {({ requests, unsupportedNodes }) => (
+            <>
+              <p
+                className="font-heading text-3xl font-medium tabular-nums"
+                data-testid="auth-failures-count"
+              >
+                {formatNumber(requests)}
+              </p>
+              {unsupportedNodes > 0 ? (
+                <SafetyNote data-testid="auth-failures-partial">
+                  {m.auth_failures_partial()}
                 </SafetyNote>
               ) : null}
             </>

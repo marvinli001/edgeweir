@@ -10,6 +10,7 @@ import { AnalyticsSection } from "@/components/analytics/analytics-section";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
+import { AccessTab } from "@/components/site/access-tab";
 import { BulkRedirectsTab } from "@/components/site/bulk-redirects-tab";
 import { CacheTab } from "@/components/site/cache-tab";
 import { DnsSetupCard } from "@/components/site/cname-target";
@@ -162,6 +163,9 @@ function SiteDetailPage() {
             </TabsContent>
             <TabsContent value="redirects" className="animate-enter">
               <BulkRedirectsTab siteId={data.id} />
+            </TabsContent>
+            <TabsContent value="access" className="animate-enter">
+              <AccessTab site={data} />
             </TabsContent>
             <TabsContent value="security" className="animate-enter">
               <SecurityTab siteId={data.id} />
