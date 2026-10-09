@@ -1,9 +1,11 @@
 /**
  * Answers in the lab's empty state where a procedure's schema-derived empty value is not what an
  * empty console shows: configuration and capability singletons keep their values, records opened
- * by id keep their identity (without their own lists). Everything else answers emptyOutput():
+ * by id keep their identity (without their own lists); a site's access control starts from the
+ * defaults (access-control.ts). Everything else answers emptyOutput():
  * lists without items, zero counts, a console without sites, clusters or traffic.
  */
+import { emptyAccessControlFixtures } from "./access-control";
 import type { Fixtures } from "./define";
 import { mergeFixtures } from "./define";
 import { fixtures } from "./index";
@@ -58,7 +60,7 @@ function picked(paths: readonly string[]): Fixtures {
   return out as Fixtures;
 }
 
-export const emptyFixtures: Fixtures = mergeFixtures(picked(KEEP), {
+export const emptyFixtures: Fixtures = mergeFixtures(picked(KEEP), emptyAccessControlFixtures, {
   sites: {
     // The site keeps its name and domains; its origins and cache rules are gone.
     get: async (input) => {

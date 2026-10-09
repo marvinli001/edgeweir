@@ -5,6 +5,7 @@
  */
 import type { Site } from "@edgeweir/contract";
 import { accessFixtures } from "./access";
+import { accessControlFixtures } from "./access-control";
 import { type Fixtures, mergeFixtures, notFound, ok } from "./define";
 import { infraFixtures } from "./infra";
 import { siteDetailFixtures } from "./sites-detail";
@@ -205,6 +206,7 @@ export const fixtures: Fixtures = mergeFixtures(
   core,
   siteDetailFixtures,
   accessFixtures,
+  accessControlFixtures,
   infraFixtures,
   systemFixtures,
 );
