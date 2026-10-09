@@ -135,7 +135,7 @@ This verifies identity only; it is no bot scoring. A crawler address seen for th
 
 ## Challenge failure bans
 
-With **Challenge failure bans** on, an address (an IPv4 address, the `/64` of an IPv6 one) that fails the site's challenges **Failures** times within 10 minutes (from its first failure) is banned on the site for **Ban duration** seconds by the node (reason **Too many failed challenges**), see [Bans](bans.en.md#automatic-bans). Failures are wrong answers and invalid, expired or reused challenge tokens. Addresses on global allow lists or the site's allow lists and the cluster's trusted proxies are not counted. Needs the node capability `challenge-v2`.
+With **Challenge failure bans** on, an address (an IPv4 address, the `/64` of an IPv6 one) that fails the site's challenges **Failures within 10 minutes** times (counted from its first failure) is banned on the site for **Ban duration (seconds)** by the node (reason **Too many failed challenges**), see [Bans](bans.en.md#automatic-bans). Failures are wrong answers and invalid, expired or reused challenge tokens. Addresses on global allow lists or the site's allow lists and the cluster's trusted proxies are not counted. Needs the node capability `challenge-v2`.
 
 ## Challenge rules
 

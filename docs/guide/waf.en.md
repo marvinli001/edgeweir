@@ -59,19 +59,19 @@ Each exclusion keeps a set of rules from running on a path, or only from inspect
 | Rule IDs | 1–200, 900000–999999, unique; no 901xxx, 949xxx, 959xxx or 980xxx | These rules do not run on the path |
 | Targets | Optional, up to 16: `ARGS:name`, `REQUEST_COOKIES:name` (1–64 letters, digits or `_` `.` `-` `[` `]`), `REQUEST_HEADERS:name` (letters, digits or `-`) | With targets the rules still run, but do not inspect those arguments, cookies or request headers |
 
-Up to 100 entries, in the order saved. Whole-site entries without targets run on every node that supports CRS; the **Excluded rule IDs** of earlier versions migrated to one such entry. Entries with a path or targets need the node capability `waf-v2`. A change of exclusions is structural: nodes render the rule file again and reload nginx (open connections stay).
+Up to 100 entries, in the order saved. The whole-site entry without targets is filled in under **Excluded rule IDs** on the CRS card and runs on every node that supports CRS; entries with a path or targets are added under **Exclusions by path** → **Add exclusion** and need the node capability `waf-v2`. A change of exclusions is structural: nodes render the rule file again and reload nginx (open connections stay).
 
 ## Overrides and exclusions by path
 
 | Way | How | Effect |
 | --- | --- | --- |
-| Exclude by path | An exclusion with a path | The rules do not run on that path; other rules still do |
+| Exclude by path | **Exclusions by path** → **Add exclusion**, with a path | The rules do not run on that path; other rules still do |
 | Override the mode by path | The **OWASP CRS** override of a configuration phase rule: Unchanged / Off / Detect only / Block, see [Override settings](rules.en.md#override-settings) | Matching requests have CRS off, detect only or block; no effect on sites without CRS; hot update, no reload |
 | Skip | **OWASP CRS** in a custom WAF **Skip** action, see [WAF actions](rules.en.md#waf-actions) | The request is not inspected by CRS |
 
 Nodes match the normalized path in the edge layer and hand the matching entries to ModSecurity in an internal request header; ModSecurity's own `REQUEST_FILENAME` is not normalized and is not used for paths. The internal header is removed before the origin and never reaches it. Excluding the prefix `/api/`, for one, does not cover `/api/../admin`, which normalizes to `/admin`.
 
-A heavily matched rule can be excluded where it shows: click **⋯** in its row of **Most-matched CRS rules** or of the logs → **Exclude by path**; the dialog holds the rule ID (and, from a log row, the request's path); choose prefix or exact and confirm, and the entry is added to the exclusions and saved at once.
+A heavily matched rule can be excluded where it shows: click **⋯** in its row of **Most-matched CRS rules** or of the logs → **Exclude by path**; the dialog holds the rule ID (and, from a log row, the request's path); choose prefix or exact and confirm, and the entry is added to **Exclusions by path** and saved at once.
 
 ## Behavior
 
