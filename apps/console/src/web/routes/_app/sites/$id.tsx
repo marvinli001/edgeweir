@@ -159,7 +159,7 @@ function SiteDetailPage() {
               <HttpsTab site={data} />
             </TabsContent>
             <TabsContent value="rules" className="animate-enter">
-              <RulesTab siteId={data.id} originGroups={originGroups(data)} />
+              <RulesTab siteId={data.id} originGroups={originGroups(data)} site={data} />
             </TabsContent>
             <TabsContent value="redirects" className="animate-enter">
               <BulkRedirectsTab siteId={data.id} />

@@ -1,6 +1,8 @@
 import {
   ARG_FIELD,
   ARG_NAME_RE,
+  bodyFields,
+  botFields,
   COOKIE_FIELD,
   COOKIE_NAME_RE,
   ExpressionError,
@@ -9,6 +11,7 @@ import {
   type Phase,
   parseExpression,
   parseValueExpression,
+  requestPhases,
   responsePhases,
   rulesV3Fields,
 } from "@edgeweir/rule-engine";
@@ -19,14 +22,17 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
+  BOT_TEMPLATES,
   CONDITION_TEMPLATES,
   type ConditionTemplate,
   conditionTemplateLabel,
   type ExpressionFailure,
   expressionErrorText,
   insertCondition,
+  RULES_BODY_TEMPLATES,
   RULES_V3_TEMPLATES,
   TEMPLATE_VALUES,
+  templateInPhase,
 } from "@/lib/expressions";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
@@ -132,6 +138,8 @@ export function ExpressionEditor({
   actions,
   testId,
   hideRulesV3 = false,
+  hideRulesBody = false,
+  hideBotFields = false,
 }: {
   id: string;
   label: string;
@@ -144,6 +152,10 @@ export function ExpressionEditor({
   testId?: string;
   /** Leave the rules-v3 fields and templates out of the menus (the cluster's nodes lack it). */
   hideRulesV3?: boolean;
+  /** Leave the request body fields and templates out (no rules-body-v1 on the nodes). */
+  hideRulesBody?: boolean;
+  /** Leave the verified crawler fields and templates out (no challenge-v2 on the nodes). */
+  hideBotFields?: boolean;
 }) {
   // The field read by name being inserted, and its name so far.
   const [named, setNamed] = React.useState<NamedField | null>(null);
@@ -174,12 +186,18 @@ export function ExpressionEditor({
   const lists = useQuery({ ...orpc.ipLists.list.queryOptions(), enabled: kind === "condition" });
   const tokens = value.split(TOKENS);
   let offset = 0;
+  // Cache rule conditions are judged in the phase cache.
+  const fieldPhase = kind === "cacheRule" ? "cache" : phase;
   const available = Object.keys(fields).filter(
     (field) =>
-      (!field.startsWith("http.response.") || responsePhases.has(phase)) &&
+      (!field.startsWith("http.response.") || responsePhases.has(fieldPhase)) &&
+      // The request body and crawler fields: the request phases only.
+      (!(bodyFields.has(field) || botFields.has(field)) || requestPhases.has(fieldPhase)) &&
       // A value is a string: string fields only.
       (kind !== "value" || fields[field] === "string") &&
-      !(hideRulesV3 && rulesV3Fields.has(field)),
+      !(hideRulesV3 && rulesV3Fields.has(field)) &&
+      !(hideRulesBody && bodyFields.has(field)) &&
+      !(hideBotFields && botFields.has(field)),
   );
   const namedKinds = (Object.keys(NAMED_FIELDS) as NamedField[]).filter(
     (key) => !(hideRulesV3 && NAMED_FIELDS[key].v3),
@@ -207,7 +225,13 @@ export function ExpressionEditor({
               value={null}
               options={[
                 ...(Object.keys(CONDITION_TEMPLATES) as ConditionTemplate[])
-                  .filter((template) => !(hideRulesV3 && RULES_V3_TEMPLATES.has(template)))
+                  .filter(
+                    (template) =>
+                      templateInPhase(template, phase) &&
+                      !(hideRulesV3 && RULES_V3_TEMPLATES.has(template)) &&
+                      !(hideRulesBody && RULES_BODY_TEMPLATES.has(template)) &&
+                      !(hideBotFields && BOT_TEMPLATES.has(template)),
+                  )
                   .map((template) => ({
                     value: template,
                     label: conditionTemplateLabel(template),

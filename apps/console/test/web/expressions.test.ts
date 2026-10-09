@@ -1,4 +1,4 @@
-import { ExpressionError, parseExpression, phases } from "@edgeweir/rule-engine";
+import { ExpressionError, type Phase, parseExpression, phases } from "@edgeweir/rule-engine";
 import { describe, expect, it } from "vitest";
 import {
   appendCondition,
@@ -7,13 +7,15 @@ import {
   expressionErrorText,
   expressionReason,
   insertCondition,
+  REQUEST_PHASE_TEMPLATES,
   TEMPLATE_VALUES,
+  templateInPhase,
 } from "../../src/web/lib/expressions";
 import { overwriteGetLocale } from "../../src/web/paraglide/runtime.js";
 
-const failure = (source: string) => {
+const failure = (source: string, phase?: Phase) => {
   try {
-    parseExpression(source);
+    parseExpression(source, phase);
   } catch (error) {
     if (error instanceof ExpressionError) return error;
   }
@@ -36,10 +38,31 @@ describe("expression error texts", () => {
 });
 
 describe("condition templates", () => {
-  it("parse as conditions in every phase and keep an 'or' together", () => {
+  it("parse as conditions in every phase that offers them and keep an 'or' together", () => {
     for (const phase of phases)
-      for (const condition of Object.values(CONDITION_TEMPLATES))
-        expect(() => parseExpression(condition, phase), `${phase}: ${condition}`).not.toThrow();
+      for (const [template, condition] of Object.entries(CONDITION_TEMPLATES) as [
+        ConditionTemplate,
+        string,
+      ][])
+        if (templateInPhase(template, phase))
+          expect(() => parseExpression(condition, phase), `${phase}: ${condition}`).not.toThrow();
+        else expect(failure(condition, phase).code, `${phase}: ${condition}`).toBe("request_field");
+    // Request body and crawler templates: the request phases only.
+    expect(phases.filter((phase) => templateInPhase("json_value", phase))).toEqual([
+      "request-transform",
+      "redirect",
+      "config",
+      "waf-custom",
+      "ratelimit",
+      "origin",
+    ]);
+    expect([...REQUEST_PHASE_TEMPLATES].sort()).toEqual([
+      "body_contains",
+      "form_value",
+      "json_value",
+      "upload_name",
+      "verified_bot",
+    ]);
     const method = CONDITION_TEMPLATES.method;
     expect(appendCondition("true", method, "waf-custom")).toBe(method);
     expect(appendCondition("  ", method, "waf-custom")).toBe(method);

@@ -21,18 +21,25 @@ import {
   type RuleDto,
   type RuleInput,
   ruleInput,
+  type Site,
+  siteRuleInput,
   staticRedirectTarget,
 } from "@edgeweir/contract";
 import {
   type ChallengeType,
   challengeTypes,
   compressionCodings,
+  crsOverrides,
   MAX_HOST_HEADER_LENGTH,
   type Phase,
   phases,
   QUERY_NAME_RE,
+  RULE_BAN,
   rateLimitKeys,
+  respondContentTypes,
+  respondStatus,
   validHostHeader,
+  validRespondBody,
 } from "@edgeweir/rule-engine";
 import {
   Add01Icon,
@@ -47,28 +54,42 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
 import type * as z from "zod";
+import { durationLabel } from "@/components/ban-dialog";
 import { FormSelect, OptionSelect } from "@/components/form-select";
 import { PresetSelect, usePreset } from "@/components/preset-select";
 import { SafetyNote } from "@/components/safety-note";
 import { ExpressionEditor, expressionFailure } from "@/components/site/expression-editor";
 import { ListInput, NumberField, SwitchField } from "@/components/site/fields";
+import { RulesBodyLimitCard } from "@/components/site/rules-body-limit-card";
 import { nextDraftKey, SaveBar } from "@/components/site/save-site";
 import { EmptyState, QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { expressionErrorText, expressionReason } from "@/lib/expressions";
 import { m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
-import { challengeLabel } from "@/lib/protection";
+import { challengeLabel, wafModeLabel } from "@/lib/protection";
+import {
+  type Action,
+  type ActionOf,
+  defaultAction,
+  type Kind,
+  RULE_BAN_DURATIONS,
+  type SkipTarget,
+  toggleSkip,
+  WAF_V2_KINDS,
+  withAccessLog,
+  withRateLimitBan,
+  withRespondStatus,
+} from "@/lib/rule-actions";
 import { cn } from "@/lib/utils";
 import { randomUuid } from "@/lib/uuid";
 
-type Action = RuleDto["action"];
-type Kind = Action["kind"];
-type ActionOf<K extends Kind> = Extract<Action, { kind: K }>;
 type Coding = (typeof compressionCodings)[number];
 
 const phaseLabel = (phase: Phase) =>
@@ -88,7 +109,7 @@ const kinds: Record<Phase, readonly Kind[]> = {
   "request-transform": ["rewrite", "request_header"],
   redirect: ["redirect"],
   config: ["config"],
-  "waf-custom": ["block", "log", "allow", "challenge"],
+  "waf-custom": ["block", "log", "allow", "challenge", "ban", "respond", "close", "skip"],
   ratelimit: ["rate_limit"],
   cache: ["config"],
   origin: ["request_header", "origin"],
@@ -111,43 +132,13 @@ const actionLabel = (kind: Kind) =>
     rate_limit: m.rules_rate,
     origin: m.rules_origin,
     compression: m.rules_compression,
+    ban: m.rules_ban,
+    respond: m.rules_respond,
+    close: m.rules_close,
+    skip: m.rules_skip,
   })[kind]();
 const codingLabel = (coding: Coding) =>
   ({ zstd: m.compression_zstd, br: m.compression_brotli, gzip: m.cert_gzip })[coding]();
-function defaultAction(kind: Kind): RuleInput["action"] {
-  switch (kind) {
-    case "block":
-      return { kind, statusCode: 403 };
-    case "redirect":
-      return {
-        kind,
-        value: "/",
-        target: "",
-        statusCode: 301,
-        preserveQuery: false,
-        setQuery: [],
-        removeQuery: [],
-      };
-    case "rewrite":
-      return { kind, value: "/", target: "", preserveQuery: true, setQuery: [], removeQuery: [] };
-    case "request_header":
-      return { kind, header: "x-custom", value: "", expression: "", remove: false };
-    case "response_header":
-      return { kind, header: "x-custom", value: "", expression: "", remove: false, append: false };
-    case "config":
-      return { kind, cacheBypass: true };
-    case "rate_limit":
-      return { kind, ...RATE_LIMIT_PRESETS.standard, key: "ip.src", statusCode: 429 };
-    case "challenge":
-      return { kind, type: "js" };
-    case "origin":
-      return { kind, originGroup: "", hostHeader: "", sni: "", port: 0 };
-    case "compression":
-      return { kind, algorithms: [] };
-    default:
-      return { kind };
-  }
-}
 const HEADER_KEY = "http.request.headers.";
 /** Rate limit keys offered in the select; a request header is the last choice. */
 const keyChoice = (key: string) => (key.startsWith(HEADER_KEY) ? "header" : key);
@@ -181,16 +172,43 @@ const actionFieldLabels: Record<string, () => string> = {
   originReadTimeoutMs: m.rules_read_timeout,
   logSampleRate: m.rules_log_sample_rate,
   requestBodyLimit: m.rules_request_body_limit,
+  banScope: m.rules_ban_scope,
+  banPrefixV4: m.rules_ban_prefix_v4,
+  banPrefixV6: m.rules_ban_prefix_v6,
+  contentType: m.rules_respond_type,
+  body: m.rules_respond_body,
+  errorPage: m.rules_respond_error_page,
+  skip: m.rules_skip_targets,
+  crs: m.rules_config_crs,
 };
 
 /** Whether the site's cluster lacks site-content-v1 (config rules' body limit). */
 const ContentLock = React.createContext(false);
+/**
+ * What the site's cluster lacks of G14 (waf-v2 actions and settings, rules-body-v1 body fields,
+ * challenge-v2 crawler fields), and whether these are platform rules (only they ban everywhere).
+ */
+interface Locks {
+  wafV2: boolean;
+  body: boolean;
+  bot: boolean;
+  platform: boolean;
+}
+const LocksContext = React.createContext<Locks>({
+  wafV2: false,
+  body: false,
+  bot: false,
+  platform: false,
+});
 /** The label of the field an issue of `row` points at. */
 function issueField(row: RuleDto, path: readonly PropertyKey[]): string {
   const [head, field] = path;
   if (head === "name") return m.rules_name();
   if (head === "expression") return m.rules_expression();
   if (head !== "action" || typeof field !== "string") return m.rules_action();
+  // A ban's duration, or a rate limit's ban over the limit.
+  if (field === "banSeconds")
+    return row.action.kind === "rate_limit" ? m.rules_rate_ban() : m.rules_ban_seconds();
   // Redirects and rewrites label their static value as the target.
   if (field === "value")
     return row.action.kind === "redirect" || row.action.kind === "rewrite"
@@ -220,10 +238,19 @@ function ruleIssueText(row: RuleDto, issue: z.core.$ZodIssue | undefined): strin
 
 /**
  * Rules of a site (siteId) or of the platform. A site's rules can send requests to its origin
- * groups; the rule engine extensions (rules-v2) and additions (rules-v3) stay locked while the
- * cluster's nodes lack them.
+ * groups; the rule engine extensions (rules-v2), additions (rules-v3), the WAF actions (waf-v2),
+ * the request body fields (rules-body-v1) and the crawler fields (challenge-v2) stay locked while
+ * the cluster's nodes lack them. With `site`, the tab also sets how much body the rules read.
  */
-export function RulesTab({ siteId, originGroups }: { siteId?: string; originGroups?: string[] }) {
+export function RulesTab({
+  siteId,
+  originGroups,
+  site,
+}: {
+  siteId?: string;
+  originGroups?: string[];
+  site?: Site;
+}) {
   const query = useQuery(
     siteId
       ? orpc.rules.get.queryOptions({ input: { id: siteId } })
@@ -233,54 +260,96 @@ export function RulesTab({ siteId, originGroups }: { siteId?: string; originGrou
     ...orpc.sites.features.queryOptions({ input: { id: siteId ?? "" } }),
     enabled: !!siteId,
   });
-  const editor = (
-    rules: RuleDto[],
-    availability?: FeatureAvailability,
-    availabilityV3?: FeatureAvailability,
-    availabilityContent?: FeatureAvailability,
-  ) => (
-    <ContentLock.Provider value={availabilityContent?.available === false}>
-      <RulesEditor
-        key={JSON.stringify(rules)}
-        initial={rules}
-        siteId={siteId}
-        originGroups={siteId ? (originGroups ?? []) : undefined}
-        availability={availability}
-        availabilityV3={availabilityV3}
-        locked={availability?.available === false}
-        lockedV3={availabilityV3?.available === false}
-      />
+  const editor = (rules: RuleDto[], available?: SiteFeatures) => (
+    <ContentLock.Provider value={available?.siteContent.available === false}>
+      <LocksContext.Provider
+        value={{
+          wafV2: available?.wafV2.available === false,
+          body: available?.rulesBody.available === false,
+          bot: available?.challengeV2.available === false,
+          platform: !siteId,
+        }}
+      >
+        <RulesEditor
+          key={JSON.stringify(rules)}
+          initial={rules}
+          siteId={siteId}
+          originGroups={siteId ? (originGroups ?? []) : undefined}
+          features={available}
+          locked={available?.rulesV2.available === false}
+          lockedV3={available?.rulesV3.available === false}
+        />
+      </LocksContext.Provider>
     </ContentLock.Provider>
   );
   // Platform rules have no site features to wait for.
   return (
-    <QueryView query={query}>
-      {(rules) =>
-        siteId ? (
-          <QueryView query={features}>
-            {({ rulesV2, rulesV3, siteContent }) => editor(rules, rulesV2, rulesV3, siteContent)}
-          </QueryView>
-        ) : (
-          editor(rules)
-        )
-      }
-    </QueryView>
+    <div className="flex flex-col gap-5">
+      <QueryView query={query}>
+        {(rules) =>
+          siteId ? (
+            <QueryView query={features}>{(available) => editor(rules, available)}</QueryView>
+          ) : (
+            editor(rules)
+          )
+        }
+      </QueryView>
+      {site ? <RulesBodyLimitCard site={site} /> : null}
+    </div>
   );
+}
+
+type SiteFeatures = Record<
+  "rulesV2" | "rulesV3" | "siteContent" | "wafV2" | "rulesBody" | "challengeV2",
+  FeatureAvailability
+>;
+
+/**
+ * The one line on what the cluster's nodes cannot run yet: the rule engine extensions, or else
+ * the first of the later additions they lack (test id names it).
+ */
+function UnavailableNote({ features }: { features?: SiteFeatures }) {
+  if (!features) return null;
+  if (!features.rulesV2.available)
+    return (
+      <SafetyNote
+        className="animate-in fade-in"
+        data-testid="rules-v2-unavailable"
+        data-reason={features.rulesV2.reason ?? undefined}
+      >
+        {m.rules_v2_unavailable()}
+      </SafetyNote>
+    );
+  const missing = (
+    [
+      ["rules-v3", features.rulesV3],
+      ["rules-waf-v2", features.wafV2],
+      ["rules-body", features.rulesBody],
+      ["rules-challenge-v2", features.challengeV2],
+    ] as const
+  ).find(([, availability]) => !availability.available);
+  return missing ? (
+    <SafetyNote
+      className="animate-in fade-in"
+      data-testid={`${missing[0]}-unavailable`}
+      data-reason={missing[1].reason ?? undefined}
+    >
+      {m.feature_unavailable_nodes()}
+    </SafetyNote>
+  ) : null;
 }
 function RulesEditor({
   initial,
   siteId,
   originGroups,
-  availability,
-  availabilityV3,
+  features,
   locked,
   lockedV3,
 }: {
   initial: RuleDto[];
   siteId?: string;
   originGroups?: string[];
-  availability?: FeatureAvailability;
-  availabilityV3?: FeatureAvailability;
+  features?: SiteFeatures;
   locked: boolean;
   /** The rules-v3 additions wait until the cluster's nodes run them. */
   lockedV3: boolean;
@@ -308,8 +377,10 @@ function RulesEditor({
         event.preventDefault();
         setError(null);
         const rules: RuleInput[] = [];
+        // A site's rules ban on the request's site only.
+        const schema = siteId ? siteRuleInput : ruleInput;
         for (const row of rows) {
-          const parsed = ruleInput.safeParse(row);
+          const parsed = schema.safeParse(row);
           if (!parsed.success) {
             setError(ruleIssueText(row, parsed.error.issues[0]));
             return;
@@ -329,23 +400,7 @@ function RulesEditor({
         }
       }}
     >
-      {availability && !availability.available ? (
-        <SafetyNote
-          className="animate-in fade-in"
-          data-testid="rules-v2-unavailable"
-          data-reason={availability.reason ?? undefined}
-        >
-          {m.rules_v2_unavailable()}
-        </SafetyNote>
-      ) : availabilityV3 && !availabilityV3.available ? (
-        <SafetyNote
-          className="animate-in fade-in"
-          data-testid="rules-v3-unavailable"
-          data-reason={availabilityV3.reason ?? undefined}
-        >
-          {m.feature_unavailable_nodes()}
-        </SafetyNote>
-      ) : null}
+      <UnavailableNote features={features} />
       {rows.length === 0 ? <EmptyState title={m.rules_empty()} /> : null}
       <DndContext
         sensors={sensors}
@@ -478,9 +533,14 @@ function RuleRow({
     attributes: { roleDescription: m.site_rule_role() },
     transition: reducedMotion ? null : undefined,
   });
+  const locks = React.useContext(LocksContext);
   const a = row.action;
   const kindOptions = kinds[row.phase]
-    .filter((kind) => kind === a.kind || !(locked && v2Kinds.has(kind)))
+    .filter(
+      (kind) =>
+        kind === a.kind ||
+        !((locked && v2Kinds.has(kind)) || (locks.wafV2 && WAF_V2_KINDS.has(kind))),
+    )
     .map((kind) => ({ value: kind, label: actionLabel(kind) }));
   return (
     <div
@@ -530,6 +590,8 @@ function RuleRow({
         phase={row.phase}
         onChange={(expression) => patch({ expression })}
         hideRulesV3={lockedV3}
+        hideRulesBody={locks.body}
+        hideBotFields={locks.bot}
       />
       <div className="grid gap-4 sm:grid-cols-2">
         <FormSelect
@@ -611,6 +673,14 @@ function ActionFields({
       );
     case "rate_limit":
       return <RateLimitFields id={id} action={a} onChange={onChange} />;
+    case "log":
+      return <LogFields id={id} action={a} onChange={onChange} />;
+    case "ban":
+      return <BanFields id={id} action={a} onChange={onChange} />;
+    case "respond":
+      return <RespondFields id={id} action={a} onChange={onChange} />;
+    case "skip":
+      return <SkipFields id={id} action={a} onChange={onChange} />;
     case "challenge":
       return (
         <FormSelect
@@ -642,6 +712,7 @@ function RateLimitFields({
   action: ActionOf<"rate_limit">;
   onChange: (action: Action) => void;
 }) {
+  const locks = React.useContext(LocksContext);
   const preset = usePreset(
     RATE_LIMIT_PRESETS,
     { limit: a.limit, windowSeconds: a.windowSeconds },
@@ -700,7 +771,293 @@ function RateLimitFields({
           />
         </Field>
       ) : null}
+      <IntegerField
+        id={`rate-ban-${id}`}
+        label={m.rules_rate_ban()}
+        value={a.banSeconds ?? 0}
+        min={0}
+        max={RULE_BAN.rateLimitSeconds.max}
+        invalid={(n) => n !== 0 && (n < RULE_BAN.rateLimitSeconds.min || !Number.isInteger(n))}
+        disabled={locks.wafV2 && !a.banSeconds}
+        onChange={(seconds) => onChange(withRateLimitBan(a, seconds))}
+        testId="rule-rate-ban"
+      />
     </>
+  );
+}
+
+/**
+ * A whole number kept as text while it is edited (empty reads as 0), so a field can be cleared
+ * and typed into without jumping; `invalid` marks values the contract refuses.
+ */
+function IntegerField({
+  id,
+  label,
+  value,
+  min,
+  max,
+  invalid,
+  disabled,
+  onChange,
+  testId,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  invalid?: (value: number) => boolean;
+  disabled?: boolean;
+  onChange: (value: number) => void;
+  testId?: string;
+}) {
+  const parse = (text: string) => (text.trim() === "" ? 0 : Number(text));
+  const [text, setText] = React.useState(() => String(value));
+  const shown = parse(text) === value ? text : String(value);
+  return (
+    <NumberField
+      id={id}
+      label={label}
+      value={shown}
+      min={min}
+      max={max}
+      step={1}
+      disabled={disabled}
+      invalid={
+        Number.isNaN(parse(shown)) ||
+        parse(shown) < min ||
+        parse(shown) > max ||
+        (invalid?.(parse(shown)) ?? false)
+      }
+      onChange={(next) => {
+        setText(next);
+        onChange(parse(next));
+      }}
+      testId={testId}
+    />
+  );
+}
+
+/** A log rule's access log line, written whatever the sample rate (waf-v2). */
+function LogFields({
+  id,
+  action: a,
+  onChange,
+}: {
+  id: string;
+  action: ActionOf<"log">;
+  onChange: (action: Action) => void;
+}) {
+  const locks = React.useContext(LocksContext);
+  return (
+    <SwitchField
+      id={`access-log-${id}`}
+      label={m.rules_log_access_log()}
+      checked={a.accessLog === true}
+      disabled={locks.wafV2 && a.accessLog !== true}
+      onCheckedChange={(on) => onChange(withAccessLog(a, on))}
+      testId="rule-log-access-log"
+    />
+  );
+}
+
+/** Select value of a ban duration entered in seconds. */
+const CUSTOM = "custom";
+
+/**
+ * A ban: how long (a named duration or seconds), where (platform rules: every site), and how
+ * much of the address (IPv4 and IPv6 prefix lengths).
+ */
+function BanFields({
+  id,
+  action: a,
+  onChange,
+}: {
+  id: string;
+  action: ActionOf<"ban">;
+  onChange: (action: Action) => void;
+}) {
+  const locks = React.useContext(LocksContext);
+  const [custom, setCustom] = React.useState(() => !RULE_BAN_DURATIONS.includes(a.banSeconds));
+  const set = (change: Partial<ActionOf<"ban">>) => onChange({ ...a, ...change });
+  const prefixes = (range: { min: number; max: number }) =>
+    Array.from({ length: range.max - range.min + 1 }, (_, i) => String(range.max - i)).map(
+      (bits) => ({ value: bits, label: `/${bits}` }),
+    );
+  return (
+    <>
+      <FormSelect
+        id={`ban-duration-${id}`}
+        label={m.rules_ban_duration()}
+        value={custom ? CUSTOM : String(a.banSeconds)}
+        options={[
+          ...RULE_BAN_DURATIONS.map((seconds) => ({
+            value: String(seconds),
+            label: durationLabel(seconds),
+          })),
+          { value: CUSTOM, label: m.preset_custom() },
+        ]}
+        onChange={(choice) => {
+          setCustom(choice === CUSTOM);
+          if (choice !== CUSTOM) set({ banSeconds: Number(choice) });
+        }}
+        testId="rule-ban-duration"
+      />
+      {custom ? (
+        <IntegerField
+          id={`ban-seconds-${id}`}
+          label={m.rules_ban_seconds()}
+          value={a.banSeconds}
+          min={RULE_BAN.seconds.min}
+          max={RULE_BAN.seconds.max}
+          onChange={(banSeconds) => set({ banSeconds })}
+          testId="rule-ban-seconds"
+        />
+      ) : null}
+      {locks.platform ? (
+        <FormSelect
+          id={`ban-scope-${id}`}
+          label={m.rules_ban_scope()}
+          value={a.banScope}
+          options={[
+            { value: "site", label: m.rules_ban_scope_site() },
+            { value: "platform", label: m.rules_ban_scope_platform() },
+          ]}
+          onChange={(scope) => set({ banScope: scope as ActionOf<"ban">["banScope"] })}
+          testId="rule-ban-scope"
+        />
+      ) : null}
+      <FormSelect
+        id={`ban-v4-${id}`}
+        label={m.rules_ban_prefix_v4()}
+        value={String(a.banPrefixV4)}
+        options={prefixes(RULE_BAN.prefixV4)}
+        onChange={(bits) => set({ banPrefixV4: Number(bits) })}
+        testId="rule-ban-prefix-v4"
+      />
+      <FormSelect
+        id={`ban-v6-${id}`}
+        label={m.rules_ban_prefix_v6()}
+        value={String(a.banPrefixV6)}
+        options={prefixes(RULE_BAN.prefixV6)}
+        onChange={(bits) => set({ banPrefixV6: Number(bits) })}
+        testId="rule-ban-prefix-v6"
+      />
+    </>
+  );
+}
+
+/**
+ * A custom response: the status and either a static body of a content type or the site's error
+ * page of the status (4xx and 5xx); 204 has no body.
+ */
+function RespondFields({
+  id,
+  action: a,
+  onChange,
+}: {
+  id: string;
+  action: ActionOf<"respond">;
+  onChange: (action: Action) => void;
+}) {
+  const set = (change: Partial<ActionOf<"respond">>) => onChange({ ...a, ...change });
+  const errorPages = a.statusCode >= 400;
+  return (
+    <>
+      <IntegerField
+        id={`respond-status-${id}`}
+        label={m.rules_status()}
+        value={a.statusCode}
+        min={200}
+        max={599}
+        invalid={(status) => !respondStatus(status)}
+        onChange={(status) => onChange(withRespondStatus(a, status))}
+        testId="rule-respond-status"
+      />
+      {errorPages ? (
+        <SwitchField
+          id={`respond-error-page-${id}`}
+          label={m.rules_respond_error_page()}
+          checked={a.errorPage}
+          // An error page has no body of its own.
+          onCheckedChange={(errorPage) => set(errorPage ? { errorPage, body: "" } : { errorPage })}
+          testId="rule-respond-error-page"
+        />
+      ) : null}
+      {a.errorPage ? null : (
+        <>
+          <FormSelect
+            id={`respond-type-${id}`}
+            label={m.rules_respond_type()}
+            value={a.contentType}
+            options={respondContentTypes.map((type) => ({ value: type, label: type }))}
+            onChange={(type) => set({ contentType: type as ActionOf<"respond">["contentType"] })}
+            testId="rule-respond-type"
+          />
+          {a.statusCode === 204 ? null : (
+            <Field
+              className="min-w-0 sm:col-span-2"
+              data-invalid={!validRespondBody(a.body) || undefined}
+            >
+              <FieldLabel htmlFor={`respond-body-${id}`}>{m.rules_respond_body()}</FieldLabel>
+              <Textarea
+                id={`respond-body-${id}`}
+                value={a.body}
+                rows={3}
+                spellCheck={false}
+                aria-invalid={!validRespondBody(a.body) || undefined}
+                onChange={(e) => set({ body: e.target.value })}
+                className="max-h-64 font-mono"
+                data-testid="rule-respond-body"
+              />
+            </Field>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+/** What a skip rule skips, in the order a request meets them. */
+const SKIP_CHOICES: readonly [SkipTarget, () => string][] = [
+  ["rules", m.rules_skip_rules],
+  ["rate_limits", m.rules_skip_rate_limits],
+  ["crs", m.rules_skip_crs],
+  ["challenges", m.rules_skip_challenges],
+];
+
+/** The checks a skip rule skips for the request (at least one). */
+function SkipFields({
+  id,
+  action: a,
+  onChange,
+}: {
+  id: string;
+  action: ActionOf<"skip">;
+  onChange: (action: Action) => void;
+}) {
+  return (
+    <FieldSet className="gap-2 sm:col-span-2" data-invalid={a.skip.length === 0 || undefined}>
+      <FieldLegend variant="label" className="mb-1">
+        {m.rules_skip_targets()}
+      </FieldLegend>
+      <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
+        {SKIP_CHOICES.map(([target, label]) => (
+          <Field key={target} orientation="horizontal" className="w-auto">
+            <Checkbox
+              id={`skip-${target}-${id}`}
+              checked={a.skip.includes(target)}
+              aria-invalid={a.skip.length === 0 || undefined}
+              onCheckedChange={(on) => onChange({ ...a, skip: toggleSkip(a.skip, target, on) })}
+              data-testid={`rule-skip-${target}`}
+            />
+            <FieldLabel htmlFor={`skip-${target}-${id}`} className="font-normal">
+              {label()}
+            </FieldLabel>
+          </Field>
+        ))}
+      </div>
+    </FieldSet>
   );
 }
 
@@ -1287,8 +1644,9 @@ function ConfigFields({
   onChange: (action: ConfigAction) => void;
 }) {
   const set = (change: Partial<ConfigAction>) => onChange({ ...a, ...change });
-  // The body limit waits until the cluster's nodes run site-content-v1.
+  // The body limit waits until the cluster's nodes run site-content-v1, the CRS override waf-v2.
   const contentLocked = React.useContext(ContentLock);
+  const wafV2Locked = React.useContext(LocksContext).wafV2;
   const triState = (key: ConfigSwitch, v2: boolean) => {
     // Turning gzip back on is new with rules-v2 as well.
     const noOn = locked && (v2 || key === "gzip") && a[key] !== true;
@@ -1372,6 +1730,20 @@ function ConfigFields({
             disabled={contentLocked && a.requestBodyLimit === undefined}
             onChange={(requestBodyLimit) => set({ requestBodyLimit })}
             testId="rule-config-requestBodyLimit"
+          />
+          <FormSelect
+            id={`crs-${id}`}
+            label={m.rules_config_crs()}
+            value={a.crs ?? UNCHANGED}
+            options={[
+              { value: UNCHANGED, label: m.rules_unchanged() },
+              ...crsOverrides.map((mode) => ({ value: mode, label: wafModeLabel(mode) })),
+            ]}
+            disabled={wafV2Locked && a.crs === undefined}
+            onChange={(mode) =>
+              set({ crs: mode === UNCHANGED ? undefined : (mode as (typeof crsOverrides)[number]) })
+            }
+            testId="rule-config-crs"
           />
         </>
       ) : null}
