@@ -3,9 +3,14 @@ import {
   CC_LEVELS,
   CC_PRESETS,
   CHALLENGE_PRESETS,
+  CHALLENGE_TEXT_MAX,
   CHALLENGE_TYPES,
+  type ChallengeText,
   type ChallengeType,
   crsDetectionRule,
+  FAILURE_BAN_DEFAULTS,
+  FAILURE_BAN_SECONDS_RANGE,
+  FAILURE_THRESHOLD_RANGE,
   type FeatureAvailability,
   matchPreset,
   PASS_TTL_RANGE,
@@ -318,6 +323,14 @@ function UnderAttackCard({ siteId, protection }: { siteId: string; protection: S
   );
 }
 
+/** The challenge page texts in the card's order: title and hint, Chinese then English. */
+const CHALLENGE_TEXT_FIELDS: readonly [keyof ChallengeText, () => string][] = [
+  ["titleZh", m.protection_challenge_title_zh],
+  ["hintZh", m.protection_challenge_hint_zh],
+  ["titleEn", m.protection_challenge_title_en],
+  ["hintEn", m.protection_challenge_hint_en],
+];
+
 function ChallengeSettingsCard({
   siteId,
   protection,
@@ -326,12 +339,23 @@ function ChallengeSettingsCard({
   protection: SiteProtection;
 }) {
   const { save, error, pending } = useUpdateProtection(siteId);
+  const features = useQuery(orpc.sites.features.queryOptions({ input: { id: siteId } }));
+  // Crawlers, texts and failure bans wait for challenge-v2 (what is set stays editable).
+  const v2 = features.data?.challengeV2;
+  const v2Locked = v2?.available === false;
   // Its own fields only: saving Under Attack or the CC policy leaves an unsaved draft here alone.
   const { draft, setDraft, dirty } = useDraft({
     passTtlSeconds: String(protection.passTtlSeconds),
     powDifficulty: String(protection.powDifficulty),
     powHighDifficulty: String(protection.powHighDifficulty),
     logJa4: protection.logJa4,
+    allowVerifiedBots: protection.allowVerifiedBots,
+    challengeText: protection.challengeText,
+    failureBan: {
+      enabled: protection.failureBan.enabled,
+      threshold: String(protection.failureBan.threshold),
+      banSeconds: String(protection.failureBan.banSeconds),
+    },
   });
   const preset = usePreset(
     CHALLENGE_PRESETS,
@@ -348,6 +372,8 @@ function ChallengeSettingsCard({
         powHighDifficulty: String(values.powHighDifficulty),
       }),
   );
+  const failure = draft.failureBan;
+  const textsSet = Object.values(protection.challengeText).some((text) => text !== "");
   return (
     <Card
       id={CARD_IDS.challenges}
@@ -363,58 +389,167 @@ function ChallengeSettingsCard({
             powDifficulty: Number(draft.powDifficulty),
             powHighDifficulty: Number(draft.powHighDifficulty),
             logJa4: draft.logJa4,
+            allowVerifiedBots: draft.allowVerifiedBots,
+            challengeText: draft.challengeText,
+            failureBan: {
+              enabled: failure.enabled,
+              threshold: Number(failure.threshold),
+              banSeconds: Number(failure.banSeconds),
+            },
           });
         }}
       >
         <CardHeader>
           <CardTitle>{m.protection_challenge_title()}</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <PresetSelect id="protection-preset" value={preset.choice} onChange={preset.choose} />
-          {preset.choice === "custom" ? (
-            <>
-              <NumberField
-                id="protection-pass-ttl"
-                label={m.protection_pass_ttl()}
-                value={draft.passTtlSeconds}
-                min={PASS_TTL_RANGE.min}
-                max={PASS_TTL_RANGE.max}
-                step={1}
-                required
-                testId="protection-pass-ttl"
-                onChange={(passTtlSeconds) => setDraft({ ...draft, passTtlSeconds })}
-              />
-              <NumberField
-                id="protection-pow"
-                label={m.protection_pow()}
-                value={draft.powDifficulty}
-                min={POW_DIFFICULTY_RANGE.min}
-                max={POW_DIFFICULTY_RANGE.max}
-                step={1}
-                required
-                testId="protection-pow"
-                onChange={(powDifficulty) => setDraft({ ...draft, powDifficulty })}
-              />
-              <NumberField
-                id="protection-pow-high"
-                label={m.protection_pow_high()}
-                value={draft.powHighDifficulty}
-                min={Math.max(POW_HIGH_DIFFICULTY_RANGE.min, Number(draft.powDifficulty) || 0)}
-                max={POW_HIGH_DIFFICULTY_RANGE.max}
-                step={1}
-                required
-                testId="protection-pow-high"
-                onChange={(powHighDifficulty) => setDraft({ ...draft, powHighDifficulty })}
-              />
-            </>
+        <CardContent className="flex flex-col gap-5">
+          {v2Locked ? (
+            <SafetyNote
+              className="animate-in fade-in"
+              data-testid="protection-challenge-v2-unavailable"
+              data-reason={v2?.reason ?? undefined}
+            >
+              {m.feature_unavailable_nodes()}
+            </SafetyNote>
           ) : null}
-          <SwitchField
-            id="protection-log-ja4"
-            label={m.protection_log_ja4()}
-            checked={draft.logJa4}
-            testId="protection-log-ja4"
-            onCheckedChange={(logJa4) => setDraft({ ...draft, logJa4 })}
-          />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <PresetSelect id="protection-preset" value={preset.choice} onChange={preset.choose} />
+            {preset.choice === "custom" ? (
+              <>
+                <NumberField
+                  id="protection-pass-ttl"
+                  label={m.protection_pass_ttl()}
+                  value={draft.passTtlSeconds}
+                  min={PASS_TTL_RANGE.min}
+                  max={PASS_TTL_RANGE.max}
+                  step={1}
+                  required
+                  testId="protection-pass-ttl"
+                  onChange={(passTtlSeconds) => setDraft({ ...draft, passTtlSeconds })}
+                />
+                <NumberField
+                  id="protection-pow"
+                  label={m.protection_pow()}
+                  value={draft.powDifficulty}
+                  min={POW_DIFFICULTY_RANGE.min}
+                  max={POW_DIFFICULTY_RANGE.max}
+                  step={1}
+                  required
+                  testId="protection-pow"
+                  onChange={(powDifficulty) => setDraft({ ...draft, powDifficulty })}
+                />
+                <NumberField
+                  id="protection-pow-high"
+                  label={m.protection_pow_high()}
+                  value={draft.powHighDifficulty}
+                  min={Math.max(POW_HIGH_DIFFICULTY_RANGE.min, Number(draft.powDifficulty) || 0)}
+                  max={POW_HIGH_DIFFICULTY_RANGE.max}
+                  step={1}
+                  required
+                  testId="protection-pow-high"
+                  onChange={(powHighDifficulty) => setDraft({ ...draft, powHighDifficulty })}
+                />
+              </>
+            ) : null}
+            <SwitchField
+              id="protection-log-ja4"
+              label={m.protection_log_ja4()}
+              checked={draft.logJa4}
+              testId="protection-log-ja4"
+              onCheckedChange={(logJa4) => setDraft({ ...draft, logJa4 })}
+            />
+            <SwitchField
+              id="protection-verified-bots"
+              label={m.protection_allow_verified_bots()}
+              checked={draft.allowVerifiedBots}
+              disabled={v2Locked && !protection.allowVerifiedBots}
+              testId="protection-verified-bots"
+              onCheckedChange={(allowVerifiedBots) => setDraft({ ...draft, allowVerifiedBots })}
+            />
+          </div>
+          <FieldSet className="min-w-0 gap-3" data-testid="protection-failure-ban">
+            <SwitchField
+              id="protection-failure-ban"
+              label={m.protection_failure_ban()}
+              checked={failure.enabled}
+              disabled={v2Locked && !protection.failureBan.enabled}
+              testId="protection-failure-ban-enabled"
+              className="self-start"
+              onCheckedChange={(enabled) =>
+                setDraft({
+                  ...draft,
+                  // Turned on, it starts from the defaults when the fields hold no valid values.
+                  failureBan: {
+                    enabled,
+                    threshold:
+                      enabled && !(Number(failure.threshold) >= FAILURE_THRESHOLD_RANGE.min)
+                        ? String(FAILURE_BAN_DEFAULTS.threshold)
+                        : failure.threshold,
+                    banSeconds:
+                      enabled && !(Number(failure.banSeconds) >= FAILURE_BAN_SECONDS_RANGE.min)
+                        ? String(FAILURE_BAN_DEFAULTS.banSeconds)
+                        : failure.banSeconds,
+                  },
+                })
+              }
+            />
+            {failure.enabled ? (
+              <div className="grid gap-4 animate-in fade-in sm:grid-cols-2 lg:grid-cols-3">
+                <NumberField
+                  id="protection-failure-threshold"
+                  label={m.protection_failure_threshold()}
+                  value={failure.threshold}
+                  min={FAILURE_THRESHOLD_RANGE.min}
+                  max={FAILURE_THRESHOLD_RANGE.max}
+                  step={1}
+                  required
+                  testId="protection-failure-threshold"
+                  onChange={(threshold) =>
+                    setDraft({ ...draft, failureBan: { ...failure, threshold } })
+                  }
+                />
+                <NumberField
+                  id="protection-failure-ban-seconds"
+                  label={m.protection_failure_ban_seconds()}
+                  value={failure.banSeconds}
+                  min={FAILURE_BAN_SECONDS_RANGE.min}
+                  max={FAILURE_BAN_SECONDS_RANGE.max}
+                  step={1}
+                  required
+                  testId="protection-failure-ban-seconds"
+                  onChange={(banSeconds) =>
+                    setDraft({ ...draft, failureBan: { ...failure, banSeconds } })
+                  }
+                />
+              </div>
+            ) : null}
+          </FieldSet>
+          <FieldSet className="min-w-0 gap-0" data-testid="protection-challenge-text">
+            <FieldLegend variant="label" className="mb-3 text-muted-foreground">
+              {m.protection_challenge_text()}
+            </FieldLegend>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {CHALLENGE_TEXT_FIELDS.map(([key, label]) => (
+                <Field key={key} data-disabled={(v2Locked && !textsSet) || undefined}>
+                  <FieldLabel htmlFor={`protection-text-${key}`}>{label()}</FieldLabel>
+                  <Input
+                    id={`protection-text-${key}`}
+                    value={draft.challengeText[key]}
+                    maxLength={CHALLENGE_TEXT_MAX}
+                    placeholder={m.protection_challenge_text_default()}
+                    disabled={v2Locked && !textsSet}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        challengeText: { ...draft.challengeText, [key]: event.target.value },
+                      })
+                    }
+                    data-testid={`protection-text-${key}`}
+                  />
+                </Field>
+              ))}
+            </div>
+          </FieldSet>
         </CardContent>
         <SaveBar dirty={dirty} pending={pending} error={error} testId="protection-save" />
       </form>
