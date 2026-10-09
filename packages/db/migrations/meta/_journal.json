@@ -407,6 +407,13 @@
       "when": 1791461571207,
       "tag": "0057_g11_certificates_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1791515213421,
+      "tag": "0058_g12_access_auth",
+      "breakpoints": true
     }
   ]
 }

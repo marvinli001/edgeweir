@@ -299,6 +299,8 @@ export const site = pgTable(
     maintenance: jsonb("maintenance").$type<Record<string, unknown>>().notNull().default({}),
     /** When the maintenance settings were last saved; null until then. */
     maintenanceUpdatedAt: timestamp("maintenance_updated_at", { withTimezone: true }),
+    /** When the access authentication rules were last saved; null until then. */
+    authUpdatedAt: timestamp("auth_updated_at", { withTimezone: true }),
     /** Charset of text responses (contract `charsetSettings`); `{}` means off. */
     charset: jsonb("charset").$type<Record<string, unknown>>().notNull().default({}),
     /** Largest request body by Content-Length in bytes; 0 means no limit. */
@@ -343,6 +345,39 @@ export const siteSecret = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [uniqueIndex("site_secret_site_kind_uq").on(t.siteId, t.kind)],
+);
+
+/**
+ * A site's access authentication rules (ADR-0038), at most 16, in order
+ * (position 0-15). settings holds the kind's settings without secrets
+ * (Basic user names included); the secret (Basic users with their password
+ * hashes, URL signing keys) is envelope-encrypted with the master key
+ * (purpose site_auth_rule.secret_envelope, bound to the rule id), and only
+ * nodes of the site's cluster receive it, over the mTLS node channel
+ * (GetOriginCredentials).
+ */
+export const siteAuthRule = pgTable(
+  "site_auth_rule",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => site.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    /** basic, forward, url_a, url_b, url_c or url_d */
+    kind: text("kind").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    /** domains, pathPrefixes, extensions, excludePathPrefixes */
+    scope: jsonb("scope").$type<Record<string, unknown>>().notNull().default({}),
+    settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}),
+    /** JSON envelope of the rule's secret; null for forward rules. Never plaintext. */
+    secretEnvelope: text("secret_envelope"),
+    /** Bumped when the secret changes; part of the compiled configuration. */
+    secretVersion: integer("secret_version").notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("site_auth_rule_site_position_uq").on(t.siteId, t.position)],
 );
 
 /**
@@ -648,6 +683,8 @@ export const nodeMinuteStats = pgTable(
     wafRules: jsonb("waf_rules").$type<Record<string, number>>().notNull().default({}),
     /** Id of a rule with the log action → matched requests (bounded, heaviest first). */
     loggedRules: jsonb("logged_rules").$type<Record<string, number>>().notNull().default({}),
+    /** Requests access authentication refused (access-auth-v1). */
+    authFailures: bigint("auth_failures", { mode: "number" }).notNull().default(0),
   },
   (t) => [
     primaryKey({ columns: [t.minute, t.nodeId, t.siteId] }),
