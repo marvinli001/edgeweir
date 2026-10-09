@@ -167,6 +167,15 @@
 #   the g12-auth service (allow, 401 passed on, login redirect, copied
 #   headers, cached answers, 503 when unavailable or slow, allowed when the
 #   rule says so); failures counted; Playwright e2e/g12.spec.ts.
+#   Site parity G13 (scripts/e2e-g13.mjs, after G12): both nodes report
+#   access-control-v1; site block and allow lists (the allow list skipping
+#   geo); geo denial with the test MMDB (country, subdivision, allow only);
+#   hotlink (denied, allowed, own domain, empty, unparseable, cached
+#   objects, the 302 placeholder); user agents (allow first); CORS
+#   preflights answered at the edge (204, echoed Origin with credentials,
+#   Vary: Origin; 403 for other origins) and headers on cache hits;
+#   WebSocket origins; security headers on cache hits without Server and
+#   X-Powered-By; the IP check; Playwright e2e/g13.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -1261,6 +1270,14 @@ if ! $SKIP_UI; then
 fi
 node scripts/e2e-g12.mjs --cleanup || fail "G12 cleanup failed"
 pass "G12 checks passed"
+
+step "G13: site lists, geo, CORS, hotlink, user agents, WebSocket origins and security headers at the edge"
+node scripts/e2e-g13.mjs || fail "G13 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g13.spec.ts || fail "G13 browser checks failed"
+fi
+node scripts/e2e-g13.mjs --cleanup || fail "G13 cleanup failed"
+pass "G13 checks passed"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"

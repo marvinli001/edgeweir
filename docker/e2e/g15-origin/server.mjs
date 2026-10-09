@@ -6,6 +6,8 @@
 //   /text/<n>      n bytes of "a", text/plain (compression)
 //   /img           a few bytes as image/png (no charset added)
 //   /fail-a        502 on origin "a", 200 on the others (retries)
+//   /powered/...   X-Powered-By, X-Frame-Options and Access-Control-* headers
+//                  the edge removes or replaces (G13)
 //   POST /upload/..., POST /form   "received <bytes> bytes"
 //   anything else  "<name> <method> <path>", text/plain; charset=utf-8
 import http from "node:http";
@@ -53,6 +55,16 @@ http
     if (path === "/img") {
       res.setHeader("content-type", "image/png");
       res.end("png");
+      return;
+    }
+    // G13 (scripts/e2e-g13.mjs): headers the edge removes or replaces.
+    if (path.startsWith("/powered/")) {
+      res.setHeader("x-powered-by", "Express");
+      res.setHeader("x-frame-options", "ALLOWALL");
+      res.setHeader("access-control-allow-origin", "https://origin-set.example");
+      res.setHeader("access-control-allow-methods", "TRACE");
+      res.setHeader("content-type", "text/plain");
+      res.end(`${name} powered\n`);
       return;
     }
     if (path === "/fail-a" && name === "a") {
