@@ -137,9 +137,9 @@ export async function ingestLogs(
           .slice(0, MAX_WAF_RULE_IDS),
         wafBlocked: l.wafBlocked,
         requestId: REQUEST_ID_RE.test(l.requestId) ? l.requestId : "",
-        ruleIds: [...new Set(l.ruleIds.filter((id) => uuid.test(id)))]
-          .map((id) => id.toLowerCase())
-          .slice(0, MAX_LOG_RULE_IDS),
+        ruleIds: [
+          ...new Set(l.ruleIds.filter((id) => uuid.test(id)).map((id) => id.toLowerCase())),
+        ].slice(0, MAX_LOG_RULE_IDS),
       },
     ];
   });
