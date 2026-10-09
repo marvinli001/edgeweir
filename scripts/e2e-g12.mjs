@@ -435,8 +435,27 @@ try {
   assert.equal(`${missing.status} ${missing.headers["x-edgeweir-error"]}`, "403 auth-denied");
   assert.equal(`${expiredB.status} ${expiredB.headers["x-edgeweir-error"]}`, "403 auth-expired");
   assert.ok(Math.abs(Date.parse(a2.expiresAt) - Date.now() - 60_000) < 10_000, a2.expiresAt);
+  // Every kind, expired and wrong (D's rule: 600 s, no skew).
+  const oldD = now - 700;
+  const [expiredC, expiredD, wrongB, wrongC, wrongD] = await requests(
+    [
+      { path: `/${md5(`/c/doc.txt@${old}@${KEY}`)}/${old}/c/doc.txt` },
+      { path: `/d/doc.txt?sign=${md5(`/d/doc.txt@${oldD}@${KEY}`)}&t=${oldD}` },
+      { path: `/${now}/${md5(`/b/doc.txt@${now}@not-the-key-123456`)}/b/doc.txt` },
+      { path: `/${md5(`/c/doc.txt@${now}@not-the-key-123456`)}/${now}/c/doc.txt` },
+      { path: `/d/doc.txt?sign=${md5(`/d/doc.txt@${now}@not-the-key-123456`)}&t=${now}` },
+    ].map((r) => ({ target: "node-upgrade-peer", host: HOST.url, ...r })),
+  );
+  for (const [label, r, code] of [
+    ["C expired", expiredC, "auth-expired"],
+    ["D expired", expiredD, "auth-expired"],
+    ["B wrong", wrongB, "auth-denied"],
+    ["C wrong", wrongC, "auth-denied"],
+    ["D wrong", wrongD, "auth-denied"],
+  ])
+    assert.equal(`${r.status} ${r.headers["x-edgeweir-error"]}`, `403 ${code}`, label);
   pass(
-    `c. signed URLs signed by the console: A ${a1.url.replace(/[0-9a-f]{32}/, "…")}, B, C and D answer 200 on both nodes with the signature removed before the origin; another signature of the same URL is a cache HIT; expired 403 auth-expired, wrong key and none 403 auth-denied, the backup key accepted; a URL signed for 60 s expires at ${a2.expiresAt}`,
+    `c. signed URLs signed by the console: A ${a1.url.replace(/[0-9a-f]{32}/, "…")}, B, C and D answer 200 on both nodes with the signature removed before the origin; another signature of the same URL is a cache HIT; every kind expired 403 auth-expired and signed with another key 403 auth-denied, none 403 auth-denied, the backup key accepted; a URL signed for 60 s expires at ${a2.expiresAt}`,
   );
 
   // ---------------------------------------------------------------- d
