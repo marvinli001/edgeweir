@@ -2419,6 +2419,7 @@
   "node_feature_unknown_host_v1": "unknown host handling",
   "node_feature_multi_certificate_v1": "several certificates per site",
   "node_feature_client_cert_v1": "client certificates",
+  "node_feature_access_auth_v1": "access authentication",
   "https_blocker_no_certificate_names": "The site has only pattern domains: no name to issue for",
   "dns_pointing_unchecked": "Not checkable",
   "bans_reason_unknown_host_scan": "Unknown host scan",

@@ -2231,6 +2231,7 @@
   "node_feature_unknown_host_v1": "未知域名处理",
   "node_feature_multi_certificate_v1": "网站多证书",
   "node_feature_client_cert_v1": "客户端证书",
+  "node_feature_access_auth_v1": "访问鉴权",
   "https_blocker_no_certificate_names": "网站只有正则域名，没有可签发的名称",
   "dns_pointing_unchecked": "无法检查",
   "bans_reason_unknown_host_scan": "扫描未知域名",

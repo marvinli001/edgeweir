@@ -44,6 +44,7 @@ const ALL_FEATURES = [
   "domains-v2",
   "multi-certificate-v1",
   "client-cert-v1",
+  "access-auth-v1",
 ];
 
 /** A change without the operator behind it (service accounts, background jobs). */
@@ -145,6 +146,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       domainsV2: available,
       multiCertificate: available,
       clientCertificate: available,
+      accessAuth: available,
     });
     const https = await admin.https.get({ id: siteId });
     expect(https).toMatchObject({ brotli: false, brotliLevel: 6, zstd: false, zstdLevel: 3 });
@@ -306,6 +308,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       domainsV2: unavailable,
       multiCertificate: unavailable,
       clientCertificate: unavailable,
+      accessAuth: unavailable,
     });
     const before = (await config()).revision;
     for (const [call, feature] of [
