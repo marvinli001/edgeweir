@@ -406,6 +406,12 @@ message Site {
   // origins and idle timeout, security response headers (ADR-0039). Unset:
   // none of them. Added in v0.28.0 (feature access-control-v1).
   AccessControl access_control = 30;
+  // Largest request body, by Content-Length, the rules read (the
+  // http.request.body.* fields, form_value and json_value): 1024-1048576;
+  // 0 means 65536. Set only when the site's rules or the platform rules
+  // read the body; other requests and sites never read it. Added in v0.29.0
+  // (feature rules-body-v1).
+  uint32 rules_body_limit = 31;
 }
 
 // AuthKind is how an access authentication rule checks a request.
@@ -802,6 +808,29 @@ message SiteWaf {
   repeated uint32 excluded_rule_ids = 4;
   // Request body bytes inspected, 0-134217728; 0 inspects no body.
   uint32 request_body_limit = 5;
+  // Exclusions by path or by target, at most 100, in the site's order (the
+  // site-wide ones without targets are in excluded_rule_ids). Added in
+  // v0.29.0 (feature waf-v2).
+  repeated WafExclusion exclusions = 6;
+}
+
+// WafExclusion removes CRS rules for the requests of a path, or only some of
+// their targets. The node matches path against the client's normalized path
+// ($uri, before rewrites; a signed URL's signature removed): exact or as a
+// byte prefix; empty matches every path.
+message WafExclusion {
+  // Empty, or starting with "/", at most 1024 bytes, without "?", "#",
+  // whitespace or control characters.
+  string path = 1;
+  bool exact = 2;
+  // CRS rule ids (900000-999999, detection rules only), 1-200, sorted and
+  // unique.
+  repeated uint32 rule_ids = 3;
+  // Targets the rules no longer inspect (ctl:ruleRemoveTargetById), at most
+  // 16, sorted and unique: ARGS:<name>, REQUEST_COOKIES:<name> or
+  // REQUEST_HEADERS:<name>, names of 1-64 [A-Za-z0-9_.-[]] (headers:
+  // [A-Za-z0-9-]). Empty: the rules do not run (ctl:ruleRemoveById).
+  repeated string targets = 4;
 }
 
 // SiteProtection holds a site's challenge and CC mitigation settings.
@@ -822,6 +851,29 @@ message SiteProtection {
   CcPolicy cc = 6;
   // Record the JA4 fingerprint in sampled access logs (feature ja4-v1).
   bool log_ja4 = 7;
+  // Fields 8-11 were added in v0.29.0 (feature challenge-v2).
+  //
+  // Skip Under Attack (the site's and the platform's) and CC challenges for
+  // requests whose User-Agent claims a search engine crawler that the node
+  // verifies by reverse DNS of ip.src and a forward lookup of that name.
+  bool allow_verified_bots = 8;
+  // Title and hint of the site's challenge pages; unset or empty values keep
+  // the built-in text.
+  ChallengeText challenge_text = 9;
+  // Ban a client address (IPv4, IPv6 /64) of the site for
+  // failure_ban_seconds (60-86400) once it failed this many challenge
+  // answers within 600 seconds; 0 off, else 3-100.
+  uint32 failure_threshold = 10;
+  uint32 failure_ban_seconds = 11;
+}
+
+// ChallengeText is plain text (no control characters, at most 200
+// characters each); nodes escape it.
+message ChallengeText {
+  string title_zh = 1;
+  string hint_zh = 2;
+  string title_en = 3;
+  string hint_en = 4;
 }
 
 // CcPolicy raises the challenge level of a site or of attacked paths while
@@ -901,6 +953,15 @@ message ChallengeKeyRef {
 // Since v0.23.0 (feature client-ip-v1): field ip.peer (IP), the TCP (QUIC:
 // UDP) peer of the connection; ip.src is the client address the cluster's
 // ClientAddress setting resolves (equal to ip.peer without one).
+//
+// Since v0.29.0 (feature rules-body-v1): fields http.request.body.size
+// (number: Content-Length, -1 without), http.request.body.raw,
+// http.request.body.truncated (boolean) and http.request.body.filenames, and
+// functions form_value and json_value (one op "const" string argument: the
+// field name, the JSON path), in the request phases request-transform,
+// redirect, config, waf-custom, ratelimit and origin only. Feature
+// challenge-v2: fields http.request.bot.verified (boolean) and
+// http.request.bot.name, in the same phases.
 message RuleExpression {
   string op = 1;
   string field = 2;
@@ -978,6 +1039,38 @@ message RuleAction {
   // 0 no limit, at most 10737418240). Unset keeps the site's. Added in
   // v0.24.0 (feature site-content-v1).
   optional uint64 request_body_limit = 33;
+  // Fields 34-43 were added in v0.29.0 (feature waf-v2).
+  //
+  // Kind "ban" (phase waf-custom): ban ip.src, masked to ban_prefix_v4
+  // (16-32, 0 means 32) or ban_prefix_v6 (48-64, 0 means 64), for
+  // ban_seconds (60-604800) at ban_scope "site" (empty) or "platform"
+  // (platform rules only); the request gets 403 ip-banned. Kind
+  // "rate_limit": ban_seconds 0 (none) or 60-86400 bans the address over the
+  // limit at site scope.
+  uint32 ban_seconds = 34;
+  string ban_scope = 35;
+  uint32 ban_prefix_v4 = 36;
+  uint32 ban_prefix_v6 = 37;
+  // Kind "respond" (phase waf-custom): status_code 200, 204, 400-499 or
+  // 500-599, and either error_page (4xx and 5xx only: the site's error page
+  // of the status) or content_type (text/plain, text/html or
+  // application/json) with a static body of at most 8192 bytes (empty for
+  // 204).
+  string content_type = 38;
+  string body = 39;
+  bool error_page = 40;
+  // Kind "skip" (phase waf-custom): what the request skips, sorted and
+  // unique, at least one of rules (the remaining waf-custom rules of the
+  // rule's scope), rate_limits (platform rules: every rate limit; site
+  // rules: the site's), crs and challenges (Under Attack and CC challenges
+  // and CC address bans, like allow).
+  repeated string skip = 41;
+  // Kind "log": write an access log line for the request whatever the
+  // sample rate (at most 100 per site and second per node).
+  bool access_log = 42;
+  // Kind "config" (phase config only): the request's OWASP CRS mode, off,
+  // detect or block; empty keeps the site's. Sites without CRS ignore it.
+  string crs = 43;
 }
 
 // QueryParam is one query parameter a redirect or rewrite sets. name:

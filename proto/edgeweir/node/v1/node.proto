@@ -636,6 +636,9 @@ message AccessLog {
   // Request id the node answered with (X-Request-Id; the client's when it
   // was valid). Error pages show the same id. Added in v0.12.0.
   string request_id = 15;
+  // Rules with the log action that asked for this line (at most 8): such
+  // lines are written whatever the sample rate. Added in v0.29.0.
+  repeated string rule_ids = 16;
 }
 // ReportLogsRequest is an immutable, ordered batch from the private node spool.
 message ReportLogsRequest {
@@ -688,8 +691,9 @@ message Ban {
   // At most 7 days after created_at.
   google.protobuf.Timestamp expires_at = 5;
   BanSource source = 6;
-  // Reason code: abuse, attack, scanner, spam, other (manual), cc_ip_rate or
-  // unknown_host_scan (automatic).
+  // Reason code: abuse, attack, scanner, spam, other (manual), cc_ip_rate,
+  // unknown_host_scan or challenge_failures (automatic), waf_rule or
+  // rate_limit (made by a rule, BAN_SOURCE_AUTO; since v0.29.0).
   string reason = 7;
   google.protobuf.Timestamp created_at = 8;
 }
@@ -744,6 +748,9 @@ message AutoBan {
   // (UnknownHosts, reason unknown_host_scan); unspecified is
   // BAN_SCOPE_SITE. Added in v0.25.0.
   BanScope scope = 10;
+  // The rule of a ban made by a rule (reasons waf_rule and rate_limit: any
+  // prefix of 16-32 bits for IPv4 and 48-64 for IPv6). Added in v0.29.0.
+  string rule_id = 11;
 }
 
 // ReportBansRequest uploads automatic bans, at most 1000 per request.
