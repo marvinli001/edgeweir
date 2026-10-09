@@ -1,8 +1,11 @@
 import {
   type BanScope,
   banLookupCidr,
+  type SiteWaf,
+  WAF_MAX_EXCLUSION_ENTRIES,
   WAF_MAX_EXCLUSIONS,
   wafExcludedRuleIds,
+  wafExclusions,
 } from "@edgeweir/contract";
 import { MoreHorizontalIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -12,6 +15,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { BanDialog } from "@/components/ban-dialog";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
+import { ExclusionDialog } from "@/components/site/exclusion-dialog";
 import { ErrorState } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +29,12 @@ import { m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
 import { expandPurgeTargets } from "@/lib/purge";
 import { cn } from "@/lib/utils";
+import {
+  addExclusion,
+  type Exclusion,
+  siteWideRuleIds,
+  withSiteWideRuleIds,
+} from "@/lib/waf-exclusions";
 
 /**
  * Something done where the data is (a log row, a top list, an event, ⌘K): it runs in place in a
@@ -37,8 +47,10 @@ export type QuickAction =
   | { kind: "unban"; address: string; siteId: string }
   /** A URL purge; paths expand to the site's domains that are not wildcards. */
   | { kind: "purge"; targets: string[]; siteId?: string }
-  /** Adds a CRS rule to the site's exclusions. */
+  /** Adds a CRS rule to the site's exclusions for every path. */
   | { kind: "exclude-rule"; siteId: string; ruleId: number }
+  /** Excludes CRS rules on a path of the site (path and rules prefilled, both editable). */
+  | { kind: "exclude-path"; siteId: string; ruleIds: number[]; path?: string }
   /** Turns the site's Under Attack the other way. */
   | { kind: "under-attack"; siteId: string; siteName: string }
   /** Turns Under Attack for every site the other way. */
@@ -146,6 +158,8 @@ function QuickActionDialog({
       return <PurgeConfirm action={action} open={open} onOpenChange={onOpenChange} />;
     case "exclude-rule":
       return <ExcludeRuleConfirm action={action} open={open} onOpenChange={onOpenChange} />;
+    case "exclude-path":
+      return <ExcludePathDialog action={action} open={open} onOpenChange={onOpenChange} />;
     case "under-attack":
       return <UnderAttackConfirm action={action} open={open} onOpenChange={onOpenChange} />;
     case "platform-under-attack":
@@ -238,9 +252,42 @@ function PurgeConfirm({ action, open, onOpenChange }: DialogProps<"purge">) {
   );
 }
 
-function ExcludeRuleConfirm({ action, open, onOpenChange }: DialogProps<"exclude-rule">) {
+/**
+ * Saves the site's exclusions as `change` makes them from the ones saved now (the update replaces
+ * the whole list), unless nothing changes; the toast leads to the CRS card.
+ */
+function useSaveExclusions(siteId: string) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  return async (change: (list: Exclusion[]) => Exclusion[], done: string) => {
+    const waf = await client.waf.get({ id: siteId });
+    const next = change(waf.exclusions);
+    if (next.length > WAF_MAX_EXCLUSION_ENTRIES)
+      throw new Error(m.waf_exclusion_limit({ max: WAF_MAX_EXCLUSION_ENTRIES }));
+    if (!wafExclusions.safeParse(next).success)
+      throw new Error(m.waf_exclusions_invalid({ max: WAF_MAX_EXCLUSIONS }));
+    const saved: SiteWaf =
+      JSON.stringify(next) === JSON.stringify(waf.exclusions)
+        ? waf
+        : await client.waf.update({ id: siteId, exclusions: next });
+    queryClient.setQueryData(orpc.waf.get.queryKey({ input: { id: siteId } }), saved);
+    toast.success(done, {
+      action: {
+        label: m.waf_view(),
+        onClick: () =>
+          void navigate({
+            to: "/sites/$id",
+            params: { id: siteId },
+            search: { tab: "security" },
+            hash: "security-waf",
+          }),
+      },
+    });
+  };
+}
+
+function ExcludeRuleConfirm({ action, open, onOpenChange }: DialogProps<"exclude-rule">) {
+  const save = useSaveExclusions(action.siteId);
   const id = String(action.ruleId);
   return (
     <ControlledConfirmDialog
@@ -248,29 +295,35 @@ function ExcludeRuleConfirm({ action, open, onOpenChange }: DialogProps<"exclude
       onOpenChange={onOpenChange}
       title={m.quick_exclude_confirm({ id })}
       confirmLabel={m.waf_exclusions_add()}
-      onConfirm={async () => {
-        // The exclusions as saved now: the update replaces the whole list.
-        const waf = await client.waf.get({ id: action.siteId });
-        const next = [...new Set([...waf.excludedRuleIds, action.ruleId])].sort((a, b) => a - b);
-        if (!wafExcludedRuleIds.safeParse(next).success)
-          throw new Error(m.waf_exclusions_invalid({ max: WAF_MAX_EXCLUSIONS }));
-        const saved =
-          next.length === waf.excludedRuleIds.length
-            ? waf
-            : await client.waf.update({ id: action.siteId, excludedRuleIds: next });
-        queryClient.setQueryData(orpc.waf.get.queryKey({ input: { id: action.siteId } }), saved);
-        toast.success(m.quick_rule_excluded({ id }), {
-          action: {
-            label: m.waf_view(),
-            onClick: () =>
-              void navigate({
-                to: "/sites/$id",
-                params: { id: action.siteId },
-                search: { tab: "security" },
-                hash: "security-waf",
-              }),
-          },
-        });
+      onConfirm={() =>
+        // The rule joins the entry every path has (created when there is none).
+        save((list) => {
+          const ids = [...siteWideRuleIds(list), action.ruleId];
+          if (!wafExcludedRuleIds.safeParse([...new Set(ids)]).success)
+            throw new Error(m.waf_exclusions_invalid({ max: WAF_MAX_EXCLUSIONS }));
+          return withSiteWideRuleIds(list, ids);
+        }, m.quick_rule_excluded({ id }))
+      }
+    />
+  );
+}
+
+/** Excludes CRS rules on one path of the site: an entry of its own, or the rules join one. */
+function ExcludePathDialog({ action, open, onOpenChange }: DialogProps<"exclude-path">) {
+  const save = useSaveExclusions(action.siteId);
+  const features = useQuery(orpc.sites.features.queryOptions({ input: { id: action.siteId } }));
+  return (
+    <ExclusionDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={m.quick_exclude_path_title()}
+      submitLabel={m.waf_exclusions_add()}
+      initial={{ path: action.path ?? "", exact: false, ruleIds: action.ruleIds, targets: [] }}
+      requirePath
+      blocked={features.data?.wafV2.available === false}
+      onSubmit={async (entry) => {
+        await save((list) => addExclusion(list, entry), m.quick_path_excluded());
+        onOpenChange(false);
       }}
     />
   );

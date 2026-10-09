@@ -18,6 +18,7 @@ import {
   securityEventKind,
   WAF_ANOMALY_THRESHOLD_RANGE,
   WAF_BODY_LIMIT_RANGE,
+  WAF_MAX_EXCLUSION_ENTRIES,
   WAF_MAX_EXCLUSIONS,
   WAF_MODES,
   WAF_PARANOIA_RANGE,
@@ -25,7 +26,7 @@ import {
   type WafMode,
   wafExcludedRuleIds,
 } from "@edgeweir/contract";
-import { Cancel01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, Cancel01Icon, PencilEdit01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -43,6 +44,7 @@ import { Pager } from "@/components/pager";
 import { PresetSelect, presetLabel, usePreset } from "@/components/preset-select";
 import { RowMenu, type RowMenuItem } from "@/components/quick-actions";
 import { SafetyNote } from "@/components/safety-note";
+import { ExclusionDialog } from "@/components/site/exclusion-dialog";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, EmptyState, QueryView } from "@/components/states";
@@ -50,9 +52,10 @@ import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { useDialogState } from "@/hooks/use-dialog-state";
 import { useDraft } from "@/hooks/use-draft";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { ANALYTICS_RANGES, rangeLabel } from "@/lib/analytics";
@@ -65,6 +68,15 @@ import {
   metricLabel,
   wafModeLabel,
 } from "@/lib/protection";
+import {
+  type Exclusion,
+  isSiteWide,
+  needsWafV2,
+  parseRuleIds,
+  siteWideRuleIds,
+  unexcludable,
+  withSiteWideRuleIds,
+} from "@/lib/waf-exclusions";
 
 const PAGE_SIZE = 20;
 const ALL = "all";
@@ -508,6 +520,7 @@ function WafCard({ siteId }: { siteId: string }) {
             siteId={siteId}
             waf={saved}
             availability={available.crs}
+            wafV2={available.wafV2}
           />
         )}
       </QueryView>
@@ -515,21 +528,17 @@ function WafCard({ siteId }: { siteId: string }) {
   );
 }
 
-/** "942100, 920350 941100" → sorted unique ids, or null when a token is not a CRS rule id. */
-function parseRuleIds(value: string): number[] | null {
-  const tokens = value.split(/[\s,]+/).filter(Boolean);
-  if (!tokens.every((token) => /^\d{6}$/.test(token))) return null;
-  return tokens.map(Number);
-}
-
 function WafForm({
   siteId,
   waf,
   availability,
+  wafV2,
 }: {
   siteId: string;
   waf: SiteWaf;
   availability: FeatureAvailability;
+  /** Exclusions by path or target (waf-v2). */
+  wafV2: FeatureAvailability;
 }) {
   const queryClient = useQueryClient();
   const mutation = useMutation(orpc.waf.update.mutationOptions());
@@ -538,7 +547,7 @@ function WafForm({
     paranoiaLevel: String(waf.paranoiaLevel),
     anomalyThreshold: String(waf.anomalyThreshold),
     requestBodyLimit: String(waf.requestBodyLimit),
-    excludedRuleIds: waf.excludedRuleIds,
+    exclusions: waf.exclusions,
   };
   const [draft, setDraft] = React.useState(initial);
   const preset = usePreset(
@@ -561,25 +570,24 @@ function WafForm({
   const [error, setError] = React.useState<string | null>(null);
   // Turning CRS on needs the feature; a site that runs it can still be turned off.
   const locked = !availability.available && waf.mode === "off";
-  const invalidRules = () => m.waf_exclusions_invalid({ max: WAF_MAX_EXCLUSIONS });
+  // The rules every path skips: the site-wide entry, edited as chips.
+  const siteWide = siteWideRuleIds(draft.exclusions);
   const addRules = () => {
     const ids = parseRuleIds(ruleInput);
-    const next = ids
-      ? [...new Set([...draft.excludedRuleIds, ...ids])].sort((a, b) => a - b)
-      : null;
+    const next = ids ? [...new Set([...siteWide, ...ids])] : null;
     if (!next || !wafExcludedRuleIds.safeParse(next).success) {
-      setRuleError(invalidRules());
+      setRuleError(m.waf_exclusions_invalid({ max: WAF_MAX_EXCLUSIONS }));
       return;
     }
     // Setup and evaluation rules would turn blocking off: the server refuses them too.
-    const refused = (ids ?? []).filter((id) => !crsDetectionRule(id));
+    const refused = unexcludable(ids ?? []);
     if (refused.length) {
       setRuleError(m.error_waf_rule_not_excludable({ ids: refused.join(", ") }));
       return;
     }
     setRuleError(null);
     setRuleInput("");
-    setDraft({ ...draft, excludedRuleIds: next });
+    setDraft({ ...draft, exclusions: withSiteWideRuleIds(draft.exclusions, next) });
   };
   return (
     <form
@@ -594,7 +602,7 @@ function WafForm({
             paranoiaLevel: Number(draft.paranoiaLevel),
             anomalyThreshold: Number(draft.anomalyThreshold),
             requestBodyLimit: Number(draft.requestBodyLimit),
-            excludedRuleIds: draft.excludedRuleIds,
+            exclusions: draft.exclusions,
           });
           queryClient.setQueryData(orpc.waf.get.queryKey({ input: { id: siteId } }), saved);
           toast.success(m.common_saved());
@@ -687,10 +695,10 @@ function WafForm({
           {ruleError ? (
             <FieldError data-testid="waf-exclusion-error">{ruleError}</FieldError>
           ) : null}
-          {draft.excludedRuleIds.length ? (
+          {siteWide.length ? (
             <ul className="flex flex-wrap gap-1.5" data-testid="waf-exclusions">
-              {draft.excludedRuleIds.map((id) => (
-                <li key={id}>
+              {siteWide.map((id) => (
+                <li key={id} className="animate-in fade-in">
                   <Badge
                     variant="outline"
                     className="gap-1 font-mono tabular-nums"
@@ -706,7 +714,10 @@ function WafForm({
                       onClick={() =>
                         setDraft({
                           ...draft,
-                          excludedRuleIds: draft.excludedRuleIds.filter((rule) => rule !== id),
+                          exclusions: withSiteWideRuleIds(
+                            draft.exclusions,
+                            siteWide.filter((rule) => rule !== id),
+                          ),
                         })
                       }
                     >
@@ -718,6 +729,11 @@ function WafForm({
             </ul>
           ) : null}
         </Field>
+        <ExclusionEntries
+          exclusions={draft.exclusions}
+          wafV2={wafV2}
+          onChange={(exclusions) => setDraft({ ...draft, exclusions })}
+        />
         {availability.available ? null : (
           <SafetyNote data-testid="waf-unavailable" data-reason={availability.reason ?? undefined}>
             {m.feature_unavailable_nodes()}
@@ -731,6 +747,161 @@ function WafForm({
         testId="waf-save"
       />
     </form>
+  );
+}
+
+/** Where an exclusion applies: its path and match, or the whole site. */
+function exclusionScope(entry: Exclusion): string {
+  return entry.path === "" ? m.waf_exclusion_whole_site() : entry.path;
+}
+
+/**
+ * The exclusions besides the site-wide rule ids: by path (prefix or exact) and by target, each
+ * edited in a dialog. Without waf-v2 on the cluster's nodes, new ones wait (the line says so);
+ * saved ones can still be edited or removed.
+ */
+function ExclusionEntries({
+  exclusions,
+  wafV2,
+  onChange,
+}: {
+  exclusions: Exclusion[];
+  wafV2: FeatureAvailability;
+  onChange: (exclusions: Exclusion[]) => void;
+}) {
+  // The site-wide entry's ids are the chips above; every other entry is a row here.
+  const chips = exclusions.findIndex(isSiteWide);
+  const rows = exclusions.flatMap((entry, index) => (index === chips ? [] : [{ entry, index }]));
+  // Which entry the dialog edits (null: a new one).
+  const dialog = useDialogState<number | null>();
+  const full = exclusions.length >= WAF_MAX_EXCLUSION_ENTRIES;
+  const editing = dialog.value === undefined || dialog.value === null ? null : dialog.value;
+  return (
+    <FieldSet className="min-w-0 gap-2" data-testid="waf-exclusion-entries">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <FieldLegend variant="label" className="mb-0">
+          {m.waf_exclusion_entries()}
+        </FieldLegend>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={!wafV2.available || full}
+          onClick={() => dialog.show(null)}
+          data-testid="waf-exclusion-entry-add"
+        >
+          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+          {m.waf_exclusion_add()}
+        </Button>
+      </div>
+      {rows.length ? (
+        <ul className="divide-y divide-border/70 rounded-2xl sunk-well">
+          {rows.map(({ entry, index }, i) => (
+            <li
+              key={`${index}-${entry.path}`}
+              className="flex min-w-0 items-start gap-3 px-3 py-2.5 animate-enter"
+              style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}
+              data-testid="waf-exclusion-entry"
+              data-path={entry.path}
+            >
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                  <span
+                    className={
+                      entry.path === ""
+                        ? "text-sm font-medium"
+                        : "min-w-0 font-mono text-sm break-all"
+                    }
+                    data-testid="waf-exclusion-entry-path"
+                  >
+                    {exclusionScope(entry)}
+                  </span>
+                  {entry.path === "" ? null : (
+                    <Badge variant="outline" data-testid="waf-exclusion-entry-match">
+                      {entry.exact ? m.waf_exclusion_exact() : m.waf_exclusion_prefix()}
+                    </Badge>
+                  )}
+                </div>
+                <span
+                  className="font-mono text-xs break-all text-muted-foreground tabular-nums"
+                  data-testid="waf-exclusion-entry-rules"
+                >
+                  {entry.ruleIds.join(" ")}
+                </span>
+                {entry.targets.length ? (
+                  <span
+                    className="font-mono text-xs break-all text-muted-foreground"
+                    data-testid="waf-exclusion-entry-targets"
+                  >
+                    {entry.targets.join(" ")}
+                  </span>
+                ) : null}
+              </div>
+              <div className="-my-1 flex shrink-0 items-center">
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={m.waf_exclusion_edit()}
+                  onClick={() => dialog.show(index)}
+                  data-testid="waf-exclusion-entry-edit"
+                >
+                  <HugeiconsIcon icon={PencilEdit01Icon} strokeWidth={2} />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={m.waf_exclusion_remove({ path: exclusionScope(entry) })}
+                  onClick={() => onChange(exclusions.filter((_, at) => at !== index))}
+                  data-testid="waf-exclusion-entry-remove"
+                >
+                  <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {wafV2.available ? null : (
+        <SafetyNote
+          className="animate-in fade-in"
+          data-testid="waf-exclusion-entries-unavailable"
+          data-reason={wafV2.reason ?? undefined}
+        >
+          {m.feature_unavailable_nodes()}
+        </SafetyNote>
+      )}
+      {dialog.value !== undefined ? (
+        <ExclusionDialog
+          key={dialog.key}
+          open={dialog.open}
+          onOpenChange={dialog.onOpenChange}
+          title={editing === null ? m.waf_exclusion_add() : m.waf_exclusion_edit()}
+          submitLabel={m.common_confirm()}
+          initial={
+            (editing === null ? undefined : exclusions[editing]) ?? {
+              path: "",
+              exact: false,
+              ruleIds: [],
+              targets: [],
+            }
+          }
+          blocked={
+            // A saved entry by path stays editable; new ones wait for waf-v2.
+            !wafV2.available && (editing === null || !needsWafV2(exclusions[editing] as Exclusion))
+          }
+          onSubmit={async (entry) => {
+            onChange(
+              editing === null
+                ? [...exclusions, entry]
+                : exclusions.map((existing, at) => (at === editing ? entry : existing)),
+            );
+            dialog.onOpenChange(false);
+          }}
+        />
+      ) : null}
+    </FieldSet>
   );
 }
 
@@ -770,6 +941,12 @@ function WafRulesCard({ siteId }: { siteId: string }) {
                       {
                         label: m.quick_exclude_rule({ id: value }),
                         action: { kind: "exclude-rule", siteId, ruleId: Number(value) },
+                        testId: "waf-top-exclude-rule",
+                      },
+                      {
+                        label: m.quick_exclude_path(),
+                        action: { kind: "exclude-path", siteId, ruleIds: [Number(value)] },
+                        testId: "waf-top-exclude-path",
                       },
                     ]
                   : []

@@ -18,6 +18,7 @@ import { m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 import { requestUrl } from "@/lib/purge";
 import { cn } from "@/lib/utils";
+import { exclusionPath } from "@/lib/waf-exclusions";
 
 const localTime = (date: Date) =>
   new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -213,9 +214,11 @@ const LABELLED =
 /**
  * Sampled requests in a well: a sticky header, rows rendered only while they are in view
  * (TanStack Virtual, rows measured as they wrap), machine values in monospace. The request's id,
- * JA4 fingerprint and CRS matches sit under the request, so the table keeps its width.
+ * JA4 fingerprint, CRS matches and the log rules that wrote the line sit under the request, so the
+ * table keeps its width.
  */
 function LogTable({ entries, siteId }: { entries: LogEntry[]; siteId: string }) {
+  const ruleName = useRuleNames(siteId, entries);
   const scroller = React.useRef<HTMLElement>(null);
   const virtualizer = useVirtualizer({
     count: entries.length,
@@ -295,7 +298,11 @@ function LogTable({ entries, siteId }: { entries: LogEntry[]; siteId: string }) 
                     <span className="text-muted-foreground">{row.method}</span> {row.host}
                     {row.path}
                   </span>
-                  {row.requestId || row.ja4 || row.wafBlocked || row.wafRuleIds.length > 0 ? (
+                  {row.requestId ||
+                  row.ja4 ||
+                  row.wafBlocked ||
+                  row.wafRuleIds.length > 0 ||
+                  row.ruleIds.length > 0 ? (
                     <span className="flex flex-wrap items-center gap-x-3 gap-y-1 font-sans text-muted-foreground">
                       {/* The id the node answered with (X-Request-Id, also on error pages). */}
                       {row.requestId ? (
@@ -331,6 +338,31 @@ function LogTable({ entries, siteId }: { entries: LogEntry[]; siteId: string }) 
                               {id}
                             </span>
                           ))}
+                        </span>
+                      ) : null}
+                      {/* Log rules that wrote this line whatever the sample rate. */}
+                      {row.ruleIds.length > 0 ? (
+                        <span
+                          className="flex min-w-0 flex-wrap items-center gap-1.5"
+                          data-testid="log-rules"
+                        >
+                          {m.logs_rules()}
+                          {row.ruleIds.map((id) => {
+                            const name = ruleName(id);
+                            return (
+                              <span
+                                key={id}
+                                className={cn(
+                                  "min-w-0 break-all text-foreground",
+                                  name === null && "font-mono",
+                                )}
+                                data-testid="log-rule"
+                                data-rule-id={id}
+                              >
+                                {name ?? id}
+                              </span>
+                            );
+                          })}
                         </span>
                       ) : null}
                     </span>
@@ -401,6 +433,21 @@ function LogTable({ entries, siteId }: { entries: LogEntry[]; siteId: string }) 
                         action: { kind: "exclude-rule" as const, siteId, ruleId },
                         testId: "log-exclude-rule",
                       })),
+                      // The request's path, with every rule it matched that can be excluded.
+                      ...(row.wafRuleIds.some(crsDetectionRule)
+                        ? [
+                            {
+                              label: m.quick_exclude_path(),
+                              action: {
+                                kind: "exclude-path" as const,
+                                siteId,
+                                ruleIds: row.wafRuleIds.filter(crsDetectionRule),
+                                path: exclusionPath(row.path),
+                              },
+                              testId: "log-exclude-path",
+                            },
+                          ]
+                        : []),
                     ]}
                   />
                 </td>
@@ -411,4 +458,28 @@ function LogTable({ entries, siteId }: { entries: LogEntry[]; siteId: string }) 
       </table>
     </section>
   );
+}
+
+/**
+ * Names of the log rules lines name (the site's own, platform rules marked), or null for a rule
+ * that is gone or not loaded yet; read only when a line names one.
+ */
+function useRuleNames(siteId: string, entries: LogEntry[]) {
+  const named = entries.some((entry) => entry.ruleIds.length > 0);
+  const own = useQuery({
+    ...orpc.rules.get.queryOptions({ input: { id: siteId } }),
+    enabled: named,
+  });
+  const platform = useQuery({ ...orpc.platformRules.get.queryOptions(), enabled: named });
+  const names = React.useMemo(
+    () =>
+      new Map<string, string>([
+        ...(platform.data ?? []).map(
+          (rule) => [rule.id, m.rules_logged_platform({ name: rule.name })] as const,
+        ),
+        ...(own.data ?? []).map((rule) => [rule.id, rule.name] as const),
+      ]),
+    [own.data, platform.data],
+  );
+  return (id: string): string | null => names.get(id) ?? null;
 }
