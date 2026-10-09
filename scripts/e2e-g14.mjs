@@ -24,7 +24,9 @@
 //      X-Edgeweir-*
 //   e. body fields on g14-body (limit 1024): a JSON field, a form field and a
 //      multipart file name block (403); harmless bodies reach the origin
-//      whole; a body over the limit is truncated (422 from a respond rule)
+//      whole; a body over the limit is truncated (422 from a respond rule);
+//      a POST whose body stalls is answered at once on g14-act (its rules
+//      reference no body field, so the node reads none) while g14-body waits
 //   f. rate limit ban on g14-rate: the 4th request 429, the next 403
 //      ip-banned; the ban list shows reason rate_limit with the rule
 //   g. crawlers on g14-bots (node-g14, Under Attack js, verified crawlers
@@ -183,6 +185,36 @@ process.stdin.on("data", (d) => (input += d)).on("end", async () => {
 const requests = async (list, client = "client-a") =>
   list.length ? JSON.parse(await nodeIn(client, REQUESTS, JSON.stringify(list))) : [];
 const request = async (r, client = "client-a") => (await requests([r], client))[0];
+/**
+ * A POST whose body stops after 10 of its Content-Length bytes: the headers and those bytes are
+ * sent, the rest never. Resolves with the status of a response that arrives within `waitMs`
+ * (0 when none does) and how long it took; a node that reads the body waits for the rest.
+ */
+const STALLED = `
+const net = require("node:net");
+let input = "";
+process.stdin.on("data", (d) => (input += d)).on("end", () => {
+  const r = JSON.parse(input);
+  const started = Date.now();
+  let data = "";
+  const finish = () => {
+    const m = /^HTTP\\/1\\.1 (\\d{3})/.exec(data);
+    process.stdout.write(JSON.stringify({ status: m ? Number(m[1]) : 0, ms: Date.now() - started }));
+    socket.destroy();
+    process.exit(0);
+  };
+  const socket = net.connect(80, r.target, () => {
+    socket.write("POST " + r.path + " HTTP/1.1\\r\\nHost: " + r.host + "\\r\\nContent-Type: " + r.type +
+      "\\r\\nContent-Length: 512\\r\\nConnection: close\\r\\n\\r\\n" + "x".repeat(10));
+  });
+  socket.on("data", (d) => {
+    data += d;
+    if (data.includes("\\r\\n\\r\\n")) finish();
+  });
+  socket.on("error", finish);
+  setTimeout(finish, r.waitMs);
+});`;
+const stalled = async (r) => JSON.parse(await nodeIn("client-a", STALLED, JSON.stringify(r)));
 const summary = (r) =>
   `${r.status} ${r.headers["x-edgeweir-error"] ?? "-"}${r.error ? ` ${r.error}` : ""}`;
 /** Asserts status (and X-Edgeweir-Error) of a request on both nodes. */
@@ -569,8 +601,40 @@ try {
     assert.equal(truncated.status, 422, `${target} truncated: ${summary(truncated)}`);
     assert.equal(truncated.body, "truncated");
   }
+  // Bodies that never finish: g14-act's rules reference no body field, so the node answers
+  // before the body arrives; g14-body's rules read it, so the node waits for the rest.
+  const unread = [];
+  const waited = [];
+  for (const target of NODES) {
+    const act = await stalled({
+      target,
+      host: HOST.act,
+      path: "/teapot",
+      type: "text/plain",
+      waitMs: 3000,
+    });
+    assert.equal(
+      act.status,
+      418,
+      `${target} g14-act answers without the body: ${JSON.stringify(act)}`,
+    );
+    unread.push(act.ms);
+    const read = await stalled({
+      target,
+      host: HOST.body,
+      path: "/form",
+      type: "application/json",
+      waitMs: 3000,
+    });
+    assert.equal(
+      read.status,
+      0,
+      `${target} g14-body must wait for the body: ${JSON.stringify(read)}`,
+    );
+    waited.push(read.ms);
+  }
   pass(
-    "e. g14-body (limit 1024) on both nodes: JSON cmd=rm, form user=admin and a .php upload 403; the harmless bodies reached the origin whole; a 2 KB body counts as truncated (422)",
+    `e. g14-body (limit 1024) on both nodes: JSON cmd=rm, form user=admin and a .php upload 403; the harmless bodies reached the origin whole; a 2 KB body counts as truncated (422); a POST stalled after 10 of 512 body bytes: g14-act (no body fields) answered 418 in ${unread.join(" / ")} ms, g14-body (json_value) still waiting after ${waited.join(" / ")} ms`,
   );
 
   // ---------------------------------------------------------------- f
