@@ -197,6 +197,9 @@ const core: Fixtures = {
         clientCertificate: on,
         accessAuth: on,
         accessControl: on,
+        wafV2: on,
+        rulesBody: on,
+        challengeV2: on,
       };
     },
   },

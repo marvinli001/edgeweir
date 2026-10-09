@@ -17,7 +17,7 @@ import {
   type Site,
   type SiteDelivery,
 } from "@edgeweir/contract";
-import { cacheConditionExpression } from "@edgeweir/rule-engine";
+import { cacheConditionExpression, RULES_BODY_LIMIT } from "@edgeweir/rule-engine";
 
 export const NOW = Date.now();
 export const MINUTE = 60_000;
@@ -837,6 +837,7 @@ const CACHE_SETTINGS: Record<string, Partial<Site["cacheSettings"]>> = {
 const DEFAULT_CONTENT_SETTINGS: Site["contentSettings"] = {
   charset: { name: "off", force: false, uppercase: false },
   requestBodyLimit: DEFAULT_REQUEST_BODY_LIMIT,
+  rulesBodyLimit: RULES_BODY_LIMIT.default,
 };
 
 const CONTENT_SETTINGS: Record<string, Site["contentSettings"]> = {
@@ -844,12 +845,15 @@ const CONTENT_SETTINGS: Record<string, Site["contentSettings"]> = {
   "shop.example.com": {
     charset: { name: "utf-8", force: false, uppercase: false },
     requestBodyLimit: 20 * 1024 * 1024,
+    // Login and checkout forms are small; rules read up to 128 KiB of them.
+    rulesBodyLimit: 128 * 1024,
   },
   "api.example.com": { ...DEFAULT_CONTENT_SETTINGS, requestBodyLimit: 10 * 1024 * 1024 },
   // The old CMS sends pages without a charset.
   "legacy.example.org": {
     charset: { name: "gb18030", force: true, uppercase: true },
     requestBodyLimit: DEFAULT_REQUEST_BODY_LIMIT,
+    rulesBodyLimit: RULES_BODY_LIMIT.default,
   },
 };
 

@@ -684,32 +684,61 @@ interface BanSeed {
   by?: Ban["createdBy"];
   distributed?: boolean;
   unappliedNodes?: number;
+  /** The rule of a ban a rule made (its name null once deleted). */
+  rule?: NonNullable<Ban["rule"]>;
+  /** A rate limit's window, or the challenge failures' 10 minutes. */
+  windowSeconds?: number;
 }
 
+/** Bans the nodes make on their own: automatic mitigation, and rules (waf-v2). */
+const AUTO_REASONS: readonly Ban["reason"][] = [
+  "cc_ip_rate",
+  "unknown_host_scan",
+  "challenge_failures",
+];
+const RULE_REASONS: readonly Ban["reason"][] = ["waf_rule", "rate_limit"];
+
+/**
+ * Ids of shop.example.com's rules by position, and of the platform rules (as sites-detail.ts
+ * `rules()` gives them): the shop's base is its place among the sites times 100.
+ */
+const shopRule = (index: number) =>
+  id(10, (sites.findIndex((s) => s.name === "shop.example.com") + 1) * 100 + index + 1);
+const platformRule = (index: number) => id(10, 0x1000 + index + 1);
+
 function banOf(seed: BanSeed, n: number): Omit<Ban, "seq"> {
-  const auto = seed.reason === "cc_ip_rate";
+  const source = AUTO_REASONS.includes(seed.reason)
+    ? "auto"
+    : RULE_REASONS.includes(seed.reason)
+      ? "rule"
+      : "manual";
+  const fromNode = source !== "manual";
   const parsed = parseBanCidr(seed.cidr);
   if (!parsed.ok) throw new Error(`lab: bad ban ${seed.cidr}`);
   const site = seed.site ? siteNamed(seed.site) : null;
   const node = seed.node ? nodeNamed(seed.node) : null;
+  // What the nodes name their triggers: CC counts per address, the others after the reason.
+  const metric = seed.reason === "cc_ip_rate" ? "ip_qps" : seed.reason;
   return {
     id: id(23, n),
     scope: site ? "site" : "platform",
     cidr: parsed.text,
     reason: seed.reason,
-    source: auto ? "auto" : "manual",
+    source,
     siteId: site?.id ?? null,
     siteName: site?.name ?? null,
-    node: auto && node ? { id: node.id, name: node.name } : null,
-    trigger: auto
+    node: fromNode && node ? { id: node.id, name: node.name } : null,
+    trigger: fromNode
       ? {
-          metric: "ip_qps",
+          metric,
           observed: seed.observed ?? 0,
-          threshold: seed.threshold ?? ccTemplate.ipQps,
-          windowSeconds: ccTemplate.windowSeconds,
+          threshold: seed.threshold ?? (seed.reason === "cc_ip_rate" ? ccTemplate.ipQps : 0),
+          windowSeconds: seed.windowSeconds ?? ccTemplate.windowSeconds,
+          ...(seed.rule ? { ruleId: seed.rule.id } : {}),
         }
       : null,
-    createdBy: auto ? null : (seed.by ?? OPERATOR),
+    rule: seed.rule ?? null,
+    createdBy: fromNode ? null : (seed.by ?? OPERATOR),
     createdAt: ago(seed.at),
     expiresAt: ago(seed.at - seed.duration * SECOND),
     distributed: seed.distributed ?? true,
@@ -821,6 +850,62 @@ const banSeeds: BanSeed[] = [
     site: "auth.example.net",
   },
   { cidr: "2001:db8:dead::/48", at: 5 * DAY, duration: 7 * 86_400, reason: "other" },
+  // Rules of shop.example.com: the ban action and the login rate limit's ban over the limit.
+  {
+    cidr: "198.51.100.177",
+    at: 52 * MINUTE,
+    duration: 21_600,
+    reason: "waf_rule",
+    site: "shop.example.com",
+    node: "tyo-edge-02",
+    windowSeconds: 0,
+    rule: { id: shopRule(28), name: "Credential stuffing", platform: false },
+  },
+  {
+    cidr: "203.0.113.61",
+    at: 17 * MINUTE,
+    duration: 3_600,
+    reason: "rate_limit",
+    site: "shop.example.com",
+    node: "sin-edge-01",
+    observed: 46,
+    threshold: 20,
+    windowSeconds: 60,
+    rule: { id: shopRule(16), name: "Login attempts", platform: false },
+  },
+  // A rule deleted since it banned.
+  {
+    cidr: "2001:db8:5c::/64",
+    at: 3 * HOUR,
+    duration: 86_400,
+    reason: "waf_rule",
+    site: "shop.example.com",
+    node: "tyo-edge-01",
+    windowSeconds: 0,
+    rule: { id: id(11, 2), name: null, platform: false },
+  },
+  // The platform's scanner rule bans a /24 everywhere.
+  {
+    cidr: "192.0.2.0/24",
+    at: 2 * HOUR,
+    duration: 7 * 86_400,
+    reason: "waf_rule",
+    node: "fra-edge-02",
+    windowSeconds: 0,
+    rule: { id: platformRule(8), name: "Mass scanners", platform: true },
+  },
+  // Failed the shop's challenge eight times in ten minutes.
+  {
+    cidr: "198.51.100.150",
+    at: 26 * MINUTE,
+    duration: 1_800,
+    reason: "challenge_failures",
+    site: "shop.example.com",
+    node: "tyo-edge-01",
+    observed: 8,
+    threshold: 8,
+    windowSeconds: 600,
+  },
 ];
 
 /** Active bans, newest first, with change sequence numbers in creation order. */

@@ -12,7 +12,9 @@ import {
   type CcThresholds,
   type CertificateDto,
   CHALLENGE_PRESETS,
+  CHALLENGE_TEXT_DEFAULTS,
   DEFAULT_COMPRESSION_TYPES,
+  FAILURE_BAN_DEFAULTS,
   type HttpsCheck,
   type LogEntry,
   type LoggedRules,
@@ -193,7 +195,7 @@ const SHOP_RULES: RuleSeed[] = [
     "Cart writes",
     "waf-custom",
     'http.request.uri.path eq "/api/v2/cart" and http.request.method in {"POST" "PUT" "DELETE"}',
-    { kind: "log" },
+    { kind: "log", accessLog: true },
   ],
   [
     "Suspicious user agents",
@@ -223,7 +225,14 @@ const SHOP_RULES: RuleSeed[] = [
     "Login attempts",
     "ratelimit",
     'http.request.uri.path eq "/account/login" and http.request.method eq "POST"',
-    { kind: "rate_limit", statusCode: 429, limit: 20, windowSeconds: 60, key: "ip.src" },
+    {
+      kind: "rate_limit",
+      statusCode: 429,
+      limit: 20,
+      windowSeconds: 60,
+      key: "ip.src",
+      banSeconds: 3_600,
+    },
   ],
   [
     "Cart API",
@@ -305,6 +314,61 @@ const SHOP_RULES: RuleSeed[] = [
     "compression",
     'http.response.content_type.media_type eq "application/json"',
     { kind: "compression", algorithms: ["br", "gzip"] },
+  ],
+  // G14: WAF actions, the request body, verified crawlers and the CRS override.
+  [
+    "Admin uploads in detect mode",
+    "config",
+    'starts_with(http.request.uri.path, "/admin/upload")',
+    { kind: "config", crs: "detect" },
+  ],
+  [
+    "Monitoring",
+    "waf-custom",
+    'ip.src in {198.51.100.10} and http.request.uri.path eq "/healthz"',
+    { kind: "skip", skip: ["challenges", "crs", "rate_limits"] },
+  ],
+  [
+    "Credential stuffing",
+    "waf-custom",
+    'http.request.uri.path eq "/account/login" and form_value("username") eq "admin"',
+    {
+      kind: "ban",
+      banSeconds: 21_600,
+      banScope: "site",
+      banPrefixV4: 32,
+      banPrefixV6: 64,
+    },
+  ],
+  [
+    "Script uploads",
+    "waf-custom",
+    'http.request.body.filenames contains ".php"',
+    {
+      kind: "respond",
+      statusCode: 415,
+      contentType: "application/json",
+      body: '{"error":"unsupported_upload"}',
+      errorPage: false,
+    },
+  ],
+  [
+    "Legacy API retired",
+    "waf-custom",
+    'starts_with(http.request.uri.path, "/api/v0/")',
+    { kind: "respond", statusCode: 410, contentType: "text/plain", body: "", errorPage: true },
+  ],
+  [
+    "Repository probes",
+    "waf-custom",
+    'starts_with(http.request.uri.path, "/.git/")',
+    { kind: "close" },
+  ],
+  [
+    "Verified crawlers",
+    "waf-custom",
+    "http.request.bot.verified eq true",
+    { kind: "log", accessLog: true },
   ],
 ];
 
@@ -454,6 +518,12 @@ const PLATFORM_RULE_SEEDS: RuleSeed[] = [
     { kind: "config", logSampleRate: 100 },
   ],
   [
+    "Mass scanners",
+    "waf-custom",
+    'http.user_agent contains "masscan" or http.user_agent contains "zgrab"',
+    { kind: "ban", banSeconds: 604_800, banScope: "platform", banPrefixV4: 24, banPrefixV6: 48 },
+  ],
+  [
     "Edge request id",
     "response-transform",
     "true",
@@ -537,7 +607,11 @@ function wafTopRules(site: Site, range: AnalyticsRange, limit: number): WafTopRu
   const waf = wafOf(site);
   if (waf.mode === "off") return { approximate: true, items: [] };
   const v = volume(range, site.id);
-  const items = CRS_MATCHES.filter(([ruleId]) => !waf.excludedRuleIds.includes(ruleId))
+  // Rules every path skips no longer match; those excluded on a path still do elsewhere.
+  const skipped = waf.exclusions
+    .filter((e) => e.path === "" && e.targets.length === 0)
+    .flatMap((e) => e.ruleIds);
+  const items = CRS_MATCHES.filter(([ruleId]) => !skipped.includes(ruleId))
     .map(([ruleId, normal, attack]) => ({
       ruleId,
       requests: count(v, normal * (waf.paranoiaLevel > 1 ? 1.8 : 1), attack),
@@ -552,14 +626,20 @@ function wafTopRules(site: Site, range: AnalyticsRange, limit: number): WafTopRu
 // CRS and protection
 
 function wafOf(site: Site): SiteWaf {
-  const base = { siteId: site.id, ...WAF_DEFAULTS, excludedRuleIds: [], updatedAt: null };
+  const base = { siteId: site.id, ...WAF_DEFAULTS, exclusions: [], updatedAt: null };
+  const everyPath = (ruleIds: number[]) => ({ path: "", exact: false, ruleIds, targets: [] });
   switch (site.name) {
     case "shop.example.com":
       return {
         ...base,
         mode: "block",
         ...WAF_PRESETS.standard,
-        excludedRuleIds: [920300, 942430],
+        exclusions: [
+          everyPath([920300, 942430]),
+          // Search terms are free text; the rich text editor saves HTML on one path.
+          { path: "/search", exact: false, ruleIds: [942100, 942200], targets: ["ARGS:q"] },
+          { path: "/admin/editor/save", exact: true, ruleIds: [941100, 941160], targets: [] },
+        ],
         updatedAt: ago(9 * HOUR),
       };
     case "example.com":
@@ -569,7 +649,7 @@ function wafOf(site: Site): SiteWaf {
         ...base,
         mode: "detect",
         ...WAF_PRESETS.strict,
-        excludedRuleIds: [920420],
+        exclusions: [everyPath([920420])],
         updatedAt: ago(12 * DAY),
       };
     case "auth.example.net":
@@ -605,6 +685,9 @@ function protectionOf(site: Site): SiteProtection {
     ccTemplate: template,
     effectiveCc: null,
     logJa4: false,
+    allowVerifiedBots: false,
+    challengeText: CHALLENGE_TEXT_DEFAULTS,
+    failureBan: { enabled: false, ...FAILURE_BAN_DEFAULTS },
     platformUnderAttack: false,
     updatedAt: null,
   };
@@ -615,6 +698,14 @@ function protectionOf(site: Site): SiteProtection {
         cc: withCc(CC_PRESETS.strict, true, false),
         effectiveCc: CC_PRESETS.strict,
         logJa4: true,
+        allowVerifiedBots: true,
+        challengeText: {
+          titleZh: "正在确认你的访问",
+          hintZh: "大促期间流量较大，验证通过后会自动跳转。",
+          titleEn: "Checking your visit",
+          hintEn: "",
+        },
+        failureBan: { enabled: true, threshold: 8, banSeconds: 1_800 },
         updatedAt: ago(9 * HOUR),
       };
     case "example.com":
@@ -1572,6 +1663,17 @@ function serverAt(ctx: LogContext, time: number, r: number): string {
   return (list[Math.floor(r * list.length)] ?? list[0])?.id ?? id(4, 1);
 }
 
+/** Log rules that write an access log line, by what they match (shop.example.com's). */
+function loggedRuleIds(ctx: LogContext, method: string, path: string, bot: boolean): string[] {
+  if (!isShop(ctx.site)) return [];
+  const idOf = (name: string) => siteRules(ctx.site).find((r) => r.name === name)?.id;
+  const ids = [
+    path === "/api/v2/cart" && method !== "GET" ? idOf("Cart writes") : undefined,
+    bot ? idOf("Verified crawlers") : undefined,
+  ];
+  return ids.filter((ruleId): ruleId is string => ruleId !== undefined);
+}
+
 function normalEntry(ctx: LogContext, k: number, time: number): LogEntry {
   const r = (salt: number) => noise(k * 17 + salt + ctx.seed);
   const p = ctx.pick(r(1));
@@ -1682,6 +1784,8 @@ function normalEntry(ctx: LogContext, k: number, time: number): LogEntry {
     ja4: ctx.ja4 ? (BROWSER_JA4[Math.floor(r(9) * BROWSER_JA4.length)] as string) : "",
     wafRuleIds,
     wafBlocked,
+    // A verified crawler now and then on pages.
+    ruleIds: loggedRuleIds(ctx, method, p.path, p.kind === "page" && r(12) < 0.06),
   });
 }
 
@@ -1711,6 +1815,7 @@ function attackEntry(ctx: LogContext, k: number, time: number, wave: boolean): L
     ja4: ctx.ja4 ? (wave ? WAVE_JA4 : ATTACK_JA4) : "",
     wafRuleIds: crs ? (r(6) < 0.5 ? [942100, 942200] : [941100]) : [],
     wafBlocked: crs,
+    ruleIds: loggedRuleIds(ctx, wave ? "GET" : "POST", path, false),
   });
 }
 
