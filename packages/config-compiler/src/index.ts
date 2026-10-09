@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { clone, create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import {
+  AccessControlSchema,
   ActiveHealthCheckSchema,
   AuthKind,
   AuthRuleSchema,
@@ -23,12 +24,15 @@ import {
   ClientAddressSchema,
   ClientCertificateMode,
   ClientCertificateSchema,
+  CorsSchema,
   DomainMatch,
   DomainSchema,
   type EdgeRule,
   EdgeRuleSchema,
   ErrorPageSchema,
   ForwardAuthSchema,
+  GeoAccessSchema,
+  HotlinkSchema,
   type HttpChallenge,
   type IpList,
   IpListSchema,
@@ -63,6 +67,7 @@ import {
   RuleActionSchema,
   type RuleExpression,
   S3AuthSchema,
+  SecurityHeadersSchema,
   SessionAffinitySchema,
   type SessionTicketKeyRef,
   SessionTicketKeyRefSchema,
@@ -76,6 +81,9 @@ import {
   type UnknownHosts,
   UnknownHostsSchema,
   UrlAuthSchema,
+  UserAgentRuleSchema,
+  UserAgentRulesSchema,
+  WebSocketAccessSchema,
 } from "@edgeweir/proto";
 import {
   type Expression,
@@ -365,6 +373,67 @@ const AUTH_KINDS: Record<AuthRuleKind, AuthKind> = {
   url_d: AuthKind.URL_D,
 };
 
+/** Feature of a site's access control (proto v0.28.0, Site.access_control; ADR-0039). */
+export const ACCESS_CONTROL_FEATURE = "access-control-v1";
+
+/**
+ * A site's access control (config.proto AccessControl). Parts that are off
+ * are omitted; a site without any part has none, so it compiles as before.
+ */
+export interface AccessControlModel {
+  blockListIds: string[];
+  allowListIds: string[];
+  hotlink?: {
+    allowEmpty: boolean;
+    allowSiteDomains: boolean;
+    allowed: string[];
+    denied: string[];
+    checkOrigin: boolean;
+    extensions: string[];
+    pathPrefixes: string[];
+    excludePathPrefixes: string[];
+    /** "" for 403. */
+    redirectUrl: string;
+  };
+  userAgents?: {
+    rules: { pattern: string; allow: boolean }[];
+    pathPrefixes: string[];
+    excludePathPrefixes: string[];
+  };
+  cors?: {
+    allowedOrigins: string[];
+    allowCredentials: boolean;
+    allowedMethods: string[];
+    allowedHeaders: string[];
+    echoRequestHeaders: boolean;
+    exposedHeaders: string[];
+    maxAgeSeconds: number;
+    preflightToOrigin: boolean;
+    keepOriginHeaders: boolean;
+    pathPrefixes: string[];
+  };
+  geo?: {
+    allowOnly: boolean;
+    countries: string[];
+    subdivisions: string[];
+    asns: number[];
+    pathPrefixes: string[];
+    exceptPathPrefixes: string[];
+  };
+  /** origins empty: every origin; idleTimeoutSeconds 0: 3600. */
+  websocket?: { origins: string[]; idleTimeoutSeconds: number };
+  securityHeaders?: {
+    nosniff: boolean;
+    /** "", "DENY" or "SAMEORIGIN". */
+    frameOptions: string;
+    /** "" or a Referrer-Policy value. */
+    referrerPolicy: string;
+    permissionsPolicy: string;
+    hideServer: boolean;
+    removePoweredBy: boolean;
+  };
+}
+
 /** A site's client certificates (config.proto ClientCertificate); off is omitted. */
 export interface ClientCertificateModel {
   mode: "optional" | "required";
@@ -492,6 +561,8 @@ export interface SiteModel {
   requestBodyLimit?: number;
   /** Enabled access authentication rules in order (access-auth-v1); omitted: none. */
   authRules?: AuthRuleModel[];
+  /** Access control (access-control-v1); omitted or null: none. */
+  accessControl?: AccessControlModel | null;
 }
 
 /** A site's listener ports. */
@@ -888,7 +959,10 @@ export function nodeRequirements(config: NodeConfig): string[] {
   const readsSubdivision = (expression: RuleExpression): boolean =>
     (expression.op !== "call" && expression.field === "ip.geoip.subdivision") ||
     expression.children.some(readsSubdivision);
-  return configExpressions(config).some(readsSubdivision)
+  const geoSubdivisions = config.sites.some(
+    (site) => (site.accessControl?.geo?.subdivisions.length ?? 0) > 0,
+  );
+  return configExpressions(config).some(readsSubdivision) || geoSubdivisions
     ? [...config.requiredFeatures, "geoip-subdivision-v1"]
     : [...config.requiredFeatures];
 }
@@ -1547,6 +1621,67 @@ function compileSite(model: SiteModel, challenges: boolean, edge?: EdgeModel): S
       ),
     ports: compileSitePorts(model, edge),
     authRules: (model.authRules ?? []).map(compileAuthRule),
+    accessControl: model.accessControl ? compileAccessControl(model.accessControl) : undefined,
+  });
+}
+
+/** A site's access control; lists as sets (byte order) but UA rules and CORS methods in order. */
+function compileAccessControl(model: AccessControlModel) {
+  const { hotlink, userAgents, cors, geo, websocket, securityHeaders } = model;
+  return create(AccessControlSchema, {
+    blockListIds: sortedByteSet(model.blockListIds),
+    allowListIds: sortedByteSet(model.allowListIds),
+    hotlink: hotlink
+      ? create(HotlinkSchema, {
+          allowEmpty: hotlink.allowEmpty,
+          allowSiteDomains: hotlink.allowSiteDomains,
+          allowed: sortedByteSet(hotlink.allowed),
+          denied: sortedByteSet(hotlink.denied),
+          checkOrigin: hotlink.checkOrigin,
+          extensions: sortedByteSet(hotlink.extensions),
+          pathPrefixes: sortedByteSet(hotlink.pathPrefixes),
+          excludePathPrefixes: sortedByteSet(hotlink.excludePathPrefixes),
+          redirectUrl: hotlink.redirectUrl,
+        })
+      : undefined,
+    userAgents: userAgents
+      ? create(UserAgentRulesSchema, {
+          rules: userAgents.rules.map((rule) => create(UserAgentRuleSchema, rule)),
+          pathPrefixes: sortedByteSet(userAgents.pathPrefixes),
+          excludePathPrefixes: sortedByteSet(userAgents.excludePathPrefixes),
+        })
+      : undefined,
+    cors: cors
+      ? create(CorsSchema, {
+          allowedOrigins: sortedByteSet(cors.allowedOrigins),
+          allowCredentials: cors.allowCredentials,
+          allowedMethods: [...new Set(cors.allowedMethods)],
+          allowedHeaders: sortedByteSet(cors.allowedHeaders),
+          echoRequestHeaders: cors.echoRequestHeaders,
+          exposedHeaders: sortedByteSet(cors.exposedHeaders),
+          maxAgeSeconds: cors.maxAgeSeconds,
+          preflightToOrigin: cors.preflightToOrigin,
+          keepOriginHeaders: cors.keepOriginHeaders,
+          pathPrefixes: sortedByteSet(cors.pathPrefixes),
+        })
+      : undefined,
+    geo: geo
+      ? create(GeoAccessSchema, {
+          allowOnly: geo.allowOnly,
+          countries: sortedByteSet(geo.countries),
+          subdivisions: sortedByteSet(geo.subdivisions),
+          asns: sortedSet(geo.asns),
+          pathPrefixes: sortedByteSet(geo.pathPrefixes),
+          exceptPathPrefixes: sortedByteSet(geo.exceptPathPrefixes),
+        })
+      : undefined,
+    websocket: websocket
+      ? create(WebSocketAccessSchema, {
+          origins: sortedByteSet(websocket.origins),
+          idleTimeoutSeconds: websocket.idleTimeoutSeconds,
+        })
+      : undefined,
+    securityHeaders: securityHeaders ? create(SecurityHeadersSchema, securityHeaders) : undefined,
   });
 }
 
@@ -1691,6 +1826,41 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
       site.maintenance.allowedPathPrefixes = sortedByteSet(site.maintenance.allowedPathPrefixes);
     }
     site.bulkRedirects.sort(byBytes((redirect) => redirect.source));
+    // Access control: sets, but UA rules and CORS methods keep their order.
+    const access = site.accessControl;
+    if (access) {
+      access.blockListIds = sortedByteSet(access.blockListIds);
+      access.allowListIds = sortedByteSet(access.allowListIds);
+      const h = access.hotlink;
+      if (h) {
+        h.allowed = sortedByteSet(h.allowed);
+        h.denied = sortedByteSet(h.denied);
+        h.extensions = sortedByteSet(h.extensions);
+        h.pathPrefixes = sortedByteSet(h.pathPrefixes);
+        h.excludePathPrefixes = sortedByteSet(h.excludePathPrefixes);
+      }
+      const u = access.userAgents;
+      if (u) {
+        u.pathPrefixes = sortedByteSet(u.pathPrefixes);
+        u.excludePathPrefixes = sortedByteSet(u.excludePathPrefixes);
+      }
+      const c = access.cors;
+      if (c) {
+        c.allowedOrigins = sortedByteSet(c.allowedOrigins);
+        c.allowedHeaders = sortedByteSet(c.allowedHeaders);
+        c.exposedHeaders = sortedByteSet(c.exposedHeaders);
+        c.pathPrefixes = sortedByteSet(c.pathPrefixes);
+      }
+      const g = access.geo;
+      if (g) {
+        g.countries = sortedByteSet(g.countries);
+        g.subdivisions = sortedByteSet(g.subdivisions);
+        g.asns = sortedSet(g.asns);
+        g.pathPrefixes = sortedByteSet(g.pathPrefixes);
+        g.exceptPathPrefixes = sortedByteSet(g.exceptPathPrefixes);
+      }
+      if (access.websocket) access.websocket.origins = sortedByteSet(access.websocket.origins);
+    }
     // Access authentication rules keep their order; their lists are sets.
     for (const rule of site.authRules) {
       rule.domains = sortedByteSet(rule.domains);
@@ -1922,6 +2092,22 @@ export function derivedFeatures(config: NodeConfig): string[] {
     ...domainFeatures(config),
     ...certificateFeatures(config),
     ...(config.sites.some((site) => site.authRules.length) ? [ACCESS_AUTH_FEATURE] : []),
+    ...accessControlFeatures(config),
+  ];
+}
+
+/**
+ * Features of sites' access control: access-control-v1, and the GeoIP data
+ * geo access reads (countries and subdivisions: geoip-city-v1; ASNs:
+ * geoip-asn-v1; subdivisions are checked by the console, see nodeRequirements).
+ */
+export function accessControlFeatures(config: NodeConfig): string[] {
+  const sites = config.sites.filter((site) => site.accessControl);
+  const geo = sites.map((site) => site.accessControl?.geo).filter((g) => g !== undefined);
+  return [
+    ...(sites.length ? [ACCESS_CONTROL_FEATURE] : []),
+    ...(geo.some((g) => g.countries.length || g.subdivisions.length) ? ["geoip-city-v1"] : []),
+    ...(geo.some((g) => g.asns.length) ? ["geoip-asn-v1"] : []),
   ];
 }
 
