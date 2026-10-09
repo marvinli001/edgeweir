@@ -2,6 +2,9 @@ import { createHash } from "node:crypto";
 import { clone, create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import {
   ActiveHealthCheckSchema,
+  AuthKind,
+  AuthRuleSchema,
+  BasicAuthSchema,
   BulkRedirectSchema,
   CacheAction,
   CacheKeyPolicySchema,
@@ -25,6 +28,7 @@ import {
   type EdgeRule,
   EdgeRuleSchema,
   ErrorPageSchema,
+  ForwardAuthSchema,
   type HttpChallenge,
   type IpList,
   IpListSchema,
@@ -71,6 +75,7 @@ import {
   TlsOptionsSchema,
   type UnknownHosts,
   UnknownHostsSchema,
+  UrlAuthSchema,
 } from "@edgeweir/proto";
 import {
   type Expression,
@@ -315,6 +320,50 @@ export const MULTI_CERTIFICATE_FEATURE = "multi-certificate-v1";
  * (proto v0.26.0, Site.client_certificate).
  */
 export const CLIENT_CERT_FEATURE = "client-cert-v1";
+/** Feature of access authentication rules (proto v0.27.0, Site.auth_rules; ADR-0038). */
+export const ACCESS_AUTH_FEATURE = "access-auth-v1";
+
+/** Kinds of access authentication rules (the contract's names). */
+export type AuthRuleKind = "basic" | "forward" | "url_a" | "url_b" | "url_c" | "url_d";
+
+/**
+ * An enabled access authentication rule (config.proto AuthRule). The
+ * secret (Basic users and hashes, URL keys) is only referenced: nodes fetch
+ * it with GetOriginCredentials.
+ */
+export interface AuthRuleModel {
+  id: string;
+  kind: AuthRuleKind;
+  scope: {
+    domains: string[];
+    pathPrefixes: string[];
+    extensions: string[];
+    excludePathPrefixes: string[];
+  };
+  /** Basic and URL rules. */
+  credential?: { id: string; version: number };
+  basic?: { realm: string; keepAuthorization: boolean; userHeader: boolean };
+  forward?: {
+    url: string;
+    method: "GET" | "HEAD";
+    timeoutMs: number;
+    requestHeaders: string[];
+    responseHeaders: string[];
+    cacheSeconds: number;
+    passRedirects: boolean;
+    allowUnavailable: boolean;
+  };
+  url?: { validitySeconds: number; skewSeconds: number; signParam: string; timeParam: string };
+}
+
+const AUTH_KINDS: Record<AuthRuleKind, AuthKind> = {
+  basic: AuthKind.BASIC,
+  forward: AuthKind.FORWARD,
+  url_a: AuthKind.URL_A,
+  url_b: AuthKind.URL_B,
+  url_c: AuthKind.URL_C,
+  url_d: AuthKind.URL_D,
+};
 
 /** A site's client certificates (config.proto ClientCertificate); off is omitted. */
 export interface ClientCertificateModel {
@@ -441,6 +490,8 @@ export interface SiteModel {
   charset?: CharsetModel | null;
   /** Bytes, 0 no limit; omitted or DEFAULT_REQUEST_BODY_LIMIT compiles as before. */
   requestBodyLimit?: number;
+  /** Enabled access authentication rules in order (access-auth-v1); omitted: none. */
+  authRules?: AuthRuleModel[];
 }
 
 /** A site's listener ports. */
@@ -1495,6 +1546,35 @@ function compileSite(model: SiteModel, challenges: boolean, edge?: EdgeModel): S
         }),
       ),
     ports: compileSitePorts(model, edge),
+    authRules: (model.authRules ?? []).map(compileAuthRule),
+  });
+}
+
+/** An access authentication rule; scope lists as sets (byte order, as Go sorts them). */
+function compileAuthRule(rule: AuthRuleModel) {
+  return create(AuthRuleSchema, {
+    id: rule.id,
+    kind: AUTH_KINDS[rule.kind],
+    domains: sortedByteSet(rule.scope.domains),
+    pathPrefixes: sortedByteSet(rule.scope.pathPrefixes),
+    extensions: sortedByteSet(rule.scope.extensions),
+    excludePathPrefixes: sortedByteSet(rule.scope.excludePathPrefixes),
+    credentialId: rule.credential?.id ?? "",
+    credentialVersion: BigInt(rule.credential?.version ?? 0),
+    basic: rule.basic ? create(BasicAuthSchema, rule.basic) : undefined,
+    forward: rule.forward
+      ? create(ForwardAuthSchema, {
+          url: rule.forward.url,
+          head: rule.forward.method === "HEAD",
+          timeoutMs: rule.forward.timeoutMs,
+          requestHeaders: sortedByteSet(rule.forward.requestHeaders),
+          responseHeaders: sortedByteSet(rule.forward.responseHeaders),
+          cacheSeconds: rule.forward.cacheSeconds,
+          passRedirects: rule.forward.passRedirects,
+          allowUnavailable: rule.forward.allowUnavailable,
+        })
+      : undefined,
+    url: rule.url ? create(UrlAuthSchema, rule.url) : undefined,
   });
 }
 
@@ -1611,6 +1691,17 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
       site.maintenance.allowedPathPrefixes = sortedByteSet(site.maintenance.allowedPathPrefixes);
     }
     site.bulkRedirects.sort(byBytes((redirect) => redirect.source));
+    // Access authentication rules keep their order; their lists are sets.
+    for (const rule of site.authRules) {
+      rule.domains = sortedByteSet(rule.domains);
+      rule.pathPrefixes = sortedByteSet(rule.pathPrefixes);
+      rule.extensions = sortedByteSet(rule.extensions);
+      rule.excludePathPrefixes = sortedByteSet(rule.excludePathPrefixes);
+      if (rule.forward) {
+        rule.forward.requestHeaders = sortedByteSet(rule.forward.requestHeaders);
+        rule.forward.responseHeaders = sortedByteSet(rule.forward.responseHeaders);
+      }
+    }
     for (const rule of site.rules) canonicalizeAction(rule.action);
     site.domains.sort(byString(domainKey));
     site.originPool?.origins.sort(byString((o) => o.id));
@@ -1830,6 +1921,7 @@ export function derivedFeatures(config: NodeConfig): string[] {
     ...edgeFeatures(config),
     ...domainFeatures(config),
     ...certificateFeatures(config),
+    ...(config.sites.some((site) => site.authRules.length) ? [ACCESS_AUTH_FEATURE] : []),
   ];
 }
 
