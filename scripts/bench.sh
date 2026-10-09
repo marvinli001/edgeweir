@@ -30,6 +30,13 @@
 #              container on that network (BENCH_URL then names the node's
 #              container, e.g. https://<project>-g11-bench-new/bench-cache.txt),
 #              which keeps the host's port forwarding out of the measurement.
+#   url-auth   cache HITs of a site behind a signed URL rule of kind A
+#              (access-auth-v1): every request carries a valid signature, which
+#              the node checks and removes before the cache lookup; the script
+#              signs BENCH_URL with BENCH_URL_AUTH_KEY and checks that the
+#              unsigned URL is refused (403) and the signed one is a HIT.
+#              Defaults to the new node of scripts/bench-g12-nodes.mjs; its
+#              cache.bench.g12.test with BENCH_SCENARIO=cache is the baseline.
 # pass and challenge default to ua-bench.test, which scripts/e2e-g2.mjs leaves
 # behind (whoami, cache rule on /, Under Attack js); headers to
 # hdr-bench.g8.test, which scripts/e2e-g8.mjs leaves behind; charset to
@@ -54,7 +61,8 @@ case "$BENCH_SCENARIO" in
   proxy-plain) DEFAULT_HOST=proxy-bench.g9.test DEFAULT_URL="http://127.0.0.1:${E2E_G9_LB_PLAIN_PORT:-18991}/bench-cache.txt" ;;
   charset) DEFAULT_HOST=charset-bench.g15.test ;;
   tls | tls-resume) DEFAULT_HOST=new.tls-bench.g11.test DEFAULT_URL="https://127.0.0.1:${E2E_G11_BENCH_NEW_PORT:-18944}/bench-cache.txt" ;;
-  *) echo "BENCH_SCENARIO must be cache, pass, challenge, headers, proxy, proxy-plain, charset, tls or tls-resume, not $BENCH_SCENARIO" >&2; exit 2 ;;
+  url-auth) DEFAULT_HOST=url.bench.g12.test DEFAULT_URL="http://127.0.0.1:${E2E_G12_BENCH_NEW_PORT:-18948}/bench-cache.txt" ;;
+  *) echo "BENCH_SCENARIO must be cache, pass, challenge, headers, proxy, proxy-plain, charset, tls, tls-resume or url-auth, not $BENCH_SCENARIO" >&2; exit 2 ;;
 esac
 BENCH_URL="${BENCH_URL:-${DEFAULT_URL:-http://127.0.0.1:${E2E_NODE_PORT:-18080}/bench-cache.txt}}"
 BENCH_HOST="${BENCH_HOST:-$DEFAULT_HOST}"
@@ -122,6 +130,19 @@ if [[ "$BENCH_SCENARIO" == pass ]]; then
   OHA_HEADERS+=(-H "Cookie: $PASS")
   CURL_HEADERS+=(-H "Cookie: $PASS")
   EXPECT_STATUS=200
+fi
+if [[ "$BENCH_SCENARIO" == url-auth ]]; then
+  # Kind A: path?sign=ts-rand-md5(path@ts@rand@key), valid for the rule's day.
+  URL_PATH="/${BENCH_URL#*://*/}"
+  URL_PATH="${URL_PATH%%\?*}"
+  TS="$(date +%s)"
+  SIGN="$(printf '%s@%s@bench@%s' "$URL_PATH" "$TS" "${BENCH_URL_AUTH_KEY:-g12-bench-key-0123456789}" | openssl md5 | awk '{print $NF}')"
+  UNSIGNED="$(curl -s -o /dev/null -w '%{http_code}' "${CURL_HEADERS[@]}" "$BENCH_URL")"
+  if [[ "$UNSIGNED" != 403 ]]; then
+    echo "Refusing to benchmark: $BENCH_HOST answers $UNSIGNED without a signature, not 403." >&2
+    exit 1
+  fi
+  BENCH_URL="$BENCH_URL?sign=$TS-bench-$SIGN"
 fi
 if [[ "$BENCH_SCENARIO" != challenge && "$BENCH_SCENARIO" != tls* ]]; then
   for _ in 1 2; do curl -fsS "${CURL_HEADERS[@]}" "$BENCH_URL" -o /dev/null; done
