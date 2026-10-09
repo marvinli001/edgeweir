@@ -45,6 +45,18 @@
 #              Access-Control-Allow-Origin and X-Content-Type-Options.
 #              Defaults to the new node of scripts/bench-g13-nodes.mjs; its
 #              new.cache.bench.g13.test with BENCH_SCENARIO=cache is the baseline.
+#   body       cache HITs of a site whose rules read the request body
+#              (rules-body-v1: form_value, json_value and the file names, after a
+#              method check); GETs read no body. Defaults to the new node of
+#              scripts/bench-g14-nodes.mjs; its new.cache.bench.g14.test with
+#              BENCH_SCENARIO=cache is the baseline (and base.cache.bench.g14.test
+#              on its base node, the node before G14).
+#   post       POSTs of BENCH_BODY (a form, about 200 bytes by default) to
+#              BENCH_URL on the same node's new.cache.bench.g14.test, a site whose
+#              rules read no body; answered by the origin, no HIT check.
+#   body-post  the same POSTs to body.bench.g14.test, whose rules read and parse
+#              each body (the cost of reading request bodies; post is its
+#              baseline).
 # pass and challenge default to ua-bench.test, which scripts/e2e-g2.mjs leaves
 # behind (whoami, cache rule on /, Under Attack js); headers to
 # hdr-bench.g8.test, which scripts/e2e-g8.mjs leaves behind; charset to
@@ -71,7 +83,10 @@ case "$BENCH_SCENARIO" in
   tls | tls-resume) DEFAULT_HOST=new.tls-bench.g11.test DEFAULT_URL="https://127.0.0.1:${E2E_G11_BENCH_NEW_PORT:-18944}/bench-cache.txt" ;;
   url-auth) DEFAULT_HOST=url.bench.g12.test DEFAULT_URL="http://127.0.0.1:${E2E_G12_BENCH_NEW_PORT:-18948}/bench-cache.txt" ;;
   access) DEFAULT_HOST=access.bench.g13.test DEFAULT_URL="http://127.0.0.1:${E2E_G13_BENCH_NEW_PORT:-18950}/bench-cache.txt" ;;
-  *) echo "BENCH_SCENARIO must be cache, pass, challenge, headers, proxy, proxy-plain, charset, tls, tls-resume, url-auth or access, not $BENCH_SCENARIO" >&2; exit 2 ;;
+  body) DEFAULT_HOST=body.bench.g14.test DEFAULT_URL="http://127.0.0.1:${E2E_G14_BENCH_NEW_PORT:-18952}/bench-cache.txt" ;;
+  post) DEFAULT_HOST=new.cache.bench.g14.test DEFAULT_URL="http://127.0.0.1:${E2E_G14_BENCH_NEW_PORT:-18952}/form" ;;
+  body-post) DEFAULT_HOST=body.bench.g14.test DEFAULT_URL="http://127.0.0.1:${E2E_G14_BENCH_NEW_PORT:-18952}/form" ;;
+  *) echo "BENCH_SCENARIO must be cache, pass, challenge, headers, proxy, proxy-plain, charset, tls, tls-resume, url-auth, access, body, post or body-post, not $BENCH_SCENARIO" >&2; exit 2 ;;
 esac
 BENCH_URL="${BENCH_URL:-${DEFAULT_URL:-http://127.0.0.1:${E2E_NODE_PORT:-18080}/bench-cache.txt}}"
 BENCH_HOST="${BENCH_HOST:-$DEFAULT_HOST}"
@@ -158,7 +173,23 @@ if [[ "$BENCH_SCENARIO" == access ]]; then
   OHA_HEADERS+=(-H "Origin: $BENCH_ORIGIN" -H "Referer: $BENCH_ORIGIN/page" -H "User-Agent: $BENCH_USER_AGENT")
   CURL_HEADERS+=(-H "Origin: $BENCH_ORIGIN" -H "Referer: $BENCH_ORIGIN/page" -A "$BENCH_USER_AGENT")
 fi
-if [[ "$BENCH_SCENARIO" != challenge && "$BENCH_SCENARIO" != tls* ]]; then
+BENCH_BODY="${BENCH_BODY:-user=bench&email=bench%40example.test&comment=$(printf 'x%.0s' $(seq 1 150))}"
+if [[ "$BENCH_SCENARIO" == post || "$BENCH_SCENARIO" == body-post ]]; then
+  OHA_HEADERS+=(-m POST -T application/x-www-form-urlencoded -d "$BENCH_BODY")
+  ANSWER="$(curl -s -o /dev/null -w '%{http_code}' "${CURL_HEADERS[@]}" -X POST \
+    -H 'Content-Type: application/x-www-form-urlencoded' --data "$BENCH_BODY" "$BENCH_URL")"
+  if [[ "$ANSWER" != 200 ]]; then
+    echo "Refusing to benchmark: POST to $BENCH_HOST answers $ANSWER, not 200." >&2
+    exit 1
+  fi
+  if [[ "$BENCH_SCENARIO" == body-post ]] &&
+    [[ "$(curl -s -o /dev/null -w '%{http_code}' "${CURL_HEADERS[@]}" -X POST \
+      -H 'Content-Type: application/x-www-form-urlencoded' --data 'user=admin' "$BENCH_URL")" != 403 ]]; then
+    echo "Refusing to benchmark: $BENCH_HOST does not read the body (user=admin must be 403)." >&2
+    exit 1
+  fi
+fi
+if [[ "$BENCH_SCENARIO" != challenge && "$BENCH_SCENARIO" != tls* && "$BENCH_SCENARIO" != post && "$BENCH_SCENARIO" != body-post ]]; then
   for _ in 1 2; do curl -fsS "${CURL_HEADERS[@]}" "$BENCH_URL" -o /dev/null; done
   HEADERS="$(curl -fsS -D - -o /dev/null "${CURL_HEADERS[@]}" "$BENCH_URL")"
   if ! printf '%s\n' "$HEADERS" | tr -d '\r' | grep -qi '^x-cache: HIT$'; then
