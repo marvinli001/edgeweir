@@ -81,7 +81,7 @@ pnpm --filter @edgeweir/console exec playwright install chromium
 | `pnpm lint` | Biome check and format verification, `buf lint proto` | Before every commit |
 | `pnpm format` | Biome auto-fix (`biome check --write .`) | When `pnpm lint` reports formatting |
 | `pnpm typecheck` | Generates Paraglide messages and the route tree, then type-checks the whole workspace | Before every commit |
-| `pnpm test` | Vitest unit and integration tests; PostgreSQL is in-process PGlite, no Docker | Before every commit |
+| `pnpm test` | Vitest unit and integration tests; PostgreSQL is in-process PGlite, no Docker; with `TEST_DATABASE_URL` set, also the concurrent transaction tests | Before every commit |
 | `pnpm build` | Production build: Vite front end and single-file server | When build configuration or dependencies change |
 | `pnpm proto:lint` | `buf lint proto` | When `proto/` changes |
 | `pnpm proto:gen` | Generates TypeScript from `proto/` into `packages/proto` | When `proto/` changes |
@@ -98,6 +98,12 @@ CI runs on pull requests and pushes to `master`: `pnpm lint`, no diff in `packag
 | certd | `go test -race ./...` | `helpers/certd` |
 | UI flows | Playwright | `apps/console/e2e`, driven by `scripts/e2e.sh` |
 | End-to-end | `scripts/e2e.sh` and `scripts/e2e-*.mjs` | `compose.e2e.yml` |
+
+PGlite runs one transaction at a time. Tests that interleave concurrent transactions (such as `site-delete-locks.test.ts`) need a real PostgreSQL: `TEST_DATABASE_URL` names a user that may create databases (for example the `compose.dev.yml` database); the tests run in a temporary database of their own and drop it afterwards. Without it they are skipped; CI sets it.
+
+```bash
+TEST_DATABASE_URL=postgres://edgeweir:edgeweir@localhost:5432/edgeweir pnpm test
+```
 
 Run a single Vitest file from `apps/console`:
 

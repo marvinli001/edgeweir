@@ -81,7 +81,7 @@ pnpm --filter @edgeweir/console exec playwright install chromium
 | `pnpm lint` | Biome 检查与格式校验、`buf lint proto` | 每次提交前 |
 | `pnpm format` | Biome 自动修复（`biome check --write .`） | `pnpm lint` 报格式问题时 |
 | `pnpm typecheck` | 生成 Paraglide 消息与路由树，全 workspace TypeScript 类型检查 | 每次提交前 |
-| `pnpm test` | Vitest 单元与集成测试；PostgreSQL 由进程内 PGlite 提供，不需要 Docker | 每次提交前 |
+| `pnpm test` | Vitest 单元与集成测试；PostgreSQL 由进程内 PGlite 提供，不需要 Docker；设置 `TEST_DATABASE_URL` 时另跑并发事务测试 | 每次提交前 |
 | `pnpm build` | 生产构建：Vite 前端与单文件服务端 | 改动构建配置或依赖时 |
 | `pnpm proto:lint` | `buf lint proto` | 改动 `proto/` 时 |
 | `pnpm proto:gen` | 由 `proto/` 生成 TypeScript 至 `packages/proto` | 改动 `proto/` 时 |
@@ -98,6 +98,12 @@ CI 在 PR 与 `master` 推送时运行：`pnpm lint`、`pnpm proto:gen` 后 `pac
 | certd | `go test -race ./...` | `helpers/certd` |
 | 页面流程 | Playwright | `apps/console/e2e`，由 `scripts/e2e.sh` 驱动 |
 | 端到端 | `scripts/e2e.sh` 与 `scripts/e2e-*.mjs` | `compose.e2e.yml` |
+
+PGlite 一次只运行一个事务。交错并发事务的测试（如 `site-delete-locks.test.ts`）需要真实 PostgreSQL：`TEST_DATABASE_URL` 指向一个可建库的用户（例如 `compose.dev.yml` 的数据库），测试在自建的临时库中运行并在结束时删除；未设置时跳过，CI 设置了它。
+
+```bash
+TEST_DATABASE_URL=postgres://edgeweir:edgeweir@localhost:5432/edgeweir pnpm test
+```
 
 单个 Vitest 文件在 `apps/console` 下运行：
 

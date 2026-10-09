@@ -24,6 +24,7 @@ import {
   notExists,
   or,
   type SQL,
+  type SQLWrapper,
   sql,
 } from "drizzle-orm";
 import type * as z from "zod";
@@ -304,6 +305,37 @@ export async function findSite(db: Executor, id: string, lock = false) {
   const [row] = await (lock ? query.for("update") : query);
   if (!row) fail("SITE_NOT_FOUND", "site not found");
   return row;
+}
+
+/**
+ * Locks sites against their deletion until the transaction ends (FOR KEY
+ * SHARE, in id order) and returns the ids of those that still exist. Each
+ * argument is a list of ids or a subquery selecting them.
+ *
+ * Deleting a site (or an origin, in updateSite) locks the site row first and
+ * then deletes the rows that reference it by cascade. A writer that changed
+ * or deleted one of those rows first and then inserted another, whose
+ * foreign key check waits for the site row, deadlocked with it (SQLSTATE
+ * 40P01: the deletion, waiting first, was the one aborted). Background
+ * writers of such rows (node reports, the alert sweep) call this before they
+ * touch any of them, so both sides wait on the site row: a deletion waits
+ * for the writer, and a writer that waited for a deletion finds the site
+ * gone and skips its rows. FOR KEY SHARE conflicts with deleting the row and
+ * FOR UPDATE only, not with updates of the site.
+ */
+export async function shareSites(
+  tx: Executor,
+  ...ids: (readonly string[] | SQLWrapper)[]
+): Promise<Set<string>> {
+  const sources = ids.filter((set) => !Array.isArray(set) || set.length > 0);
+  if (!sources.length) return new Set();
+  const rows = await tx
+    .select({ id: schema.site.id })
+    .from(schema.site)
+    .where(or(...sources.map((set) => inArray(schema.site.id, set))))
+    .orderBy(asc(schema.site.id))
+    .for("key share");
+  return new Set(rows.map((row) => row.id));
 }
 
 async function toSiteDto(db: Executor, row: SiteRow): Promise<Site> {

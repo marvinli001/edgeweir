@@ -4,7 +4,7 @@ import { and, eq, gt, inArray } from "drizzle-orm";
 import { cleanErrorCode, cleanErrorParams, originError } from "../lib/node-errors";
 import { ONLINE_WINDOW_SECONDS } from "./nodes";
 import type { Executor } from "./revisions";
-import { findSite } from "./sites";
+import { findSite, shareSites } from "./sites";
 
 export interface ReportedOriginHealth {
   siteId: string;
@@ -36,8 +36,25 @@ export async function replaceOriginHealth(
   reports: ReportedOriginHealth[],
   now = new Date(),
 ): Promise<number> {
-  await tx.delete(schema.originHealth).where(eq(schema.originHealth.nodeId, node.id));
   const ids = [...new Set(reports.map((r) => r.originId).filter((id) => UUID_RE.test(id)))];
+  // Lock order with site deletion (shareSites): the sites of the node's
+  // stored entries, which the delete locks, and of the reported origins,
+  // which the insert references, before either. The origins are read after
+  // it: none of a locked site can be deleted meanwhile, and those of a site
+  // deleted while this waited are gone.
+  await shareSites(
+    tx,
+    tx
+      .select({ id: schema.originHealth.siteId })
+      .from(schema.originHealth)
+      .where(eq(schema.originHealth.nodeId, node.id)),
+    tx
+      .select({ id: schema.originPool.siteId })
+      .from(schema.origin)
+      .innerJoin(schema.originPool, eq(schema.originPool.id, schema.origin.poolId))
+      .where(inArray(schema.origin.id, ids)),
+  );
+  await tx.delete(schema.originHealth).where(eq(schema.originHealth.nodeId, node.id));
   if (ids.length === 0) return 0;
   const known = await tx
     .select({ originId: schema.origin.id, siteId: schema.site.id })
