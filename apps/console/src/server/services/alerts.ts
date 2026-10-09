@@ -27,7 +27,7 @@ import {
 import type { Executor } from "./revisions";
 import { elevatedSites, raiseCcAlert } from "./security";
 import { defineSetting } from "./settings";
-import { findSite } from "./sites";
+import { findSite, shareSites } from "./sites";
 
 const POLICY_KEY = "alert_policy";
 /** Notifications a sweep sends at most, and for how long it keeps starting new ones. */
@@ -578,8 +578,26 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
     await app.db.transaction(async (tx) => {
       const previous = await tx.select().from(schema.alertState);
       const firing = new Set(previous.filter((s) => s.active).map((s) => s.key));
-      for (const [key, c] of snapshot.active) {
-        if (firing.has(key)) continue;
+      const raised = [...snapshot.active].filter(([key]) => !firing.has(key));
+      // Platform alerts (no site) are raised and resolved where they happen,
+      // not here; node_offline is the exception.
+      const resolved = previous.filter(
+        (s) =>
+          s.active &&
+          (s.siteId !== null || s.kind === "node_offline") &&
+          !snapshot.active.has(s.key),
+      );
+      // Lock order with site deletion (shareSites): the sites whose states
+      // and events are written below, before any of them; a site deleted
+      // since the snapshot is skipped.
+      const live = await shareSites(
+        tx,
+        raised.flatMap(([, c]) => (c.siteId ? [c.siteId] : [])),
+        resolved.flatMap((s) => (s.siteId ? [s.siteId] : [])),
+      );
+      const gone = (siteId: string | null) => siteId !== null && !live.has(siteId);
+      for (const [key, c] of raised) {
+        if (gone(c.siteId)) continue;
         // At most once per site in 15 minutes: a raise held back fires here once they are over.
         if (c.kind === "cc_mitigation" && c.siteId) {
           await raiseCcAlert(tx, { id: c.siteId, name: c.siteName }, new Date(now));
@@ -610,14 +628,8 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
       }
       const nodeNames = new Map(snapshot.nodes.map((n) => [n.id, n.name]));
       const siteNames = new Map(snapshot.sites.map((s) => [s.id, s.name]));
-      // Platform alerts (no site) are raised and resolved where they happen,
-      // not here; node_offline is the exception.
-      for (const old of previous.filter(
-        (s) =>
-          s.active &&
-          (s.siteId !== null || s.kind === "node_offline") &&
-          !snapshot.active.has(s.key),
-      )) {
+      for (const old of resolved) {
+        if (gone(old.siteId)) continue;
         await tx
           .update(schema.alertState)
           .set({ active: false, updatedAt: new Date(now) })

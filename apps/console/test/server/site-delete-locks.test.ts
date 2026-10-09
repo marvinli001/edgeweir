@@ -4,7 +4,10 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { AppContext } from "../../src/server/lib/context";
 import { MasterKey } from "../../src/server/lib/envelope";
+import { createLogger } from "../../src/server/lib/logger";
+import { sweepAlerts } from "../../src/server/services/alerts";
 import type { Actor } from "../../src/server/services/audit";
 import { reportAutoBans } from "../../src/server/services/bans";
 import { createCluster } from "../../src/server/services/clusters";
@@ -226,5 +229,39 @@ describe.skipIf(!url)("site deletion against concurrent writers (PostgreSQL)", (
       { status: "fulfilled" },
     ]);
     expect(await db.select().from(schema.ipBan).where(eq(schema.ipBan.siteId, siteId))).toEqual([]);
+  });
+
+  it("deletes a site while the alert sweep raises one of its alerts", async () => {
+    const { siteId, originId } = await seedSite("alerts");
+    // Every origin is down on the node: origin_unavailable fires, over a
+    // state row left from an earlier, resolved alert.
+    await replaceOriginHealth(db, node, [failing(siteId, originId)]);
+    await db.insert(schema.alertState).values({
+      key: `origin_unavailable/${siteId}/${siteId}`,
+      siteId,
+      kind: "origin_unavailable",
+      resourceId: siteId,
+      active: false,
+    });
+    const sweep = await connection(/^insert into "alert_state"/i);
+    const deletion = await connection();
+    const app = {
+      db: sweep.db,
+      pool: handle.pool,
+      masterKey,
+      log: createLogger({ test: true }),
+    } as unknown as AppContext;
+    const sweeping = sweepAlerts(app);
+    await sweep.paused;
+    const deleting = deleteSite(deletion.db, siteId, { actor });
+    await waitsForLock(deletion.pid);
+    sweep.release();
+    expect(await Promise.allSettled([sweeping, deleting])).toMatchObject([
+      { status: "fulfilled" },
+      { status: "fulfilled" },
+    ]);
+    expect(
+      await db.select().from(schema.alertState).where(eq(schema.alertState.siteId, siteId)),
+    ).toEqual([]);
   });
 });
