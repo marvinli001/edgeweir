@@ -59,6 +59,9 @@ export function FormDialog({
         <form
           onSubmit={async (event) => {
             event.preventDefault();
+            // React passes events from the portal to the components around the dialog: a dialog
+            // opened inside another form would submit that form too.
+            event.stopPropagation();
             const data = new FormData(event.currentTarget);
             setError(null);
             try {
