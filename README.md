@@ -19,7 +19,7 @@
 | 四层转发 | 按集群的 TCP / UDP 端口池；L4 应用：权重与备用源站、被动健康检查、连接与空闲超时、向源站发送 PROXY protocol v1 / v2 与接受 PROXY protocol、端口段与同号源站端口、TCP 的 TLS 卸载、放行 / 拦截名单、每节点并发与新建连接上限；与网站共用 DNS 调度（CNAME、解析线路、备用节点组）；按分钟统计连接、拒绝、并发峰值与流量；增删端口时已有连接不断开 |
 | 域名 | 精确、泛域名、任意层级后缀与正则域名，国际化域名（Punycode）；未知域名与节点 IP 访问的处理（平台页、关闭连接、默认网站）与扫描封禁；可重新生成或自定义的 CNAME 前缀 |
 | 证书与协议 | 证书上传、ACME HTTP-01 / DNS-01 签发与续期（Let's Encrypt、ZeroSSL、Google Trust Services 或自定义 ACME 目录，ECDSA / RSA 密钥，ACME 账户列表）、HTTPS、每个网站最多 4 张证书（按 SNI 与客户端能力选择）、客户端证书（双向 TLS）、集群内共享票据密钥的 TLS 会话复用、HSTS、HTTP/2、HTTP/3；80 / 443 之外的监听端口与网站绑定端口、跳转状态码与端口；访客 IP 来自 PROXY protocol 或可信代理报头；Zstandard、Brotli、Gzip 压缩（Gzip 级别、最大压缩长度） |
-| 访问策略 | IP 名单（全局允许 / 拦截）、本地 GeoIP、分阶段规则与内置函数、WAF、限速、动态重定向与改写、批量重定向、请求头与响应头变换、源站覆盖与压缩规则、按请求覆盖网站设置；秒级下发的 IP 封禁，全局封禁可由 nftables 在内核丢包 |
+| 访问策略 | IP 名单（全局允许 / 拦截）、本地 GeoIP、分阶段规则与内置函数、WAF、限速、动态重定向与改写、批量重定向、请求头与响应头变换、源站覆盖与压缩规则、按请求覆盖网站设置；访问鉴权（Basic、转发鉴权、URL 鉴权 A–D 与控制台生成签名 URL，缓存命中同样鉴权）；秒级下发的 IP 封禁，全局封禁可由 nftables 在内核丢包 |
 | 托管规则 | OWASP CRS：仅检测或拦截、paranoia level、异常分数阈值、按规则 ID 排除、请求体检查上限；命中规则的统计与访问日志 |
 | 挑战与 CC 防护 | Cookie 跳转、JS 计算、工作量证明、图片验证码四级挑战；网站或全局 Under Attack；节点本地分级 CC 自动升级（站点、单 URL、单 IP 自动封禁、源站错误率）；集群内通用的签名通行凭证；JA4 指纹用于规则、限速与访问日志 |
 | DNS 与观测 | 独立 DNS 版本、健康节点调度、流量统计去重与汇总、Top URL / IP、告警与订阅 |
@@ -251,7 +251,7 @@ doc/                       文档站（Fumadocs），发布至 GitHub Pages
 | 分类 | 文档 |
 | --- | --- |
 | 部署 | [部署概览](docs/deploy/README.md) · [Docker Compose](docs/deploy/docker.md) · [宝塔 / aaPanel](docs/deploy/baota.md) · [deploy.sh](docs/deploy/deploy-script.md) · [Railway](docs/deploy/railway.md) · [Fly.io](docs/deploy/fly.md) · [bunny.net](docs/deploy/bunny.md) · [Render](docs/deploy/render.md) · [Zeabur](docs/deploy/zeabur.md) · [端口与反向代理](docs/deploy/networking.md) · [接入节点](docs/deploy/nodes.md) · [版本与升级](docs/deploy/upgrade.md) · [备份与恢复](docs/deploy/backup.md) |
-| 使用 | [快速上手](docs/guide/first-site.md) · [账户与登录](docs/guide/account.md) · [集群与系统](docs/guide/system.md) · [源站与缓存](docs/guide/origins-and-cache.md) · [HTTPS 与证书](docs/guide/https.md) · [规则](docs/guide/rules.md) · [封禁](docs/guide/bans.md) · [挑战与 CC 防护](docs/guide/challenges.md) · [OWASP CRS 托管规则](docs/guide/waf.md) · [DNS 调度与告警](docs/guide/dns-and-alerts.md) · [区域探针与智能调度](docs/guide/scheduling.md) · [四层转发](docs/guide/l4.md) · [访问日志与 AccessKey](docs/guide/access-logs.md) · [节点升级](docs/guide/node-upgrades.md) |
+| 使用 | [快速上手](docs/guide/first-site.md) · [账户与登录](docs/guide/account.md) · [集群与系统](docs/guide/system.md) · [源站与缓存](docs/guide/origins-and-cache.md) · [HTTPS 与证书](docs/guide/https.md) · [规则](docs/guide/rules.md) · [访问控制](docs/guide/access-control.md) · [封禁](docs/guide/bans.md) · [挑战与 CC 防护](docs/guide/challenges.md) · [OWASP CRS 托管规则](docs/guide/waf.md) · [DNS 调度与告警](docs/guide/dns-and-alerts.md) · [区域探针与智能调度](docs/guide/scheduling.md) · [四层转发](docs/guide/l4.md) · [访问日志与 AccessKey](docs/guide/access-logs.md) · [节点升级](docs/guide/node-upgrades.md) |
 | 参考 | [环境变量](docs/reference/environment.md) · [命令行](docs/reference/cli.md) · [API 与端点](docs/reference/api.md) |
 | 项目 | [架构](ARCHITECTURE.md) · [安全](SECURITY.md) · [贡献指南](CONTRIBUTING.md) · [许可证](LICENSING.md) |
 

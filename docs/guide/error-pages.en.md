@@ -29,15 +29,16 @@ The error pages nodes answer with: a site's templates and redirects, maintenance
 
 | Status | Responses that use the page | `X-Edgeweir-Error` |
 | --- | --- | --- |
-| 403 Forbidden | Rule and IP list denials (including rate limit rules set to 403), bans and automatic CC bans, OWASP CRS blocks, WebSocket upgrades while WebSocket is off | `policy-denied`, `ip-banned`, `waf-blocked`, `websocket-disabled` |
-| 429 Too Many Requests | Rate limit rules | `policy-denied` |
+| 401 Unauthorized | [Access authentication](access-control.en.md) by Basic without or with wrong credentials (with `WWW-Authenticate`; redirect pages and response statuses do not apply); also to replace the origin's 401 | `auth-required`; the origin's `origin-error` |
+| 403 Forbidden | Rule and IP list denials (including rate limit rules set to 403), bans and automatic CC bans, OWASP CRS blocks, WebSocket upgrades while WebSocket is off, signed URLs that fail, forward authentication refusals | `policy-denied`, `ip-banned`, `waf-blocked`, `websocket-disabled`, `auth-denied`, `auth-expired` |
+| 429 Too Many Requests | Rate limit rules, the Basic failure limit | `policy-denied`, `auth-rate-limited` |
 | 502 Bad Gateway | The node cannot connect to the origin, every origin was dropped before the attempt, origin signing failed | `origin-unreachable`, `no-origin`, and others |
-| 503 Service Unavailable | The node cannot complete a check for now (for example, challenge keys not delivered yet) | `challenge-unavailable`, `policy-unavailable` |
+| 503 Service Unavailable | The node cannot complete a check for now (for example, challenge keys not delivered yet), the forward authentication service is unavailable | `challenge-unavailable`, `policy-unavailable`, `auth-unavailable` |
 | 504 Gateway Timeout | The origin timed out | `origin-timeout` |
 | 400 Bad request | Requests the node cannot parse, request headers too large, plain HTTP on an HTTPS port (when the site is known) | `bad-request`, `header-too-large`, `https-required`, `waf-blocked` |
 | 405 Method not allowed | Methods an S3 origin does not take | `method-not-allowed` |
 | 500 Server error | The node failed while handling the request (when the site is known) | `internal-error` |
-| 401 Unauthorized, 404 Not found, 410 Gone | Only to replace errors the origin returns | `origin-error` |
+| 404 Not found, 410 Gone | Only to replace errors the origin returns | `origin-error` |
 | Other 4xx / Other 5xx | The 4xx / 5xx without a page of their own above: the node's 413 and 414 and other statuses from the origin | As for the status |
 
 | Lookup order | Description |
@@ -122,7 +123,7 @@ Without a template, nodes answer with a self-contained built-in page: no externa
 
 | Page | Status | `X-Edgeweir-Error` |
 | --- | --- | --- |
-| Access denied / Too many requests / Origin unreachable / Service unavailable / Origin timed out | 403 / 429 / 502 / 503 / 504 | See above |
+| Authentication required / Access denied / Too many requests / Origin unreachable / Service unavailable / Origin timed out | 401 / 403 / 429 / 502 / 503 / 504 | See above |
 | Method not allowed | 405 | `method-not-allowed` |
 | Under maintenance | 503 | `maintenance` |
 | Site not found | 404 | `unknown-host` |

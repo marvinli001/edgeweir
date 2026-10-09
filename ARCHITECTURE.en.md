@@ -304,7 +304,7 @@ Every RPC other than `Enroll` and `EnrollProbe` requires a client certificate ve
 | `ReportStatus` | Heartbeat, apply receipt, origin health and error codes (passive and active checks reported apart), ban state, host metrics (`metrics-v1`), cache zone usage (`cache-zone-v1`, kept in `node.cache_usage`); `probe` in the response tells the node whether it also probes |
 | `ReportStats`, `ReportStatsV2` | Per-minute pre-aggregated traffic statistics (`ReportStatsV2` also carries the L4 apps' minute statistics, `l4-v1`); deduplicated by batch sequence |
 | `ReportLogs` | Sampled access logs; deduplicated by batch sequence |
-| `GetOriginCredentials` | S3 origin keys and PURGE keys (`site_secret`, empty `access_key_id`) referenced by the cluster's sites |
+| `GetOriginCredentials` | S3 origin keys, PURGE keys (`site_secret`) and access authentication secrets (`site_auth_rule`, JSON) referenced by the cluster's sites; the latter two with an empty `access_key_id` |
 | `SubmitPurge` | A PURGE request the node hands on (`site-content-v1`): the console checks that the node's cluster serves the site, that the site has PURGE on and that the URL belongs to it, then creates a URL purge task as the node (source `purge_method`), at most 120 per site and minute |
 | `GetCertificates` | Certificate chains and private keys referenced by the cluster's sites (further certificates included) |
 | `GetSessionTicketKeys` | The cluster's TLS session ticket keys (80 bytes); a node only gets its own cluster's |
@@ -347,6 +347,13 @@ DNS steering is bound per cluster (`dns_binding`, mode Not managed, Manual, or A
 2. Client certificates live in `site.tls_settings` (mode, CA PEM, depth, forwarding); the IR has `Site.client_certificate` and requires `client-cert-v1`, as do rules reading `tls.client.*`. Nodes ask for a certificate with `ngx.ssl.verify_client` without aborting the handshake and decide in the request phase (403 `client-cert-required` when Required). Visitors' own `X-Client-*` request headers are removed on every site. Not together with HTTP/3 (`CLIENT_CERTIFICATE_HTTP3`).
 3. Session resumption: nodes' HTTPS listeners use `ssl_session_cache shared:edgeweir_tls:16m` and `ssl_session_timeout 1h`, with `ssl_early_data off` written out; each site has its own session context (`SSL_set_session_id_context`), so sessions resume on the same site only. Ticket keys are per cluster (`session_ticket_key`: `next`, `current`, `previous`), created when a cluster with a site using a certificate publishes; the IR holds ids and roles only (`NodeConfig.session_ticket_keys`, sorted by id, no capability required, ignored by older nodes), and nodes fetch the 80-byte keys with `GetSessionTicketKeys`. A key is generated the first time it is fetched and stored envelope-encrypted (purpose `session_ticket_key.secret`).
 4. `maintenance.rotate-session-ticket-keys` checks hourly and rotates once the newest key is 12 hours old (the same way as challenge keys); clusters whose latest revision carries ticket keys publish a new revision (reason `session_ticket_keys_rotated`), audited as `cluster.session_ticket_keys_rotate`. Nodes write `ssl_session_ticket_key` in the order current, previous, next; file names follow the keys, so a rotation reloads.
+
+## Access authentication
+
+1. A site has at most 16 authentication rules (`site_auth_rule`, ordered by `position`): kind `basic`, `forward` or `url_a`–`url_d`, a scope (domains, path prefixes, extensions, excluded path prefixes) and the kind's settings; the secret (Basic users with PBKDF2-HMAC-SHA256 hashes, the primary and backup keys of signed URLs) is one JSON document envelope-encrypted in the same row (purpose `site_auth_rule.secret_envelope`, bound to the rule ID), and `secret_version` grows with every change. The IR is `Site.auth_rules` (the enabled rules in order, scope lists sorted) with references to the secrets only (`credential_id`, `credential_version`); it requires `access-auth-v1`.
+2. Nodes fetch the rules' secrets of their cluster's sites with `GetOriginCredentials` (the path of S3 and PURGE keys), keep them in `credentials.json` in the state directory (0600) and attach them, parsed, to the site table in the data plane's shared memory; a rule without its secret stays but has no users or keys and refuses every request in its scope.
+3. In the edge layer's access phase the first enabled rule whose scope the request matches is chosen after the PURGE method, and a signed URL loses its signature at once (A and D their query parameters, B and C two segments of the normalized `$uri`); the check runs after the platform allow and block lists and before the rule phases (a plain HTTP request the site forces to HTTPS is redirected first). Basic keeps results per worker (successes 60 s, failures 10 s) and limits failures per site and client network (shared dictionary `edgeweir_auth`). Forward authentication sends an `ngx.location.capture` subrequest to the internal location `/./edgeweir-auth`, which goes through the origin layer to the service (origin address policy, TLS verification, the rule's timeout, only the forwarded request headers); 2xx and 401/403 answers may be cached in `edgeweir_auth`.
+4. Refused requests are counted in `MinuteStats.auth_failures` (`node_minute_stats.auth_failures`, the hourly and daily rollups and the ClickHouse mirror) and shown on the site's Security tab. The console's "Sign a URL" computes with the primary key on the server and neither stores nor sends the result. See [Access control](docs/guide/access-control.en.md).
 
 ## Regional probes and scheduling
 
@@ -460,6 +467,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `origin` | Origins and their origin group (empty for the default group) |
 | `origin_credential` | S3 origin keys, envelope-encrypted |
 | `site_secret` | Other site secrets (the PURGE method's key), envelope-encrypted, delivered over the node channel only |
+| `site_auth_rule` | A site's access authentication rules (at most 16, ordered); Basic user hashes and signing keys envelope-encrypted in the same row, delivered over the node channel only |
 | `cache_rule` | Cache rules: condition expression and list references, status and size conditions, action, edge and browser TTLs |
 | `edge_rule` | Site or global rules: phase, expression, action, list references |
 | `bulk_redirect` | A site's bulk redirects: source (path or domain plus path, unique per site), target, status code, whether the query string is kept, order |
@@ -586,6 +594,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0055_site_content` | `site_secret`; `cluster.cache_max_size_gb`, `cluster.cache_inactive_days` (cache zone); `node.cache_max_size_gb` (node size override), `node.cache_usage` (reported usage); `site.hide_x_cache`, `site.purge_method`, `site.maintenance`, `site.maintenance_updated_at`, `site.charset`, `site.request_body_limit`; `origin_pool.tries`, `origin_pool.status_retry`; `cache_rule.cache_set_cookie`; `site_error_page.redirect_url`, `site_error_page.response_status` |
 | `0056_domain_forms_cname_prefix` | `site_domain.kind` replaces `wildcard`, unique by `(name, kind)`; `site.cname_prefix`, `l4_app.cname_prefix` (their id for existing rows: CNAMEs do not change); `cname_retired`; `cluster.unknown_hosts`, `cluster.default_site_id` |
 | `0057_g11_certificates_sessions` | `site_certificate`, `session_ticket_key`; `certificate.acme_account_id` |
+| `0058_g12_access_auth` | `site_auth_rule`; `site.auth_updated_at`; `auth_failures` in `node_minute_stats`, `node_hour_stats`, `node_day_stats` (the `traffic_hour_stats` view rebuilt) |
 
 ## Build output
 

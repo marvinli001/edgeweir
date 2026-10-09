@@ -304,7 +304,7 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 | `ReportStatus` | 心跳、应用回执、源站健康状态与错误码（被动检查与主动检查分别上报）、封禁状态、主机指标（`metrics-v1`）、缓存区用量（`cache-zone-v1`，存入 `node.cache_usage`）；响应的 `probe` 告诉节点是否兼任探针 |
 | `ReportStats`、`ReportStatsV2` | 按分钟预聚合的流量统计（`ReportStatsV2` 另含 L4 应用的分钟统计，`l4-v1`）；按批次序号去重 |
 | `ReportLogs` | 采样访问日志；按批次序号去重 |
-| `GetOriginCredentials` | 本集群网站引用的 S3 源站密钥与 PURGE 密钥（`site_secret`，`access_key_id` 为空） |
+| `GetOriginCredentials` | 本集群网站引用的 S3 源站密钥、PURGE 密钥（`site_secret`）与访问鉴权规则的密钥（`site_auth_rule`，JSON）；后两种 `access_key_id` 为空 |
 | `SubmitPurge` | 节点转交的 PURGE 请求（`site-content-v1`）：控制台确认节点所在集群服务该网站、网站开启了 PURGE 且 URL 属于网站，以节点身份创建 URL 刷新任务（来源 `purge_method`），每个网站每分钟至多 120 个 |
 | `GetCertificates` | 本集群网站引用的证书链与私钥（含网站的其他证书） |
 | `GetSessionTicketKeys` | 本集群的 TLS 会话票据密钥（80 字节），只能取到本集群的 |
@@ -347,6 +347,13 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 2. 客户端证书在 `site.tls_settings`（模式、CA PEM、深度、是否传递），IR 为 `Site.client_certificate`，要求 `client-cert-v1`；规则读取 `tls.client.*` 时同样要求。节点用 `ngx.ssl.verify_client` 请求证书，握手不中止，结果在请求阶段判定（「必须」时 403 `client-cert-required`）。访客自带的 `X-Client-*` 请求头在所有网站删除。与 HTTP/3 互斥（`CLIENT_CERTIFICATE_HTTP3`）。
 3. 会话复用：节点的 HTTPS 监听使用 `ssl_session_cache shared:edgeweir_tls:16m`、`ssl_session_timeout 1h`，`ssl_early_data off` 显式写出；每个网站有自己的会话上下文（`SSL_set_session_id_context`），会话只在同一网站复用。票据密钥按集群（`session_ticket_key`，`next`、`current`、`previous`），有网站使用证书的集群在发布时创建；IR 只含 id 与角色（`NodeConfig.session_ticket_keys`，按 id 排序，不要求能力，旧节点忽略），节点以 `GetSessionTicketKeys` 取得 80 字节密钥，密钥在第一次被取用时生成，信封加密保存（用途 `session_ticket_key.secret`）。
 4. `maintenance.rotate-session-ticket-keys` 每小时检查一次，最新的密钥满 12 小时就轮换（与挑战密钥相同的方式）；最新 revision 带票据密钥的集群发布新 revision（原因 `session_ticket_keys_rotated`），审计 `cluster.session_ticket_keys_rotate`。节点按 current、previous、next 的顺序写 `ssl_session_ticket_key`，文件名随密钥变化，轮换时 reload。
+
+## 访问鉴权
+
+1. 网站最多 16 条鉴权规则（`site_auth_rule`，按 `position` 排序）：类型 `basic`、`forward`、`url_a`–`url_d`，范围（域名、路径前缀、扩展名、排除路径前缀）与该类型的设置；密钥（Basic 用户与 PBKDF2-HMAC-SHA256 哈希、URL 鉴权的主备密钥）是一份 JSON，信封加密在同一行（用途 `site_auth_rule.secret_envelope`，绑定规则 ID），每次变化 `secret_version` 加一。IR 为 `Site.auth_rules`（启用的规则按顺序，范围列表排序），只含密钥的引用（`credential_id`、`credential_version`），要求 `access-auth-v1`。
+2. 节点以 `GetOriginCredentials` 取得本集群网站的规则密钥（与 S3、PURGE 密钥同一条路径），存进状态目录的 `credentials.json`（0600），解析后附到站点表进入数据面共享内存；密钥缺失时规则照常生效但没有用户或密钥，范围内的请求全部拒绝。
+3. 边缘层 access 阶段：PURGE 方法之后选出第一条命中范围的启用规则，URL 鉴权立即解析并去掉签名（A、D 删查询参数，B、C 从规范化后的 `$uri` 去掉两段）；平台放行与拦截名单之后、规则阶段之前判定（明文 HTTP 且网站强制 HTTPS 时先跳转）。Basic 在 worker 内缓存结果（成功 60 秒、失败 10 秒），失败按网站与客户端网络限速（共享字典 `edgeweir_auth`）。转发鉴权以 `ngx.location.capture` 发子请求到内部 location `/./edgeweir-auth`，经回源层发往鉴权服务（源站地址策略、TLS 校验、规则的超时、只发转发列表中的请求头）；2xx 与 401 / 403 的应答可缓存在 `edgeweir_auth`。
+4. 被拒绝的请求计入 `MinuteStats.auth_failures`（`node_minute_stats.auth_failures` 及小时、天汇总与 ClickHouse 镜像），网站「安全」页签显示。控制台的「生成签名 URL」用主密钥在服务端计算，不保存、不下发。详见 [访问控制](docs/guide/access-control.md)。
 
 ## 区域探针与智能调度
 
@@ -460,6 +467,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `origin` | 源站与所属的源站组（空为默认组） |
 | `origin_credential` | S3 源站密钥，信封加密 |
 | `site_secret` | 网站的其他密钥（PURGE 方法的密钥），信封加密，只经节点通道下发 |
+| `site_auth_rule` | 网站的访问鉴权规则（最多 16 条，有序）；Basic 用户哈希与 URL 鉴权密钥信封加密在同一行，只经节点通道下发 |
 | `cache_rule` | 缓存规则：条件表达式与名单引用、状态码与大小条件、动作、边缘与浏览器 TTL |
 | `edge_rule` | 网站规则或全局规则：阶段、表达式、动作、名单引用 |
 | `bulk_redirect` | 网站的批量重定向：来源（路径或域名加路径，网站内唯一）、目标、状态码、是否保留查询串、顺序 |
@@ -586,6 +594,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0055_site_content` | `site_secret`；`cluster.cache_max_size_gb`、`cluster.cache_inactive_days`（缓存区）；`node.cache_max_size_gb`（节点容量覆盖）、`node.cache_usage`（上报的用量）；`site.hide_x_cache`、`site.purge_method`、`site.maintenance`、`site.maintenance_updated_at`、`site.charset`、`site.request_body_limit`；`origin_pool.tries`、`origin_pool.status_retry`；`cache_rule.cache_set_cookie`；`site_error_page.redirect_url`、`site_error_page.response_status` |
 | `0056_domain_forms_cname_prefix` | `site_domain.kind` 取代 `wildcard`，唯一索引改为 `(name, kind)`；`site.cname_prefix`、`l4_app.cname_prefix`（已有行为其 ID，CNAME 不变）；`cname_retired`；`cluster.unknown_hosts`、`cluster.default_site_id` |
 | `0057_g11_certificates_sessions` | `site_certificate`、`session_ticket_key`；`certificate.acme_account_id` |
+| `0058_g12_access_auth` | `site_auth_rule`；`site.auth_updated_at`；`node_minute_stats`、`node_hour_stats`、`node_day_stats` 的 `auth_failures`（`traffic_hour_stats` 视图随之重建） |
 
 ## 构建产物
 

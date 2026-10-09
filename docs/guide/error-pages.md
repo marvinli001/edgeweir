@@ -29,15 +29,16 @@
 
 | 状态码 | 使用该页面的响应 | `X-Edgeweir-Error` |
 | --- | --- | --- |
-| 403 拒绝访问 | 规则拒绝与 IP 名单（含限速规则选 403 时）、封禁与 CC 自动封禁、OWASP CRS 拦截、关闭 WebSocket 时的升级请求 | `policy-denied`、`ip-banned`、`waf-blocked`、`websocket-disabled` |
-| 429 请求过多 | 限速规则 | `policy-denied` |
+| 401 需要认证 | [访问鉴权](access-control.md)的 Basic 认证没有凭据或凭据错误（带 `WWW-Authenticate`；跳转页面与响应状态码不生效）；也用于替换源站返回的 401 | `auth-required`；源站的为 `origin-error` |
+| 403 拒绝访问 | 规则拒绝与 IP 名单（含限速规则选 403 时）、封禁与 CC 自动封禁、OWASP CRS 拦截、关闭 WebSocket 时的升级请求、URL 鉴权失败、转发鉴权拒绝 | `policy-denied`、`ip-banned`、`waf-blocked`、`websocket-disabled`、`auth-denied`、`auth-expired` |
+| 429 请求过多 | 限速规则、Basic 认证失败限速 | `policy-denied`、`auth-rate-limited` |
 | 502 网关错误 | 节点连不上源站、全部源站在尝试前被剔除、回源签名失败 | `origin-unreachable`、`no-origin` 等 |
-| 503 服务不可用 | 节点暂时无法完成检查（例如挑战密钥尚未下发） | `challenge-unavailable`、`policy-unavailable` |
+| 503 服务不可用 | 节点暂时无法完成检查（例如挑战密钥尚未下发）、转发鉴权的鉴权服务不可用 | `challenge-unavailable`、`policy-unavailable`、`auth-unavailable` |
 | 504 网关超时 | 源站响应超时 | `origin-timeout` |
 | 400 请求无效 | 节点无法解析的请求、请求头过大、HTTPS 端口收到明文请求（能确定网站时） | `bad-request`、`header-too-large`、`https-required`、`waf-blocked` |
 | 405 方法不允许 | S3 源站不接收的方法 | `method-not-allowed` |
 | 500 服务器错误 | 节点处理请求时出错（能确定网站时） | `internal-error` |
-| 401 需要认证、404 页面不存在、410 已删除 | 只用于替换源站返回的错误 | `origin-error` |
+| 404 页面不存在、410 已删除 | 只用于替换源站返回的错误 | `origin-error` |
 | 其他 4xx / 其他 5xx | 上面没有单独页面的 4xx / 5xx：节点生成的 413、414 与源站返回的其他状态码 | 同对应状态 |
 
 | 查找顺序 | 说明 |
@@ -122,7 +123,7 @@
 
 | 页面 | 状态码 | `X-Edgeweir-Error` |
 | --- | --- | --- |
-| 拒绝访问 / 请求过于频繁 / 无法连接源站 / 服务暂不可用 / 源站响应超时 | 403 / 429 / 502 / 503 / 504 | 见上表 |
+| 需要认证 / 拒绝访问 / 请求过于频繁 / 无法连接源站 / 服务暂不可用 / 源站响应超时 | 401 / 403 / 429 / 502 / 503 / 504 | 见上表 |
 | 不支持的请求方法 | 405 | `method-not-allowed` |
 | 维护中 | 503 | `maintenance` |
 | 站点不存在 | 404 | `unknown-host` |

@@ -60,6 +60,7 @@ const SECTIONS = [
       ["origins-and-cache", "docs/guide/origins-and-cache.md"],
       ["https", "docs/guide/https.md"],
       ["rules", "docs/guide/rules.md"],
+      ["access-control", "docs/guide/access-control.md"],
       ["bans", "docs/guide/bans.md"],
       ["challenges", "docs/guide/challenges.md"],
       ["waf", "docs/guide/waf.md"],

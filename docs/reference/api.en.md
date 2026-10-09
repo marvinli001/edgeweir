@@ -683,6 +683,28 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 
 `GET /certificates/settings` adds `acmeDirectory` (the custom directory in effect, `null` without one), `acmeDirectoryEab` (the custom directory has a saved EAB) and `defaultCa` (`letsencrypt`, or `custom` while the custom directory comes from the environment only); `ca` of `GET /sites/{id}/https/check` adds `google` and `custom` and defaults to `defaultCa`. `GET /sites/{id}/features` adds `multiCertificate` and `clientCertificate`. A certificate's `lastError` adds `acme_directory_not_configured`. Revision reasons add `session_ticket_keys_rotated`, audit actions `cluster.session_ticket_keys_rotate`. Node capabilities add `multi-certificate-v1` and `client-cert-v1`; the node channel adds `GetSessionTicketKeys`.
 
+### Access authentication
+
+| Procedure | Endpoint | Notes |
+| --- | --- | --- |
+| `authRules.get` | `GET /sites/{id}/auth-rules` | `{ siteId, rules, updatedAt }`; each rule `{ id, kind, enabled, scope, basic, forward, url }`, `kind` one of `basic`, `forward`, `url_a`–`url_d`, the parts of other kinds `null`. Basic returns user names only (`users: [{ name }]`), signed URLs only `backupKey` (whether a backup key is set); password hashes and keys are never returned |
+| `authRules.update` | `PUT /sites/{id}/auth-rules` | Replaces the rules, at most 16, matched in array order; optional `expectedUpdatedAt` (409 `UPDATED_AT_MISMATCH` when stale). Publishes a revision (reason `site_auth_updated`), audits `site.auth_update` |
+| `authRules.signUrl` | `POST /sites/{id}/auth-rules/{ruleId}/sign` | `{ url, validitySeconds? }` → `{ url, expiresAt }`: signed with the rule's primary key; `url` is a path starting with `/` or an `http(s)` URL of one of the site's domains; audits `site.auth_sign_url` |
+| `authRules.failures` | `GET /sites/{id}/auth-rules/failures?range=` | `{ requests, unsupportedNodes }`: requests authentication refused over the range; `unsupportedNodes` counts the active nodes that do not report them (no `access-auth-v1`) |
+
+Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys can call the `GET` ones only (signing is a `POST`).
+
+| Field | Values |
+| --- | --- |
+| `id` | Left out for a new rule; an existing rule's ID keeps its saved passwords and keys; another site's or a repeated ID answers 404 `AUTH_RULE_NOT_FOUND` |
+| `kind`, `enabled` | As above; `enabled` defaults to `true`. A rule carries only the `basic`, `forward` or `url` part of its `kind` |
+| `scope` | `domains` (the site's domains as `GET /sites/{id}` writes them; others answer 400 `AUTH_DOMAIN_UNKNOWN`), `pathPrefixes` (≤ 32), `extensions` (≤ 64, no dot), `excludePathPrefixes` (≤ 32) |
+| `basic` | `realm` (1–64 characters, no `"` or `\`), `keepAuthorization` (default `false`), `userHeader` (default `false`), `users`: 1–100 `{ name, password? }`; `password` 8–128 characters, left out to keep the user's saved password; a new user without one answers 400 `AUTH_PASSWORD_REQUIRED` (`data.user`) |
+| `forward` | `url` (`http(s)`; IP literals are checked against the origin address policy, 400 `ORIGIN_ADDRESS_FORBIDDEN`), `method` (`GET` / `HEAD`), `timeoutMs` (100–10000, default 5000), `requestHeaders` (≤ 16, default `authorization`, `cookie`), `responseHeaders` (≤ 8), `cacheSeconds` (0–300), `passRedirects`, `allowUnavailable` |
+| `url` | `validitySeconds` (1–31536000, default 1800), `skewSeconds` (0–600, default 300), `signParam`, `timeParam` (`[A-Za-z0-9_-]{1,32}`, default `sign`, `t`; different for D), `primaryKey` (16–128 printable ASCII characters, left out to keep the saved one; 400 `AUTH_KEY_REQUIRED` without one), `backupKey` (left out: kept; `null`: removed) |
+
+Signing errors: a rule that is not a signed URL rule answers 400 `AUTH_RULE_NOT_URL`; a URL that is neither a path nor an `http(s)` URL of the site's domains 400 `AUTH_SIGN_URL_INVALID`; `validitySeconds` above the rule's validity 400 `AUTH_SIGN_VALIDITY` (`data.max`). `GET /sites/{id}/features` adds `accessAuth`. Nodes add the capability `access-auth-v1`; the node channel's `GetOriginCredentials` also returns the rules' secrets, and `ReportStats` carries `MinuteStats.auth_failures`, the refused requests.
+
 ### Port pools and L4 apps
 
 | Procedure | Endpoint | Notes |

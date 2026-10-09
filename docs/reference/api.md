@@ -683,6 +683,28 @@ DNS 绑定与记录的新增字段：
 
 `GET /certificates/settings` 新增 `acmeDirectory`（生效的自定义目录，没有时为 `null`）、`acmeDirectoryEab`（自定义目录保存了 EAB）与 `defaultCa`（`letsencrypt`，自定义目录只来自环境变量时为 `custom`）；`GET /sites/{id}/https/check` 的 `ca` 增加 `google`、`custom`，省略时为 `defaultCa`。`GET /sites/{id}/features` 新增 `multiCertificate`、`clientCertificate`。证书的 `lastError` 新增 `acme_directory_not_configured`。配置版本的原因新增 `session_ticket_keys_rotated`，审计新增 `cluster.session_ticket_keys_rotate`。节点能力新增 `multi-certificate-v1`、`client-cert-v1`；节点通道新增 `GetSessionTicketKeys`。
 
+### 访问鉴权
+
+| 过程 | 端点 | 说明 |
+| --- | --- | --- |
+| `authRules.get` | `GET /sites/{id}/auth-rules` | `{ siteId, rules, updatedAt }`；每条规则 `{ id, kind, enabled, scope, basic, forward, url }`，`kind` 为 `basic`、`forward`、`url_a`–`url_d`，不属于该类型的部分为 `null`。Basic 只返回用户名（`users: [{ name }]`），URL 鉴权只返回 `backupKey`（是否设置了备用密钥）；密码哈希与密钥从不返回 |
+| `authRules.update` | `PUT /sites/{id}/auth-rules` | 整体替换，最多 16 条，按数组顺序匹配；可带 `expectedUpdatedAt`（不一致 409 `UPDATED_AT_MISMATCH`）。发布配置版本（原因 `site_auth_updated`），审计 `site.auth_update` |
+| `authRules.signUrl` | `POST /sites/{id}/auth-rules/{ruleId}/sign` | `{ url, validitySeconds? }` → `{ url, expiresAt }`：用规则的主密钥签名，`url` 为以 `/` 开头的路径或网站域名的 `http(s)` 网址；审计 `site.auth_sign_url` |
+| `authRules.failures` | `GET /sites/{id}/auth-rules/failures?range=` | `{ requests, unsupportedNodes }`：时间范围内被鉴权拒绝的请求数；`unsupportedNodes` 为不上报的活动节点数（缺少 `access-auth-v1`） |
+
+服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`（生成签名 URL 是 `POST`）。
+
+| 字段 | 取值 |
+| --- | --- |
+| `id` | 省略为新规则；已有规则的 ID 沿用它保存的密码与密钥，不属于该网站或重复时 404 `AUTH_RULE_NOT_FOUND` |
+| `kind`、`enabled` | 见上；`enabled` 默认 `true`。每条规则只带与 `kind` 对应的 `basic`、`forward` 或 `url` |
+| `scope` | `domains`（网站的域名，写法同 `GET /sites/{id}` 的 `domains`；不属于网站时 400 `AUTH_DOMAIN_UNKNOWN`）、`pathPrefixes`（≤ 32）、`extensions`（≤ 64，不带点）、`excludePathPrefixes`（≤ 32） |
+| `basic` | `realm`（1–64 字符，不含 `"`、`\`）、`keepAuthorization`（默认 `false`）、`userHeader`（默认 `false`）、`users`：1–100 个 `{ name, password? }`；`password` 8–128 字符，省略时保留该用户已保存的密码，新用户省略时 400 `AUTH_PASSWORD_REQUIRED`（`data.user`） |
+| `forward` | `url`（`http(s)`，IP 字面量按源站地址策略检查，不允许时 400 `ORIGIN_ADDRESS_FORBIDDEN`）、`method`（`GET` / `HEAD`）、`timeoutMs`（100–10000，默认 5000）、`requestHeaders`（≤ 16，默认 `authorization`、`cookie`）、`responseHeaders`（≤ 8）、`cacheSeconds`（0–300）、`passRedirects`、`allowUnavailable` |
+| `url` | `validitySeconds`（1–31536000，默认 1800）、`skewSeconds`（0–600，默认 300）、`signParam`、`timeParam`（`[A-Za-z0-9_-]{1,32}`，默认 `sign`、`t`；D 的两者不能相同）、`primaryKey`（16–128 个可打印 ASCII，省略时保留已保存的主密钥，没有时 400 `AUTH_KEY_REQUIRED`）、`backupKey`（省略保留，`null` 删除） |
+
+签名 URL 的错误：规则不是 URL 鉴权 400 `AUTH_RULE_NOT_URL`；网址不是路径或网站域名的 `http(s)` 网址 400 `AUTH_SIGN_URL_INVALID`；`validitySeconds` 超过规则的有效期 400 `AUTH_SIGN_VALIDITY`（`data.max`）。`GET /sites/{id}/features` 新增 `accessAuth`。节点能力新增 `access-auth-v1`；节点通道的 `GetOriginCredentials` 同时返回鉴权规则的密钥，`ReportStats` 的 `MinuteStats.auth_failures` 为被拒绝的请求数。
+
 ### 端口池与 L4 应用
 
 | 过程 | 端点 | 说明 |

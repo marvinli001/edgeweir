@@ -168,6 +168,7 @@ wildcard_replace(http.request.full_uri, "https://*.example.com/*", "https://exam
 | Item | Behavior |
 | --- | --- |
 | Allow and block lists | Run first. An address in a block list gets 403; an address in an allow list is exempt from the block lists but not from rules; an address in both is allowed |
+| Access authentication | The site's [access authentication](access-control.en.md) runs after the lists and before every phase; refused requests run no rules. Signed URLs have lost their signature before: expressions never see the signature parameters or path segments |
 | Scope | In each phase, global rules run before site rules; within a scope, in list order |
 | Terminating actions | Block, redirect (bulk redirects included), and exceeding a rate limit end the request |
 | Bulk redirects | Looked up after the global and site rules of the redirect phase |
@@ -230,7 +231,7 @@ substring(sha256(http.request.uri.path), 0, 8) eq "a1b2c3d4"
 | `http.request.uri.path` | String | The path after nginx normalization |
 | `http.request.uri.path.extension` | String | The text after the last `.` of the path's last segment, lowercase; empty string without one |
 | `http.request.uri.query` | String | The query string without `?` |
-| `http.request.uri` | String | The raw request URI (path plus query) |
+| `http.request.uri` | String | The raw request URI (path plus query), without a signed URL's signature |
 | `http.request.full_uri` | String | `scheme://`, the Host (lowercase, without port), and the raw request URI; rewrites do not change it |
 | `http.request.headers["name"]` | String | Case-insensitive name; multiple values joined with `, ` |
 | `http.request.cookies["name"]` | String | The raw value (not decoded, quotes kept) of the first cookie of that name in the request's `Cookie` header; the name is case-sensitive, 1–64 token characters; empty string without one. Cookies are separated by `;`, spaces and tabs around a pair, its name, and its value are ignored, and a part without `=` is skipped; several `Cookie` headers are joined with `; ` |

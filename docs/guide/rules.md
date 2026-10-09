@@ -168,6 +168,7 @@ wildcard_replace(http.request.full_uri, "https://*.example.com/*", "https://exam
 | 项目 | 行为 |
 | --- | --- |
 | 放行与拦截名单 | 最先执行。地址命中拦截名单返回 403；命中放行名单只豁免拦截名单，不跳过规则；同时在两种名单中时放行优先 |
+| 访问鉴权 | 名单之后、所有阶段之前执行网站的[访问鉴权](access-control.md)；被拒绝的请求不再运行规则。URL 鉴权的签名在此之前已经去掉，表达式读不到签名参数与签名路径段 |
 | 作用域 | 每个阶段先执行全局规则，再执行网站规则；同一作用域内按列表顺序 |
 | 结束请求 | 拦截、重定向（含批量重定向）和限速超额结束请求 |
 | 批量重定向 | 重定向阶段的全局规则与网站规则之后查表 |
@@ -230,7 +231,7 @@ substring(sha256(http.request.uri.path), 0, 8) eq "a1b2c3d4"
 | `http.request.uri.path` | 字符串 | nginx 规范化后的路径 |
 | `http.request.uri.path.extension` | 字符串 | 路径最后一段中最后一个 `.` 之后的部分，小写；没有时为空字符串 |
 | `http.request.uri.query` | 字符串 | 查询字符串，不含 `?` |
-| `http.request.uri` | 字符串 | 原始请求 URI（路径加查询） |
+| `http.request.uri` | 字符串 | 原始请求 URI（路径加查询）；URL 鉴权的签名已去掉 |
 | `http.request.full_uri` | 字符串 | `scheme://` 加 Host（小写、不含端口）再加原始请求 URI；不随改写变化 |
 | `http.request.headers["name"]` | 字符串 | 名称不区分大小写；多个值用 `, ` 连接 |
 | `http.request.cookies["名称"]` | 字符串 | 请求 `Cookie` 头中第一个同名 Cookie 的原始值（不解码，引号保留）；名称区分大小写，为 1–64 个 token 字符；没有时为空字符串。Cookie 以 `;` 分隔，每一对及其名称和值两侧的空格与制表符忽略，没有 `=` 的一段跳过；多个 `Cookie` 头以 `; ` 连接 |
