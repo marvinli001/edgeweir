@@ -69,8 +69,11 @@ const GOOGLEBOT = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.co
 const BROWSER = "Mozilla/5.0 (X11; Linux x86_64) G14Browser/1.0";
 const XSS = "<script>alert(1)</script>";
 const XSS_QUERY = `q=${encodeURIComponent(XSS)}`;
-/** Detection rules the payload matches at paranoia level 1 (scripts/e2e-g3.mjs). */
-const XSS_DETECTION = [941100, 941110, 941160];
+/**
+ * Detection rules the payload matches at paranoia level 1: those of scripts/e2e-g3.mjs and the
+ * JavaScript method rule 941390 (alert).
+ */
+const XSS_DETECTION = [941100, 941110, 941160, 941390];
 
 async function waitFor(label, fn, seconds = 180, interval = 1000, detail = () => "") {
   const deadline = Date.now() + seconds * 1000;
@@ -495,7 +498,7 @@ try {
   assert.ok(detected.wafRuleIds.includes(941100), `detect logged ${detected.wafRuleIds}`);
   assert.equal(detected.wafBlocked, false);
   pass(
-    "d. g14-crs (block) on both nodes: the payload 403 on /other, 200 under /skip/ (skip crs), /off/ (crs off) and /detect/ (logged, not blocked); /api/ with 941100, 941110, 941160 excluded 200, /apix and /api/../other 403; /login with them excluded for ARGS:q only 200 for q, 403 for r and /login/x; the origin never saw X-Edgeweir-*",
+    "d. g14-crs (block) on both nodes: the payload 403 on /other, 200 under /skip/ (skip crs), /off/ (crs off) and /detect/ (logged, not blocked); /api/ with 941100, 941110, 941160, 941390 excluded 200, /apix and /api/../other 403; /login with them excluded for ARGS:q only 200 for q, 403 for r and /login/x; the origin never saw X-Edgeweir-*",
   );
 
   // ---------------------------------------------------------------- e
