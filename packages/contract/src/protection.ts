@@ -20,6 +20,45 @@ export const POW_DIFFICULTY_RANGE = { min: 8, max: 24 } as const;
 export const POW_HIGH_DIFFICULTY_RANGE = { min: 8, max: 26 } as const;
 /** Days security events are kept (platform setting). */
 export const EVENT_RETENTION_RANGE = { min: 7, max: 365 } as const;
+/** Challenge failures within 10 minutes that ban an address (challenge-v2), and the ban. */
+export const FAILURE_THRESHOLD_RANGE = { min: 3, max: 100 } as const;
+export const FAILURE_BAN_SECONDS_RANGE = { min: 60, max: 86400 } as const;
+export const FAILURE_BAN_DEFAULTS = { threshold: 10, banSeconds: 600 } as const;
+/** Longest challenge page title or hint, in characters. */
+export const CHALLENGE_TEXT_MAX = 200;
+
+/** Plain text without control characters, at most 200 characters. */
+const challengeTextValue = z
+  .string()
+  .trim()
+  .refine((s) => [...s].length <= CHALLENGE_TEXT_MAX, `at most ${CHALLENGE_TEXT_MAX} characters`)
+  .refine(
+    (s) => ![...s].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127),
+    "no control characters",
+  );
+/** Title and hint of a site's challenge pages per language; empty keeps the built-in text. */
+export const challengeText = z.object({
+  titleZh: challengeTextValue.default(""),
+  hintZh: challengeTextValue.default(""),
+  titleEn: challengeTextValue.default(""),
+  hintEn: challengeTextValue.default(""),
+});
+export const CHALLENGE_TEXT_DEFAULTS: ChallengeText = {
+  titleZh: "",
+  hintZh: "",
+  titleEn: "",
+  hintEn: "",
+};
+/** Ban an address after `threshold` challenge failures within 10 minutes (challenge-v2). */
+export const failureBan = z.object({
+  enabled: z.boolean(),
+  threshold: z.number().int().min(FAILURE_THRESHOLD_RANGE.min).max(FAILURE_THRESHOLD_RANGE.max),
+  banSeconds: z
+    .number()
+    .int()
+    .min(FAILURE_BAN_SECONDS_RANGE.min)
+    .max(FAILURE_BAN_SECONDS_RANGE.max),
+});
 
 const count = (max: number) => z.number().int().min(0).max(max);
 
@@ -158,6 +197,12 @@ export const siteProtection = z.object({
   effectiveCc: ccThresholds.nullable(),
   /** Record the JA4 fingerprint in sampled access logs. */
   logJa4: z.boolean(),
+  /** Skip Under Attack and CC challenges for verified search engine crawlers (challenge-v2). */
+  allowVerifiedBots: z.boolean(),
+  /** Title and hint of the challenge pages (challenge-v2). */
+  challengeText: challengeText,
+  /** Ban after repeated challenge failures (challenge-v2). */
+  failureBan: failureBan,
   /** Under Attack is on for every site (system settings). */
   platformUnderAttack: z.boolean(),
   updatedAt: isoDateTime.nullable(),
@@ -184,6 +229,10 @@ export const siteProtectionUpdateInput = z.object({
     .optional(),
   cc: siteCcPolicy.partial().optional(),
   logJa4: z.boolean().optional(),
+  allowVerifiedBots: z.boolean().optional(),
+  /** Replaces the texts. */
+  challengeText: challengeText.optional(),
+  failureBan: failureBan.optional(),
 });
 
 /** Platform protection (system setting `protection_settings`). */
@@ -285,6 +334,8 @@ export const securityContract = {
 };
 
 export type ChallengeType = z.infer<typeof challengeType>;
+export type ChallengeText = z.infer<typeof challengeText>;
+export type FailureBan = z.infer<typeof failureBan>;
 export type CcLevel = z.infer<typeof ccLevel>;
 export type CcThresholds = z.infer<typeof ccThresholds>;
 export type SiteCcPolicy = z.infer<typeof siteCcPolicy>;

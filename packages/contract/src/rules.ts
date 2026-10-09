@@ -3,14 +3,21 @@ import {
   canonicalCidr,
   challengeTypes,
   compressionCodings,
+  crsOverrides,
   expressionErrorCodes,
   isRateLimitKey,
   MAX_HOST_HEADER_LENGTH,
+  MAX_RESPOND_BODY_BYTES,
   ORIGIN_GROUP_RE,
   parseExpression,
   parseValueExpression,
   phases,
   QUERY_NAME_RE,
+  RULE_BAN,
+  respondContentTypes,
+  respondStatus,
+  skipTargets,
+  validRespondBody,
 } from "@edgeweir/rule-engine";
 import { oc } from "@orpc/contract";
 import * as z from "zod";
@@ -157,17 +164,92 @@ export const configPhaseFields = [
   "originReadTimeoutMs",
   "logSampleRate",
   "requestBodyLimit",
+  "crs",
 ] as const;
 
+/** A ban's scope: the request's site, or every site (platform rules only). */
+export const ruleBanScope = z.enum(["site", "platform"]);
 export const ruleAction = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("block"),
     statusCode: z.union([z.literal(403), z.literal(451)]).default(403),
   }),
-  z.object({ kind: z.literal("log") }),
+  z.object({
+    kind: z.literal("log"),
+    /** Write an access log line whatever the sample rate (waf-v2; 100 per site and second per node). */
+    accessLog: z.boolean().default(false),
+  }),
   z.object({ kind: z.literal("allow") }),
   /** Challenges requests without a pass of this type's level or higher. */
   z.object({ kind: z.literal("challenge"), type: z.enum(challengeTypes).default("js") }),
+  /**
+   * Bans the client address (masked to the prefix) through the automatic ban channel (source
+   * rule) and answers 403 ip-banned (waf-v2). Platform scope: platform rules only.
+   */
+  z.object({
+    kind: z.literal("ban"),
+    banSeconds: z.number().int().min(RULE_BAN.seconds.min).max(RULE_BAN.seconds.max).default(3600),
+    banScope: ruleBanScope.default("site"),
+    banPrefixV4: z
+      .number()
+      .int()
+      .min(RULE_BAN.prefixV4.min)
+      .max(RULE_BAN.prefixV4.max)
+      .default(RULE_BAN.prefixV4.max),
+    banPrefixV6: z
+      .number()
+      .int()
+      .min(RULE_BAN.prefixV6.min)
+      .max(RULE_BAN.prefixV6.max)
+      .default(RULE_BAN.prefixV6.max),
+  }),
+  /**
+   * Answers with a status and a static body, or with the site's error page of the status
+   * (4xx and 5xx), Cache-Control: no-store (waf-v2).
+   */
+  z
+    .object({
+      kind: z.literal("respond"),
+      statusCode: z
+        .number()
+        .int()
+        .refine(respondStatus, "status 200, 204, 400-499 or 500-599")
+        .default(403),
+      contentType: z.enum(respondContentTypes).default("text/plain"),
+      /** At most 8192 bytes; no control characters but tab and line breaks. */
+      body: z
+        .string()
+        .refine(validRespondBody, `at most ${MAX_RESPOND_BODY_BYTES} bytes, no control characters`)
+        .default(""),
+      errorPage: z.boolean().default(false),
+    })
+    .superRefine((a, ctx) => {
+      if (a.errorPage && a.statusCode < 400)
+        ctx.addIssue({
+          code: "custom",
+          message: "error pages are for 4xx and 5xx",
+          path: ["errorPage"],
+        });
+      if (a.errorPage && a.body !== "")
+        ctx.addIssue({ code: "custom", message: "an error page has no body", path: ["body"] });
+      if (a.statusCode === 204 && a.body !== "")
+        ctx.addIssue({ code: "custom", message: "204 has no body", path: ["body"] });
+    }),
+  /** Closes the connection without a response (444, waf-v2). */
+  z.object({ kind: z.literal("close") }),
+  /**
+   * Skips, for the request: the remaining custom WAF rules of the rule's scope, rate limits
+   * (platform rules: all; site rules: the site's), the OWASP CRS, and Under Attack and CC
+   * challenges (waf-v2).
+   */
+  z.object({
+    kind: z.literal("skip"),
+    skip: z
+      .array(z.enum(skipTargets))
+      .min(1)
+      .max(skipTargets.length)
+      .refine((list) => new Set(list).size === list.length, "targets must be unique"),
+  }),
   z
     .object({
       kind: z.literal("redirect"),
@@ -247,6 +329,8 @@ export const ruleAction = z.discriminatedUnion("kind", [
         .min(0)
         .max(10 * 1024 * 1024 * 1024)
         .optional(),
+      /** The request's OWASP CRS mode (waf-v2); sites without CRS ignore it. */
+      crs: z.enum(crsOverrides).optional(),
     })
     .refine(
       (a) =>
@@ -303,6 +387,16 @@ export const ruleAction = z.discriminatedUnion("kind", [
     windowSeconds: z.number().int().min(1).max(3600),
     /** ip.src, http.host, tls.ja4 or http.request.headers.<name>. */
     key: z.string().refine(isRateLimitKey).default("ip.src"),
+    /** Ban the address over the limit at site scope for this long (waf-v2); 0 is off. */
+    banSeconds: z
+      .number()
+      .int()
+      .refine(
+        (n) =>
+          n === 0 || (n >= RULE_BAN.rateLimitSeconds.min && n <= RULE_BAN.rateLimitSeconds.max),
+        `0 or ${RULE_BAN.rateLimitSeconds.min}-${RULE_BAN.rateLimitSeconds.max}`,
+      )
+      .default(0),
   }),
 ]);
 /** The rate of a rate_limit rule a preset sets; the key and status stay the rule's own. */
@@ -393,6 +487,11 @@ export const loggedRules = z.object({
   /** Active nodes of the site's cluster that do not count matches (no rule-log-v1). */
   unsupportedNodes: z.number().int(),
 });
+/** A site's rule: only platform rules ban at platform scope. */
+export const siteRuleInput = ruleInput.refine(
+  (rule) => rule.action.kind !== "ban" || rule.action.banScope === "site",
+  { message: "only platform rules ban at platform scope", path: ["action", "banScope"] },
+);
 export const rulesContract = {
   get: oc
     .route({ method: "GET", path: "/sites/{id}/rules", tags: ["rules"] })
@@ -400,7 +499,7 @@ export const rulesContract = {
     .output(z.array(ruleDto)),
   save: oc
     .route({ method: "PUT", path: "/sites/{id}/rules", tags: ["rules"] })
-    .input(z.object({ id: uuid, rules: z.array(ruleInput).max(64) }))
+    .input(z.object({ id: uuid, rules: z.array(siteRuleInput).max(64) }))
     .output(z.array(ruleDto)),
   /**
    * Requests that matched the site's rules with the log action (and platform

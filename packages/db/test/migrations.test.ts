@@ -203,7 +203,7 @@ describe("migrations", () => {
       mode: "off",
       paranoiaLevel: 1,
       anomalyThreshold: 5,
-      excludedRuleIds: [],
+      exclusions: [],
       requestBodyLimit: 131072,
     });
     const minute = new Date("2026-10-01T10:05:00Z");
@@ -484,6 +484,93 @@ describe("migration 0032 on existing data", () => {
         expression: "ssl eq true",
         path_prefixes: ["/kept/"],
       });
+    } finally {
+      await old.close();
+      rmSync(folder, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("migration 0060 on existing data", () => {
+  it("turns site-wide CRS exclusions into one exclusion and adds the G14 defaults", async () => {
+    const journal = JSON.parse(
+      readFileSync(join(defaultMigrationsFolder, "meta", "_journal.json"), "utf8"),
+    ) as { entries: { idx: number; tag: string }[] };
+    // The migrations up to 0059, then CRS settings written by a G13 console, then 0060.
+    const folder = mkdtempSync(join(tmpdir(), "edgeweir-g13-"));
+    const old = new PGlite();
+    const id = (n: string) => `00000000-0000-4000-8000-0000000000${n}`;
+    try {
+      mkdirSync(join(folder, "meta"));
+      const entries = journal.entries.filter((entry) => entry.idx <= 59);
+      writeFileSync(join(folder, "meta", "_journal.json"), JSON.stringify({ ...journal, entries }));
+      for (const { tag } of entries)
+        copyFileSync(join(defaultMigrationsFolder, `${tag}.sql`), join(folder, `${tag}.sql`));
+      const oldDb = drizzle({ client: old, schema, casing: "snake_case" });
+      await migrate(oldDb, { migrationsFolder: folder, migrationsSchema: "drizzle" });
+      await old.exec(`
+        insert into cluster (id, name) values ('${id("e1")}', 'g13');
+        insert into site (id, cluster_id, name, cname_prefix) values
+          ('${id("e2")}', '${id("e1")}', 'with', 'g13a'),
+          ('${id("e3")}', '${id("e1")}', 'without', 'g13b');
+        insert into site_waf (site_id, mode, excluded_rule_ids) values
+          ('${id("e2")}', 'block', '{920350,942100}'),
+          ('${id("e3")}', 'detect', '{}');
+        insert into site_protection (site_id) values ('${id("e2")}');
+      `);
+      await migrate(oldDb, {
+        migrationsFolder: defaultMigrationsFolder,
+        migrationsSchema: "drizzle",
+      });
+      const waf = await old.query<{ site_id: string; exclusions: unknown }>(
+        "select site_id, exclusions from site_waf order by site_id",
+      );
+      expect(waf.rows).toEqual([
+        {
+          site_id: id("e2"),
+          exclusions: [{ path: "", exact: false, ruleIds: [920350, 942100], targets: [] }],
+        },
+        { site_id: id("e3"), exclusions: [] },
+      ]);
+      const columns = await old.query<{ column_name: string }>(
+        "select column_name from information_schema.columns where table_name = 'site_waf'",
+      );
+      expect(columns.rows.map((r) => r.column_name)).not.toContain("excluded_rule_ids");
+      const [protection] = (
+        await old.query(
+          "select allow_verified_bots, challenge_text, failure_ban_enabled, failure_threshold, failure_ban_seconds from site_protection",
+        )
+      ).rows;
+      expect(protection).toEqual({
+        allow_verified_bots: false,
+        challenge_text: {},
+        failure_ban_enabled: false,
+        failure_threshold: 10,
+        failure_ban_seconds: 600,
+      });
+      const [site] = (
+        await old.query<{ rules_body_limit: number }>(
+          `select rules_body_limit from site where id = '${id("e2")}'`,
+        )
+      ).rows;
+      expect(site?.rules_body_limit).toBe(65536);
+      // A node may hold an automatic and a rule ban of the same address on a site.
+      await old.exec(`
+        insert into node (id, cluster_id, name) values ('${id("e4")}', '${id("e1")}', 'n');
+        insert into ip_ban (scope, site_id, cluster_id, cidr, reason, source, node_id, expires_at, seq) values
+          ('site', '${id("e2")}', '${id("e1")}', '192.0.2.1/32', 'cc_ip_rate', 'auto', '${id("e4")}', now() + interval '1 hour', 1),
+          ('site', '${id("e2")}', '${id("e1")}', '192.0.2.1/32', 'waf_rule', 'rule', '${id("e4")}', now() + interval '1 hour', 2);
+      `);
+      await expect(
+        old.exec(`
+          insert into ip_ban (scope, site_id, cluster_id, cidr, reason, source, node_id, expires_at, seq) values
+            ('site', '${id("e2")}', '${id("e1")}', '192.0.2.1/32', 'rate_limit', 'rule', '${id("e4")}', now() + interval '1 hour', 3);
+        `),
+      ).rejects.toThrow();
+      const logs = await old.query<{ column_default: string }>(
+        "select column_default from information_schema.columns where table_name = 'access_log' and column_name = 'rule_ids'",
+      );
+      expect(logs.rows[0]?.column_default).toContain("{}");
     } finally {
       await old.close();
       rmSync(folder, { recursive: true, force: true });

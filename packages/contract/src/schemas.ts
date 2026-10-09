@@ -2,6 +2,7 @@ import {
   cacheConditionExpression,
   MAX_HOST_HEADER_LENGTH,
   parseExpression,
+  RULES_BODY_LIMIT,
   type StructuredCacheCondition,
   structuredCacheCondition,
 } from "@edgeweir/rule-engine";
@@ -474,6 +475,16 @@ export const contentSettings = z.object({
     .min(0)
     .max(MAX_REQUEST_BODY_LIMIT)
     .default(DEFAULT_REQUEST_BODY_LIMIT),
+  /**
+   * Largest request body by Content-Length the rules read (request body fields, form_value and
+   * json_value; rules-body-v1); larger ones count as truncated.
+   */
+  rulesBodyLimit: z
+    .number()
+    .int()
+    .min(RULES_BODY_LIMIT.min)
+    .max(RULES_BODY_LIMIT.max)
+    .default(RULES_BODY_LIMIT.default),
 });
 
 /**

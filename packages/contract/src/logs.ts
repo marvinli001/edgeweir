@@ -34,6 +34,8 @@ export const logEntry = z.object({
   wafBlocked: z.boolean().default(false),
   /** The id the node answered with (X-Request-Id), also shown on error pages; empty for older nodes. */
   requestId: z.string().default(""),
+  /** Rules with the log action that wrote this line whatever the sample rate (at most 8). */
+  ruleIds: z.array(z.string()).default([]),
 });
 export type LogEntry = z.infer<typeof logEntry>;
 export const logsContract = {

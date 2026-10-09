@@ -5,6 +5,8 @@ import {
   siteWafUpdateInput,
   tlsSettings,
   WAF_DEFAULTS,
+  WAF_MAX_EXCLUSION_ENTRIES,
+  WAF_MAX_EXCLUSION_TARGETS,
   WAF_MAX_EXCLUSIONS,
   wafTopRulesInput,
 } from "../src/index";
@@ -69,7 +71,7 @@ describe("OWASP CRS settings", () => {
       mode: "off",
       paranoiaLevel: 1,
       anomalyThreshold: 5,
-      excludedRuleIds: [],
+      exclusions: [],
       requestBodyLimit: 131_072,
     });
   });
@@ -82,15 +84,44 @@ describe("OWASP CRS settings", () => {
       mode: "block",
       paranoiaLevel: 4,
       anomalyThreshold: 1000,
-      excludedRuleIds: [942100, 920350, 999999, 900000],
+      exclusions: [{ ruleIds: [942100, 920350, 999999, 900000] }],
       requestBodyLimit: 134_217_728,
     });
-    expect(full.excludedRuleIds).toEqual([942100, 920350, 999999, 900000]);
+    expect(full.exclusions).toEqual([
+      { path: "", exact: false, ruleIds: [942100, 920350, 999999, 900000], targets: [] },
+    ]);
     expect(siteWafUpdateInput.parse({ id, requestBodyLimit: 0 }).requestBodyLimit).toBe(0);
     expect(
       siteWafUpdateInput.safeParse({
         id,
-        excludedRuleIds: Array.from({ length: WAF_MAX_EXCLUSIONS }, (_, i) => 900000 + i),
+        exclusions: [{ ruleIds: Array.from({ length: WAF_MAX_EXCLUSIONS }, (_, i) => 900000 + i) }],
+      }).success,
+    ).toBe(true);
+    // waf-v2: by path (prefix or exact) and by target.
+    const byPath = siteWafUpdateInput.parse({
+      id,
+      exclusions: [
+        { path: "/api/", ruleIds: [942100] },
+        { path: "/login", exact: true, ruleIds: [941100, 942100], targets: ["ARGS:password"] },
+        {
+          ruleIds: [920350],
+          targets: ["REQUEST_COOKIES:session", "REQUEST_HEADERS:X-Token", "ARGS:user[name]"],
+        },
+      ],
+    });
+    expect(byPath.exclusions?.[1]).toEqual({
+      path: "/login",
+      exact: true,
+      ruleIds: [941100, 942100],
+      targets: ["ARGS:password"],
+    });
+    expect(
+      siteWafUpdateInput.safeParse({
+        id,
+        exclusions: Array.from({ length: WAF_MAX_EXCLUSION_ENTRIES }, (_, i) => ({
+          path: `/p${i}`,
+          ruleIds: [942100],
+        })),
       }).success,
     ).toBe(true);
   });
@@ -104,11 +135,43 @@ describe("OWASP CRS settings", () => {
       { anomalyThreshold: 1001 },
       { requestBodyLimit: -1 },
       { requestBodyLimit: 134_217_729 },
-      { excludedRuleIds: [942100, 942100] },
-      { excludedRuleIds: [899999] },
-      { excludedRuleIds: [1_000_000] },
-      { excludedRuleIds: [942100.5] },
-      { excludedRuleIds: Array.from({ length: WAF_MAX_EXCLUSIONS + 1 }, (_, i) => 900000 + i) },
+      { exclusions: [{ ruleIds: [942100, 942100] }] },
+      { exclusions: [{ ruleIds: [899999] }] },
+      { exclusions: [{ ruleIds: [1_000_000] }] },
+      { exclusions: [{ ruleIds: [942100.5] }] },
+      { exclusions: [{ ruleIds: [] }] },
+      {
+        exclusions: [
+          { ruleIds: Array.from({ length: WAF_MAX_EXCLUSIONS + 1 }, (_, i) => 900000 + i) },
+        ],
+      },
+      {
+        exclusions: Array.from({ length: WAF_MAX_EXCLUSION_ENTRIES + 1 }, (_, i) => ({
+          path: `/p${i}`,
+          ruleIds: [942100],
+        })),
+      },
+      { exclusions: [{ path: "api/", ruleIds: [942100] }] },
+      { exclusions: [{ path: "/a?b", ruleIds: [942100] }] },
+      { exclusions: [{ path: "/a#b", ruleIds: [942100] }] },
+      { exclusions: [{ path: "/a b", ruleIds: [942100] }] },
+      { exclusions: [{ path: "/a\tb", ruleIds: [942100] }] },
+      { exclusions: [{ path: `/${"a".repeat(1024)}`, ruleIds: [942100] }] },
+      { exclusions: [{ ruleIds: [942100], targets: ["ARGS"] }] },
+      { exclusions: [{ ruleIds: [942100], targets: ["ARGS:a b"] }] },
+      { exclusions: [{ ruleIds: [942100], targets: ["ARGS:/regex/"] }] },
+      { exclusions: [{ ruleIds: [942100], targets: ["REQUEST_HEADERS:x_y"] }] },
+      { exclusions: [{ ruleIds: [942100], targets: ["REQUEST_BODY:x"] }] },
+      { exclusions: [{ ruleIds: [942100], targets: ["ARGS:a", "ARGS:a"] }] },
+      { exclusions: [{ ruleIds: [942100], targets: [`ARGS:${"a".repeat(65)}`] }] },
+      {
+        exclusions: [
+          {
+            ruleIds: [942100],
+            targets: Array.from({ length: WAF_MAX_EXCLUSION_TARGETS + 1 }, (_, i) => `ARGS:a${i}`),
+          },
+        ],
+      },
     ])
       expect(siteWafUpdateInput.safeParse({ id, ...input }).success, JSON.stringify(input)).toBe(
         false,

@@ -44,6 +44,8 @@ export const accessLog = pgTable(
     wafBlocked: boolean("waf_blocked").notNull().default(false),
     /** The request id the node answered with (X-Request-Id); empty for older nodes. */
     requestId: text("request_id").notNull().default(""),
+    /** Log rules that wrote this line whatever the sample rate (waf-v2, at most 8). */
+    ruleIds: text("rule_ids").array().notNull().default(sql`'{}'`),
   },
   (t) => [
     primaryKey({ columns: [t.time, t.id] }),

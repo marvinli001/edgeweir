@@ -319,6 +319,8 @@ export const site = pgTable(
     requestBodyLimit: bigint("request_body_limit", { mode: "number" })
       .notNull()
       .default(104_857_600),
+    /** Largest request body by Content-Length the rules read (rules-body-v1), 1024 to 1048576. */
+    rulesBodyLimit: integer("rules_body_limit").notNull().default(65_536),
     /**
      * First label of the site's CNAME target `<prefix>.<cluster domain>`:
      * 8 random characters for new sites, the site id for sites created

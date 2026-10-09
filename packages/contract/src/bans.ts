@@ -13,15 +13,23 @@ export const MANUAL_BAN_REASONS = ["abuse", "attack", "scanner", "spam", "other"
 /**
  * cc_ip_rate: a site's CC protection (site scope); unknown_host_scan: scan
  * protection of the cluster's unknown hosts and node IP access (platform
- * scope, unknown-host-v1).
+ * scope, unknown-host-v1); challenge_failures: repeated challenge failures
+ * (site scope, challenge-v2).
  */
-export const AUTO_BAN_REASONS = ["cc_ip_rate", "unknown_host_scan"] as const;
+export const AUTO_BAN_REASONS = ["cc_ip_rate", "unknown_host_scan", "challenge_failures"] as const;
+/**
+ * Bans made by rules (source rule, waf-v2): waf_rule, the ban action (site
+ * scope, or platform scope from platform rules); rate_limit, a rate limit's
+ * ban of the address over the limit (site scope).
+ */
+export const RULE_BAN_REASONS = ["waf_rule", "rate_limit"] as const;
 
 export const banScope = z.enum(["platform", "site"]);
-export const banSource = z.enum(["manual", "auto"]);
+export const banSource = z.enum(["manual", "auto", "rule"]);
 export const manualBanReason = z.enum(MANUAL_BAN_REASONS);
 export const autoBanReason = z.enum(AUTO_BAN_REASONS);
-export const banReason = z.enum([...MANUAL_BAN_REASONS, ...AUTO_BAN_REASONS]);
+export const ruleBanReason = z.enum(RULE_BAN_REASONS);
+export const banReason = z.enum([...MANUAL_BAN_REASONS, ...AUTO_BAN_REASONS, ...RULE_BAN_REASONS]);
 
 /** A ban lasts from one minute to seven days. */
 export const BAN_MIN_SECONDS = 60;
@@ -84,6 +92,11 @@ export function parseBanCidr(input: string): BanCidr {
  */
 export function isAutoBanPrefix(cidr: Cidr): boolean {
   return cidr.version === 4 ? cidr.prefix === 32 : cidr.prefix === 64 || cidr.prefix === 128;
+}
+
+/** What a rule bans (waf-v2): IPv4 /16 to /32, IPv6 /48 to /64. */
+export function isRuleBanPrefix(cidr: Cidr): boolean {
+  return cidr.version === 4 ? cidr.prefix >= 16 : cidr.prefix >= 48 && cidr.prefix <= 64;
 }
 
 /**
@@ -168,6 +181,8 @@ export const banTrigger = z.object({
   observed: z.number(),
   threshold: z.number(),
   windowSeconds: z.number().int(),
+  /** The rule of a ban a rule made (source rule). */
+  ruleId: uuid.optional(),
 });
 
 export const ban = z.object({
@@ -183,6 +198,8 @@ export const ban = z.object({
   /** Node that created an automatic ban. */
   node: z.object({ id: uuid, name: z.string() }).nullable(),
   trigger: banTrigger.nullable(),
+  /** The rule of a ban a rule made; name null once the rule is deleted. */
+  rule: z.object({ id: uuid, name: z.string().nullable(), platform: z.boolean() }).nullable(),
   /** Who created a manual ban. */
   createdBy: z.object({ type: z.string(), id: z.string(), name: z.string() }).nullable(),
   createdAt: isoDateTime,

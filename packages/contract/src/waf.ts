@@ -16,7 +16,12 @@ export const WAF_ANOMALY_THRESHOLD_RANGE = { min: 1, max: 1000 } as const;
 export const WAF_BODY_LIMIT_RANGE = { min: 0, max: 134_217_728 } as const;
 /** CRS rule ids (the CRS reserves 900000 to 999999). */
 export const WAF_RULE_ID_RANGE = { min: 900_000, max: 999_999 } as const;
+/** Rule ids of one exclusion entry. */
 export const WAF_MAX_EXCLUSIONS = 200;
+/** Exclusion entries of a site (waf-v2: by path or target). */
+export const WAF_MAX_EXCLUSION_ENTRIES = 100;
+/** Targets of one exclusion entry. */
+export const WAF_MAX_EXCLUSION_TARGETS = 16;
 
 export const wafRuleId = z.number().int().min(WAF_RULE_ID_RANGE.min).max(WAF_RULE_ID_RANGE.max);
 
@@ -33,17 +38,54 @@ export const CRS_EVALUATION_FILES = [901, 949, 959, 980] as const;
 export const crsDetectionRule = (id: number) =>
   !(CRS_EVALUATION_FILES as readonly number[]).includes(Math.floor(id / 1000));
 
-/** Rule ids that never run for the site; unique, stored in ascending order. */
+/** Rule ids of an exclusion: unique, stored in ascending order. */
 export const wafExcludedRuleIds = z
   .array(wafRuleId)
+  .min(1)
   .max(WAF_MAX_EXCLUSIONS)
   .refine((ids) => new Set(ids).size === ids.length, { message: "rule ids must be unique" });
+
+/** A target a CRS rule stops inspecting: ARGS, REQUEST_COOKIES or REQUEST_HEADERS by name. */
+export const WAF_TARGET_RE =
+  /^(?:(?:ARGS|REQUEST_COOKIES):[A-Za-z0-9_.\-[\]]{1,64}|REQUEST_HEADERS:[A-Za-z0-9-]{1,64})$/;
+/**
+ * A path of an exclusion: empty (the whole site) or starting with "/", at most 1024 bytes,
+ * without "?", "#", whitespace or control characters (the node judges the normalized path).
+ */
+export function validWafExclusionPath(path: string): boolean {
+  if (path === "") return true;
+  if (!path.startsWith("/") || new TextEncoder().encode(path).length > 1024) return false;
+  return ![...path].some((c) => {
+    const code = c.charCodeAt(0);
+    return code <= 32 || code === 127 || c === "?" || c === "#" || /\s/.test(c);
+  });
+}
+
+/**
+ * A CRS exclusion: the rules do not run (or, with targets, do not inspect those targets) for
+ * the requests of the path (exact or as a prefix of the client's normalized path; empty: every
+ * path). Targets need waf-v2; so do paths.
+ */
+export const wafExclusion = z.object({
+  path: z
+    .string()
+    .refine(validWafExclusionPath, { message: "a path starting with / without ?, # or spaces" })
+    .default(""),
+  exact: z.boolean().default(false),
+  ruleIds: wafExcludedRuleIds,
+  targets: z
+    .array(z.string().regex(WAF_TARGET_RE))
+    .max(WAF_MAX_EXCLUSION_TARGETS)
+    .refine((list) => new Set(list).size === list.length, { message: "targets must be unique" })
+    .default([]),
+});
+export const wafExclusions = z.array(wafExclusion).max(WAF_MAX_EXCLUSION_ENTRIES);
 
 export const WAF_DEFAULTS = {
   mode: "off",
   paranoiaLevel: 1,
   anomalyThreshold: 5,
-  excludedRuleIds: [] as number[],
+  exclusions: [] as WafExclusion[],
   requestBodyLimit: 131_072,
 } as const satisfies Omit<SiteWaf, "siteId" | "updatedAt">;
 
@@ -74,7 +116,15 @@ export const siteWaf = z.object({
   mode: wafMode,
   paranoiaLevel: z.number().int(),
   anomalyThreshold: z.number().int(),
-  excludedRuleIds: z.array(z.number().int()),
+  /** Exclusions in the site's order. */
+  exclusions: z.array(
+    z.object({
+      path: z.string(),
+      exact: z.boolean(),
+      ruleIds: z.array(z.number().int()),
+      targets: z.array(z.string()),
+    }),
+  ),
   requestBodyLimit: z.number().int(),
   updatedAt: isoDateTime.nullable(),
 });
@@ -95,7 +145,8 @@ export const siteWafUpdateInput = z.object({
     .min(WAF_ANOMALY_THRESHOLD_RANGE.min)
     .max(WAF_ANOMALY_THRESHOLD_RANGE.max)
     .optional(),
-  excludedRuleIds: wafExcludedRuleIds.optional(),
+  /** Replaces every exclusion. */
+  exclusions: wafExclusions.optional(),
   requestBodyLimit: z
     .number()
     .int()
@@ -176,6 +227,18 @@ export const siteFeatures = z.object({
   accessAuth: featureAvailability,
   /** Access control (access-control-v1). */
   accessControl: featureAvailability,
+  /**
+   * The custom WAF actions ban, respond, close and skip, access log lines from log rules, rate
+   * limit bans, the config rules' CRS override and CRS exclusions by path or target (waf-v2).
+   */
+  wafV2: featureAvailability,
+  /** Request body fields and form_value / json_value in rules (rules-body-v1). */
+  rulesBody: featureAvailability,
+  /**
+   * Verified crawlers (allowVerifiedBots, http.request.bot.*), challenge page texts and
+   * challenge failure bans (challenge-v2).
+   */
+  challengeV2: featureAvailability,
 });
 
 const idParam = z.object({ id: uuid });
@@ -197,6 +260,7 @@ export const wafContract = {
 };
 
 export type WafMode = z.infer<typeof wafMode>;
+export type WafExclusion = z.infer<typeof wafExclusion>;
 export type SiteWaf = z.infer<typeof siteWaf>;
 export type SiteWafUpdateInput = z.infer<typeof siteWafUpdateInput>;
 export type WafTopRules = z.infer<typeof wafTopRules>;

@@ -421,6 +421,13 @@
       "when": 1791526172159,
       "tag": "0059_g13_access_control",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1791535590819,
+      "tag": "0060_g14_waf_actions",
+      "breakpoints": true
     }
   ]
 }

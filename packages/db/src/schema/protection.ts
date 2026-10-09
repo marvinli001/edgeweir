@@ -34,6 +34,22 @@ export interface StoredCcPolicy {
   cooldownSeconds: number;
 }
 
+/** A CRS exclusion as saved (contract `wafExclusion`). */
+export interface StoredWafExclusion {
+  path: string;
+  exact: boolean;
+  ruleIds: number[];
+  targets: string[];
+}
+
+/** Title and hint of a site's challenge pages (contract `challengeText`). */
+export interface StoredChallengeText {
+  titleZh: string;
+  hintZh: string;
+  titleEn: string;
+  hintEn: string;
+}
+
 /** OWASP CRS managed rules of a site; no row means off with the defaults. */
 export const siteWaf = pgTable("site_waf", {
   siteId: uuid("site_id")
@@ -45,8 +61,11 @@ export const siteWaf = pgTable("site_waf", {
   paranoiaLevel: integer("paranoia_level").notNull().default(1),
   /** Inbound anomaly score threshold, 1 to 1000. */
   anomalyThreshold: integer("anomaly_threshold").notNull().default(5),
-  /** CRS rule ids that never run for the site, ascending and unique. */
-  excludedRuleIds: integer("excluded_rule_ids").array().notNull().default(sql`'{}'`),
+  /**
+   * Exclusions in the site's order (contract `wafExclusion`): rule ids that do not run, or do
+   * not inspect the targets, for a path or the whole site (path "").
+   */
+  exclusions: jsonb("exclusions").$type<StoredWafExclusion[]>().notNull().default([]),
   /** Request body bytes inspected, 0 to 134217728. */
   requestBodyLimit: integer("request_body_limit").notNull().default(131_072),
   updatedAt: timestamp("updated_at", { withTimezone: true })
@@ -74,6 +93,17 @@ export const siteProtection = pgTable("site_protection", {
   cc: jsonb("cc").$type<StoredCcPolicy>(),
   /** Record the JA4 fingerprint in sampled access logs. */
   logJa4: boolean("log_ja4").notNull().default(false),
+  /** Skip Under Attack and CC challenges for verified search engine crawlers (challenge-v2). */
+  allowVerifiedBots: boolean("allow_verified_bots").notNull().default(false),
+  /** Title and hint of the challenge pages; empty values keep the built-in text. */
+  challengeText: jsonb("challenge_text")
+    .$type<Partial<StoredChallengeText>>()
+    .notNull()
+    .default({}),
+  /** Ban an address after failureThreshold challenge failures within 10 minutes. */
+  failureBanEnabled: boolean("failure_ban_enabled").notNull().default(false),
+  failureThreshold: integer("failure_threshold").notNull().default(10),
+  failureBanSeconds: integer("failure_ban_seconds").notNull().default(600),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .$onUpdate(() => new Date())

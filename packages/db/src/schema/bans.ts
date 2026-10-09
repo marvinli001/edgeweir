@@ -20,12 +20,14 @@ import { cluster, node, site } from "./core";
  */
 export const ipBanSeq = pgSequence("ip_ban_seq");
 
-/** What made a node ban an address automatically. */
+/** What made a node ban an address automatically (or a rule: ruleId). */
 export interface BanTrigger {
   metric: string;
   observed: number;
   threshold: number;
   windowSeconds: number;
+  /** The rule of a ban a rule made (source rule). */
+  ruleId?: string;
 }
 
 /** Who created a manual ban, as it was when the ban was made. */
@@ -54,9 +56,12 @@ export const ipBan = pgTable(
     clusterId: uuid("cluster_id").references(() => cluster.id, { onDelete: "cascade" }),
     /** Canonical CIDR: host bits zero, IPv6 lowercase and compressed. */
     cidr: text("cidr").notNull(),
-    /** abuse | attack | scanner | spam | other (manual); cc_ip_rate (auto) */
+    /**
+     * abuse | attack | scanner | spam | other (manual); cc_ip_rate | unknown_host_scan |
+     * challenge_failures (auto); waf_rule | rate_limit (rule)
+     */
     reason: text("reason").notNull(),
-    /** manual | auto */
+    /** manual | auto | rule */
     source: text("source").notNull(),
     /** Node that created an automatic ban. */
     nodeId: uuid("node_id").references(() => node.id, { onDelete: "set null" }),
@@ -84,8 +89,9 @@ export const ipBan = pgTable(
     uniqueIndex("ip_ban_platform_uq")
       .on(t.cidr)
       .where(sql`${t.scope} = 'platform' and ${t.removedAt} is null`),
+    // Automatic and rule bans per reporting node and source (platform ones: ip_ban_platform_uq).
     uniqueIndex("ip_ban_auto_uq")
-      .on(t.nodeId, t.siteId, t.cidr)
-      .where(sql`${t.source} = 'auto' and ${t.removedAt} is null`),
+      .on(t.nodeId, t.siteId, t.cidr, t.source)
+      .where(sql`${t.source} in ('auto', 'rule') and ${t.removedAt} is null`),
   ],
 );
