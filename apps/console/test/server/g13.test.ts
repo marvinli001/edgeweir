@@ -1,9 +1,10 @@
 import "reflect-metadata";
 import { ACCESS_CONTROL_FEATURE, decodeNodeConfig } from "@edgeweir/config-compiler";
-import type { SiteAccessControlUpdate } from "@edgeweir/contract";
+import type { SiteAccessControlUpdate, siteAccessControlUpdate } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type * as z from "zod";
 import { createApp } from "../../src/server/app";
 import { updateAccessControl } from "../../src/server/services/access-control";
 import { latestRevision } from "../../src/server/services/revisions";
@@ -19,7 +20,8 @@ import {
 const service = {
   actor: { type: "service_account" as const, id: "service-account-g13", name: "integration" },
 };
-type Update = Omit<SiteAccessControlUpdate, "id">;
+/** What a request may send: parts with their defaults left out. */
+type Update = Omit<z.input<typeof siteAccessControlUpdate>, "id">;
 
 describe("access control (G13)", async () => {
   const { ctx, client: pglite } = await createTestContext();
