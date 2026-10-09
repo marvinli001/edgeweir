@@ -35,6 +35,8 @@
 //   h. challenge page texts (Chinese and English, escaped)
 //   i. challenge failures on g14-fail: three failed answers ban client-a (403
 //      ip-banned, ban reason challenge_failures)
+//   j. the payload's rules reach g14-crs's top CRS rules (g14.spec.ts uses
+//      them)
 // `node scripts/e2e-g14.mjs --cleanup` removes its sites and those
 // apps/console/e2e/g14.spec.ts leaves (g14-ui-*).
 import assert from "node:assert/strict";
@@ -782,6 +784,22 @@ try {
   pass(
     `i. g14-fail: three failed answers (${attempts.map((r) => r.status).join(", ")}) banned ${addressA} (403 ip-banned; reason challenge_failures, threshold 3)`,
   );
+
+  // ---------------------------------------------------------------- j
+  // The top CRS rules of g14-crs come with the nodes' minute reports;
+  // apps/console/e2e/g14.spec.ts excludes one by path from that list.
+  let top = [];
+  await waitFor(
+    "the payload's rules in g14-crs's top CRS rules",
+    async () => {
+      top = (await admin.ok("GET", `/sites/${sites.crs.id}/waf/rules?range=1h`)).items;
+      return XSS_DETECTION.every((rule) => top.some((item) => item.ruleId === rule));
+    },
+    240,
+    5000,
+    () => JSON.stringify(top),
+  );
+  pass(`j. g14-crs top CRS rules: ${top.map((t) => `${t.ruleId}×${t.requests}`).join(", ")}`);
 
   finished = true;
   console.log("G14 OK");
