@@ -639,6 +639,13 @@ try {
     botNode = await waitFor("node-g14 enrolled", async () =>
       (await admin.ok("GET", `/nodes?clusterId=${botCluster.id}`)).find((n) => n.name === BOT_NODE),
     );
+  } else {
+    // A node-g14 of an earlier run remembers its crawler checks; a restart starts it empty.
+    await run([...compose, "restart", "node-g14"]);
+    await waitFor(
+      "node-g14 serving again",
+      async () => (await request({ target: "node-g14", host: HOST.bots, path: "/" })).status > 0,
+    );
   }
   await everyNode(
     "node-g14 reports challenge-v2",
