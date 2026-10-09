@@ -217,7 +217,7 @@ echo "https://www.example.com${path}?sign=${sign}&t=${ts}"
 | 允许的请求头 | 列表（最多 64 个），或「回显预检请求的头」 | 空 |
 | 暴露的头 | 最多 64 个 | 空 |
 | Max-Age（秒） | 0–86400 | 600 |
-| 预检交给源站 | 开启后预检照常回源，不在边缘应答 | 关 |
+| 预检交给源站 | 开启后预检照常回源，不在边缘应答；来源允许时源站的应答同样带上完整的预检头（方法、请求头、Max-Age 与 `Vary`），开启「保留源站的 CORS 头」且源站已给出 `Access-Control-Allow-Origin` 时除外 | 关 |
 | 保留源站的 CORS 头 | 开启后源站响应已有 `Access-Control-Allow-Origin` 时不改动任何 `Access-Control-*` 头 | 关 |
 | 生效路径前缀 | 最多 32 个；留空为全部路径 | 空 |
 
@@ -250,7 +250,7 @@ echo "https://www.example.com${path}?sign=${sign}&t=${ts}"
 | 生效范围 | 扩展名与路径前缀都为空时为全部请求；否则扩展名在列表中或路径以某个前缀开头；再去掉排除前缀下的请求 |
 | 解析 | 只接受 `http://` 或 `https://` URL：取主机名（小写，去掉账号、端口与末尾的 `.`）；无法解析的 `Referer`（如 `android-app://…`、`Origin: null`）视为不允许，即使开启了「允许空来源」 |
 | 判定 | 取到的每个值都必须允许：先看禁止的来源，再看本站域名与允许的来源 |
-| 拒绝 | 403，`X-Edgeweir-Error: hotlink-denied`；或 302 与 `Cache-Control: no-store` |
+| 拒绝 | 403，`X-Edgeweir-Error: hotlink-denied`；或 302，带 `Cache-Control: no-store` 与同样的 `X-Edgeweir-Error` |
 | 跳转目标 | 目标是本站路径时，请求该路径本身不检查；目标是本网站的完整 URL 且落在生效范围内时会循环跳转，放进排除路径前缀 |
 | 局限 | 访客或浏览器可以去掉 `Referer`（例如 `Referrer-Policy: no-referrer`）；需要阻止这类请求时关闭「允许空来源」 |
 

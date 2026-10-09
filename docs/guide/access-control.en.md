@@ -217,7 +217,7 @@ Turn on the switch on the "CORS" card, fill in the allowed origins and the rest,
 | Allowed request headers | A list (at most 64), or "Echo the preflight's headers" | Empty |
 | Exposed headers | At most 64 | Empty |
 | Max-Age (s) | 0–86400 | 600 |
-| Preflights to the origin | Preflights go to the origin as usual instead of being answered at the edge | Off |
+| Preflights to the origin | Preflights go to the origin as usual instead of being answered at the edge; for an allowed origin its answer gets the full preflight headers too (methods, request headers, Max-Age and `Vary`), unless the origin's CORS headers are kept and it sent `Access-Control-Allow-Origin` | Off |
 | Keep the origin's CORS headers | When the origin's response has `Access-Control-Allow-Origin`, no `Access-Control-*` header is changed | Off |
 | Path prefixes | At most 32; empty: every path | Empty |
 
@@ -250,7 +250,7 @@ Turn on the switch on the "Hotlink protection" card, adjust the sources and scop
 | Scope | Every request when extensions and path prefixes are both empty; else an extension in the list or a path under a prefix; minus the excluded prefixes |
 | Parsing | Only `http://` and `https://` URLs: their host (lowercase, without user, port and a trailing `.`); a `Referer` that cannot be parsed (`android-app://…`, `Origin: null`) is not allowed, even with empty sources allowed |
 | Decision | Every value present must be allowed: denied sources first, then the site's domains and the allowed sources |
-| Refused | 403, `X-Edgeweir-Error: hotlink-denied`; or a 302 with `Cache-Control: no-store` |
+| Refused | 403, `X-Edgeweir-Error: hotlink-denied`; or a 302 with `Cache-Control: no-store` and the same `X-Edgeweir-Error` |
 | Redirect target | A request for a target that is a site path is not checked itself; a full URL of this site in scope would redirect in a loop: exclude its path |
 | Limits | Visitors and browsers can drop `Referer` (e.g. `Referrer-Policy: no-referrer`); turn empty sources off to refuse them |
 
