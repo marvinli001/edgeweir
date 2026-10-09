@@ -402,6 +402,10 @@ message Site {
   // cache lookup (Basic, forward authentication or signed URLs). Disabled
   // rules are left out. Added in v0.27.0 (feature access-auth-v1).
   repeated AuthRule auth_rules = 29;
+  // Access control: site lists, geo, CORS, hotlink, user agents, WebSocket
+  // origins and idle timeout, security response headers (ADR-0039). Unset:
+  // none of them. Added in v0.28.0 (feature access-control-v1).
+  AccessControl access_control = 30;
 }
 
 // AuthKind is how an access authentication rule checks a request.
@@ -500,6 +504,151 @@ message UrlAuth {
   // [A-Za-z0-9_-]{1,32}.
   string sign_param = 3;
   string time_param = 4;
+}
+
+// AccessControl is a site's access control (ADR-0039), checked at the edge
+// before access authentication and the rule phases, so cache hits too:
+// site block lists, geo, CORS preflights, hotlink, user agents. Every part
+// is optional and present only when used. Path prefixes start with "/",
+// are at most 1024 bytes without "?", "#" and control characters and match
+// the normalized path ($uri, a signed URL's signature removed) bytewise;
+// at most 32 per list. Added in v0.28.0 (feature access-control-v1).
+message AccessControl {
+  // Ids of NodeConfig.ip_lists, at most 16 each, disjoint. ip.src on a
+  // block list gets 403 (ip-blocked) unless it is on a platform allow list
+  // or on one of the site's allow lists. ip.src on an allow list skips the
+  // site's bans and block lists, geo, hotlink and user agent checks, CC
+  // bans and Under Attack and CC challenges; never platform block lists and
+  // bans, CORS, WebSocket origins, access authentication or rules.
+  repeated string block_list_ids = 1;
+  repeated string allow_list_ids = 2;
+  Hotlink hotlink = 3;
+  UserAgentRules user_agents = 4;
+  Cors cors = 5;
+  GeoAccess geo = 6;
+  WebSocketAccess websocket = 7;
+  SecurityHeaders security_headers = 8;
+}
+
+// Hotlink protection by Referer (and Origin): requests in scope whose
+// source is not allowed get 403 (hotlink-denied) or a 302 to redirect_url.
+// Host forms: "a.com" (exact), "*.a.com" (one label below a.com), ".a.com"
+// (any depth below a.com, not a.com itself), "*" (any host); lowercase.
+message Hotlink {
+  // Requests with neither value (an empty or missing Referer, and Origin
+  // when checked) pass.
+  bool allow_empty = 1;
+  // Hosts the node resolves to this site pass.
+  bool allow_site_domains = 2;
+  // At most 200 each; a denied host never passes.
+  repeated string allowed = 3;
+  repeated string denied = 4;
+  // Also check a non-empty Origin header.
+  bool check_origin = 5;
+  // Requests in scope: extension in extensions (lowercase, no dot, at most
+  // 64) or path under path_prefixes; both empty: every request; minus
+  // exclude_path_prefixes.
+  repeated string extensions = 6;
+  repeated string path_prefixes = 7;
+  repeated string exclude_path_prefixes = 8;
+  // Empty: 403. Else a site path ("/..." not "//...") or an http(s) URL
+  // without credentials, whitespace, control characters or backslashes, at
+  // most 2048 characters; requests for that site path itself are not
+  // checked.
+  string redirect_url = 9;
+}
+
+// UserAgentRule is a user agent pattern: the rule engine's wildcard (whole
+// value, "*" any bytes (at most 8), "\*" and "\\" literals, ASCII case
+// insensitive), 0-512 printable ASCII bytes; "" matches an empty or missing
+// User-Agent.
+message UserAgentRule {
+  string pattern = 1;
+  // true: allow, false: deny.
+  bool allow = 2;
+}
+
+// UserAgentRules: a request in scope whose User-Agent matches an allow rule
+// passes; else one matching a deny rule gets 403 (ua-denied).
+message UserAgentRules {
+  // 1-200, in the operator's order.
+  repeated UserAgentRule rules = 1;
+  repeated string path_prefixes = 2;
+  repeated string exclude_path_prefixes = 3;
+}
+
+// Cors answers preflights at the edge and sets CORS response headers on
+// requests in scope (path_prefixes, empty: every path). Origin forms:
+// "scheme://host[:port]" (http or https, lowercase host, the default port
+// left out), the host may start with "*." (one label), or "*" alone.
+message Cors {
+  // 1-100. "*" only without allow_credentials.
+  repeated string allowed_origins = 1;
+  // Echo Origin and send Access-Control-Allow-Credentials: true.
+  bool allow_credentials = 2;
+  // 1-16 uppercase tokens, in order.
+  repeated string allowed_methods = 3;
+  // At most 64 lowercase tokens; ignored with echo_request_headers.
+  repeated string allowed_headers = 4;
+  // Answer preflights with their Access-Control-Request-Headers.
+  bool echo_request_headers = 5;
+  // At most 64 tokens.
+  repeated string exposed_headers = 6;
+  // 0-86400.
+  uint32 max_age_seconds = 7;
+  // Preflights go to the origin instead of a 204 from the edge.
+  bool preflight_to_origin = 8;
+  // Keep the origin's Access-Control-* headers when it sent
+  // Access-Control-Allow-Origin (otherwise they are replaced).
+  bool keep_origin_headers = 9;
+  repeated string path_prefixes = 10;
+}
+
+// GeoAccess allows or denies requests in scope by the client's country,
+// subdivision or ASN (403 geo-denied); GeoIP failures 503
+// (policy-unavailable).
+message GeoAccess {
+  // true: only matching requests pass; false: matching requests get 403.
+  bool allow_only = 1;
+  // ISO 3166-1 alpha-2, uppercase; at most 256 (needs geoip-city-v1).
+  repeated string countries = 2;
+  // "CC-subdivision" (ip.geoip.subdivision, compared ASCII case
+  // insensitively); at most 256.
+  repeated string subdivisions = 3;
+  // 1-4294967295; at most 256 (needs geoip-asn-v1).
+  repeated uint32 asns = 4;
+  // Empty: every path.
+  repeated string path_prefixes = 5;
+  repeated string except_path_prefixes = 6;
+}
+
+// WebSocketAccess restricts WebSocket upgrades by Origin and sets the idle
+// timeout of upgraded connections.
+message WebSocketAccess {
+  // Empty: every origin. Else 1-100 origin forms (no "*" alone); upgrades
+  // without a matching Origin get 403 (websocket-origin-denied).
+  repeated string origins = 1;
+  // 60-86400; 0 means 3600. Config rules' send and read timeouts win.
+  uint32 idle_timeout_seconds = 2;
+}
+
+// SecurityHeaders set on every response of the site, before the response
+// phases (rules may change them).
+message SecurityHeaders {
+  // X-Content-Type-Options: nosniff.
+  bool nosniff = 1;
+  // X-Frame-Options: "" (unset), "DENY" or "SAMEORIGIN".
+  string frame_options = 2;
+  // Referrer-Policy: "" or one of no-referrer, no-referrer-when-downgrade,
+  // origin, origin-when-cross-origin, same-origin, strict-origin,
+  // strict-origin-when-cross-origin, unsafe-url.
+  string referrer_policy = 3;
+  // Permissions-Policy: "" or 1-1024 printable ASCII characters.
+  string permissions_policy = 4;
+  // Remove the Server header.
+  bool hide_server = 5;
+  // Remove X-Powered-By.
+  bool remove_powered_by = 6;
 }
 
 // ClientCertificateMode is when a site asks visitors for a certificate.
