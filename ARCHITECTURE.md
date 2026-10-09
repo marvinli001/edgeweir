@@ -24,7 +24,7 @@
 └── 子进程 stdin/stdout ──▶ edgeweir-certd ──▶ ACME CA、DNS 服务商 API
 ```
 
-控制台与节点之间唯一的契约是 `proto/` 中的 `edgeweir.node.v1`（当前 tag `proto/v0.28.0`）。开源核心与商业产品的边界见 [LICENSING.md](LICENSING.md)。
+控制台与节点之间唯一的契约是 `proto/` 中的 `edgeweir.node.v1`（当前 tag `proto/v0.29.0`）。开源核心与商业产品的边界见 [LICENSING.md](LICENSING.md)。
 
 ## 仓库布局
 
@@ -361,6 +361,14 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 2. 编译器只把开启的项写进 `Site.access_control`（proto `v0.28.0`），能力 `access-control-v1`；地区访问控制按列表另要求 `geoip-city-v1` / `geoip-asn-v1`（行政区由控制台检查 `geoip-subdivision-v1`）。没有任何设置的网站编码与之前逐字节相同。来源、主机写法、Referer 解析、UA 通配与各项判定在 `@edgeweir/rule-engine` 有参考实现，与节点 Lua 共用测试向量。
 3. 边缘层 access 阶段：确定网站后先算出「本站放行」（`ip.src` 在本站放行名单中），网站封禁与 CC 单 IP 封禁、本站拦截名单、地区、防盗链、UA 名单与 Under Attack / CC 挑战对它不生效；平台放行与拦截名单之后依次执行本站拦截名单 → 地区 → CORS 预检应答（204 / 403，不回源）→ 防盗链 → UA 名单 → 访问鉴权 → 规则阶段；WebSocket 升级在规则之后检查来源。响应头过滤阶段先加 CORS 响应头与安全响应头，再运行响应阶段的规则（规则优先），缓存命中同样生效。回源层对升级后的连接使用网站的 WebSocket 空闲超时，边缘层到回源层的本地一跳超时为 86400 秒。
 4. `ipCheck.check` 只读：列出含有该地址的名单、覆盖它的有效封禁、各集群访客 IP 设置下的身份（可信代理、节点地址），并按边缘的顺序给出选定网站的结论；不查 GeoIP。详见 [访问控制](docs/guide/access-control.md)。
+
+## WAF 动作、请求体与已验证爬虫
+
+1. 规则动作仍存在 `edge_rule.action`：自定义 WAF 阶段新增封禁、自定义响应、断开连接与跳过，记录动作的 `accessLog`、限速的 `banSeconds`、配置动作的 `crs`。编译器只在使用时写出 `RuleAction` 34–43（proto `v0.29.0`，能力 `waf-v2`），默认值为零值（如封禁的 /32、/64 前缀写为 0）。CRS 排除存在 `site_waf.exclusions`：整站且不带目标的条目合并进原来的 `excluded_rule_ids`，带路径或目标的进 `SiteWaf.exclusions`。
+2. 请求体字段与 `form_value`、`json_value` 只能用于请求阶段（能力 `rules-body-v1`）；引用它们的网站（或全局规则引用时所有网站）带 `Site.rules_body_limit`（`site.rules_body_limit`）。表单、multipart、JSON 的解析在 `@edgeweir/rule-engine` 有参考实现，与节点 Lua 共用测试向量。节点只在表达式求值到这些字段时读取请求体，且只读 `Content-Length` 不超过上限的请求；之后 CRS location 中的 ModSecurity 检查同一份已读的请求体。
+3. 封禁动作与限速的超额封禁由节点经自动封禁通道写入并以 `ReportBans`（`AutoBan.rule_id`）上报；控制台存为来源 `rule`（原因 `waf_rule`、`rate_limit`，`trigger.ruleId`），与自动封禁共用唯一索引（含来源）、共享设置与每个集群的上限。记录规则要求写访问日志时，节点不论采样率写日志并带 `AccessLog.rule_ids`，控制台存入 `access_log.rule_ids`。
+4. CRS 按路径：节点在边缘层按规范化路径判断排除条目与配置规则的 CRS 覆盖，把条目的内容令牌经内部头 `X-Edgeweir-Waf-Ex` 交给生成的 ModSecurity 规则（`ctl:ruleRemoveById` / `ctl:ruleRemoveTargetById`），覆盖改写 `X-Edgeweir-Waf` 的模式或不进入 CRS location；两个内部头在回源前删除。
+5. `SiteProtection` 8–11（能力 `challenge-v2`）：放行已验证的搜索引擎爬虫（节点用自己的解析器做反向加正向解析，结果缓存在共享字典）、挑战页文案、挑战失败封禁（原因 `challenge_failures`）。存在 `site_protection` 的新列。详见 [规则](docs/guide/rules.md#waf-动作)、[OWASP CRS](docs/guide/waf.md#按路径覆盖与排除) 与 [挑战与 CC 防护](docs/guide/challenges.md#已验证的搜索引擎爬虫)。
 
 ## 区域探针与智能调度
 
