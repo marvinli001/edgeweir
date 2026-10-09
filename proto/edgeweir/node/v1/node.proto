@@ -373,6 +373,9 @@ message MinuteStats {
   // = rule id (EdgeRule.id), with the number of requests (bounded, heaviest
   // first). Added in v0.18.0 (feature rule-log-v1).
   repeated TopCounter logged_rules = 12;
+  // Requests access authentication refused (401, 403, 429, 503). Added in
+  // v0.27.0 (feature access-auth-v1).
+  uint64 auth_failures = 13;
 }
 
 // TopCounter is a bounded, approximate heavy-hitter counter (no query strings).
@@ -442,7 +445,9 @@ message GetOriginCredentialsRequest {
 
 // OriginCredential is an access key pair for an S3-compatible origin, or
 // (since v0.24.0) the key of a site's PURGE method: access_key_id empty,
-// secret_access_key the key.
+// secret_access_key the key, or (since v0.27.0) the secret of an access
+// authentication rule (id = AuthRule.credential_id): access_key_id empty,
+// secret_access_key its JSON document.
 message OriginCredential {
   string id = 1;
   // Matches S3Auth.credential_version of the configuration.

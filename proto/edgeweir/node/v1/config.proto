@@ -397,6 +397,109 @@ message Site {
   // means off. Needs certificate_id. Added in v0.26.0 (feature
   // client-cert-v1).
   ClientCertificate client_certificate = 28;
+  // Access authentication rules in their order: a request is checked by the
+  // first enabled rule whose scope it matches, before the rule phases and the
+  // cache lookup (Basic, forward authentication or signed URLs). Disabled
+  // rules are left out. Added in v0.27.0 (feature access-auth-v1).
+  repeated AuthRule auth_rules = 29;
+}
+
+// AuthKind is how an access authentication rule checks a request.
+enum AuthKind {
+  AUTH_KIND_UNSPECIFIED = 0;
+  // HTTP Basic authentication against the rule's users.
+  AUTH_KIND_BASIC = 1;
+  // A subrequest to an authentication service decides.
+  AUTH_KIND_FORWARD = 2;
+  // Signed URLs: path?sign=ts-rand-md5(path@ts@rand@key).
+  AUTH_KIND_URL_A = 3;
+  // Signed URLs: /ts/md5(path@ts@key)/path.
+  AUTH_KIND_URL_B = 4;
+  // Signed URLs: /md5(path@ts@key)/ts/path.
+  AUTH_KIND_URL_C = 5;
+  // Signed URLs: path?sign=md5(path@ts@key)&t=ts.
+  AUTH_KIND_URL_D = 6;
+}
+
+// AuthRule is a site's access authentication rule. Its scope lists are
+// sorted; empty lists do not narrow the scope. Basic users with their
+// password hashes and URL signing keys are never part of the configuration:
+// nodes fetch them with NodeService.GetOriginCredentials (an
+// OriginCredential with id credential_id) and keep them in the agent's state
+// directory.
+message AuthRule {
+  string id = 1;
+  AuthKind kind = 2;
+  // Site domains in their written form (a.com, *.a.com, .a.com, ~pattern),
+  // each matched against the request's Host as the site matches it.
+  repeated string domains = 3;
+  // Path prefixes ("/..."): the request's path starts with one of them.
+  repeated string path_prefixes = 4;
+  // Lowercase extensions without the dot (as
+  // http.request.uri.path.extension).
+  repeated string extensions = 5;
+  // Path prefixes the rule leaves alone.
+  repeated string exclude_path_prefixes = 6;
+  // The rule's secret (Basic, URL kinds); credential_version changes
+  // whenever the secret does, so that nodes fetch it again.
+  string credential_id = 7;
+  uint64 credential_version = 8;
+  // Exactly one of these, by kind.
+  BasicAuth basic = 9;
+  ForwardAuth forward = 10;
+  UrlAuth url = 11;
+}
+
+// BasicAuth holds the settings of a Basic rule. The secret is
+// {"users":[{"name":..,"hash":"pbkdf2-sha256$<iterations>$<salt hex>$<hash
+// hex>"}]}.
+message BasicAuth {
+  // Sent in WWW-Authenticate.
+  string realm = 1;
+  // Keep the Authorization header towards the origin (default: removed).
+  bool keep_authorization = 2;
+  // Send X-Auth-User with the user name to the origin.
+  bool user_header = 3;
+}
+
+// ForwardAuth holds the settings of a forward authentication rule. The node
+// sends the subrequest through its origin layer, under the origin address
+// policy.
+message ForwardAuth {
+  // http(s) URL of the authentication service (no user information).
+  string url = 1;
+  // HEAD instead of GET.
+  bool head = 2;
+  // 100-10000.
+  uint32 timeout_ms = 3;
+  // Request headers forwarded from the visitor (lowercase names), besides
+  // X-Original-URI, X-Original-Method, X-Original-Host, X-Real-IP and
+  // X-Forwarded-For.
+  repeated string request_headers = 4;
+  // Headers of a 2xx answer copied to the request towards the origin
+  // (lowercase names); absent ones are removed from it.
+  repeated string response_headers = 5;
+  // Cache 2xx, 401 and 403 answers for this long (0: off, at most 300), keyed
+  // by the forwarded request headers.
+  uint32 cache_seconds = 6;
+  // Pass 3xx answers on to the visitor (login redirects); otherwise they deny.
+  bool pass_redirects = 7;
+  // When the service fails (5xx, connection errors, timeouts), let the
+  // request through instead of answering 503.
+  bool allow_unavailable = 8;
+}
+
+// UrlAuth holds the settings of a signed URL rule (kinds A-D). The secret is
+// {"keys":["primary"(,"backup")]}; a signature of either key is accepted.
+message UrlAuth {
+  // A signature is valid from ts - skew_seconds to ts + validity_seconds +
+  // skew_seconds. validity 1-31536000, skew 0-600.
+  uint32 validity_seconds = 1;
+  uint32 skew_seconds = 2;
+  // Query parameter of the signature (A, D) and of the timestamp (D);
+  // [A-Za-z0-9_-]{1,32}.
+  string sign_param = 3;
+  string time_param = 4;
 }
 
 // ClientCertificateMode is when a site asks visitors for a certificate.
