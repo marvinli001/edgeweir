@@ -1,0 +1,1695 @@
+{
+  "hostForms": [
+    {
+      "form": "a.com",
+      "host": "a.com",
+      "match": true
+    },
+    {
+      "form": "a.com",
+      "host": "b.a.com",
+      "match": false
+    },
+    {
+      "form": "a.com",
+      "host": "a.co",
+      "match": false
+    },
+    {
+      "form": "*.a.com",
+      "host": "b.a.com",
+      "match": true
+    },
+    {
+      "form": "*.a.com",
+      "host": "c.b.a.com",
+      "match": false
+    },
+    {
+      "form": "*.a.com",
+      "host": "a.com",
+      "match": false
+    },
+    {
+      "form": "*.a.com",
+      "host": "xa.com",
+      "match": false
+    },
+    {
+      "form": ".a.com",
+      "host": "b.a.com",
+      "match": true
+    },
+    {
+      "form": ".a.com",
+      "host": "c.b.a.com",
+      "match": true
+    },
+    {
+      "form": ".a.com",
+      "host": "a.com",
+      "match": false
+    },
+    {
+      "form": ".a.com",
+      "host": "xa.com",
+      "match": false
+    },
+    {
+      "form": "*",
+      "host": "anything.example",
+      "match": true
+    },
+    {
+      "form": "*",
+      "host": "1.2.3.4",
+      "match": true
+    },
+    {
+      "form": "1.2.3.4",
+      "host": "1.2.3.4",
+      "match": true
+    },
+    {
+      "form": "1.2.3.4",
+      "host": "1.2.3.5",
+      "match": false
+    }
+  ],
+  "normalizeHostForm": [
+    {
+      "input": "A.COM",
+      "output": "a.com"
+    },
+    {
+      "input": "a.com.",
+      "output": "a.com"
+    },
+    {
+      "input": "*.A.com",
+      "output": "*.a.com"
+    },
+    {
+      "input": ".a.com",
+      "output": ".a.com"
+    },
+    {
+      "input": "*",
+      "output": "*"
+    },
+    {
+      "input": " a.com ",
+      "output": "a.com"
+    },
+    {
+      "input": "1.2.3.4",
+      "output": "1.2.3.4"
+    },
+    {
+      "input": "*.1.2.3.4",
+      "output": null
+    },
+    {
+      "input": ".1.2.3.4",
+      "output": null
+    },
+    {
+      "input": "a..com",
+      "output": null
+    },
+    {
+      "input": "-a.com",
+      "output": null
+    },
+    {
+      "input": "a-.com",
+      "output": null
+    },
+    {
+      "input": "a_b.com",
+      "output": "a_b.com"
+    },
+    {
+      "input": "*.*.a.com",
+      "output": null
+    },
+    {
+      "input": "a.*.com",
+      "output": null
+    },
+    {
+      "input": "",
+      "output": null
+    },
+    {
+      "input": "a com",
+      "output": null
+    },
+    {
+      "input": "https://a.com",
+      "output": null
+    },
+    {
+      "input": "a.com/x",
+      "output": null
+    },
+    {
+      "input": "xn--fsq.com",
+      "output": "xn--fsq.com"
+    },
+    {
+      "input": "例子.com",
+      "output": null
+    },
+    {
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+      "output": null
+    }
+  ],
+  "refererHost": [
+    {
+      "input": "https://a.com/x.png",
+      "host": "a.com"
+    },
+    {
+      "input": "http://A.COM",
+      "host": "a.com"
+    },
+    {
+      "input": "HTTPS://a.com:8443/p?q#f",
+      "host": "a.com"
+    },
+    {
+      "input": "https://user:pw@a.com/",
+      "host": "a.com"
+    },
+    {
+      "input": "https://a.com./",
+      "host": "a.com"
+    },
+    {
+      "input": "https://[2001:db8::1]:443/",
+      "host": "2001:db8::1"
+    },
+    {
+      "input": "https://[::ffff:1.2.3.4]/",
+      "host": "::ffff:1.2.3.4"
+    },
+    {
+      "input": "https://1.2.3.4/x",
+      "host": "1.2.3.4"
+    },
+    {
+      "input": "ftp://a.com/",
+      "host": null
+    },
+    {
+      "input": "a.com/x",
+      "host": null
+    },
+    {
+      "input": "//a.com/x",
+      "host": null
+    },
+    {
+      "input": "https://",
+      "host": null
+    },
+    {
+      "input": "https:///x",
+      "host": null
+    },
+    {
+      "input": "https://a.com:99999/",
+      "host": null
+    },
+    {
+      "input": "https://a.com:x/",
+      "host": null
+    },
+    {
+      "input": "https://a.com:/",
+      "host": "a.com"
+    },
+    {
+      "input": "https://a%2ecom/",
+      "host": null
+    },
+    {
+      "input": "https://[zz::1]/",
+      "host": null
+    },
+    {
+      "input": "https://[::1",
+      "host": null
+    },
+    {
+      "input": "null",
+      "host": null
+    },
+    {
+      "input": "",
+      "host": null
+    },
+    {
+      "input": "android-app://com.example/",
+      "host": null
+    },
+    {
+      "input": "https://a b.com/",
+      "host": null
+    },
+    {
+      "input": "https://a.com?x",
+      "host": "a.com"
+    },
+    {
+      "input": "https://a.com#x",
+      "host": "a.com"
+    },
+    {
+      "input": "https://xn--fsq.com/",
+      "host": "xn--fsq.com"
+    }
+  ],
+  "normalizeOriginForm": [
+    {
+      "input": "https://A.com",
+      "star": false,
+      "output": "https://a.com"
+    },
+    {
+      "input": "https://a.com:443",
+      "star": false,
+      "output": "https://a.com"
+    },
+    {
+      "input": "http://a.com:80",
+      "star": false,
+      "output": "http://a.com"
+    },
+    {
+      "input": "http://a.com:443",
+      "star": false,
+      "output": "http://a.com:443"
+    },
+    {
+      "input": "https://*.a.com",
+      "star": false,
+      "output": "https://*.a.com"
+    },
+    {
+      "input": "https://*.a.com:8443",
+      "star": false,
+      "output": "https://*.a.com:8443"
+    },
+    {
+      "input": "*",
+      "star": true,
+      "output": "*"
+    },
+    {
+      "input": "*",
+      "star": false,
+      "output": null
+    },
+    {
+      "input": "https://a.com/",
+      "star": false,
+      "output": null
+    },
+    {
+      "input": "https://a.com/x",
+      "star": false,
+      "output": null
+    },
+    {
+      "input": "a.com",
+      "star": false,
+      "output": null
+    },
+    {
+      "input": "ws://a.com",
+      "star": false,
+      "output": null
+    },
+    {
+      "input": "https://*.*.a.com",
+      "star": false,
+      "output": null
+    },
+    {
+      "input": "https://a.*.com",
+      "star": false,
+      "output": null
+    },
+    {
+      "input": "https://*",
+      "star": false,
+      "output": null
+    },
+    {
+      "input": "https://a.com:0",
+      "star": false,
+      "output": null
+    },
+    {
+      "input": "https://a.com:080",
+      "star": false,
+      "output": null
+    },
+    {
+      "input": "https://a.com:70000",
+      "star": false,
+      "output": null
+    },
+    {
+      "input": "https://u@a.com",
+      "star": false,
+      "output": null
+    },
+    {
+      "input": "https://1.2.3.4:8080",
+      "star": false,
+      "output": "https://1.2.3.4:8080"
+    },
+    {
+      "input": "https://[::1]",
+      "star": false,
+      "output": null
+    },
+    {
+      "input": "HTTP://A.COM",
+      "star": false,
+      "output": "http://a.com"
+    },
+    {
+      "input": " https://a.com ",
+      "star": false,
+      "output": "https://a.com"
+    }
+  ],
+  "normalizeOrigin": [
+    {
+      "input": "https://a.com",
+      "output": "https://a.com"
+    },
+    {
+      "input": "https://A.com:443",
+      "output": "https://a.com"
+    },
+    {
+      "input": "null",
+      "output": null
+    },
+    {
+      "input": "",
+      "output": null
+    },
+    {
+      "input": "https://*.a.com",
+      "output": null
+    },
+    {
+      "input": "https://a.com/",
+      "output": null
+    },
+    {
+      "input": "http://localhost:3000",
+      "output": "http://localhost:3000"
+    },
+    {
+      "input": "https://[::1]",
+      "output": null
+    }
+  ],
+  "originForms": [
+    {
+      "form": "https://a.com",
+      "origin": "https://a.com",
+      "match": true
+    },
+    {
+      "form": "https://a.com",
+      "origin": "http://a.com",
+      "match": false
+    },
+    {
+      "form": "https://a.com",
+      "origin": "https://a.com:8443",
+      "match": false
+    },
+    {
+      "form": "https://*.a.com",
+      "origin": "https://b.a.com",
+      "match": true
+    },
+    {
+      "form": "https://*.a.com",
+      "origin": "https://c.b.a.com",
+      "match": false
+    },
+    {
+      "form": "https://*.a.com",
+      "origin": "https://a.com",
+      "match": false
+    },
+    {
+      "form": "https://*.a.com",
+      "origin": "https://b.a.com:8443",
+      "match": false
+    },
+    {
+      "form": "https://*.a.com:8443",
+      "origin": "https://b.a.com:8443",
+      "match": true
+    },
+    {
+      "form": "http://localhost:3000",
+      "origin": "http://localhost:3000",
+      "match": true
+    }
+  ],
+  "pathScope": [
+    {
+      "path": "/img/a.png",
+      "prefixes": [],
+      "excluded": [],
+      "result": true
+    },
+    {
+      "path": "/img/a.png",
+      "prefixes": ["/img/"],
+      "excluded": [],
+      "result": true
+    },
+    {
+      "path": "/css/a.css",
+      "prefixes": ["/img/"],
+      "excluded": [],
+      "result": false
+    },
+    {
+      "path": "/img/free/a.png",
+      "prefixes": ["/img/"],
+      "excluded": ["/img/free/"],
+      "result": false
+    },
+    {
+      "path": "/a",
+      "prefixes": [],
+      "excluded": ["/a"],
+      "result": false
+    },
+    {
+      "path": "/ab",
+      "prefixes": ["/a"],
+      "excluded": [],
+      "result": true
+    }
+  ],
+  "userAgents": [
+    {
+      "rules": [
+        {
+          "pattern": "*curl*",
+          "allow": false
+        }
+      ],
+      "ua": "curl/8.5.0",
+      "result": "deny"
+    },
+    {
+      "rules": [
+        {
+          "pattern": "*curl*",
+          "allow": false
+        }
+      ],
+      "ua": "Mozilla/5.0",
+      "result": "pass"
+    },
+    {
+      "rules": [
+        {
+          "pattern": "*CURL*",
+          "allow": false
+        }
+      ],
+      "ua": "curl/8.5.0",
+      "result": "deny"
+    },
+    {
+      "rules": [
+        {
+          "pattern": "curl",
+          "allow": false
+        }
+      ],
+      "ua": "curl/8.5.0",
+      "result": "pass"
+    },
+    {
+      "rules": [
+        {
+          "pattern": "*",
+          "allow": false
+        },
+        {
+          "pattern": "*Googlebot*",
+          "allow": true
+        }
+      ],
+      "ua": "Mozilla/5.0 (compatible; Googlebot/2.1)",
+      "result": "pass"
+    },
+    {
+      "rules": [
+        {
+          "pattern": "*",
+          "allow": false
+        },
+        {
+          "pattern": "*Googlebot*",
+          "allow": true
+        }
+      ],
+      "ua": "Bingbot",
+      "result": "deny"
+    },
+    {
+      "rules": [
+        {
+          "pattern": "",
+          "allow": false
+        }
+      ],
+      "ua": "",
+      "result": "deny"
+    },
+    {
+      "rules": [
+        {
+          "pattern": "",
+          "allow": false
+        }
+      ],
+      "ua": "x",
+      "result": "pass"
+    },
+    {
+      "rules": [
+        {
+          "pattern": "*",
+          "allow": false
+        }
+      ],
+      "ua": "",
+      "result": "deny"
+    },
+    {
+      "rules": [
+        {
+          "pattern": "*bot*",
+          "allow": true
+        }
+      ],
+      "ua": "anything",
+      "result": "pass"
+    },
+    {
+      "rules": [
+        {
+          "pattern": "a\\*b",
+          "allow": false
+        }
+      ],
+      "ua": "a*b",
+      "result": "deny"
+    },
+    {
+      "rules": [
+        {
+          "pattern": "a\\*b",
+          "allow": false
+        }
+      ],
+      "ua": "axb",
+      "result": "pass"
+    },
+    {
+      "rules": [
+        {
+          "pattern": "Mozilla/* (*) *",
+          "allow": false
+        }
+      ],
+      "ua": "Mozilla/5.0 (X11) Gecko",
+      "result": "deny"
+    },
+    {
+      "rules": [],
+      "ua": "curl",
+      "result": "pass"
+    }
+  ],
+  "validUserAgentPattern": [
+    {
+      "pattern": "",
+      "valid": true
+    },
+    {
+      "pattern": "*curl*",
+      "valid": true
+    },
+    {
+      "pattern": "a\\*b",
+      "valid": true
+    },
+    {
+      "pattern": "a\\\\b",
+      "valid": true
+    },
+    {
+      "pattern": "a\\b",
+      "valid": false
+    },
+    {
+      "pattern": "********",
+      "valid": true
+    },
+    {
+      "pattern": "*********",
+      "valid": false
+    },
+    {
+      "pattern": "tab\there",
+      "valid": false
+    },
+    {
+      "pattern": "ü",
+      "valid": false
+    },
+    {
+      "pattern": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "valid": true
+    },
+    {
+      "pattern": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "valid": false
+    }
+  ],
+  "hotlink": [
+    {
+      "name": "empty referer allowed",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "",
+        "path": "/a.png",
+        "referer": ""
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "pass"
+    },
+    {
+      "name": "empty referer denied",
+      "cfg": {
+        "allowEmpty": false,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "",
+        "path": "/a.png",
+        "referer": ""
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "deny"
+    },
+    {
+      "name": "own domain",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "",
+        "path": "/a.png",
+        "referer": "https://www.site.com/page"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "pass"
+    },
+    {
+      "name": "own domain off",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": false,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "",
+        "path": "/a.png",
+        "referer": "https://www.site.com/page"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "deny"
+    },
+    {
+      "name": "foreign",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "",
+        "path": "/a.png",
+        "referer": "https://evil.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "deny"
+    },
+    {
+      "name": "out of scope extension",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "css",
+        "origin": "",
+        "path": "/a.css",
+        "referer": "https://evil.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "skip"
+    },
+    {
+      "name": "allowed exact",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": ["friend.com"],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "",
+        "path": "/a.png",
+        "referer": "https://friend.com/x"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "pass"
+    },
+    {
+      "name": "allowed wildcard one level",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": ["*.friend.com"],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "",
+        "path": "/a.png",
+        "referer": "https://b.friend.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "pass"
+    },
+    {
+      "name": "allowed wildcard deeper",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": ["*.friend.com"],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "",
+        "path": "/a.png",
+        "referer": "https://c.b.friend.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "deny"
+    },
+    {
+      "name": "allowed suffix deeper",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": [".friend.com"],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "",
+        "path": "/a.png",
+        "referer": "https://c.b.friend.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "pass"
+    },
+    {
+      "name": "star allows any",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": ["*"],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "",
+        "path": "/a.png",
+        "referer": "https://evil.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "pass"
+    },
+    {
+      "name": "deny wins over star",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": ["*"],
+        "denied": ["evil.com"],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "",
+        "path": "/a.png",
+        "referer": "https://evil.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "deny"
+    },
+    {
+      "name": "deny wins over own domain",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [".site.com"],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "",
+        "path": "/a.png",
+        "referer": "https://www.site.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "deny"
+    },
+    {
+      "name": "unparseable referer",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": ["*"],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "",
+        "path": "/a.png",
+        "referer": "not a url"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "deny"
+    },
+    {
+      "name": "unparseable with allowEmpty",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "",
+        "path": "/a.png",
+        "referer": "android-app://x/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "deny"
+    },
+    {
+      "name": "origin ignored by default",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "https://evil.com",
+        "path": "/a.png",
+        "referer": ""
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "pass"
+    },
+    {
+      "name": "origin checked",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": true,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "https://evil.com",
+        "path": "/a.png",
+        "referer": ""
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "deny"
+    },
+    {
+      "name": "origin null checked",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": true,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "null",
+        "path": "/a.png",
+        "referer": ""
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "deny"
+    },
+    {
+      "name": "both must pass",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": true,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "https://evil.com",
+        "path": "/a.png",
+        "referer": "https://site.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "deny"
+    },
+    {
+      "name": "both pass",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": true,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "https://cdn.site.com",
+        "path": "/a.png",
+        "referer": "https://site.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "pass"
+    },
+    {
+      "name": "prefix scope",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": [],
+        "pathPrefixes": ["/dl/"],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "zip",
+        "origin": "",
+        "path": "/dl/a.zip",
+        "referer": "https://evil.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "deny"
+    },
+    {
+      "name": "prefix scope outside",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": [],
+        "pathPrefixes": ["/dl/"],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "zip",
+        "origin": "",
+        "path": "/a.zip",
+        "referer": "https://evil.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "skip"
+    },
+    {
+      "name": "extension or prefix",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": ["png"],
+        "pathPrefixes": ["/dl/"],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "zip",
+        "origin": "",
+        "path": "/dl/a.zip",
+        "referer": "https://evil.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "deny"
+    },
+    {
+      "name": "excluded",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": ["/public/"],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "",
+        "path": "/public/a.png",
+        "referer": "https://evil.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "skip"
+    },
+    {
+      "name": "empty scope is everything",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": [],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "",
+        "origin": "",
+        "path": "/page",
+        "referer": "https://evil.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "deny"
+    },
+    {
+      "name": "redirect target exempt",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": "/hotlink.png"
+      },
+      "req": {
+        "extension": "png",
+        "origin": "",
+        "path": "/hotlink.png",
+        "referer": "https://evil.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "skip"
+    },
+    {
+      "name": "redirect url target not exempt",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": "https://img.site.com/hotlink.png"
+      },
+      "req": {
+        "extension": "png",
+        "origin": "",
+        "path": "/hotlink.png",
+        "referer": "https://evil.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "deny"
+    },
+    {
+      "name": "host with port",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": ["friend.com"],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "",
+        "path": "/a.png",
+        "referer": "http://friend.com:8080/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "pass"
+    },
+    {
+      "name": "ip literal",
+      "cfg": {
+        "allowEmpty": true,
+        "allowSiteDomains": true,
+        "allowed": ["10.0.0.1"],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": ["png", "jpg"],
+        "pathPrefixes": [],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "png",
+        "origin": "",
+        "path": "/a.png",
+        "referer": "http://10.0.0.1/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "pass"
+    }
+  ],
+  "geo": [
+    {
+      "cfg": {
+        "allowOnly": false,
+        "countries": ["CN"],
+        "subdivisions": [],
+        "asns": [],
+        "pathPrefixes": [],
+        "exceptPathPrefixes": []
+      },
+      "geo": {
+        "country": "CN",
+        "subdivision": "GD",
+        "asnum": 4134
+      },
+      "result": "deny"
+    },
+    {
+      "cfg": {
+        "allowOnly": false,
+        "countries": ["CN"],
+        "subdivisions": [],
+        "asns": [],
+        "pathPrefixes": [],
+        "exceptPathPrefixes": []
+      },
+      "geo": {
+        "country": "US",
+        "subdivision": "CA",
+        "asnum": 7922
+      },
+      "result": "pass"
+    },
+    {
+      "cfg": {
+        "allowOnly": true,
+        "countries": ["CN"],
+        "subdivisions": [],
+        "asns": [],
+        "pathPrefixes": [],
+        "exceptPathPrefixes": []
+      },
+      "geo": {
+        "country": "US",
+        "subdivision": "CA",
+        "asnum": 7922
+      },
+      "result": "deny"
+    },
+    {
+      "cfg": {
+        "allowOnly": true,
+        "countries": ["CN"],
+        "subdivisions": [],
+        "asns": [],
+        "pathPrefixes": [],
+        "exceptPathPrefixes": []
+      },
+      "geo": {
+        "country": "CN",
+        "subdivision": "",
+        "asnum": 0
+      },
+      "result": "pass"
+    },
+    {
+      "cfg": {
+        "allowOnly": true,
+        "countries": ["CN"],
+        "subdivisions": [],
+        "asns": [],
+        "pathPrefixes": [],
+        "exceptPathPrefixes": []
+      },
+      "geo": {
+        "country": "",
+        "subdivision": "",
+        "asnum": 0
+      },
+      "result": "deny"
+    },
+    {
+      "cfg": {
+        "allowOnly": false,
+        "countries": ["CN"],
+        "subdivisions": [],
+        "asns": [],
+        "pathPrefixes": [],
+        "exceptPathPrefixes": []
+      },
+      "geo": {
+        "country": "",
+        "subdivision": "",
+        "asnum": 0
+      },
+      "result": "pass"
+    },
+    {
+      "cfg": {
+        "allowOnly": false,
+        "countries": [],
+        "subdivisions": ["US-CA"],
+        "asns": [],
+        "pathPrefixes": [],
+        "exceptPathPrefixes": []
+      },
+      "geo": {
+        "country": "US",
+        "subdivision": "CA",
+        "asnum": 1
+      },
+      "result": "deny"
+    },
+    {
+      "cfg": {
+        "allowOnly": false,
+        "countries": [],
+        "subdivisions": ["us-ca"],
+        "asns": [],
+        "pathPrefixes": [],
+        "exceptPathPrefixes": []
+      },
+      "geo": {
+        "country": "US",
+        "subdivision": "CA",
+        "asnum": 1
+      },
+      "result": "deny"
+    },
+    {
+      "cfg": {
+        "allowOnly": false,
+        "countries": [],
+        "subdivisions": ["US-CA"],
+        "asns": [],
+        "pathPrefixes": [],
+        "exceptPathPrefixes": []
+      },
+      "geo": {
+        "country": "US",
+        "subdivision": "NY",
+        "asnum": 1
+      },
+      "result": "pass"
+    },
+    {
+      "cfg": {
+        "allowOnly": false,
+        "countries": [],
+        "subdivisions": ["CN-Guangdong"],
+        "asns": [],
+        "pathPrefixes": [],
+        "exceptPathPrefixes": []
+      },
+      "geo": {
+        "country": "CN",
+        "subdivision": "guangdong",
+        "asnum": 1
+      },
+      "result": "deny"
+    },
+    {
+      "cfg": {
+        "allowOnly": false,
+        "countries": [],
+        "subdivisions": ["US-"],
+        "asns": [],
+        "pathPrefixes": [],
+        "exceptPathPrefixes": []
+      },
+      "geo": {
+        "country": "US",
+        "subdivision": "",
+        "asnum": 1
+      },
+      "result": "pass"
+    },
+    {
+      "cfg": {
+        "allowOnly": false,
+        "countries": [],
+        "subdivisions": [],
+        "asns": [64512],
+        "pathPrefixes": [],
+        "exceptPathPrefixes": []
+      },
+      "geo": {
+        "country": "NZ",
+        "subdivision": "",
+        "asnum": 64512
+      },
+      "result": "deny"
+    },
+    {
+      "cfg": {
+        "allowOnly": true,
+        "countries": ["NZ"],
+        "subdivisions": [],
+        "asns": [64512],
+        "pathPrefixes": [],
+        "exceptPathPrefixes": []
+      },
+      "geo": {
+        "country": "AU",
+        "subdivision": "",
+        "asnum": 64512
+      },
+      "result": "pass"
+    },
+    {
+      "cfg": {
+        "allowOnly": false,
+        "countries": [],
+        "subdivisions": [],
+        "asns": [0],
+        "pathPrefixes": [],
+        "exceptPathPrefixes": []
+      },
+      "geo": {
+        "country": "",
+        "subdivision": "",
+        "asnum": 0
+      },
+      "result": "pass"
+    }
+  ],
+  "cors": [
+    {
+      "cfg": {
+        "allowedOrigins": ["*"],
+        "allowCredentials": false
+      },
+      "origin": "https://any.example",
+      "result": "*"
+    },
+    {
+      "cfg": {
+        "allowedOrigins": ["*"],
+        "allowCredentials": false
+      },
+      "origin": "null",
+      "result": "*"
+    },
+    {
+      "cfg": {
+        "allowedOrigins": ["*"],
+        "allowCredentials": false
+      },
+      "origin": "",
+      "result": null
+    },
+    {
+      "cfg": {
+        "allowedOrigins": ["https://a.com"],
+        "allowCredentials": false
+      },
+      "origin": "https://a.com",
+      "result": "https://a.com"
+    },
+    {
+      "cfg": {
+        "allowedOrigins": ["https://a.com"],
+        "allowCredentials": true
+      },
+      "origin": "https://a.com",
+      "result": "https://a.com"
+    },
+    {
+      "cfg": {
+        "allowedOrigins": ["https://a.com"],
+        "allowCredentials": false
+      },
+      "origin": "https://a.com:443",
+      "result": "https://a.com:443"
+    },
+    {
+      "cfg": {
+        "allowedOrigins": ["https://a.com"],
+        "allowCredentials": false
+      },
+      "origin": "https://b.com",
+      "result": null
+    },
+    {
+      "cfg": {
+        "allowedOrigins": ["https://*.a.com"],
+        "allowCredentials": true
+      },
+      "origin": "https://x.a.com",
+      "result": "https://x.a.com"
+    },
+    {
+      "cfg": {
+        "allowedOrigins": ["https://*.a.com"],
+        "allowCredentials": true
+      },
+      "origin": "https://a.com",
+      "result": null
+    },
+    {
+      "cfg": {
+        "allowedOrigins": ["https://a.com"],
+        "allowCredentials": false
+      },
+      "origin": "null",
+      "result": null
+    },
+    {
+      "cfg": {
+        "allowedOrigins": ["http://localhost:3000"],
+        "allowCredentials": false
+      },
+      "origin": "http://localhost:3000",
+      "result": "http://localhost:3000"
+    }
+  ],
+  "websocket": [
+    {
+      "origins": [],
+      "origin": "",
+      "result": true
+    },
+    {
+      "origins": [],
+      "origin": "https://evil.com",
+      "result": true
+    },
+    {
+      "origins": ["https://a.com"],
+      "origin": "https://a.com",
+      "result": true
+    },
+    {
+      "origins": ["https://a.com"],
+      "origin": "",
+      "result": false
+    },
+    {
+      "origins": ["https://a.com"],
+      "origin": "https://evil.com",
+      "result": false
+    },
+    {
+      "origins": ["https://*.a.com"],
+      "origin": "https://chat.a.com",
+      "result": true
+    },
+    {
+      "origins": ["https://a.com"],
+      "origin": "null",
+      "result": false
+    }
+  ]
+}

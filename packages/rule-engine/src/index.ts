@@ -2,6 +2,28 @@ import ipaddr from "ipaddr.js";
 import { md5Hex, sha1Hex, sha256Hex } from "./digest.ts";
 import { validHostHeader } from "./host-header.ts";
 
+export {
+  corsAllowOrigin,
+  type GeoAccessModel,
+  type GeoRecord,
+  geoDecision,
+  geoMatches,
+  type HotlinkModel,
+  type HotlinkRequest,
+  hostFormMatches,
+  hotlinkDecision,
+  normalizeHostForm,
+  normalizeOrigin,
+  normalizeOriginForm,
+  originFormMatches,
+  pathInScope,
+  refererHost,
+  type UserAgentRuleModel,
+  userAgentDecision,
+  validHostName,
+  validUserAgentPattern,
+  websocketOriginAllowed,
+} from "./access-control.ts";
 export { MAX_HOST_HEADER_LENGTH, validHostHeader } from "./host-header.ts";
 export {
   checkSignedUri,
