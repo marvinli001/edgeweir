@@ -44,8 +44,8 @@ Phases run in the order of this table.
 | Request transform | Rewrite path, Request header | Rewrites the origin path and query parameters; sets or removes request headers |
 | Redirect | Redirect | Returns 301, 302, 303, 307, or 308; [bulk redirects](#bulk-redirects) are looked up after the rules |
 | Configuration | Override settings | Overrides site settings per request, see [Override settings](#override-settings) |
-| Custom WAF | Block, Log, Allow, Challenge | Block returns 403 or 451; Log only writes a log line; Allow skips the remaining custom WAF rules of the same scope; Challenge makes visitors pass a challenge first |
-| Rate limit | Rate limit | Fixed-window counting; over the limit returns 429 or 403 |
+| Custom WAF | Block, Log, Allow, Challenge, Ban, Custom response, Close connection, Skip | Block returns 403 or 451; Log only writes a log line (and optionally an access log line); Allow skips the remaining custom WAF rules of the same scope; Challenge makes visitors pass a challenge first; Ban, Custom response, Close connection and Skip: see [WAF actions](#waf-actions) |
+| Rate limit | Rate limit | Fixed-window counting; over the limit returns 429 or 403 and can ban the address |
 | Cache | Override settings | Overrides only cache bypass, HTTPS redirect, and Gzip |
 | Origin | Request header, Origin override | Sets or removes headers sent to the origin; picks an origin group and overrides the origin Host, SNI, and port |
 | Response transform | Response header | Sets, appends, or removes response headers based on status and response headers |
@@ -79,6 +79,16 @@ Phases run in the order of this table.
 | Rate limit | Window (seconds) | 1–3600 | 60 |
 | Rate limit | Rate limit key | `ip.src`, `http.host`, `tls.ja4`, or `http.request.headers.<name>` (pick **Request header** and enter the name) | `ip.src` |
 | Rate limit | Status code | 429 / 403 | 429 |
+| Rate limit | Ban when exceeded (s) | 0 or 60–86400; 0 bans nothing | 0 |
+| Log | Write access log | On / Off | Off |
+| Ban | Duration (s) | 60–604800 | 3600 |
+| Ban | Scope | This site / Global (global rules only) | This site |
+| Ban | IPv4 prefix, IPv6 prefix | IPv4 /16–/32; IPv6 /48–/64 | /32, /64 |
+| Custom response | Status code | 200, 204, 400–499, 500–599 | 403 |
+| Custom response | Use error page | On / Off; 4xx and 5xx only, without type and body when on | Off |
+| Custom response | Type | `text/plain` / `text/html` / `application/json` | `text/plain` |
+| Custom response | Body | Static text, at most 8192 bytes, no control characters but tab and line breaks; 204 has no body | Empty |
+| Skip | Skipped | **Remaining custom WAF rules**, **Rate limits**, **OWASP CRS**, **Under Attack and CC challenges**, at least one | None |
 
 Protected headers cannot be set or removed by rules: `Host`, `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `Content-Length`, `Transfer-Encoding`, `Connection`, `Upgrade`, `TE`, `Trailer`, `CDN-Loop`, and headers starting with `X-Edgeweir-`.
 
@@ -105,6 +115,7 @@ Every setting of **Override settings** starts as **Unchanged**; numbers left emp
 | Origin send timeout (s), Origin read timeout (s) | 0.1–3600 | Configuration | Override the pool's send and read timeouts |
 | Log sample rate (%) | 0–100 | Configuration | The access log sample rate of the request |
 | Body limit (MiB) | 0–10240, 0 for no limit | Configuration | Overrides the site's [request body limit](origins-and-cache.en.md#request-body-limit); needs the node capability `site-content-v1` |
+| OWASP CRS | Unchanged / Off / Detect only / Block | Configuration | The request's CRS mode; no effect on sites without CRS, see [overrides and exclusions by path](waf.en.md#overrides-and-exclusions-by-path); needs the node capability `waf-v2` |
 
 A later matching rule overrides an earlier one setting by setting. Compression switches apply only among the algorithms the site has turned on; rules cannot turn on an algorithm the site has off.
 
@@ -163,6 +174,19 @@ wildcard_replace(http.request.full_uri, "https://*.example.com/*", "https://exam
 | When values are computed | Request phase values use the request at that point (the path, query string, and `http.request.uri.args` after rewrites); response header values are computed in the edge layer's header filter, for cache hits and origin responses alike |
 | Node requirement | `rules-v3`, see [Node capabilities and publishing](#node-capabilities-and-publishing) |
 
+### WAF actions
+
+| Action | Behavior |
+| --- | --- |
+| Ban | Writes `ip.src`, masked to the chosen prefix (IPv4 /32 and IPv6 /64 by default), as an [automatic ban](bans.en.md#rule-bans) with source **Rule**, reason **Banned by a rule** and the rule id; this request gets 403 (`X-Edgeweir-Error: ip-banned`, the error page). An address that already has an active ban is not written again. Addresses on global allow lists, the cluster's trusted proxies and the node's own prefetches are never written; site-scope bans are not written for addresses on the site's allow lists. The console shares the ban with the cluster's other nodes ([Share automatic bans in the cluster](bans.en.md#automatic-bans) on) |
+| Custom response | Ends the request without the origin, with `Cache-Control: no-store`. Static body: `Content-Type` is the chosen type (text types get `; charset=utf-8`), HEAD and 204 have no body, no `X-Edgeweir-Error`; **Use error page**: the site's error page of the status, else of its class (4xx / 5xx), else the built-in page, with `X-Edgeweir-Error: rule-response` |
+| Close connection | Sends nothing and closes the connection (nginx 444; under HTTP/2 and HTTP/3 the request's stream is reset) |
+| Skip | **Remaining custom WAF rules**: the remaining custom WAF rules of the scope (global or site) do not run; **Rate limits**: a global rule skips global and site rate limits, a site rule the site's only; **OWASP CRS**: the request is not inspected by CRS; **Under Attack and CC challenges**: like Allow, exempts from Under Attack, CC challenges and CC per-IP bans. Without **Remaining custom WAF rules** the rules after it still run. Site rules run after the global rules of the same phase and cannot skip a global block |
+| Log: write access log | Besides the count, writes an [access log](access-logs.en.md) line for the request whatever the site's sample rate, with the rule id; at most 100 per site and second on each node, beyond that the sample rate applies as usual |
+| Rate limit: ban when exceeded | The request over the limit still gets the rate limit's status; `ip.src` (IPv4 /32, IPv6 /64) is banned on the site for the seconds set (source **Rule**, reason **Over a rate limit**), and later requests get 403 `ip-banned`. Exemptions as for Ban |
+
+Ban, Custom response, Close connection, Skip, Write access log and Ban when exceeded need the node capability `waf-v2`; they are available in the custom WAF phase only (Ban when exceeded in the rate limit phase), and the node's own prefetches are not affected.
+
 ### Execution order
 
 | Item | Behavior |
@@ -170,9 +194,10 @@ wildcard_replace(http.request.full_uri, "https://*.example.com/*", "https://exam
 | Allow and block lists | Run first. An address in a block list gets 403; an address in an allow list is exempt from the block lists but not from rules; an address in both is allowed. The site's [access control](access-control.en.md#order) (site lists, geo, CORS preflights, hotlink protection, user agents) and access authentication follow, and only then the rule phases |
 | Access authentication | The site's [access authentication](access-control.en.md) runs after the lists and before every phase; refused requests run no rules. Signed URLs have lost their signature before: expressions never see the signature parameters or path segments |
 | Scope | In each phase, global rules run before site rules; within a scope, in list order |
-| Terminating actions | Block, redirect (bulk redirects included), and exceeding a rate limit end the request |
+| Terminating actions | Block, redirect (bulk redirects included), exceeding a rate limit, Ban, Custom response and Close connection end the request |
 | Bulk redirects | Looked up after the global and site rules of the redirect phase |
 | Allow | Skips only the remaining custom WAF rules of the same scope, not the other scope and not rate limits; a site allow rule cannot bypass a block in the global rules |
+| Skip | See [WAF actions](#waf-actions); skipping **Rate limits** skips every rate limit from a global rule, the site's only from a site rule |
 | Stacking | Other actions accumulate; a later action overrides an earlier setting; override settings and origin overrides apply field by field, and a later compression rule replaces an earlier one |
 | Ordering | Dragging changes order only within a phase |
 
@@ -257,6 +282,12 @@ substring(sha256(http.request.uri.path), 0, 8) eq "a1b2c3d4"
 | `tls.client.verified` | Boolean | `true` when the visitor presented a client certificate the site's CA issued and it passed verification, see [Client certificates](https.en.md#client-certificates); `false` on sites without client certificates and over plain HTTP |
 | `tls.client.cert_sha256` | String | SHA-256 of the verified client certificate's DER (lowercase hex); empty string otherwise |
 | `tls.client.subject` | String | Subject of the verified client certificate (RFC 2253, such as `CN=svc,O=Example`); empty string otherwise |
+| `http.request.body.size` | Integer | The request's `Content-Length`; -1 without one. Reads no body. See [Request body](#request-body) |
+| `http.request.body.raw` | String | The body read; an empty string when it was not read (truncated) |
+| `http.request.body.truncated` | Boolean | `true` when the body was not read, see [Request body](#request-body) |
+| `http.request.body.filenames` | String | The (non-empty) file names of a `multipart/form-data` upload, joined by line breaks in their order |
+| `http.request.bot.verified` | Boolean | The visitor claims to be a search engine crawler and the node's reverse and forward DNS confirmed it, see [Verified search engine crawlers](challenges.en.md#verified-search-engine-crawlers) |
+| `http.request.bot.name` | String | The verified crawler: `googlebot`, `bingbot`, `baiduspider`, `yandexbot` or `applebot`; empty string otherwise |
 
 ### Operators and literals
 
@@ -293,6 +324,8 @@ Every string is handled as UTF-8 bytes. Arguments are fields, string literals, o
 | `md5(s)`, `sha1(s)`, `sha256(s)` | String | The digest in lowercase hexadecimal |
 | `substring(s, start[, length])` | String | Bytes from `start` (0-based; negative counts from the end, clamped to the first byte), up to the end without a length; empty when the start is not below the length of `s`. `start` is an integer literal from -65536 to 65536, `length` from 0 to 65536 |
 | `to_string(x)` | String | Integers in decimal, booleans as `true` / `false`, IPs as the address text the node sees, strings unchanged; the argument can be a field or function of any type |
+| `form_value("name")` | String | The first value of a form field, see [Request body](#request-body); the name is a string literal of 1–256 bytes |
+| `json_value("a.b.0.c")` | String | The value at the path of a JSON body, see [Request body](#request-body); the path is a string literal of 1–256 bytes, 1–32 segments separated by `.` |
 
 | Item | Rule |
 | --- | --- |
@@ -301,8 +334,31 @@ Every string is handled as UTF-8 bytes. Arguments are fields, string literals, o
 | Literal arguments | Patterns, wildcards, replacements, and `"s"` must be string literals; wildcards and replacements are at most 1024 bytes without control characters |
 | Replacements | `${1}`–`${8}` refer to the pattern's capture groups or the wildcard's `*`, up to their number; groups that did not take part in the match become empty; any other `$` is a literal; captures keep the case of the original string |
 | Nesting | At most 4 levels |
-| Result length | A function result longer than 8192 bytes fails evaluation |
+| Result length | A function result longer than 8192 bytes fails evaluation; `form_value` and `json_value`, like reading a field, have no such limit |
 | Evaluation failure | A pattern over its execution budget, a result that is too long, or an invalid dynamic target gets the request a 503 (`X-Edgeweir-Error: policy-unavailable`) |
+
+### Request body
+
+Request body fields, `form_value` and `json_value` work in the request phases only: request transform, redirect, configuration, custom WAF, rate limit and origin; not in the cache phase, cache rule conditions or the response phases, and not as a rate limit key.
+
+| Item | Behavior |
+| --- | --- |
+| When it is read | Only when the site's or the global rules reference a body field or one of the two functions, and an expression evaluates it (`and` and `or` stop early); sites without such a reference never read request bodies. `http.request.body.size` takes `Content-Length` only, reading nothing |
+| Which requests | With a `Content-Length` of at most the site's **Rules body limit** (**Rules** tab, 1024–1048576 bytes, default 65536) the whole body is read; an HTTP/1.x request with neither `Content-Length` nor `Transfer-Encoding` has no body (empty, not truncated) |
+| Truncated | Bodies over the limit, chunked bodies, HTTP/2 and HTTP/3 requests without `Content-Length` (GETs included), gRPC requests of sites that proxy gRPC and WebSocket upgrades are not read: `http.request.body.truncated` is `true` and `raw`, `filenames`, `form_value`, `json_value` are empty. When blocking on body fields, check truncation and the method as well, such as `http.request.method eq "POST" and http.request.body.truncated eq true` |
+| Forms | `application/x-www-form-urlencoded`: split at `&`, names and values decoded once (`+` is a space); `multipart/form-data`: values of the parts that are not files, as sent; the first field of a name |
+| Multipart | Split at the `boundary`; a part with a `filename` parameter is a file (in `filenames`, not a form field); parsing stops at the first malformed part, keeping what came before; at most 1000 parts |
+| JSON | Media type `application/json` or one ending in `+json`; the whole body is checked against RFC 8259 and is empty when invalid; path segments are object keys or array indexes (from 0); a repeated key keeps its last value; strings decoded, numbers as written, booleans `true` / `false`, `null`, objects and arrays empty; at most 128 levels |
+| CRS | After the rules read a body, sites with CRS have ModSecurity inspect the same body; the CRS request body limit and the rules body limit are separate |
+| Origin | Reading does not change the body; the origin receives what the visitor sent |
+| Node capability | `rules-body-v1` |
+
+```text
+json_value("cmd") eq "rm"
+form_value("user") eq "admin"
+http.request.body.filenames contains ".php"
+http.request.method eq "POST" and http.request.body.truncated eq true
+```
 
 ### IP semantics
 
@@ -418,6 +474,7 @@ API: `GET` and `POST /api/v1/ip-lists`, `PUT` and `DELETE /api/v1/ip-lists/{id}`
 | Rule engine extensions | Any of these needs `rules-v2`: functions and `http.request.full_uri`, `http.request.uri.path.extension`, `http.response.content_type.media_type`; expression targets, query parameter edits, and a redirect with **Keep query string** on or a rewrite with it off; origin overrides; the compression phase; the overrides available only in the configuration phase and **Gzip** On; cache rule conditions not in the [builder](origins-and-cache.en.md#request-conditions)'s shape and **Browser TTL (s)**; bulk redirects; origin groups other than the default group |
 | Expression fields and header values | Any of these needs `rules-v3`: `http.request.cookies[…]`, `http.request.uri.args[…]`, `http.referer`, `http.user_agent`, `http.request.version`, `http.request.scheme`, `http.request.id`, `http.request.timestamp.sec`, `edge.server_port`, `ip.geoip.as_name` (also `geoip-asn-v1`), `http.response.cache_status`; `url_encode`, `base64_encode`, `base64_decode`, `md5`, `sha1`, `sha256`, `substring`, `to_string`; `wildcard` and `strict wildcard`; expression values of request headers, response headers, and query parameters; response header **Append**; redirect status 303; `{{time}}` and `{{path}}` in [error pages](error-pages.en.md) |
 | Direct peer | Configurations that read `ip.peer` need `client-ip-v1` |
+| WAF actions and request bodies | Ban, Custom response, Close connection, Skip, Write access log, Ban when exceeded and the **OWASP CRS** override need `waf-v2`; request body fields, `form_value` and `json_value` need `rules-body-v1`; `http.request.bot.*` needs `challenge-v2`. Configurations without them do not change |
 | Existing configurations | Configurations that use none of the extensions stay as they were and do not need `rules-v2`; cache rules in the builder's shape are still sent as the former structured conditions; configurations that use none of the `rules-v3` items stay byte for byte the same as well |
 | Console and AccessKeys | A save is published even when an active node of the cluster lacks a required capability; such nodes keep their last-known-good configuration and **Clusters & nodes** shows **Upgrade required**, see [Node upgrades](node-upgrades.en.md) |
 | Service accounts and background jobs | When a configuration they publish introduces a new capability, every active node of the cluster is checked, including temporarily offline ones; if any lacks it, the publish is refused (`NODE_CAPABILITY_REQUIRED`, "Some nodes don't support … yet: {nodes}") and the configuration and revision stay unchanged |
@@ -483,6 +540,7 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 | Expressions | A wirefilter-style subset; built-in functions only, no custom functions or raw Lua |
 | String replacement | `regex_replace` and `wildcard_replace` only in value expressions (redirect targets, rewrite paths, header values, and query parameter values), once each per expression; `regex_replace` replaces only the first match |
 | Cookies and query parameters | Read by name, the first value, not decoded; there is no list of every cookie or parameter, and names take no wildcards |
+| Request body | Only requests with a `Content-Length` of at most the rules body limit (1 MiB at most) are read; XML is not parsed; JSON keys cannot contain `.` (the path's separator) |
 | Bulk redirects | Exact matches only, static targets |
 | Protected headers | See [Action fields](#action-fields); rules cannot change them |
 | Compression | Override settings and compression rules choose only among the algorithms the site has on |
@@ -511,4 +569,6 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 | "Some nodes of the site's cluster do not support it yet" (Rules tab) | An active node of the cluster lacks `rules-v3` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
 | A rule that redirects HTTP to HTTPS makes requests return 503 | The site has no certificate | Select a certificate on the **HTTPS** tab |
 | Rate limits are not shared across nodes | Rate limits count per node | Scale the threshold by the number of nodes |
+| A rule on body fields does not apply | The body exceeds the rules body limit, is chunked, or the request is HTTP/2 or HTTP/3 without `Content-Length`: it was not read | Raise the limit, or also check `http.request.body.truncated` |
+| "Request body and crawler fields are only available in the request phases" | A body or crawler field in the cache phase, a cache rule or a response phase | Move it to a request phase |
 | Some visitors are not rate limited and the node log shows `rate limit partition full` | The site's rate-limit partition is full and new clients are not counted | Raise the node flag `--rate-limit-dict-kb` |

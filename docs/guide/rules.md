@@ -44,8 +44,8 @@
 | 请求变换 | 改写路径、请求头 | 改写回源路径与查询参数；设置或移除请求头 |
 | 重定向 | 重定向 | 返回 301、302、303、307 或 308；规则之后查[批量重定向](#批量重定向) |
 | 配置 | 覆盖设置 | 按请求覆盖网站设置，见[覆盖设置](#覆盖设置) |
-| 自定义 WAF | 拦截、记录、放行、挑战 | 拦截返回 403 或 451；记录只写日志；放行跳过同一作用域剩余的自定义 WAF 规则；挑战要求访客先通过挑战 |
-| 限速 | 限速 | 固定窗口计数，超额返回 429 或 403 |
+| 自定义 WAF | 拦截、记录、放行、挑战、封禁、自定义响应、断开连接、跳过 | 拦截返回 403 或 451；记录只写日志（可另写访问日志）；放行跳过同一作用域剩余的自定义 WAF 规则；挑战要求访客先通过挑战；封禁、自定义响应、断开连接与跳过见[WAF 动作](#waf-动作) |
+| 限速 | 限速 | 固定窗口计数，超额返回 429 或 403，可在超额后封禁该地址 |
 | 缓存 | 覆盖设置 | 只覆盖绕过缓存、强制 HTTPS 与 Gzip |
 | 回源 | 请求头、源站覆盖 | 设置或移除发往源站的请求头；选择源站组，覆盖回源 Host、SNI 与端口 |
 | 响应变换 | 响应头 | 根据状态码和响应头设置、追加或移除响应头 |
@@ -79,6 +79,16 @@
 | 限速 | 窗口（秒） | 1–3600 | 60 |
 | 限速 | 限速键 | `ip.src`、`http.host`、`tls.ja4` 或 `http.request.headers.<名称>`（选择「请求头」后填写名称） | `ip.src` |
 | 限速 | 状态码 | 429 / 403 | 429 |
+| 限速 | 超额后封禁（秒） | 0 或 60–86400；0 不封禁 | 0 |
+| 记录 | 写入访问日志 | 开 / 关 | 关 |
+| 封禁 | 时长（秒） | 60–604800 | 3600 |
+| 封禁 | 范围 | 本站 / 全局（只有全局规则可选） | 本站 |
+| 封禁 | IPv4 前缀、IPv6 前缀 | IPv4 /16–/32；IPv6 /48–/64 | /32、/64 |
+| 自定义响应 | 状态码 | 200、204、400–499、500–599 | 403 |
+| 自定义响应 | 使用错误页 | 开 / 关；只用于 4xx、5xx，开启后不填类型与正文 | 关 |
+| 自定义响应 | 类型 | `text/plain` / `text/html` / `application/json` | `text/plain` |
+| 自定义响应 | 正文 | 静态文本，最多 8192 字节，不含制表符与换行以外的控制字符；204 没有正文 | 空 |
+| 跳过 | 跳过的项 | 「剩余自定义 WAF 规则」「限速」「OWASP CRS」「Under Attack 与 CC 挑战」，至少一项 | 无 |
 
 受保护头不能通过规则设置或移除：`Host`、`Authorization`、`Proxy-Authorization`、`Cookie`、`Set-Cookie`、`Content-Length`、`Transfer-Encoding`、`Connection`、`Upgrade`、`TE`、`Trailer`、`CDN-Loop`，以及以 `X-Edgeweir-` 开头的头。
 
@@ -105,6 +115,7 @@
 | 回源发送超时（秒）、回源读取超时（秒） | 0.1–3600 | 配置 | 覆盖源站池的发送、读取超时 |
 | 日志采样率（%） | 0–100 | 配置 | 本请求的访问日志采样率 |
 | 请求体上限（MiB） | 0–10240，0 不限 | 配置 | 覆盖网站的[请求体上限](origins-and-cache.md#请求体上限)；需要节点能力 `site-content-v1` |
+| OWASP CRS | 不更改 / 关闭 / 仅检测 / 拦截 | 配置 | 本请求的 CRS 模式；网站没有开启 CRS 时无效，见[按路径覆盖](waf.md#按路径覆盖与排除)；需要节点能力 `waf-v2` |
 
 后命中的规则逐项覆盖先命中的规则。压缩算法的开关只在网站已开启的算法中生效，规则不能开启网站未开启的算法。
 
@@ -163,6 +174,19 @@ wildcard_replace(http.request.full_uri, "https://*.example.com/*", "https://exam
 | 求值时机 | 请求阶段的值按当时的请求求值（改写之后的路径、查询与 `http.request.uri.args`）；响应头的值在边缘层的响应头过滤阶段求值，缓存命中与回源响应都会重新计算 |
 | 节点要求 | `rules-v3`，见[节点能力与发布](#节点能力与发布) |
 
+### WAF 动作
+
+| 动作 | 行为 |
+| --- | --- |
+| 封禁 | 把 `ip.src` 按所选前缀（IPv4 默认 /32、IPv6 默认 /64）写入[自动封禁](bans.md#规则封禁)，来源「规则」、原因「规则封禁」，记录规则 ID；本次请求返回 403（`X-Edgeweir-Error: ip-banned`，错误页）。该地址已有有效封禁时不再写入。全局放行名单中的地址、集群的可信代理与节点自己的预热请求不写入；本站范围的封禁不写给本站放行名单中的地址。封禁经控制台共享给集群的其他节点（[集群内共享自动封禁](bans.md#自动封禁) 开启时） |
+| 自定义响应 | 结束请求，不回源，带 `Cache-Control: no-store`。静态正文：`Content-Type` 为所选类型（文本类型加 `; charset=utf-8`），HEAD 与 204 没有正文，不带 `X-Edgeweir-Error`；「使用错误页」：网站该状态码的错误页，没有时用该类（4xx / 5xx）的页面，再没有时用内置页，带 `X-Edgeweir-Error: rule-response` |
+| 断开连接 | 不发送响应，直接关闭连接（nginx 444；HTTP/2、HTTP/3 下重置该请求的流） |
+| 跳过 | 「剩余自定义 WAF 规则」：本作用域（全局或网站）剩余的自定义 WAF 规则不再执行；「限速」：全局规则跳过全局与网站的限速，网站规则只跳过网站的限速；「OWASP CRS」：本请求不经过 CRS；「Under Attack 与 CC 挑战」：与放行相同，豁免 Under Attack、CC 挑战与 CC 单 IP 封禁。没有勾选「剩余自定义 WAF 规则」时继续执行后面的规则。网站规则排在同阶段的全局规则之后，不能跳过全局规则的拦截 |
+| 记录：写入访问日志 | 除计数之外，不论网站的采样率都为该请求写一条[访问日志](access-logs.md)，日志带规则 ID；每个节点每个网站每秒至多 100 条，超出的照常按采样率记录 |
+| 限速：超额后封禁 | 超额的请求照常返回限速状态码，同时把 `ip.src`（IPv4 /32、IPv6 /64）在本站封禁所设秒数（来源「规则」、原因「超过限速」）；之后的请求返回 403 `ip-banned`。豁免同「封禁」 |
+
+封禁、自定义响应、断开连接、跳过、写入访问日志与超额后封禁需要节点能力 `waf-v2`；它们只在自定义 WAF 阶段（超额后封禁在限速阶段）可用，节点自己的预热请求不受影响。
+
 ### 执行顺序
 
 | 项目 | 行为 |
@@ -170,9 +194,10 @@ wildcard_replace(http.request.full_uri, "https://*.example.com/*", "https://exam
 | 放行与拦截名单 | 最先执行。地址命中拦截名单返回 403；命中放行名单只豁免拦截名单，不跳过规则；同时在两种名单中时放行优先。之后是网站的[访问控制](access-control.md#执行顺序)（本站名单、地区、CORS 预检、防盗链、UA 名单）与访问鉴权，然后才是规则阶段 |
 | 访问鉴权 | 名单之后、所有阶段之前执行网站的[访问鉴权](access-control.md)；被拒绝的请求不再运行规则。URL 鉴权的签名在此之前已经去掉，表达式读不到签名参数与签名路径段 |
 | 作用域 | 每个阶段先执行全局规则，再执行网站规则；同一作用域内按列表顺序 |
-| 结束请求 | 拦截、重定向（含批量重定向）和限速超额结束请求 |
+| 结束请求 | 拦截、重定向（含批量重定向）、限速超额、封禁、自定义响应与断开连接结束请求 |
 | 批量重定向 | 重定向阶段的全局规则与网站规则之后查表 |
 | 放行 | 只跳过同一作用域剩余的自定义 WAF 规则，不跳过另一作用域或限速；网站的放行规则不能绕过全局规则中的拦截 |
+| 跳过 | 见[WAF 动作](#waf-动作)；跳过「限速」时全局规则跳过所有限速，网站规则只跳过网站的限速 |
 | 叠加 | 其余动作依次叠加，后执行的覆盖先执行的设置；覆盖设置与源站覆盖逐项覆盖，后命中的压缩规则替换先命中的 |
 | 排序 | 拖动只改变同一阶段内的顺序 |
 
@@ -257,6 +282,12 @@ substring(sha256(http.request.uri.path), 0, 8) eq "a1b2c3d4"
 | `tls.client.verified` | 布尔 | 访客出示了网站 CA 签发并通过验证的客户端证书时为 `true`，见[客户端证书](https.md#客户端证书)；网站没有开启客户端证书或明文 HTTP 时为 `false` |
 | `tls.client.cert_sha256` | 字符串 | 通过验证的客户端证书 DER 的 SHA-256（小写十六进制）；否则为空字符串 |
 | `tls.client.subject` | 字符串 | 通过验证的客户端证书的主体（RFC 2253，如 `CN=svc,O=Example`）；否则为空字符串 |
+| `http.request.body.size` | 整数 | 请求的 `Content-Length`；没有时为 -1。不读取请求体。见[请求体](#请求体) |
+| `http.request.body.raw` | 字符串 | 读取的请求体；没有读取（截断）时为空字符串 |
+| `http.request.body.truncated` | 布尔 | 请求体没有读取时为 `true`，见[请求体](#请求体) |
+| `http.request.body.filenames` | 字符串 | `multipart/form-data` 上传文件的文件名（非空的），按出现顺序以换行连接 |
+| `http.request.bot.verified` | 布尔 | 访客声称是搜索引擎爬虫，且节点的反向与正向解析确认了它，见[已验证的搜索引擎爬虫](challenges.md#已验证的搜索引擎爬虫) |
+| `http.request.bot.name` | 字符串 | 通过校验的爬虫：`googlebot`、`bingbot`、`baiduspider`、`yandexbot` 或 `applebot`；否则为空字符串 |
 
 ### 运算符与字面量
 
@@ -293,6 +324,8 @@ substring(sha256(http.request.uri.path), 0, 8) eq "a1b2c3d4"
 | `md5(s)`、`sha1(s)`、`sha256(s)` | 字符串 | 摘要的小写十六进制 |
 | `substring(s, 起点[, 长度])` | 字符串 | 按字节截取：起点从 0 开始，负数从末尾数（超出开头时从第 1 个字节起）；省略长度时到末尾；起点不小于长度时为空字符串。起点为 -65536–65536、长度为 0–65536 的整数字面量 |
 | `to_string(x)` | 字符串 | 整数写成十进制，布尔为 `true` / `false`，IP 为节点看到的地址文本，字符串原样返回；参数可以是任何类型的字段或函数 |
+| `form_value("名称")` | 字符串 | 表单字段的第一个值，见[请求体](#请求体)；名称为字符串字面量，1–256 字节 |
+| `json_value("a.b.0.c")` | 字符串 | JSON 请求体中该路径的值，见[请求体](#请求体)；路径为字符串字面量，1–256 字节，以 `.` 分隔的 1–32 段 |
 
 | 项目 | 规则 |
 | --- | --- |
@@ -301,8 +334,31 @@ substring(sha256(http.request.uri.path), 0, 8) eq "a1b2c3d4"
 | 字面量参数 | 正则、通配模式、替换串与 `"s"` 必须是字符串字面量；通配模式与替换串最长 1024 字节，不含控制字符 |
 | 替换串 | `${1}`–`${8}` 引用正则的捕获组或通配模式的 `*`，编号不超过组数或 `*` 数；未参与匹配的组替换为空串；其他 `$` 是字面量；捕获保留原串的大小写 |
 | 嵌套 | 至多 4 层 |
-| 结果长度 | 函数算出的字符串超过 8192 字节时求值失败 |
+| 结果长度 | 函数算出的字符串超过 8192 字节时求值失败；`form_value`、`json_value` 与读取字段一样不受这个限制 |
 | 求值失败 | 正则超出执行预算、结果超长或动态目标无效时，请求返回 503（`X-Edgeweir-Error: policy-unavailable`） |
+
+### 请求体
+
+请求体字段与 `form_value`、`json_value` 只能用于请求阶段：请求变换、重定向、配置、自定义 WAF、限速与回源；不能用于缓存阶段、缓存规则条件与响应阶段，也不能作为限速键。
+
+| 项目 | 行为 |
+| --- | --- |
+| 何时读取 | 只有网站规则或全局规则引用了请求体字段或这两个函数，且表达式求值到它们时才读取（`and`、`or` 短路后不读）；没有引用的网站从不读取请求体。`http.request.body.size` 只取 `Content-Length`，不读取 |
+| 读取哪些请求 | 有 `Content-Length` 且不超过网站「规则检查请求体上限」（「规则」页签，1024–1048576 字节，默认 65536）时读取整个请求体；HTTP/1.x 既没有 `Content-Length` 也没有 `Transfer-Encoding` 时没有请求体（空字符串，不截断） |
+| 截断 | 超过上限、分块编码、没有 `Content-Length` 的 HTTP/2 与 HTTP/3 请求（包括 GET）、网站转发 gRPC 的 gRPC 请求与 WebSocket 升级请求都不读取：`http.request.body.truncated` 为 `true`，`raw`、`filenames`、`form_value`、`json_value` 为空字符串。依据请求体拦截时同时判断截断与方法，例如 `http.request.method eq "POST" and http.request.body.truncated eq true` |
+| 表单 | `application/x-www-form-urlencoded`：按 `&` 分割，名称与值各解码一遍（`+` 为空格）；`multipart/form-data`：非文件部分的值原样；取第一个同名字段 |
+| multipart | 按 `boundary` 切分；有 `filename` 参数的部分是文件（计入 `filenames`，不是表单字段）；遇到格式错误即停止，之前得到的值保留；最多处理 1000 个部分 |
+| JSON | 媒体类型 `application/json` 或以 `+json` 结尾；整份按 RFC 8259 校验，无效时为空字符串；路径的段按对象的键或数组下标（从 0 开始）；重复的键取最后一个；字符串取解码后的值，数字为原样的写法，布尔为 `true` / `false`，`null`、对象与数组为空字符串；嵌套至多 128 层 |
+| 与 CRS | 规则读取请求体后，开启 CRS 的网站由 ModSecurity 检查同一份请求体；CRS 的请求体检查上限与「规则检查请求体上限」相互独立 |
+| 源站 | 读取不改变请求体，源站收到的请求体与访客发送的相同 |
+| 节点要求 | `rules-body-v1` |
+
+```text
+json_value("cmd") eq "rm"
+form_value("user") eq "admin"
+http.request.body.filenames contains ".php"
+http.request.method eq "POST" and http.request.body.truncated eq true
+```
 
 ### IP 语义
 
@@ -418,6 +474,7 @@ API：`GET`、`POST /api/v1/ip-lists`，`PUT`、`DELETE /api/v1/ip-lists/{id}`�
 | 规则扩展 | 以下任何一项需要 `rules-v2`：函数与 `http.request.full_uri`、`http.request.uri.path.extension`、`http.response.content_type.media_type`；表达式目标、查询参数编辑，以及重定向打开或改写路径关闭「保留查询参数」；源站覆盖；压缩阶段；只在配置阶段可用的覆盖项与 Gzip「开启」；不是[构建器](origins-and-cache.md#请求条件)形状的缓存规则条件与「浏览器 TTL（秒）」；批量重定向；默认组以外的源站组 |
 | 表达式变量与报头值 | 以下任何一项需要 `rules-v3`：`http.request.cookies[…]`、`http.request.uri.args[…]`、`http.referer`、`http.user_agent`、`http.request.version`、`http.request.scheme`、`http.request.id`、`http.request.timestamp.sec`、`edge.server_port`、`ip.geoip.as_name`（另需 `geoip-asn-v1`）、`http.response.cache_status`；`url_encode`、`base64_encode`、`base64_decode`、`md5`、`sha1`、`sha256`、`substring`、`to_string`；`wildcard`、`strict wildcard`；请求头、响应头与查询参数的表达式值；响应头「追加」；重定向 303；[错误页](error-pages.md)的 `{{time}}`、`{{path}}` |
 | 直连对端 | 读取 `ip.peer` 的配置需要 `client-ip-v1` |
+| WAF 动作与请求体 | 封禁、自定义响应、断开连接、跳过、写入访问日志、超额后封禁与覆盖设置的「OWASP CRS」需要 `waf-v2`；请求体字段与 `form_value`、`json_value` 需要 `rules-body-v1`；`http.request.bot.*` 需要 `challenge-v2`。没有用到的配置不变 |
 | 已有配置 | 没有用到规则扩展的配置与之前相同，不要求 `rules-v2`；构建器形状的缓存规则仍以原来的结构化条件下发；没有用到 `rules-v3` 各项的配置同样逐字节不变 |
 | 控制台与 AccessKey | 保存时即使集群内有活动节点缺少所需能力也照常发布；缺少能力的节点保留 last-known-good 配置，**集群与节点** 中显示「需要升级」，见[节点升级](node-upgrades.md) |
 | 服务账号与后台任务 | 它们发布的配置引入新能力时，检查集群内所有活动节点（含暂时离线的节点）；有节点缺少能力时拒绝（`NODE_CAPABILITY_REQUIRED`，「节点尚不支持：…（<节点>）」），原配置与版本不变 |
@@ -483,6 +540,7 @@ GeoIP 字段读取节点本地的 MMDB 文件。节点不自动下载更新，�
 | 表达式 | wirefilter 风格子集；只有内置函数，不支持自定义函数和原始 Lua |
 | 字符串替换 | `regex_replace`、`wildcard_replace` 只用于值表达式（重定向目标、改写路径、报头值与查询参数值），每个表达式各一次；`regex_replace` 只替换第一个匹配 |
 | Cookie 与查询参数 | 按名称取第一个值，不解码；不能列举全部 Cookie 或参数，名称不能用通配 |
+| 请求体 | 只读取不超过「规则检查请求体上限」（最大 1 MiB）且带 `Content-Length` 的请求；不解析 XML；JSON 的键不能含 `.`（路径以 `.` 分隔） |
 | 批量重定向 | 只做精确匹配，目标为静态值 |
 | 受保护头 | 见[动作字段](#动作字段)；不能通过规则修改 |
 | 压缩 | 覆盖设置与压缩规则只能在网站已开启的算法中选择 |
@@ -511,4 +569,6 @@ GeoIP 字段读取节点本地的 MMDB 文件。节点不自动下载更新，�
 | 「所在集群有节点不支持，暂时无法开启」（规则页签） | 集群内有活动节点缺少 `rules-v3` | 升级节点，见[节点升级](node-upgrades.md) |
 | 开启强制 HTTPS 的规则使请求返回 503 | 网站没有证书 | 在「HTTPS」页签选择证书 |
 | 限速在多个节点间未合并计数 | 限速按单节点计数 | 按节点数折算阈值 |
+| 依据请求体的规则没有生效 | 请求体超过「规则检查请求体上限」、为分块编码或是没有 `Content-Length` 的 HTTP/2、HTTP/3 请求，没有读取 | 调高上限，或同时判断 `http.request.body.truncated` |
+| 「请求体与爬虫字段只能用于请求阶段」 | 在缓存阶段、缓存规则或响应阶段使用了请求体或爬虫字段 | 改到请求阶段 |
 | 部分访客未被限速，节点日志有 `rate limit partition full` | 网站的限速分区已满，新客户端不计数 | 调大节点参数 `--rate-limit-dict-kb` |

@@ -8,7 +8,7 @@ Block clients by IP address or CIDR for a limited time. Bans travel over the nod
 | --- | --- |
 | Ban | An IP address or CIDR whose requests are blocked until it expires. |
 | Scope | **Site**: one site only. **Global**: every site of every cluster, also dropped in the kernel by the nodes (see [Kernel bans](#kernel-bans)). In the API these are `site` and `platform`. |
-| Source | **Manual**: created on the **Bans** page or through the API. **Automatic**: created by a node on a trigger and reported to the console. |
+| Source | **Manual**: created on the **Bans** page or through the API. **Automatic**: created by a node on a trigger and reported to the console. **Rule**: created by a node running a rule's **Ban** action or a rate limit's **Ban when exceeded**, and reported. |
 | Expiry | 1 minute to 7 days. Block for longer with [IP lists](rules.en.md#ip-lists). |
 
 ## Ban an address
@@ -37,7 +37,7 @@ The list shows active bans only (neither expired nor lifted), newest first, and 
 | Address | Canonical CIDR; "Not applied on N nodes" when nodes could not hold the ban |
 | Site | Site name; "Global" for global bans |
 | Reason | Why the address is banned |
-| Source | "Manual" and the operator; "Automatic" and the node and trigger (metric, observed / threshold, window in seconds); automatic bans that are not sent to other nodes are marked "Not shared" |
+| Source | "Manual" and the operator; "Automatic" and the node and trigger (metric, observed / threshold, window in seconds); "Rule" and the rule's name (global rules marked "Global", the rule id once it is deleted) and the node, with the trigger for rate limits; automatic and rule bans that are not sent to other nodes are marked "Not shared" |
 | Expires | A status light and the time left; hover for the expiry time. A ban that expired since the list was last refreshed shows "Expired" |
 
 ## Rules
@@ -47,7 +47,7 @@ The list shows active bans only (neither expired nor lifted), newest first, and 
 | Address | IPv4 / IPv6 address or CIDR; a single address means `/32` or `/128`; host bits are cleared, IPv6 is lowercased and compressed; `::ffff:a.b.c.d` counts as the IPv4 address; leading zeros and zone IDs are refused |
 | Shortest prefix | IPv4 `/16`, IPv6 `/48` |
 | Expiry | 1 minute to 7 days (the UI offers 1 hour to 7 days); nodes drop a ban when it expires, the console deletes it an hour later |
-| Reason | Manual: abuse, attack, scanning, spam, other. Automatic: per-IP request rate, unknown host scan |
+| Reason | Manual: abuse, attack, scanning, spam, other. Automatic: per-IP request rate, unknown host scan, too many failed challenges. Rule: banned by a rule, over a rate limit |
 | Banning again | One active manual ban per address for global bans, and per site and address for site bans; banning it again sets the new reason and expiry and does not add a ban; a manual global ban of the same address or range as an automatic global ban (scan protection; /64 for IPv6) takes it over, counted, audited and sent to every node as a new ban; an unshared scan ban is lifted with it, and each node deletes its own |
 | Protected addresses | A site ban may not cover an address of a node in the site's cluster, a global ban no node address at all; neither may cover loopback (`127.0.0.0/8`, `::1`) or unspecified addresses (`0.0.0.0/8`, `::`), nor overlap an allow list |
 | Where it applies | At the edge layer once the site is known, before rules: global bans first, then site bans; addresses on an allow list are never banned; addresses on a site's [allow lists](access-control.en.md#site-lists) are not banned on that site (CC bans of single clients included), global bans still apply |
@@ -75,11 +75,28 @@ A node bans on its own on a trigger: the per-IP QPS of CC mitigation (site scope
 | Protected addresses, global scope | A ban covering an address of another cluster's node or any cluster's trusted proxy is stored but never shared: listed as "Not shared" and liftable. One covering an address of a node of the reporting node's cluster or an allow list is stored as lifted, not listed, and the nodes of that cluster delete their own bans of it within seconds; other clusters' nodes keep theirs |
 | Unban | Like a manual ban: click "Unban" in the row; a ban that was not shared is deleted within seconds by the nodes that hold it (older nodes without support keep it until it expires). A global one goes to every node with scan protection, as several may have banned the address, and each node deletes its own bans expiring no later than the unban plus the longest scan ban time its cluster has had (every ban from before the unban expires by then). A ban of the same address a node makes after it got the unban is not affected. After a site-scope ban is lifted the nodes count the client afresh: it is banned again when it exceeds the threshold again |
 
+Challenge failure bans (site scope, reason **Too many failed challenges**): the node bans an address that failed the site's challenges the set number of times within 10 minutes, see [Challenge failure bans](challenges.en.md#challenge-failure-bans); sharing, merging and unbanning as above.
+
+## Rule bans
+
+A rule's **Ban** action and a rate limit's **Ban when exceeded** are written and reported by the node through the same channel as automatic bans; the list shows source **Rule** with the rule's name. See [WAF actions](rules.en.md#waf-actions).
+
+| Item | Behavior |
+| --- | --- |
+| Scope | **Ban**: site scope from site rules; global rules choose site or global scope. **Ban when exceeded**: site scope |
+| Prefix | **Ban**: IPv4 /16–/32 (default /32), IPv6 /48–/64 (default /64); **Ban when exceeded**: IPv4 /32, IPv6 /64 |
+| Duration | **Ban** 60–604800 seconds; **Ban when exceeded** 60–86400 seconds |
+| Not written twice | A node writes nothing while the network has an active ban (of any source); banned requests are refused before the rules run |
+| Never written | Addresses on allow lists, the cluster's trusted proxies and the node's own prefetches; site-scope bans are not written for addresses on the site's allow lists |
+| Merging | Site scope: one rule ban per node, site and network (kept apart from an automatic ban of the same address); global scope: one per network; a repeated report only extends the expiry |
+| Checks | The rule must exist: global bans come from global rules, site bans from the site's rules or global rules; a rule deleted before the report drops its bans (the node's own ban expires as usual) |
+| Sharing and unban | As for automatic bans; they count toward the 10000 automatic bans per cluster, not toward the manual ban limit; not audited |
+
 ## Nodes
 
 | Item | Behavior |
 | --- | --- |
-| Capability | Bans need `bans-v1`; older nodes without it keep serving and do not enforce bans |
+| Capability | Bans need `bans-v1`; older nodes without it keep serving and do not enforce bans; rule bans and challenge failure bans also need `waf-v2` and `challenge-v2` |
 | Sync | A node receives the bans of its cluster and the global bans. It keeps the sequence it applied and fetches only later changes; on its first connection or after a console database restore it gets a full snapshot. Nodes store bans on disk and load them before connecting after a restart |
 | Capacity | Node options `--ban-capacity` (100000 entries by default) and `--ban-dict-mb` (32 MiB by default). Short of room, the oldest automatic bans go first |
 | Not applied | Manual bans never lapse silently: a node that cannot hold one reports it, the list shows "Not applied on N nodes" (online nodes only), and the node retries every minute |

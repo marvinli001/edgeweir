@@ -75,6 +75,8 @@ With [OWASP CRS](waf.en.md) on, requests that matched rules also record the rule
 
 Rules of the configuration phase can set a sample rate for the requests they match with **Log sample rate (%)**; those logs are kept even while the site's sample rate is **Off**, see [Override settings](rules.en.md#override-settings).
 
+With **Write access log** on, a **Log** rule of the custom WAF phase writes a line for every request it matches whatever the sample rate (at most 100 per site and second on each node), carrying the ids of these rules (at most 8): the list shows **Rules** and the rule names under the request (global rules marked **Global**, deleted rules by id), and the CSV adds a `ruleIds` column (space separated). These lines are kept while the site's sample rate is **Off** as well; a line written only because of a rule has a sample rate of 100%. See [WAF actions](rules.en.md#waf-actions).
+
 Access logs need the node capability `access-logs-v1`, and JA4 also `ja4-v1`. A configuration rollback keeps the current sample rate and JA4 setting and never re-enables logging that was turned off.
 
 ## Search and export logs
@@ -88,7 +90,8 @@ Access logs need the node capability `access-logs-v1`, and JA4 also `ja4-v1`. A 
    | --- | --- |
    | Ban IP | Opens the ban dialog with the site and the client IP filled in; the **Scope** can change to **Global**, see [Bans](bans.en.md) |
    | Purge URL | After a confirmation, creates a URL purge of the request's host and path, see [Purge and prefetch](origins-and-cache.en.md#purge-and-prefetch) |
-   | Exclude CRS rule N | Only on rows that matched CRS rules, one item per matched rule; after a confirmation, the rule ID is added to the site's exclusions, see [OWASP CRS](waf.en.md#fields). Initialization, blocking evaluation and correlation rules (901xxx, 949xxx, 959xxx, 980xxx) are not offered: excluding them turns blocking off |
+   | Exclude CRS rule N | Only on rows that matched CRS rules, one item per matched rule; after a confirmation, the rule ID is added to the site's whole-site exclusion, see [OWASP CRS](waf.en.md#exclusions). Initialization, blocking evaluation and correlation rules (901xxx, 949xxx, 959xxx, 980xxx) are not offered: excluding them turns blocking off |
+   | Exclude by path | As above, with a dialog holding the rule ID and the request's path, which can be a prefix or an exact path; after a confirmation an exclusion is added, see [overrides and exclusions by path](waf.en.md#overrides-and-exclusions-by-path) |
 
    The toast that follows links to the bans, the purge tasks or the CRS settings.
 

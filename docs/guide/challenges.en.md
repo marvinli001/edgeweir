@@ -80,6 +80,8 @@ These requests are never challenged by Under Attack or CC mitigation:
 | Addresses on an **Allow** IP list | Applies to every site, see [IP lists](rules.en.md#ip-lists) |
 | Addresses on a site's allow lists | That site only, see [Site lists](access-control.en.md#site-lists) |
 | Requests that match an `allow` rule | A `challenge` rule that matched before the `allow` still applies |
+| Requests matching a **Skip** rule with **Under Attack and CC challenges** | Like `allow`, see [WAF actions](rules.en.md#waf-actions) |
+| Verified search engine crawlers | When the site has **Allow verified search engine crawlers** on, see [Verified search engine crawlers](#verified-search-engine-crawlers) |
 
 The level required is the highest of: global Under Attack, the site's Under Attack, matching `challenge` rules, the site's current CC level, and the path's CC level. Rules of the configuration phase can turn the site's Under Attack on or off, turn **CC mitigation** off, or set **CC highest level** per request; global Under Attack is unaffected, see [Override settings](rules.en.md#override-settings).
 
@@ -93,6 +95,9 @@ The level required is the highest of: global Under Attack, the site's Under Atta
 | Proof-of-work difficulty | 8–24 | 16 |
 | High proof-of-work difficulty | 8–26, at least the proof-of-work difficulty | 20 |
 | Record JA4 in access logs | On / off | Off |
+| Allow verified search engine crawlers | On / off | Off |
+| Challenge page text | Chinese title, Chinese hint, English title, English hint, ≤ 200 characters each, plain text | Empty (built-in text) |
+| Challenge failure bans | On / off; failures within 10 minutes 3–100; ban 60–86400 seconds | Off; 10; 600 seconds |
 
 | Preset | Pass lifetime | Proof-of-work difficulty | High proof-of-work difficulty |
 | --- | --- | --- | --- |
@@ -101,6 +106,36 @@ The level required is the highest of: global Under Attack, the site's Under Atta
 | Strict | 900 | 18 | 22 |
 
 Each extra step of difficulty doubles the work a browser does on average.
+
+## Verified search engine crawlers
+
+With **Allow verified search engine crawlers** on, when Under Attack (the site's or the global one) or CC requires a challenge from a request without a sufficient pass, the node checks whether its User-Agent claims a crawler of the table; if so it verifies the address and skips the challenge when that passes. `challenge` rules, bans, CC per-IP bans and other checks still apply.
+
+| Name | User-Agent contains (case-insensitive) | Reverse DNS name must be in |
+| --- | --- | --- |
+| `googlebot` | `Googlebot`, `Storebot-Google`, `Google-InspectionTool`, `GoogleOther`, `Google-CloudVertexBot` | `googlebot.com`, `google.com`, `googleusercontent.com` |
+| `bingbot` | `bingbot` | `search.msn.com` |
+| `baiduspider` | `Baiduspider` | `baidu.com`, `baidu.jp` |
+| `yandexbot` | `Yandex` | `yandex.ru`, `yandex.net`, `yandex.com` |
+| `applebot` | `Applebot` | `applebot.apple.com` |
+
+| Item | Behavior |
+| --- | --- |
+| Verification | A reverse lookup (PTR, at most 3 names) of the visitor address; a name equal to a domain of the table or ending in `.` plus it is resolved forward (A for IPv4 visitors, AAAA for IPv6), and the visitor address must be among the answers. No third-party IP list is downloaded |
+| Resolver | The node's resolver (node flag `--resolver`, by default from `/etc/resolv.conf`); 1 second per query, at most 2 tries |
+| Cache | Per address and crawler in the node's shared memory: verified 24 hours, not verified 1 hour, timeouts and lookup failures 60 seconds; while an address is being looked up, other requests count as not verified |
+| Rule fields | `http.request.bot.verified`, `http.request.bot.name`, see [Fields](rules.en.md#fields); looked up only when a rule evaluates them |
+| Node capability | `challenge-v2` |
+
+This verifies identity only; it is no bot scoring. A crawler address seen for the first time waits for the lookups (a few seconds at most); while the resolver is unavailable crawlers are challenged as usual.
+
+## Challenge page text
+
+**Challenge page text** sets the page title and a hint below it, one set in Chinese and one in English, chosen by `Accept-Language`; empty values keep the built-in text. Plain text of at most 200 characters each, without control characters; the node escapes it as HTML. It applies to the site's challenge pages only (Under Attack, CC and `challenge` rules). Needs the node capability `challenge-v2`.
+
+## Challenge failure bans
+
+With **Challenge failure bans** on, an address (an IPv4 address, the `/64` of an IPv6 one) that fails the site's challenges **Failures** times within 10 minutes (from its first failure) is banned on the site for **Ban duration** seconds by the node (reason **Too many failed challenges**), see [Bans](bans.en.md#automatic-bans). Failures are wrong answers and invalid, expired or reused challenge tokens. Addresses on global allow lists or the site's allow lists and the cluster's trusted proxies are not counted. Needs the node capability `challenge-v2`.
 
 ## Challenge rules
 
@@ -207,6 +242,7 @@ Changes need a console session or a read-write AccessKey; read-only AccessKeys c
 | Feature | Capability |
 | --- | --- |
 | Under Attack, CC mitigation, challenge rules | `challenge-v1` |
+| Allow verified search engine crawlers, challenge page text, challenge failure bans, `http.request.bot.*` | `challenge-v2` |
 | `tls.ja4` field, JA4 rate limit key, JA4 logging | `ja4-v1` |
 
 When an active node of the cluster lacks a capability, the change is still saved and published; nodes without the capability keep their previous configuration and show **Upgrade required** in **Clusters & nodes**, see [Node upgrades](node-upgrades.en.md). Service accounts and background jobs that publish such a configuration get 409 `NODE_CAPABILITY_REQUIRED` ("Some nodes don't support … yet: {nodes}") and the settings stay as they were. Clusters that use none of these features keep their configuration unchanged.
@@ -234,4 +270,6 @@ Fields and examples: [API and endpoints](../reference/api.en.md#challenges-and-c
 | 503, `X-Edgeweir-Error: challenge-unavailable` | The node has not fetched the pass keys yet | Check the node's connection to the console |
 | Forms or API calls get 403 with `X-Edgeweir-Challenge: required` | Non-GET/HEAD requests without a valid pass | Pass the challenge in a browser first; let machine-to-machine endpoints through with an `allow` rule |
 | Challenged again after passing | The pass expired; the client changed network or User-Agent; the required level is above the pass level | Lengthen the lifetime; check whether a proxy's exit address keeps changing |
+| A search engine crawler is still challenged | **Allow verified search engine crawlers** is off; the crawler is not in the table; the node's resolver finds no PTR or A / AAAA record, or the lookup timed out (retried after 60 seconds) | Turn it on; check that the node resolves the address's PTR record |
+| Visitors get 403 `ip-banned` with the reason **Too many failed challenges** | The address failed the challenge the set number of times within 10 minutes | Unban it under **Bans**; raise the number of failures |
 | CC mitigation does not escalate | Traffic spreads over several nodes and no single node reaches the thresholds | Lower the thresholds by the number of nodes |

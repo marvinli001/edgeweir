@@ -18,7 +18,7 @@ Prerequisites: every active node of the site's cluster supports `modsecurity-v1`
 
 1. Open **Sites**, select the site, and open the **Security** tab.
 2. In the **OWASP CRS managed rules** card, set **Mode** to **Detect only**.
-3. Pick Loose, Standard (the default), or Strict under **Preset**, or **Custom** to set **Paranoia level**, **Anomaly score threshold**, and **Request body inspected (bytes)**; add **Excluded rule IDs** as needed.
+3. Pick Loose, Standard (the default), or Strict under **Preset**, or **Custom** to set **Paranoia level**, **Anomaly score threshold**, and **Request body inspected (bytes)**; add [exclusions](#exclusions) as needed.
 4. Click **Save**. The console shows **Saved** and publishes a new configuration revision for the site's cluster.
 5. Verify: after the node applies the revision, send a test payload:
 
@@ -38,7 +38,7 @@ Prerequisites: every active node of the site's cluster supports `modsecurity-v1`
 | Paranoia level | 1–4 | 1 | CRS rule level that runs |
 | Anomaly score threshold | 1–1000 | 5 | A request whose anomaly score reaches it counts as an attack; 5 means a single critical rule is enough |
 | Request body inspected (bytes) | 0–134217728 (128 MiB) | 131072 (128 KiB) | Only this many bytes of the request body are inspected; 0 inspects no body |
-| Excluded rule IDs | 900000–999999, unique, up to 200; no 901xxx, 949xxx, 959xxx or 980xxx | None | These rules never run for the site; use them against false positives |
+| Exclusions | Up to 100 entries, see [Exclusions](#exclusions) | None | These rules do not run on the entry's path (or do not inspect its targets); use them against false positives |
 
 | Preset | Paranoia level | Anomaly score threshold | Request body inspected (bytes) |
 | --- | --- | --- | --- |
@@ -46,9 +46,32 @@ Prerequisites: every active node of the site's cluster supports `modsecurity-v1`
 | Standard | 1 | 5 | 131072 |
 | Strict | 2 | 5 | 1048576 |
 
-Presets leave **Mode** and **Excluded rule IDs** alone. Saved values that match no preset show as **Custom**.
+Presets leave **Mode** and the exclusions alone. Saved values that match no preset show as **Custom**.
 
-To exclude rules, type one or more IDs (separated by commas or spaces) into **Excluded rule IDs** and click **Add** or press Enter; click the × next to an ID to remove it. Changes apply once you click **Save**.
+## Exclusions
+
+Each exclusion keeps a set of rules from running on a path, or only from inspecting some targets:
+
+| Field | Values | Notes |
+| --- | --- | --- |
+| Path | Empty for the whole site; or starting with `/`, at most 1024 bytes, without `?`, `#`, whitespace or control characters | Matched against the client's normalized path (before rewrites, a signed URL's signature removed) |
+| Match | Prefix / Exact | Prefixes compare bytes; `/api/` does not match `/apix` |
+| Rule IDs | 1–200, 900000–999999, unique; no 901xxx, 949xxx, 959xxx or 980xxx | These rules do not run on the path |
+| Targets | Optional, up to 16: `ARGS:name`, `REQUEST_COOKIES:name` (1–64 letters, digits or `_` `.` `-` `[` `]`), `REQUEST_HEADERS:name` (letters, digits or `-`) | With targets the rules still run, but do not inspect those arguments, cookies or request headers |
+
+Up to 100 entries, in the order saved. Whole-site entries without targets run on every node that supports CRS; the **Excluded rule IDs** of earlier versions migrated to one such entry. Entries with a path or targets need the node capability `waf-v2`. A change of exclusions is structural: nodes render the rule file again and reload nginx (open connections stay).
+
+## Overrides and exclusions by path
+
+| Way | How | Effect |
+| --- | --- | --- |
+| Exclude by path | An exclusion with a path | The rules do not run on that path; other rules still do |
+| Override the mode by path | The **OWASP CRS** override of a configuration phase rule: Unchanged / Off / Detect only / Block, see [Override settings](rules.en.md#override-settings) | Matching requests have CRS off, detect only or block; no effect on sites without CRS; hot update, no reload |
+| Skip | **OWASP CRS** in a custom WAF **Skip** action, see [WAF actions](rules.en.md#waf-actions) | The request is not inspected by CRS |
+
+Nodes match the normalized path in the edge layer and hand the matching entries to ModSecurity in an internal request header; ModSecurity's own `REQUEST_FILENAME` is not normalized and is not used for paths. The internal header is removed before the origin and never reaches it. Excluding the prefix `/api/`, for one, does not cover `/api/../admin`, which normalizes to `/admin`.
+
+A heavily matched rule can be excluded where it shows: click **⋯** in its row of **Most-matched CRS rules** or of the logs → **Exclude by path**; the dialog holds the rule ID (and, from a log row, the request's path); choose prefix or exact and confirm, and the entry is added to the exclusions and saved at once.
 
 ## Behavior
 
@@ -68,7 +91,7 @@ To exclude rules, type one or more IDs (separated by commas or spaces) into **Ex
 | **Security** tab → **Most-matched CRS rules** | The rule IDs matched most often in the selected range (last hour to 30 days). The counts are approximate: each node reports only the 20 most-matched rules per site and minute |
 | The site's **Logs** tab | With access log sampling on, requests that matched rules show **CRS** under the request: the rule IDs (at most 16 per request) and a **Blocked** badge. The CSV gets `wafRuleIds` (space-separated) and `wafBlocked` columns |
 
-Matches are recorded in both detect and block mode. A rule that raises false positives can be excluded where it shows: click **⋯** in its row of **Most-matched CRS rules** or of the logs → **Exclude CRS rule N** and confirm; the rule ID is added to **Excluded rule IDs** and saved at once, and the CRS card updates. Initialization, blocking evaluation and correlation rules (901xxx, 949xxx, 959xxx, 980xxx) only add up scores and decide, so 949110, for one, matches every blocked request: they are left out of **Most-matched CRS rules** and cannot be excluded (the console and the API refuse them, `WAF_RULE_NOT_EXCLUDABLE`), since excluding them breaks CRS or turns blocking off. Against a false positive, exclude the rule that detected it in the log row; to stop blocking, set the mode to **Detect only**. The status line at the top of the **Security** tab shows the CRS mode and preset; click it to jump to the CRS card. Access logs: [Access logs](access-logs.en.md).
+Matches are recorded in both detect and block mode. A rule that raises false positives can be excluded where it shows: click **⋯** in its row of **Most-matched CRS rules** or of the logs → **Exclude CRS rule N** and confirm; the rule ID joins the whole-site exclusion and is saved at once; **Exclude by path** excludes it on one path only, see [Overrides and exclusions by path](#overrides-and-exclusions-by-path). The CRS card updates. Initialization, blocking evaluation and correlation rules (901xxx, 949xxx, 959xxx, 980xxx) only add up scores and decide, so 949110, for one, matches every blocked request: they are left out of **Most-matched CRS rules** and cannot be excluded (the console and the API refuse them, `WAF_RULE_NOT_EXCLUDABLE`), since excluding them breaks CRS or turns blocking off. Against a false positive, exclude the rule that detected it in the log row; to stop blocking, set the mode to **Detect only**. The status line at the top of the **Security** tab shows the CRS mode and preset; click it to jump to the CRS card. Access logs: [Access logs](access-logs.en.md).
 
 ## Performance
 
@@ -81,6 +104,7 @@ While any site on a node runs CRS, the node loads ModSecurity and the bundled ru
 | Capability | Needed for |
 | --- | --- |
 | `modsecurity-v1` | Any site with CRS on (detect or block) |
+| `waf-v2` | Exclusions with a path or targets; the **OWASP CRS** override; the **Skip** action |
 
 While an active node of the cluster lacks `modsecurity-v1`, **Mode** of a site without CRS cannot be changed and shows "Some nodes of the site's cluster do not support it yet" (`crs.reason` is `nodes` in `GET /sites/{id}/features`); CRS already on can still be changed or turned off. The API can still turn it on: the configuration is published, and nodes without the capability keep their last-known-good configuration and show **Upgrade required** until `edgeweir-openresty-modsecurity` is installed or the node is upgraded.
 
@@ -89,7 +113,7 @@ While an active node of the cluster lacks `modsecurity-v1`, **Mode** of a site w
 | Item | Description |
 | --- | --- |
 | Rules | Only the CRS bundled with the node package runs; custom ModSecurity rules cannot be added |
-| Exclusions | Only by rule ID for the whole site; not by path or parameter |
+| Exclusions | By path prefix or exact path, rule ID and argument / cookie / request header name; not by path pattern, rule tag or request body field |
 | Statistics | Approximate; each node reports only the 20 most-matched rules per site and minute |
 | Nodes | Nodes installed with `--no-modsecurity` do not support CRS |
 
@@ -99,6 +123,7 @@ While an active node of the cluster lacks `modsecurity-v1`, **Mode** of a site w
 | --- | --- | --- |
 | **Mode** is unavailable with "Some nodes of the site's cluster do not support it yet" | An active node of the cluster lacks `edgeweir-openresty-modsecurity` or is too old | Install the package on the node or upgrade it |
 | A node shows **Upgrade required** | CRS was turned on through the API and the node lacks `modsecurity-v1` | Install the package on the node or upgrade it |
-| Legitimate requests get 403 | False positive | Find the rule ID in **Most-matched CRS rules** or the access logs and add it to **Excluded rule IDs**; or lower the paranoia level or raise the threshold |
+| Legitimate requests get 403 | False positive | Find the rule ID in **Most-matched CRS rules** or the access logs and exclude it (for the path, or the whole site); or lower the paranoia level or raise the threshold |
 | The test payload is not blocked | Mode is **Detect only**; the anomaly score stays below the threshold; the rules are excluded; the node has not applied the configuration yet | Check the settings and the node's applied revision |
 | "Rule IDs are integers from 900000 to 999999, without duplicates, at most 200" | An ID outside the CRS range, a duplicate, or too many IDs | Correct the input |
+| Still blocked after excluding by path | Paths are matched normalized (prefixes by bytes); more than one rule matched; the node has not reloaded yet | Look up every matched rule in the logs; check prefix or exact; wait for the node to apply the configuration |
