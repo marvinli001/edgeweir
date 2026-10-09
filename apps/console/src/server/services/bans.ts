@@ -14,11 +14,13 @@ import {
   banLookupCidr,
   banSettings,
   isAutoBanPrefix,
+  isRuleBanPrefix,
   MAX_AUTO_BANS_PER_CLUSTER,
   nodeSupportsFeature,
   parseBanCidr,
   protectedBanOverlap,
   protectedBanRanges,
+  RULE_BAN_REASONS,
   UNKNOWN_HOST_FEATURE,
   unicastAddress,
 } from "@edgeweir/contract";
@@ -48,6 +50,10 @@ import { defineSetting } from "./settings";
 import { findSite, shareSites } from "./sites";
 
 type BanRow = typeof schema.ipBan.$inferSelect;
+
+/** Sources of the bans nodes make and report: automatic mitigation and rules (waf-v2). */
+const NODE_SOURCES = ["auto", "rule"] as const;
+const fromNodes = () => inArray(schema.ipBan.source, [...NODE_SOURCES]);
 
 const SETTINGS_KEY = "ban_settings";
 /** Expired rows are deleted this long after they expire (nodes drop them at expiry). */
@@ -164,6 +170,10 @@ async function toBans(db: Executor, where: ReturnType<typeof and>, page?: [numbe
     db,
     rows.map((r) => r.ban.id),
   );
+  const rules = await banRules(
+    db,
+    rows.flatMap((r) => (r.ban.trigger?.ruleId ? [r.ban.trigger.ruleId] : [])),
+  );
   return rows.map(
     ({ ban, siteName, nodeName }): Ban => ({
       id: ban.id,
@@ -175,6 +185,13 @@ async function toBans(db: Executor, where: ReturnType<typeof and>, page?: [numbe
       siteName: siteName ?? null,
       node: ban.nodeId ? { id: ban.nodeId, name: nodeName ?? "" } : null,
       trigger: ban.trigger ?? null,
+      rule: ban.trigger?.ruleId
+        ? {
+            id: ban.trigger.ruleId,
+            name: rules.get(ban.trigger.ruleId)?.name ?? null,
+            platform: rules.get(ban.trigger.ruleId)?.platform ?? ban.scope === "platform",
+          }
+        : null,
       createdBy: ban.createdBy ?? null,
       createdAt: ban.createdAt.toISOString(),
       expiresAt: ban.expiresAt.toISOString(),
@@ -183,6 +200,20 @@ async function toBans(db: Executor, where: ReturnType<typeof and>, page?: [numbe
       unappliedNodes: unapplied.get(ban.id) ?? 0,
     }),
   );
+}
+
+/** Names of the rules that made bans (deleted rules are absent). */
+async function banRules(
+  db: Executor,
+  ids: string[],
+): Promise<Map<string, { name: string; platform: boolean }>> {
+  const unique = [...new Set(ids.filter((id) => UUID_RE.test(id)))];
+  if (!unique.length) return new Map();
+  const rows = await db
+    .select({ id: schema.edgeRule.id, name: schema.edgeRule.name, siteId: schema.edgeRule.siteId })
+    .from(schema.edgeRule)
+    .where(inArray(schema.edgeRule.id, unique));
+  return new Map(rows.map((row) => [row.id, { name: row.name, platform: row.siteId === null }]));
 }
 
 async function banById(db: Executor, id: string): Promise<Ban> {
@@ -281,7 +312,12 @@ export async function createBan(
     // An active automatic platform ban never shared lives on the nodes as
     // their own bans: it is lifted (each node releases its own on its next
     // sync, however late; ownReleases) and the manual ban is a new entry.
-    if (existing?.source === "auto" && !existing.distributed && existing.expiresAt > now) {
+    if (
+      existing &&
+      existing.source !== "manual" &&
+      !existing.distributed &&
+      existing.expiresAt > now
+    ) {
       await tx
         .update(schema.ipBan)
         .set({ removedAt: now, seq: await nextSeq(tx) })
@@ -459,7 +495,7 @@ export async function banChanges(
       eq(schema.ipBan.distributed, true),
     );
     const ownLifted = and(
-      eq(schema.ipBan.source, "auto"),
+      fromNodes(),
       or(
         and(eq(schema.ipBan.scope, "site"), eq(schema.ipBan.nodeId, node.id)),
         // A platform row with a cluster was lifted for that cluster's nodes only.
@@ -544,7 +580,8 @@ async function ownReleases(
     let expiresAt = row.expiresAt;
     if (row.scope === "platform") {
       if (!capable || !row.removedAt) return [];
-      if (row.clusterId === null)
+      // Scan bans: the cluster's longest scan ban time; a rule's ban keeps its own expiry.
+      if (row.clusterId === null && row.source === "auto")
         expiresAt = new Date(
           Math.min(row.expiresAt.getTime(), row.removedAt.getTime() + banSeconds * 1000),
         );
@@ -586,7 +623,10 @@ async function longestScanBanSeconds(tx: Executor, clusterId: string): Promise<n
 }
 
 export interface ReportedAutoBan {
-  /** platform: scan protection (unknown_host_scan, no site); site: CC (cc_ip_rate). */
+  /**
+   * platform: scan protection (unknown_host_scan) or a platform rule's ban (waf_rule), no
+   * site; site: CC (cc_ip_rate), challenge failures, a rule's ban or rate limit.
+   */
   scope: "site" | "platform";
   siteId: string;
   cidr: string;
@@ -597,6 +637,8 @@ export interface ReportedAutoBan {
   observed: number;
   threshold: number;
   windowSeconds: number;
+  /** The rule of a ban a rule made (reasons waf_rule and rate_limit). */
+  ruleId?: string;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -630,6 +672,7 @@ export async function reportAutoBans(
     {
       scope: "site" | "platform";
       siteId: string;
+      source: "auto" | "rule";
       cidr: ReturnType<typeof parseBanCidr> & { ok: true };
       createdAt: Date;
       expiresAt: Date;
@@ -638,13 +681,20 @@ export async function reportAutoBans(
     }
   >();
   for (const ban of reported) {
-    if (!(AUTO_BAN_REASONS as readonly string[]).includes(ban.reason)) continue;
+    const byRule = (RULE_BAN_REASONS as readonly string[]).includes(ban.reason);
+    if (!byRule && !(AUTO_BAN_REASONS as readonly string[]).includes(ban.reason)) continue;
     const platform = ban.scope === "platform";
-    // Scan protection bans at platform scope only; CC per site.
-    if (platform !== (ban.reason === "unknown_host_scan")) continue;
+    // Scan protection and platform rules' bans at platform scope only; the others per site.
+    if (
+      platform !== (ban.reason === "unknown_host_scan" || (ban.reason === "waf_rule" && platform))
+    )
+      continue;
     if (platform ? ban.siteId !== "" : !UUID_RE.test(ban.siteId)) continue;
+    // A rule's ban names its rule; nothing else does.
+    const ruleId = ban.ruleId ?? "";
+    if (byRule !== UUID_RE.test(ruleId)) continue;
     const cidr = parseBanCidr(ban.cidr);
-    if (!cidr.ok || !isAutoBanPrefix(cidr.cidr)) continue;
+    if (!cidr.ok || !(byRule ? isRuleBanPrefix(cidr.cidr) : isAutoBanPrefix(cidr.cidr))) continue;
     const created =
       ban.createdAt &&
       ban.createdAt.getTime() <= now.getTime() &&
@@ -656,12 +706,15 @@ export async function reportAutoBans(
       Math.min(ban.expiresAt.getTime(), created.getTime() + BAN_MAX_SECONDS * 1000, maxExpiry),
     );
     if (expiresAt.getTime() <= now.getTime()) continue;
-    const key = `${platform ? "*" : ban.siteId.toLowerCase()}|${cidr.text}`;
+    const source = byRule ? ("rule" as const) : ("auto" as const);
+    // Platform bans are one per CIDR; site bans one per site, CIDR and source.
+    const key = platform ? `*|${cidr.text}` : `${ban.siteId.toLowerCase()}|${cidr.text}|${source}`;
     const previous = items.get(key);
     if (previous && previous.expiresAt >= expiresAt) continue;
     items.set(key, {
       scope: platform ? "platform" : "site",
       siteId: ban.siteId.toLowerCase(),
+      source,
       cidr,
       createdAt: created,
       expiresAt,
@@ -671,8 +724,27 @@ export async function reportAutoBans(
         observed: finite(ban.observed),
         threshold: finite(ban.threshold),
         windowSeconds: Math.max(0, Math.min(Math.trunc(finite(ban.windowSeconds)), 86400)),
+        ...(byRule ? { ruleId: ruleId.toLowerCase() } : {}),
       },
     });
+  }
+  // A rule's ban needs its rule: a platform rule for platform bans, the site's or a platform
+  // rule for site bans (a rule deleted meanwhile drops its bans).
+  const ruleIds = [...new Set([...items.values()].flatMap((i) => i.trigger.ruleId ?? []))];
+  if (ruleIds.length) {
+    const rules = await db
+      .select({ id: schema.edgeRule.id, siteId: schema.edgeRule.siteId })
+      .from(schema.edgeRule)
+      .where(inArray(schema.edgeRule.id, ruleIds));
+    const owner = new Map(rules.map((rule) => [rule.id, rule.siteId]));
+    for (const [key, item] of items) {
+      const ruleId = item.trigger.ruleId;
+      if (ruleId === undefined) continue;
+      const site = owner.get(ruleId);
+      const ok =
+        site !== undefined && (site === null || (item.scope === "site" && site === item.siteId));
+      if (!ok) items.delete(key);
+    }
   }
   if (items.size === 0) return 0;
   // The node and allow-list addresses are parsed once and checked outside
@@ -727,7 +799,7 @@ export async function reportAutoBans(
           .from(schema.ipBan)
           .where(
             and(
-              eq(schema.ipBan.source, "auto"),
+              fromNodes(),
               eq(schema.ipBan.nodeId, node.id),
               isNull(schema.ipBan.removedAt),
               inArray(schema.ipBan.siteId, [...new Set(accepted.map((item) => item.siteId))]),
@@ -735,13 +807,13 @@ export async function reportAutoBans(
             ),
           )
           .for("update")
-      ).map((row) => [`${row.siteId}|${row.cidr}`, row]),
+      ).map((row) => [`${row.siteId}|${row.cidr}|${row.source}`, row]),
     );
     let changed = false;
     let added = false;
     const inserts: (typeof schema.ipBan.$inferInsert)[] = [];
     for (const item of accepted) {
-      const row = existing.get(`${item.siteId}|${item.cidr.text}`);
+      const row = existing.get(`${item.siteId}|${item.cidr.text}|${item.source}`);
       if (row && row.expiresAt > now) {
         // A retried or repeated report only ever extends the ban.
         if (item.expiresAt <= row.expiresAt) continue;
@@ -776,7 +848,7 @@ export async function reportAutoBans(
           clusterId: node.clusterId,
           cidr: item.cidr.text,
           reason: item.reason,
-          source: "auto",
+          source: item.source,
           nodeId: node.id,
           trigger: item.trigger,
           createdAt: item.createdAt,
@@ -817,6 +889,7 @@ async function storePlatformAutoBans(
   node: { id: string; clusterId: string },
   all: {
     cidr: ReturnType<typeof parseBanCidr> & { ok: true };
+    source: "auto" | "rule";
     createdAt: Date;
     expiresAt: Date;
     reason: string;
@@ -864,12 +937,13 @@ async function storePlatformAutoBans(
     if (row && row.expiresAt > now) {
       // Already banned on every site: a manual ban stays as it is, and a
       // shared one is not extended over a range other clusters protect.
-      if (row.source !== "auto" || item.expiresAt <= row.expiresAt) continue;
+      if (row.source === "manual" || item.expiresAt <= row.expiresAt) continue;
       if (row.distributed && item.handling === "local") continue;
       await tx
         .update(schema.ipBan)
         .set({
           reason: item.reason,
+          source: item.source,
           trigger: item.trigger,
           seq: await nextSeq(tx),
           expiresAt: item.expiresAt,
@@ -883,7 +957,7 @@ async function storePlatformAutoBans(
           reason: item.reason,
           trigger: item.trigger,
           seq: await nextSeq(tx),
-          source: "auto",
+          source: item.source,
           nodeId: node.id,
           createdBy: null,
           createdAt: item.createdAt,
@@ -899,7 +973,7 @@ async function storePlatformAutoBans(
         siteId: null,
         clusterId: null,
         cidr: item.cidr.text,
-        source: "auto",
+        source: item.source,
         nodeId: node.id,
         createdAt: item.createdAt,
         expiresAt: item.expiresAt,
@@ -933,6 +1007,7 @@ async function storeLiftedPlatformBans(
   node: { id: string; clusterId: string },
   items: {
     cidr: ReturnType<typeof parseBanCidr> & { ok: true };
+    source: "auto" | "rule";
     createdAt: Date;
     expiresAt: Date;
     reason: string;
@@ -947,7 +1022,7 @@ async function storeLiftedPlatformBans(
       .where(
         and(
           eq(schema.ipBan.scope, "platform"),
-          eq(schema.ipBan.source, "auto"),
+          fromNodes(),
           eq(schema.ipBan.distributed, false),
           isNotNull(schema.ipBan.removedAt),
           eq(schema.ipBan.clusterId, node.clusterId),
@@ -959,6 +1034,7 @@ async function storeLiftedPlatformBans(
       .for("update");
     const values = {
       nodeId: node.id,
+      source: item.source,
       reason: item.reason,
       trigger: item.trigger,
       createdAt: item.createdAt,
@@ -980,7 +1056,6 @@ async function storeLiftedPlatformBans(
         siteId: null,
         clusterId: node.clusterId,
         cidr: item.cidr.text,
-        source: "auto",
         expiresAt: item.expiresAt,
         distributed: false,
       });
@@ -1001,7 +1076,7 @@ async function capAutoBans(tx: Executor, clusterId: string | null, now: Date): P
     .where(
       and(
         clusterId === null ? isNull(schema.ipBan.clusterId) : eq(schema.ipBan.clusterId, clusterId),
-        eq(schema.ipBan.source, "auto"),
+        fromNodes(),
         active(now),
       ),
     )

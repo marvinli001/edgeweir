@@ -1384,7 +1384,10 @@ export const siteUpdateInput = z.object({
       purgeMethod: purgeMethodInput.optional(),
     })
     .optional(),
-  contentSettings: contentSettings.optional(),
+  /** Replaces the content settings; rulesBodyLimit stays as it is when omitted. */
+  contentSettings: contentSettings
+    .extend({ rulesBodyLimit: contentSettings.shape.rulesBodyLimit.unwrap().optional() })
+    .optional(),
   /**
    * Replaces the listener ports (SITE_PORT_UNAVAILABLE, SITE_PORTS_EMPTY,
    * SITE_HTTPS_PORT_NEEDS_CERTIFICATE); the HTTPS redirect's port must stay

@@ -1045,7 +1045,8 @@ export function createNodeService(
           scope: ban.scope === "platform" ? BanScope.PLATFORM : BanScope.SITE,
           siteId: ban.siteId ?? "",
           expiresAt: timestampFromDate(ban.expiresAt),
-          source: ban.source === "auto" ? BanSource.AUTO : BanSource.MANUAL,
+          // Rules' bans are automatic for the nodes (waf-v2).
+          source: ban.source === "manual" ? BanSource.MANUAL : BanSource.AUTO,
           reason: ban.reason,
           createdAt: timestampFromDate(ban.createdAt),
         });
@@ -1080,6 +1081,7 @@ export function createNodeService(
           observed: ban.observed,
           threshold: ban.threshold,
           windowSeconds: ban.windowSeconds,
+          ruleId: ban.ruleId,
         })),
       );
       log.debug("automatic bans", { nodeId: node.id, reported: req.bans.length, accepted });

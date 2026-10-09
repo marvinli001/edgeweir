@@ -2,7 +2,13 @@ import type { PlatformProtectionModel, SiteProtectionModel } from "@edgeweir/con
 import {
   CC_TEMPLATE_DEFAULTS,
   type CcThresholds,
+  CHALLENGE_TEXT_DEFAULTS,
+  type ChallengeText,
   ccTemplate,
+  challengeText,
+  FAILURE_BAN_DEFAULTS,
+  type FailureBan,
+  failureBan,
   PROTECTION_SETTINGS_DEFAULTS,
   type ProtectionSettings,
   protectionSettings,
@@ -76,10 +82,30 @@ export function effectiveCc(cc: SiteCcPolicy, template: CcThresholds): CcThresho
   return thresholds;
 }
 
+/** A site's challenge page texts (empty: the built-in text). */
+function savedText(row: ProtectionRow | undefined): ChallengeText {
+  const parsed = challengeText.safeParse({
+    ...CHALLENGE_TEXT_DEFAULTS,
+    ...(row?.challengeText ?? {}),
+  });
+  return parsed.success ? parsed.data : { ...CHALLENGE_TEXT_DEFAULTS };
+}
+
+/** A site's challenge failure ban as saved (off with the defaults until set). */
+function savedFailureBan(row: ProtectionRow | undefined): FailureBan {
+  const parsed = failureBan.safeParse({
+    enabled: row?.failureBanEnabled ?? false,
+    threshold: row?.failureThreshold ?? FAILURE_BAN_DEFAULTS.threshold,
+    banSeconds: row?.failureBanSeconds ?? FAILURE_BAN_DEFAULTS.banSeconds,
+  });
+  return parsed.success ? parsed.data : { enabled: false, ...FAILURE_BAN_DEFAULTS };
+}
+
 function protectionModel(
   row: ProtectionRow | undefined,
   template: CcThresholds,
 ): SiteProtectionModel {
+  const failure = savedFailureBan(row);
   return {
     underAttack: row?.underAttack ?? false,
     underAttackChallenge: row?.underAttackChallenge ?? "js",
@@ -88,6 +114,11 @@ function protectionModel(
     powHighDifficulty: row?.powHighDifficulty ?? 20,
     cc: effectiveCc(savedCc(row, template), template),
     logJa4: row?.logJa4 ?? false,
+    allowVerifiedBots: row?.allowVerifiedBots ?? false,
+    challengeText: savedText(row),
+    failureBan: failure.enabled
+      ? { threshold: failure.threshold, banSeconds: failure.banSeconds }
+      : null,
   };
 }
 
@@ -135,6 +166,9 @@ function toDto(
     ccTemplate: template,
     effectiveCc: effectiveCc(cc, template),
     logJa4: row?.logJa4 ?? false,
+    allowVerifiedBots: row?.allowVerifiedBots ?? false,
+    challengeText: savedText(row),
+    failureBan: savedFailureBan(row),
     platformUnderAttack: platform.underAttack,
     updatedAt: row?.updatedAt.toISOString() ?? null,
   };
@@ -182,6 +216,11 @@ export async function updateSiteProtection(
       powHighDifficulty: input.powHighDifficulty ?? before.powHighDifficulty,
       cc: input.cc || row?.cc ? { ...before.cc, ...(input.cc ?? {}) } : null,
       logJa4: input.logJa4 ?? before.logJa4,
+      allowVerifiedBots: input.allowVerifiedBots ?? before.allowVerifiedBots,
+      challengeText: input.challengeText ?? before.challengeText,
+      failureBanEnabled: (input.failureBan ?? before.failureBan).enabled,
+      failureThreshold: (input.failureBan ?? before.failureBan).threshold,
+      failureBanSeconds: (input.failureBan ?? before.failureBan).banSeconds,
     };
     if (next.powHighDifficulty < next.powDifficulty)
       fail(

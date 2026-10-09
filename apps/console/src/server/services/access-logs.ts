@@ -19,6 +19,8 @@ const JA4_RE = /^[a-z][a-z0-9]{2}[di][0-9]{4}[a-zA-Z0-9]{2}_[0-9a-f]{12}_[0-9a-f
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** CRS rule ids kept per log entry (nodes send at most 16). */
 const MAX_WAF_RULE_IDS = 16;
+/** Log rules that wrote a line whatever the sample rate (waf-v2). */
+const MAX_LOG_RULE_IDS = 8;
 /** Request ids as nodes answer them (X-Request-Id); anything else is stored empty. */
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
 export const logCutoff = (now = Date.now()) => Math.floor(now / DAY) * DAY - 6 * DAY;
@@ -68,13 +70,16 @@ export async function ingestLogs(
             inArray(schema.site.id, ids),
             eq(schema.site.clusterId, node.clusterId),
             // The site samples, or an enabled site or platform rule samples some
-            // of its requests (config action logSampleRate, rules-v2).
+            // of its requests (config action logSampleRate, rules-v2) or writes
+            // lines whatever the sample rate (log action accessLog, waf-v2).
             sql`(${schema.site.logSampleRate} > 0 or exists (
               select 1 from ${schema.edgeRule}
               where (${schema.edgeRule.siteId} = ${schema.site.id} or ${schema.edgeRule.siteId} is null)
                 and ${schema.edgeRule.enabled}
-                and ${schema.edgeRule.action}->>'kind' = 'config'
-                and (${schema.edgeRule.action}->>'logSampleRate')::int > 0))`,
+                and ((${schema.edgeRule.action}->>'kind' = 'config'
+                    and (${schema.edgeRule.action}->>'logSampleRate')::int > 0)
+                  or (${schema.edgeRule.action}->>'kind' = 'log'
+                    and (${schema.edgeRule.action}->>'accessLog')::boolean))))`,
           ),
         )
     : [];
@@ -132,6 +137,9 @@ export async function ingestLogs(
           .slice(0, MAX_WAF_RULE_IDS),
         wafBlocked: l.wafBlocked,
         requestId: REQUEST_ID_RE.test(l.requestId) ? l.requestId : "",
+        ruleIds: [...new Set(l.ruleIds.filter((id) => uuid.test(id)))]
+          .map((id) => id.toLowerCase())
+          .slice(0, MAX_LOG_RULE_IDS),
       },
     ];
   });
@@ -240,6 +248,7 @@ export function logsCsv(entries: LogEntry[]) {
     "ja4",
     "wafRuleIds",
     "wafBlocked",
+    "ruleIds",
   ] as const;
   const cell = (value: unknown) => {
     let text = Array.isArray(value) ? value.join(" ") : String(value);

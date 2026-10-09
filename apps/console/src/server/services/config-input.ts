@@ -441,9 +441,12 @@ export function authRuleModels(
 function contentModel(
   s: typeof schema.site.$inferSelect,
   purgeKey: { id: string; version: number } | undefined,
-): Pick<SiteModel, "purge" | "hideXCache" | "maintenance" | "charset" | "requestBodyLimit"> {
+): Pick<
+  SiteModel,
+  "purge" | "hideXCache" | "maintenance" | "charset" | "requestBodyLimit" | "rulesBodyLimit"
+> {
   const maintenance = readMaintenance(s.maintenance);
-  const { charset, requestBodyLimit } = readContentSettings(s);
+  const { charset, requestBodyLimit, rulesBodyLimit } = readContentSettings(s);
   return {
     purge:
       s.purgeMethod && purgeKey
@@ -463,6 +466,7 @@ function contentModel(
         ? null
         : { name: charset.name, force: charset.force, uppercase: charset.uppercase },
     requestBodyLimit,
+    rulesBodyLimit,
   };
 }
 

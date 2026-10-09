@@ -577,12 +577,15 @@ function auditedCacheSettings(
     : rest;
 }
 
-/** Site columns of the content settings. */
-function contentSettingsValues(settings: ContentSettingsInput) {
+/** Site columns of the content settings; an omitted rulesBodyLimit stays as it is. */
+function contentSettingsValues(
+  settings: Omit<ContentSettingsInput, "rulesBodyLimit"> & { rulesBodyLimit?: number },
+) {
   const { name, force, uppercase } = settings.charset;
   return {
     charset: name === "off" ? {} : { name, force, uppercase },
     requestBodyLimit: settings.requestBodyLimit,
+    ...(settings.rulesBodyLimit !== undefined ? { rulesBodyLimit: settings.rulesBodyLimit } : {}),
   };
 }
 

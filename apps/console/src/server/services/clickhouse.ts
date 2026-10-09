@@ -52,7 +52,7 @@ export async function ensureClickHouse(env: Env) {
         client_ip String, method LowCardinality(String), host String, path String,
         status UInt16, bytes_sent UInt64, duration_ms UInt32, cache_status LowCardinality(String), sample_rate UInt16,
         ja4 String DEFAULT '', waf_rule_ids Array(UInt32) DEFAULT [], waf_blocked Bool DEFAULT false,
-        request_id String DEFAULT ''
+        request_id String DEFAULT '', rule_ids Array(String) DEFAULT []
       ) ENGINE = ReplacingMergeTree ORDER BY (site_id, time, id)
         PARTITION BY toDate(time) TTL toDateTime(time) + INTERVAL 7 DAY`,
       );
@@ -68,6 +68,11 @@ export async function ensureClickHouse(env: Env) {
       await clickhouse(
         env,
         "ALTER TABLE access_log ADD COLUMN IF NOT EXISTS waf_blocked Bool DEFAULT false",
+      );
+      // Log rules that wrote a line whatever the sample rate (waf-v2).
+      await clickhouse(
+        env,
+        "ALTER TABLE access_log ADD COLUMN IF NOT EXISTS rule_ids Array(String) DEFAULT []",
       );
       await clickhouse(
         env,
@@ -124,6 +129,7 @@ export async function insertClickHouseLogs(env: Env, rows: LogEntry[]) {
         waf_rule_ids: r.wafRuleIds,
         waf_blocked: r.wafBlocked,
         request_id: r.requestId,
+        rule_ids: r.ruleIds,
       }),
     )
     .join("\n");
@@ -136,7 +142,7 @@ export async function queryClickHouseLogs(env: Env, input: LogQuery): Promise<Lo
     `SELECT id, formatDateTime(time, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS timeIso,
     toString(node_id) AS nodeId, toString(site_id) AS siteId, client_ip AS clientIp, method, host, path, status,
     toFloat64(bytes_sent) AS bytesSent, duration_ms AS durationMs, cache_status AS cacheStatus, sample_rate AS sampleRate, ja4,
-    waf_rule_ids AS wafRuleIds, waf_blocked AS wafBlocked, request_id AS requestId
+    waf_rule_ids AS wafRuleIds, waf_blocked AS wafBlocked, request_id AS requestId, rule_ids AS ruleIds
     FROM access_log FINAL WHERE site_id = {site:UUID}
       AND time >= fromUnixTimestamp64Milli({from:Int64}) AND time < fromUnixTimestamp64Milli({to:Int64})
       AND ({status:UInt16} = 0 OR status = {status:UInt16}) AND ({ip:String} = '' OR client_ip = {ip:String})

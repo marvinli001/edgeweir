@@ -3,16 +3,19 @@ import {
   ACCESS_CONTROL_FEATURE,
   ACTIVE_HEALTH_FEATURE,
   BROTLI_FEATURE,
+  CHALLENGE_V2_FEATURE,
   CLIENT_CERT_FEATURE,
   ERROR_PAGES_FEATURE,
   MODSECURITY_FEATURE,
   MULTI_CERTIFICATE_FEATURE,
   ORIGIN_HTTP2_FEATURE,
+  RULES_BODY_FEATURE,
   RULES_V2_FEATURE,
   RULES_V3_FEATURE,
   SESSION_AFFINITY_FEATURE,
   SITE_CONTENT_FEATURE,
   type SiteWafModel,
+  WAF_V2_FEATURE,
   ZSTD_FEATURE,
 } from "@edgeweir/config-compiler";
 import {
@@ -30,8 +33,10 @@ import {
   type SiteWaf,
   type SiteWafUpdateInput,
   WAF_DEFAULTS,
+  type WafExclusion,
   type WafMode,
   type WafTopRules,
+  wafExclusion,
   wafMode,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
@@ -44,6 +49,25 @@ import { findSite } from "./sites";
 
 type WafRow = typeof schema.siteWaf.$inferSelect;
 
+/** The stored exclusions that are valid (the contract's shape, rule ids and targets sorted). */
+function readExclusions(value: unknown): WafExclusion[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const parsed = wafExclusion.safeParse(entry);
+    return parsed.success ? [normalizeExclusion(parsed.data)] : [];
+  });
+}
+
+/** An exclusion as stored: rule ids ascending, targets sorted, exact only with a path. */
+function normalizeExclusion(e: WafExclusion): WafExclusion {
+  return {
+    path: e.path,
+    exact: e.path !== "" && e.exact,
+    ruleIds: [...new Set(e.ruleIds)].sort((a, b) => a - b),
+    targets: [...new Set(e.targets)].sort(),
+  };
+}
+
 function toDto(siteId: string, row: WafRow | undefined): SiteWaf {
   const mode = wafMode.safeParse(row?.mode);
   return {
@@ -51,7 +75,7 @@ function toDto(siteId: string, row: WafRow | undefined): SiteWaf {
     mode: mode.success ? mode.data : WAF_DEFAULTS.mode,
     paranoiaLevel: row?.paranoiaLevel ?? WAF_DEFAULTS.paranoiaLevel,
     anomalyThreshold: row?.anomalyThreshold ?? WAF_DEFAULTS.anomalyThreshold,
-    excludedRuleIds: row?.excludedRuleIds ?? [],
+    exclusions: readExclusions(row?.exclusions),
     requestBodyLimit: row?.requestBodyLimit ?? WAF_DEFAULTS.requestBodyLimit,
     updatedAt: row?.updatedAt.toISOString() ?? null,
   };
@@ -78,7 +102,7 @@ export async function loadSiteWafModels(
                 mode: row.mode,
                 paranoiaLevel: row.paranoiaLevel,
                 anomalyThreshold: row.anomalyThreshold,
-                excludedRuleIds: row.excludedRuleIds,
+                exclusions: readExclusions(row.exclusions),
                 requestBodyLimit: row.requestBodyLimit,
               },
             ],
@@ -110,7 +134,9 @@ export async function updateSiteWaf(
   ctx: { actor: Actor },
 ): Promise<SiteWaf> {
   return db.transaction(async (tx) => {
-    const refused = (input.excludedRuleIds ?? []).filter((id) => !crsDetectionRule(id));
+    const refused = [...new Set((input.exclusions ?? []).flatMap((e) => e.ruleIds))].filter(
+      (id) => !crsDetectionRule(id),
+    );
     if (refused.length)
       fail("WAF_RULE_NOT_EXCLUDABLE", "CRS setup and evaluation rules cannot be excluded", {
         ids: refused.slice(0, 5).join(", "),
@@ -122,7 +148,7 @@ export async function updateSiteWaf(
       mode: input.mode ?? before.mode,
       paranoiaLevel: input.paranoiaLevel ?? before.paranoiaLevel,
       anomalyThreshold: input.anomalyThreshold ?? before.anomalyThreshold,
-      excludedRuleIds: [...(input.excludedRuleIds ?? before.excludedRuleIds)].sort((a, b) => a - b),
+      exclusions: (input.exclusions ?? before.exclusions).map(normalizeExclusion),
       requestBodyLimit: input.requestBodyLimit ?? before.requestBodyLimit,
     };
     const [saved] = await tx
@@ -193,6 +219,9 @@ export async function siteFeatures(db: Database, siteId: string): Promise<SiteFe
     clientCertificate: byNodes(CLIENT_CERT_FEATURE),
     accessAuth: byNodes(ACCESS_AUTH_FEATURE),
     accessControl: byNodes(ACCESS_CONTROL_FEATURE),
+    wafV2: byNodes(WAF_V2_FEATURE),
+    rulesBody: byNodes(RULES_BODY_FEATURE),
+    challengeV2: byNodes(CHALLENGE_V2_FEATURE),
   };
 }
 

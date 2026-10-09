@@ -46,12 +46,18 @@ const ALL_FEATURES = [
   "client-cert-v1",
   "access-auth-v1",
   "access-control-v1",
+  "waf-v2",
+  "rules-body-v1",
+  "challenge-v2",
 ];
 
 /** A change without the operator behind it (service accounts, background jobs). */
 const service = {
   actor: { type: "service_account" as const, id: "service-account-waf", name: "integration" },
 };
+
+/** The site-wide exclusion of 920350 and 942100 as the API returns it. */
+const WHOLE_SITE = { path: "", exact: false, ruleIds: [920350, 942100], targets: [] };
 
 describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
   const { ctx, client: pglite } = await createTestContext();
@@ -122,7 +128,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       mode: "off",
       paranoiaLevel: 1,
       anomalyThreshold: 5,
-      excludedRuleIds: [],
+      exclusions: [],
       requestBodyLimit: 131072,
       updatedAt: null,
     });
@@ -149,6 +155,9 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       clientCertificate: available,
       accessAuth: available,
       accessControl: available,
+      wafV2: available,
+      rulesBody: available,
+      challengeV2: available,
     });
     const https = await admin.https.get({ id: siteId });
     expect(https).toMatchObject({ brotli: false, brotliLevel: 6, zstd: false, zstdLevel: 3 });
@@ -183,7 +192,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       mode: "block",
       paranoiaLevel: 2,
       anomalyThreshold: 10,
-      excludedRuleIds: [942100, 920350],
+      exclusions: [{ ruleIds: [942100, 920350] }],
       requestBodyLimit: 65536,
     });
     expect(res.status).toBe(200);
@@ -192,7 +201,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       mode: "block",
       paranoiaLevel: 2,
       anomalyThreshold: 10,
-      excludedRuleIds: [920350, 942100],
+      exclusions: [WHOLE_SITE],
       requestBodyLimit: 65536,
     });
     const current = await config();
@@ -214,15 +223,15 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
     expect(audit).toMatchObject({ targetId: siteId, actorType: "api_key" });
     expect(audit?.metadata).toMatchObject({
       from: { mode: "off", paranoiaLevel: 1 },
-      to: { mode: "block", paranoiaLevel: 2, excludedRuleIds: [920350, 942100] },
+      to: { mode: "block", paranoiaLevel: 2, exclusions: [WHOLE_SITE] },
     });
     // Fields not given keep their values; duplicate or non-CRS ids are refused.
     const detect = await admin.waf.update({ id: siteId, mode: "detect" });
     expect(detect).toMatchObject({ mode: "detect", paranoiaLevel: 2, anomalyThreshold: 10 });
     expect((await siteOf())?.waf?.mode).toBe("detect");
     for (const input of [
-      { excludedRuleIds: [942100, 942100] },
-      { excludedRuleIds: [123] },
+      { exclusions: [{ ruleIds: [942100, 942100] }] },
+      { exclusions: [{ ruleIds: [123] }] },
       { paranoiaLevel: 5 },
       { anomalyThreshold: 0 },
       { requestBodyLimit: 134_217_729 },
@@ -230,14 +239,17 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       expect((await rpcError(admin.waf.update({ id: siteId, ...input }))).status).toBe(400);
     // Setup and evaluation rules (901, 949, 959, 980) would break CRS or turn blocking off.
     const evaluation = await rpcError(
-      admin.waf.update({ id: siteId, excludedRuleIds: [942100, 949110, 901100, 980170] }),
+      admin.waf.update({
+        id: siteId,
+        exclusions: [{ path: "/a", ruleIds: [942100, 949110, 901100] }, { ruleIds: [980170] }],
+      }),
     );
     expect(evaluation).toMatchObject({
       status: 400,
       code: "WAF_RULE_NOT_EXCLUDABLE",
       data: { ids: "949110, 901100, 980170" },
     });
-    expect((await admin.waf.get({ id: siteId })).excludedRuleIds).toEqual([920350, 942100]);
+    expect((await admin.waf.get({ id: siteId })).exclusions).toEqual([WHOLE_SITE]);
     // Off: the site no longer carries CRS and the cluster no longer needs the module.
     await admin.waf.update({ id: siteId, mode: "off" });
     expect((await siteOf())?.waf).toBeUndefined();
@@ -312,6 +324,9 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       clientCertificate: unavailable,
       accessAuth: unavailable,
       accessControl: unavailable,
+      wafV2: unavailable,
+      rulesBody: unavailable,
+      challengeV2: unavailable,
     });
     const before = (await config()).revision;
     for (const [call, feature] of [
@@ -473,9 +488,9 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
     expect(blocked?.wafRuleIds).not.toContain(0);
     expect(entries.find((e) => !e.wafBlocked)).toMatchObject({ wafRuleIds: [], wafBlocked: false });
     const csv = logsCsv(entries).split("\r\n");
-    expect(csv[0]).toMatch(/,ja4,wafRuleIds,wafBlocked$/);
+    expect(csv[0]).toMatch(/,ja4,wafRuleIds,wafBlocked,ruleIds$/);
     expect(
-      csv.some((line) => line.includes('"920000 920001 920002') && line.endsWith('"true"')),
+      csv.some((line) => line.includes('"920000 920001 920002') && line.endsWith('"true",""')),
     ).toBe(true);
     const res = await admin.logs.export({
       siteId,

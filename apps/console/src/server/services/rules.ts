@@ -84,6 +84,9 @@ export async function saveRules(
       if (group && !groups.has(group))
         fail("RULE_INVALID", `rule ${rule.name}: the site has no origin group ${group}`);
       if (rule.action.kind === "origin") assertHostHeader(rule.action.hostHeader);
+      // Only platform rules ban at platform scope (waf-v2).
+      if (rule.action.kind === "ban" && rule.action.banScope === "platform" && siteId)
+        fail("RULE_INVALID", `rule ${rule.name}: only platform rules ban at platform scope`);
     }
     const ids = rules.flatMap((rule) => (rule.id ? [rule.id] : []));
     if (new Set(ids).size !== ids.length) fail("RULE_INVALID", "duplicate rule ID");

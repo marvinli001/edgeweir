@@ -177,7 +177,7 @@ export const ruleAction = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("log"),
     /** Write an access log line whatever the sample rate (waf-v2; 100 per site and second per node). */
-    accessLog: z.boolean().default(false),
+    accessLog: z.boolean().optional(),
   }),
   z.object({ kind: z.literal("allow") }),
   /** Challenges requests without a pass of this type's level or higher. */
@@ -396,7 +396,7 @@ export const ruleAction = z.discriminatedUnion("kind", [
           n === 0 || (n >= RULE_BAN.rateLimitSeconds.min && n <= RULE_BAN.rateLimitSeconds.max),
         `0 or ${RULE_BAN.rateLimitSeconds.min}-${RULE_BAN.rateLimitSeconds.max}`,
       )
-      .default(0),
+      .optional(),
   }),
 ]);
 /** The rate of a rate_limit rule a preset sets; the key and status stay the rule's own. */

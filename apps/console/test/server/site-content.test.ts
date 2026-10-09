@@ -86,6 +86,7 @@ describe("cache, origin and content settings (site-content-v1, cache-zone-v1) on
     expect(site.contentSettings).toEqual({
       charset: { name: "off", force: false, uppercase: false },
       requestBodyLimit: 104_857_600,
+      rulesBodyLimit: 65_536,
     });
     expect(site.originSettings).toMatchObject({ tries: 3, statusRetry: true });
     expect((await admin.clusters.get({ id: clusterId })).cache).toEqual({
@@ -227,6 +228,7 @@ describe("cache, origin and content settings (site-content-v1, cache-zone-v1) on
     expect(site.contentSettings).toEqual({
       charset: { name: "gbk", force: true, uppercase: true },
       requestBodyLimit: 0,
+      rulesBodyLimit: 65_536,
     });
     expect(site.originSettings).toMatchObject({ tries: 5, statusRetry: false });
     expect(site.cacheRules.map((rule) => rule.cacheSetCookie)).toEqual([true, false]);
