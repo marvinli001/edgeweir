@@ -1,6 +1,6 @@
 import { type IpListDto, ipListInput } from "@edgeweir/contract";
 import { canonicalCidr } from "@edgeweir/rule-engine";
-import { Add01Icon, ListViewIcon } from "@hugeicons/core-free-icons";
+import { Add01Icon, ListViewIcon, Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
@@ -9,6 +9,7 @@ import { AccessTabs } from "@/components/access-tabs";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
+import { IpCheckDialog } from "@/components/ip-check";
 import { enterDelay, Page } from "@/components/page";
 import { EmptyState, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
@@ -46,14 +47,21 @@ export function IpListsPage() {
       await queries.invalidateQueries();
     },
   });
-  const createButton = (
-    <Button onClick={() => edit.show("new")} data-testid="ip-list-create">
-      <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-      {m.ip_lists_create()}
-    </Button>
+  const check = useDialogState();
+  const actions = (
+    <>
+      <Button variant="outline" onClick={() => check.show()} data-testid="ip-check-open">
+        <HugeiconsIcon icon={Search01Icon} strokeWidth={2} />
+        {m.ip_check_title()}
+      </Button>
+      <Button onClick={() => edit.show("new")} data-testid="ip-list-create">
+        <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+        {m.ip_lists_create()}
+      </Button>
+    </>
   );
   return (
-    <Page title={m.ip_lists_title()} actions={createButton}>
+    <Page title={m.ip_lists_title()} actions={actions}>
       <AccessTabs value="ip-lists" />
       <QueryView
         query={query}
@@ -95,6 +103,7 @@ export function IpListsPage() {
           }}
         />
       ) : null}
+      <IpCheckDialog key={check.key} open={check.open} onOpenChange={check.onOpenChange} />
     </Page>
   );
 }

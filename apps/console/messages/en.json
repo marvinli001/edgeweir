@@ -158,13 +158,8 @@
   "enroll_ttl": "Valid for",
   "enroll_ttl_minutes": [
     {
-      "declarations": [
-        "input count",
-        "local countPlural = count: plural"
-      ],
-      "selectors": [
-        "countPlural"
-      ],
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
       "match": {
         "countPlural=one": "{count} minute",
         "countPlural=other": "{count} minutes"
@@ -173,13 +168,8 @@
   ],
   "enroll_ttl_hours": [
     {
-      "declarations": [
-        "input count",
-        "local countPlural = count: plural"
-      ],
-      "selectors": [
-        "countPlural"
-      ],
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
       "match": {
         "countPlural=one": "{count} hour",
         "countPlural=other": "{count} hours"
@@ -297,10 +287,7 @@
         "local nodesPlural = nodes: plural",
         "local sitesPlural = sites: plural"
       ],
-      "selectors": [
-        "nodesPlural",
-        "sitesPlural"
-      ],
+      "selectors": ["nodesPlural", "sitesPlural"],
       "match": {
         "nodesPlural=one, sitesPlural=one": "The cluster still has {nodes} node and {sites} site",
         "nodesPlural=one, sitesPlural=other": "The cluster still has {nodes} node and {sites} sites",
@@ -679,14 +666,8 @@
   "site_origin_health_ok": "Healthy",
   "site_origin_health_down": [
     {
-      "declarations": [
-        "input down",
-        "input total",
-        "local totalPlural = total: plural"
-      ],
-      "selectors": [
-        "totalPlural"
-      ],
+      "declarations": ["input down", "input total", "local totalPlural = total: plural"],
+      "selectors": ["totalPlural"],
       "match": {
         "totalPlural=one": "Down on {down} of {total} node",
         "totalPlural=other": "Down on {down} of {total} nodes"
@@ -770,13 +751,8 @@
   "quick_purge_url": "Purge URL",
   "quick_purge_confirm": [
     {
-      "declarations": [
-        "input count",
-        "local countPlural = count: plural"
-      ],
-      "selectors": [
-        "countPlural"
-      ],
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
       "match": {
         "countPlural=one": "Purge {count} URL?",
         "countPlural=other": "Purge {count} URLs?"
@@ -795,14 +771,8 @@
   "purge_nodes": "Nodes",
   "purge_nodes_progress": [
     {
-      "declarations": [
-        "input done",
-        "input total",
-        "local totalPlural = total: plural"
-      ],
-      "selectors": [
-        "totalPlural"
-      ],
+      "declarations": ["input done", "input total", "local totalPlural = total: plural"],
+      "selectors": ["totalPlural"],
       "match": {
         "totalPlural=one": "{done}/{total} node",
         "totalPlural=other": "{done}/{total} nodes"
@@ -833,9 +803,7 @@
         "input url",
         "local totalPlural = total: plural"
       ],
-      "selectors": [
-        "totalPlural"
-      ],
+      "selectors": ["totalPlural"],
       "match": {
         "totalPlural=one": "{failed} of {total} URL failed, first {url} ({reason})",
         "totalPlural=other": "{failed} of {total} URLs failed, first {url} ({reason})"
@@ -849,14 +817,8 @@
   "task_error_reason_other": "other error",
   "task_error_prefetch_timeout": [
     {
-      "declarations": [
-        "input done",
-        "input total",
-        "local totalPlural = total: plural"
-      ],
-      "selectors": [
-        "totalPlural"
-      ],
+      "declarations": ["input done", "input total", "local totalPlural = total: plural"],
+      "selectors": ["totalPlural"],
       "match": {
         "totalPlural=one": "Ran out of time after {done} of {total} URL",
         "totalPlural=other": "Ran out of time after {done} of {total} URLs"
@@ -953,14 +915,8 @@
   "cert_error_other": "Issuance failed ({code})",
   "cert_expires": [
     {
-      "declarations": [
-        "input date",
-        "input days",
-        "local daysPlural = days: plural"
-      ],
-      "selectors": [
-        "daysPlural"
-      ],
+      "declarations": ["input date", "input days", "local daysPlural = days: plural"],
+      "selectors": ["daysPlural"],
       "match": {
         "daysPlural=one": "Expires {date} · {days} day remaining",
         "daysPlural=other": "Expires {date} · {days} days remaining"
@@ -1156,13 +1112,8 @@
   "ip_lists_empty": "No IP lists",
   "ip_lists_count": [
     {
-      "declarations": [
-        "input count",
-        "local countPlural = count: plural"
-      ],
-      "selectors": [
-        "countPlural"
-      ],
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
       "match": {
         "countPlural=one": "{count} entry",
         "countPlural=other": "{count} entries"
@@ -1355,14 +1306,8 @@
   "upgrade_group": "Canary node group",
   "upgrade_group_nodes": [
     {
-      "declarations": [
-        "input count",
-        "input name",
-        "local countPlural = count: plural"
-      ],
-      "selectors": [
-        "countPlural"
-      ],
+      "declarations": ["input count", "input name", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
       "match": {
         "countPlural=one": "{name} ({count} node)",
         "countPlural=other": "{name} ({count} nodes)"
@@ -1485,14 +1430,8 @@
   "rollout_traffic_baseline": "Baseline traffic",
   "rollout_traffic_value": [
     {
-      "declarations": [
-        "input errors",
-        "input requests",
-        "local requestsPlural = requests: plural"
-      ],
-      "selectors": [
-        "requestsPlural"
-      ],
+      "declarations": ["input errors", "input requests", "local requestsPlural = requests: plural"],
+      "selectors": ["requestsPlural"],
       "match": {
         "requestsPlural=one": "{requests} request, {errors} 5xx",
         "requestsPlural=other": "{requests} requests, {errors} 5xx"
@@ -1522,9 +1461,7 @@
         "input removed",
         "local previousPlural = previous: plural"
       ],
-      "selectors": [
-        "previousPlural"
-      ],
+      "selectors": ["previousPlural"],
       "match": {
         "previousPlural=one": "DNS mass removal held back: {removed} of {previous} address record would go; the current records stay",
         "previousPlural=other": "DNS mass removal held back: {removed} of {previous} address records would go; the current records stay"
@@ -1581,13 +1518,8 @@
   "bans_expired": "Expired",
   "bans_unapplied": [
     {
-      "declarations": [
-        "input count",
-        "local countPlural = count: plural"
-      ],
-      "selectors": [
-        "countPlural"
-      ],
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
       "match": {
         "countPlural=one": "Not applied on {count} node",
         "countPlural=other": "Not applied on {count} nodes"
@@ -1701,13 +1633,8 @@
   "security_no_nodes": "No nodes",
   "security_escalated_paths": [
     {
-      "declarations": [
-        "input count",
-        "local countPlural = count: plural"
-      ],
-      "selectors": [
-        "countPlural"
-      ],
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
       "match": {
         "countPlural=one": "{count} escalated path",
         "countPlural=other": "{count} escalated paths"
@@ -1721,13 +1648,8 @@
   "security_hours": "Range",
   "security_hours_value": [
     {
-      "declarations": [
-        "input hours",
-        "local hoursPlural = hours: plural"
-      ],
-      "selectors": [
-        "hoursPlural"
-      ],
+      "declarations": ["input hours", "local hoursPlural = hours: plural"],
+      "selectors": ["hoursPlural"],
       "match": {
         "hoursPlural=one": "Last {hours} hour",
         "hoursPlural=other": "Last {hours} hours"
@@ -1846,13 +1768,8 @@
   "purge_sitemap_max": "URL limit",
   "purge_sitemap_limit": [
     {
-      "declarations": [
-        "input count",
-        "local countPlural = count: plural"
-      ],
-      "selectors": [
-        "countPlural"
-      ],
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
       "match": {
         "countPlural=one": "Up to {count} URL",
         "countPlural=other": "Up to {count} URLs"
@@ -2097,13 +2014,8 @@
   "error_dns_reconcile_busy": "This cluster's DNS is still being synced; try again later",
   "error_region_in_use": [
     {
-      "declarations": [
-        "input probes",
-        "local probesPlural = probes: plural"
-      ],
-      "selectors": [
-        "probesPlural"
-      ],
+      "declarations": ["input probes", "local probesPlural = probes: plural"],
+      "selectors": ["probesPlural"],
       "match": {
         "probesPlural=one": "{probes} probe still belongs to this region",
         "probesPlural=other": "{probes} probes still belong to this region"
@@ -2135,13 +2047,8 @@
   "probes_rtt": "{rtt} ms",
   "probes_failed_targets": [
     {
-      "declarations": [
-        "input count",
-        "local countPlural = count: plural"
-      ],
-      "selectors": [
-        "countPlural"
-      ],
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
       "match": {
         "countPlural=one": "{count} target unreachable",
         "countPlural=other": "{count} targets unreachable"
@@ -2518,6 +2425,7 @@
   "node_feature_multi_certificate_v1": "several certificates per site",
   "node_feature_client_cert_v1": "client certificates",
   "node_feature_access_auth_v1": "access authentication",
+  "node_feature_access_control_v1": "access control",
   "https_blocker_no_certificate_names": "The site has only pattern domains: no name to issue for",
   "dns_pointing_unchecked": "Not checkable",
   "bans_reason_unknown_host_scan": "Unknown host scan",
@@ -2597,5 +2505,83 @@
   "auth_move_up": "Move up",
   "auth_move_down": "Move down",
   "auth_failures_title": "Authentication failures",
-  "auth_failures_partial": "Some nodes of the cluster do not report authentication failures"
+  "auth_failures_partial": "Some nodes of the cluster do not report authentication failures",
+  "access_enabled": "Enabled",
+  "access_path_prefixes": "Path prefixes",
+  "access_exclude_prefixes": "Excluded path prefixes",
+  "access_extensions": "Extensions",
+  "access_site_lists_title": "Site lists",
+  "access_site_block_lists": "Site block lists",
+  "access_site_allow_lists": "Site allow lists",
+  "access_geo_title": "Geo access",
+  "access_geo_mode": "Mode",
+  "access_geo_mode_deny": "Deny listed",
+  "access_geo_mode_allow": "Allow listed only",
+  "access_geo_countries": "Countries (ISO codes)",
+  "access_geo_subdivisions": "Subdivisions",
+  "access_geo_asns": "ASNs",
+  "access_hotlink_title": "Hotlink protection",
+  "access_hotlink_allow_empty": "Allow no referer",
+  "access_hotlink_allow_site": "Allow the site's domains",
+  "access_hotlink_check_origin": "Check Origin too",
+  "access_hotlink_allowed": "Allowed sources",
+  "access_hotlink_denied": "Denied sources",
+  "access_hotlink_action": "Action",
+  "access_hotlink_action_deny": "Answer 403",
+  "access_hotlink_action_redirect": "302 redirect",
+  "access_hotlink_redirect_url": "Redirect to",
+  "access_ua_title": "User agents",
+  "access_ua_add": "Add rule",
+  "access_ua_empty": "No user agent rules",
+  "access_ua_pattern": "Pattern",
+  "access_ua_empty_pattern": "(no user agent)",
+  "access_ua_action": "Action",
+  "access_ua_allow": "Allow",
+  "access_ua_deny": "Deny",
+  "access_cors_title": "CORS",
+  "access_cors_origins": "Allowed origins",
+  "access_cors_credentials": "Allow credentials",
+  "access_cors_methods": "Allowed methods",
+  "access_cors_headers": "Allowed request headers",
+  "access_cors_headers_list": "List",
+  "access_cors_headers_echo": "Echo the preflight's headers",
+  "access_cors_headers_names": "Header names",
+  "access_cors_exposed": "Exposed headers",
+  "access_cors_max_age": "Max-Age (s)",
+  "access_cors_preflight_origin": "Preflights go to the origin",
+  "access_cors_keep_origin": "Keep the origin's CORS headers",
+  "access_ws_title": "WebSocket",
+  "access_ws_origins_mode": "Origins",
+  "access_ws_all": "Any origin",
+  "access_ws_list": "Listed origins only",
+  "access_ws_origins": "Allowed origins",
+  "access_ws_idle": "Idle timeout (s)",
+  "access_headers_title": "Security headers",
+  "access_headers_nosniff": "X-Content-Type-Options: nosniff",
+  "access_headers_frame": "X-Frame-Options",
+  "access_headers_referrer": "Referrer-Policy",
+  "access_headers_permissions": "Permissions-Policy",
+  "access_headers_hide_server": "Hide Server",
+  "access_headers_remove_powered_by": "Remove X-Powered-By",
+  "access_headers_off": "Not set",
+  "ip_check_title": "IP check",
+  "ip_check_ip": "IP address",
+  "ip_check_submit": "Check",
+  "ip_check_site": "Site",
+  "ip_check_any_site": "No site",
+  "ip_check_outcome_platform_banned": "Banned on every site",
+  "ip_check_outcome_site_banned": "Banned on this site",
+  "ip_check_outcome_platform_blocked": "Blocked by a block list",
+  "ip_check_outcome_site_blocked": "Blocked by a site block list",
+  "ip_check_outcome_allowed": "Allowed",
+  "ip_check_outcome_none": "No list or ban applies",
+  "ip_check_platform_allowed": "Allow list",
+  "ip_check_lists": "Matching lists",
+  "ip_check_bans": "Active bans",
+  "ip_check_none": "None",
+  "ip_check_site_role_block": "Site block",
+  "ip_check_site_role_allow": "Site allow",
+  "ip_check_trusted_proxy": "Trusted proxy",
+  "ip_check_node_address": "Node address",
+  "ip_check_geoip_note": "GeoIP is not checked"
 }

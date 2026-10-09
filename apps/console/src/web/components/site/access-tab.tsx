@@ -31,7 +31,15 @@ import { toast } from "sonner";
 import { CopyButton } from "@/components/copy-button";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
+import { IpCheckCard } from "@/components/ip-check";
 import { SafetyNote } from "@/components/safety-note";
+import { CorsCard } from "@/components/site/access-control/cors-card";
+import { GeoCard } from "@/components/site/access-control/geo-card";
+import { HotlinkCard } from "@/components/site/access-control/hotlink-card";
+import { SecurityHeadersCard } from "@/components/site/access-control/security-headers-card";
+import { SiteListsCard } from "@/components/site/access-control/site-lists-card";
+import { UserAgentsCard } from "@/components/site/access-control/user-agents-card";
+import { WebsocketCard } from "@/components/site/access-control/websocket-card";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { CheckboxList } from "@/components/site/ports-card";
 import { SaveBar } from "@/components/site/save-site";
@@ -253,7 +261,8 @@ function scopeSummary(d: Draft): string {
 
 /**
  * The site's access control tab: access authentication rules, checked in order before
- * the rules and the cache (the first enabled rule whose scope matches decides).
+ * the rules and the cache (the first enabled rule whose scope matches decides), then one card
+ * per part of the access control (each saves its own part) and the IP check.
  */
 export function AccessTab({ site }: { site: Site }) {
   const rules = useQuery(orpc.authRules.get.queryOptions({ input: { id: site.id } }));
@@ -272,6 +281,14 @@ export function AccessTab({ site }: { site: Site }) {
           )}
         </QueryView>
       </Card>
+      <SiteListsCard siteId={site.id} index={1} />
+      <GeoCard siteId={site.id} index={2} />
+      <HotlinkCard siteId={site.id} index={3} />
+      <UserAgentsCard siteId={site.id} index={4} />
+      <CorsCard siteId={site.id} index={5} />
+      <WebsocketCard siteId={site.id} index={6} />
+      <SecurityHeadersCard siteId={site.id} index={7} />
+      <IpCheckCard siteId={site.id} index={8} />
     </div>
   );
 }

@@ -29,7 +29,7 @@ const SOURCES: Record<BanSource, () => string> = {
 };
 
 /** Time left until `iso`, rounded down ("3 h left"). */
-function timeLeft(iso: string, now = Date.now()): string {
+export function timeLeft(iso: string, now = Date.now()): string {
   const seconds = Math.max(0, Math.floor((Date.parse(iso) - now) / 1000));
   if (seconds < 3600) return m.bans_left_minutes({ count: Math.max(1, Math.floor(seconds / 60)) });
   if (seconds < 86400) return m.bans_left_hours({ count: Math.floor(seconds / 3600) });

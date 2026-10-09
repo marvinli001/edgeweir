@@ -38,15 +38,29 @@ function durationLabel(seconds: number): string {
     : m.bans_duration_hours({ count: seconds / 3600 });
 }
 
-type SiteChoice = { id: string; name: string };
+export type SiteChoice = { id: string; name: string };
 
-/** Sites the caller can ban in: a search box and, beside it, a select over the matches. */
-function SiteSelect({
+/** The choice of no site in an optional SiteSelect. */
+const NO_SITE = "__none__";
+
+/**
+ * Sites to pick from: a search box and, beside it, a select over the matches. With `noneLabel`
+ * the site is optional: that choice (first) picks none.
+ */
+export function SiteSelect({
+  id = "ban-site",
+  label = m.bans_site(),
   value,
   onChange,
+  noneLabel,
+  testId,
 }: {
+  id?: string;
+  label?: string;
   value: SiteChoice | null;
-  onChange: (site: SiteChoice) => void;
+  onChange: (site: SiteChoice | null) => void;
+  noneLabel?: string;
+  testId?: string;
 }) {
   const [search, setSearch] = React.useState("");
   const sites = useQuery({
@@ -58,12 +72,13 @@ function SiteSelect({
   const choices = (sites.data?.items ?? []).map((s) => ({ value: s.id, label: s.name }));
   if (value && !choices.some((c) => c.value === value.id))
     choices.unshift({ value: value.id, label: value.name });
+  if (noneLabel !== undefined) choices.unshift({ value: NO_SITE, label: noneLabel });
   return (
     <div className="grid items-start gap-4 sm:grid-cols-2">
       <Field>
-        <FieldLabel htmlFor="ban-site-search">{m.bans_site_search()}</FieldLabel>
+        <FieldLabel htmlFor={`${id}-search`}>{m.bans_site_search()}</FieldLabel>
         <Input
-          id="ban-site-search"
+          id={`${id}-search`}
           type="search"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
@@ -72,13 +87,18 @@ function SiteSelect({
       <QueryView query={sites} loadingClassName="min-h-16">
         {() => (
           <FormSelect
-            id="ban-site"
-            label={m.bans_site()}
-            value={value?.id ?? ""}
+            id={id}
+            label={label}
+            value={value?.id ?? (noneLabel !== undefined ? NO_SITE : "")}
             options={choices}
-            onChange={(id) =>
-              onChange({ id, name: choices.find((c) => c.value === id)?.label ?? "" })
+            onChange={(picked) =>
+              onChange(
+                picked === NO_SITE
+                  ? null
+                  : { id: picked, name: choices.find((c) => c.value === picked)?.label ?? "" },
+              )
             }
+            testId={testId}
           />
         )}
       </QueryView>
