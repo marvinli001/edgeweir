@@ -301,6 +301,18 @@ export const site = pgTable(
     maintenanceUpdatedAt: timestamp("maintenance_updated_at", { withTimezone: true }),
     /** When the access authentication rules were last saved; null until then. */
     authUpdatedAt: timestamp("auth_updated_at", { withTimezone: true }),
+    /**
+     * Access control (contract `accessControlSettings` without siteLists):
+     * hotlink, userAgents, cors, geo, websocket, securityHeaders; `{}` means
+     * the defaults (all off).
+     */
+    accessControl: jsonb("access_control").$type<Record<string, unknown>>().notNull().default({}),
+    /** IP lists whose addresses get 403 on this site (ADR-0039). */
+    blockListIds: uuid("block_list_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    /** IP lists whose addresses skip this site's block lists, bans, geo, hotlink, user agents and challenges. */
+    allowListIds: uuid("allow_list_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    /** When the access control was last saved; null until then. */
+    accessControlUpdatedAt: timestamp("access_control_updated_at", { withTimezone: true }),
     /** Charset of text responses (contract `charsetSettings`); `{}` means off. */
     charset: jsonb("charset").$type<Record<string, unknown>>().notNull().default({}),
     /** Largest request body by Content-Length in bytes; 0 means no limit. */
