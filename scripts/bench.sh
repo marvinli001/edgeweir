@@ -37,6 +37,14 @@
 #              unsigned URL is refused (403) and the signed one is a HIT.
 #              Defaults to the new node of scripts/bench-g12-nodes.mjs; its
 #              new.cache.bench.g12.test with BENCH_SCENARIO=cache is the baseline.
+#   access     cache HITs of a site with every part of access control on
+#              (access-control-v1): site lists, geo, CORS with credentials,
+#              hotlink, user agent rules and security headers; every request
+#              sends the Origin, Referer and User-Agent that pass them, and
+#              the script checks that the warmed HIT carries the echoed
+#              Access-Control-Allow-Origin and X-Content-Type-Options.
+#              Defaults to the new node of scripts/bench-g13-nodes.mjs; its
+#              new.cache.bench.g13.test with BENCH_SCENARIO=cache is the baseline.
 # pass and challenge default to ua-bench.test, which scripts/e2e-g2.mjs leaves
 # behind (whoami, cache rule on /, Under Attack js); headers to
 # hdr-bench.g8.test, which scripts/e2e-g8.mjs leaves behind; charset to
@@ -62,7 +70,8 @@ case "$BENCH_SCENARIO" in
   charset) DEFAULT_HOST=charset-bench.g15.test ;;
   tls | tls-resume) DEFAULT_HOST=new.tls-bench.g11.test DEFAULT_URL="https://127.0.0.1:${E2E_G11_BENCH_NEW_PORT:-18944}/bench-cache.txt" ;;
   url-auth) DEFAULT_HOST=url.bench.g12.test DEFAULT_URL="http://127.0.0.1:${E2E_G12_BENCH_NEW_PORT:-18948}/bench-cache.txt" ;;
-  *) echo "BENCH_SCENARIO must be cache, pass, challenge, headers, proxy, proxy-plain, charset, tls, tls-resume or url-auth, not $BENCH_SCENARIO" >&2; exit 2 ;;
+  access) DEFAULT_HOST=access.bench.g13.test DEFAULT_URL="http://127.0.0.1:${E2E_G13_BENCH_NEW_PORT:-18950}/bench-cache.txt" ;;
+  *) echo "BENCH_SCENARIO must be cache, pass, challenge, headers, proxy, proxy-plain, charset, tls, tls-resume, url-auth or access, not $BENCH_SCENARIO" >&2; exit 2 ;;
 esac
 BENCH_URL="${BENCH_URL:-${DEFAULT_URL:-http://127.0.0.1:${E2E_NODE_PORT:-18080}/bench-cache.txt}}"
 BENCH_HOST="${BENCH_HOST:-$DEFAULT_HOST}"
@@ -144,6 +153,11 @@ if [[ "$BENCH_SCENARIO" == url-auth ]]; then
   fi
   BENCH_URL="$BENCH_URL?sign=$TS-bench-$SIGN"
 fi
+if [[ "$BENCH_SCENARIO" == access ]]; then
+  BENCH_ORIGIN="${BENCH_ORIGIN:-https://app.bench.g13.test}"
+  OHA_HEADERS+=(-H "Origin: $BENCH_ORIGIN" -H "Referer: $BENCH_ORIGIN/page" -H "User-Agent: $BENCH_USER_AGENT")
+  CURL_HEADERS+=(-H "Origin: $BENCH_ORIGIN" -H "Referer: $BENCH_ORIGIN/page" -A "$BENCH_USER_AGENT")
+fi
 if [[ "$BENCH_SCENARIO" != challenge && "$BENCH_SCENARIO" != tls* ]]; then
   for _ in 1 2; do curl -fsS "${CURL_HEADERS[@]}" "$BENCH_URL" -o /dev/null; done
   HEADERS="$(curl -fsS -D - -o /dev/null "${CURL_HEADERS[@]}" "$BENCH_URL")"
@@ -157,6 +171,12 @@ if [[ "$BENCH_SCENARIO" != challenge && "$BENCH_SCENARIO" != tls* ]]; then
       echo "Refusing to benchmark: $BENCH_HOST does not compute its header values (X-Cache-Status, two Link lines)." >&2
       exit 1
     fi
+  fi
+  if [[ "$BENCH_SCENARIO" == access ]] &&
+    { ! printf '%s\n' "$HEADERS" | tr -d '\r' | grep -qi "^access-control-allow-origin: $BENCH_ORIGIN$" ||
+      ! printf '%s\n' "$HEADERS" | tr -d '\r' | grep -qi '^x-content-type-options: nosniff$'; }; then
+    echo "Refusing to benchmark: $BENCH_HOST does not apply its access control (CORS, security headers)." >&2
+    exit 1
   fi
   if [[ "$BENCH_SCENARIO" == charset ]] &&
     ! printf '%s\n' "$HEADERS" | tr -d '\r' | grep -qi '^content-type: .*; charset=gbk$'; then
