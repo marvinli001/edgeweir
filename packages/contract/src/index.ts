@@ -8,6 +8,7 @@ import { logsContract } from "./logs";
 
 export * from "./logs";
 
+import { accessControlContract, ipCheckContract } from "./access-control";
 import { accessKeysContract } from "./access-keys";
 import { alertsContract } from "./alerts";
 import { authRulesContract } from "./auth-rules";
@@ -40,6 +41,7 @@ import { cnamePrefixInput, cnamePrefixState, unknownHostProcedures } from "./unk
 import { usageContract, usageSettings } from "./usage";
 import { siteFeatures, wafContract } from "./waf";
 
+export * from "./access-control";
 export * from "./addresses";
 export * from "./audit";
 export * from "./auth-rules";
@@ -105,6 +107,10 @@ export const contract = {
   maintenance: maintenanceContract,
   /** A site's access authentication: Basic, forward authentication and signed URLs. */
   authRules: authRulesContract,
+  /** A site's access control: site lists, geo, CORS, hotlink, user agents, WebSocket origins, security headers. */
+  accessControl: accessControlContract,
+  /** What the console knows about an address: lists, bans and client address settings. */
+  ipCheck: ipCheckContract,
   certificates: certificatesContract,
   acmeAccounts: acmeAccountsContract,
   /** Regional probes and their latest results. */

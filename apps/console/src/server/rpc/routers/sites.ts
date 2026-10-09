@@ -1,3 +1,4 @@
+import { getAccessControl, updateAccessControl } from "../../services/access-control";
 import { configureLogs, logSettings, logsCsv, queryLogs } from "../../services/access-logs";
 import {
   topNodes,
@@ -81,6 +82,14 @@ export const sitesRouter = {
     ),
     failures: authed.authRules.failures.handler(({ input, context }) =>
       authFailures(context.app.db, input),
+    ),
+  },
+  accessControl: {
+    get: authed.accessControl.get.handler(({ input, context }) =>
+      getAccessControl(context.app.db, input.id),
+    ),
+    update: authed.accessControl.update.handler(({ input, context }) =>
+      updateAccessControl(context.app.db, input, { actor: context.actor }),
     ),
   },
   https: {

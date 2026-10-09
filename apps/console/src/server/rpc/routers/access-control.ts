@@ -1,3 +1,4 @@
+import { ipCheck } from "../../services/access-control";
 import { createBan, deleteBan, listBans } from "../../services/bans";
 import { getSiteProtection, updateSiteProtection } from "../../services/protection";
 import { topLoggedRules } from "../../services/rule-logs";
@@ -33,6 +34,9 @@ export const accessControlRouter = {
     save: authed.platformRules.save.handler(({ input, context }) =>
       saveRules(context.app, null, input.rules, context),
     ),
+  },
+  ipCheck: {
+    check: authed.ipCheck.check.handler(({ input, context }) => ipCheck(context.app.db, input)),
   },
   ipLists: {
     list: authed.ipLists.list.handler(({ context }) => listIpLists(context.app)),

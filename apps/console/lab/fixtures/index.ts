@@ -195,6 +195,7 @@ const core: Fixtures = {
         multiCertificate: on,
         clientCertificate: on,
         accessAuth: on,
+        accessControl: on,
       };
     },
   },

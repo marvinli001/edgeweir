@@ -198,7 +198,7 @@ export function failUnknownLists(names: string[]): void {
 }
 /**
  * What uses a list, the first five: rules ("name (site)" for site rules), sites whose cache
- * rules reference it, and L4 applications.
+ * rules reference it or that chose it as a site list, and L4 applications.
  */
 async function listUsers(tx: Executor, id: string): Promise<string[]> {
   const uses = (column: unknown) => sql`${id}::uuid = any(${column})`;
@@ -222,10 +222,18 @@ async function listUsers(tx: Executor, id: string): Promise<string[]> {
     .where(sql`${uses(schema.l4App.allowListIds)} or ${uses(schema.l4App.blockListIds)}`)
     .orderBy(asc(schema.l4App.name))
     .limit(5);
+  // Sites that chose the list as a site block or allow list (ADR-0039).
+  const siteLists = await tx
+    .select({ name: schema.site.name })
+    .from(schema.site)
+    .where(sql`${uses(schema.site.allowListIds)} or ${uses(schema.site.blockListIds)}`)
+    .orderBy(asc(schema.site.name))
+    .limit(5);
   return [
     ...new Set([
       ...rules.map((rule) => (rule.site ? `${rule.name} (${rule.site})` : rule.name)),
       ...sites.map((site) => site.name),
+      ...siteLists.map((site) => site.name),
       ...apps.map((app) => app.name),
     ]),
   ].slice(0, 5);

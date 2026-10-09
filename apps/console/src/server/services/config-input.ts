@@ -34,6 +34,7 @@ import {
   parseValueExpression,
 } from "@edgeweir/rule-engine";
 import { and, asc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
+import { accessControlModel, readAccessControl } from "../lib/access-control";
 import { toAuthRuleDto } from "../lib/auth-rule-dto";
 import { parseCacheCondition } from "../lib/cache-conditions";
 import { readCacheKey } from "../lib/cache-key";
@@ -165,6 +166,7 @@ export async function loadSiteModels(
     .where(and(inArray(schema.edgeRule.siteId, siteIds), eq(schema.edgeRule.enabled, true)))
     .orderBy(asc(schema.edgeRule.priority));
   const lists = await db.select().from(schema.ipList);
+  const listIds = new Set(lists.map((list) => list.id));
   const redirects = await db
     .select()
     .from(schema.bulkRedirect)
@@ -354,6 +356,7 @@ export async function loadSiteModels(
             .filter((d) => d.siteId === s.id)
             .map((d) => formatSiteDomain({ kind: d.kind as DomainKind, name: d.name })),
         ),
+        accessControl: accessControlModel(readAccessControl(s), listIds),
         certificateId: s.certificateId ?? "",
         ...(() => {
           const {

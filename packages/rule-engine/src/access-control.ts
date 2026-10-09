@@ -241,6 +241,9 @@ export function hotlinkDecision(cfg: HotlinkModel, req: HotlinkRequest): "skip" 
   return "pass";
 }
 
+/** Lowercases ASCII letters only, as nodes compare subdivisions. */
+const asciiLower = (s: string) => s.replace(/[A-Z]/g, (c) => c.toLowerCase());
+
 export interface GeoAccessModel {
   allowOnly: boolean;
   countries: string[];
@@ -260,8 +263,8 @@ export interface GeoRecord {
 export function geoMatches(cfg: GeoAccessModel, geo: GeoRecord): boolean {
   if (geo.country !== "" && cfg.countries.includes(geo.country)) return true;
   if (geo.country !== "" && geo.subdivision !== "") {
-    const key = `${geo.country}-${geo.subdivision}`.toLowerCase();
-    if (cfg.subdivisions.some((s) => s.toLowerCase() === key)) return true;
+    const key = asciiLower(`${geo.country}-${geo.subdivision}`);
+    if (cfg.subdivisions.some((s) => asciiLower(s) === key)) return true;
   }
   return geo.asnum > 0 && cfg.asns.includes(geo.asnum);
 }

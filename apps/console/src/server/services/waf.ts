@@ -1,5 +1,6 @@
 import {
   ACCESS_AUTH_FEATURE,
+  ACCESS_CONTROL_FEATURE,
   ACTIVE_HEALTH_FEATURE,
   BROTLI_FEATURE,
   CLIENT_CERT_FEATURE,
@@ -191,6 +192,7 @@ export async function siteFeatures(db: Database, siteId: string): Promise<SiteFe
     multiCertificate: byNodes(MULTI_CERTIFICATE_FEATURE),
     clientCertificate: byNodes(CLIENT_CERT_FEATURE),
     accessAuth: byNodes(ACCESS_AUTH_FEATURE),
+    accessControl: byNodes(ACCESS_CONTROL_FEATURE),
   };
 }
 

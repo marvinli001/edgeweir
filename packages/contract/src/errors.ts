@@ -256,6 +256,12 @@ export const errorDefs = {
   AUTH_SIGN_URL_INVALID: { status: 400, params: [] },
   /** A signed URL can be valid for at most the rule's validity (seconds). */
   AUTH_SIGN_VALIDITY: { status: 400, params: ["max"] },
+  /** An IP list chosen as both a site block list and a site allow list. */
+  SITE_LIST_CONFLICT: { status: 400, params: ["lists"] },
+  /** CORS with credentials cannot allow every origin ("*"). */
+  CORS_CREDENTIALS_WILDCARD: { status: 400, params: [] },
+  /** Not an IPv4 or IPv6 address. */
+  IP_ADDRESS_INVALID: { status: 400, params: [] },
 } as const satisfies Record<string, { status: number; params: readonly string[] }>;
 
 export type ErrorCode = keyof typeof errorDefs;
@@ -296,6 +302,7 @@ export const revisionReasonDefs = {
   site_error_pages_updated: { params: ["site"], en: "error pages of {site} updated" },
   site_maintenance_updated: { params: ["site"], en: "maintenance of {site} updated" },
   site_auth_updated: { params: ["site"], en: "access authentication of {site} updated" },
+  site_access_control_updated: { params: ["site"], en: "access control of {site} updated" },
   cluster_cache_updated: { params: [], en: "cache zone updated" },
   node_cache_updated: { params: ["node"], en: "cache size of node {node} updated" },
   error_pages_updated: { params: [], en: "platform error pages updated" },
