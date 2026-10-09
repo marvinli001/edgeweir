@@ -147,7 +147,7 @@ fi
 if [[ "$BENCH_SCENARIO" != challenge && "$BENCH_SCENARIO" != tls* ]]; then
   for _ in 1 2; do curl -fsS "${CURL_HEADERS[@]}" "$BENCH_URL" -o /dev/null; done
   HEADERS="$(curl -fsS -D - -o /dev/null "${CURL_HEADERS[@]}" "$BENCH_URL")"
-  if ! printf '%s\n' "$HEADERS" | tr -d '\r' | rg -qi '^x-cache: HIT$'; then
+  if ! printf '%s\n' "$HEADERS" | tr -d '\r' | grep -qi '^x-cache: HIT$'; then
     echo 'Refusing to benchmark: the warmed response is not a cache HIT.' >&2
     exit 1
   fi
