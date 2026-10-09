@@ -159,6 +159,14 @@
 #   node too, never with another site's SNI; no early data; Pebble from the
 #   system settings issuing an RSA 2048 certificate, its ACME account
 #   listed; Playwright e2e/g11.spec.ts.
+#   Site parity G12 (scripts/e2e-g12.mjs, after G11): both nodes report
+#   access-auth-v1; Basic (401 with the challenge, 200 with credentials,
+#   cache hits still checked, password changes); signed URLs A-D signed by
+#   the console (valid, expired, wrong, the signature removed before the
+#   cache, two signatures one cached object); forward authentication with
+#   the g12-auth service (allow, 401 passed on, login redirect, copied
+#   headers, cached answers, 503 when unavailable or slow, allowed when the
+#   rule says so); failures counted; Playwright e2e/g12.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -1245,6 +1253,14 @@ if ! $SKIP_UI; then
 fi
 node scripts/e2e-g11.mjs --cleanup || fail "G11 cleanup failed"
 pass "G11 checks passed"
+
+step "G12: Basic, signed URLs A-D and forward authentication before the rules and the cache"
+node scripts/e2e-g12.mjs || fail "G12 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g12.spec.ts || fail "G12 browser checks failed"
+fi
+node scripts/e2e-g12.mjs --cleanup || fail "G12 cleanup failed"
+pass "G12 checks passed"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"
