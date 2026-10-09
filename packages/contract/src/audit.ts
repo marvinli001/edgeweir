@@ -111,6 +111,8 @@ export const auditActions = [
   "service_account.key_create",
   "service_account.key_revoke",
   "service_account.update",
+  "site.auth_sign_url",
+  "site.auth_update",
   "site.bulk_redirects_update",
   "site.cname_update",
   "site.create",

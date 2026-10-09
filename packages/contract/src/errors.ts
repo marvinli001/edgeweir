@@ -243,6 +243,19 @@ export const errorDefs = {
   HTTPS_REDIRECT_PORT_INVALID: { status: 400, params: ["port"] },
   /** Domains excluded from the HTTPS redirect that the site does not have. */
   HTTPS_REDIRECT_DOMAIN_INVALID: { status: 400, params: ["domains"] },
+  /** An access authentication rule's scope names a domain the site does not have. */
+  AUTH_DOMAIN_UNKNOWN: { status: 400, params: ["domain"] },
+  /** A new Basic user (or one of a rule that had no users stored) without a password. */
+  AUTH_PASSWORD_REQUIRED: { status: 400, params: ["user"] },
+  /** A URL authentication rule without a stored primary key needs one. */
+  AUTH_KEY_REQUIRED: { status: 400, params: [] },
+  AUTH_RULE_NOT_FOUND: { status: 404, params: [] },
+  /** Only URL authentication rules (kinds A-D) sign URLs. */
+  AUTH_RULE_NOT_URL: { status: 400, params: [] },
+  /** A URL to sign that is not a path or an http(s) URL of one of the site's domains. */
+  AUTH_SIGN_URL_INVALID: { status: 400, params: [] },
+  /** A signed URL can be valid for at most the rule's validity (seconds). */
+  AUTH_SIGN_VALIDITY: { status: 400, params: ["max"] },
 } as const satisfies Record<string, { status: number; params: readonly string[] }>;
 
 export type ErrorCode = keyof typeof errorDefs;
@@ -282,6 +295,7 @@ export const revisionReasonDefs = {
   site_waf_updated: { params: ["site"], en: "OWASP CRS of {site} updated" },
   site_error_pages_updated: { params: ["site"], en: "error pages of {site} updated" },
   site_maintenance_updated: { params: ["site"], en: "maintenance of {site} updated" },
+  site_auth_updated: { params: ["site"], en: "access authentication of {site} updated" },
   cluster_cache_updated: { params: [], en: "cache zone updated" },
   node_cache_updated: { params: ["node"], en: "cache size of node {node} updated" },
   error_pages_updated: { params: [], en: "platform error pages updated" },

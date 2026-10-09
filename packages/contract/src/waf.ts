@@ -172,6 +172,8 @@ export const siteFeatures = z.object({
   multiCertificate: featureAvailability,
   /** Client certificates and the tls.client.* fields (client-cert-v1). */
   clientCertificate: featureAvailability,
+  /** Access authentication rules (access-auth-v1). */
+  accessAuth: featureAvailability,
 });
 
 const idParam = z.object({ id: uuid });

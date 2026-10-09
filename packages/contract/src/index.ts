@@ -10,6 +10,7 @@ export * from "./logs";
 
 import { accessKeysContract } from "./access-keys";
 import { alertsContract } from "./alerts";
+import { authRulesContract } from "./auth-rules";
 import { banSettings, bansContract } from "./bans";
 import { bulkRedirectsContract } from "./bulk-redirects";
 import {
@@ -41,6 +42,7 @@ import { siteFeatures, wafContract } from "./waf";
 
 export * from "./addresses";
 export * from "./audit";
+export * from "./auth-rules";
 export * from "./bans";
 export * from "./bulk-redirects";
 export * from "./certificates";
@@ -101,6 +103,8 @@ export const contract = {
   errorPages: errorPagesContract,
   /** A site's maintenance mode. */
   maintenance: maintenanceContract,
+  /** A site's access authentication: Basic, forward authentication and signed URLs. */
+  authRules: authRulesContract,
   certificates: certificatesContract,
   acmeAccounts: acmeAccountsContract,
   /** Regional probes and their latest results. */
