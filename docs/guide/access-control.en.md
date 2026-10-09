@@ -173,7 +173,7 @@ Each signed URL is audited as `site.auth_sign_url` (rule, path and expiry, never
 ## Site lists
 
 1. Create the lists under **IP lists** first (any action, see [IP lists](rules.en.md#ip-lists)).
-2. Open **Sites → (site) → Access control**, choose "Block lists" and "Allow lists" (at most 16 each) on the "Site lists" card and click "Save".
+2. Open **Sites → (site) → Access control**, tick "Site block lists" and "Site allow lists" (at most 16 each; a list ticked on one side cannot be ticked on the other) on the "Site lists" card and click "Save".
 
 | Item | Behavior |
 | --- | --- |
@@ -186,16 +186,16 @@ Each signed URL is audited as `site.auth_sign_url` (rule, path and expiry, never
 
 ## Geo access
 
-Turn on the switch on the "Geo access" card, choose the mode, fill in the lists and click "Save".
+Turn on "Enabled" on the "Geo access" card, choose the mode ("Deny listed" or "Allow listed only"), fill in the lists (countries and ASNs comma-separated, subdivisions and path prefixes one per line) and click "Save".
 
 | Field | Values | Default |
 | --- | --- | --- |
 | Mode | Deny: clients matching the lists get 403; Allow only: clients not matching them get 403 | Deny |
-| Countries | ISO 3166-1 alpha-2 codes, one per line, at most 256 | Empty |
+| Countries (ISO codes) | ISO 3166-1 alpha-2 codes, at most 256 | Empty |
 | Subdivisions | `country-subdivision`, the subdivision as `ip.geoip.subdivision` reads it (the City MMDB code, else its English name), e.g. `US-CA`; compared ASCII case-insensitively; at most 256 | Empty |
 | ASNs | 1–4294967295, at most 256 | Empty |
 | Path prefixes | One per line, at most 32; empty: every path | Empty |
-| Exception path prefixes | Paths starting with one of them are not checked, at most 32 | Empty |
+| Excluded path prefixes | Paths starting with one of them are not checked (exceptions), at most 32 | Empty |
 
 | Item | Behavior |
 | --- | --- |
@@ -207,7 +207,7 @@ Turn on the switch on the "Geo access" card, choose the mode, fill in the lists 
 
 ## CORS
 
-Turn on the switch on the "CORS" card, fill in the allowed origins and the rest, and click "Save".
+Turn on "Enabled" on the "CORS" card, fill in "Allowed origins" and the rest, and click "Save".
 
 | Field | Values | Default |
 | --- | --- | --- |
@@ -217,7 +217,7 @@ Turn on the switch on the "CORS" card, fill in the allowed origins and the rest,
 | Allowed request headers | A list (at most 64), or "Echo the preflight's headers" | Empty |
 | Exposed headers | At most 64 | Empty |
 | Max-Age (s) | 0–86400 | 600 |
-| Preflights to the origin | Preflights go to the origin as usual instead of being answered at the edge; for an allowed origin its answer gets the full preflight headers too (methods, request headers, Max-Age and `Vary`), unless the origin's CORS headers are kept and it sent `Access-Control-Allow-Origin` | Off |
+| Preflights go to the origin | Preflights go to the origin as usual instead of being answered at the edge; for an allowed origin its answer gets the full preflight headers too (methods, request headers, Max-Age and `Vary`), unless the origin's CORS headers are kept and it sent `Access-Control-Allow-Origin` | Off |
 | Keep the origin's CORS headers | When the origin's response has `Access-Control-Allow-Origin`, no `Access-Control-*` header is changed | Off |
 | Path prefixes | At most 32; empty: every path | Empty |
 
@@ -231,37 +231,37 @@ Turn on the switch on the "CORS" card, fill in the allowed origins and the rest,
 
 ## Hotlink protection
 
-Turn on the switch on the "Hotlink protection" card, adjust the sources and scope, and click "Save".
+Turn on "Enabled" on the "Hotlink protection" card, adjust the sources and scope, and click "Save".
 
 | Field | Values | Default |
 | --- | --- | --- |
-| Allow empty sources | Requests without `Referer` (and without `Origin` when it is checked) pass | On |
+| Allow no referer | Requests without `Referer` (and without `Origin` when it is checked) pass | On |
 | Allow the site's domains | A `Referer` whose host this site serves (exact, wildcard, suffix and pattern domains) passes | On |
 | Allowed sources | `a.com` (exact), `*.a.com` (one label below), `.a.com` (any depth below, not `a.com`) or `*` alone (any host), one per line, at most 200 | Empty |
 | Denied sources | The same forms, at most 200; a match is refused, before allowed sources and the site's domains | Empty |
-| Also check Origin | A request's `Origin` is checked the same way | Off |
-| Extensions | At most 64 | Common image, audio, video and download types (jpg, png, webp, mp4, m3u8, zip, apk, pdf and others, 49) |
+| Check Origin too | A request's `Origin` is checked the same way | Off |
+| Extensions | At most 64, comma-separated | Common image, audio, video and download types (jpg, png, webp, mp4, m3u8, zip, apk, pdf and others, 49) |
 | Path prefixes | At most 32 | Empty |
 | Excluded path prefixes | At most 32 | Empty |
-| Action | 403 (error page) or a 302 to a target (a site path or an `http(s)` URL, at most 2048 characters) | 403 |
+| Action | "Answer 403" (error page) or "302 redirect" to "Redirect to" (a site path or an `http(s)` URL, at most 2048 characters) | Answer 403 |
 
 | Item | Behavior |
 | --- | --- |
 | Scope | Every request when extensions and path prefixes are both empty; else an extension in the list or a path under a prefix; minus the excluded prefixes |
-| Parsing | Only `http://` and `https://` URLs: their host (lowercase, without user, port and a trailing `.`); a `Referer` that cannot be parsed (`android-app://…`, `Origin: null`) is not allowed, even with empty sources allowed |
+| Parsing | Only `http://` and `https://` URLs: their host (lowercase, without user, port and a trailing `.`); a `Referer` that cannot be parsed (`android-app://…`, `Origin: null`) is not allowed, even with "Allow no referer" on |
 | Decision | Every value present must be allowed: denied sources first, then the site's domains and the allowed sources |
 | Refused | 403, `X-Edgeweir-Error: hotlink-denied`; or a 302 with `Cache-Control: no-store` and the same `X-Edgeweir-Error` |
 | Redirect target | A request for a target that is a site path is not checked itself; a full URL of this site in scope would redirect in a loop: exclude its path |
-| Limits | Visitors and browsers can drop `Referer` (e.g. `Referrer-Policy: no-referrer`); turn empty sources off to refuse them |
+| Limits | Visitors and browsers can drop `Referer` (e.g. `Referrer-Policy: no-referrer`); turn "Allow no referer" off to refuse them |
 
 ## User agents
 
-Add entries (a pattern with "Allow" or "Deny") on the "User agents" card and click "Save". Without entries nothing is checked.
+Click "Add rule" on the "User agents" card, fill in "Pattern" and choose "Allow" or "Deny", reorder with up and down, and click "Save". Without rules nothing is checked.
 
 | Field | Values |
 | --- | --- |
 | Pattern | Like the rule operator `wildcard`: the whole value, `*` any bytes (at most 8), `\*` and `\\` literals; ASCII case-insensitive; at most 512 printable ASCII characters; an empty pattern matches an empty or missing User-Agent |
-| Entries | At most 200, in their order |
+| Rules | At most 200, in their order |
 | Path prefixes, excluded path prefixes | At most 32 each |
 
 | Item | Behavior |
@@ -273,7 +273,7 @@ Add entries (a pattern with "Allow" or "Deny") on the "User agents" card and cli
 
 ## WebSocket origins and idle timeout
 
-Choose "Allow every origin" or list the origins on the "WebSocket" card, adjust the idle timeout and click "Save". The site's WebSocket switch is on the Origins tab, see [WebSocket](origins-and-cache.en.md#websocket).
+Choose "Any origin" or "Listed origins only" with the origins on the "WebSocket" card, adjust "Idle timeout (s)" and click "Save". The site's WebSocket switch is on the Origins tab, see [WebSocket](origins-and-cache.en.md#websocket).
 
 | Field | Values | Default |
 | --- | --- | --- |
@@ -291,7 +291,7 @@ Turn on what you need on the "Security headers" card and click "Save".
 
 | Field | Response header |
 | --- | --- |
-| No MIME sniffing | `X-Content-Type-Options: nosniff` |
+| X-Content-Type-Options: nosniff | `X-Content-Type-Options: nosniff` |
 | X-Frame-Options | Not set / `DENY` / `SAMEORIGIN` |
 | Referrer-Policy | Not set, or `no-referrer`, `no-referrer-when-downgrade`, `origin`, `origin-when-cross-origin`, `same-origin`, `strict-origin`, `strict-origin-when-cross-origin`, `unsafe-url` |
 | Permissions-Policy | The value (at most 1024 printable ASCII characters); empty: not set |
@@ -381,7 +381,7 @@ Read-only AccessKeys can call the `GET` ones only; service accounts none of them
 | "A list cannot be both a site block and allow list: …" | The same list on both sides | Remove it from one side |
 | "With credentials, origins cannot be *" | CORS allows credentials and lists `*` | List the origins, or turn credentials off |
 | The browser reports a CORS error; no `Access-Control-Allow-Origin` | The request's `Origin` is not allowed (`*.a.com` matches neither `a.com` nor deeper names) or the path is out of scope | Add the origin or adjust the path prefixes |
-| Images on your own pages get 403 `hotlink-denied` | The page's host is neither served by this site nor allowed, or the page sends `Referrer-Policy: no-referrer` while empty sources are refused | Allow the page's domain; allow empty sources |
+| Images on your own pages get 403 `hotlink-denied` | The page's host is neither served by this site nor allowed, or the page sends `Referrer-Policy: no-referrer` while "Allow no referer" is off | Allow the page's domain; turn "Allow no referer" on |
 | Every request 503 `policy-unavailable` | Geo access is on and the node's GeoIP service is unavailable | Check the node's GeoIP setup, see [GeoIP databases](rules.en.md#configure-geoip-databases) |
 | WebSocket connections get 403 `websocket-origin-denied` | The origin is not listed, or the client sends no `Origin` | Add the origin; have non-browser clients send an allowed `Origin` |
 | A security header is missing or different | A response-transform rule changed or removed it | Check the site's and the global rules |
