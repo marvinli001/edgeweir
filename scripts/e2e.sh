@@ -176,6 +176,15 @@
 #   Vary: Origin; 403 for other origins) and headers on cache hits;
 #   WebSocket origins; security headers on cache hits without Server and
 #   X-Powered-By; the IP check; Playwright e2e/g13.spec.ts.
+#   Site parity G14 (scripts/e2e-g14.mjs, after G13): both nodes report
+#   waf-v2, rules-body-v1 and challenge-v2; the ban action (403 ip-banned,
+#   shared, source rule in the ban list, lifted); custom responses, error
+#   page responses, closed connections and access log lines from log rules;
+#   CRS skipped, turned off or set to detect by rules and excluded by path
+#   and by target (normalized paths); JSON, form and multipart fields and
+#   truncated bodies; rate limit bans; verified crawlers on node-g14 with the
+#   g14-dns test resolver (profile g14); challenge page texts; challenge
+#   failure bans; Playwright e2e/g14.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -1278,6 +1287,14 @@ if ! $SKIP_UI; then
 fi
 node scripts/e2e-g13.mjs --cleanup || fail "G13 cleanup failed"
 pass "G13 checks passed"
+
+step "G14: WAF actions, request body fields, CRS by path, verified crawlers and challenge additions"
+node scripts/e2e-g14.mjs || fail "G14 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g14.spec.ts || fail "G14 browser checks failed"
+fi
+node scripts/e2e-g14.mjs --cleanup || fail "G14 cleanup failed"
+pass "G14 checks passed"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"

@@ -596,7 +596,7 @@ try {
     mode: "detect",
     paranoiaLevel: 1,
     anomalyThreshold: 5,
-    excludedRuleIds: [],
+    exclusions: [],
     requestBodyLimit: 131072,
   });
   assert.equal(detect.mode, "detect");
@@ -761,10 +761,12 @@ try {
   expectBlocked(await edge(HOST_CRS, `/g3-nobody-${rid}?${XSS_QUERY}`), "query with body limit 0");
   await admin.ok("PATCH", `/sites/${sites.crs.id}/waf`, { requestBodyLimit: 131072 });
 
+  // Site-wide exclusions (an entry without a path or targets, ADR-0040).
+  const wholeSite = (ruleIds) => ({ path: "", exact: false, ruleIds, targets: [] });
   const excluded1 = await admin.ok("PATCH", `/sites/${sites.crs.id}/waf`, {
-    excludedRuleIds: [941100],
+    exclusions: [{ ruleIds: [941100] }],
   });
-  assert.deepEqual(excluded1.excludedRuleIds, [941100]);
+  assert.deepEqual(excluded1.exclusions, [wholeSite([941100])]);
   await synced("excluded rule 941100 published");
   const excl1Path = `/g3-exclude-one-${rid}`;
   expectBlocked(await edge(HOST_CRS, `${excl1Path}?${XSS_QUERY}`), "payload with 941100 excluded");
@@ -773,12 +775,9 @@ try {
   assert.ok(excl1Log.wafRuleIds.includes(941110), `${excl1Log.wafRuleIds}`);
   const allXss = detectIds.filter(detectionRule);
   const excluded2 = await admin.ok("PATCH", `/sites/${sites.crs.id}/waf`, {
-    excludedRuleIds: [...allXss].reverse(),
+    exclusions: [{ ruleIds: [...allXss].reverse() }],
   });
-  assert.deepEqual(
-    excluded2.excludedRuleIds,
-    [...allXss].sort((a, b) => a - b),
-  );
+  assert.deepEqual(excluded2.exclusions, [wholeSite([...allXss].sort((a, b) => a - b))]);
   await synced("every matched rule excluded");
   const excl2Path = `/g3-exclude-all-${rid}`;
   const passed = await edge(HOST_CRS, `${excl2Path}?${XSS_QUERY}`);
@@ -790,7 +789,7 @@ try {
   const excl2Log = (await logged(excl2Path))[0];
   assert.deepEqual(excl2Log.wafRuleIds, []);
   assert.equal(excl2Log.wafBlocked, false);
-  await admin.ok("PATCH", `/sites/${sites.crs.id}/waf`, { excludedRuleIds: [] });
+  await admin.ok("PATCH", `/sites/${sites.crs.id}/waf`, { exclusions: [] });
   const demo = await edge("demo.test", `/g3-noncrs-${rid}?${XSS_QUERY}`);
   assert.equal(demo.status, 200, `demo.test (no CRS) must serve the payload: ${summary(demo)}`);
   pass(
