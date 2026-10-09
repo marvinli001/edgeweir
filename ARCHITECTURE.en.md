@@ -595,6 +595,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0056_domain_forms_cname_prefix` | `site_domain.kind` replaces `wildcard`, unique by `(name, kind)`; `site.cname_prefix`, `l4_app.cname_prefix` (their id for existing rows: CNAMEs do not change); `cname_retired`; `cluster.unknown_hosts`, `cluster.default_site_id` |
 | `0057_g11_certificates_sessions` | `site_certificate`, `session_ticket_key`; `certificate.acme_account_id` |
 | `0058_g12_access_auth` | `site_auth_rule`; `site.auth_updated_at`; `auth_failures` in `node_minute_stats`, `node_hour_stats`, `node_day_stats` (the `traffic_hour_stats` view rebuilt) |
+| `0059_g13_access_control` | `site.access_control`, `site.block_list_ids`, `site.allow_list_ids`, `site.access_control_updated_at` |
 
 ## Build output
 

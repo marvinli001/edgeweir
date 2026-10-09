@@ -595,6 +595,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0056_domain_forms_cname_prefix` | `site_domain.kind` 取代 `wildcard`，唯一索引改为 `(name, kind)`；`site.cname_prefix`、`l4_app.cname_prefix`（已有行为其 ID，CNAME 不变）；`cname_retired`；`cluster.unknown_hosts`、`cluster.default_site_id` |
 | `0057_g11_certificates_sessions` | `site_certificate`、`session_ticket_key`；`certificate.acme_account_id` |
 | `0058_g12_access_auth` | `site_auth_rule`；`site.auth_updated_at`；`node_minute_stats`、`node_hour_stats`、`node_day_stats` 的 `auth_failures`（`traffic_hour_stats` 视图随之重建） |
+| `0059_g13_access_control` | `site.access_control`、`site.block_list_ids`、`site.allow_list_ids`、`site.access_control_updated_at` |
 
 ## 构建产物
 
