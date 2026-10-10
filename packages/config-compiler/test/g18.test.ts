@@ -56,7 +56,10 @@ describe("WebP / AVIF conversion (image-convert-v1)", () => {
     // The quality of a format the site does not offer is not sent: it
     // changes nothing on nodes, so it changes no hash either.
     expect(c?.avifQuality).toBe(0);
-    const other = compileNodeConfig(input({ imageConvert: { ...conversion, avifQuality: 90 } }), 1n);
+    const other = compileNodeConfig(
+      input({ imageConvert: { ...conversion, avifQuality: 90 } }),
+      1n,
+    );
     expect(other.contentHash).toBe(config.contentHash);
     const avif = compileNodeConfig(input({ imageConvert: { ...conversion, avif: true } }), 1n);
     expect(avif.sites[0]?.imageConvert?.avifQuality).toBe(50);
@@ -83,12 +86,21 @@ describe("content hash matches the Go agent (v0.31.0)", () => {
     expect(raw.requiredFeatures).toEqual(["tls-v1", IMAGE_CONVERT_FEATURE]);
     const config = canonicalize(raw);
     const a = config.sites[0];
-    expect(a?.imageConvert).toMatchObject({ webp: true, avif: true, webpQuality: 80, avifQuality: 50, jpeg: true, png: false });
+    expect(a?.imageConvert).toMatchObject({
+      webp: true,
+      avif: true,
+      webpQuality: 80,
+      avifQuality: 50,
+      jpeg: true,
+      png: false,
+    });
     expect(config.sites[1]?.imageConvert).toBeUndefined();
     const bare = clone(NodeConfigSchema, config);
     bare.revision = 0n;
     bare.contentHash = "";
-    expect(Buffer.from(toBinary(NodeConfigSchema, bare)).toString("hex")).toBe(vector.canonical_hex);
+    expect(Buffer.from(toBinary(NodeConfigSchema, bare)).toString("hex")).toBe(
+      vector.canonical_hex,
+    );
     expect(contentHash(config)).toBe(vector.content_hash);
   });
 

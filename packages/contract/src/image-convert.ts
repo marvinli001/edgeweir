@@ -50,7 +50,14 @@ const imageConvertFields = z.object({
 
 /** The settings are checked as a whole, also while conversion is off. */
 function checkSettings(
-  value: { webp: boolean; avif: boolean; jpeg: boolean; png: boolean; minSize: number; maxSize: number },
+  value: {
+    webp: boolean;
+    avif: boolean;
+    jpeg: boolean;
+    png: boolean;
+    minSize: number;
+    maxSize: number;
+  },
   ctx: z.RefinementCtx,
 ) {
   if (!value.webp && !value.avif)
@@ -58,7 +65,11 @@ function checkSettings(
   if (!value.jpeg && !value.png)
     ctx.addIssue({ code: "custom", path: ["jpeg"], message: "choose JPEG, PNG or both" });
   if (value.minSize > value.maxSize)
-    ctx.addIssue({ code: "custom", path: ["minSize"], message: "the lower bound is above the upper bound" });
+    ctx.addIssue({
+      code: "custom",
+      path: ["minSize"],
+      message: "the lower bound is above the upper bound",
+    });
 }
 
 export const imageConvertSettings = imageConvertFields.superRefine(checkSettings);

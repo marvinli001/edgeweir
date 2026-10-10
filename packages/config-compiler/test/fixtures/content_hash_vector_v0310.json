@@ -48,9 +48,7 @@
           "http2": true,
           "gzip": true,
           "gzipMinLength": 256,
-          "gzipTypes": [
-            "text/html"
-          ],
+          "gzipTypes": ["text/html"],
           "cipherProfile": "modern"
         }
       },
@@ -83,9 +81,7 @@
           "http2": true,
           "gzip": true,
           "gzipMinLength": 256,
-          "gzipTypes": [
-            "text/html"
-          ],
+          "gzipTypes": ["text/html"],
           "cipherProfile": "modern"
         },
         "imageConvert": {
@@ -100,10 +96,7 @@
         }
       }
     ],
-    "requiredFeatures": [
-      "tls-v1",
-      "image-convert-v1"
-    ]
+    "requiredFeatures": ["tls-v1", "image-convert-v1"]
   },
   "canonical_hex": "1a0263312204085010012a120a0764656661756c7410805018402080f524327b0a0161120161180122080a06612e746573742a210a03702d6110011a180a036f2d61120b6f726967696e2e746573741850200128013a0764656661756c7440016a1f2a03312e32300138014080024a09746578742f68746d6c5a066d6f6465726ea202170801100118502032280138800840808080054880c8d00732610a0162120162180122080a06622e746573742a210a03702d6210011a180a036f2d62120b6f726967696e2e746573741850200128013a0764656661756c7440016a1f2a03312e32300138014080024a09746578742f68746d6c5a066d6f6465726e4a10696d6167652d636f6e766572742d76314a06746c732d7631",
   "content_hash": "d226ebdf84c2f539396b95fb71c19d8b91aa4908010f4b932c0493eb9adcbc58"
