@@ -102,7 +102,7 @@ The last four publish a new configuration revision when saved; nodes update thei
 
 Client IPs, User-Agents, Referers, query strings and request headers can be personal data: turn options on only as needed and shorten the retention as needed (see [Retention](#retention)).
 
-The origin fields come from the node's origin layer: the origin address is the origin that answered (the last one after retries; not recorded for cache revalidations, `REVALIDATED`); the origin status and time cover the node's whole exchange with its origin layer, retries included. Query strings and request headers are the client's (after a signed URL's signature is removed, before rules change them); requests refused before that (bans, client certificates) record no query string.
+The origin fields come from the node's origin layer: the origin address is the origin that answered (the last one after retries; not recorded for cache revalidations, `REVALIDATED`); the origin status and time cover the node's whole exchange with its origin layer, retries included. Query strings and request headers are the client's (after a signed URL's signature is removed, before rules change them); requests refused before that (bans, client certificates) record no query string, and on a site whose signed URLs carry the signature in the path (kinds B and C) no path either (empty in the log, not in the top URLs).
 
 Country and network come from the node's GeoIP lookups: each worker caches recent addresses and makes at most 200 lookups per second that miss the cache; beyond that, or when the agent does not answer, they are unknown.
 
