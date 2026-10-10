@@ -63,8 +63,9 @@ import { Switch } from "@/components/ui/switch";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { useDraft } from "@/hooks/use-draft";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { blockReasonLabel } from "@/lib/access-logs";
 import { ANALYTICS_RANGES, rangeLabel } from "@/lib/analytics";
-import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
+import { formatDateTime, formatNumber, formatPercent, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import {
   challengeLabel,
@@ -73,6 +74,7 @@ import {
   metricLabel,
   wafModeLabel,
 } from "@/lib/protection";
+import { cn } from "@/lib/utils";
 import {
   type Exclusion,
   isSiteWide,
@@ -157,6 +159,8 @@ export function SecurityTab({ siteId }: { siteId: string }) {
       <WafRulesCard siteId={siteId} />
       <LoggedRulesCard siteId={siteId} />
       <AuthFailuresCard siteId={siteId} />
+      <BlockReasonsCard siteId={siteId} />
+      <ChallengesCard siteId={siteId} />
       <EventsCard siteId={siteId} />
     </div>
   );
@@ -1187,6 +1191,151 @@ function AuthFailuresCard({ siteId }: { siteId: string }) {
                 <SafetyNote data-testid="auth-failures-partial">
                   {m.auth_failures_partial()}
                 </SafetyNote>
+              ) : null}
+            </>
+          )}
+        </QueryView>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** The site's statistics dimensions over a range of its own (block reasons, challenges). */
+function useDimensions(siteId: string, range: AnalyticsRange) {
+  return useQuery({
+    ...orpc.analytics.dimensions.queryOptions({ input: { range, siteId } }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** A card's title with the range select of its own. */
+function RangeHeader({
+  title,
+  range,
+  onRangeChange,
+  id,
+}: {
+  title: string;
+  range: AnalyticsRange;
+  onRangeChange: (range: AnalyticsRange) => void;
+  id: string;
+}) {
+  return (
+    <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+      <CardTitle>{title}</CardTitle>
+      <div className="w-full sm:w-44">
+        <FormSelect
+          id={id}
+          label={m.security_hours()}
+          value={range}
+          testId={id}
+          options={ANALYTICS_RANGES.map((value) => ({ value, label: rangeLabel(value) }))}
+          onChange={(value) => onRangeChange(value as AnalyticsRange)}
+        />
+      </div>
+    </CardHeader>
+  );
+}
+
+/** Requests the nodes refused or challenged over a range, by reason. */
+function BlockReasonsCard({ siteId }: { siteId: string }) {
+  const [range, setRange] = React.useState<AnalyticsRange>("24h");
+  const dimensions = useDimensions(siteId, range);
+  return (
+    <Card
+      className="animate-enter"
+      style={{ animationDelay: "315ms" }}
+      data-testid="block-reasons-card"
+    >
+      <RangeHeader
+        title={m.block_reasons_title()}
+        range={range}
+        onRangeChange={setRange}
+        id="block-reasons-range"
+      />
+      <CardContent className="flex flex-col gap-4">
+        <QueryView query={dimensions}>
+          {({ blockReasons, unsupportedNodes }) => (
+            <>
+              <TopList
+                title={m.block_reasons_reason()}
+                items={[...blockReasons]
+                  .filter((item) => item.requests > 0)
+                  .sort((a, b) => b.requests - a.requests)
+                  .map((item) => ({
+                    id: item.key,
+                    value: blockReasonLabel(item.key),
+                    count: item.requests,
+                  }))}
+                testId="block-reasons"
+              />
+              {unsupportedNodes > 0 ? (
+                <SafetyNote data-testid="block-reasons-partial">
+                  {m.stats_dims_partial()}
+                </SafetyNote>
+              ) : null}
+            </>
+          )}
+        </QueryView>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Challenges issued and passed over a range, and the share that passed. */
+function ChallengesCard({ siteId }: { siteId: string }) {
+  const [range, setRange] = React.useState<AnalyticsRange>("24h");
+  const dimensions = useDimensions(siteId, range);
+  return (
+    <Card
+      className="animate-enter"
+      style={{ animationDelay: "330ms" }}
+      data-testid="challenges-card"
+    >
+      <RangeHeader
+        title={m.challenges_title()}
+        range={range}
+        onRangeChange={setRange}
+        id="challenges-range"
+      />
+      <CardContent className="flex flex-col gap-4">
+        <QueryView query={dimensions}>
+          {({ challenges, unsupportedNodes }) => (
+            <>
+              {challenges.issued === 0 ? (
+                <p className="text-sm text-muted-foreground" data-testid="challenges-empty">
+                  {m.security_top_empty()}
+                </p>
+              ) : (
+                <dl className="grid grid-cols-3 gap-4 sm:max-w-xl">
+                  {(
+                    [
+                      [
+                        "rate",
+                        m.challenges_rate(),
+                        formatPercent((challenges.passed / challenges.issued) * 100),
+                      ],
+                      ["issued", m.challenges_issued(), formatNumber(challenges.issued)],
+                      ["passed", m.challenges_passed(), formatNumber(challenges.passed)],
+                    ] as const
+                  ).map(([key, label, value]) => (
+                    <div key={key} className="flex min-w-0 flex-col gap-1">
+                      <dt className="text-xs text-muted-foreground">{label}</dt>
+                      <dd
+                        className={cn(
+                          "font-heading font-medium tabular-nums",
+                          key === "rate" ? "text-3xl" : "text-xl",
+                        )}
+                        data-testid={`challenges-${key}`}
+                      >
+                        {value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+              {unsupportedNodes > 0 ? (
+                <SafetyNote data-testid="challenges-partial">{m.stats_dims_partial()}</SafetyNote>
               ) : null}
             </>
           )}
