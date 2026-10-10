@@ -428,6 +428,13 @@
       "when": 1791535590819,
       "tag": "0060_g14_waf_actions",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1791592576747,
+      "tag": "0061_g16_access_logs_stats",
+      "breakpoints": true
     }
   ]
 }

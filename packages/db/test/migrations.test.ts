@@ -265,6 +265,76 @@ describe("migrations", () => {
     await db.delete(schema.site).where(eq(schema.site.id, site.id));
   });
 
+  it("carries statistics dimensions through the traffic view and defaults G16 columns", async () => {
+    const [cl] = await db.insert(schema.cluster).values({ name: "g16" }).returning();
+    if (!cl) throw new Error("cluster not inserted");
+    const [site] = await db
+      .insert(schema.site)
+      .values({ clusterId: cl.id, name: "g16", cnamePrefix: "g16" })
+      .returning();
+    if (!site) throw new Error("site not inserted");
+    expect(site).toMatchObject({
+      logBlocked: false,
+      logQuery: false,
+      logHeaders: [],
+      logPeer: false,
+    });
+    const nodeId = "00000000-0000-4000-8000-0000000000c1";
+    await db.insert(schema.nodeMinuteStats).values({
+      minute: new Date("2026-10-10T10:05:00Z"),
+      nodeId,
+      siteId: site.id,
+      requests: 5,
+      countryRequests: { CN: 3, "": 2 },
+      countryBytes: { CN: 300, "": 20 },
+      asns: { "4134": 3 },
+      referers: { "example.org": 2 },
+      browsers: { chrome: 4, crawler: 1 },
+      oses: { android: 4, other: 1 },
+      devices: { mobile: 4, crawler: 1 },
+      httpVersions: { "2": 5 },
+      tlsVersions: { "1.3": 5 },
+      blockReasons: { region: 1 },
+      challengesIssued: 2,
+      challengesPassed: 1,
+    });
+    await db.insert(schema.nodeHourStats).values({
+      minute: new Date("2026-10-10T08:00:00Z"),
+      nodeId,
+      siteId: site.id,
+      requests: 7,
+      countryRequests: { US: 7 },
+      challengesIssued: 4,
+    });
+    const rows = await db
+      .select()
+      .from(schema.trafficHourStats)
+      .where(eq(schema.trafficHourStats.siteId, site.id));
+    expect(
+      rows
+        .map((row) => row.countryRequests)
+        .sort((a, b) => Object.keys(a).length - Object.keys(b).length),
+    ).toEqual([{ US: 7 }, { CN: 3, "": 2 }]);
+    expect(rows.map((row) => row.challengesIssued).sort()).toEqual([2, 4]);
+    expect(rows.find((row) => row.requests === 5)).toMatchObject({
+      asns: { "4134": 3 },
+      referers: { "example.org": 2 },
+      blockReasons: { region: 1 },
+      challengesPassed: 1,
+    });
+    // Rows written before stats-dims-v1 read as empty dimensions.
+    const [old] = await db
+      .insert(schema.nodeMinuteStats)
+      .values({ minute: new Date("2026-10-10T10:06:00Z"), nodeId, siteId: site.id })
+      .returning();
+    expect(old).toMatchObject({ countryRequests: {}, browsers: {}, challengesIssued: 0 });
+    await db.insert(schema.asnName).values({ asn: 4294967295, name: "Example" });
+    expect(await db.select().from(schema.asnName)).toMatchObject([
+      { asn: 4294967295, name: "Example" },
+    ]);
+    await db.delete(schema.site).where(eq(schema.site.id, site.id));
+  });
+
   it("keeps one origin health row per node, origin and check, and one error page per site and status", async () => {
     const [cl] = await db.insert(schema.cluster).values({ name: "g4" }).returning();
     if (!cl) throw new Error("cluster not inserted");

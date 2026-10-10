@@ -18,6 +18,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 import { certificate } from "./certificates";
+import { statsDimensionColumns } from "./stats-dims";
 
 const bytea = customType<{ data: Uint8Array; driverData: Buffer | Uint8Array }>({
   dataType: () => "bytea",
@@ -271,6 +272,11 @@ export const site = pgTable(
     enabled: boolean("enabled").notNull().default(true),
     /** Bumped to purge every cached object of the site. */
     logSampleRate: integer("log_sample_rate").notNull().default(0),
+    /** Access log options (access-logs-v2): always log blocked requests, query strings, headers, peers. */
+    logBlocked: boolean("log_blocked").notNull().default(false),
+    logQuery: boolean("log_query").notNull().default(false),
+    logHeaders: text("log_headers").array().notNull().default(sql`'{}'`),
+    logPeer: boolean("log_peer").notNull().default(false),
     cacheGeneration: bigint("cache_generation", { mode: "number" }).notNull().default(1),
     /** Cache key policy (contract `cacheKeyPolicy`); `{}` means the defaults. */
     cacheKey: jsonb("cache_key").$type<Record<string, unknown>>().notNull().default({}),
@@ -699,6 +705,7 @@ export const nodeMinuteStats = pgTable(
     loggedRules: jsonb("logged_rules").$type<Record<string, number>>().notNull().default({}),
     /** Requests access authentication refused (access-auth-v1). */
     authFailures: bigint("auth_failures", { mode: "number" }).notNull().default(0),
+    ...statsDimensionColumns(),
   },
   (t) => [
     primaryKey({ columns: [t.minute, t.nodeId, t.siteId] }),
