@@ -5,7 +5,7 @@
 // converted" log lines). `node scripts/bench-g18.mjs` sets up
 // bench-img.g18.test (origin g18-origin, cached, WebP 80 / AVIF 50, JPEG and
 // PNG), requests BENCH_IMAGES (default 20) distinct URLs of each test picture
-// per class from client-a to the node `node` one after another, writes
+// per class from client-a to the node BENCH_NODE (default `node`) one after another, writes
 // .e2e/bench-g18.json (BENCH_OUTPUT) and prints a summary. The site stays for
 // `BENCH_SCENARIO=image` / `image-original` of scripts/bench.sh;
 // `node scripts/bench-g18.mjs --cleanup` removes it.
@@ -20,6 +20,9 @@ const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
 const compose = ["compose", "-f", "compose.e2e.yml", "--profile", "upgrades"];
 const run = async (args) => (await execute("docker", args, { maxBuffer: 64 * 1024 * 1024 })).stdout;
 const HOST = "bench-img.g18.test";
+// The node measured (a compose service of the default cluster); the full
+// e2e ends by deleting \`node\`, so after it use node-upgrade-peer.
+const NODE = process.env.BENCH_NODE ?? "node";
 const IMAGES = Number(process.env.BENCH_IMAGES ?? 20);
 const OUTPUT = process.env.BENCH_OUTPUT ?? ".e2e/bench-g18.json";
 const CLASSES = { original: "*/*", webp: "image/webp,*/*", avif: "image/avif,image/webp,*/*" };
@@ -84,7 +87,7 @@ process.stdin.on("data", (d) => (input += d)).on("end", async () => {
   for (const r of JSON.parse(input)) {
     const start = process.hrtime.bigint();
     out.push(await new Promise((resolve) => {
-      const req = http.request({ host: "node", port: 80, path: r.path, headers: { host: r.host, accept: r.accept },
+      const req = http.request({ host: r.target, port: 80, path: r.path, headers: { host: r.host, accept: r.accept },
         agent: false, timeout: 30000 }, (res) => {
         let bytes = 0;
         res.on("data", (d) => (bytes += d.length));
@@ -125,7 +128,7 @@ await api("PUT", `/sites/${site.id}/image-convert`, {
 const deadline = Date.now() + 120_000;
 for (;;) {
   const [probe] = await timed([
-    { host: HOST, path: `/photo.jpg?probe=${Date.now()}`, accept: CLASSES.webp },
+    { target: NODE, host: HOST, path: `/photo.jpg?probe=${Date.now()}`, accept: CLASSES.webp },
   ]);
   if (probe.type === "image/webp") break;
   assert.ok(Date.now() < deadline, `the node does not convert yet: ${JSON.stringify(probe)}`);
@@ -139,6 +142,7 @@ for (const picture of PICTURES) {
   for (const [name, accept] of Object.entries(CLASSES)) {
     const misses = await timed(
       Array.from({ length: IMAGES }, (_, i) => ({
+        target: NODE,
         host: HOST,
         path: `${picture}?b=${runId}-${i}`,
         accept,
@@ -146,6 +150,7 @@ for (const picture of PICTURES) {
     );
     const hits = await timed(
       Array.from({ length: IMAGES }, (_, i) => ({
+        target: NODE,
         host: HOST,
         path: `${picture}?b=${runId}-${i}`,
         accept,
@@ -163,7 +168,7 @@ for (const picture of PICTURES) {
   }
 }
 await sleep(1000);
-const logs = await run([...compose, "logs", "--no-color", "--since", since, "node"]);
+const logs = await run([...compose, "logs", "--no-color", "--since", since, NODE]);
 const conversions = logs
   .split("\n")
   .filter((line) => line.includes("image converted") && line.includes(`site=${site.id}`))
@@ -197,6 +202,7 @@ for (const v of Object.values(converter)) {
 }
 const summary = {
   host: HOST,
+  node: NODE,
   images: IMAGES,
   at: new Date().toISOString(),
   requests: results,
