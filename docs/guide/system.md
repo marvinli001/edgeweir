@@ -338,6 +338,14 @@ URL 与 CA 证书分别显示来源标签（**已保存**、**环境变量** 或
 
 修改写审计 `system.usage_update`。用量接口与 `completeUntil` 的定义见 [用量](../reference/api.md#用量)。
 
+### 访问日志
+
+| 字段 | 取值 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| **保留天数** | PostgreSQL 1–30，ClickHouse 1–90 | 7 | 访问日志的保留时间；卡片只显示当前统计模式（`EDGEWEIR_ANALYTICS`）的天数 |
+
+修改写审计 `system.log_retention_update`，下一次每分钟维护按新的天数删除分区（ClickHouse 修改 TTL），见[访问日志的保留期](access-logs.md#保留期)。
+
 ### 平台错误页
 
 | 字段 | 适用的请求 | 说明 |

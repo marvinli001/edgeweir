@@ -338,6 +338,14 @@ Each node also pins its own release source and signature trust locally, out of t
 
 Changes are audited as `system.usage_update`. The usage API and the definition of `completeUntil`: [Usage](../reference/api.en.md#usage).
 
+### Access logs
+
+| Field | Values | Default | Description |
+| --- | --- | --- | --- |
+| **Retention (days)** | PostgreSQL 1–30, ClickHouse 1–90 | 7 | How long access logs are kept; the card shows the days of the current analytics mode (`EDGEWEIR_ANALYTICS`) only |
+
+Changes are audited as `system.log_retention_update`; the next minute's maintenance drops partitions by the new days (ClickHouse changes the TTL), see [access log retention](access-logs.en.md#retention).
+
 ### Platform error pages
 
 | Field | Requests it applies to | Notes |

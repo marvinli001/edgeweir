@@ -24,7 +24,7 @@
 | 挑战与 CC 防护 | Cookie 跳转、JS 计算、工作量证明、图片验证码四级挑战；网站或全局 Under Attack；节点本地分级 CC 自动升级（站点、单 URL、单 IP 自动封禁、源站错误率）；集群内通用的签名通行凭证；JA4 指纹用于规则、限速与访问日志 |
 | DNS 与观测 | 独立 DNS 版本、健康节点调度、流量统计去重与汇总、Top URL / IP、告警与订阅 |
 | 智能调度 | 区域探针（TCP / HTTP / HTTPS 健康端点）、节点主机指标；调度规则按节点指标与探测结果摘除节点、切换到备用节点组或备用 IP，带预览；运营商解析线路（DNSPod、腾讯云、阿里云、华为云）、备用节点组、多级备用 IP |
-| 运维 | 采样访问日志与 CSV 导出、可选 ClickHouse、只读及可吊销 AccessKey、签名灰度升级与回滚、性能基线、备份恢复 |
+| 运维 | 采样访问日志（UA、来源、协议、地区、回源、拦截原因，可强制记录被拦截的请求，11 种筛选，保留期可调）与 CSV 导出、节点上实时查看请求、统计维度（地区、运营商、来源、终端、协议、拦截原因、挑战通过率）、可选 ClickHouse、只读及可吊销 AccessKey、签名灰度升级与回滚、性能基线、备份恢复 |
 
 ## 架构
 
@@ -107,7 +107,7 @@ docker compose logs console | grep setupToken
 
 | Compose profile | 组件 | 说明 |
 | --- | --- | --- |
-| `analytics` | ClickHouse | 配合 `EDGEWEIR_ANALYTICS=clickhouse` 启用原始访问日志与分钟级统计。访问日志采样默认关闭，保留 7 天。控制台图表与告警使用 PostgreSQL 汇总数据。 |
+| `analytics` | ClickHouse | 配合 `EDGEWEIR_ANALYTICS=clickhouse` 启用原始访问日志与分钟级统计。访问日志采样默认关闭，保留期在系统设置中调整（默认 7 天，ClickHouse 至多 90 天）。控制台图表与告警使用 PostgreSQL 汇总数据。 |
 
 详见 [访问日志与 AccessKey](docs/guide/access-logs.md)、[备份与恢复](docs/deploy/backup.md)。
 
