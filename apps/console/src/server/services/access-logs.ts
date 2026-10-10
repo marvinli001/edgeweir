@@ -121,6 +121,8 @@ export async function maintainLogs(db: Database, now = Date.now(), env?: Env) {
 }
 
 interface SiteLogPolicy {
+  /** The site only logs blocked requests: lines without a block reason are dropped. */
+  blockedOnly: boolean;
   ja4: boolean;
   query: boolean;
   headers: ReadonlySet<string>;
@@ -146,18 +148,11 @@ export async function ingestLogs(
           logQuery: schema.site.logQuery,
           logHeaders: schema.site.logHeaders,
           logPeer: schema.site.logPeer,
-        })
-        .from(schema.site)
-        .leftJoin(schema.siteProtection, eq(schema.siteProtection.siteId, schema.site.id))
-        .where(
-          and(
-            inArray(schema.site.id, ids),
-            eq(schema.site.clusterId, node.clusterId),
-            // The site samples, logs blocked requests (access-logs-v2), or an
-            // enabled site or platform rule samples some of its requests
-            // (config action logSampleRate, rules-v2) or writes lines whatever
-            // the sample rate (log action accessLog, waf-v2).
-            sql`(${schema.site.logSampleRate} > 0 or ${schema.site.logBlocked} or exists (
+          logBlocked: schema.site.logBlocked,
+          // The site samples, or an enabled site or platform rule samples some
+          // of its requests (config action logSampleRate, rules-v2) or writes
+          // lines whatever the sample rate (log action accessLog, waf-v2).
+          sampled: sql<boolean>`(${schema.site.logSampleRate} > 0 or exists (
               select 1 from ${schema.edgeRule}
               where (${schema.edgeRule.siteId} = ${schema.site.id} or ${schema.edgeRule.siteId} is null)
                 and ${schema.edgeRule.enabled}
@@ -165,27 +160,34 @@ export async function ingestLogs(
                     and (${schema.edgeRule.action}->>'logSampleRate')::int > 0)
                   or (${schema.edgeRule.action}->>'kind' = 'log'
                     and (${schema.edgeRule.action}->>'accessLog')::boolean))))`,
-          ),
-        )
+        })
+        .from(schema.site)
+        .leftJoin(schema.siteProtection, eq(schema.siteProtection.siteId, schema.site.id))
+        .where(and(inArray(schema.site.id, ids), eq(schema.site.clusterId, node.clusterId)))
     : [];
   // JA4 and the optional fields are kept only while the site records them (current privacy policy).
-  const policies = new Map<string, SiteLogPolicy>(
-    sites.map((s) => [
-      s.id,
-      {
-        ja4: s.logJa4 === true,
-        query: s.logQuery,
-        headers: new Set(s.logHeaders),
-        peer: s.logPeer,
-      },
-    ]),
-  );
+  const policies = new Map<string, SiteLogPolicy>();
+  for (const s of sites) {
+    const sampled = s.sampled === true;
+    // Nothing sampled and blocked requests not logged: none of its lines.
+    if (!sampled && !s.logBlocked) continue;
+    policies.set(s.id, {
+      // Only blocked requests are logged: other lines (nodes behind the
+      // revision, a spooled backlog) are not kept.
+      blockedOnly: !sampled,
+      ja4: s.logJa4 === true,
+      query: s.logQuery,
+      headers: new Set(s.logHeaders),
+      peer: s.logPeer,
+    });
+  }
   const entries: LogEntry[] = logs.flatMap((l, index) => {
     const policy = policies.get(l.siteId);
     const time = l.time ? timestampDate(l.time).getTime() : NaN,
       bytes = Number(l.bytesSent);
     if (
       !policy ||
+      (policy.blockedOnly && !REASONS.has(l.blockReason)) ||
       !Number.isFinite(time) ||
       time < cutoff ||
       time > now + 300000 ||
