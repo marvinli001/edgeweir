@@ -1587,9 +1587,9 @@ export const siteListInput = z.object({
   /** Matches the site name, any of its domains or any of its tags. */
   search: z.string().trim().max(100).optional(),
   clusterId: uuid.optional(),
-  /** Sites with these tags (`tagIds[]=…`): any of them, or all with tagMatch "all". */
+  /** Sites with these tags (`tagIds[]=…`): any of them, or all with tagMatch "all" (omitted: any). */
   tagIds: queryList(uuid).pipe(z.array(uuid).max(MAX_SITE_TAGS)).optional(),
-  tagMatch: z.enum(["any", "all"]).default("any"),
+  tagMatch: z.enum(["any", "all"]).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
