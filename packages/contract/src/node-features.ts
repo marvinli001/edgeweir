@@ -35,6 +35,13 @@ export const METRICS_FEATURE = "metrics-v1";
  */
 export const RULE_LOG_FEATURE = "rule-log-v1";
 /**
+ * stats-dims-v1: MinuteStats countries, networks, referring hosts, user
+ * agent classes, HTTP and TLS versions, block reasons and challenges
+ * (ADR-0041). A cluster's dimensions are partial while an active node
+ * lacks it.
+ */
+export const STATS_DIMS_FEATURE = "stats-dims-v1";
+/**
  * l4-v1: layer-4 applications (NodeConfig.l4_apps, required by
  * configurations with applications) and their statistics
  * (ReportStatsV2Request.l4_stats).
