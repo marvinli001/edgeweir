@@ -162,4 +162,47 @@ describe("configuration rollback", async () => {
     expect(decodeNodeConfig(row.ir).sites[0]?.logSampleRate).toBe(0);
     expect(decodeNodeConfig(row.ir).requiredFeatures).not.toContain("access-logs-v1");
   });
+  it("does not revive the access log options when rolling back (G16)", async () => {
+    await admin.logs.configure({
+      siteId,
+      logBlocked: true,
+      logQuery: true,
+      logPeer: true,
+      logHeaders: ["x-trace-id", "accept-language"],
+    });
+    const recorded = await latestRevision(ctx.db, clusterId);
+    if (!recorded) throw new Error("no revision with the options");
+    expect(decodeNodeConfig(recorded.ir).sites[0]?.logHeaders).toEqual([
+      "accept-language",
+      "x-trace-id",
+    ]);
+    // The operator keeps only the trace header and blocked requests.
+    await admin.logs.configure({
+      siteId,
+      logQuery: false,
+      logPeer: false,
+      logHeaders: ["x-trace-id"],
+    });
+    const restored = await admin.clusters.rollback({ id: clusterId, revision: recorded.revision });
+    const row = await getRevision(ctx.db, clusterId, restored.revision);
+    if (!row) throw new Error("no restored revision");
+    const site = decodeNodeConfig(row.ir).sites[0];
+    expect(site).toMatchObject({
+      logBlocked: true,
+      logQuery: false,
+      logPeer: false,
+      logHeaders: ["x-trace-id"],
+    });
+    await admin.logs.configure({ siteId, logBlocked: false, logHeaders: [] });
+    const cleared = await admin.clusters.rollback({ id: clusterId, revision: recorded.revision });
+    const after = await getRevision(ctx.db, clusterId, cleared.revision);
+    if (!after) throw new Error("no restored revision");
+    expect(decodeNodeConfig(after.ir).sites[0]).toMatchObject({
+      logBlocked: false,
+      logQuery: false,
+      logPeer: false,
+      logHeaders: [],
+    });
+    expect(decodeNodeConfig(after.ir).requiredFeatures).not.toContain("access-logs-v2");
+  });
 });

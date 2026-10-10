@@ -129,6 +129,13 @@ async function restoreSites(
     site.logSampleRate = opts.strict
       ? current.logSampleRate
       : Math.min(site.logSampleRate, current.logSampleRate);
+    // So are the access log options (access-logs-v2): only what both enable stays.
+    site.logBlocked = opts.strict ? current.logBlocked : site.logBlocked && current.logBlocked;
+    site.logQuery = opts.strict ? current.logQuery : site.logQuery && current.logQuery;
+    site.logPeer = opts.strict ? current.logPeer : site.logPeer && current.logPeer;
+    site.logHeaders = opts.strict
+      ? [...current.logHeaders].sort()
+      : site.logHeaders.filter((name) => current.logHeaders.includes(name));
     const ids = siteCertificates(site);
     if (opts.strict && ids.length) {
       const chains: string[] = [];
