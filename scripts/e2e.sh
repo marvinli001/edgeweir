@@ -202,6 +202,14 @@
 #   (cached, the query left out of the key); a clone serving the same; two
 #   sites turned off in one revision (503 site-disabled) and on again;
 #   Playwright e2e/g17.spec.ts.
+#   Site parity G18 (scripts/e2e-g18.mjs, after G17): both nodes report
+#   image-convert-v1; Accept image/webp and image/avif get the variant (MISS,
+#   then the same variant HIT), */*, navigations and no Accept the JPEG,
+#   all with Vary: Accept, the origin answering once per class and node; a
+#   path without an extension and a PNG converted, a picture over the pixel
+#   limit served and cached as JPEG; AVIF off serves the WebP variant; the
+#   saved bytes reach imageConvert.savings; off again, the cached JPEG;
+#   Playwright e2e/g18.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -1328,6 +1336,14 @@ if ! $SKIP_UI; then
 fi
 node scripts/e2e-g17.mjs --cleanup || fail "G17 cleanup failed"
 pass "G17 checks passed"
+
+step "G18: WebP / AVIF variants by Accept, cached once each, limits, savings"
+node scripts/e2e-g18.mjs || fail "G18 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g18.spec.ts || fail "G18 browser checks failed"
+fi
+node scripts/e2e-g18.mjs --cleanup || fail "G18 cleanup failed"
+pass "G18 checks passed"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"
