@@ -96,8 +96,8 @@ test("G17: tags filter the site list, are edited on a site and renamed or delete
   await page.getByTestId("tag-picker-input").press("Enter");
   await page.getByTestId("tag-picker-input").fill(tag);
   await page.getByTestId("tag-picker-input").press("Enter");
-  // The same name in another case is the same tag: one chip, as first written.
-  await expect(page.getByTestId("tag-chip")).toHaveCount(1);
+  // g17-copy and the new tag: the same name in another case is the same tag, one chip.
+  await expect(page.getByTestId("tag-chip")).toHaveCount(2);
   await page.getByTestId("site-tags-save").click();
   await expect(page.getByTestId("site-tag").filter({ hasText: tag.toUpperCase() })).toBeVisible();
   await page.keyboard.press("Control+k");
