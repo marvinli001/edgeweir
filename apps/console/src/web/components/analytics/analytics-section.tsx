@@ -5,6 +5,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type * as React from "react";
 import { StatusCodesCard, TopListCard } from "@/components/analytics/breakdowns";
 import { type DetailTarget, MetricDetailDialog } from "@/components/analytics/detail-dialog";
+import { DimensionCards, TopCountriesCard } from "@/components/analytics/dimensions";
 import { MetricChart } from "@/components/analytics/metric-chart";
 import { MetricCard } from "@/components/analytics/panel";
 import { RangeSelect } from "@/components/analytics/range-select";
@@ -28,14 +29,16 @@ export interface TopList {
 
 /**
  * Traffic of every site (or one site) over a range: two large charts with value axes,
- * four compact ones, the status-class split and optional top lists. Every card follows the one
- * range control; a refetch keeps the old numbers, dimmed, until the new ones arrive.
+ * four compact ones, the status-class split and optional top lists, then a site's countries,
+ * networks, referrers, protocols and clients. Every card follows the one range control; a refetch
+ * keeps the old numbers, dimmed, until the new ones arrive.
  */
 export function AnalyticsSection({
   range,
   onRangeChange,
   siteId,
   topLists = [],
+  topCountries = false,
   aside,
   delay = 0,
 }: {
@@ -43,6 +46,8 @@ export function AnalyticsSection({
   onRangeChange: (range: AnalyticsRange) => void;
   siteId?: string;
   topLists?: TopList[];
+  /** The countries with the most bytes sent, beside the top lists (the overview's). */
+  topCountries?: boolean;
   /**
    * A card beside the two large charts (the overview's edge network): from @5xl the charts stack
    * in two thirds of the row and the card takes the last third; narrower, it follows them.
@@ -73,7 +78,13 @@ export function AnalyticsSection({
     ...live,
     enabled: topLists.some((l) => l.id === "nodes"),
   });
-  const queries = [traffic, topSites, topNodes];
+  // Statistics dimensions: one query for every card that shows them.
+  const dimensions = useQuery({
+    ...orpc.analytics.dimensions.queryOptions({ input: { range, siteId } }),
+    ...live,
+    enabled: !!siteId || topCountries,
+  });
+  const queries = [traffic, topSites, topNodes, dimensions];
   const fetching = queries.some((q) => q.isFetching);
   const stale = queries.some((q) => q.isPlaceholderData);
   const enter = (index: number, className?: string) => ({
@@ -81,7 +92,9 @@ export function AnalyticsSection({
     style: { animationDelay: `${delay + index * 60}ms` },
   });
   // Without top lists the status card has the row to itself.
-  const statusWide = topLists.length === 0;
+  const statusWide = topLists.length === 0 && !topCountries;
+  // Cards in the status row: four sit two by two up to a very wide main area.
+  const cells = 1 + topLists.length + (topCountries ? 1 : 0);
   const metric = METRICS.find((candidate) => candidate.id === detail.value);
   const target: DetailTarget | null = metric
     ? {
@@ -189,7 +202,8 @@ export function AnalyticsSection({
             <div
               className={cn(
                 "grid gap-3 @3xl/main:grid-cols-2",
-                topLists.length > 1 && "@4xl/main:grid-cols-3",
+                cells === 3 && "@4xl/main:grid-cols-3",
+                cells >= 4 && "@7xl/main:grid-cols-4",
               )}
             >
               <div {...enter(6, statusWide ? "@3xl/main:col-span-2" : undefined)}>
@@ -214,11 +228,17 @@ export function AnalyticsSection({
                   </div>
                 );
               })}
+              {topCountries ? (
+                <div {...enter(7 + topLists.length)}>
+                  <TopCountriesCard query={dimensions} />
+                </div>
+              ) : null}
             </div>
             <div className="grid gap-3 @3xl/main:grid-cols-2">
               <TopRequestsCard range={range} siteId={siteId} by="url" />
               <TopRequestsCard range={range} siteId={siteId} by="ip" />
             </div>
+            {siteId ? <DimensionCards query={dimensions} delay={delay + 9 * 60} /> : null}
           </div>
         )}
       </QueryView>

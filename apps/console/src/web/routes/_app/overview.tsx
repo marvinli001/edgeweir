@@ -123,6 +123,7 @@ function OverviewPage() {
                 navigate({ search: { range: range === DEFAULT_RANGE ? undefined : range } })
               }
               aside={<EdgeNetworkCard nodes={nodeList} clusters={clusterList} />}
+              topCountries
               topLists={[
                 {
                   id: "sites",
