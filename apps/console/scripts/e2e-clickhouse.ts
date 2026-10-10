@@ -10,7 +10,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import type { AppContext } from "../src/server/lib/context";
 import { loadEnv } from "../src/server/lib/env";
-import { ingestLogs, queryLogs } from "../src/server/services/access-logs";
+import { ingestLogs, queryLogs, setLogRetention } from "../src/server/services/access-logs";
 import {
   clickhouse,
   insertClickHouseLogs,
@@ -61,6 +61,18 @@ try {
     bytesSent: 50n,
     durationMs: 5,
     sampleRate: 10000,
+    // ADR-0041 fields.
+    userAgent: "Mozilla/5.0 Firefox/131",
+    referer: "https://ref.example/page",
+    httpVersion: "2",
+    scheme: "https",
+    country: "NL",
+    asn: 1136,
+    asName: "KPN B.V.",
+    requestBytes: 300n,
+    contentType: "text/html",
+    tlsVersion: "1.3",
+    blockReason: "region",
   });
   assert.equal(await ingestLogs(app, node, 1n, [record]), 1);
   assert.equal(await ingestLogs(app, node, 1n, [record]), 0);
@@ -80,6 +92,30 @@ try {
   result = await queryLogs(app, input);
   assert.equal(result.entries.length, 1);
   assert.equal((await queryLogs(app, { ...input, status: 200 })).entries.length, 0);
+  assert.equal(result.entries[0]?.country, "NL");
+  assert.equal(result.entries[0]?.asn, 1136);
+  assert.equal(result.entries[0]?.requestBytes, 300);
+  assert.equal(result.entries[0]?.blockReason, "region");
+  // The G16 filters on ClickHouse (positionCaseInsensitiveUTF8, isIPAddressInRange).
+  for (const [filter, count] of [
+    [{ blockReason: "any" }, 1],
+    [{ blockReason: "rule" }, 0],
+    [{ country: "NL", asn: 1136 }, 1],
+    [{ ua: "FIREFOX" }, 1],
+    [{ referer: "ref.example" }, 1],
+    [{ statusClass: "4xx" }, 1],
+    [{ statusClass: "2xx" }, 0],
+    [{ cidr: "2001:db8::/32" }, 1],
+    [{ cidr: "192.0.2.0/24" }, 0],
+    [{ minDuration: 6 }, 0],
+    [{ host: "TEST.example", method: "get" }, 1],
+    [{ cacheStatus: "HIT" }, 0],
+  ] as const)
+    assert.equal(
+      (await queryLogs(app, { ...input, ...filter })).entries.length,
+      count,
+      JSON.stringify(filter),
+    );
   assert.equal((await db.select().from(schema.accessLog)).length, 0);
   const minute = new Date(Math.floor(at.getTime() / 60000) * 60000);
   const bucket = {
@@ -91,6 +127,13 @@ try {
     cacheHits: 8,
     cacheMisses: 1,
     statusCodes: { "200": 9 },
+    dimensions: {
+      countries: [{ country: "NL", requests: 9, bytesSent: 90 }],
+      asns: [{ asn: 1136, name: "KPN B.V.", requests: 9 }],
+      browsers: { firefox: 9 },
+      blockReasons: { region: 1 },
+      challengesIssued: 2,
+    },
   };
   const mirror = (tx: import("../src/server/services/revisions").Executor) =>
     mirrorMinuteStats(env, tx, node.id, 1n, [{ siteId: site.id, minute: minute.toISOString() }]);
@@ -102,8 +145,25 @@ try {
     { site: site.id },
   );
   assert.equal(Number(JSON.parse(stats.trim()).requests), 9);
+  const dims = JSON.parse(
+    (
+      await clickhouse(
+        env,
+        "SELECT country_requests, asns, browsers, block_reasons, challenges_issued FROM minute_stats FINAL WHERE site_id={site:UUID} FORMAT JSONEachRow",
+        { site: site.id },
+      )
+    ).trim(),
+  );
+  assert.equal(Number(dims.country_requests.NL), 9);
+  assert.equal(Number(dims.asns["1136"]), 9);
+  assert.equal(Number(dims.block_reasons.region), 1);
+  assert.equal(Number(dims.challenges_issued), 2);
+  // Retention: the access_log TTL follows the setting (ADR-0041 §5).
+  await setLogRetention(app, { type: "user", id: "ch-e2e" }, { postgresDays: 7, clickhouseDays: 30 });
+  const ddl = await clickhouse(env, "SHOW CREATE TABLE access_log FORMAT TSVRaw");
+  assert.match(ddl, /TTL toDateTime\(time\) \+ toIntervalDay\(30\)/);
   console.log(
-    "ClickHouse E2E OK: raw logs, privacy, FINAL retry dedup, status filter, sequenced minute stats",
+    "ClickHouse E2E OK: raw logs, privacy, FINAL retry dedup, G16 fields and filters, sequenced minute stats with dimensions, retention TTL",
   );
 } finally {
   await client.close();
