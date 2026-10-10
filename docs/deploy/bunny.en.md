@@ -65,14 +65,14 @@ Use the output as is. Keep `edgeweir-master-key` offline and apart from database
 4. **Environment variables → Raw editor**:
 
    ```ini
-   DATABASE_URL=postgres://edgeweir:<password>@<host>:5432/edgeweir
+   DATABASE_URL=postgres://edgeweir:<password>@<host>:5432/edgeweir?sslmode=verify-full
    EDGEWEIR_MASTER_KEY=<contents of edgeweir-master-key>
    ```
 
 5. Under **Region**, pick one region near PostgreSQL that supports Anycast; set **App name** to `edgeweir-console`; click **Deploy**.
 6. In the app's **Regions and Scaling**, set the minimum and maximum instances to 1 and keep this single region: autoprovisioning starts instances in regions with growing demand.
 
-The console still lacks `EDGEWEIR_PUBLIC_URL` at this point: it fails to start and the platform keeps restarting it until step 3. Do step 3 soon: restarts have a deadline, after which the platform removes the instance.
+`EDGEWEIR_PUBLIC_URL` is not set yet, so the console runs with the default `http://localhost:3000`, and setup and sign-in through `mc-<id>.bunny.run` fail the origin check: open the setup wizard only after step 3.
 
 bunny CLI: create `bunny.jsonc` in an empty directory and adjust `regions` and the image tag:
 
@@ -124,7 +124,7 @@ Pass the image on the first run: it creates the app, writes `.bunny/app.json` (t
 2. In the app's **Container Settings → Edit → Environment Variables**, complete the variables, click **Update Container**, then **Save Changes**:
 
    ```ini
-   DATABASE_URL=postgres://edgeweir:<password>@<host>:5432/edgeweir
+   DATABASE_URL=postgres://edgeweir:<password>@<host>:5432/edgeweir?sslmode=verify-full
    EDGEWEIR_MASTER_KEY=<contents of edgeweir-master-key>
    EDGEWEIR_PUBLIC_URL=https://mc-<id>.bunny.run
    EDGEWEIR_NODE_API_URL=https://<Anycast IP>:8443
@@ -204,7 +204,7 @@ Without that line, restart the app (the app's **Restart**, or `bunny apps restar
 
 | Variable | Value | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | PostgreSQL 18 connection string | Required. |
+| `DATABASE_URL` | PostgreSQL 18 connection string | Required.When PostgreSQL is reached over the internet, end `DATABASE_URL` with `?sslmode=verify-full` (encrypted, certificate verified); use `sslmode=no-verify` when the provider's certificate is not issued by a public CA. Without `sslmode` the connection is not encrypted: managed databases that require TLS refuse it, and the console exits after waiting 60 seconds. |
 | `EDGEWEIR_MASTER_KEY` | Output of `openssl rand -base64 32` | Required. |
 | `EDGEWEIR_PUBLIC_URL` | `https://mc-<id>.bunny.run` | Required. Change to your domain when you use a custom domain. |
 | `EDGEWEIR_NODE_API_URL` | `https://<Anycast IP>:8443` | Required while no URL is saved under "Node channel" in **System settings**: the default `https://<public host>:8443` points at the CDN and is unreachable. The host name or IP is added to the node channel certificate. |

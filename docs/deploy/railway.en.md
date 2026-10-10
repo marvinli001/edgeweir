@@ -164,6 +164,8 @@ Equivalent to steps 1–8. **Seal** is available only in the web console.
 | `EDGEWEIR_VERSION` | Not set | The running version built into the image; the image tag sets the version. |
 | `BETTER_AUTH_SECRET` | Not set | Keep the existing value when migrating a deployment that set it. |
 
+When the referenced domain or TCP proxy does not exist, `${{…}}` expands to nothing: the console logs `EDGEWEIR_PUBLIC_URL: expected … got "https://"` or `EDGEWEIR_NODE_API_URL: expected … got "https://:"` and keeps restarting. Generate the domain and the TCP proxy under **Settings → Networking** and redeploy, or write literal values.
+
 `ROLE`, `HOST`, and `NODE_API_PORT` keep the image defaults `all`, `0.0.0.0`, and `8443`. All variables: [Environment variables](../reference/environment.en.md).
 
 ## Verification
