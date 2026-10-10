@@ -77,8 +77,9 @@ const KEYS: Record<string, ReadonlySet<string>> = {
   block_reasons: new Set(BLOCK_REASONS),
 };
 const COUNTRY_RE = /^(?:[A-Z]{2})?$/;
+/** Referring hosts as nodes report them: lowercase labels of letters, digits, "-" and "_". */
 const HOST_RE =
-  /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+  /^(?=.{1,253}$)(?:[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?\.)*[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?$/;
 const isCount = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) > 0;
 /** Names nodes report for a network: control characters dropped, at most 128 characters. */
 export const cleanAsName = (name: string) =>

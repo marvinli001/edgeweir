@@ -609,7 +609,7 @@ describe("access logs and statistics dimensions (G16)", async () => {
               })),
               { asn: 0, name: "none", requests: 1000 },
             ],
-            referers: { "search.example": 4, "Bad Host": 9, "a..b": 3 },
+            referers: { "search.example": 4, "Bad Host": 9, "a..b": 3, "cdn_1.example": 2 },
             browsers: { chrome: 6, crawler: 2, netscape: 9 },
             oses: { android: 6, other: 2 },
             devices: { mobile: 6, crawler: 2 },
@@ -647,7 +647,7 @@ describe("access logs and statistics dimensions (G16)", async () => {
       expect(row?.countryRequests).not.toHaveProperty("de");
       expect(Object.keys(row?.asns ?? {})).toHaveLength(50);
       expect(row?.asns).not.toHaveProperty("0");
-      expect(row?.referers).toEqual({ "search.example": 4 });
+      expect(row?.referers).toEqual({ "search.example": 4, "cdn_1.example": 2 });
       expect(row?.browsers).toEqual({ chrome: 7, crawler: 2 });
       expect(row?.httpVersions).toEqual({ "2": 7, "1.1": 3 });
       expect(row?.blockReasons).toEqual({ region: 1, rule: 1 });
@@ -696,7 +696,10 @@ describe("access logs and statistics dimensions (G16)", async () => {
       expect(site.countries).toHaveLength(250);
       expect(site.asns).toHaveLength(50);
       expect(site.asns[0]).toEqual({ asn: 64500, name: "AS-renamed", requests: 101 });
-      expect(site.referers).toEqual([{ host: "search.example", requests: 4 }]);
+      expect(site.referers).toEqual([
+        { host: "search.example", requests: 4 },
+        { host: "cdn_1.example", requests: 2 },
+      ]);
       expect(site.browsers).toEqual([
         { key: "chrome", requests: 10 },
         { key: "crawler", requests: 2 },
