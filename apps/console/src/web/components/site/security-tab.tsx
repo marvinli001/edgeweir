@@ -1302,7 +1302,7 @@ function ChallengesCard({ siteId }: { siteId: string }) {
         <QueryView query={dimensions}>
           {({ challenges, unsupportedNodes }) => (
             <>
-              {challenges.issued === 0 ? (
+              {challenges.issued === 0 && challenges.passed === 0 ? (
                 <p className="text-sm text-muted-foreground" data-testid="challenges-empty">
                   {m.security_top_empty()}
                 </p>
@@ -1310,11 +1310,19 @@ function ChallengesCard({ siteId }: { siteId: string }) {
                 <dl className="grid grid-cols-3 gap-4 sm:max-w-xl">
                   {(
                     [
-                      [
-                        "rate",
-                        m.challenges_rate(),
-                        formatPercent((challenges.passed / challenges.issued) * 100),
-                      ],
+                      // A pass can be counted by another node than the challenge (or fall in
+                      // the next range): the rate stops at 100%, and needs issued challenges.
+                      ...(challenges.issued > 0
+                        ? ([
+                            [
+                              "rate",
+                              m.challenges_rate(),
+                              formatPercent(
+                                Math.min(100, (challenges.passed / challenges.issued) * 100),
+                              ),
+                            ],
+                          ] as const)
+                        : []),
                       ["issued", m.challenges_issued(), formatNumber(challenges.issued)],
                       ["passed", m.challenges_passed(), formatNumber(challenges.passed)],
                     ] as const
