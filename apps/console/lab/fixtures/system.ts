@@ -20,6 +20,7 @@ import {
   DAY,
   HOUR,
   id,
+  logRetention,
   MINUTE,
   NOW,
   nodeGroups,
@@ -936,6 +937,16 @@ const storySeeds: AuditSeed[] = [
     metadata: { enabled: true, windowSeconds: 600, autoPromote: true },
   },
   {
+    at: 2 * DAY,
+    actor: OPERATOR,
+    action: "system.log_retention_update",
+    target: settingT("log_retention"),
+    metadata: {
+      from: { postgresDays: 7, clickhouseDays: 7 },
+      to: { postgresDays: 14, clickhouseDays: 30 },
+    },
+  },
+  {
     at: 24 * DAY,
     actor: OPERATOR,
     action: "system.release_source_update",
@@ -1102,6 +1113,11 @@ export const systemFixtures: Fixtures = {
       source: "setting",
     }),
     usage: () => ({ retentionDays: 90, offlineThresholdMinutes: 30 }),
+    logRetention: () => ({ ...logRetention, storage: "lite" }),
+    setLogRetention: (input) => {
+      Object.assign(logRetention, input);
+      return { ...logRetention, storage: "lite" };
+    },
     probes: () => ({
       intervalSeconds: 10,
       timeoutMs: 2000,

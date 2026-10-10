@@ -5,6 +5,7 @@
  */
 import type {
   AnalyticsRange,
+  StatsDimensions,
   Traffic,
   TrafficBreakdown,
   TrafficBreakdownInput,
@@ -364,5 +365,185 @@ export function topRequestsOf(
     items: list
       .slice(0, limit)
       .map(([value, weight]) => ({ value, requests: Math.round(total * head * weight) })),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Statistics dimensions (countries, networks, referrers, clients, protocols, blocks)
+
+/** Client countries of the platform: request weight and bytes per request against the mean. */
+const COUNTRY_WEIGHTS: [country: string, weight: number, bytes: number][] = [
+  ["JP", 26, 1.1],
+  ["US", 18, 1.25],
+  ["SG", 10, 0.95],
+  ["CN", 9, 0.7],
+  ["KR", 7, 1],
+  ["DE", 6, 1.15],
+  ["TW", 5, 0.9],
+  ["AU", 4, 1.05],
+  ["GB", 4, 1.1],
+  ["HK", 3, 0.9],
+  ["IN", 2.5, 0.6],
+  ["FR", 2, 1],
+  ["NL", 1.5, 1.6],
+  ["CA", 1.2, 1.1],
+  ["BR", 1, 0.8],
+  ["", 0.8, 0.5],
+];
+
+/** Where a cluster's audience lives: weight multipliers by country. */
+const CLUSTER_AUDIENCE: Record<string, Record<string, number>> = {
+  "apac-edge": { JP: 1.4, SG: 1.5, CN: 1.3, KR: 1.2, TW: 1.3, HK: 1.3, AU: 1.2 },
+  "eu-edge": { DE: 3, GB: 3, FR: 3, NL: 3 },
+  "na-edge": { US: 2.5, CA: 3, BR: 2 },
+};
+
+/** Client networks (documentation AS numbers) and the country each serves. */
+export const NETWORKS: { asn: number; name: string; country: string; share: number }[] = [
+  { asn: 64496, name: "Example Fiber KK", country: "JP", share: 0.6 },
+  { asn: 64497, name: "Example Mobile Japan", country: "JP", share: 0.4 },
+  { asn: 64498, name: "Example Cable US", country: "US", share: 0.7 },
+  { asn: 64499, name: "Example Cloud Hosting", country: "US", share: 0.3 },
+  { asn: 64500, name: "Example Telecom SG", country: "SG", share: 1 },
+  { asn: 64501, name: "Example Broadband CN", country: "CN", share: 1 },
+  { asn: 64502, name: "Example Telecom KR", country: "KR", share: 1 },
+  { asn: 64503, name: "Example Netz DE", country: "DE", share: 1 },
+  { asn: 64504, name: "Example Telecom TW", country: "TW", share: 1 },
+  { asn: 64505, name: "Example Internet AU", country: "AU", share: 1 },
+  { asn: 64506, name: "Example Broadband UK", country: "GB", share: 1 },
+  { asn: 64507, name: "Example Datacenter NL", country: "NL", share: 1 },
+];
+
+const REFERRERS: [host: string, share: number][] = [
+  ["search.example", 0.34],
+  ["blog.example.org", 0.14],
+  ["news.example.net", 0.11],
+  ["social.example", 0.09],
+  ["mail.example.com", 0.05],
+  ["forum.example.org", 0.04],
+  ["video.example", 0.03],
+  ["partners.example.net", 0.02],
+  ["deals.example", 0.015],
+  ["wiki.example.org", 0.01],
+];
+
+type Shares = Record<string, number>;
+const CLIENTS: Record<
+  "web" | "api",
+  Record<"browsers" | "oses" | "devices" | "http" | "tls", Shares>
+> = {
+  web: {
+    browsers: {
+      chrome: 0.44,
+      safari: 0.22,
+      edge: 0.08,
+      firefox: 0.04,
+      samsung: 0.025,
+      wechat: 0.03,
+      qq: 0.01,
+      uc: 0.008,
+      opera: 0.007,
+      yandex: 0.003,
+      ie: 0.002,
+      crawler: 0.07,
+      tool: 0.04,
+      other: 0.015,
+    },
+    oses: {
+      windows: 0.29,
+      ios: 0.25,
+      android: 0.21,
+      macos: 0.14,
+      linux: 0.05,
+      chromeos: 0.01,
+      harmonyos: 0.01,
+      other: 0.04,
+    },
+    devices: { desktop: 0.48, mobile: 0.41, tablet: 0.04, crawler: 0.07 },
+    http: { "2": 0.63, "3": 0.22, "1.1": 0.145, "1.0": 0.002, other: 0.003 },
+    tls: { "1.3": 0.86, "1.2": 0.11, none: 0.03 },
+  },
+  api: {
+    browsers: { tool: 0.52, chrome: 0.2, safari: 0.1, crawler: 0.02, other: 0.16 },
+    oses: { linux: 0.45, android: 0.14, ios: 0.12, windows: 0.1, macos: 0.06, other: 0.13 },
+    devices: { other: 0.52, mobile: 0.26, desktop: 0.2, crawler: 0.02 },
+    http: { "1.1": 0.58, "2": 0.4, "3": 0.02 },
+    tls: { "1.3": 0.7, "1.2": 0.29, none: 0.01 },
+  },
+};
+
+/** Block reasons of refused requests: shop.example.com took the burst, the others see little. */
+const BLOCKS: Record<"burst" | "quiet", Shares> = {
+  burst: {
+    rate_limit: 0.38,
+    ip_banned: 0.21,
+    crs: 0.14,
+    cc: 0.1,
+    challenge: 0.09,
+    rule: 0.04,
+    auth: 0.02,
+    referer: 0.015,
+    region: 0.005,
+  },
+  quiet: { referer: 0.4, crs: 0.3, user_agent: 0.2, region: 0.1 },
+};
+
+const keyed = (total: number, shares: Shares) =>
+  Object.entries(shares)
+    .map(([key, share]) => ({ key, requests: Math.round(total * share) }))
+    .filter((item) => item.requests > 0)
+    .sort((a, b) => b.requests - a.requests);
+
+/** Sites in clusters with a node without stats-dims-v1 (an older release). */
+const PARTIAL_SITES = new Set(["download.example.com"]);
+
+export function dimensionsOf(range: AnalyticsRange, siteId?: string): StatsDimensions {
+  const site = siteId ? sites.find((s) => s.id === siteId) : undefined;
+  const totals = trafficOf(range, siteId).totals;
+  const audience = (site && CLUSTER_AUDIENCE[site.clusterName]) ?? {};
+  const weights = COUNTRY_WEIGHTS.map(([country, weight, bytes]) => {
+    const seed = site ? noise(site.name.length * 31 + country.charCodeAt(0)) : 0.5;
+    return { country, weight: weight * (audience[country] ?? 1) * (0.8 + seed * 0.4), bytes };
+  });
+  const weightSum = weights.reduce((t, c) => t + c.weight, 0);
+  const bytesSum = weights.reduce((t, c) => t + c.weight * c.bytes, 0);
+  const countries = weights
+    .map((c) => ({
+      country: c.country,
+      requests: Math.round((totals.requests * c.weight) / weightSum),
+      bytesSent: Math.round((totals.bytesSent * c.weight * c.bytes) / bytesSum),
+    }))
+    .sort((a, b) => b.requests - a.requests);
+  const byCountry = new Map(countries.map((c) => [c.country, c.requests]));
+  const asns = NETWORKS.map((n) => ({
+    asn: n.asn,
+    name: n.name,
+    requests: Math.round((byCountry.get(n.country) ?? 0) * n.share * 0.9),
+  }))
+    .filter((n) => n.requests > 0)
+    .sort((a, b) => b.requests - a.requests);
+  const api = site?.name === "api.example.com" || site?.name === "auth.example.net";
+  const profile = CLIENTS[api ? "api" : "web"];
+  const referers = (api ? [] : REFERRERS)
+    .filter(([host]) => host !== site?.name)
+    .map(([host, share]) => ({ host, requests: Math.round(totals.requests * 0.22 * share) }));
+  const burst = !site || site.id === SHOP;
+  const refused = Math.round(totals.status4xx * (burst ? 0.8 : 0.1));
+  const blockReasons = keyed(refused, BLOCKS[burst ? "burst" : "quiet"]);
+  const issued = burst
+    ? Math.round(refused * (BLOCKS.burst.challenge ?? 0) * 1.4 + totals.requests * 0.002)
+    : 0;
+  return {
+    countries,
+    asns,
+    referers,
+    browsers: keyed(totals.requests, profile.browsers),
+    oses: keyed(totals.requests, profile.oses),
+    devices: keyed(totals.requests, profile.devices),
+    httpVersions: keyed(totals.requests, profile.http),
+    tlsVersions: keyed(totals.requests, profile.tls),
+    blockReasons,
+    challenges: { issued, passed: Math.round(issued * 0.41) },
+    unsupportedNodes: !site || PARTIAL_SITES.has(site.name) ? 1 : 0,
   };
 }
