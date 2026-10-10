@@ -57,6 +57,14 @@
 #   body-post  the same POSTs to body.bench.g14.test, whose rules read and parse
 #              each body (the cost of reading request bodies; post is its
 #              baseline).
+#   dims       cache HITs with a browser User-Agent and an external Referer:
+#              a G16 node counts the statistics dimensions of every request
+#              (GeoIP from the worker's cache, the User-Agent class, the
+#              referring host, the protocols; stats-dims-v1). Defaults to the
+#              new node of scripts/bench-g16-nodes.mjs; its base node (the node
+#              before G16) with the same BENCH_SCENARIO is the baseline.
+#   logs       the same headers on <base|new>.logs.bench.g16.test, which logs
+#              every request (sample rate 100%; G16 lines carry the new fields).
 # pass and challenge default to ua-bench.test, which scripts/e2e-g2.mjs leaves
 # behind (whoami, cache rule on /, Under Attack js); headers to
 # hdr-bench.g8.test, which scripts/e2e-g8.mjs leaves behind; charset to
@@ -86,7 +94,9 @@ case "$BENCH_SCENARIO" in
   body) DEFAULT_HOST=body.bench.g14.test DEFAULT_URL="http://127.0.0.1:${E2E_G14_BENCH_NEW_PORT:-18952}/bench-cache.txt" ;;
   post) DEFAULT_HOST=new.cache.bench.g14.test DEFAULT_URL="http://127.0.0.1:${E2E_G14_BENCH_NEW_PORT:-18952}/form" ;;
   body-post) DEFAULT_HOST=body.bench.g14.test DEFAULT_URL="http://127.0.0.1:${E2E_G14_BENCH_NEW_PORT:-18952}/form" ;;
-  *) echo "BENCH_SCENARIO must be cache, pass, challenge, headers, proxy, proxy-plain, charset, tls, tls-resume, url-auth, access, body, post or body-post, not $BENCH_SCENARIO" >&2; exit 2 ;;
+  dims) DEFAULT_HOST=new.cache.bench.g16.test DEFAULT_URL="http://127.0.0.1:${E2E_G16_BENCH_NEW_PORT:-18954}/bench-cache.txt" ;;
+  logs) DEFAULT_HOST=new.logs.bench.g16.test DEFAULT_URL="http://127.0.0.1:${E2E_G16_BENCH_NEW_PORT:-18954}/bench-cache.txt" ;;
+  *) echo "BENCH_SCENARIO must be cache, pass, challenge, headers, proxy, proxy-plain, charset, tls, tls-resume, url-auth, access, body, post, body-post, dims or logs, not $BENCH_SCENARIO" >&2; exit 2 ;;
 esac
 BENCH_URL="${BENCH_URL:-${DEFAULT_URL:-http://127.0.0.1:${E2E_NODE_PORT:-18080}/bench-cache.txt}}"
 BENCH_HOST="${BENCH_HOST:-$DEFAULT_HOST}"
@@ -97,6 +107,12 @@ BENCH_OUTPUT="${BENCH_OUTPUT:-.e2e/bench.json}"
 mkdir -p "$(dirname "$BENCH_OUTPUT")"
 OHA_HEADERS=(-H "Host: $BENCH_HOST")
 CURL_HEADERS=(-H "Host: $BENCH_HOST")
+if [[ "$BENCH_SCENARIO" == dims || "$BENCH_SCENARIO" == logs ]]; then
+  BENCH_BROWSER_UA="${BENCH_BROWSER_UA:-Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36}"
+  BENCH_REFERER="${BENCH_REFERER:-https://search.bench.example/results}"
+  OHA_HEADERS+=(-H "User-Agent: $BENCH_BROWSER_UA" -H "Referer: $BENCH_REFERER")
+  CURL_HEADERS+=(-A "$BENCH_BROWSER_UA" -e "$BENCH_REFERER")
+fi
 EXPECT_STATUS=200
 if [[ "$BENCH_SCENARIO" == pass || "$BENCH_SCENARIO" == challenge ]]; then
   OHA_HEADERS+=(-H "User-Agent: $BENCH_USER_AGENT")
