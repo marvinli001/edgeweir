@@ -63,6 +63,9 @@ for (const [kind, version] of Object.entries(versions)) {
       [
         "build",
         "-trimpath",
+        // The release builds' tags (edgeweir-node .goreleaser.yaml).
+        "-tags",
+        "nodynamic,wasm2go",
         "-ldflags",
         `-s -w -X github.com/marvinli001/edgeweir-node/internal/version.Version=${version}`,
         "-o",
