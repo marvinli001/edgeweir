@@ -2,8 +2,10 @@
 #
 # Zeabur template: the console and PostgreSQL 18 on a Zeabur Server. Deploy
 # with `npx zeabur@latest template deploy -f zeabur.yaml`; guide and limits:
-# docs/deploy/zeabur.md. The node channel port is forwarded as raw TCP; the
-# console terminates its TLS and mTLS.
+# docs/deploy/zeabur.md. Nodes reach the node channel through its WebSocket
+# entry on the web port (wss://<domain>/node-channel); the node channel port is
+# also forwarded as raw TCP for a direct node channel URL saved in the system
+# settings. The console terminates the node channel's TLS and mTLS either way.
 apiVersion: zeabur.com/v1
 kind: Template
 metadata:
@@ -17,8 +19,9 @@ spec:
   readme: |
     # Edgeweir
 
-    The console of a self-hosted CDN: the web UI and API on port 3000, the
-    node channel on port 8443 (forwarded as raw TCP), and PostgreSQL 18.
+    The console of a self-hosted CDN: the web UI, the API and the node
+    channel's WebSocket entry on port 3000, the node channel on port 8443
+    (forwarded as raw TCP), and PostgreSQL 18.
 
     Guide: https://github.com/marvinli001/edgeweir/blob/master/docs/deploy/zeabur.en.md
   resourceRequirement:
@@ -99,23 +102,26 @@ spec:
             default: ${POSTGRES_CONNECTION_STRING}
           EDGEWEIR_PUBLIC_URL:
             default: https://${ZEABUR_WEB_DOMAIN}
-          EDGEWEIR_NODE_API_URL:
-            default: https://${PORT_FORWARDED_HOSTNAME}:${NODE_PORT_FORWARDED_PORT}
+          # Install commands get wss://<domain>. Port forwarding variables do
+          # not expand to a valid URL in a service variable, so the direct URL
+          # is shown in the instructions instead.
+          EDGEWEIR_NODE_API_WEBSOCKET:
+            default: "true"
         instructions:
           - type: TEXT
             title: Setup token
             content: "Logs tab: the line \"first-run setup\" carries setupToken; open https://${ZEABUR_WEB_DOMAIN}/setup"
           - type: TEXT
-            title: Node channel URL
-            content: https://${PORT_FORWARDED_HOSTNAME}:${NODE_PORT_FORWARDED_PORT}
+            title: Direct node channel URL (optional)
+            content: "System settings → Node channel: https://${PORT_FORWARDED_HOSTNAME}:${NODE_PORT_FORWARDED_PORT}"
 localization:
   zh-CN:
     description: 自托管 CDN、WAF 与边缘调度控制台，含 PostgreSQL 18。
     readme: |
       # Edgeweir
 
-      自托管 CDN 的控制台：Web UI 与 API 在 3000 端口，节点通道在 8443 端口
-      （以原始 TCP 转发），数据库为 PostgreSQL 18。
+      自托管 CDN 的控制台：Web UI、API 与节点通道的 WebSocket 入口在 3000 端口，
+      节点通道在 8443 端口（以原始 TCP 转发），数据库为 PostgreSQL 18。
 
       部署文档：https://github.com/marvinli001/edgeweir/blob/master/docs/deploy/zeabur.md
     variables:

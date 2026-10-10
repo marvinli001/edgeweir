@@ -35,7 +35,7 @@ Console components, runtime requirements, supported platforms, and process roles
 | Fly.io | Console image with an external PostgreSQL 18; flyctl deployment, Dashboard for secrets, IPs, certificates, and logs | [fly.en.md](fly.en.md) | Supported |
 | bunny.net Magic Containers | Console image with an external PostgreSQL 18; a CDN endpoint for the web console, an Anycast IP for the node channel; Dashboard, optional bunny CLI | [bunny.en.md](bunny.en.md) | Supported |
 | Render | `render.yaml` creates the console and Render Postgres 18 in one click, or manual creation in the Dashboard; nodes connect through the WebSocket entry (edgeweir-node 0.2.0 or later) | [render.en.md](render.en.md) | Supported |
-| Zeabur | The `zeabur.yaml` template creates the console and PostgreSQL 18 in one click, or manual creation in the Dashboard; runs on a Zeabur Server, the node channel goes through TCP port forwarding | [zeabur.en.md](zeabur.en.md) | Supported |
+| Zeabur | The `zeabur.yaml` template creates the console and PostgreSQL 18 in one click, or manual creation in the Dashboard; runs on a Zeabur Server, nodes connect through the WebSocket entry (edgeweir-node 0.2.0 or later), or directly through TCP port forwarding | [zeabur.en.md](zeabur.en.md) | Supported |
 
 ### Platform conditions
 

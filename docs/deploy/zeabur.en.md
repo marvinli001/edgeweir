@@ -13,6 +13,7 @@ Deploy the console on a Zeabur Server with the console image and PostgreSQL 18: 
 | Console image | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`, public; linux/amd64, linux/arm64. Tag rules: [Versions, upgrades and rollback](upgrade.en.md) |
 | PostgreSQL | PostgreSQL 18, in the same project as the console |
 | Master key | Generated with `openssl rand -base64 32`; keep it outside Zeabur, apart from database backups |
+| Nodes | edgeweir-node 0.2.0 or later: nodes reach the node channel through its [WebSocket entry](networking.en.md#the-node-channels-websocket-entry) by default |
 | Local commands | `openssl`, `curl`; Node.js for template deployment (`npx zeabur@latest`) |
 
 ## Topology
@@ -20,11 +21,11 @@ Deploy the console on a Zeabur Server with the console image and PostgreSQL 18: 
 | Zeabur resource | Target | Carries |
 | --- | --- | --- |
 | Service `edgeweir` (Docker Image) | — | `ROLE=all` (image default): web UI, API, node channel, pg-boss worker |
-| HTTP port `web`: `<prefix>.zeabur.app` or a custom domain, certificate issued and TLS terminated by Zeabur | Container port 3000 | Browsers, `/api/v1`, `/install.sh`, `/healthz` |
-| TCP port `node`: port forwarding `<host>:<port>`, the port assigned by Zeabur (NodePort 30000–32767) | Container port 8443 | Node channel; forwarded as TCP, TLS and mTLS terminated by the console |
+| HTTP port `web`: `<prefix>.zeabur.app` or a custom domain, certificate issued and TLS terminated by Zeabur | Container port 3000 | Browsers, `/api/v1`, `/install.sh`, `/healthz`; the node channel's WebSocket entry `/node-channel` (the default node channel URL) |
+| TCP port `node`: port forwarding `<host>:<port>`, the port assigned by Zeabur (NodePort 30000–32767) | Container port 8443 | Direct node channel (optional, see [Direct node channel](#direct-node-channel)); forwarded as TCP |
 | Service `postgresql`, volume at `/var/lib/postgresql`, no port forwarding | Private network `postgresql.zeabur.internal:5432` | PostgreSQL 18 |
 
-General rules for ports and the node channel certificate: [Ports, reverse proxy and trusted proxies](networking.en.md).
+Nodes enroll with `wss://<prefix>.zeabur.app` by default: the node channel's TLS runs inside the WebSocket, terminated by the console, which requires mTLS; see [The node channel's WebSocket entry](networking.en.md#the-node-channels-websocket-entry). General rules for ports and the node channel certificate: [Ports, reverse proxy and trusted proxies](networking.en.md).
 
 ## One-click template
 
@@ -33,7 +34,7 @@ General rules for ports and the node channel certificate: [Ports, reverse proxy 
 | Service | Settings |
 | --- | --- |
 | `postgresql` | `postgres:18.6-alpine` (pinned by digest); volume `data` at `/var/lib/postgresql`; database and user `edgeweir`, password the `${PASSWORD}` Zeabur generates; `portForwarding.enabled: false`; TCP health check |
-| `edgeweir` | `ghcr.io/marvinli001/edgeweir:latest`; ports `web` 3000/HTTP and `node` 8443/TCP; HTTP health check `/healthz`; `PORT=3000`, `DATABASE_URL=${POSTGRES_CONNECTION_STRING}`, `EDGEWEIR_PUBLIC_URL=https://${ZEABUR_WEB_DOMAIN}`, `EDGEWEIR_NODE_API_URL=https://${PORT_FORWARDED_HOSTNAME}:${NODE_PORT_FORWARDED_PORT}` |
+| `edgeweir` | `ghcr.io/marvinli001/edgeweir:latest`; ports `web` 3000/HTTP and `node` 8443/TCP; HTTP health check `/healthz`; `PORT=3000`, `DATABASE_URL=${POSTGRES_CONNECTION_STRING}`, `EDGEWEIR_PUBLIC_URL=https://${ZEABUR_WEB_DOMAIN}`, `EDGEWEIR_NODE_API_WEBSOCKET=true`; the deployment instructions show where the setup token is and the direct URL `https://<host>:<port>` |
 | Template variables | `PUBLIC_DOMAIN`: the `zeabur.app` domain prefix, bound to the `web` port; `EDGEWEIR_MASTER_KEY`: the master key |
 
 1. Generate the master key:
@@ -77,7 +78,7 @@ Equivalent to the [one-click template](#one-click-template).
      DATABASE_URL=${POSTGRES_CONNECTION_STRING}
      EDGEWEIR_MASTER_KEY=<contents of edgeweir-master-key>
      EDGEWEIR_PUBLIC_URL=https://${ZEABUR_WEB_DOMAIN}
-     EDGEWEIR_NODE_API_URL=https://${PORT_FORWARDED_HOSTNAME}:${NODE_PORT_FORWARDED_PORT}
+     EDGEWEIR_NODE_API_WEBSOCKET=true
      ```
 
    Click **Deploy**.
@@ -120,7 +121,8 @@ CLI: `npx zeabur@latest deployment log -t=runtime --service-name edgeweir | grep
 | `DATABASE_URL` | `${POSTGRES_CONNECTION_STRING}` | Required. The private network connection string the `postgresql` service exposes. |
 | `EDGEWEIR_MASTER_KEY` | The output of `openssl rand -base64 32` | Required. |
 | `EDGEWEIR_PUBLIC_URL` | `https://${ZEABUR_WEB_DOMAIN}` | Required. The domain bound to the `web` port; with a custom domain, set the literal value. |
-| `EDGEWEIR_NODE_API_URL` | `https://${PORT_FORWARDED_HOSTNAME}:${NODE_PORT_FORWARDED_PORT}` | Required while no URL is saved under "Node channel" in **System settings**: the default `https://<public domain>:8443` is unreachable. Its host name or IP goes into the node channel certificate. |
+| `EDGEWEIR_NODE_API_WEBSOCKET` | `true` | The node channel URL defaults to `wss://<host of EDGEWEIR_PUBLIC_URL>`, and the WebSocket entry stays open. |
+| `EDGEWEIR_NODE_API_URL` | Unset | Do not set it to `https://${PORT_FORWARDED_HOSTNAME}:${NODE_PORT_FORWARDED_PORT}`: in a service variable these two do not expand to a valid URL, and the console refuses to start. Save a direct URL in **System settings** instead; see [Direct node channel](#direct-node-channel). |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | Empty | Extra names for the node channel certificate, comma separated. |
 | `EDGEWEIR_TRUSTED_PROXIES` | Empty | See [Limitations](#limitations). |
 | `EDGEWEIR_VERSION` | Unset | The running version built into the image; the image tag decides it. |
@@ -134,33 +136,26 @@ CLI: `npx zeabur@latest deployment log -t=runtime --service-name edgeweir | grep
 | --- | --- | --- |
 | Services | **Overview** of the `edgeweir` and `postgresql` services | Both running |
 | Web and API | `curl -fsS https://<prefix>.zeabur.app/healthz` | `{"status":"ok","version":"20260929-a1b2c3d"}` |
+| WebSocket entry | `curl -s -o /dev/null -w '%{http_code}\n' https://<prefix>.zeabur.app/node-channel` | `426` |
+| Node channel URL | "Node channel" in **System settings** | `wss://<prefix>.zeabur.app`, connection check "Reachable" |
+| Node enrollment | **Clusters and nodes** → **Add node** | `--server wss://<prefix>.zeabur.app`; run it on the node as in [Adding nodes](nodes.en.md) |
 | Port forwarding | `edgeweir` service **Networking**; `npx zeabur@latest service network` | The `node` port has a `<host>:<port>`; `postgresql` has none |
-| Node channel TLS | The `openssl` command below | Issuer `Edgeweir Node Channel CA` |
-| Node channel URL | "Node channel" in **System settings** | `https://<host>:<port>`, connection check "Reachable" |
-| Node enrollment | **Clusters and nodes** → **Add node** | `--server` is the port forwarding address; run it on the node as in [Adding nodes](nodes.en.md) |
-
-```bash
-openssl s_client -connect <host>:<port> </dev/null 2>/dev/null \
-  | openssl x509 -noout -text | grep -E 'Issuer:|Subject:|DNS:'
-```
-
-Expected: issuer `CN=Edgeweir Node Channel CA, O=Edgeweir`. Any other issuer means a device in between terminates TLS.
 
 ## Custom domain
 
 Do this before enrolling nodes.
 
-1. Web console: `edgeweir` service **Domains → Custom Domain**, enter `console.example.com`, click **Create Domain**, and add the DNS record the page shows.
-2. Node channel: add `nodes.example.com` to DNS as an `A` record for the port forwarding host (the public IP of the Zeabur Server); the port stays the same. With DNS on Cloudflare, turn the proxy off (DNS only). When the forwarding host or port changes, only this record or the node channel URL needs changing.
-3. Change the variables (the service restarts):
+1. `edgeweir` service **Domains → Custom Domain**, enter `console.example.com`, click **Create Domain**, and add the DNS record the page shows.
+2. Change the variable (the service restarts):
 
    ```ini
    EDGEWEIR_PUBLIC_URL=https://console.example.com
-   EDGEWEIR_NODE_API_URL=https://nodes.example.com:<port>
    ```
 
-   The node channel URL can instead be changed only under "Node channel" in **System settings** to `https://nodes.example.com:<port>`, without a restart.
-4. Verify: run the `curl` command of [Verification](#verification) with the new domain, and the `openssl` command with `nodes.example.com:<port>` and `-servername nodes.example.com`.
+   The default node channel URL becomes `wss://console.example.com`.
+3. Verify: run the `curl` command of [Verification](#verification) with the new domain.
+
+With nodes already enrolled through `wss://<prefix>.zeabur.app`, save `wss://console.example.com` under "Node channel" in **System settings** and leave `EDGEWEIR_NODE_API_WEBSOCKET` as is: the old name stays in the node channel certificate, and the `<prefix>.zeabur.app` domain stays bound.
 
 Moving enrolled nodes to another node channel URL: [Node channel URL and certificate](networking.en.md#node-channel-url-and-certificate).
 
@@ -180,17 +175,36 @@ Moving enrolled nodes to another node channel URL: [Node channel URL and certifi
 
 Migrations, signature verification, and rollback: [Versions, upgrades and rollback](upgrade.en.md).
 
-## Node channel over WebSocket
+## Direct node channel
 
-When port forwarding is unavailable, or nodes should only connect to an HTTPS domain, nodes can use the WebSocket entry on the `web` port: save `wss://<prefix>.zeabur.app` under "Node channel" in **System settings**, or remove `EDGEWEIR_NODE_API_URL` and set `EDGEWEIR_NODE_API_WEBSOCKET=true`. Nodes need edgeweir-node 0.2.0 or later; see [The node channel's WebSocket entry](networking.en.md#the-node-channels-websocket-entry).
+Nodes can bypass Zeabur's HTTP entry and connect straight to the TCP port forwarding address of the `node` port. Do this before enrolling nodes.
+
+1. Read the port forwarding address: the `<host>:<port>` of the `node` port under the `edgeweir` service's **Networking**, or "Direct node channel URL" in the template's deployment instructions; CLI: `npx zeabur@latest service network`.
+2. Optional: add `nodes.example.com` to DNS as an `A` record for that host (the public IP of the Zeabur Server); with DNS on Cloudflare, turn the proxy off (DNS only). When the forwarding host or port changes, only this record or the node channel URL needs changing.
+3. Save `https://<host>:<port>` (or `https://nodes.example.com:<port>`) under "Node channel" in **System settings**; the connection check should say "Reachable". It applies at once, without a restart.
+4. Verify that the console terminates TLS:
+
+   ```bash
+   openssl s_client -connect <host>:<port> </dev/null 2>/dev/null \
+     | openssl x509 -noout -text | grep -E 'Issuer:|Subject:|DNS:'
+   ```
+
+   Expected: issuer `CN=Edgeweir Node Channel CA, O=Edgeweir`. Any other issuer means a device in between terminates TLS. With a domain, add `-servername nodes.example.com`.
+
+Enrolled nodes keep connecting to the address they enrolled with; see [Node channel URL and certificate](networking.en.md#node-channel-url-and-certificate).
+
+### Migrating a deployment from the old template
+
+Before 2026-10-10 the template set `EDGEWEIR_NODE_API_URL` to `https://${PORT_FORWARDED_HOSTNAME}:${NODE_PORT_FORWARDED_PORT}`; the console then logs `EDGEWEIR_NODE_API_URL: expected https://, wss:// or ws://host[:port] without a path` at startup and keeps restarting. In the `edgeweir` service's **Variables**, delete `EDGEWEIR_NODE_API_URL` and add `EDGEWEIR_NODE_API_WEBSOCKET=true`; the service recovers after it restarts.
 
 ## Limitations
 
 | Item | Behavior | Impact |
 | --- | --- | --- |
-| Port forwarding address | Host and port are assigned by Zeabur and usually stay the same; Zeabur does not guarantee they never change | Enrolled nodes keep connecting to the address they enrolled with: use a domain pointing at the Server IP as the node channel URL |
-| Client IP | The HTTP entry passes the client address in `X-Forwarded-For`; the source ranges it connects to containers from are not published | Leave `EDGEWEIR_TRUSTED_PROXIES` empty; audit IPs and sign-in rate limiting use the entry's address; see [Trusted proxies and client IP](networking.en.md#trusted-proxies-and-client-ip) |
-| Nodes' connection source address | Whether port forwarding keeps the node's address is not documented; no PROXY protocol | A node's "connection source address" may not be its public address |
+| Node channel | Goes through the WebSocket entry behind the HTTP entry by default | Needs edgeweir-node 0.2.0 or later; the entry's connection duration and idle limits are not published, nodes reconnect when a connection is closed and keep serving with the last good configuration meanwhile |
+| Port forwarding address | Host and port are assigned by Zeabur and usually stay the same; Zeabur does not guarantee they never change | With a direct node channel, enrolled nodes keep connecting to the address they enrolled with: use a domain pointing at the Server IP as the node channel URL |
+| Client IP | The HTTP entry passes the client address in `X-Forwarded-For`; the source ranges it connects to containers from are not published | Leave `EDGEWEIR_TRUSTED_PROXIES` empty; audit IPs, sign-in rate limiting and the "connection source address" of nodes connected over WebSocket use the entry's address; see [Trusted proxies and client IP](networking.en.md#trusted-proxies-and-client-ip) |
+| Directly connected nodes' source address | Whether port forwarding keeps the node's address is not documented; no PROXY protocol | A node's "connection source address" may not be its public address |
 | Deploy switchover | Services without volumes start the new instance and end the old one once the health check passes; services with volumes (`postgresql`) stop before they start | Old and new console versions run side by side for a short while; changing the `postgresql` service (image, variables) stops the database briefly, during which console requests and background jobs fail, and they continue once it is back |
 | Logs | After a restart or redeploy the previous instance's logs are gone | The setup token is logged again on every start |
 | Template variables | Written to every service of the project | The master key also appears among the `postgresql` service's variables |
