@@ -4,6 +4,15 @@ import { eq, sql } from "drizzle-orm";
 import { lockStats } from "../lib/locks";
 import type { Executor } from "./revisions";
 import { addTrafficCounter } from "./stats-counter";
+import {
+  cleanDimensions,
+  DIMENSION_COLUMNS,
+  type DimensionBucket,
+  dimensionUpsert,
+  mergeDimensions,
+  type ReportedDimensions,
+  reportedAsNames,
+} from "./stats-dims";
 
 /** Buckets accepted per ReportStats call; the rest of a larger batch is dropped. */
 export const MAX_STATS_PER_REPORT = 5000;
@@ -28,9 +37,11 @@ export interface ReportedMinuteStats {
   loggedRules?: Record<string, number>;
   /** Requests access authentication refused (access-auth-v1). */
   authFailures?: number;
+  /** Countries, networks, referrers, clients, protocols, block reasons, challenges (stats-dims-v1). */
+  dimensions?: ReportedDimensions;
 }
 
-interface Bucket {
+interface Bucket extends DimensionBucket {
   minute: string;
   site_id: string;
   requests: number;
@@ -99,9 +110,11 @@ export async function ingestMinuteStats(
         waf_rules: cleanTop(s.wafRules, "rule"),
         logged_rules: cleanTop(s.loggedRules, "id"),
         auth_failures: s.authFailures ?? 0,
+        ...cleanDimensions(s.dimensions),
       });
       continue;
     }
+    Object.assign(b, mergeDimensions(b, cleanDimensions(s.dimensions)));
     b.requests = addTrafficCounter(b.requests, s.requests);
     b.bytes_sent = addTrafficCounter(b.bytes_sent, s.bytesSent);
     b.bytes_received = addTrafficCounter(b.bytes_received, s.bytesReceived);
@@ -122,14 +135,14 @@ export async function ingestMinuteStats(
   const t = schema.nodeMinuteStats;
   const result = await db.execute<{ site_id: string }>(sql`
     with stored as (
-    insert into ${t} (minute, node_id, site_id, requests, bytes_sent, bytes_received, cache_hits, cache_misses, status_codes, top_urls, top_ips, waf_rules, logged_rules, auth_failures)
+    insert into ${t} (minute, node_id, site_id, requests, bytes_sent, bytes_received, cache_hits, cache_misses, status_codes, top_urls, top_ips, waf_rules, logged_rules, auth_failures, ${dimensionList})
     select b.minute, ${node.id}::uuid, b.site_id, b.requests, b.bytes_sent, b.bytes_received,
            b.cache_hits, b.cache_misses, coalesce(b.status_codes, '{}'::jsonb), b.top_urls, b.top_ips, b.waf_rules, b.logged_rules,
-           b.auth_failures
+           b.auth_failures, ${dimensionList}
     from jsonb_to_recordset(${JSON.stringify([...buckets.values()])}::jsonb) as b(
       minute timestamptz, site_id uuid, requests bigint, bytes_sent bigint, bytes_received bigint,
       cache_hits bigint, cache_misses bigint, status_codes jsonb, top_urls jsonb, top_ips jsonb, waf_rules jsonb, logged_rules jsonb,
-      auth_failures bigint)
+      auth_failures bigint, ${dimensionTypes})
     join ${schema.site} on ${schema.site.id} = b.site_id and ${schema.site.clusterId} = ${node.clusterId}::uuid
     on conflict (minute, node_id, site_id) do update set
       requests = least(9007199254740991::numeric, ${t}.requests::numeric + excluded.requests),
@@ -150,6 +163,7 @@ export async function ingestMinuteStats(
       logged_rules = (select coalesce(jsonb_object_agg(k,n),'{}'::jsonb) from (
         select k, least(9007199254740991::numeric, coalesce((${t}.logged_rules ->> k)::numeric,0)+coalesce((excluded.logged_rules ->> k)::numeric,0)) as n
         from jsonb_object_keys(${t}.logged_rules || excluded.logged_rules) as k order by n desc,k limit ${MAX_LOGGED_RULES}) q),
+      ${dimensionUpsert("node_minute_stats")},
       -- Sum per-status counters key by key.
       status_codes = (
         select coalesce(jsonb_object_agg(k, least(9007199254740991::numeric, coalesce((${t}.status_codes ->> k)::numeric, 0)
@@ -167,10 +181,26 @@ export async function ingestMinuteStats(
     ) select site_id from stored
   `);
   const stored = new Set(result.rows.map((r) => r.site_id));
+  // Names of the reported networks (stats-dims-v1), kept as the last one reported.
+  const names = reportedAsNames(reported.slice(0, MAX_STATS_PER_REPORT).map((s) => s.dimensions));
+  if (names.length && stored.size)
+    await db.execute(sql`
+      insert into ${schema.asnName} (asn, name, updated_at)
+      select n.asn, n.name, now() from jsonb_to_recordset(${JSON.stringify(names)}::jsonb) as n(asn bigint, name text)
+      on conflict (asn) do update set name = excluded.name, updated_at = excluded.updated_at
+      where ${schema.asnName}.name <> excluded.name
+    `);
   let accepted = 0;
   for (const [siteId, n] of perSite) if (stored.has(siteId)) accepted += n;
   return accepted;
 }
+
+const dimensionList = sql.raw(DIMENSION_COLUMNS.join(", "));
+const dimensionTypes = sql.raw(
+  DIMENSION_COLUMNS.map((c) => `${c} ${c.startsWith("challenges_") ? "bigint" : "jsonb"}`).join(
+    ", ",
+  ),
+);
 
 /** Heavy hitters kept per site, node and minute (URLs and addresses; CRS rules below). */
 const MAX_TOP = 50;

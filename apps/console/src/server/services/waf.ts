@@ -1,6 +1,7 @@
 import {
   ACCESS_AUTH_FEATURE,
   ACCESS_CONTROL_FEATURE,
+  ACCESS_LOGS_V2_FEATURE,
   ACTIVE_HEALTH_FEATURE,
   BROTLI_FEATURE,
   CHALLENGE_V2_FEATURE,
@@ -222,6 +223,7 @@ export async function siteFeatures(db: Database, siteId: string): Promise<SiteFe
     wafV2: byNodes(WAF_V2_FEATURE),
     rulesBody: byNodes(RULES_BODY_FEATURE),
     challengeV2: byNodes(CHALLENGE_V2_FEATURE),
+    accessLogsV2: byNodes(ACCESS_LOGS_V2_FEATURE),
   };
 }
 

@@ -49,6 +49,7 @@ const ALL_FEATURES = [
   "waf-v2",
   "rules-body-v1",
   "challenge-v2",
+  "access-logs-v2",
 ];
 
 /** A change without the operator behind it (service accounts, background jobs). */
@@ -158,6 +159,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       wafV2: available,
       rulesBody: available,
       challengeV2: available,
+      accessLogsV2: available,
     });
     const https = await admin.https.get({ id: siteId });
     expect(https).toMatchObject({ brotli: false, brotliLevel: 6, zstd: false, zstdLevel: 3 });
@@ -327,6 +329,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       wafV2: unavailable,
       rulesBody: unavailable,
       challengeV2: unavailable,
+      accessLogsV2: unavailable,
     });
     const before = (await config()).revision;
     for (const [call, feature] of [
@@ -488,10 +491,15 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
     expect(blocked?.wafRuleIds).not.toContain(0);
     expect(entries.find((e) => !e.wafBlocked)).toMatchObject({ wafRuleIds: [], wafBlocked: false });
     const csv = logsCsv(entries).split("\r\n");
-    expect(csv[0]).toMatch(/,ja4,wafRuleIds,wafBlocked,ruleIds$/);
-    expect(
-      csv.some((line) => line.includes('"920000 920001 920002') && line.endsWith('"true",""')),
-    ).toBe(true);
+    // The G14 columns, then the G16 ones (ADR-0041) at the end.
+    expect(csv[0]).toMatch(/,ja4,wafRuleIds,wafBlocked,ruleIds,userAgent,/);
+    expect(csv[0]).toMatch(/,blockReason,blockRuleId,query,headers,peerIp$/);
+    const header = csv[0]?.split(",") ?? [];
+    const cells = (line: string) => line.slice(1, -1).split('","');
+    const row = csv.find((line) => line.includes('"920000 920001 920002'));
+    expect(row && cells(row)[header.indexOf("wafBlocked")]).toBe("true");
+    expect(row && cells(row)[header.indexOf("ruleIds")]).toBe("");
+    expect(row && cells(row).length).toBe(header.length);
     const res = await admin.logs.export({
       siteId,
       from: new Date(now - 60_000).toISOString(),

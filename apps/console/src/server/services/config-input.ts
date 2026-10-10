@@ -275,6 +275,10 @@ export async function loadSiteModels(
         enabled: s.enabled && !site?.missing,
         cacheGeneration: s.cacheGeneration,
         logSampleRate: s.logSampleRate,
+        logBlocked: s.logBlocked,
+        logQuery: s.logQuery,
+        logHeaders: s.logHeaders,
+        logPeer: s.logPeer,
         domains: served(
           s,
           domains.filter((d) => d.siteId === s.id),
