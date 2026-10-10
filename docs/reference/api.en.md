@@ -529,7 +529,7 @@ Behavior: [Clusters and system](../guide/system.en.md) and [Adding nodes](../dep
 | Procedure | Endpoint | Notes |
 | --- | --- | --- |
 | `settings.nodeChannel` | `GET /settings/node-channel` | `{ url, effectiveUrl, source }`: `url` is the URL saved in system settings (an empty string when none is); `effectiveUrl` the URL install commands carry; `source` is `setting`, `environment` (`EDGEWEIR_NODE_API_URL`), or `default` |
-| `settings.setNodeChannel` | `PUT /settings/node-channel` | Body `{ url }`: `https://host[:port]` without a path, query, fragment, or credentials, otherwise 400; saved as its origin. An empty string clears the saved URL. Responds like `settings.nodeChannel`. Applies at once, the node channel certificate adds the new URL's name; audited as `system.node_channel_update` |
+| `settings.setNodeChannel` | `PUT /settings/node-channel` | Body `{ url }`: `https://`, `wss://` or `ws://host[:port]` without a path, query, fragment, or credentials, otherwise 400; saved as its origin. An empty string clears the saved URL. Responds like `settings.nodeChannel`. Applies at once, the node channel certificate adds the new URL's name; audited as `system.node_channel_update` |
 
 Service accounts cannot call them (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys call `settings.nodeChannel` only. Enrolled nodes keep the URL they enrolled with; see [Node channel URL and certificate](../deploy/networking.en.md#node-channel-url-and-certificate).
 

@@ -529,7 +529,7 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | 过程 | 端点 | 说明 |
 | --- | --- | --- |
 | `settings.nodeChannel` | `GET /settings/node-channel` | `{ url, effectiveUrl, source }`：`url` 为系统设置中保存的地址（未保存时为空字符串）；`effectiveUrl` 为安装命令使用的地址；`source` 为 `setting`、`environment`（`EDGEWEIR_NODE_API_URL`）或 `default` |
-| `settings.setNodeChannel` | `PUT /settings/node-channel` | 请求体 `{ url }`：`https://主机[:端口]`，不含路径、查询参数、片段与账号，否则 400；保存为 origin 形式。空字符串清除保存的地址。响应同 `settings.nodeChannel`。立即生效，节点通道证书加入新地址的名称；写审计 `system.node_channel_update` |
+| `settings.setNodeChannel` | `PUT /settings/node-channel` | 请求体 `{ url }`：`https://`、`wss://` 或 `ws://主机[:端口]`，不含路径、查询参数、片段与账号，否则 400；保存为 origin 形式。空字符串清除保存的地址。响应同 `settings.nodeChannel`。立即生效，节点通道证书加入新地址的名称；写审计 `system.node_channel_update` |
 
 服务账号不能调用（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `settings.nodeChannel`。已注册的节点继续使用注册时的地址，见 [节点通道地址与证书](../deploy/networking.md#节点通道地址与证书)。
 
