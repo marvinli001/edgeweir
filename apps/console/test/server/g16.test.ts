@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { create } from "@bufbuild/protobuf";
+import { create, type MessageInitShape } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { ACCESS_LOGS_V2_FEATURE, decodeNodeConfig } from "@edgeweir/config-compiler";
 import { STATS_DIMS_FEATURE } from "@edgeweir/contract";
@@ -70,7 +70,7 @@ describe("access logs and statistics dimensions (G16)", async () => {
       .update(schema.node)
       .set({ supportedFeatures: features })
       .where(eq(schema.node.id, nodeId));
-  const line = (extra: Partial<Parameters<typeof create<typeof AccessLogSchema>>[1]> = {}) =>
+  const line = (extra: MessageInitShape<typeof AccessLogSchema> = {}) =>
     create(AccessLogSchema, {
       siteId,
       time: timestampFromDate(new Date(now)),
