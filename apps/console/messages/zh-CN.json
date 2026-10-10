@@ -346,6 +346,7 @@
   "batch_remove_tags_title": "从 {count} 个网站移除标签",
   "batch_tags_toast": "已更新 {count} 个网站的标签",
   "batch_clear": "取消选择",
+  "batch_limit": "最多 {max} 个",
   "batch_enable_confirm": "启用 {count} 个网站？",
   "batch_disable_confirm": "停用 {count} 个网站？",
   "batch_enabled_toast": "已启用 {count} 个网站",

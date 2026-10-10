@@ -1,4 +1,9 @@
-import { type Site, type SiteCreateInput, siteCreateInput } from "@edgeweir/contract";
+import {
+  MAX_BATCH_SITES,
+  type Site,
+  type SiteCreateInput,
+  siteCreateInput,
+} from "@edgeweir/contract";
 import { MAX_HOST_HEADER_LENGTH, validHostHeader } from "@edgeweir/rule-engine";
 import { Add01Icon, GlobeIcon, Search01Icon, Tag01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -95,6 +100,21 @@ function SitesPage() {
   const setCreateOpen = (open: boolean) =>
     navigate({ search: (prev) => ({ ...prev, create: open || undefined }), replace: true });
   const filtered = !!search.q || !!search.cluster || tagIds.length > 0;
+  // A tag deleted or merged away leaves the filter: its id would filter by nothing visible.
+  React.useEffect(() => {
+    if (!tags.data || !tagIds.length) return;
+    const known = new Set(tags.data.map((tag) => tag.id));
+    if (tagIds.every((id) => known.has(id))) return;
+    const kept = tagIds.filter((id) => known.has(id));
+    void navigate({
+      search: (prev) => ({
+        ...prev,
+        tags: kept.length ? kept : undefined,
+        match: kept.length ? prev.match : undefined,
+      }),
+      replace: true,
+    });
+  }, [tags.data, tagIds, navigate]);
   const filterTag = React.useCallback(
     (id: string) =>
       navigate({ search: (prev) => ({ ...prev, tags: [id], match: undefined, page: undefined }) }),
@@ -112,8 +132,10 @@ function SitesPage() {
       setSelected((prev) => {
         const next = new Map(prev);
         for (const row of rows) {
-          if (checked) next.set(row.id, row.name);
-          else next.delete(row.id);
+          // A batch takes at most MAX_BATCH_SITES sites: further rows stay unselected.
+          if (checked && (next.has(row.id) || next.size < MAX_BATCH_SITES))
+            next.set(row.id, row.name);
+          else if (!checked) next.delete(row.id);
         }
         return next;
       }),

@@ -1,3 +1,4 @@
+import { MAX_BATCH_SITES } from "@edgeweir/contract";
 import {
   Cancel01Icon,
   Copy01Icon,
@@ -80,6 +81,11 @@ export function SitesBatchBar({
       <span className="me-1 text-sm font-medium tabular-nums" data-testid="batch-count">
         {m.sites_selected({ count })}
       </span>
+      {count >= MAX_BATCH_SITES ? (
+        <span className="text-xs text-muted-foreground" data-testid="batch-limit">
+          {m.batch_limit({ max: MAX_BATCH_SITES })}
+        </span>
+      ) : null}
       {action("enable", PlayIcon, m.site_enable())}
       {action("disable", PauseIcon, m.site_disable())}
       {action("purge", DatabaseSync01Icon, m.sites_purge())}

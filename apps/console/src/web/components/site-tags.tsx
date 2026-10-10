@@ -109,26 +109,32 @@ export function TagPicker({
   const suggestions = (tags.data ?? [])
     .filter((tag) => !chosen.has(tagKey(tag.name)) && tagKey(tag.name).includes(typed))
     .slice(0, 8);
-  const add = (raw: string) => {
-    const parsed = tagName.safeParse(raw);
-    if (!parsed.success) {
-      setInvalid(m.tags_invalid());
-      return false;
+  /**
+   * Adds the names (typed, pasted as a list or picked) in one change, so that none of a pasted
+   * list is lost; the first invalid name or the limit stops it with a message.
+   */
+  const add = (raws: readonly string[]) => {
+    let next = [...value];
+    let problem: string | null = null;
+    for (const raw of raws) {
+      if (!raw.trim()) continue;
+      const parsed = tagName.safeParse(raw);
+      if (!parsed.success) {
+        problem = m.tags_invalid();
+        break;
+      }
+      if (next.some((name) => tagKey(name) === tagKey(parsed.data))) continue;
+      if (next.length >= max) {
+        problem = m.tags_limit({ max });
+        break;
+      }
+      // An existing tag keeps its name as first written.
+      const existing = (tags.data ?? []).find((tag) => tagKey(tag.name) === tagKey(parsed.data));
+      next = uniqueTagNames([...next, existing?.name ?? parsed.data]);
     }
-    if (chosen.has(tagKey(parsed.data))) {
-      setText("");
-      return true;
-    }
-    if (value.length >= max) {
-      setInvalid(m.tags_limit({ max }));
-      return false;
-    }
-    // An existing tag keeps its name as first written.
-    const existing = (tags.data ?? []).find((tag) => tagKey(tag.name) === tagKey(parsed.data));
-    onChange(uniqueTagNames([...value, existing?.name ?? parsed.data]));
-    setText("");
-    setInvalid(null);
-    return true;
+    if (next.length !== value.length) onChange(next);
+    setInvalid(problem);
+    return problem === null;
   };
   return (
     <div className="flex flex-col gap-2" data-testid={testId}>
@@ -163,20 +169,21 @@ export function TagPicker({
             const next = event.target.value;
             // A comma ends a name, as Enter does (also for pasted lists).
             if (next.includes(",") || next.includes("，")) {
-              for (const part of next.split(/[,，]/).slice(0, -1)) if (part.trim()) add(part);
-              setText(next.split(/[,，]/).at(-1) ?? "");
+              const parts = next.split(/[,，]/);
+              add(parts.slice(0, -1));
+              setText(parts.at(-1) ?? "");
             } else setText(next);
           }}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
-              if (text.trim()) add(text);
+              if (text.trim() && add([text])) setText("");
             } else if (event.key === "Backspace" && text === "" && value.length) {
               onChange(value.slice(0, -1));
             }
           }}
           onBlur={() => {
-            if (text.trim()) add(text);
+            if (text.trim() && add([text])) setText("");
           }}
           data-testid={`${testId}-input`}
         />
@@ -191,7 +198,7 @@ export function TagPicker({
                 <button
                   type="button"
                   onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => add(tag.name)}
+                  onClick={() => add([tag.name])}
                 />
               }
               className="cursor-pointer"
@@ -250,6 +257,8 @@ export function TagFilter({
                 <DropdownMenuCheckboxItem
                   key={tag.id}
                   checked={selected.includes(tag.id)}
+                  // The list filters by at most as many tags as a site carries.
+                  disabled={!selected.includes(tag.id) && selected.length >= MAX_SITE_TAGS}
                   closeOnClick={false}
                   onCheckedChange={(checked) =>
                     onChange({

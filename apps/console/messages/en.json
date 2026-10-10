@@ -380,6 +380,7 @@
   "batch_remove_tags_title": "Remove tags from {count} sites",
   "batch_tags_toast": "Tags of {count} sites updated",
   "batch_clear": "Clear selection",
+  "batch_limit": "At most {max}",
   "batch_enable_confirm": "Turn on {count} sites?",
   "batch_disable_confirm": "Turn off {count} sites?",
   "batch_enabled_toast": "{count} sites turned on",
