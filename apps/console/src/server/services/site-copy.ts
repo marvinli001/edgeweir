@@ -36,6 +36,7 @@ import { servesHost } from "./bulk-redirects";
 import { newCnamePrefix } from "./cname-prefixes";
 import { loadOriginAllowList } from "./config-input";
 import { loadSiteErrorPages, storedStatus } from "./error-pages";
+import { assertOriginsAllowed } from "./origin-allow-list";
 import { type Executor, publishRevision, type Tx, toRevisionDto } from "./revisions";
 import { actionOriginGroup, siteOriginGroups } from "./rules";
 import { assertSitePorts, portsOf } from "./site-ports";
@@ -514,7 +515,10 @@ export const COPY_PARTS: Record<SiteCopyPart, Part<unknown>> = {
       await tx
         .insert(schema.siteWaf)
         .values({ siteId: target.id, ...values })
-        .onConflictDoUpdate({ target: schema.siteWaf.siteId, set: values });
+        .onConflictDoUpdate({
+          target: schema.siteWaf.siteId,
+          set: { ...values, updatedAt: new Date() },
+        });
     },
   }),
   protection: part<ProtectionValue>({
@@ -908,6 +912,8 @@ async function cloneOrigins(tx: Tx, source: SiteRow, cloneId: string, masterKey:
     .from(schema.origin)
     .where(eq(schema.origin.poolId, sourcePool.id))
     .orderBy(asc(schema.origin.createdAt), asc(schema.origin.id));
+  // As creating a site: the allow list may have narrowed since the source's origins were saved.
+  await assertOriginsAllowed(tx, origins);
   const base = Date.now();
   if (origins.length)
     await tx.insert(schema.origin).values(

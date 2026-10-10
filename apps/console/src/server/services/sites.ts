@@ -815,6 +815,8 @@ export async function createSite(
     if (!pool) throw new Error("origin pool insert failed");
     await writeOrigins(tx, pool, input.origins, ctx.masterKey);
     await replaceCacheRules(tx, siteRow, input.cacheRules);
+    // Before publishing: every transaction takes the tags lock before a cluster's publish lock.
+    if (input.tags.length) await setNewSiteTags(tx, ctx.actor, siteRow.id, input.tags);
     const revision = await publishSiteChange(tx, ctx.actor, siteRow, {
       reason: "site_created",
       action: "site.create",
@@ -825,7 +827,6 @@ export async function createSite(
         ...(input.tags.length ? { tags: input.tags } : {}),
       },
     });
-    if (input.tags.length) await setNewSiteTags(tx, ctx.actor, siteRow.id, input.tags);
     return { site: await toSiteDto(tx, siteRow), revision };
   });
 }

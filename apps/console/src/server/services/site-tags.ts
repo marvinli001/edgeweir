@@ -191,6 +191,21 @@ async function findTag(tx: Executor, id: string) {
   return row;
 }
 
+/**
+ * Locks a tag's site_tag rows in site id order before the tag goes: deleting
+ * sites (one by one, in id order) removes their rows in that order too, while
+ * the tag's cascade would take them in index order.
+ */
+async function lockTagSites(tx: Executor, id: string): Promise<string[]> {
+  const rows = await tx
+    .select({ siteId: schema.siteTag.siteId })
+    .from(schema.siteTag)
+    .where(eq(schema.siteTag.tagId, id))
+    .orderBy(asc(schema.siteTag.siteId))
+    .for("update");
+  return rows.map((row) => row.siteId);
+}
+
 async function tagSites(tx: Executor, id: string): Promise<number> {
   const [row] = await tx
     .select({ n: count() })
@@ -230,14 +245,7 @@ export async function renameSiteTag(
       return { id: row.id, name: input.name, sites: await tagSites(tx, row.id) };
     }
     // The sites keep existing until the transaction ends (in id order, as every site writer).
-    const members = await tx
-      .select({ siteId: schema.siteTag.siteId })
-      .from(schema.siteTag)
-      .where(eq(schema.siteTag.tagId, row.id));
-    const live = await shareSites(
-      tx,
-      members.map((member) => member.siteId),
-    );
+    const live = await shareSites(tx, await lockTagSites(tx, row.id));
     if (live.size)
       await tx
         .insert(schema.siteTag)
@@ -261,7 +269,7 @@ export async function deleteSiteTag(db: Database, id: string, actor: Actor) {
   return db.transaction(async (tx) => {
     await lockTags(tx);
     const row = await findTag(tx, id);
-    const sites = await tagSites(tx, row.id);
+    const sites = (await lockTagSites(tx, row.id)).length;
     await tx.delete(schema.tag).where(eq(schema.tag.id, row.id));
     await recordAudit(tx, actor, {
       action: "site_tag.delete",
