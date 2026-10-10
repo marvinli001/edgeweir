@@ -223,7 +223,12 @@ test("G16: the access log retention card saves and is set back", async ({ page }
   await expect(days).toHaveValue("7");
   // PostgreSQL keeps at most 30 days: the field refuses 31.
   await days.fill("31");
-  expect(await days.evaluate((el) => (el as HTMLInputElement).validity.rangeOverflow)).toBe(true);
+  await expect(days).toHaveAttribute("max", "30");
+  expect(
+    await days.evaluate(
+      (el: { validity: { rangeOverflow: boolean } }) => el.validity.rangeOverflow,
+    ),
+  ).toBe(true);
   await days.fill("9");
   await saved(page, page.getByTestId("log-retention-save"), "settings/setLogRetention");
   await page.reload();
