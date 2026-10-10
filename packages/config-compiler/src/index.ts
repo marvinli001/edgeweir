@@ -384,6 +384,8 @@ export const ACCESS_CONTROL_FEATURE = "access-control-v1";
 export const WAF_V2_FEATURE = "waf-v2";
 export const RULES_BODY_FEATURE = "rules-body-v1";
 export const CHALLENGE_V2_FEATURE = "challenge-v2";
+/** A site's access log options (proto v0.30.0, Site.log_blocked..log_peer; ADR-0041). */
+export const ACCESS_LOGS_V2_FEATURE = "access-logs-v2";
 
 /**
  * A site's access control (config.proto AccessControl). Parts that are off
@@ -517,6 +519,16 @@ export interface SiteModel {
   enabled: boolean;
   cacheGeneration: number;
   logSampleRate?: number;
+  /**
+   * Access log options (feature access-logs-v2): blocked, challenged and
+   * authentication-refused requests always logged; the query string, the
+   * named request headers (lowercase, at most 8) and the connection's peer
+   * on lines. Off and empty compile as before.
+   */
+  logBlocked?: boolean;
+  logQuery?: boolean;
+  logHeaders?: readonly string[];
+  logPeer?: boolean;
   /**
    * `tlsPending`: the site's certificate does not cover the domain yet; it
    * is served over HTTP only (feature tls-pending-domains-v1). Ignored on a
@@ -1530,6 +1542,10 @@ function compileSite(
     cacheZone: DEFAULT_CACHE_ZONE,
     cacheGeneration: BigInt(model.cacheGeneration),
     logSampleRate: model.logSampleRate ?? 0,
+    logBlocked: model.logBlocked ?? false,
+    logQuery: model.logQuery ?? false,
+    logHeaders: sortedByteSet(model.logHeaders ?? []),
+    logPeer: model.logPeer ?? false,
     domains: model.domains.map((d) =>
       create(DomainSchema, {
         name: d.name,
@@ -1948,6 +1964,8 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
     }
     // v0.23.0: listener ports and excluded domains as sets.
     site.ports = sortedSet(site.ports);
+    // v0.30.0: the recorded request headers as a set.
+    site.logHeaders = sortedByteSet(site.logHeaders);
     if (site.tls)
       site.tls.redirectExcludedDomains = sortedByteSet(site.tls.redirectExcludedDomains);
     site.errorPages?.pages.sort((a, b) => a.status - b.status);
@@ -2199,6 +2217,9 @@ const compileListener = (l: ListenerModel): Listener =>
 export function derivedFeatures(config: NodeConfig): string[] {
   return [
     ...(config.sites.some((s) => s.logSampleRate) ? ["access-logs-v1"] : []),
+    ...(config.sites.some((s) => s.logBlocked || s.logQuery || s.logHeaders.length || s.logPeer)
+      ? [ACCESS_LOGS_V2_FEATURE]
+      : []),
     ...(config.sites.some((s) => s.tls) ? ["tls-v1"] : []),
     ...(config.httpChallenges.length ? ["http01-v1"] : []),
     ...(config.sites.some((s) => s.domains.some((d) => d.tlsPending))
