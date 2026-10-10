@@ -30,6 +30,7 @@ const KEEP = [
   "errorPages.get",
   "maintenance.get",
   "authRules.get",
+  "imageConvert.get",
   // Records opened by id.
   "clusters.get",
   "nodes.get",

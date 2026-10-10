@@ -46,6 +46,7 @@ export const copyPartLabel = (part: SiteCopyPart): string =>
     authRules: m.copy_part_auth_rules,
     originSettings: m.copy_part_origin_settings,
     logs: m.copy_part_logs,
+    imageConvert: m.copy_part_image_convert,
   })[part]();
 
 /** What a part's change looks like on one line: item counts, or how many settings change. */

@@ -48,6 +48,7 @@ import { CompressionCard } from "@/components/site/compression-card";
 import { CharsetCard, PurgeMethodCard, XCacheCard } from "@/components/site/content-cards";
 import { ExpressionEditor, expressionFailure } from "@/components/site/expression-editor";
 import { NumberField, SwitchField } from "@/components/site/fields";
+import { ImageConvertCard, ImageSavingsCard } from "@/components/site/image-convert-card";
 import {
   nextDraftKey,
   SaveBar,
@@ -69,8 +70,9 @@ import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
 /**
- * Cache tab: purges, ordered cache rules, how cache keys are built and whether the
- * origin's Cache-Tag reaches clients. Each card saves on its own.
+ * Cache tab: purges, ordered cache rules, how cache keys are built, whether the
+ * origin's Cache-Tag reaches clients, compression, WebP / AVIF conversion and
+ * charsets. Each card saves on its own.
  */
 export function CacheTab({ site }: { site: Site }) {
   const { cacheKey, rangeSlice, keepCacheTag, xCache, purgeMethod } = site.cacheSettings;
@@ -85,6 +87,8 @@ export function CacheTab({ site }: { site: Site }) {
       <CacheTagCard key={`cache-tag-${keepCacheTag}`} site={site} />
       <XCacheCard key={`x-cache-${xCache}`} site={site} />
       <CompressionCard site={site} />
+      <ImageConvertCard site={site} />
+      <ImageSavingsCard siteId={site.id} />
       <CharsetCard key={`charset-${JSON.stringify(site.contentSettings.charset)}`} site={site} />
     </div>
   );

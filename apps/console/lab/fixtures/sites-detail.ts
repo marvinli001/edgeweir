@@ -16,6 +16,8 @@ import {
   DEFAULT_COMPRESSION_TYPES,
   FAILURE_BAN_DEFAULTS,
   type HttpsCheck,
+  IMAGE_CONVERT_DEFAULTS,
+  type ImageConvertSettings,
   type LogEntry,
   type LoggedRules,
   logQuery,
@@ -1625,6 +1627,19 @@ interface LogOptions {
   logHeaders: string[];
   logPeer: boolean;
 }
+/** WebP / AVIF conversion per site: the shop converts its photos to both formats. */
+const imageConverts = new Map<string, ImageConvertSettings>();
+function imageConvertOf(site: Site): ImageConvertSettings {
+  let settings = imageConverts.get(site.id);
+  if (!settings) {
+    settings = isShop(site)
+      ? { ...IMAGE_CONVERT_DEFAULTS, enabled: true, avif: true }
+      : { ...IMAGE_CONVERT_DEFAULTS };
+    imageConverts.set(site.id, settings);
+  }
+  return settings;
+}
+
 const logOptions = new Map<string, LogOptions>();
 
 function logOptionsOf(site: Site): LogOptions {
@@ -2527,6 +2542,17 @@ export const siteDetailFixtures: Fixtures = {
     get: ({ id: siteId }) => authRulesOf(siteOf(siteId)),
     failures: (input) => ({
       requests: isShop(siteOf(input.id)) ? 1284 : 0,
+      unsupportedNodes: 0,
+    }),
+  },
+  imageConvert: {
+    get: ({ id: siteId }) => imageConvertOf(siteOf(siteId)),
+    update: ({ id: siteId, ...settings }) => {
+      imageConverts.set(siteId, settings);
+      return imageConvertOf(siteOf(siteId));
+    },
+    savings: (input) => ({
+      bytesSaved: isShop(siteOf(input.id)) ? 41_873_211_904 : 0,
       unsupportedNodes: 0,
     }),
   },
