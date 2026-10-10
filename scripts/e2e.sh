@@ -185,6 +185,14 @@
 #   truncated bodies; rate limit bans; verified crawlers on node-g14 with the
 #   g14-dns test resolver (profile g14); challenge page texts; challenge
 #   failure bans; Playwright e2e/g14.spec.ts.
+#   Site parity G16 (scripts/e2e-g16.mjs, after G14): both nodes report
+#   access-logs-v2 and stats-dims-v1; access log lines carry User-Agent,
+#   Referer, HTTP version, scheme, country and network, the query string and
+#   a chosen header, request bytes, content type and the origin; blocked and
+#   rate limited requests of a site that samples nothing are logged with
+#   their reason and rule; every new filter; log retention moves the
+#   PostgreSQL partitions; edgeweir-node accesslog prints live requests;
+#   statistics dimensions appear; Playwright e2e/g16.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -1295,6 +1303,14 @@ if ! $SKIP_UI; then
 fi
 node scripts/e2e-g14.mjs --cleanup || fail "G14 cleanup failed"
 pass "G14 checks passed"
+
+step "G16: access log fields, options, filters and retention, live view on the node, statistics dimensions"
+node scripts/e2e-g16.mjs || fail "G16 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g16.spec.ts || fail "G16 browser checks failed"
+fi
+node scripts/e2e-g16.mjs --cleanup || fail "G16 cleanup failed"
+pass "G16 checks passed"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"
