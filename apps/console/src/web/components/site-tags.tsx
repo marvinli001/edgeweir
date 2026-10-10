@@ -321,7 +321,8 @@ export function TagManagerDialog({
         >
           {(data) => (
             <ul
-              className="divide-y divide-border/70 rounded-2xl sunk-well"
+              // min-w-0: a long tag name must not widen the dialog's grid column (it truncates).
+              className="min-w-0 divide-y divide-border/70 rounded-2xl sunk-well"
               data-testid="tag-manager"
             >
               {data.map((tag, index) => (
@@ -405,7 +406,7 @@ function TagRow({ tag, index }: { tag: SiteTag; index: number }) {
           <span className="min-w-0 truncate text-sm font-medium" data-testid="tag-row-name">
             {tag.name}
           </span>
-          <span className="text-xs tabular-nums text-muted-foreground">
+          <span className="shrink-0 text-xs whitespace-nowrap tabular-nums text-muted-foreground">
             {m.tags_sites_count({ count: tag.sites })}
           </span>
           <Button

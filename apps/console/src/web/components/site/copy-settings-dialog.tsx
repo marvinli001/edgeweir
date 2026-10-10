@@ -120,7 +120,7 @@ export function CopySettingsDialog({
           {step.kind === "form" ? <SafetyNote>{m.copy_note()}</SafetyNote> : null}
         </DialogHeader>
         {step.kind === "form" ? (
-          <FieldGroup>
+          <FieldGroup className="min-w-0">
             {source ? null : (
               <Field>
                 <FieldLabel htmlFor="copy-source">{m.copy_source()}</FieldLabel>
@@ -139,7 +139,7 @@ export function CopySettingsDialog({
             {fixedTargets ? (
               <Field>
                 <FieldLabel>{m.copy_targets()}</FieldLabel>
-                <p className="text-sm" data-testid="copy-targets-fixed">
+                <p className="text-sm break-all" data-testid="copy-targets-fixed">
                   {[...fixedTargets.values()].join(", ")}
                 </p>
               </Field>
@@ -211,7 +211,7 @@ export function CopySettingsDialog({
             </DialogFooter>
           </FieldGroup>
         ) : step.kind === "preview" ? (
-          <div className="flex flex-col gap-4">
+          <div className="flex min-w-0 flex-col gap-4">
             <ul className="flex flex-col gap-2" data-testid="copy-preview-list">
               {step.preview.targets.map((target, index) => (
                 <li
@@ -220,7 +220,7 @@ export function CopySettingsDialog({
                   style={enterDelay(index)}
                   data-testid="copy-preview-target"
                 >
-                  <p className="text-sm font-medium">{target.name}</p>
+                  <p className="truncate text-sm font-medium">{target.name}</p>
                   {target.error ? (
                     <p
                       className="mt-1 flex items-start gap-1.5 text-sm text-destructive"
@@ -279,7 +279,7 @@ export function CopySettingsDialog({
             </DialogFooter>
           </div>
         ) : (
-          <div className="flex flex-col gap-4">
+          <div className="flex min-w-0 flex-col gap-4">
             <ul className="flex flex-col gap-2" data-testid="copy-result-list">
               {step.result.targets.map((target, index) => (
                 <li
@@ -297,7 +297,7 @@ export function CopySettingsDialog({
                     }
                   />
                   <span className="flex min-w-0 flex-col">
-                    <span className="font-medium">{target.name}</span>
+                    <span className="truncate font-medium">{target.name}</span>
                     <span className={target.ok ? "text-muted-foreground" : "text-destructive"}>
                       {target.ok
                         ? target.changed.length

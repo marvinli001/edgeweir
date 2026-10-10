@@ -221,7 +221,10 @@ export function SitesBatchBar({
 /** The sites an action touches, as one wrapped line under its title. */
 function SiteNames({ selected }: { selected: ReadonlyMap<string, string> }) {
   return (
-    <p className="max-h-24 overflow-y-auto text-sm text-muted-foreground" data-testid="batch-sites">
+    <p
+      className="max-h-24 min-w-0 overflow-y-auto text-sm break-all text-muted-foreground"
+      data-testid="batch-sites"
+    >
       {[...selected.values()].join(", ")}
     </p>
   );
