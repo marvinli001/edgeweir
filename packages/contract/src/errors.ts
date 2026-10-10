@@ -262,6 +262,13 @@ export const errorDefs = {
   CORS_CREDENTIALS_WILDCARD: { status: 400, params: [] },
   /** Not an IPv4 or IPv6 address. */
   IP_ADDRESS_INVALID: { status: 400, params: [] },
+  /** A site would carry more than `limit` tags. */
+  SITE_TAG_LIMIT: { status: 400, params: ["site", "limit"] },
+  SITE_TAG_NOT_FOUND: { status: 404, params: [] },
+  /** Copied or cloned settings: a rule chooses an origin group the site does not have. */
+  ORIGIN_GROUP_UNKNOWN: { status: 400, params: ["group", "rule"] },
+  /** Copied settings: the HTTPS redirect, HSTS or client certificates on a site without a certificate. */
+  HTTPS_REQUIRES_CERTIFICATE: { status: 400, params: [] },
 } as const satisfies Record<string, { status: number; params: readonly string[] }>;
 
 export type ErrorCode = keyof typeof errorDefs;
@@ -313,6 +320,11 @@ export const revisionReasonDefs = {
   listen_ports_updated: { params: [], en: "listener ports updated" },
   client_ip_updated: { params: [], en: "client address setting updated" },
   unknown_hosts_updated: { params: [], en: "unknown host settings updated" },
+  sites_enabled: { params: ["count"], en: "{count} sites enabled" },
+  sites_disabled: { params: ["count"], en: "{count} sites disabled" },
+  sites_deleted: { params: ["count"], en: "{count} sites deleted" },
+  site_settings_copied: { params: ["site", "source"], en: "settings of {source} copied to {site}" },
+  site_cloned: { params: ["site", "source"], en: "site {site} cloned from {source}" },
 } as const satisfies Record<string, { params: readonly string[]; en: string }>;
 
 export type RevisionReasonCode = keyof typeof revisionReasonDefs;

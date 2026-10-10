@@ -862,6 +862,29 @@ const SITE_PORTS: Record<string, Site["ports"]> = {
   "shop.example.com": { http: [80], https: [443, 8443] },
 };
 
+/** Tags of the fixture sites (the operator's own grouping, ADR-0042). */
+export const tagSeeds = [
+  { id: id(60, 1), name: "production" },
+  { id: id(60, 2), name: "staging" },
+  { id: id(60, 3), name: "static" },
+  { id: id(60, 4), name: "api" },
+  { id: id(60, 5), name: "legacy" },
+  { id: id(60, 6), name: "retired" },
+];
+const tagOf = (name: string) => tagSeeds.find((tag) => tag.name === name) ?? { id: "", name };
+const SITE_TAGS: Record<string, string[]> = {
+  "example.com": ["production"],
+  "shop.example.com": ["production"],
+  "api.example.com": ["production", "api"],
+  "static.example.net": ["production", "static"],
+  "app.example.net": ["staging"],
+  "media.example.net": ["production", "static"],
+  "cdn.example.org": ["static"],
+  "auth.example.net": ["production", "api"],
+  "download.example.com": ["static"],
+  "legacy.example.org": ["legacy"],
+};
+
 export const sites: Site[] = siteSeeds.map((seed, index) => {
   const originList =
     ORIGINS[seed.name] ??
@@ -900,6 +923,7 @@ export const sites: Site[] = siteSeeds.map((seed, index) => {
     // Sites from before CNAME prefixes keep their id; newer ones have 8 random characters.
     cnamePrefix:
       index % 3 === 0 ? id(5, index + 1) : `s${(index * 7919).toString(36).padStart(7, "x")}`,
+    tags: (SITE_TAGS[seed.name] ?? []).map(tagOf),
     origins: origins(index + 1, originList),
     cacheRules: cacheRules(index + 1, CACHE_RULES[seed.name] ?? []),
     originSettings: settings,

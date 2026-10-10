@@ -16,6 +16,7 @@ import {
 } from "./addresses";
 import { siteDomains } from "./domains";
 import { addExpressionIssue } from "./expressions";
+import { MAX_SITE_TAGS, queryList, siteTagNames, siteTagRef } from "./site-tags";
 
 const LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
 const HOSTNAME_RE = new RegExp(`^(?:${LABEL}\\.)*${LABEL}$`);
@@ -522,6 +523,8 @@ export const siteCreateInput = z.object({
   /** Omitted: 80 and 443 (SITE_PORT_UNAVAILABLE, SITE_PORTS_EMPTY). */
   ports: sitePorts.optional(),
   contentSettings: contentSettings.prefault({}),
+  /** Tag names (any case matches an existing tag); at most 10. */
+  tags: siteTagNames.default([]),
 });
 
 export const origin = originFields.omit({ s3: true }).extend({
@@ -639,6 +642,8 @@ export const site = z.object({
   domains: z.array(z.string()),
   /** First label of the CNAME target `<prefix>.<cluster domain>` (DNS bindings). */
   cnamePrefix: z.string(),
+  /** The site's tags by name (console only; nodes never see them). */
+  tags: z.array(siteTagRef),
   origins: z.array(origin),
   cacheRules: z.array(cacheRule),
   originSettings: originSettings.required(),
@@ -1579,9 +1584,12 @@ export const cacheTaskList = z.object({
 });
 
 export const siteListInput = z.object({
-  /** Matches the site name or any of its domains. */
+  /** Matches the site name, any of its domains or any of its tags. */
   search: z.string().trim().max(100).optional(),
   clusterId: uuid.optional(),
+  /** Sites with these tags (`tagIds[]=…`): any of them, or all with tagMatch "all". */
+  tagIds: queryList(uuid).pipe(z.array(uuid).max(MAX_SITE_TAGS)).optional(),
+  tagMatch: z.enum(["any", "all"]).default("any"),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });

@@ -37,6 +37,16 @@ import { ccTemplate, protectionContract, protectionSettings, securityContract } 
 import { ipListsContract, platformRulesContract, rulesContract } from "./rules";
 import * as s from "./schemas";
 import { serviceAccountsContract } from "./service-accounts";
+import { siteCopyContract } from "./site-copy";
+import {
+  batchResult,
+  batchSetEnabledInput,
+  batchSiteIds,
+  batchTagsInput,
+  siteTagRef,
+  siteTagsContract,
+  siteTagsInput,
+} from "./site-tags";
 import { cnamePrefixInput, cnamePrefixState, unknownHostProcedures } from "./unknown-hosts";
 import { usageContract, usageSettings } from "./usage";
 import { siteFeatures, wafContract } from "./waf";
@@ -58,6 +68,8 @@ export * from "./protection";
 export * from "./rules";
 export * from "./s3-presets";
 export * from "./schemas";
+export * from "./site-copy";
+export * from "./site-tags";
 export * from "./unknown-hosts";
 export * from "./waf";
 
@@ -90,6 +102,8 @@ export const contract = {
   rules: rulesContract,
   /** A site's exact-match redirect table. */
   bulkRedirects: bulkRedirectsContract,
+  /** Tags of sites: the console's own grouping (nodes never see them). */
+  siteTags: siteTagsContract,
   /** Rules that apply to every site. */
   platformRules: platformRulesContract,
   ipLists: ipListsContract,
@@ -416,6 +430,30 @@ export const contract = {
       .route({ method: "GET", path: "/sites/{id}/features", tags: ["sites"] })
       .input(idParam)
       .output(siteFeatures),
+    /** Replaces the site's tags (names, any case matches an existing tag); not published. */
+    setTags: oc
+      .route({ method: "PUT", path: "/sites/{id}/tags", tags: ["sites"] })
+      .input(siteTagsInput)
+      .output(z.object({ tags: z.array(siteTagRef) })),
+    /**
+     * Turns sites on or off: each changed site is audited, each of their
+     * clusters published once.
+     */
+    batchSetEnabled: oc
+      .route({ method: "POST", path: "/sites/batch/enabled", tags: ["sites"] })
+      .input(batchSetEnabledInput)
+      .output(batchResult),
+    /** Adds and removes tags on sites (not published: nodes do not see tags). */
+    batchTags: oc
+      .route({ method: "POST", path: "/sites/batch/tags", tags: ["sites"] })
+      .input(batchTagsInput)
+      .output(batchResult),
+    /** Deletes sites: each is audited, each of their clusters published once. */
+    batchDelete: oc
+      .route({ method: "POST", path: "/sites/batch/delete", tags: ["sites"] })
+      .input(z.object({ ids: batchSiteIds }))
+      .output(batchResult),
+    ...siteCopyContract,
   },
   /**
    * Cache purge (URL, prefix, whole site, host, Cache-Tag) and prefetch (URLs
