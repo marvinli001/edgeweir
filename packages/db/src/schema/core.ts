@@ -433,6 +433,38 @@ export const siteStar = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.siteId] }), index("site_star_site_idx").on(t.siteId)],
 );
 
+/**
+ * A tag sites carry (ADR-0042): 1-32 characters, unique regardless of case
+ * (`key`: the name NFC-normalized and in lower case). Tags stay until they
+ * are deleted, also without sites. Only the console uses them: they never
+ * reach nodes.
+ */
+export const tag = pgTable(
+  "tag",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    key: text("key").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("tag_key_uq").on(t.key)],
+);
+
+/** The tags of a site, at most 10. */
+export const siteTag = pgTable(
+  "site_tag",
+  {
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => site.id, { onDelete: "cascade" }),
+    tagId: uuid("tag_id")
+      .notNull()
+      .references(() => tag.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.siteId, t.tagId] }), index("site_tag_tag_idx").on(t.tagId)],
+);
+
 export const siteDomain = pgTable(
   "site_domain",
   {

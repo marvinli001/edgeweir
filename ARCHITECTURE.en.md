@@ -478,6 +478,8 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `site` | Sites: cluster, enabled state, cache key, slicing, Cache-Tag forwarding, WebSocket, certificate, TLS settings, cache generation, log sample rate, whether error pages replace origin errors and when they were saved |
 | `site_domain` | Site domains: name and form (`kind`: exact, wildcard, suffix, pattern); a name in one form is unique across the console |
 | `site_star` | Per-user stars |
+| `tag` | Site tags: a name (1–32 characters) and a `key` (NFC, lower case, unique: names differing only in case are one tag); console only, never sent to nodes |
+| `site_tag` | Sites and their tags (at most 10 per site) |
 | `origin_pool` | Origin pools: timeouts, keepalive, failure thresholds, origin TLS verification, HTTP version towards the origins and gRPC, active health check and session affinity (kept while off) |
 | `origin` | Origins and their origin group (empty for the default group) |
 | `origin_credential` | S3 origin keys, envelope-encrypted |
@@ -612,6 +614,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0058_g12_access_auth` | `site_auth_rule`; `site.auth_updated_at`; `auth_failures` in `node_minute_stats`, `node_hour_stats`, `node_day_stats` (the `traffic_hour_stats` view rebuilt) |
 | `0059_g13_access_control` | `site.access_control`, `site.block_list_ids`, `site.allow_list_ids`, `site.access_control_updated_at` |
 | `0060_g14_waf_actions` | `site.rules_body_limit`; `site_waf.exclusions` (replacing `excluded_rule_ids`; the site-wide exclusions migrate to one exclusion without a path); `allow_verified_bots`, `challenge_text`, `failure_ban_enabled`, `failure_threshold`, `failure_ban_seconds` of `site_protection`; `access_log.rule_ids`; `ip_ban_auto_uq` unique per (node, site, CIDR, source), including source `rule` |
+| `0061_g17_site_tags` | `tag`, `site_tag` |
 
 ## Build output
 
