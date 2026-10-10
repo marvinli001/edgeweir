@@ -772,6 +772,27 @@ curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicati
 
 Behaviour: [Rules](../guide/rules.en.md), [OWASP CRS managed rules](../guide/waf.en.md), [Challenges and CC protection](../guide/challenges.en.md) and [Bans](../guide/bans.en.md).
 
+### Site tags, batch operations, copying settings and cloning
+
+| Procedure | Endpoint | Notes |
+| --- | --- | --- |
+| `sites.setTags` | `PUT /sites/{id}/tags` | `{ tags: [names] }` → `{ tags: [{ id, name }] }`: replaces the site's tags (≤ 10). A name is 1–32 characters after trimming and NFC normalization, without control characters; repeats in any case are dropped, an existing tag keeps its spelling, a new name creates a tag. Publishes nothing; audit `site.tags_update` (`added`, `removed`, `tags`) |
+| `siteTags.list` | `GET /site-tags` | `[{ id, name, sites }]` by name, including tags no site uses |
+| `siteTags.rename` | `PATCH /site-tags/{id}` | `{ name }` → `{ id, name, sites }`. A name another tag has (any case) merges the two: that tag is returned and this one deleted. Audit `site_tag.rename`; 404 `SITE_TAG_NOT_FOUND` |
+| `siteTags.delete` | `DELETE /site-tags/{id}` | Takes the tag off every site and deletes it; audit `site_tag.delete` (`sites`) |
+| `sites.batchSetEnabled` | `POST /sites/batch/enabled` | `{ ids, enabled }` → `{ changed: [{ id, name }], revisions: [{ clusterId, revision, created }] }`: each site whose state changes is audited (`site.enable` / `site.disable`, `batch`), each cluster published once (reason `sites_enabled` / `sites_disabled`, `count`; `site_enabled` / `site_disabled` when one site of the cluster changes) |
+| `sites.batchTags` | `POST /sites/batch/tags` | `{ ids, add?: [names], remove?: [names] }` (at least one; a name cannot be added and removed at once) → as above, `revisions` empty |
+| `sites.batchDelete` | `POST /sites/batch/delete` | `{ ids }` → as above; each site audited `site.delete`, each cluster published once (`sites_deleted`) |
+| `sites.copySettingsPreview` | `GET /sites/{id}/copy-settings?targetIds[]=&parts[]=` | `{ source, targets: [{ id, name, changes, error }] }`: a dry run of the copy on each target, rolled back: nothing saved, audited or published. `changes` has one entry per part, `{ part, changed, before, after, fields }`: item counts for the list parts (`cacheRules`, `rules`, `bulkRedirects`, `errorPages`, `authRules`), the number of changed settings for the others; `error` is why the copy would fail, `{ code, message, data }` |
+| `sites.copySettings` | `POST /sites/{id}/copy-settings` | `{ targetIds, parts }` → `{ targets: [{ id, name, ok, changed, revision, error }] }`: one transaction per target; a failed target keeps its settings, the others are copied. Each copied target publishes its cluster (reason `site_settings_copied`, `site`, `source`) and is audited `site.settings_copied` (`source`, `parts`, `changed`, `revision`) |
+| `sites.clone` | `POST /sites/{id}/clone` | `{ name?, domains, tags? }` → as `sites.create` (201): a new site in the source's cluster with every part that can be copied, the origins, the PURGE method and key, the content settings and maintenance mode; no certificates (the HTTPS options that need one are off, of the HTTPS ports only 443 stays). `tags` omitted: the source's. Publishes (reason `site_cloned`), audit `site.clone` |
+
+`ids` and `targetIds` are 1–100 site IDs; `targetIds` cannot include the source (400). A missing site fails a batch operation as a whole with 404 `SITE_NOT_FOUND` (a copy fails only that target); more than 10 tags after adding is 400 `SITE_TAG_LIMIT` (`data.site`, `data.limit`). Arrays in a query string use bracket notation (`targetIds[]=a&targetIds[]=b`); a single value can be `targetIds=a`.
+
+Values of `parts`: `cacheRules`, `cacheKey` (cache key and slicing), `cacheTag`, `compression`, `https` (without certificates and the domains left out of the redirect), `rules` (with `rulesBodyLimit`), `bulkRedirects`, `errorPages` (without maintenance mode), `waf`, `protection` (without `logJa4`), `accessControl`, `authRules` (secrets encrypted again for the target), `originSettings` (without the origins), `logs` (sample rate and `logJa4`). A copied part replaces that part of the target as a whole; parts already equal to the source's are not written. A target that lacks what the settings use fails: an origin group a rule chooses 400 `ORIGIN_GROUP_UNKNOWN` (`data.group`, `data.rule`); the HTTPS redirect, HSTS or client certificates without a certificate 400 `HTTPS_REQUIRES_CERTIFICATE`; a redirect port that is not one of the target's HTTPS ports 400 `HTTPS_REDIRECT_PORT_INVALID`; a bulk redirect source host that is not a domain of the target 400 `BULK_REDIRECT_HOST_UNKNOWN`; an access authentication domain the target does not have 400 `AUTH_DOMAIN_UNKNOWN`; a missing IP list 404 `IP_LIST_NOT_FOUND`. In a clone these errors fail the whole clone (except the certificate ones: those settings are turned off).
+
+`sites.list` takes `tagIds` (`tagIds[]=…`, ≤ 10) and `tagMatch` (`any` by default, or `all`), and `search` also matches tag names; sites carry `tags: [{ id, name }]`; `sites.create` takes `tags`. A read-only AccessKey can call the `GET`s only (the tag list, the preview); service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`).
+
 ### Port pools and L4 apps
 
 | Procedure | Endpoint | Notes |

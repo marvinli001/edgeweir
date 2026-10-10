@@ -370,6 +370,12 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 4. CRS 按路径：节点在边缘层按规范化路径判断排除条目与配置规则的 CRS 覆盖，把条目的内容令牌经内部头 `X-Edgeweir-Waf-Ex` 交给生成的 ModSecurity 规则（`ctl:ruleRemoveById` / `ctl:ruleRemoveTargetById`），覆盖改写 `X-Edgeweir-Waf` 的模式或不进入 CRS location；两个内部头在回源前删除。
 5. `SiteProtection` 8–11（能力 `challenge-v2`）：放行已验证的搜索引擎爬虫（节点用自己的解析器做反向加正向解析，结果缓存在共享字典）、挑战页文案、挑战失败封禁（原因 `challenge_failures`）。存在 `site_protection` 的新列。详见 [规则](docs/guide/rules.md#waf-动作)、[OWASP CRS](docs/guide/waf.md#按路径覆盖与排除) 与 [挑战与 CC 防护](docs/guide/challenges.md#已验证的搜索引擎爬虫)。
 
+## 网站标签、批量操作与复制设置
+
+1. 标签存在 `tag`（`key` 为 NFC 后的小写名称，唯一）与 `site_tag`，只在控制台使用：不进入 `NodeConfig`，改标签不发布。写标签的事务先取咨询锁 `edgeweir.tags`，再按 id 顺序以 FOR KEY SHARE 锁网站行。`sites.list` 按 `tagIds`（任一 / 全部）筛选，`search` 也匹配标签名。
+2. 批量启停与删除在一个事务里完成：每个变化的网站写与单个操作相同的审计，每个集群只发布一次（`publishRevision`，原因带网站数）；删除与 `deleteSite` 相同，先 `lockStats` 再补算用量。批量刷新复用多网站的整站刷新任务。
+3. 复制设置（`services/site-copy.ts`）把网站的设置分成 14 个部分，每个部分有「读（填入默认值，可比较）→ 按目标检查与调整 → 写」三步，检查与各页签保存时相同（源站组、域名、证书与 HTTPS 端口、IP 名单 FOR SHARE）。源的值读一次（访问鉴权密钥只在内存中解密），每个目标一个事务：只写有变化的部分，以该目标发布其集群并审计 `site.settings_copied`；失败的目标整体回滚。预览执行同一过程后回滚事务。访问鉴权密钥、PURGE 密钥与 S3 密钥复制或克隆时用主密钥为新行重新加密（信封绑定新的记录 id）。复制与克隆不在源与目标之间保存关联，之后修改源网站不影响目标。详见 [管理多个网站](docs/guide/site-management.md)。
+
 ## 区域探针与智能调度
 
 1. 探测方：区域探针（`probe`，`edgeweir-node probe` 以一次性 `probe_token` 经 `EnrollProbe` 注册），或 `node.probe_enabled` 且节点组有区域的节点（`ReportStatus` 响应 `probe=true`）。

@@ -78,6 +78,7 @@ Separate commercial products (see [LICENSING.en.md](LICENSING.en.md)) may use li
 | Data key | Random per record; data and data key both encrypted with AES-256-GCM |
 | Additional authenticated data | `edgeweir/envelope/v2`, `<table>.<column>`, `<record id>`; a ciphertext moved to another row or column fails to decrypt |
 | Format version | v2; v1 envelopes written by older versions (bound to the purpose only) are re-encrypted at console startup, and the read path rejects v1 |
+| Copying settings and cloning | The password hashes and signing keys of access authentication, PURGE keys and S3 origin keys are decrypted in the console's memory only and encrypted again for the target site's new records (bound to the new record ids); previews, results and audit entries never contain them |
 
 ### Storage
 

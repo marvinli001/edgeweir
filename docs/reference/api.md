@@ -772,6 +772,27 @@ curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicati
 
 行为见 [规则](../guide/rules.md)、[OWASP CRS 托管规则](../guide/waf.md)、[挑战与 CC 防护](../guide/challenges.md) 与 [封禁](../guide/bans.md)。
 
+### 网站标签、批量操作、复制设置与克隆
+
+| 过程 | 端点 | 说明 |
+| --- | --- | --- |
+| `sites.setTags` | `PUT /sites/{id}/tags` | `{ tags: [名称] }` → `{ tags: [{ id, name }] }`：整体替换网站的标签（≤ 10 个）。名称去首尾空白、NFC 规范化后 1–32 个字符，不能有控制字符；不区分大小写去重，已有标签沿用它的写法，新名称创建标签。不发布配置版本；审计 `site.tags_update`（`added`、`removed`、`tags`） |
+| `siteTags.list` | `GET /site-tags` | `[{ id, name, sites }]`，按名称排序；包括没有网站使用的标签 |
+| `siteTags.rename` | `PATCH /site-tags/{id}` | `{ name }` → `{ id, name, sites }`。新名称是另一个标签的名称（任意大小写）时两者合并：返回那个标签，原标签删除。审计 `site_tag.rename`；不存在 404 `SITE_TAG_NOT_FOUND` |
+| `siteTags.delete` | `DELETE /site-tags/{id}` | 从所有网站移除并删除；审计 `site_tag.delete`（`sites`） |
+| `sites.batchSetEnabled` | `POST /sites/batch/enabled` | `{ ids, enabled }` → `{ changed: [{ id, name }], revisions: [{ clusterId, revision, created }] }`：状态改变的网站各写审计 `site.enable` / `site.disable`（`batch`），每个集群发布一次（原因 `sites_enabled` / `sites_disabled`，`count`；集群只有一个网站变化时为 `site_enabled` / `site_disabled`） |
+| `sites.batchTags` | `POST /sites/batch/tags` | `{ ids, add?: [名称], remove?: [名称] }`（至少一项，同名不能既加又减）→ 同上，`revisions` 为空 |
+| `sites.batchDelete` | `POST /sites/batch/delete` | `{ ids }` → 同上；每个网站审计 `site.delete`，每个集群发布一次（`sites_deleted`） |
+| `sites.copySettingsPreview` | `GET /sites/{id}/copy-settings?targetIds[]=&parts[]=` | `{ source, targets: [{ id, name, changes, error }] }`：对每个目标试运行复制后回滚，不保存、不审计、不发布。`changes` 每个部分一项 `{ part, changed, before, after, fields }`：列表部分（`cacheRules`、`rules`、`bulkRedirects`、`errorPages`、`authRules`）给出前后条数，其他部分给出变化的设置数；`error` 为复制会失败的原因 `{ code, message, data }` |
+| `sites.copySettings` | `POST /sites/{id}/copy-settings` | `{ targetIds, parts }` → `{ targets: [{ id, name, ok, changed, revision, error }] }`：每个目标一个事务；失败的目标不变，其他目标照常。成功的目标发布所在集群（原因 `site_settings_copied`，`site`、`source`），审计 `site.settings_copied`（`source`、`parts`、`changed`、`revision`） |
+| `sites.clone` | `POST /sites/{id}/clone` | `{ name?, domains, tags? }` → 与 `sites.create` 相同（201）：在源网站的集群新建网站，带源的全部可复制部分、源站、PURGE 方法与密钥、内容设置与维护模式；不带证书（需要证书的 HTTPS 选项关闭，HTTPS 端口只保留 443）。`tags` 省略为源的标签。发布（原因 `site_cloned`），审计 `site.clone` |
+
+`ids`、`targetIds` 为 1–100 个网站 ID；`targetIds` 不能包含源网站（400）。网站不存在时批量操作整体失败 404 `SITE_NOT_FOUND`（复制时只有该目标失败）；加标签后超过 10 个 400 `SITE_TAG_LIMIT`（`data.site`、`data.limit`）。查询串里的数组用方括号写法（`targetIds[]=a&targetIds[]=b`），一个值也可以写 `targetIds=a`。
+
+`parts` 的取值：`cacheRules`、`cacheKey`（缓存键与分片）、`cacheTag`、`compression`、`https`（不含证书与不跳转的域名）、`rules`（含 `rulesBodyLimit`）、`bulkRedirects`、`errorPages`（不含维护模式）、`waf`、`protection`（不含 `logJa4`）、`accessControl`、`authRules`（密钥为目标重新加密）、`originSettings`（不含源站列表）、`logs`（采样率与 `logJa4`）。复制的部分整体替换目标的该部分；内容与源相同的部分不写入。目标缺少设置用到的对象时该目标失败：规则选择的源站组不存在 400 `ORIGIN_GROUP_UNKNOWN`（`data.group`、`data.rule`）、没有证书却要复制 HTTPS 跳转 / HSTS / 客户端证书 400 `HTTPS_REQUIRES_CERTIFICATE`、跳转端口不是目标的 HTTPS 端口 400 `HTTPS_REDIRECT_PORT_INVALID`、批量重定向的来源主机不是目标的域名 400 `BULK_REDIRECT_HOST_UNKNOWN`、访问鉴权范围的域名不是目标的域名 400 `AUTH_DOMAIN_UNKNOWN`、IP 名单不存在 404 `IP_LIST_NOT_FOUND`。克隆时这些错误使整个克隆失败（证书相关的除外，它们被关闭）。
+
+`sites.list` 新增 `tagIds`（`tagIds[]=…`，≤ 10）与 `tagMatch`（`any` 默认 / `all`），`search` 也匹配标签名；网站对象新增 `tags: [{ id, name }]`；`sites.create` 新增 `tags`。只读 AccessKey 只能调用 `GET`（标签列表、预览）；服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）。
+
 ### 端口池与 L4 应用
 
 | 过程 | 端点 | 说明 |
