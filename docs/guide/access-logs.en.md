@@ -102,9 +102,11 @@ The last four publish a new configuration revision when saved; nodes update thei
 
 Client IPs, User-Agents, Referers, query strings and request headers can be personal data: turn options on only as needed and shorten the retention as needed (see [Retention](#retention)).
 
-The origin fields come from the node's origin layer: the origin address is the origin that answered (the last one after retries); the origin status and time cover the node's whole exchange with its origin layer, retries included.
+The origin fields come from the node's origin layer: the origin address is the origin that answered (the last one after retries; not recorded for cache revalidations, `REVALIDATED`); the origin status and time cover the node's whole exchange with its origin layer, retries included. Query strings and request headers are the client's (after a signed URL's signature is removed, before rules change them); requests refused before that (bans, client certificates) record no query string.
 
-Forced lines share the budget of 100 lines per site and second on each node with **Write access log** rules; beyond it, the sample rate applies as usual. While the site's sample rate is **Off**, the console keeps these lines as long as forced logging is on.
+Country and network come from the node's GeoIP lookups: each worker caches recent addresses and makes at most 200 lookups per second that miss the cache; beyond that, or when the agent does not answer, they are unknown.
+
+Forced lines share the budget of 100 lines per site and second on each node with **Write access log** rules; beyond it, the sample rate applies as usual. While the site's sample rate is **Off**, the console keeps these lines as long as forced logging is on (only lines with a block reason).
 
 With **Record JA4 in access logs** on (**Security → Challenges** of the site), logs also record the JA4 TLS client fingerprint (empty over plain HTTP): the table shows **JA4** and the fingerprint under the request, and the CSV gets a `ja4` column. Once it is off, the console stops keeping the field. JA4 format: [JA4](challenges.en.md#ja4).
 
@@ -114,7 +116,7 @@ Rules of the configuration phase can set a sample rate for the requests they mat
 
 With **Write access log** on, a **Log** rule of the custom WAF phase writes a line for every request it matches whatever the sample rate (at most 100 per site and second on each node), carrying the ids of these rules (at most 8): the list shows **Rules** and the rule names under the request (global rules marked **Global**, deleted rules by id), and the CSV adds a `ruleIds` column (space separated). These lines are kept while the site's sample rate is **Off** as well; a line written only because of a rule has a sample rate of 100%. See [WAF actions](rules.en.md#waf-actions).
 
-Access logs need the node capability `access-logs-v1`, JA4 also `ja4-v1`, forced logging and the optional fields also `access-logs-v2`. A configuration rollback keeps the current sample rate, JA4 and log options and never re-enables logging that was turned off.
+Access logs need the node capability `access-logs-v1`, JA4 also `ja4-v1`, forced logging and the optional fields also `access-logs-v2`. A configuration rollback keeps the current sample rate and JA4, keeps only the log options both the target and the current configuration have, and never re-enables logging or fields that were turned off.
 
 ### Block reasons
 
