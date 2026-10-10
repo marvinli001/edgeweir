@@ -33,9 +33,7 @@ export async function statsDimensions(
     sql`${stats.minute} < ${window.end.toISOString()}::timestamptz`,
     input.siteId ? eq(stats.siteId, input.siteId) : undefined,
   );
-  const columns = sql.raw(
-    [...DIMENSION_MAPS.map(([c]) => c), ...DIMENSION_COUNTERS].map((c) => `s.${c}`).join(", "),
-  );
+  const columns = sql.raw([...DIMENSION_MAPS.map(([c]) => c), ...DIMENSION_COUNTERS].join(", "));
   // Constant column names; one statement with a branch per dimension.
   const branches = [
     ...DIMENSION_MAPS.map(
@@ -49,8 +47,8 @@ export async function statsDimensions(
   ].join(" union all ");
   const result = await db.execute<{ d: string; k: string; n: string }>(sql`
     with r as (
-      select ${columns} from ${stats} s
-      inner join ${schema.site} on ${schema.site.id} = s.site_id
+      select ${columns} from ${stats}
+      inner join ${schema.site} on ${schema.site.id} = ${stats.siteId}
       where ${where ?? sql`true`}
     ) ${sql.raw(branches)}`);
   const maps = new Map<string, Counts>();

@@ -49,8 +49,10 @@ export interface DimensionBucket {
 
 /** Map columns and how many keys a bucket keeps (null: the key list bounds them). */
 export const DIMENSION_MAPS = [
-  ["country_requests", MAX_STATS_COUNTRIES],
-  ["country_bytes", MAX_STATS_COUNTRIES],
+  // Bounded by the key space (two letters or ""): one report keeps the heaviest
+  // MAX_STATS_COUNTRIES by requests, with their bytes.
+  ["country_requests", null],
+  ["country_bytes", null],
   ["asns", MAX_STATS_TOP],
   ["referers", MAX_STATS_TOP],
   ["browsers", null],
@@ -141,6 +143,10 @@ export function cleanDimensions(input: ReportedDimensions | undefined): Dimensio
     for (const [key, n] of Object.entries(values ?? {}))
       if (KEYS[column]?.has(key) && isCount(n)) add(out[column], key, n);
   for (const [column, limit] of DIMENSION_MAPS) out[column] = bounded(out[column], limit);
+  out.country_requests = bounded(out.country_requests, MAX_STATS_COUNTRIES);
+  out.country_bytes = Object.fromEntries(
+    Object.entries(out.country_bytes).filter(([country]) => country in out.country_requests),
+  );
   return out;
 }
 
