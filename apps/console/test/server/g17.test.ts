@@ -447,12 +447,13 @@ describe("site tags, batch operations, copying settings and cloning (G17)", asyn
     it("fails the whole batch when a site does not exist", async () => {
       const a = await newSite();
       const missing = "00000000-0000-4000-8000-000000000000";
+      // One at a time: a rejection must not arrive before it is awaited.
       for (const call of [
-        admin.sites.batchSetEnabled({ ids: [a.id, missing], enabled: false }),
-        admin.sites.batchDelete({ ids: [a.id, missing] }),
-        admin.sites.batchTags({ ids: [a.id, missing], add: ["x"] }),
+        () => admin.sites.batchSetEnabled({ ids: [a.id, missing], enabled: false }),
+        () => admin.sites.batchDelete({ ids: [a.id, missing] }),
+        () => admin.sites.batchTags({ ids: [a.id, missing], add: ["x"] }),
       ])
-        expect((await rpcError(call)).code).toBe("SITE_NOT_FOUND");
+        expect((await rpcError(call())).code).toBe("SITE_NOT_FOUND");
       const kept = await admin.sites.get({ id: a.id });
       expect([kept.enabled, kept.tags]).toEqual([true, []]);
     });
@@ -691,6 +692,17 @@ describe("site tags, batch operations, copying settings and cloning (G17)", asyn
       expect(again.targets[0]?.revision?.revision).toBe(revision?.revision);
     });
 
+    it("marks the target's WAF settings as saved anew, so that an editor holding the old ones is refused", async () => {
+      const site = await target();
+      await admin.waf.update({ id: site.id, paranoiaLevel: 3 });
+      const before = (await admin.waf.get({ id: site.id })).updatedAt;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      await admin.sites.copySettings({ id: sourceId, targetIds: [site.id], parts: ["waf"] });
+      const after = await admin.waf.get({ id: site.id });
+      expect(after.mode).toBe("block");
+      expect(Date.parse(after.updatedAt ?? "")).toBeGreaterThan(Date.parse(before ?? ""));
+    });
+
     it("refuses a copy to the source itself and unknown targets", async () => {
       expect(
         (
@@ -858,6 +870,19 @@ describe("site tags, batch operations, copying settings and cloning (G17)", asyn
         https: [443],
       });
       expect(clonePorts({ http: [], https: [8443] })).toEqual({ http: [80], https: [] });
+    });
+
+    it("checks the source's origins against the origin allow list as creating a site does", async () => {
+      await admin.settings.setOriginAllowList({ cidrs: ["10.17.0.0/16"] });
+      const internal = await newSite({ origins: [{ address: "10.17.0.5" }] });
+      await admin.settings.setOriginAllowList({ cidrs: [] });
+      const error = await rpcError(
+        admin.sites.clone({ id: internal.id, domains: ["internal-copy.g17.test"] }),
+      );
+      expect([error.code, error.data]).toEqual([
+        "ORIGIN_ADDRESS_FORBIDDEN",
+        expect.objectContaining({ address: "10.17.0.5" }),
+      ]);
     });
 
     it("fails when the source's settings name its domains or the domains are taken", async () => {
