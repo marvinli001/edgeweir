@@ -63,7 +63,7 @@ Conversions run in child processes of the node's agent, one CPU each. These are 
 | Flag | Default | Notes |
 | --- | --- | --- |
 | `--image-workers` | min(4, max(1, CPUs / 2)) | Concurrent conversions; 0 turns conversion off and the node does not announce `image-convert-v1` |
-| `--image-memory-mb` | `1024` | Memory the running conversions may use together. Each conversion is estimated from its pixels (WebP about 48 bytes per pixel + 32 MiB, AVIF about 160 bytes per pixel + 64 MiB); images whose estimate exceeds the total are not converted |
+| `--image-memory-mb` | `1024` | Memory the running conversions may use together. Each conversion is estimated from its pixels (WebP about 48 bytes per pixel + 32 MiB, AVIF about 160 bytes per pixel + 64 MiB); images whose estimate exceeds the total are not converted. Originals held in the agent's memory before their conversion count against the same total |
 | `--image-timeout` | `8s` | Longest conversion; the original is served after it |
 
 With the defaults, AVIF converts images up to about 6 megapixels and WebP up to about 20; larger images reach AVIF clients as the original.
