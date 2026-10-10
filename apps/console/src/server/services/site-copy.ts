@@ -649,19 +649,31 @@ export const COPY_PARTS: Record<SiteCopyPart, Part<unknown>> = {
       await tx.update(schema.site).set({ websocket }).where(eq(schema.site.id, target.id));
     },
   }),
-  logs: part<{ sampleRate: number; logJa4: boolean }>({
+  logs: part<{
+    sampleRate: number;
+    logBlocked: boolean;
+    logQuery: boolean;
+    logHeaders: string[];
+    logPeer: boolean;
+    logJa4: boolean;
+  }>({
     async read(db, site) {
       return {
         sampleRate: site.logSampleRate,
+        logBlocked: site.logBlocked,
+        logQuery: site.logQuery,
+        logHeaders: site.logHeaders,
+        logPeer: site.logPeer,
         logJa4: (await protectionRow(db, site.id))?.logJa4 ?? false,
       };
     },
     async write(tx, target, value) {
+      const { sampleRate, logJa4, ...columns } = value;
       await tx
         .update(schema.site)
-        .set({ logSampleRate: value.sampleRate })
+        .set({ logSampleRate: sampleRate, ...columns })
         .where(eq(schema.site.id, target.id));
-      await upsertProtection(tx, target.id, { logJa4: value.logJa4 });
+      await upsertProtection(tx, target.id, { logJa4 });
     },
   }),
 };

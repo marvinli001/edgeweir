@@ -87,7 +87,7 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
     const results = await Promise.allSettled([
       maintainTraffic(ctx.db),
       maintainUsage(ctx.db),
-      maintainLogs(ctx.db),
+      maintainLogs(ctx.db, Date.now(), ctx.env),
       expireUpgrades(ctx.db),
     ]);
     const failure = results.find((result) => result.status === "rejected");

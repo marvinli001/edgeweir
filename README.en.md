@@ -25,7 +25,7 @@ Documentation: <https://marvinli001.github.io/edgeweir/en/>
 | Challenges and CC mitigation | Four challenge levels (cookie redirect, JavaScript, proof of work, image captcha); site or global Under Attack; tiered CC escalation decided locally on each node (site, per-URL, per-IP automatic bans, origin error rate); signed passes valid across the cluster; JA4 fingerprints in rules, rate limits and access logs |
 | DNS and observability | Independent DNS revisions, healthy-node steering, deduplicated traffic statistics and rollups, Top URL / IP, alerts and subscriptions |
 | Scheduling | Regional probes (TCP / HTTP / HTTPS health endpoint), node host metrics, scheduling rules that remove nodes or switch to backup node groups or backup IPs by metrics and probe results (with a preview); carrier resolution lines (DNSPod, Tencent Cloud, Alibaba Cloud, Huawei Cloud), backup node groups, multi-level backup IPs |
-| Operations | Sampled access logs with CSV export, optional ClickHouse, read-only and revocable AccessKeys, signed canary upgrades with rollback, performance baseline, backup and recovery |
+| Operations | Sampled access logs (User-Agent, referrer, protocol, region, origin, block reason; blocked requests can always be logged; 11 filters; adjustable retention) with CSV export, live request view on nodes, statistics dimensions (regions, networks, referrers, clients, protocols, block reasons, challenge pass rate), optional ClickHouse, read-only and revocable AccessKeys, signed canary upgrades with rollback, performance baseline, backup and recovery |
 
 ## Architecture
 
@@ -108,7 +108,7 @@ All other variables have defaults; see [.env.example](.env.example). `BETTER_AUT
 
 | Compose profile | Component | Description |
 | --- | --- | --- |
-| `analytics` | ClickHouse | With `EDGEWEIR_ANALYTICS=clickhouse`, stores raw access logs and per-minute statistics. Access-log sampling is off by default; logs are retained for 7 days. Console charts and alerts use PostgreSQL rollups. |
+| `analytics` | ClickHouse | With `EDGEWEIR_ANALYTICS=clickhouse`, stores raw access logs and per-minute statistics. Access-log sampling is off by default; retention is set in the system settings (7 days by default, up to 90 with ClickHouse). Console charts and alerts use PostgreSQL rollups. |
 
 See [access logs and AccessKeys](docs/guide/access-logs.en.md) and [backup and recovery](docs/deploy/backup.en.md).
 

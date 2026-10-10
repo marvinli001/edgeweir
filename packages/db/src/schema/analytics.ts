@@ -15,6 +15,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { node, site } from "./core";
+import { statsDimensionColumns } from "./stats-dims";
 
 /** A permanent high-water mark: retrying a batch never increments counters again. */
 export const nodeStatsCursor = pgTable("node_stats_cursor", {
@@ -69,6 +70,7 @@ const trafficColumns = () => ({
   wafRules: jsonb("waf_rules").$type<Record<string, number>>().notNull().default({}),
   loggedRules: jsonb("logged_rules").$type<Record<string, number>>().notNull().default({}),
   authFailures: bigint("auth_failures", { mode: "number" }).notNull().default(0),
+  ...statsDimensionColumns(),
 });
 const rollup = <T extends string>(name: T) =>
   pgTable(name, trafficColumns(), (t) => [
@@ -98,3 +100,10 @@ export const statsRollupDirty = pgTable(
 );
 /** SQL migration defines a non-overlapping union of ready rollups and pending minute data. */
 export const trafficHourStats = pgView("traffic_hour_stats", trafficColumns()).existing();
+
+/** Names of client networks (AS number → name), from nodes' statistics (stats-dims-v1). */
+export const asnName = pgTable("asn_name", {
+  asn: bigint("asn", { mode: "number" }).primaryKey(),
+  name: text("name").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});

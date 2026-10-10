@@ -1,5 +1,29 @@
-import type { LogEntry, LogQuery } from "@edgeweir/contract";
+import type { LogEntry } from "@edgeweir/contract";
 import type { Env } from "../lib/env";
+import type { LogFilter } from "./access-logs";
+import { DIMENSION_COLUMNS } from "./stats-dims";
+
+/** access_log columns of ADR-0041 (ClickHouse types and defaults). */
+const LOG_COLUMNS = [
+  ["user_agent", "String DEFAULT ''"],
+  ["referer", "String DEFAULT ''"],
+  ["http_version", "LowCardinality(String) DEFAULT ''"],
+  ["scheme", "LowCardinality(String) DEFAULT ''"],
+  ["country", "LowCardinality(String) DEFAULT ''"],
+  ["asn", "UInt32 DEFAULT 0"],
+  ["as_name", "String DEFAULT ''"],
+  ["upstream_addr", "String DEFAULT ''"],
+  ["upstream_status", "UInt16 DEFAULT 0"],
+  ["upstream_ms", "UInt32 DEFAULT 0"],
+  ["request_bytes", "UInt64 DEFAULT 0"],
+  ["content_type", "LowCardinality(String) DEFAULT ''"],
+  ["tls_version", "LowCardinality(String) DEFAULT ''"],
+  ["block_reason", "LowCardinality(String) DEFAULT ''"],
+  ["block_rule_id", "String DEFAULT ''"],
+  ["query", "String DEFAULT ''"],
+  ["headers", "Map(String, String)"],
+  ["peer_ip", "String DEFAULT ''"],
+] as const;
 
 /** Operator-controlled endpoint from the environment. Credentials stay in headers. */
 export async function clickhouse(
@@ -100,6 +124,15 @@ export async function ensureClickHouse(env: Env) {
         env,
         "ALTER TABLE minute_stats ADD COLUMN IF NOT EXISTS auth_failures UInt64 DEFAULT 0",
       );
+      // Statistics dimensions (stats-dims-v1, ADR-0041).
+      for (const column of DIMENSION_COLUMNS)
+        await clickhouse(
+          env,
+          `ALTER TABLE minute_stats ADD COLUMN IF NOT EXISTS ${column} ${column.startsWith("challenges_") ? "UInt64 DEFAULT 0" : "Map(String, UInt64)"}`,
+        );
+      // Access log fields (ADR-0041 §1, §2).
+      for (const [column, type] of LOG_COLUMNS)
+        await clickhouse(env, `ALTER TABLE access_log ADD COLUMN IF NOT EXISTS ${column} ${type}`);
     })();
     ready.set(env, job);
     job.catch(() => ready.delete(env));
@@ -130,32 +163,77 @@ export async function insertClickHouseLogs(env: Env, rows: LogEntry[]) {
         waf_blocked: r.wafBlocked,
         request_id: r.requestId,
         rule_ids: r.ruleIds,
+        user_agent: r.userAgent,
+        referer: r.referer,
+        http_version: r.httpVersion,
+        scheme: r.scheme,
+        country: r.country,
+        asn: r.asn,
+        as_name: r.asName,
+        upstream_addr: r.upstreamAddr,
+        upstream_status: r.upstreamStatus,
+        upstream_ms: r.upstreamMs,
+        request_bytes: r.requestBytes,
+        content_type: r.contentType,
+        tls_version: r.tlsVersion,
+        block_reason: r.blockReason,
+        block_rule_id: r.blockRuleId,
+        query: r.query,
+        headers: r.headers,
+        peer_ip: r.peerIp,
       }),
     )
     .join("\n");
   await clickhouse(env, "INSERT INTO access_log FORMAT JSONEachRow", {}, data);
 }
-export async function queryClickHouseLogs(env: Env, input: LogQuery): Promise<LogEntry[]> {
+export async function queryClickHouseLogs(env: Env, input: LogFilter): Promise<LogEntry[]> {
   await ensureClickHouse(env);
   const output = await clickhouse(
     env,
     `SELECT id, formatDateTime(time, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS timeIso,
     toString(node_id) AS nodeId, toString(site_id) AS siteId, client_ip AS clientIp, method, host, path, status,
     toFloat64(bytes_sent) AS bytesSent, duration_ms AS durationMs, cache_status AS cacheStatus, sample_rate AS sampleRate, ja4,
-    waf_rule_ids AS wafRuleIds, waf_blocked AS wafBlocked, request_id AS requestId, rule_ids AS ruleIds
+    waf_rule_ids AS wafRuleIds, waf_blocked AS wafBlocked, request_id AS requestId, rule_ids AS ruleIds,
+    user_agent AS userAgent, referer, http_version AS httpVersion, scheme, country, asn, as_name AS asName,
+    upstream_addr AS upstreamAddr, upstream_status AS upstreamStatus, upstream_ms AS upstreamMs,
+    toFloat64(request_bytes) AS requestBytes, content_type AS contentType, tls_version AS tlsVersion,
+    block_reason AS blockReason, block_rule_id AS blockRuleId, query, headers, peer_ip AS peerIp
     FROM access_log FINAL WHERE site_id = {site:UUID}
       AND time >= fromUnixTimestamp64Milli({from:Int64}) AND time < fromUnixTimestamp64Milli({to:Int64})
       AND ({status:UInt16} = 0 OR status = {status:UInt16}) AND ({ip:String} = '' OR client_ip = {ip:String})
       AND ({requestId:String} = '' OR request_id = {requestId:String})
-      AND startsWith(path, {path:String}) ORDER BY time DESC, id DESC LIMIT {limit:UInt32} FORMAT JSONEachRow`,
+      AND startsWith(path, {path:String})
+      AND ({host:String} = '' OR lower(host) = {host:String})
+      AND ({method:String} = '' OR method = {method:String})
+      AND ({statusClass:UInt8} = 0 OR intDiv(status, 100) = {statusClass:UInt8})
+      AND ({cache:String} = '' OR cache_status = {cache:String})
+      AND ({reason:String} = '' OR ({reason:String} = 'any' AND block_reason != '') OR block_reason = {reason:String})
+      AND ({country:String} = '' OR country = {country:String})
+      AND ({asn:UInt32} = 0 OR asn = {asn:UInt32})
+      AND ({ua:String} = '' OR positionCaseInsensitiveUTF8(user_agent, {ua:String}) > 0)
+      AND ({referer:String} = '' OR positionCaseInsensitiveUTF8(referer, {referer:String}) > 0)
+      AND duration_ms >= {minDuration:UInt32}
+      AND ({cidr:String} = '' OR isIPAddressInRange(client_ip, {cidr:String}))
+      ORDER BY time DESC, id DESC LIMIT {limit:UInt32} FORMAT JSONEachRow`,
     {
       site: input.siteId,
-      from: String(Date.parse(input.from)),
-      to: String(Date.parse(input.to)),
+      from: String(input.from),
+      to: String(input.to),
       status: String(input.status ?? 0),
       ip: input.ip,
       path: input.path,
-      requestId: input.requestId ?? "",
+      requestId: input.requestId,
+      host: input.host,
+      method: input.method,
+      statusClass: String(input.statusClass),
+      cache: input.cacheStatus,
+      reason: input.blockReason,
+      country: input.country,
+      asn: String(input.asn),
+      ua: input.ua,
+      referer: input.referer,
+      minDuration: String(input.minDuration),
+      cidr: input.cidr,
       limit: String(input.limit + 1),
     },
   );
@@ -163,14 +241,21 @@ export async function queryClickHouseLogs(env: Env, input: LogQuery): Promise<Lo
     ? output
         .trim()
         .split("\n")
-        .map((line) =>
-          (() => {
-            const row = JSON.parse(line);
-            const { timeIso, ...rest } = row;
-            return { ...rest, time: new Date(timeIso).toISOString() } as LogEntry;
-          })(),
-        )
+        .map((line) => {
+          const { timeIso, ...rest } = JSON.parse(line);
+          return { ...rest, time: new Date(timeIso).toISOString() } as LogEntry;
+        })
     : [];
+}
+
+/** Keeps access logs for `days` (ADR-0041 §5); the console applies it once per value and process. */
+export async function applyClickHouseRetention(env: Env, days: number) {
+  if (!Number.isInteger(days) || days < 1 || days > 90) throw new Error("invalid retention");
+  await ensureClickHouse(env);
+  await clickhouse(
+    env,
+    `ALTER TABLE access_log MODIFY TTL toDateTime(time) + INTERVAL ${days} DAY`,
+  );
 }
 
 /** Absolute snapshots, versioned by the same durable node sequence as Postgres. */
@@ -186,7 +271,8 @@ export async function mirrorMinuteStats(
   const result = await tx.execute<Record<string, unknown>>(sql`
     select to_char(s.minute AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') AS minute,
       s.node_id, s.site_id, s.requests, s.bytes_sent, s.bytes_received, s.cache_hits, s.cache_misses,
-      s.status_codes, s.top_urls, s.top_ips, s.waf_rules, s.logged_rules, s.auth_failures
+      s.status_codes, s.top_urls, s.top_ips, s.waf_rules, s.logged_rules, s.auth_failures,
+      ${sql.raw(DIMENSION_COLUMNS.map((c) => `s.${c}`).join(", "))}
     from node_minute_stats s inner join (
       select distinct x."siteId", date_trunc('minute', x.minute::timestamptz, 'UTC') AS minute
       from jsonb_to_recordset(${JSON.stringify(keys)}::jsonb) AS x("siteId" text, minute text)

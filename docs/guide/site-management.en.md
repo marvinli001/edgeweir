@@ -62,7 +62,7 @@ A batch action completes for every site or changes none (for example when one of
 | Access control | Site lists, hotlink protection, user agents, CORS, regions, WebSocket origins, security headers | |
 | Access authentication | Every authentication rule; password hashes and signing keys are encrypted again for the target | |
 | Origin pool settings | Load balancing, timeouts, keep-alive, origin protocol, gRPC, active health checks, session affinity, retries, WebSocket | The origins |
-| Log settings | The access log sample rate and JA4 logging | |
+| Log settings | The access log sample rate, logging blocked requests, the query string, request headers, the peer address and JA4 | |
 
 Domains, origins, certificates, ports, X-Cache, the PURGE method and key, charset, the request body limit and maintenance mode belong to no part and are never copied.
 

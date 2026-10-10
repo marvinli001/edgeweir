@@ -123,7 +123,7 @@ primary_region = "nrt"
    | Secret | 值 |
    | --- | --- |
    | `EDGEWEIR_MASTER_KEY` | `edgeweir-master-key` 的内容，原样使用 |
-   | `DATABASE_URL` | `postgres://edgeweir:<密码>@<主机>:5432/edgeweir` |
+   | `DATABASE_URL` | `postgres://edgeweir:<密码>@<主机>:5432/edgeweir?sslmode=verify-full` |
 
 3. 保持暂存，不点击 **Deploy Secrets**；secret 随第 4 步部署生效。
 
@@ -132,7 +132,7 @@ flyctl：
 ```bash
 fly secrets set --stage \
   EDGEWEIR_MASTER_KEY="$(cat edgeweir-master-key)" \
-  DATABASE_URL='postgres://edgeweir:<密码>@<主机>:5432/edgeweir'
+  DATABASE_URL='postgres://edgeweir:<密码>@<主机>:5432/edgeweir?sslmode=verify-full'
 ```
 
 Fly.io 不提供 secret 明文读取；`edgeweir-master-key` 离线保存，与数据库备份分开，见 [备份与恢复](backup.md)。
@@ -182,7 +182,7 @@ fly logs --no-tail | grep setupToken
 
 | 变量 | 位置 | 值 | 说明 |
 | --- | --- | --- | --- |
-| `DATABASE_URL` | secret | PostgreSQL 18 连接串 | 必填。 |
+| `DATABASE_URL` | secret | PostgreSQL 18 连接串 | 必填。经公网连接 PostgreSQL 时 `DATABASE_URL` 带 `?sslmode=verify-full`（加密并校验证书）；服务商证书不是公共 CA 签发时改用 `sslmode=no-verify`。不带 `sslmode` 时不加密，要求 TLS 的托管数据库拒绝连接，控制台等待 60 秒后退出。 |
 | `EDGEWEIR_MASTER_KEY` | secret | `openssl rand -base64 32` 的输出 | 必填。 |
 | `EDGEWEIR_PUBLIC_URL` | `[env]` | `https://edgeweir-console.fly.dev` | 必填。使用自定义域名时改为该域名。 |
 | `EDGEWEIR_NODE_API_URL` | `[env]` | `https://edgeweir-console.fly.dev:8443` | 主机名须解析到独享 IPv4 与 IPv6；自动写入节点通道证书。初始化后也可在 **系统设置** 的「节点通道」修改，不需要部署；那里保存的地址优先于此变量。 |

@@ -11,4 +11,5 @@ export * from "./logs";
 export * from "./probes";
 export * from "./protection";
 export * from "./rules";
+export * from "./stats-dims";
 export * from "./upgrades";

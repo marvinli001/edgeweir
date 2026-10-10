@@ -164,6 +164,8 @@ openssl rand -base64 32 > edgeweir-master-key
 | `EDGEWEIR_VERSION` | 不设置 | 镜像内置的运行版本；版本由镜像 tag 决定。 |
 | `BETTER_AUTH_SECRET` | 不设置 | 从已设置它的部署迁移时保留原值。 |
 
+引用的域名或 TCP 代理不存在时，`${{…}}` 展开为空：控制台报 `EDGEWEIR_PUBLIC_URL: expected … got "https://"` 或 `EDGEWEIR_NODE_API_URL: expected … got "https://:"` 并反复重启。在 **Settings → Networking** 生成域名与 TCP 代理后重新部署，或改写字面值。
+
 `ROLE`、`HOST`、`NODE_API_PORT` 使用镜像默认值 `all`、`0.0.0.0`、`8443`。全部变量见 [环境变量](../reference/environment.md)。
 
 ## 验证

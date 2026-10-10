@@ -65,14 +65,14 @@ openssl rand -base64 32 > edgeweir-master-key
 4. **Environment variables → Raw editor**：
 
    ```ini
-   DATABASE_URL=postgres://edgeweir:<密码>@<主机>:5432/edgeweir
+   DATABASE_URL=postgres://edgeweir:<密码>@<主机>:5432/edgeweir?sslmode=verify-full
    EDGEWEIR_MASTER_KEY=<edgeweir-master-key 的内容>
    ```
 
 5. **Region** 选 PostgreSQL 附近、支持 Anycast 的一个区域；**App name** 填 `edgeweir-console`；点击 **Deploy**。
 6. 应用 **Regions and Scaling**：最小与最大实例数均为 1，只保留这一个区域：自动扩展会在需求增加的区域启动新实例。
 
-此时控制台缺少 `EDGEWEIR_PUBLIC_URL`，启动失败，平台反复重启它，第 3 步后恢复。尽快完成第 3 步：重启有期限，到期后平台移除该实例。
+此时 `EDGEWEIR_PUBLIC_URL` 未设置，控制台按默认值 `http://localhost:3000` 运行，经 `mc-<id>.bunny.run` 的初始化与登录因来源校验失败：完成第 3 步后再打开初始化向导。
 
 bunny CLI：在空目录中创建 `bunny.jsonc`，按实际修改 `regions` 与镜像 tag：
 
@@ -124,7 +124,7 @@ bunny apps deploy ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d
 2. 应用 **Container Settings → Edit → Environment Variables**，补全后点击 **Update Container**，再 **Save Changes**：
 
    ```ini
-   DATABASE_URL=postgres://edgeweir:<密码>@<主机>:5432/edgeweir
+   DATABASE_URL=postgres://edgeweir:<密码>@<主机>:5432/edgeweir?sslmode=verify-full
    EDGEWEIR_MASTER_KEY=<edgeweir-master-key 的内容>
    EDGEWEIR_PUBLIC_URL=https://mc-<id>.bunny.run
    EDGEWEIR_NODE_API_URL=https://<Anycast IP>:8443
@@ -204,7 +204,7 @@ bunny api POST /pullzone/<pull zone ID>/setForceSSL --body '{"Hostname":"mc-<id>
 
 | 变量 | 值 | 说明 |
 | --- | --- | --- |
-| `DATABASE_URL` | PostgreSQL 18 连接串 | 必填。 |
+| `DATABASE_URL` | PostgreSQL 18 连接串 | 必填。经公网连接 PostgreSQL 时 `DATABASE_URL` 带 `?sslmode=verify-full`（加密并校验证书）；服务商证书不是公共 CA 签发时改用 `sslmode=no-verify`。不带 `sslmode` 时不加密，要求 TLS 的托管数据库拒绝连接，控制台等待 60 秒后退出。 |
 | `EDGEWEIR_MASTER_KEY` | `openssl rand -base64 32` 的输出 | 必填。 |
 | `EDGEWEIR_PUBLIC_URL` | `https://mc-<id>.bunny.run` | 必填。使用自定义域名时改为该域名。 |
 | `EDGEWEIR_NODE_API_URL` | `https://<Anycast IP>:8443` | **系统设置** 的「节点通道」没有保存地址时必填：默认值 `https://<公开域名>:8443` 指向 CDN，不可达。主机名或 IP 自动写入节点通道证书。 |

@@ -1,3 +1,4 @@
+import { logRetentionSetting, setLogRetention } from "../../services/access-logs";
 import { getAcmeDirectory, setAcmeDirectory } from "../../services/acme-directory";
 import { getBanSettings, setBanSettings } from "../../services/bans";
 import { getPlatformErrorPages, setPlatformErrorPages } from "../../services/error-pages";
@@ -79,6 +80,12 @@ export const settingsRouter = {
     usage: authed.settings.usage.handler(({ context }) => getUsageSettings(context.app.db)),
     setUsage: authed.settings.setUsage.handler(({ input, context }) =>
       setUsageSettings(context.app.db, input, context.actor),
+    ),
+    logRetention: authed.settings.logRetention.handler(({ context }) =>
+      logRetentionSetting(context.app),
+    ),
+    setLogRetention: authed.settings.setLogRetention.handler(({ input, context }) =>
+      setLogRetention(context.app, context.actor, input),
     ),
   },
 };

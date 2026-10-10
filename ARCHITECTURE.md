@@ -370,6 +370,14 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 4. CRS 按路径：节点在边缘层按规范化路径判断排除条目与配置规则的 CRS 覆盖，把条目的内容令牌经内部头 `X-Edgeweir-Waf-Ex` 交给生成的 ModSecurity 规则（`ctl:ruleRemoveById` / `ctl:ruleRemoveTargetById`），覆盖改写 `X-Edgeweir-Waf` 的模式或不进入 CRS location；两个内部头在回源前删除。
 5. `SiteProtection` 8–11（能力 `challenge-v2`）：放行已验证的搜索引擎爬虫（节点用自己的解析器做反向加正向解析，结果缓存在共享字典）、挑战页文案、挑战失败封禁（原因 `challenge_failures`）。存在 `site_protection` 的新列。详见 [规则](docs/guide/rules.md#waf-动作)、[OWASP CRS](docs/guide/waf.md#按路径覆盖与排除) 与 [挑战与 CC 防护](docs/guide/challenges.md#已验证的搜索引擎爬虫)。
 
+## 访问日志字段与统计维度
+
+1. 节点在边缘层确定网站后对每个请求查一次 GeoIP（worker 缓存命中时不访问 agent；这类查询 50 毫秒超时、失败后该 worker 5 秒内不再查询），日志与统计共用结果。日志的回源地址由回源层的内部响应头 `X-Edgeweir-Upstream` 带回边缘层（边缘层 `proxy_hide_header`，缓存命中不记录回源信息）。
+2. 拦截原因由节点在拒绝处记录（`edgeweir.reasons`，同一请求以第一个为准）；确定网站之后被拒绝的请求都计入统计与日志。网站开启 `Site.log_blocked`（proto `v0.30.0`，能力 `access-logs-v2`）时，有拦截原因的请求不论采样率写日志，与记录规则共用每节点每网站每秒 100 条的额度；`log_query`、`log_headers`、`log_peer` 决定可选字段，控制台只在网站当前开启时保存。
+3. 统计维度（`MinuteStats` 14–24，能力 `stats-dims-v1`，只用于统计）在节点每个 worker 的分钟桶中累积，分钟结束时与热门 URL / IP 一起写入共享字典 `edgeweir_topstats`；控制台按键相加（运营商与来源保留前 50），随分钟 / 小时 / 天汇总，`analytics.dimensions` 读取。AS 名称存 `asn_name`。
+4. 访问日志保留期是系统设置 `log_retention`：PostgreSQL 的分区维护与写入、查询的最早时间按它计算；ClickHouse 在保存与进程启动后的第一次维护时执行 `ALTER TABLE access_log MODIFY TTL`。
+5. `edgeweir-node accesslog` 经控制接口 `GET /v1/logs/tap` 读取共享字典 `edgeweir_tap`：只有查看者续期的标记存在时，log 阶段才为请求生成记录（10 秒过期，每节点每秒至多 2000 条），不受采样率影响，也不进入上报队列。节点不把访问日志写入本地文件。详见 [访问日志与 AccessKey](docs/guide/access-logs.md)。
+
 ## 网站标签、批量操作与复制设置
 
 1. 标签存在 `tag`（`key` 为 NFC 后的小写名称，唯一）与 `site_tag`，只在控制台使用：不进入 `NodeConfig`，改标签不发布。写标签的事务先取咨询锁 `edgeweir.tags`，再按 id 顺序以 FOR KEY SHARE 锁网站行。`sites.list` 按 `tagIds`（任一 / 全部）筛选，`search` 也匹配标签名。
@@ -408,7 +416,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 
 | 数据 | 保留 |
 | --- | --- |
-| 访问日志（PostgreSQL 与 ClickHouse） | 7 天 |
+| 访问日志 | 系统设置 `log_retention`：PostgreSQL 1–30 天、ClickHouse 1–90 天，默认 7 天 |
 | 分钟统计（PostgreSQL 与 ClickHouse） | 7 天 |
 | L4 应用的分钟统计 | 7 天 |
 | 小时统计 | 90 天 |
@@ -531,14 +539,15 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 
 | 表 | 内容 |
 | --- | --- |
-| `node_minute_stats` | 按节点、网站、分钟的流量统计，含 Top URL、Top IP 与命中的 CRS 规则 |
+| `node_minute_stats` | 按节点、网站、分钟的流量统计，含 Top URL、Top IP、命中的 CRS 规则与统计维度（国家、运营商、来源、终端、协议、拦截原因、挑战） |
+| `asn_name` | 节点上报的 AS 号与名称（统计维度的运营商名称） |
 | `node_hour_stats` | 小时汇总 |
 | `node_day_stats` | 天汇总 |
 | `stats_rollup_dirty` | 待重新汇总的时间桶（小时、天、用量窗口） |
 | `node_stats_cursor` | 每个节点统计批次的序号高水位与统计水位（`complete_until`） |
 | `l4_minute_stats` | 按节点、四层应用、分钟的统计：新建与拒绝的连接、并发峰值、入 / 出字节，保留 7 天 |
 | `site_usage` | 按网站、UTC 5 分钟窗口的可复算用量（请求数、出站与入站字节，十进制精确值）、修订号与全局序号 `seq`（序列 `site_usage_seq`） |
-| `access_log` | 采样访问日志（请求 id；网站开启时含 JA4；命中的 CRS 规则与是否被拦截），按 UTC 日分区 |
+| `access_log` | 采样与强制记录的访问日志（请求 id、User-Agent、Referer、协议、地区、回源、拦截原因与规则；网站开启时含 JA4、查询字符串、指定请求头与直连对端地址；命中的 CRS 规则与是否被拦截），按 UTC 日分区，保留期由系统设置决定 |
 | `security_event` | 节点上报的 CC 防护事件：级别变化、路径升降级、自动封禁，带当时的 Top IP 与 Top 路径 |
 | `node_log_cursor` | 每个节点日志批次的序号高水位 |
 | `origin_health` | 节点上报的源站健康状态与错误码，被动检查与主动检查各一行 |
@@ -620,7 +629,8 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0058_g12_access_auth` | `site_auth_rule`；`site.auth_updated_at`；`node_minute_stats`、`node_hour_stats`、`node_day_stats` 的 `auth_failures`（`traffic_hour_stats` 视图随之重建） |
 | `0059_g13_access_control` | `site.access_control`、`site.block_list_ids`、`site.allow_list_ids`、`site.access_control_updated_at` |
 | `0060_g14_waf_actions` | `site.rules_body_limit`；`site_waf.exclusions`（替换 `excluded_rule_ids`，原有的整站排除迁移为一个不带路径的条目）；`site_protection` 的 `allow_verified_bots`、`challenge_text`、`failure_ban_enabled`、`failure_threshold`、`failure_ban_seconds`；`access_log.rule_ids`；`ip_ban_auto_uq` 改为按（节点、网站、CIDR、来源）唯一，包含来源 `rule` |
-| `0061_g17_site_tags` | `tag`、`site_tag` |
+| `0061_g16_access_logs_stats` | `asn_name`；分钟、小时、天统计与视图 `traffic_hour_stats` 的统计维度（`country_requests`、`country_bytes`、`asns`、`referers`、`browsers`、`oses`、`devices`、`http_versions`、`tls_versions`、`block_reasons`、`challenges_issued`、`challenges_passed`）；`site.log_blocked`、`log_query`、`log_headers`、`log_peer`；`access_log` 的 User-Agent、Referer、协议、地区、回源、拦截原因与可选字段等列 |
+| `0062_g17_site_tags` | `tag`、`site_tag` |
 
 ## 构建产物
 

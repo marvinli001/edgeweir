@@ -529,7 +529,7 @@ Behavior: [Clusters and system](../guide/system.en.md) and [Adding nodes](../dep
 | Procedure | Endpoint | Notes |
 | --- | --- | --- |
 | `settings.nodeChannel` | `GET /settings/node-channel` | `{ url, effectiveUrl, source }`: `url` is the URL saved in system settings (an empty string when none is); `effectiveUrl` the URL install commands carry; `source` is `setting`, `environment` (`EDGEWEIR_NODE_API_URL`), or `default` |
-| `settings.setNodeChannel` | `PUT /settings/node-channel` | Body `{ url }`: `https://host[:port]` without a path, query, fragment, or credentials, otherwise 400; saved as its origin. An empty string clears the saved URL. Responds like `settings.nodeChannel`. Applies at once, the node channel certificate adds the new URL's name; audited as `system.node_channel_update` |
+| `settings.setNodeChannel` | `PUT /settings/node-channel` | Body `{ url }`: `https://`, `wss://` or `ws://host[:port]` without a path, query, fragment, or credentials, otherwise 400; saved as its origin. An empty string clears the saved URL. Responds like `settings.nodeChannel`. Applies at once, the node channel certificate adds the new URL's name; audited as `system.node_channel_update` |
 
 Service accounts cannot call them (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys call `settings.nodeChannel` only. Enrolled nodes keep the URL they enrolled with; see [Node channel URL and certificate](../deploy/networking.en.md#node-channel-url-and-certificate).
 
@@ -772,6 +772,42 @@ curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicati
 
 Behaviour: [Rules](../guide/rules.en.md), [OWASP CRS managed rules](../guide/waf.en.md), [Challenges and CC protection](../guide/challenges.en.md) and [Bans](../guide/bans.en.md).
 
+### Access log fields, retention and statistics dimensions
+
+Logs keep `logs.*`; the system setting `settings.logRetention` / `settings.setLogRetention` and the statistics procedure `analytics.dimensions` are new. Service accounts cannot call them (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys only call `GET`.
+
+| Request | Fields |
+| --- | --- |
+| `PUT /sites/{siteId}/logs/settings` | Every field optional, omitted keeps the current value: `sampleRate` (0–10000), `logBlocked`, `logQuery`, `logPeer` (booleans), `logHeaders` (≤ 8 request header names, `[A-Za-z0-9-]`, 1–64 characters, lowercased and deduplicated; `authorization`, `cookie`, `proxy-authorization` are 400) |
+| `GET /sites/{siteId}/logs`, `/logs/export` | New filters (all optional, combined with "and"): `host` (exact, any case), `method`, `statusClass` (`1xx`–`5xx`), `cacheStatus` (`HIT`, `MISS`, `BYPASS`, `EXPIRED`, `STALE`, `UPDATING`, `REVALIDATED`), `blockReason` (a reason below, or `any`), `country` (ISO 3166-1 two letters), `asn` (1–4294967295), `ua`, `referer` (contains, any case, ≤ 256), `minDuration` (milliseconds), `cidr` (IPv4 or IPv6 network or a single address, host bits cleared) |
+| `PUT /settings/log-retention` | `postgresDays` (1–30), `clickhouseDays` (1–90), both required; audited as `system.log_retention_update` |
+| `GET /analytics/dimensions` | `range` (`1h`, `6h`, `24h`, `7d`, `30d`, default `24h`), `siteId` (optional: every site) |
+
+Responses:
+
+| Procedure | Content |
+| --- | --- |
+| `logs.settings` | Adds `retentionDays` (days the current storage keeps), `logBlocked`, `logQuery`, `logHeaders`, `logPeer` |
+| `logs.query`, `logs.export` | Entries add `userAgent`, `referer` (without query and fragment), `httpVersion` (`1.0`, `1.1`, `2`, `3`), `scheme`, `country` (empty when unknown), `asn` (0 when unknown), `asName`, `upstreamAddr`, `upstreamStatus`, `upstreamMs` (empty, 0 and 0 without the origin), `requestBytes`, `contentType`, `tlsVersion` (`1.2`, `1.3`, empty on plain HTTP), `blockReason`, `blockRuleId`, and, while the site records them, `query`, `headers` (name → value), `peerIp`; the CSV ends with these columns in this order (`headers` as `name: value` joined with `; `) |
+| `settings.logRetention` | `postgresDays`, `clickhouseDays`, `storage` (`lite` or `clickhouse`: which one applies) |
+| `analytics.dimensions` | `countries` (`{ country, requests, bytesSent }` by requests, empty `country` is unknown), `asns` (`{ asn, name, requests }`, top 50, approximate), `referers` (`{ host, requests }`, top 50, approximate), `browsers`, `oses`, `devices`, `httpVersions`, `tlsVersions`, `blockReasons` (`{ key, requests }`), `challenges` (`{ issued, passed }`), `unsupportedNodes` (active nodes without `stats-dims-v1`; above 0 the data is partial) |
+| `sites.features` | Adds `accessLogsV2` (feature `access-logs-v2`) |
+
+`blockReason` values: `ip_banned`, `ip_blocked`, `rule`, `rate_limit`, `crs`, `cc`, `challenge`, `auth`, `referer`, `user_agent`, `region`, `cors`, `websocket_origin`, `client_cert`, `maintenance`, see [Access logs](../guide/access-logs.en.md#block-reasons). Client class keys: browsers `chrome`, `edge`, `firefox`, `safari`, `opera`, `samsung`, `uc`, `qq`, `wechat`, `yandex`, `ie`, `crawler`, `tool`, `other`; operating systems `windows`, `macos`, `ios`, `android`, `linux`, `chromeos`, `harmonyos`, `other`; devices `desktop`, `mobile`, `tablet`, `crawler`, `other`; HTTP versions `1.0`, `1.1`, `2`, `3`, `other`; TLS versions `1.2`, `1.3`, `none`, `other`.
+
+- Configurations using any of `logBlocked`, `logQuery`, `logHeaders`, `logPeer` require node feature `access-logs-v2`; without them the configuration is unchanged.
+- Statistics dimensions come from node feature `stats-dims-v1`, used only for statistics; it never holds a publish.
+
+```bash
+curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"logBlocked":true,"logHeaders":["x-request-source"]}' \
+  https://cdn-admin.example.com/api/v1/sites/<site id>/logs/settings
+curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
+  "https://cdn-admin.example.com/api/v1/sites/<site id>/logs?from=2026-10-10T00:00:00Z&to=2026-10-10T01:00:00Z&blockReason=any&country=US"
+```
+
+See [Access logs and access keys](../guide/access-logs.en.md) and [System settings](../guide/system.en.md#access-logs).
+
 ### Site tags, batch operations, copying settings and cloning
 
 | Procedure | Endpoint | Notes |
@@ -789,7 +825,7 @@ Behaviour: [Rules](../guide/rules.en.md), [OWASP CRS managed rules](../guide/waf
 
 `ids` and `targetIds` are 1–100 site IDs; `targetIds` cannot include the source (400). A missing site fails a batch operation as a whole with 404 `SITE_NOT_FOUND` (a copy fails only that target); more than 10 tags after adding is 400 `SITE_TAG_LIMIT` (`data.site`, `data.limit`). Arrays in a query string use bracket notation (`targetIds[]=a&targetIds[]=b`); a single value can be `targetIds=a`.
 
-Values of `parts`: `cacheRules`, `cacheKey` (cache key and slicing), `cacheTag`, `compression`, `https` (without certificates and the domains left out of the redirect), `rules` (with `rulesBodyLimit`), `bulkRedirects`, `errorPages` (without maintenance mode), `waf`, `protection` (without `logJa4`), `accessControl`, `authRules` (secrets encrypted again for the target), `originSettings` (without the origins), `logs` (sample rate and `logJa4`). A copied part replaces that part of the target as a whole; parts already equal to the source's are not written. A target that lacks what the settings use fails: an origin group a rule chooses 400 `ORIGIN_GROUP_UNKNOWN` (`data.group`, `data.rule`); the HTTPS redirect, HSTS or client certificates without a certificate 400 `HTTPS_REQUIRES_CERTIFICATE`; a redirect port that is not one of the target's HTTPS ports 400 `HTTPS_REDIRECT_PORT_INVALID`; a bulk redirect source host that is not a domain of the target 400 `BULK_REDIRECT_HOST_UNKNOWN`; an access authentication domain the target does not have 400 `AUTH_DOMAIN_UNKNOWN`; a missing IP list 404 `IP_LIST_NOT_FOUND`. In a clone these errors fail the whole clone (except the certificate ones: those settings are turned off).
+Values of `parts`: `cacheRules`, `cacheKey` (cache key and slicing), `cacheTag`, `compression`, `https` (without certificates and the domains left out of the redirect), `rules` (with `rulesBodyLimit`), `bulkRedirects`, `errorPages` (without maintenance mode), `waf`, `protection` (without `logJa4`), `accessControl`, `authRules` (secrets encrypted again for the target), `originSettings` (without the origins), `logs` (sample rate, `logBlocked`, `logQuery`, `logHeaders`, `logPeer` and `logJa4`). A copied part replaces that part of the target as a whole; parts already equal to the source's are not written. A target that lacks what the settings use fails: an origin group a rule chooses 400 `ORIGIN_GROUP_UNKNOWN` (`data.group`, `data.rule`); the HTTPS redirect, HSTS or client certificates without a certificate 400 `HTTPS_REQUIRES_CERTIFICATE`; a redirect port that is not one of the target's HTTPS ports 400 `HTTPS_REDIRECT_PORT_INVALID`; a bulk redirect source host that is not a domain of the target 400 `BULK_REDIRECT_HOST_UNKNOWN`; an access authentication domain the target does not have 400 `AUTH_DOMAIN_UNKNOWN`; a missing IP list 404 `IP_LIST_NOT_FOUND`. In a clone these errors fail the whole clone (except the certificate ones: those settings are turned off).
 
 `sites.list` takes `tagIds` (`tagIds[]=…`, ≤ 10) and `tagMatch` (`any` by default, or `all`), and `search` also matches tag names; sites carry `tags: [{ id, name }]`; `sites.create` takes `tags`. A read-only AccessKey can call the `GET`s only (the tag list, the preview); service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`).
 

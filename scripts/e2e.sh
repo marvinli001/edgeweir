@@ -185,7 +185,15 @@
 #   truncated bodies; rate limit bans; verified crawlers on node-g14 with the
 #   g14-dns test resolver (profile g14); challenge page texts; challenge
 #   failure bans; Playwright e2e/g14.spec.ts.
-#   Site parity G17 (scripts/e2e-g17.mjs, after G14): sites tagged in one
+#   Site parity G16 (scripts/e2e-g16.mjs, after G14): both nodes report
+#   access-logs-v2 and stats-dims-v1; access log lines carry User-Agent,
+#   Referer, HTTP version, scheme, country and network, the query string and
+#   a chosen header, request bytes, content type and the origin; blocked and
+#   rate limited requests of a site that samples nothing are logged with
+#   their reason and rule; every new filter; log retention moves the
+#   PostgreSQL partitions; edgeweir-node accesslog prints live requests;
+#   statistics dimensions appear; Playwright e2e/g16.spec.ts.
+#   Site parity G17 (scripts/e2e-g17.mjs, after G16): sites tagged in one
 #   batch and filtered by tag (any, all); the preview of copying rules, cache
 #   rules and the cache key to two sites and one without the origin group the
 #   rules choose; the copy (the third fails with ORIGIN_GROUP_UNKNOWN and
@@ -1304,6 +1312,14 @@ if ! $SKIP_UI; then
 fi
 node scripts/e2e-g14.mjs --cleanup || fail "G14 cleanup failed"
 pass "G14 checks passed"
+
+step "G16: access log fields, options, filters and retention, live view on the node, statistics dimensions"
+node scripts/e2e-g16.mjs || fail "G16 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g16.spec.ts || fail "G16 browser checks failed"
+fi
+node scripts/e2e-g16.mjs --cleanup || fail "G16 cleanup failed"
+pass "G16 checks passed"
 
 step "G17: site tags, batch operations, copying settings to other sites and cloning"
 node scripts/e2e-g17.mjs || fail "G17 end-to-end checks failed"

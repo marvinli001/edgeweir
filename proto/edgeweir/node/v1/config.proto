@@ -412,6 +412,20 @@ message Site {
   // read the body; other requests and sites never read it. Added in v0.29.0
   // (feature rules-body-v1).
   uint32 rules_body_limit = 31;
+  // Access log options, all off by default (ADR-0041). Added in v0.30.0
+  // (feature access-logs-v2).
+  // log_blocked: requests with a block reason (blocked, challenged or
+  // refused by access authentication) always get a line, sample rate 10000;
+  // with the lines of log rules at most 100 per site and second on a node.
+  bool log_blocked = 32;
+  // log_query: lines carry the query string (AccessLog.query).
+  bool log_query = 33;
+  // log_headers: request headers lines carry (AccessLog.headers): at most 8
+  // lowercase names, never authorization, cookie or proxy-authorization.
+  repeated string log_headers = 34;
+  // log_peer: lines carry the connection's peer address when it differs
+  // from the client address (AccessLog.peer_ip).
+  bool log_peer = 35;
 }
 
 // AuthKind is how an access authentication rule checks a request.

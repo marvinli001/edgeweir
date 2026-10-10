@@ -50,6 +50,7 @@ import {
   starredSites,
   updateSite,
 } from "../../services/sites";
+import { statsDimensions } from "../../services/stats-dimensions";
 import { siteFeatures } from "../../services/waf";
 import { authed, ok } from "../base";
 
@@ -164,6 +165,10 @@ export const sitesRouter = {
     topNodes: authed.analytics.topNodes.handler(({ input, context }) =>
       topNodes(context.app.db, input),
     ),
+    dimensions: authed.analytics.dimensions.handler(async ({ input, context }) => {
+      if (input.siteId) await getSite(context.app.db, input.siteId);
+      return statsDimensions(context.app.db, input);
+    }),
   },
   sites: {
     list: authed.sites.list.handler(({ input, context }) => listSites(context.app.db, input)),

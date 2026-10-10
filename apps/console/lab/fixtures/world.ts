@@ -24,6 +24,12 @@ export const MINUTE = 60_000;
 export const HOUR = 60 * MINUTE;
 export const DAY = 24 * HOUR;
 
+/**
+ * Days access logs are kept, per storage (settings.logRetention; the lab keeps what is saved
+ * until reload). The console stores logs in PostgreSQL (analyticsMode "lite").
+ */
+export const logRetention = { postgresDays: 14, clickhouseDays: 30 };
+
 export const ago = (ms: number) => new Date(NOW - ms).toISOString();
 export const ahead = (ms: number) => new Date(NOW + ms).toISOString();
 

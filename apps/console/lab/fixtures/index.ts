@@ -10,7 +10,14 @@ import { type Fixtures, mergeFixtures, notFound, ok } from "./define";
 import { infraFixtures } from "./infra";
 import { siteDetailFixtures } from "./sites-detail";
 import { systemFixtures } from "./system";
-import { breakdownOf, topNodesOf, topRequestsOf, topSitesOf, trafficOf } from "./traffic";
+import {
+  breakdownOf,
+  dimensionsOf,
+  topNodesOf,
+  topRequestsOf,
+  topSitesOf,
+  trafficOf,
+} from "./traffic";
 import {
   ago,
   attention,
@@ -85,6 +92,7 @@ const core: Fixtures = {
       }),
     topRequests: (input) =>
       topRequestsOf(input.range ?? "24h", input.by, input.limit ?? 10, input.siteId),
+    dimensions: (input) => dimensionsOf(input.range ?? "24h", input.siteId),
   },
   clusters: {
     list: () => clusters,
@@ -278,8 +286,13 @@ const core: Fixtures = {
       };
     },
     originHealth: ({ id }) => originHealthOf(id),
-    features: () => {
+    features: ({ id }) => {
       const on = { available: true, reason: null };
+      // download.example.com's cluster has a node of an older release (traffic.ts PARTIAL_SITES).
+      const older =
+        sites.find((s) => s.id === id)?.name === "download.example.com"
+          ? { available: false, reason: "nodes" as const }
+          : on;
       return {
         brotli: on,
         zstd: on,
@@ -303,6 +316,7 @@ const core: Fixtures = {
         wafV2: on,
         rulesBody: on,
         challengeV2: on,
+        accessLogsV2: older,
       };
     },
   },

@@ -293,7 +293,7 @@ Read-only (card **System**).
 
 | Constraint | Description |
 | --- | --- |
-| Format | `https://host[:port]` without a path, query, or credentials; saved with the host name in lower case, without a trailing `/` or the default port 443 |
+| Format | `https://host[:port]` (the node channel port), or `wss://host[:port]` or `ws://host[:port]` (the [WebSocket entry](../deploy/networking.en.md#the-node-channels-websocket-entry) on the web port); without a path, query, or credentials; saved with the host name in lower case, without a trailing `/` or the default port (443, 80 for `ws://`) |
 | Effect | Applies on saving, without a restart: new install and probe commands carry the URL, and the node channel certificate adds its host name or IP |
 | Enrolled nodes | Keep connecting to the URL they enrolled with, whose name stays in the certificate; while editing, the card notes "Enrolled nodes keep connecting to the previous URL: keep it reachable" |
 | Clearing | Saving an empty value falls back to the environment variable or the default |
@@ -337,6 +337,14 @@ Each node also pins its own release source and signature trust locally, out of t
 | **Offline nodes stop holding completeness (minutes)** | 5–1440 | 60 | Nodes without a heartbeat for longer no longer hold back `completeUntil` |
 
 Changes are audited as `system.usage_update`. The usage API and the definition of `completeUntil`: [Usage](../reference/api.en.md#usage).
+
+### Access logs
+
+| Field | Values | Default | Description |
+| --- | --- | --- | --- |
+| **Retention (days)** | PostgreSQL 1–30, ClickHouse 1–90 | 7 | How long access logs are kept; the card shows the days of the current analytics mode (`EDGEWEIR_ANALYTICS`) only |
+
+Changes are audited as `system.log_retention_update`; the next minute's maintenance drops partitions by the new days (ClickHouse changes the TTL), see [access log retention](access-logs.en.md#retention).
 
 ### Platform error pages
 

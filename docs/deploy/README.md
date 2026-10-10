@@ -35,7 +35,7 @@
 | Fly.io | 控制台镜像与外部 PostgreSQL 18；flyctl 部署，Dashboard 管理 secret、IP、证书与日志 | [fly.md](fly.md) | 支持 |
 | bunny.net Magic Containers | 控制台镜像与外部 PostgreSQL 18；CDN 端点承载 Web，Anycast IP 承载节点通道；Dashboard，可选 bunny CLI | [bunny.md](bunny.md) | 支持 |
 | Render | `render.yaml` 一键创建控制台与 Render Postgres 18，或 Dashboard 手动创建；节点经 WebSocket 入口连接（edgeweir-node 0.2.0 及以上） | [render.md](render.md) | 支持 |
-| Zeabur | `zeabur.yaml` 模板一键创建控制台与 PostgreSQL 18，或 Dashboard 手动创建；运行在 Zeabur Server，节点通道经 TCP 端口转发 | [zeabur.md](zeabur.md) | 支持 |
+| Zeabur | `zeabur.yaml` 模板一键创建控制台与 PostgreSQL 18，或 Dashboard 手动创建；运行在 Zeabur Server，节点经 WebSocket 入口连接（edgeweir-node 0.2.0 及以上），可改为 TCP 端口转发直连 | [zeabur.md](zeabur.md) | 支持 |
 
 ### 平台条件
 

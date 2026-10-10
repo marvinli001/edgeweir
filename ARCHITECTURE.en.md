@@ -370,6 +370,14 @@ DNS steering is bound per cluster (`dns_binding`, mode Not managed, Manual, or A
 4. CRS by path: nodes match exclusions and the config rules' CRS override against the normalized path in the edge layer, hand the matching entries' content tokens to the generated ModSecurity rules (`ctl:ruleRemoveById` / `ctl:ruleRemoveTargetById`) in the internal header `X-Edgeweir-Waf-Ex`, and rewrite the mode in `X-Edgeweir-Waf` or skip the CRS location for an override; both internal headers are removed before the origin.
 5. `SiteProtection` fields 8–11 (capability `challenge-v2`): verified search engine crawlers (reverse and forward DNS through the node's own resolver, cached in a shared dictionary), challenge page text and challenge failure bans (reason `challenge_failures`), stored in new columns of `site_protection`. See [Rules](docs/guide/rules.en.md#waf-actions), [OWASP CRS](docs/guide/waf.en.md#overrides-and-exclusions-by-path) and [Challenges](docs/guide/challenges.en.md#verified-search-engine-crawlers).
 
+## Access log fields and statistics dimensions
+
+1. Once the edge layer knows the site, it looks the client up in GeoIP once per request (no call to the agent on a worker cache hit; these lookups time out after 50 ms and, after a failure, the worker skips them for 5 seconds); logs and statistics share the result. The origin layer hands the origin address back in the internal response header `X-Edgeweir-Upstream` (the edge applies `proxy_hide_header`; cache hits record no origin).
+2. Nodes record block reasons where they refuse (`edgeweir.reasons`, the first one of a request wins); requests refused once the site is known are counted and logged. With `Site.log_blocked` (proto `v0.30.0`, feature `access-logs-v2`), requests with a block reason get a line whatever the sample rate, sharing the budget of 100 lines per site and second on a node with log rules; `log_query`, `log_headers` and `log_peer` select the optional fields, which the console keeps only while the site records them.
+3. Statistics dimensions (`MinuteStats` 14–24, feature `stats-dims-v1`, statistics only) accumulate in each worker's minute buckets and reach the shared dictionary `edgeweir_topstats` with the top URLs and IPs once the minute ends; the console adds them key by key (networks and referrers keep the top 50), rolls them up by minute, hour and day, and `analytics.dimensions` reads them. AS names are kept in `asn_name`.
+4. Access log retention is the system setting `log_retention`: PostgreSQL partition maintenance and the earliest time of writes and searches follow it; ClickHouse runs `ALTER TABLE access_log MODIFY TTL` on save and at the first maintenance after a process starts.
+5. `edgeweir-node accesslog` reads the shared dictionary `edgeweir_tap` through the control API `GET /v1/logs/tap`: only while a viewer's renewed marker exists does the log phase record requests (expiring after 10 seconds, at most 2,000 per node and second), independent of the sample rate and outside the upload queue. Nodes write no local log files. See [Access logs and AccessKeys](docs/guide/access-logs.en.md).
+
 ## Site tags, batch operations and copying settings
 
 1. Tags live in `tag` (`key`: the NFC name in lower case, unique) and `site_tag` and are used by the console only: they never enter `NodeConfig` and changing them publishes nothing. Tag writes take the advisory lock `edgeweir.tags` before the site rows, which they lock FOR KEY SHARE in id order. `sites.list` filters by `tagIds` (any or all) and `search` also matches tag names.
@@ -408,7 +416,7 @@ Access logs are sampled per site; the sample rate defaults to 0 (off). Per-minut
 
 | Data | Retention |
 | --- | --- |
-| Access logs (PostgreSQL and ClickHouse) | 7 days |
+| Access logs | System setting `log_retention`: PostgreSQL 1–30 days, ClickHouse 1–90 days, 7 by default |
 | Per-minute statistics (PostgreSQL and ClickHouse) | 7 days |
 | Per-minute statistics of L4 apps | 7 days |
 | Hourly statistics | 90 days |
@@ -531,14 +539,15 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 
 | Table | Contents |
 | --- | --- |
-| `node_minute_stats` | Traffic per node, site, and minute, with top URLs, top IPs and matched CRS rules |
+| `node_minute_stats` | Traffic per node, site, and minute, with top URLs, top IPs, matched CRS rules and statistics dimensions (country, network, referrer, client, protocol, block reason, challenges) |
+| `asn_name` | AS numbers and names nodes report (network names of the statistics dimensions) |
 | `node_hour_stats` | Hourly rollups |
 | `node_day_stats` | Daily rollups |
 | `stats_rollup_dirty` | Time buckets waiting for a rollup (hours, days, usage windows) |
 | `node_stats_cursor` | Per-node high-water mark of statistics batch sequences and the statistics watermark (`complete_until`) |
 | `l4_minute_stats` | Per node, layer-4 application and minute: new and refused connections, peak concurrency, bytes in / out, kept 7 days |
 | `site_usage` | Recomputable usage per site and UTC 5-minute window (requests, bytes out and in, exact decimals), revision and global `seq` (sequence `site_usage_seq`) |
-| `access_log` | Sampled access logs (request id; JA4 when the site records it; matched CRS rules and whether CRS blocked the request), one partition per UTC day |
+| `access_log` | Sampled and forced access logs (request id, User-Agent, Referer, protocol, region, origin, block reason and rule; JA4, the query string, chosen request headers and the peer address while the site records them; matched CRS rules and whether CRS blocked the request), one partition per UTC day, kept as the retention setting says |
 | `security_event` | CC mitigation events reported by nodes: level changes, escalated paths, automatic bans, with the top addresses and paths of the moment |
 | `node_log_cursor` | Per-node high-water mark of log batches |
 | `origin_health` | Origin health and error codes reported by nodes, one row each for the passive and the active check |
@@ -620,7 +629,8 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0058_g12_access_auth` | `site_auth_rule`; `site.auth_updated_at`; `auth_failures` in `node_minute_stats`, `node_hour_stats`, `node_day_stats` (the `traffic_hour_stats` view rebuilt) |
 | `0059_g13_access_control` | `site.access_control`, `site.block_list_ids`, `site.allow_list_ids`, `site.access_control_updated_at` |
 | `0060_g14_waf_actions` | `site.rules_body_limit`; `site_waf.exclusions` (replacing `excluded_rule_ids`; the site-wide exclusions migrate to one exclusion without a path); `allow_verified_bots`, `challenge_text`, `failure_ban_enabled`, `failure_threshold`, `failure_ban_seconds` of `site_protection`; `access_log.rule_ids`; `ip_ban_auto_uq` unique per (node, site, CIDR, source), including source `rule` |
-| `0061_g17_site_tags` | `tag`, `site_tag` |
+| `0061_g16_access_logs_stats` | `asn_name`; statistics dimensions in minute, hour and day statistics and the view `traffic_hour_stats` (`country_requests`, `country_bytes`, `asns`, `referers`, `browsers`, `oses`, `devices`, `http_versions`, `tls_versions`, `block_reasons`, `challenges_issued`, `challenges_passed`); `site.log_blocked`, `log_query`, `log_headers`, `log_peer`; `access_log` columns for User-Agent, Referer, protocol, region, origin, block reason and the optional fields |
+| `0062_g17_site_tags` | `tag`, `site_tag` |
 
 ## Build output
 

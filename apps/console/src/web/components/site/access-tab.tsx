@@ -51,20 +51,11 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { authKindLabel } from "@/lib/access-logs";
 import { localizeError } from "@/lib/errors";
 import { formatDateTime, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { randomUuid } from "@/lib/uuid";
-
-const kindLabel = (kind: AuthKind): string =>
-  ({
-    basic: m.auth_kind_basic,
-    forward: m.auth_kind_forward,
-    url_a: m.auth_kind_url_a,
-    url_b: m.auth_kind_url_b,
-    url_c: m.auth_kind_url_c,
-    url_d: m.auth_kind_url_d,
-  })[kind]();
 
 /** A rule as the form edits it: numbers and lists as text, write-only secrets empty. */
 interface Draft {
@@ -396,7 +387,7 @@ function AuthRulesForm({
                     {index + 1}
                   </span>
                   <Badge variant="outline" data-testid="auth-rule-kind">
-                    {kindLabel(row.kind)}
+                    {authKindLabel(row.kind)}
                   </Badge>
                   <span className="min-w-0 flex-1 truncate text-sm" title={scopeSummary(row)}>
                     {scopeSummary(row)}
@@ -540,7 +531,7 @@ function RuleDialog({
           label={m.auth_kind()}
           value={d.kind}
           testId="auth-kind"
-          options={AUTH_KINDS.map((kind) => ({ value: kind, label: kindLabel(kind) }))}
+          options={AUTH_KINDS.map((kind) => ({ value: kind, label: authKindLabel(kind) }))}
           onChange={(kind) =>
             set({
               kind,

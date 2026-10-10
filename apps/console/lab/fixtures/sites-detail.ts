@@ -18,6 +18,8 @@ import {
   type HttpsCheck,
   type LogEntry,
   type LoggedRules,
+  logQuery,
+  parseCidr,
   type RuleDto,
   type SecurityEvent,
   type Site,
@@ -32,11 +34,24 @@ import {
   WAF_PRESETS,
   type WafTopRules,
 } from "@edgeweir/contract";
+import type * as z from "zod";
 import { ccTemplate, certificates, siteCertificateId } from "./access";
-import { type Fixtures, notFound } from "./define";
+import { type Fixtures, notFound, ok } from "./define";
 import { infraFixtures } from "./infra";
-import { trafficOf } from "./traffic";
-import { ago, clusters, DAY, HOUR, id, MINUTE, NOW, nodes, noise, sites } from "./world";
+import { NETWORKS, trafficOf } from "./traffic";
+import {
+  ago,
+  clusters,
+  DAY,
+  HOUR,
+  id,
+  logRetention,
+  MINUTE,
+  NOW,
+  nodes,
+  noise,
+  sites,
+} from "./world";
 
 function siteOf(siteId: string): Site {
   const site = sites.find((s) => s.id === siteId);
@@ -1594,7 +1609,7 @@ const ATTACK_JA4 = "t13d190900_9dc949149365_97f8aa674fd9";
 const WAVE_JA4 = "t13d311100_e8f1e7e78f70_d339722ba4af";
 
 /** Sampled rate of each site's access logs in basis points (the UI offers 0, 1, 10, 100 %). */
-function sampleRateOf(site: Site): number {
+function defaultSampleRate(site: Site): number {
   if (!site.enabled) return 0;
   if (isShop(site)) return 1000;
   if (site.name === "api.example.com" || site.name === "auth.example.net") return 10_000;
@@ -1602,9 +1617,35 @@ function sampleRateOf(site: Site): number {
   return 100;
 }
 
+/** A site's log settings (logs.settings); logs.configure changes them until reload. */
+interface LogOptions {
+  sampleRate: number;
+  logBlocked: boolean;
+  logQuery: boolean;
+  logHeaders: string[];
+  logPeer: boolean;
+}
+const logOptions = new Map<string, LogOptions>();
+
+function logOptionsOf(site: Site): LogOptions {
+  let options = logOptions.get(site.id);
+  if (!options) {
+    options = {
+      sampleRate: defaultSampleRate(site),
+      // The shop keeps every refused request and records its query strings and two headers;
+      // the API sits behind na-edge's load balancer, so its lines name the balancer too.
+      logBlocked: isShop(site) || site.name === "api.example.com",
+      logQuery: isShop(site),
+      logHeaders: isShop(site) ? ["accept-language", "x-shop-client"] : [],
+      logPeer: site.name === "api.example.com",
+    };
+    logOptions.set(site.id, options);
+  }
+  return options;
+}
+
 /** One slot per 5 seconds; whether it holds a sampled request is decided by noise. */
 const SLOT = 5_000;
-const LOG_DAYS = 7;
 
 const hex = (seed: number, chars: number) =>
   Array.from({ length: Math.ceil(chars / 8) }, (_, i) =>
@@ -1631,21 +1672,26 @@ interface LogContext {
   site: Site;
   seed: number;
   rate: number;
+  options: LogOptions;
   pick: (r: number) => PathSeed;
   ja4: boolean;
   wafMode: SiteWaf["mode"];
   density: number;
   /** Nodes that served the site, with the time they stopped (offline nodes). */
   servers: { id: string; until: number }[];
+  /** Origin addresses as nginx names them ($upstream_addr), by weight. */
+  upstreams: string[];
 }
 
 function logContext(site: Site): LogContext {
   const protection = protectionOf(site);
   const shares: Record<string, number> = { "shop.example.com": 0.32, "api.example.com": 0.2 };
+  const options = logOptionsOf(site);
   return {
     site,
     seed: indexOf(site) * 1_000_003,
-    rate: sampleRateOf(site),
+    rate: options.sampleRate,
+    options,
     pick: weighted(profileOf(site)),
     ja4: protection.logJa4,
     wafMode: wafOf(site).mode,
@@ -1654,6 +1700,13 @@ function logContext(site: Site): LogContext {
       id: n.id,
       until: n.online ? Number.POSITIVE_INFINITY : Date.parse(n.lastSeenAt ?? ago(0)),
     })),
+    upstreams: site.origins
+      .filter((o) => !o.backup && /^[\d.:a-f]+$/.test(o.address))
+      .flatMap((o) =>
+        Array.from({ length: Math.max(1, Math.round(o.weight / 10)) }, () =>
+          o.address.includes(":") ? `[${o.address}]:${o.port}` : `${o.address}:${o.port}`,
+        ),
+      ),
   };
 }
 
@@ -1663,15 +1716,152 @@ function serverAt(ctx: LogContext, time: number, r: number): string {
   return (list[Math.floor(r * list.length)] ?? list[0])?.id ?? id(4, 1);
 }
 
+const ruleIdOf = (site: Site, name: string) => siteRules(site).find((r) => r.name === name)?.id;
+
 /** Log rules that write an access log line, by what they match (shop.example.com's). */
 function loggedRuleIds(ctx: LogContext, method: string, path: string, bot: boolean): string[] {
   if (!isShop(ctx.site)) return [];
-  const idOf = (name: string) => siteRules(ctx.site).find((r) => r.name === name)?.id;
   const ids = [
-    path === "/api/v2/cart" && method !== "GET" ? idOf("Cart writes") : undefined,
-    bot ? idOf("Verified crawlers") : undefined,
+    path === "/api/v2/cart" && method !== "GET" ? ruleIdOf(ctx.site, "Cart writes") : undefined,
+    bot ? ruleIdOf(ctx.site, "Verified crawlers") : undefined,
   ];
   return ids.filter((ruleId): ruleId is string => ruleId !== undefined);
+}
+
+/** Browsers, crawlers and tools by share; mobile ones send the shop app's header now and then. */
+const USER_AGENTS: { ua: string; share: number; mobile?: "ios" | "android"; tool?: boolean }[] = [
+  {
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+    share: 0.27,
+  },
+  {
+    ua: "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1",
+    share: 0.2,
+    mobile: "ios",
+  },
+  {
+    ua: "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36",
+    share: 0.17,
+    mobile: "android",
+  },
+  {
+    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    share: 0.12,
+  },
+  {
+    ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0",
+    share: 0.08,
+  },
+  {
+    ua: "Mozilla/5.0 (X11; Linux x86_64; rv:143.0) Gecko/20100101 Firefox/143.0",
+    share: 0.05,
+  },
+  { ua: "Mozilla/5.0 (compatible; ExampleBot/2.1; +https://bot.example.com/)", share: 0.07 },
+  { ua: "curl/8.16.0", share: 0.04, tool: true },
+];
+const ATTACK_AGENTS = ["python-requests/2.32.5", "Go-http-client/1.1", "curl/8.16.0"];
+const WAVE_AGENT =
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36";
+
+const pickAgent = (r: number) => {
+  let at = r;
+  for (const agent of USER_AGENTS) {
+    at -= agent.share;
+    if (at <= 0) return agent;
+  }
+  return USER_AGENTS[0] as (typeof USER_AGENTS)[number];
+};
+
+/** Where a client address is (the attackers' and the wave's countries are fixed). */
+function geoOf(ip: string): { country: string; asn: number; asName: string } {
+  const fixed: Record<string, string> = {
+    "203.0.113.77": "NL",
+    "198.51.100.204": "US",
+    "192.0.2.18": "DE",
+    "2001:db8:4f::2a": "NL",
+    "198.51.100.9": "US",
+    "203.0.113.140": "SG",
+    "2001:db8:91::7": "US",
+    "198.51.100.63": "US",
+  };
+  let hash = 0;
+  for (const c of ip) hash = (hash * 31 + c.charCodeAt(0)) | 0;
+  const r = noise(hash);
+  const country =
+    fixed[ip] ??
+    (r < 0.4
+      ? "JP"
+      : r < 0.58
+        ? "US"
+        : r < 0.7
+          ? "SG"
+          : r < 0.8
+            ? "KR"
+            : r < 0.88
+              ? "TW"
+              : r < 0.94
+                ? "DE"
+                : r < 0.97
+                  ? "GB"
+                  : "");
+  const networks = NETWORKS.filter((n) => n.country === country);
+  // Attackers come from hosting networks.
+  const network =
+    fixed[ip] === "US"
+      ? NETWORKS.find((n) => n.asn === 64499)
+      : networks[Math.floor(noise(hash + 1) * networks.length)];
+  return { country, asn: network?.asn ?? 0, asName: network?.name ?? "" };
+}
+
+const LANGUAGES: Record<string, string> = {
+  JP: "ja-JP,ja;q=0.9,en-US;q=0.8",
+  US: "en-US,en;q=0.9",
+  SG: "en-SG,en;q=0.9,zh-CN;q=0.8",
+  KR: "ko-KR,ko;q=0.9,en-US;q=0.8",
+  TW: "zh-TW,zh;q=0.9,en-US;q=0.8",
+  DE: "de-DE,de;q=0.9,en;q=0.8",
+  GB: "en-GB,en;q=0.9",
+};
+
+function contentTypeOf(path: string, kind: Kind | "blocked", status: number): string {
+  if (status === 304 || status === 204) return "";
+  if (kind === "blocked" || kind === "redirect" || status >= 400) return "text/html";
+  const types: [RegExp, string][] = [
+    [/\.js$/, "application/javascript"],
+    [/\.css$/, "text/css"],
+    [/\.webp$/, "image/webp"],
+    [/\.avif$/, "image/avif"],
+    [/\.svg$/, "image/svg+xml"],
+    [/\.jpg$/, "image/jpeg"],
+    [/\.woff2$/, "font/woff2"],
+    [/\.ico$/, "image/x-icon"],
+    [/\.(txt)$/, "text/plain"],
+    [/\.xml$/, "application/xml"],
+    [/\.mp4$/, "video/mp4"],
+    [/\.m4s$/, "video/iso.segment"],
+    [/\.m3u8$/, "application/vnd.apple.mpegurl"],
+    [/\.tar\.gz$/, "application/gzip"],
+  ];
+  for (const [pattern, type] of types) if (pattern.test(path)) return type;
+  return kind === "api" || kind === "cart" ? "application/json" : "text/html";
+}
+
+/** What only some requests carry: the query string the site records. */
+function queryOf(path: string, r: number): string {
+  if (path === "/search")
+    return `q=${["linen+shirt", "tote", "wool+scarf", "mug"][Math.floor(r * 4)]}`;
+  if (path === "/api/v2/products") return `page=${1 + Math.floor(r * 4)}&per_page=24`;
+  if (path.startsWith("/collections/") && r < 0.4) return "sort=price-asc";
+  if (path === "/" && r < 0.25) return "utm_source=newsletter&utm_medium=email";
+  return "";
+}
+
+interface Traits {
+  kind: Kind | "blocked";
+  agent?: string;
+  blockReason?: string;
+  blockRuleId?: string;
+  query?: string;
 }
 
 function normalEntry(ctx: LogContext, k: number, time: number): LogEntry {
@@ -1684,6 +1874,7 @@ function normalEntry(ctx: LogContext, k: number, time: number): LogEntry {
   let cacheStatus = "";
   let bytes = p.bytes;
   let duration = 0;
+  let blockReason = "";
   const wafRuleIds: number[] = [];
   switch (p.kind) {
     case "asset":
@@ -1702,6 +1893,14 @@ function normalEntry(ctx: LogContext, k: number, time: number): LogEntry {
                 : "REVALIDATED";
       }
       duration = cacheStatus === "HIT" ? 1 + Math.floor(r(4) * 9) : 30 + Math.floor(r(4) * 180);
+      // Now and then another site embeds an image: hotlink protection refuses it.
+      if (p.path.startsWith("/images/") && r(13) < 0.03) {
+        status = 403;
+        cacheStatus = "";
+        bytes = 1_204;
+        duration = 0;
+        blockReason = "referer";
+      }
       break;
     case "page":
       cacheStatus =
@@ -1769,24 +1968,37 @@ function normalEntry(ctx: LogContext, k: number, time: number): LogEntry {
         cacheStatus = "";
         bytes = 1_412;
         duration = 1 + Math.floor(r(10) * 3);
+        blockReason = "crs";
       }
     }
   }
-  return entry(ctx, k, 0, time, r, {
-    clientIp: client,
-    method,
-    host: p.host ?? (ctx.site.domains[0] as string),
-    path: p.path,
-    status,
-    bytesSent: bytes,
-    durationMs: duration,
-    cacheStatus,
-    ja4: ctx.ja4 ? (BROWSER_JA4[Math.floor(r(9) * BROWSER_JA4.length)] as string) : "",
-    wafRuleIds,
-    wafBlocked,
-    // A verified crawler now and then on pages.
-    ruleIds: loggedRuleIds(ctx, method, p.path, p.kind === "page" && r(12) < 0.06),
-  });
+  return entry(
+    ctx,
+    k,
+    0,
+    time,
+    r,
+    {
+      clientIp: client,
+      method,
+      host: p.host ?? (ctx.site.domains[0] as string),
+      path: p.path,
+      status,
+      bytesSent: bytes,
+      durationMs: duration,
+      cacheStatus,
+      ja4: ctx.ja4 ? (BROWSER_JA4[Math.floor(r(9) * BROWSER_JA4.length)] as string) : "",
+      wafRuleIds,
+      wafBlocked,
+      // A verified crawler now and then on pages.
+      ruleIds: loggedRuleIds(ctx, method, p.path, p.kind === "page" && r(12) < 0.06),
+    },
+    {
+      kind: blockReason ? "blocked" : p.kind,
+      blockReason,
+      query: queryOf(p.path, r(14)),
+    },
+  );
 }
 
 /** A refused request of the burst or of the wave. */
@@ -1803,39 +2015,146 @@ function attackEntry(ctx: LogContext, k: number, time: number, wave: boolean): L
         : "/api/v2/cart/items";
   const crs = !wave && r(3) < 0.22;
   const status = crs ? 403 : wave ? (r(4) < 0.7 ? 429 : 403) : r(4) < 0.6 ? 429 : 403;
-  return entry(ctx, k, 1, time, r, {
-    clientIp: client,
-    method: wave ? "GET" : "POST",
-    host: SHOP.domains[0] as string,
-    path,
-    status,
-    bytesSent: crs ? 1_412 : status === 429 ? 1_168 : 1_296,
-    durationMs: Math.floor(r(5) * 3),
-    cacheStatus: "",
-    ja4: ctx.ja4 ? (wave ? WAVE_JA4 : ATTACK_JA4) : "",
-    wafRuleIds: crs ? (r(6) < 0.5 ? [942100, 942200] : [941100]) : [],
-    wafBlocked: crs,
-    ruleIds: loggedRuleIds(ctx, wave ? "GET" : "POST", path, false),
-  });
+  // Why the node refused it: CRS, the login rate limit, CC, a ban or a rule's challenge.
+  const login = path === "/account/login";
+  const [blockReason, blockRuleId] = crs
+    ? ["crs", ""]
+    : status === 429
+      ? login && !wave
+        ? ["rate_limit", ruleIdOf(ctx.site, "Login attempts") ?? ""]
+        : ["cc", ""]
+      : wave
+        ? ["challenge", ""]
+        : login && r(7) < 0.5
+          ? ["challenge", ruleIdOf(ctx.site, "Login from hosting networks") ?? ""]
+          : ["ip_banned", ""];
+  return entry(
+    ctx,
+    k,
+    1,
+    time,
+    r,
+    {
+      clientIp: client,
+      method: wave ? "GET" : "POST",
+      host: SHOP.domains[0] as string,
+      path,
+      status,
+      bytesSent: crs ? 1_412 : status === 429 ? 1_168 : 1_296,
+      durationMs: Math.floor(r(5) * 3),
+      cacheStatus: "",
+      ja4: ctx.ja4 ? (wave ? WAVE_JA4 : ATTACK_JA4) : "",
+      wafRuleIds: crs ? (r(6) < 0.5 ? [942100, 942200] : [941100]) : [],
+      wafBlocked: crs,
+      ruleIds: loggedRuleIds(ctx, wave ? "GET" : "POST", path, false),
+    },
+    {
+      kind: "blocked",
+      agent: wave ? WAVE_AGENT : (ATTACK_AGENTS[Math.floor(r(8) * ATTACK_AGENTS.length)] as string),
+      blockReason,
+      blockRuleId,
+      query: wave ? `q=${hex(k, 6)}` : "",
+    },
+  );
 }
 
+type BaseFields = Pick<
+  LogEntry,
+  | "clientIp"
+  | "method"
+  | "host"
+  | "path"
+  | "status"
+  | "bytesSent"
+  | "durationMs"
+  | "cacheStatus"
+  | "ja4"
+  | "wafRuleIds"
+  | "wafBlocked"
+  | "ruleIds"
+>;
+
+/** A line with what nodes add to every request (ADR-0041) and the options the site records. */
 function entry(
   ctx: LogContext,
   k: number,
   index: number,
   time: number,
   r: (salt: number) => number,
-  fields: Omit<LogEntry, "id" | "time" | "nodeId" | "siteId" | "sampleRate" | "requestId">,
+  fields: BaseFields,
+  traits: Traits,
 ): LogEntry {
   const nodeId = serverAt(ctx, time, r(11));
+  const agent = traits.agent
+    ? { ua: traits.agent, tool: true, mobile: undefined }
+    : pickAgent(r(20));
+  const geo = geoOf(fields.clientIp);
+  const scheme = traits.kind === "redirect" && r(23) < 0.25 ? "http" : "https";
+  const httpVersion = agent.tool ? "1.1" : r(22) < 0.62 ? "2" : r(22) < 0.84 ? "3" : "1.1";
+  const tlsVersion = scheme === "http" ? "" : httpVersion === "3" || r(24) < 0.88 ? "1.3" : "1.2";
+  const siteUrl = `https://${fields.host}`;
+  const referer =
+    traits.kind === "blocked"
+      ? traits.blockReason === "referer"
+        ? "https://copycat.example/lookbook"
+        : ""
+      : traits.kind === "page"
+        ? r(21) < 0.3
+          ? "https://search.example/"
+          : r(21) < 0.4
+            ? "https://social.example/"
+            : r(21) < 0.7
+              ? `${siteUrl}/`
+              : ""
+        : traits.kind === "asset" || traits.kind === "media" || traits.kind === "api"
+          ? `${siteUrl}/`
+          : "";
+  // Answered by the origin: what was not served from the cache or by the node itself.
+  const fromOrigin =
+    !traits.blockReason &&
+    ["MISS", "BYPASS", "EXPIRED", "REVALIDATED"].includes(fields.cacheStatus) &&
+    ctx.upstreams.length > 0;
+  const upstreamMs = fromOrigin
+    ? Math.max(1, fields.durationMs - Math.floor(r(25) * Math.min(4, fields.durationMs)))
+    : 0;
+  const options = ctx.options;
+  const headers: Record<string, string> = {};
+  for (const name of options.logHeaders) {
+    if (name === "accept-language" && !agent.tool && LANGUAGES[geo.country])
+      headers[name] = LANGUAGES[geo.country] as string;
+    if (name === "x-shop-client" && agent.mobile && r(26) < 0.4)
+      headers[name] = agent.mobile === "ios" ? "ios/4.12.0" : "android/4.12.1";
+  }
+  const write = fields.method === "POST" || fields.method === "PUT";
   return {
     id: `${nodeId}/${k}/${index}`,
     time: new Date(time).toISOString(),
     nodeId,
     siteId: ctx.site.id,
-    sampleRate: ctx.rate,
+    // Refused requests the site always logs carry the full rate.
+    sampleRate: traits.blockReason && options.logBlocked ? 10_000 : ctx.rate,
     requestId: hex(k * 2 + index + ctx.seed, 32),
     ...fields,
+    userAgent: agent.ua,
+    referer,
+    httpVersion,
+    scheme,
+    country: geo.country,
+    asn: geo.asn,
+    asName: geo.asName,
+    upstreamAddr: fromOrigin
+      ? (ctx.upstreams[Math.floor(r(27) * ctx.upstreams.length)] as string)
+      : "",
+    upstreamStatus: fromOrigin ? fields.status : 0,
+    upstreamMs,
+    requestBytes: (write ? 900 + Math.floor(r(28) * 3_200) : 380) + Math.floor(r(29) * 520),
+    contentType: contentTypeOf(fields.path, traits.kind, fields.status),
+    tlsVersion,
+    blockReason: traits.blockReason ?? "",
+    blockRuleId: traits.blockRuleId ?? "",
+    query: options.logQuery ? (traits.query ?? "") : "",
+    headers,
+    peerIp: options.logPeer ? `10.20.0.${5 + Math.floor(r(30) * 3)}` : "",
   };
 }
 
@@ -1859,41 +2178,129 @@ function slotEntries(ctx: LogContext, k: number): LogEntry[] {
   return out.sort((a, b) => b.time.localeCompare(a.time));
 }
 
-function queryLogs(input: {
-  siteId: string;
-  from: string;
-  to: string;
-  status?: unknown;
-  ip?: string;
-  path?: string;
-  requestId?: string;
-  limit?: unknown;
-}): { entries: LogEntry[]; truncated: boolean } {
-  const site = siteOf(input.siteId);
+/** Whether `ip` is in the network `cidr` (contract parseCidr clears the host bits of both). */
+function inNetwork(ip: string, cidr: string): boolean {
+  const network = parseCidr(cidr);
+  const address = parseCidr(ip);
+  if (!network || !address || network.version !== address.version) return false;
+  const masked = parseCidr(`${ip}/${network.prefix}`);
+  return !!masked && masked.bytes.every((byte, i) => byte === network.bytes[i]);
+}
+
+const STATUS_CLASS_OF: Record<string, number> = {
+  "1xx": 1,
+  "2xx": 2,
+  "3xx": 3,
+  "4xx": 4,
+  "5xx": 5,
+};
+const contains = (text: string, part: string) => text.toLowerCase().includes(part.toLowerCase());
+
+type LogQueryInput = z.input<typeof logQuery>;
+
+function queryLogs(input: LogQueryInput): {
+  entries: LogEntry[];
+  truncated: boolean;
+} {
+  const q = logQuery.parse(input);
+  const site = siteOf(q.siteId);
   const ctx = logContext(site);
-  const limit = Number(input.limit ?? 100);
-  const from = Math.max(Date.parse(input.from), Date.now() - LOG_DAYS * DAY);
-  const to = Math.min(Date.parse(input.to), Date.now());
-  if (ctx.rate === 0 || !(from < to)) return { entries: [], truncated: false };
-  const status =
-    input.status === undefined || input.status === "" ? undefined : Number(input.status);
-  const ip = input.ip?.trim() ?? "";
-  const path = input.path ?? "";
-  const requestId = input.requestId?.trim() ?? "";
+  const limit = q.limit;
+  const from = Math.max(Date.parse(q.from), Date.now() - logRetention.postgresDays * DAY);
+  const to = Math.min(Date.parse(q.to), Date.now());
+  // A site that samples nothing still logs the requests it refuses when it keeps them.
+  const blockedOnly = ctx.rate === 0;
+  if ((blockedOnly && !ctx.options.logBlocked) || !(from < to))
+    return { entries: [], truncated: false };
+  const ip = q.ip.trim();
+  const requestId = q.requestId?.trim() ?? "";
   const out: LogEntry[] = [];
   for (let k = Math.floor(to / SLOT); k >= Math.floor(from / SLOT); k--) {
     for (const e of slotEntries(ctx, k)) {
       const time = Date.parse(e.time);
       if (time < from || time >= to) continue;
-      if (status !== undefined && e.status !== status) continue;
+      if (blockedOnly && !e.blockReason) continue;
+      if (q.status !== undefined && e.status !== q.status) continue;
       if (ip && e.clientIp !== ip) continue;
-      if (path && !e.path.startsWith(path)) continue;
+      if (q.path && !e.path.startsWith(q.path)) continue;
       if (requestId && e.requestId !== requestId) continue;
+      if (q.host && e.host.toLowerCase() !== q.host.toLowerCase()) continue;
+      if (q.method && e.method !== q.method.toUpperCase()) continue;
+      if (q.statusClass && Math.floor(e.status / 100) !== STATUS_CLASS_OF[q.statusClass]) continue;
+      if (q.cacheStatus && e.cacheStatus !== q.cacheStatus) continue;
+      if (
+        q.blockReason === "any" ? !e.blockReason : q.blockReason && e.blockReason !== q.blockReason
+      )
+        continue;
+      if (q.country && e.country !== q.country.toUpperCase()) continue;
+      if (q.asn !== undefined && e.asn !== q.asn) continue;
+      if (q.ua && !contains(e.userAgent, q.ua)) continue;
+      if (q.referer && !contains(e.referer, q.referer)) continue;
+      if (q.minDuration !== undefined && e.durationMs < q.minDuration) continue;
+      if (q.cidr && !inNetwork(e.clientIp, q.cidr)) continue;
       out.push(e);
       if (out.length > limit) return { entries: out.slice(0, limit), truncated: true };
     }
   }
   return { entries: out, truncated: false };
+}
+
+/** The server's CSV columns (logs.export): the first 16, then the fields of ADR-0041. */
+const CSV_COLUMNS = [
+  "time",
+  "clientIp",
+  "method",
+  "host",
+  "path",
+  "status",
+  "bytesSent",
+  "durationMs",
+  "cacheStatus",
+  "sampleRate",
+  "nodeId",
+  "requestId",
+  "ja4",
+  "wafRuleIds",
+  "wafBlocked",
+  "ruleIds",
+  "userAgent",
+  "referer",
+  "httpVersion",
+  "scheme",
+  "country",
+  "asn",
+  "asName",
+  "upstreamAddr",
+  "upstreamStatus",
+  "upstreamMs",
+  "requestBytes",
+  "contentType",
+  "tlsVersion",
+  "blockReason",
+  "blockRuleId",
+  "query",
+  "headers",
+  "peerIp",
+] as const satisfies readonly (keyof LogEntry)[];
+
+/** A quoted cell as the server writes it: lists space-separated, headers "name: value; …". */
+const csvCell = (value: unknown): string => {
+  let text = Array.isArray(value)
+    ? value.join(" ")
+    : value !== null && typeof value === "object"
+      ? Object.entries(value)
+          .map(([name, v]) => `${name}: ${v}`)
+          .join("; ")
+      : String(value);
+  // Spreadsheets would run a cell that starts like a formula.
+  if (/^[\s]*[=+@-]/.test(text)) text = `'${text}`;
+  return `"${text.replaceAll('"', '""')}"`;
+};
+
+function exportLogs(input: LogQueryInput) {
+  const { entries, truncated } = queryLogs({ ...input, limit: input.limit ?? 1000 });
+  const rows = entries.map((e) => CSV_COLUMNS.map((c) => csvCell(e[c])).join(","));
+  return { csv: [CSV_COLUMNS.join(","), ...rows].join("\r\n"), truncated };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -2124,25 +2531,28 @@ export const siteDetailFixtures: Fixtures = {
     }),
   },
   logs: {
-    settings: ({ siteId }) => ({ sampleRate: sampleRateOf(siteOf(siteId)), storage: "lite" }),
-    query: (input) => queryLogs(input),
-    export: (input) => {
-      const { entries, truncated } = queryLogs({ ...input, limit: input.limit ?? 1000 });
-      const columns = [
-        "time",
-        "clientIp",
-        "method",
-        "host",
-        "path",
-        "status",
-        "bytesSent",
-        "durationMs",
-        "cacheStatus",
-        "requestId",
-      ] as const;
-      const rows = entries.map((e) => columns.map((c) => String(e[c])).join(","));
-      return { csv: [columns.join(","), ...rows].join("\n"), truncated };
+    settings: ({ siteId }) => {
+      const { sampleRate, logBlocked, logQuery, logHeaders, logPeer } = logOptionsOf(
+        siteOf(siteId),
+      );
+      return {
+        sampleRate,
+        storage: "lite",
+        retentionDays: logRetention.postgresDays,
+        logBlocked,
+        logQuery,
+        logHeaders: [...logHeaders],
+        logPeer,
+      };
     },
+    configure: ({ siteId, ...change }) => {
+      const options = logOptionsOf(siteOf(siteId));
+      for (const [key, value] of Object.entries(change))
+        if (value !== undefined) Object.assign(options, { [key]: value });
+      return ok;
+    },
+    query: (input) => queryLogs(input),
+    export: (input) => exportLogs(input),
   },
   https: {
     get: ({ id: siteId }) => httpsOf(siteOf(siteId)),

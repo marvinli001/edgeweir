@@ -101,6 +101,9 @@ export const MAX_TASKS_PER_PULL = 20;
 export const BANS_FEATURE = "bans-v1";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const UINT32_MAX = 4294967295;
+/** A proto map of counters (uint64 values) as numbers. */
+const counts = (values: Record<string, bigint>) =>
+  Object.fromEntries(Object.entries(values).map(([key, n]) => [key, Number(n)]));
 
 /** The BanStatus of a heartbeat as stored on the node row. */
 function toNodeBanStatus(status: BanStatus, now: Date): schema.NodeBanStatus {
@@ -493,6 +496,27 @@ export function createNodeService(
                 statusCodes: Object.fromEntries(
                   Object.entries(s.statusCodes).map(([code, n]) => [code, Number(n)]),
                 ),
+                dimensions: {
+                  countries: s.countries.map((c) => ({
+                    country: c.country,
+                    requests: Number(c.requests),
+                    bytesSent: Number(c.bytesSent),
+                  })),
+                  asns: s.asns.map((a) => ({
+                    asn: a.asn,
+                    name: a.name,
+                    requests: Number(a.requests),
+                  })),
+                  referers: Object.fromEntries(s.referers.map((v) => [v.value, Number(v.count)])),
+                  browsers: counts(s.browsers),
+                  oses: counts(s.operatingSystems),
+                  devices: counts(s.devices),
+                  httpVersions: counts(s.httpVersions),
+                  tlsVersions: counts(s.tlsVersions),
+                  blockReasons: counts(s.blockReasons),
+                  challengesIssued: Number(s.challengesIssued),
+                  challengesPassed: Number(s.challengesPassed),
+                },
               },
             ]
           : [],

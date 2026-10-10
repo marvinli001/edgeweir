@@ -4,9 +4,11 @@ export * from "./upgrades";
 
 import { oc } from "@orpc/contract";
 import * as z from "zod";
-import { logsContract } from "./logs";
+import { logRetention, logRetentionSetting, logsContract } from "./logs";
+import { statsDimensions, statsDimensionsInput } from "./stats-dims";
 
 export * from "./logs";
+export * from "./stats-dims";
 
 import { accessControlContract, ipCheckContract } from "./access-control";
 import { accessKeysContract } from "./access-keys";
@@ -185,6 +187,11 @@ export const contract = {
       .route({ method: "GET", path: "/analytics/top-nodes", tags: ["analytics"] })
       .input(s.trafficTopInput)
       .output(z.array(s.trafficTopItem)),
+    /** Countries, networks, referrers, clients, protocols, block reasons and challenges. */
+    dimensions: oc
+      .route({ method: "GET", path: "/analytics/dimensions", tags: ["analytics"] })
+      .input(statsDimensionsInput)
+      .output(statsDimensions),
   },
   clusters: {
     list: oc
@@ -525,6 +532,14 @@ export const contract = {
       .route({ method: "PUT", path: "/settings/usage", tags: ["settings"] })
       .input(usageSettings)
       .output(usageSettings),
+    /** Days access logs are kept, per storage. */
+    logRetention: oc
+      .route({ method: "GET", path: "/settings/log-retention", tags: ["settings"] })
+      .output(logRetentionSetting),
+    setLogRetention: oc
+      .route({ method: "PUT", path: "/settings/log-retention", tags: ["settings"] })
+      .input(logRetention)
+      .output(logRetentionSetting),
     /** Platform limit of manual bans and sharing of automatic bans in a cluster. */
     bans: oc
       .route({ method: "GET", path: "/settings/bans", tags: ["settings"] })

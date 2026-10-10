@@ -6,6 +6,13 @@ import { TrustedProxies } from "./client-ip";
 import { decodeMasterKey, masterKeyProblem } from "./envelope";
 
 /**
+ * A rejected value for an error message, a password in it masked: a platform
+ * reference that did not expand (`${HOST}`, `https://:`) shows as it arrived.
+ */
+const shown = (value: string) =>
+  JSON.stringify(value.replace(/(\/\/[^/?#@:]*:)[^/?#@]*@/, "$1***@"));
+
+/**
  * `<scheme>://host[:port]` with nothing after it (a trailing "/" is fine), as
  * deploy.sh's valid_url; parses to the origin. z.url() would also take
  * "localhost:3000" (scheme "localhost:") and URLs with a path.
@@ -30,7 +37,7 @@ const originUrl = (schemes: readonly ("http" | "https" | "ws" | "wss")[]) =>
         names.length > 1 ? `${names.slice(0, -1).join(", ")} or ${names.at(-1)}` : names[0];
       ctx.issues.push({
         code: "custom",
-        message: `expected ${expected}host[:port] without a path, e.g. https://cdn-admin.example.com`,
+        message: `expected ${expected}host[:port] without a path, e.g. https://cdn-admin.example.com; got ${shown(value)}`,
         input: value,
       });
       return z.NEVER;

@@ -244,7 +244,14 @@ describe("site tags, batch operations, copying settings and cloning (G17)", asyn
         { kind: "url_a", url: { primaryKey: URL_KEY } },
       ],
     });
-    await admin.logs.configure({ siteId: sourceId, sampleRate: 250 });
+    await admin.logs.configure({
+      siteId: sourceId,
+      sampleRate: 250,
+      logBlocked: true,
+      logQuery: true,
+      logHeaders: ["x-request-source"],
+      logPeer: true,
+    });
   });
 
   afterAll(() => pglite.close());
@@ -726,6 +733,10 @@ describe("site tags, batch operations, copying settings and cloning (G17)", asyn
       // Columns of the site row: copied by a part, taken by a clone only, or never copied.
       const parts = [
         "logSampleRate",
+        "logBlocked",
+        "logQuery",
+        "logHeaders",
+        "logPeer",
         "cacheKey",
         "rangeSlice",
         "keepCacheTag",
