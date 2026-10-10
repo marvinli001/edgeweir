@@ -376,6 +376,49 @@ message MinuteStats {
   // Requests access authentication refused (401, 403, 429, 503). Added in
   // v0.27.0 (feature access-auth-v1).
   uint64 auth_failures = 13;
+  // Bounded dimensions (ADR-0041). Added in v0.30.0 (feature stats-dims-v1).
+  // Requests and bytes sent per client country (at most 250, heaviest
+  // first; country "" is unknown).
+  repeated CountryCounter countries = 14;
+  // Client networks, heaviest 50 (approximate).
+  repeated AsnCounter asns = 15;
+  // Referring hosts (the Referer's host, lowercase, without the port; not
+  // the request's own Host), heaviest 50 (approximate).
+  repeated TopCounter referers = 16;
+  // Requests per user agent class from the node's classification table:
+  // browsers chrome, edge, firefox, safari, opera, samsung, uc, qq, wechat,
+  // yandex, ie, crawler, tool, other; operating systems windows, macos,
+  // ios, android, linux, chromeos, harmonyos, other; devices desktop,
+  // mobile, tablet, crawler, other.
+  map<string, uint64> browsers = 17;
+  map<string, uint64> operating_systems = 18;
+  map<string, uint64> devices = 19;
+  // Requests per HTTP version (1.0, 1.1, 2, 3, other) and TLS version
+  // (1.2, 1.3, none, other).
+  map<string, uint64> http_versions = 20;
+  map<string, uint64> tls_versions = 21;
+  // Requests per block reason (AccessLog.block_reason).
+  map<string, uint64> block_reasons = 22;
+  // Challenges sent (pages and cookie302 redirects) and passes issued after
+  // a verified answer.
+  uint64 challenges_issued = 23;
+  uint64 challenges_passed = 24;
+}
+
+// CountryCounter is a client country's traffic in a minute.
+message CountryCounter {
+  // ISO 3166-1 alpha-2, uppercase; "" when unknown.
+  string country = 1;
+  uint64 requests = 2;
+  uint64 bytes_sent = 3;
+}
+
+// AsnCounter is an approximate count of a client network's requests.
+message AsnCounter {
+  uint32 asn = 1;
+  // The network's name from the node's GeoIP database.
+  string name = 2;
+  uint64 requests = 3;
 }
 
 // TopCounter is a bounded, approximate heavy-hitter counter (no query strings).
@@ -639,6 +682,42 @@ message AccessLog {
   // Rules with the log action that asked for this line (at most 8): such
   // lines are written whatever the sample rate. Added in v0.29.0.
   repeated string rule_ids = 16;
+  // Added in v0.30.0 (ADR-0041); empty from older nodes.
+  // User-Agent (at most 512 bytes) and Referer without query and fragment
+  // (at most 1024 bytes).
+  string user_agent = 17;
+  string referer = 18;
+  // "1.0", "1.1", "2" or "3"; "http" or "https".
+  string http_version = 19;
+  string scheme = 20;
+  // Client country (ISO 3166-1 alpha-2, "" unknown), network (0 unknown)
+  // and its name.
+  string country = 21;
+  uint32 asn = 22;
+  string as_name = 23;
+  // The origin address that answered, its status and the time to the
+  // origin in milliseconds; "", 0 and 0 when the request was answered
+  // without the origin (cache hits, the node's own answers).
+  string upstream_addr = 24;
+  uint32 upstream_status = 25;
+  uint32 upstream_ms = 26;
+  uint64 request_bytes = 27;
+  // The response's media type, lowercase, without parameters.
+  string content_type = 28;
+  // "1.2" or "1.3"; "" on plain HTTP.
+  string tls_version = 29;
+  // Why the node refused or challenged the request (ip_banned, ip_blocked,
+  // rule, rate_limit, crs, cc, challenge, auth, referer, user_agent,
+  // region, cors, websocket_origin, client_cert, maintenance); "" none.
+  string block_reason = 30;
+  // The rule behind the reason (EdgeRule.id, or the access authentication
+  // rule's id); CRS rules are in waf_rule_ids.
+  string block_rule_id = 31;
+  // Only while the site records them (Site.log_query, log_headers,
+  // log_peer; feature access-logs-v2).
+  string query = 32;
+  map<string, string> headers = 33;
+  string peer_ip = 34;
 }
 // ReportLogsRequest is an immutable, ordered batch from the private node spool.
 message ReportLogsRequest {
