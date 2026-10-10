@@ -53,8 +53,8 @@ export async function statsDimensions(
     ) ${sql.raw(branches)}`);
   const maps = new Map<string, Counts>();
   for (const row of result.rows) {
-    let m = maps.get(row.d);
-    if (!m) maps.set(row.d, (m = new Map()));
+    const m = maps.get(row.d) ?? new Map<string, number>();
+    maps.set(row.d, m);
     m.set(row.k, Number(row.n));
   }
   const ranked = (column: string, limit?: number) =>
