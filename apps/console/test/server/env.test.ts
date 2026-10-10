@@ -62,6 +62,22 @@ describe("console and node channel URLs", () => {
     );
   });
 
+  it.each([["https://${PORT_FORWARDED_HOSTNAME}:${NODE_PORT_FORWARDED_PORT}"], ["https://:"]])(
+    "names the rejected value %j, as a platform left it",
+    (value) => {
+      expect(() => loadEnv({ ...base, EDGEWEIR_NODE_API_URL: value })).toThrow(
+        `e.g. https://cdn-admin.example.com; got ${JSON.stringify(value)}`,
+      );
+    },
+  );
+
+  it("masks a password in the rejected value", () => {
+    const load = () =>
+      loadEnv({ ...base, EDGEWEIR_PUBLIC_URL: "https://admin:secret@cdn-admin.example.com" });
+    expect(load).toThrow('got "https://admin:***@cdn-admin.example.com"');
+    expect(load).not.toThrow(/secret/);
+  });
+
   it("takes the WebSocket entry's wss:// and ws:// URLs", () => {
     const env = loadEnv({ ...base, EDGEWEIR_NODE_API_URL: "wss://Nodes.example.com/" });
     expect(env.nodeApiUrl).toBe("wss://nodes.example.com");
