@@ -16,7 +16,11 @@ import {
   maintainLogs,
 } from "../../src/server/services/access-logs";
 import { latestRevision } from "../../src/server/services/revisions";
-import { ingestStatsBatch, type ReportedMinuteStats } from "../../src/server/services/stats";
+import {
+  ingestStatsBatch,
+  type ReportedMinuteStats,
+  recordAsNames,
+} from "../../src/server/services/stats";
 import { rollupTraffic } from "../../src/server/services/stats-rollup";
 import {
   type ApiClient,
@@ -316,7 +320,9 @@ describe("access logs and statistics dimensions (G16)", async () => {
         });
       expect(await ingest([blocked("blog-1")])).toBe(0);
       await admin.logs.configure({ siteId: otherSiteId, logBlocked: true });
-      expect(await ingest([blocked("blog-2")])).toBe(1);
+      // Lines without a block reason (a node behind the revision, a spooled backlog) are not kept.
+      const passed = line({ siteId: otherSiteId, host: "blog.g16.test", requestId: "blog-ok" });
+      expect(await ingest([blocked("blog-2"), passed])).toBe(1);
       const { entries } = await admin.logs.query({ siteId: otherSiteId, ...window() });
       expect(entries).toHaveLength(1);
       expect(entries[0]).toMatchObject({
@@ -651,6 +657,15 @@ describe("access logs and statistics dimensions (G16)", async () => {
         .from(schema.asnName)
         .where(eq(schema.asnName.asn, 64500));
       expect(name?.name).toBe("AS-renamed");
+      // Names are written after the batch commits; an unchanged name is not rewritten.
+      await recordAsNames(ctx.db, [
+        bucket({ dimensions: { asns: [{ asn: 64500, name: "AS-renamed", requests: 1 }] } }),
+      ]);
+      const [same] = await ctx.db
+        .select()
+        .from(schema.asnName)
+        .where(eq(schema.asnName.asn, 64500));
+      expect(same?.updatedAt.getTime()).toBe(name?.updatedAt.getTime());
       // A later report for the same minute adds to the stored row.
       await report([bucket({ dimensions: { browsers: { chrome: 3 }, challengesPassed: 1 } })]);
       const [again] = await ctx.db

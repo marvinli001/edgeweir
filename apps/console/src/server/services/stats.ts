@@ -181,15 +181,6 @@ export async function ingestMinuteStats(
     ) select site_id from stored
   `);
   const stored = new Set(result.rows.map((r) => r.site_id));
-  // Names of the reported networks (stats-dims-v1), kept as the last one reported.
-  const names = reportedAsNames(reported.slice(0, MAX_STATS_PER_REPORT).map((s) => s.dimensions));
-  if (names.length && stored.size)
-    await db.execute(sql`
-      insert into ${schema.asnName} (asn, name, updated_at)
-      select n.asn, n.name, now() from jsonb_to_recordset(${JSON.stringify(names)}::jsonb) as n(asn bigint, name text)
-      on conflict (asn) do update set name = excluded.name, updated_at = excluded.updated_at
-      where ${schema.asnName}.name <> excluded.name
-    `);
   let accepted = 0;
   for (const [siteId, n] of perSite) if (stored.has(siteId)) accepted += n;
   return accepted;
@@ -343,7 +334,7 @@ export async function ingestStatsBatch(
 ) {
   if (sequence < 1n || sequence > 9223372036854775807n)
     throw new Error("invalid statistics sequence");
-  return db.transaction(async (tx) => {
+  const accepted = await db.transaction(async (tx) => {
     await lockStats(tx, "shared");
     const clock = now ?? Date.now();
     const cursor = schema.nodeStatsCursor;
@@ -366,4 +357,28 @@ export async function ingestStatsBatch(
     await tx.update(cursor).set({ sequence }).where(eq(cursor.nodeId, node.id));
     return accepted;
   });
+  // Network names are shared by every node: written after the batch commits, so that nodes
+  // never wait on each other's statistics; a failed write waits for the next report.
+  if (accepted > 0) await recordAsNames(db, reported).catch(() => undefined);
+  return accepted;
+}
+
+/**
+ * Names of the networks a report names (stats-dims-v1, the last one reported wins), in AS
+ * order so that concurrent reports lock rows in the same order; unchanged names are not
+ * written (and not locked).
+ */
+export async function recordAsNames(db: Executor, reported: ReportedMinuteStats[]) {
+  const names = reportedAsNames(reported.slice(0, MAX_STATS_PER_REPORT).map((s) => s.dimensions));
+  if (!names.length) return;
+  names.sort((a, b) => a.asn - b.asn);
+  const rows = sql`jsonb_to_recordset(${JSON.stringify(names)}::jsonb) as n(asn bigint, name text)`;
+  await db.execute(sql`
+    insert into ${schema.asnName} (asn, name, updated_at)
+    select n.asn, n.name, now() from ${rows} order by n.asn
+    on conflict (asn) do nothing`);
+  await db.execute(sql`
+    update ${schema.asnName} set name = n.name, updated_at = now()
+    from (select * from ${rows} order by n.asn) n
+    where ${schema.asnName.asn} = n.asn and ${schema.asnName.name} <> n.name`);
 }
