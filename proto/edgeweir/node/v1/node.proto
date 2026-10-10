@@ -403,6 +403,11 @@ message MinuteStats {
   // a verified answer.
   uint64 challenges_issued = 23;
   uint64 challenges_passed = 24;
+  // Bytes WebP / AVIF responses saved against their originals: for each
+  // complete 200 response to a GET served as a converted variant (cache hits
+  // included), the original's length minus the variant's (ImageConvert).
+  // Added in v0.31.0 (feature image-convert-v1).
+  uint64 image_bytes_saved = 25;
 }
 
 // CountryCounter is a client country's traffic in a minute.

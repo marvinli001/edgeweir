@@ -426,6 +426,34 @@ message Site {
   // log_peer: lines carry the connection's peer address when it differs
   // from the client address (AccessLog.peer_ip).
   bool log_peer = 35;
+  // WebP / AVIF conversion of cached JPEG and PNG responses by the request's
+  // Accept (ADR-0043); unset means off. Added in v0.31.0 (feature
+  // image-convert-v1).
+  ImageConvert image_convert = 36;
+}
+
+// ImageConvert turns cached JPEG and PNG responses into WebP or AVIF for
+// clients that accept them: the edge picks avif, webp or the original from
+// Accept (explicit image/avif or image/webp with q > 0), keys the cache by
+// that class, converts on a miss and keeps the original whenever the
+// conversion fails, is over a limit or would not be smaller. Only requests
+// that are cached (a cache rule applies) are converted.
+message ImageConvert {
+  // Formats offered, at least one.
+  bool webp = 1;
+  bool avif = 2;
+  // Encoder quality, 1-100.
+  uint32 webp_quality = 3;
+  uint32 avif_quality = 4;
+  // Source types converted, at least one: image/jpeg and image/png.
+  bool jpeg = 5;
+  bool png = 6;
+  // Responses of min_size to max_size bytes are converted: max_size
+  // 1-67108864, min_size at most max_size.
+  uint64 min_size = 7;
+  uint64 max_size = 8;
+  // Largest image converted, in pixels: 1-50000000.
+  uint64 max_pixels = 9;
 }
 
 // AuthKind is how an access authentication rule checks a request.
