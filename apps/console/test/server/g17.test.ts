@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
 import {
+  IMAGE_CONVERT_DEFAULTS,
   SITE_COPY_PARTS,
   type SiteCopyPart,
   type SiteCreateInput,
@@ -251,6 +252,13 @@ describe("site tags, batch operations, copying settings and cloning (G17)", asyn
       logQuery: true,
       logHeaders: ["x-request-source"],
       logPeer: true,
+    });
+    await admin.imageConvert.update({
+      id: sourceId,
+      ...IMAGE_CONVERT_DEFAULTS,
+      enabled: true,
+      avif: true,
+      maxPixels: 4_000_000,
     });
   });
 
@@ -737,6 +745,7 @@ describe("site tags, batch operations, copying settings and cloning (G17)", asyn
         "logQuery",
         "logHeaders",
         "logPeer",
+        "imageConvert",
         "cacheKey",
         "rangeSlice",
         "keepCacheTag",

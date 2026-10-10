@@ -493,6 +493,7 @@ export function createNodeService(
                   s.loggedRules.map((v) => [v.value, Number(v.count)]),
                 ),
                 authFailures: Number(s.authFailures),
+                imageBytesSaved: Number(s.imageBytesSaved),
                 statusCodes: Object.fromEntries(
                   Object.entries(s.statusCodes).map(([code, n]) => [code, Number(n)]),
                 ),

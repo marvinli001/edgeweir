@@ -631,6 +631,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0060_g14_waf_actions` | `site.rules_body_limit`；`site_waf.exclusions`（替换 `excluded_rule_ids`，原有的整站排除迁移为一个不带路径的条目）；`site_protection` 的 `allow_verified_bots`、`challenge_text`、`failure_ban_enabled`、`failure_threshold`、`failure_ban_seconds`；`access_log.rule_ids`；`ip_ban_auto_uq` 改为按（节点、网站、CIDR、来源）唯一，包含来源 `rule` |
 | `0061_g16_access_logs_stats` | `asn_name`；分钟、小时、天统计与视图 `traffic_hour_stats` 的统计维度（`country_requests`、`country_bytes`、`asns`、`referers`、`browsers`、`oses`、`devices`、`http_versions`、`tls_versions`、`block_reasons`、`challenges_issued`、`challenges_passed`）；`site.log_blocked`、`log_query`、`log_headers`、`log_peer`；`access_log` 的 User-Agent、Referer、协议、地区、回源、拦截原因与可选字段等列 |
 | `0062_g17_site_tags` | `tag`、`site_tag` |
+| `0063_g18_image_convert` | `site.image_convert`；分钟、小时、天统计与视图 `traffic_hour_stats` 的 `image_bytes_saved` |
 
 ## 构建产物
 

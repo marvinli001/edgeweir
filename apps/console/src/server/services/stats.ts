@@ -37,6 +37,8 @@ export interface ReportedMinuteStats {
   loggedRules?: Record<string, number>;
   /** Requests access authentication refused (access-auth-v1). */
   authFailures?: number;
+  /** Bytes WebP / AVIF variants saved against their originals (image-convert-v1). */
+  imageBytesSaved?: number;
   /** Countries, networks, referrers, clients, protocols, block reasons, challenges (stats-dims-v1). */
   dimensions?: ReportedDimensions;
 }
@@ -55,6 +57,7 @@ interface Bucket extends DimensionBucket {
   waf_rules: Record<string, number>;
   logged_rules: Record<string, number>;
   auth_failures: number;
+  image_bytes_saved: number;
 }
 
 /**
@@ -83,6 +86,7 @@ export async function ingestMinuteStats(
         s.cacheHits,
         s.cacheMisses,
         s.authFailures ?? 0,
+        s.imageBytesSaved ?? 0,
         ...Object.values(s.statusCodes),
       ].every((n) => Number.isSafeInteger(n) && n >= 0)
     )
@@ -110,6 +114,7 @@ export async function ingestMinuteStats(
         waf_rules: cleanTop(s.wafRules, "rule"),
         logged_rules: cleanTop(s.loggedRules, "id"),
         auth_failures: s.authFailures ?? 0,
+        image_bytes_saved: s.imageBytesSaved ?? 0,
         ...cleanDimensions(s.dimensions),
       });
       continue;
@@ -121,6 +126,7 @@ export async function ingestMinuteStats(
     b.cache_hits = addTrafficCounter(b.cache_hits, s.cacheHits);
     b.cache_misses = addTrafficCounter(b.cache_misses, s.cacheMisses);
     b.auth_failures = addTrafficCounter(b.auth_failures, s.authFailures ?? 0);
+    b.image_bytes_saved = addTrafficCounter(b.image_bytes_saved, s.imageBytesSaved ?? 0);
     b.top_urls = mergeTop(b.top_urls, cleanTop(s.topUrls, "url"));
     b.top_ips = mergeTop(b.top_ips, cleanTop(s.topIps, "ip"));
     b.waf_rules = mergeTop(b.waf_rules, cleanTop(s.wafRules, "rule"));
@@ -135,14 +141,14 @@ export async function ingestMinuteStats(
   const t = schema.nodeMinuteStats;
   const result = await db.execute<{ site_id: string }>(sql`
     with stored as (
-    insert into ${t} (minute, node_id, site_id, requests, bytes_sent, bytes_received, cache_hits, cache_misses, status_codes, top_urls, top_ips, waf_rules, logged_rules, auth_failures, ${dimensionList})
+    insert into ${t} (minute, node_id, site_id, requests, bytes_sent, bytes_received, cache_hits, cache_misses, status_codes, top_urls, top_ips, waf_rules, logged_rules, auth_failures, image_bytes_saved, ${dimensionList})
     select b.minute, ${node.id}::uuid, b.site_id, b.requests, b.bytes_sent, b.bytes_received,
            b.cache_hits, b.cache_misses, coalesce(b.status_codes, '{}'::jsonb), b.top_urls, b.top_ips, b.waf_rules, b.logged_rules,
-           b.auth_failures, ${dimensionList}
+           b.auth_failures, b.image_bytes_saved, ${dimensionList}
     from jsonb_to_recordset(${JSON.stringify([...buckets.values()])}::jsonb) as b(
       minute timestamptz, site_id uuid, requests bigint, bytes_sent bigint, bytes_received bigint,
       cache_hits bigint, cache_misses bigint, status_codes jsonb, top_urls jsonb, top_ips jsonb, waf_rules jsonb, logged_rules jsonb,
-      auth_failures bigint, ${dimensionTypes})
+      auth_failures bigint, image_bytes_saved bigint, ${dimensionTypes})
     join ${schema.site} on ${schema.site.id} = b.site_id and ${schema.site.clusterId} = ${node.clusterId}::uuid
     on conflict (minute, node_id, site_id) do update set
       requests = least(9007199254740991::numeric, ${t}.requests::numeric + excluded.requests),
@@ -151,6 +157,7 @@ export async function ingestMinuteStats(
       cache_hits = least(9007199254740991::numeric, ${t}.cache_hits::numeric + excluded.cache_hits),
       cache_misses = least(9007199254740991::numeric, ${t}.cache_misses::numeric + excluded.cache_misses),
       auth_failures = least(9007199254740991::numeric, ${t}.auth_failures::numeric + excluded.auth_failures),
+      image_bytes_saved = least(9007199254740991::numeric, ${t}.image_bytes_saved::numeric + excluded.image_bytes_saved),
       top_urls = (select coalesce(jsonb_object_agg(k,n),'{}'::jsonb) from (
         select k, least(9007199254740991::numeric, coalesce((${t}.top_urls ->> k)::numeric,0)+coalesce((excluded.top_urls ->> k)::numeric,0)) as n
         from jsonb_object_keys(${t}.top_urls || excluded.top_urls) as k order by n desc,k limit 50) q),

@@ -19,6 +19,7 @@ import { getHttps, updateHttps } from "../../services/certificates";
 import { setCnamePrefix } from "../../services/cname-prefixes";
 import { getSiteErrorPages, updateSiteErrorPages } from "../../services/error-pages";
 import { checkHttps } from "../../services/https-check";
+import { getImageConvert, imageSavings, updateImageConvert } from "../../services/image-convert";
 import {
   createL4App,
   deleteL4App,
@@ -92,6 +93,17 @@ export const sitesRouter = {
     ),
     failures: authed.authRules.failures.handler(({ input, context }) =>
       authFailures(context.app.db, input),
+    ),
+  },
+  imageConvert: {
+    get: authed.imageConvert.get.handler(({ input, context }) =>
+      getImageConvert(context.app.db, input.id),
+    ),
+    update: authed.imageConvert.update.handler(({ input, context }) =>
+      updateImageConvert(context.app.db, input, { actor: context.actor }),
+    ),
+    savings: authed.imageConvert.savings.handler(({ input, context }) =>
+      imageSavings(context.app.db, input),
     ),
   },
   accessControl: {

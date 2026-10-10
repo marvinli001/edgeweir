@@ -124,6 +124,11 @@ export async function ensureClickHouse(env: Env) {
         env,
         "ALTER TABLE minute_stats ADD COLUMN IF NOT EXISTS auth_failures UInt64 DEFAULT 0",
       );
+      // Bytes WebP / AVIF variants saved (image-convert-v1, ADR-0043).
+      await clickhouse(
+        env,
+        "ALTER TABLE minute_stats ADD COLUMN IF NOT EXISTS image_bytes_saved UInt64 DEFAULT 0",
+      );
       // Statistics dimensions (stats-dims-v1, ADR-0041).
       for (const column of DIMENSION_COLUMNS)
         await clickhouse(
@@ -272,7 +277,7 @@ export async function mirrorMinuteStats(
     select to_char(s.minute AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') AS minute,
       s.node_id, s.site_id, s.requests, s.bytes_sent, s.bytes_received, s.cache_hits, s.cache_misses,
       s.status_codes, s.top_urls, s.top_ips, s.waf_rules, s.logged_rules, s.auth_failures,
-      ${sql.raw(DIMENSION_COLUMNS.map((c) => `s.${c}`).join(", "))}
+      s.image_bytes_saved, ${sql.raw(DIMENSION_COLUMNS.map((c) => `s.${c}`).join(", "))}
     from node_minute_stats s inner join (
       select distinct x."siteId", date_trunc('minute', x.minute::timestamptz, 'UTC') AS minute
       from jsonb_to_recordset(${JSON.stringify(keys)}::jsonb) AS x("siteId" text, minute text)

@@ -631,6 +631,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0060_g14_waf_actions` | `site.rules_body_limit`; `site_waf.exclusions` (replacing `excluded_rule_ids`; the site-wide exclusions migrate to one exclusion without a path); `allow_verified_bots`, `challenge_text`, `failure_ban_enabled`, `failure_threshold`, `failure_ban_seconds` of `site_protection`; `access_log.rule_ids`; `ip_ban_auto_uq` unique per (node, site, CIDR, source), including source `rule` |
 | `0061_g16_access_logs_stats` | `asn_name`; statistics dimensions in minute, hour and day statistics and the view `traffic_hour_stats` (`country_requests`, `country_bytes`, `asns`, `referers`, `browsers`, `oses`, `devices`, `http_versions`, `tls_versions`, `block_reasons`, `challenges_issued`, `challenges_passed`); `site.log_blocked`, `log_query`, `log_headers`, `log_peer`; `access_log` columns for User-Agent, Referer, protocol, region, origin, block reason and the optional fields |
 | `0062_g17_site_tags` | `tag`, `site_tag` |
+| `0063_g18_image_convert` | `site.image_convert`; `image_bytes_saved` in minute, hour and day statistics and the view `traffic_hour_stats` |
 
 ## Build output
 
