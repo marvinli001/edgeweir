@@ -22,7 +22,7 @@ Traffic analytics and statistics dimensions, access log sampling, forced logging
 | **Sites** → **Analytics** tab | One site |
 
 1. Open a page from the table and select a range: **Last hour**, **Last 6 hours**, **Last 24 hours**, **Last 7 days**, or **Last 30 days**.
-2. Read **Total requests**, **Data transferred**, **Cache hit ratio**, **Peak bandwidth**, **4xx rate**, **5xx rate**, **Status codes**, **Top URLs (approximate)**, and **Top IPs (approximate)**; click a metric for details. A site's **Analytics** tab also has **Regions**, **Networks**, **Referrers**, **Clients** and **Protocols** cards, and the overview **Top countries** (by data transferred), see [Statistics dimensions](#statistics-dimensions).
+2. Read **Total requests**, **Data transferred**, **Cache hit ratio**, **Peak bandwidth**, **4xx rate**, **5xx rate**, **Status codes**, **Top URLs (approximate)**, and **Top IPs (approximate)**; click a metric for details. A site's **Analytics** tab also has **Countries**, **Networks (approximate)**, **Referrers (approximate)**, **Clients** and **Protocols** cards, and the overview **Top countries by traffic** (by data transferred), see [Statistics dimensions](#statistics-dimensions).
 3. Click **Refresh** to reload.
 4. To act on an entry, click **⋯** at the end of its row: a top IP offers **Ban IP** (with the site filled in on a site's **Analytics** tab, with the **Global** scope on the overview); a top URL on a site's **Analytics** tab offers **Purge URL**, which expands the path to each of the site's domains that is not a wildcard and lists the URLs before it submits the purge.
 
@@ -50,14 +50,14 @@ Readouts with a fixed window and no range to pick:
 
 | Location | Card | Content |
 | --- | --- | --- |
-| A site's **Analytics** tab | **Regions** | Requests and data transferred per client country; addresses GeoIP does not know count as **Unknown** |
-| | **Networks** | Requests per client network (AS number and name), approximate, at most 50 |
-| | **Referrers** | Requests per host of the `Referer` (without port; not counted when it is the request's own Host), approximate, at most 50 |
+| A site's **Analytics** tab | **Countries** | Requests and data transferred per client country; addresses GeoIP does not know count as **Unknown** |
+| | **Networks (approximate)** | Requests per client network (AS number and name), approximate, at most 50 |
+| | **Referrers (approximate)** | Requests per host of the `Referer` (without port; not counted when it is the request's own Host), approximate, at most 50 |
 | | **Clients** | Browsers, operating systems and device classes (the node's User-Agent classification) |
 | | **Protocols** | HTTP versions (1.0, 1.1, 2, 3) and TLS versions (1.2, 1.3, plain) |
 | A site's **Security** tab | **Block reasons** | Requests per [block reason](#block-reasons) |
 | | **Challenge pass rate** | Challenges sent (challenge pages and cookie302 redirects), passes issued after a verified answer, and their ratio |
-| **Overview** | **Top countries** | Countries of all sites by data transferred |
+| **Overview** | **Top countries by traffic** | Countries of all sites by data transferred |
 
 | Item | Behavior |
 | --- | --- |
@@ -65,7 +65,7 @@ Readouts with a fixed window and no range to pick:
 | Bounds | Per site and minute: at most 250 countries; networks and referring hosts keep the top 50 each (each worker tracks 64 candidates, approximate counts); the other dimensions have fixed keys |
 | Rollups and retention | As for the other analytics: minute detail 7 days, hourly rollups 90 days, daily rollups 365 days |
 | Requests counted | Requests refused once the site is known are counted (client certificate, ban and maintenance refusals included); an SNI that does not match the Host, the PURGE method and unknown hosts are not |
-| Nodes | Needs node capability `stats-dims-v1` (statistics only; it never holds a publish); while an active node of the cluster lacks it, the cards show a partial-data note |
+| Nodes | Needs node capability `stats-dims-v1` (statistics only; it never holds a publish); while an active node of the cluster lacks it, the cards note "Some nodes of the cluster do not report these statistics" |
 | Approximation | Nodes sum per worker and write once a minute; each worker tracks at most 128 sites per minute, and a worker that exits abnormally loses its current minute's dimensions |
 
 ### Reporting and deduplication
@@ -83,17 +83,18 @@ Readouts with a fixed window and no range to pick:
 
 1. Open **Sites**, select the site, and open the **Logs** tab.
 2. Select **1%**, **10%**, or **100%** in **Access log sample rate**. The choice is saved at once and publishes a new configuration revision; the console shows **Saved**.
-3. Verify: after some requests, click **Search** in the query form; records appear.
+3. Turn on the switches below as needed, enter header names in **Log request headers** (comma separated), and click **Save**.
+4. Verify: after some requests, click **Search** in the query form; records appear.
 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
 | Access log sample rate | Off / 1% / 10% / 100% | Off | Share of requests recorded; the API takes an integer of 0–10000 in 1/10,000 units |
-| Always log blocked, challenged and authentication-refused requests | On / off | Off | Requests with a [block reason](#block-reasons) get a line whatever the sample rate, recorded at 100% |
-| Record query strings | On / off | Off | Lines carry the request's query string (without `?`, at most 2,048 bytes) |
-| Record request headers | Up to 8 header names | None | Lines carry these headers' values (each at most 512 bytes, several values joined with `, `); `Authorization`, `Cookie` and `Proxy-Authorization` cannot be chosen |
-| Record the peer address | On / off | Off | When client addresses come from the PROXY protocol or a trusted header (the non-direct modes of [Client IP](../deploy/nodes.en.md#client-ip)), lines also carry the connection's peer address; not recorded when it equals the client IP |
+| Always log blocked, challenged and refused requests | On / off | Off | Requests with a [block reason](#block-reasons) get a line whatever the sample rate, recorded at 100% |
+| Log query strings | On / off | Off | Lines carry the request's query string (without `?`, at most 2,048 bytes) |
+| Log request headers | Up to 8 header names | None | Lines carry these headers' values (each at most 512 bytes, several values joined with `, `); `Authorization`, `Cookie` and `Proxy-Authorization` cannot be chosen |
+| Log the peer address | On / off | Off | When client addresses come from the PROXY protocol or a trusted header (the non-direct modes of [Client IP](../deploy/nodes.en.md#client-ip)), lines also carry the connection's peer address; not recorded when it equals the client IP |
 
-The last four publish a new configuration revision when saved; nodes update their site table in place, without reloading nginx. They need node capability `access-logs-v2`: while an active node of the cluster lacks it, these switches are disabled with "Some nodes in this cluster do not support it yet".
+The last four publish a new configuration revision when saved; nodes update their site table in place, without reloading nginx. They need node capability `access-logs-v2`: while an active node of the cluster lacks it, these options can only be turned off, with "Some nodes of the site's cluster do not support it yet".
 
 | Recorded fields | Not recorded |
 | --- | --- |
@@ -119,21 +120,21 @@ Access logs need the node capability `access-logs-v1`, JA4 also `ja4-v1`, forced
 
 | Reason | Name in the list | When |
 | --- | --- | --- |
-| `ip_banned` | Banned | The ban list (console, automatic and rule bans) matched |
-| `ip_blocked` | IP list | A platform or site block list |
-| `rule` | Rule | A custom WAF rule's block, ban, close or 4xx / 5xx custom response (with the rule) |
+| `ip_banned` | IP banned | The ban list (console, automatic and rule bans) matched |
+| `ip_blocked` | Block list | A platform or site block list |
+| `rule` | Custom rule | A custom WAF rule's block, ban, close or 4xx / 5xx custom response (with the rule) |
 | `rate_limit` | Rate limit | A rate limit was exceeded (with the rule) |
 | `crs` | OWASP CRS | CRS blocked it |
 | `cc` | CC protection | CC protection's per-address ban |
 | `challenge` | Challenge | A challenge was sent (Under Attack, CC or a rule; a rule's challenge with the rule) |
 | `auth` | Access authentication | Access authentication refused it (with the authentication rule) |
 | `referer` | Hotlink protection | Hotlink protection refused or redirected it |
-| `user_agent` | User-Agent | The UA list refused it |
-| `region` | Region | Region restrictions |
-| `cors` | CORS | The cross-origin Origin is not allowed |
+| `user_agent` | User-Agent list | The UA list refused it |
+| `region` | Region restriction | Region restrictions |
+| `cors` | CORS origin | The cross-origin Origin is not allowed |
 | `websocket_origin` | WebSocket origin | The WebSocket Origin is not allowed |
 | `client_cert` | Client certificate | The site requires a client certificate |
-| `maintenance` | Maintenance | Maintenance mode |
+| `maintenance` | Maintenance mode | Maintenance mode |
 
 Nodes record the reason where they refuse; reasons match the error codes of error pages (`ip-banned`, `ip-blocked`, `policy-denied`, `waf-blocked`, `geo-denied`, `hotlink-denied`, `ua-denied`, `cors-origin-denied`, `websocket-origin-denied`, `client-cert-required`, `maintenance`, `auth-*`). A forced HTTPS answer without a certificate (503), WebSocket turned off, an oversized body and unknown hosts are not blocks.
 
@@ -153,10 +154,12 @@ Nodes record the reason where they refuse; reasons match the error codes of erro
 
    The toast that follows links to the bans, the purge tasks or the CRS settings.
 
+Rows with a block reason show its badge under the request (grey for challenges, red otherwise) with the rule name (deleted rules by id). The arrow before the request opens the details: User-Agent, Referer, protocol, country, network, origin, request bytes, content type, query string, request headers and peer address; empty fields are left out.
+
 | Item | Behavior |
 | --- | --- |
 | Time range | Defaults to the last hour; the earliest is UTC midnight of the retention's first day (6 days ago by default) and the latest 5 minutes from now; the end must be after the start |
-| Filters | Status: exact; client IP: exact; path: prefix; request ID: exact. **More filters**: Host (exact, any case), method, status class (1xx–5xx), cache status, block reason (or **Any**), country, ASN, User-Agent contains, Referer contains (any case), minimum duration (ms), client network (CIDR, such as `203.0.113.0/24`). All conditions must hold |
+| Filters | Status: exact; client IP: exact; path: prefix; request ID: exact. **More filters**: **Host** (exact, any case), **Method**, **Status class** (1xx–5xx), **Cache status**, **Block reason** (or **Any reason**), **Country code**, **ASN**, **User-Agent contains**, **Referer contains** (any case), **Min duration (ms)**, **Client network (CIDR)** (such as `203.0.113.0/24`). All conditions must hold |
 | Request ID | Each entry shows the request ID the node settled (the same as the `X-Request-Id` response header and the one on [error pages](error-pages.en.md#request-ids)), in the CSV as the `requestId` column; empty for logs of older nodes |
 | Rows | The UI shows at most 100 rows ("Showing the first 100 rows. Narrow your search."); CSV holds at most 1,000 rows ("Exported the first 1,000 rows. Narrow the time range for other records.") |
 | CSV | Every cell is quoted with quotes escaped; values starting with `=`, `+`, `-`, or `@` get a leading `'` so spreadsheets do not treat them as formulas. Columns: `time`, `clientIp`, `method`, `host`, `path`, `status`, `bytesSent`, `durationMs`, `cacheStatus`, `sampleRate`, `nodeId`, `requestId`, `ja4`, `wafRuleIds`, `wafBlocked`, `ruleIds`, `userAgent`, `referer`, `httpVersion`, `scheme`, `country`, `asn`, `asName`, `upstreamAddr`, `upstreamStatus`, `upstreamMs`, `requestBytes`, `contentType`, `tlsVersion`, `blockReason`, `blockRuleId`, `query`, `headers` (`name: value` joined with `; `), `peerIp` |
@@ -288,9 +291,9 @@ Request format and endpoints are in [API and endpoints](../reference/api.en.md).
 | Symptom | Cause | Action |
 | --- | --- | --- |
 | "No matching logs" | Sample rate off or too low; time range before retention; the node has not applied the revision that enables logs or lacks `access-logs-v1`; **More filters** too narrow | Check the sample rate, time range, filters, and the node's **Applied** revision |
-| Blocked requests have no lines | Forced logging of blocked requests is off, or more than 100 per second | Turn the option on; beyond the bound the sample rate applies |
+| Blocked requests have no lines | **Always log blocked, challenged and refused requests** is off, or more than 100 per second | Turn the option on; beyond the bound the sample rate applies |
 | Log options are disabled | An active node of the cluster lacks `access-logs-v2` | Upgrade the node, see [Node upgrades](node-upgrades.en.md) |
-| Statistics cards show a partial-data note | An active node of the cluster lacks `stats-dims-v1` | Upgrade the node |
+| Statistics cards note "Some nodes of the cluster do not report these statistics" | An active node of the cluster lacks `stats-dims-v1` | Upgrade the node |
 | Country or network empty or **Unknown** | The node has no GeoIP database, or the client address is private | See [System settings](system.en.md#geoip-databases) |
 | "End time must be after start time" | Invalid time range | Adjust the times |
 | "Showing the first 100 rows. Narrow your search." | More than 100 matches | Narrow the range, add filters, or export CSV |
