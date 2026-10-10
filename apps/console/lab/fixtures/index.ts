@@ -3,7 +3,7 @@
  * file per area. Procedures without a handler answer emptyOutput(); the lab's empty state
  * answers from empty-state.ts.
  */
-import type { Site } from "@edgeweir/contract";
+import type { Site, SiteCopyChange, SiteCopyPart } from "@edgeweir/contract";
 import { accessFixtures } from "./access";
 import { accessControlFixtures } from "./access-control";
 import { type Fixtures, mergeFixtures, notFound, ok } from "./define";
@@ -24,12 +24,16 @@ import {
   revisionsOf,
   sites,
   starredIds,
+  tagSeeds,
 } from "./world";
 
 export type { Fixtures } from "./define";
 
 /** The page the lab shows now (hash history). */
 const currentPath = () => window.location.hash.replace(/^#/, "").split("?")[0] || "/";
+
+/** A list input that a query string may also give as one value. */
+const asList = <T>(value: T | T[]): T[] => (Array.isArray(value) ? value : [value]);
 
 function siteById(id: string): Site {
   const site = sites.find((s) => s.id === id);
@@ -131,15 +135,45 @@ const core: Fixtures = {
     list: (input) => nodes.filter((n) => !input.clusterId || n.clusterId === input.clusterId),
     get: ({ id }) => nodes.find((n) => n.id === id) ?? Promise.reject(notFound()),
   },
+  siteTags: {
+    list: () =>
+      tagSeeds.map((tag) => ({
+        ...tag,
+        sites: sites.filter((site) => site.tags.some((t) => t.id === tag.id)).length,
+      })),
+    rename: ({ id, name }) => {
+      const tag = tagSeeds.find((t) => t.id === id);
+      if (!tag) throw notFound();
+      tag.name = name;
+      for (const site of sites) for (const t of site.tags) if (t.id === id) t.name = name;
+      return { ...tag, sites: sites.filter((site) => site.tags.some((t) => t.id === id)).length };
+    },
+    delete: ({ id }) => {
+      tagSeeds.splice(
+        tagSeeds.findIndex((t) => t.id === id),
+        1,
+      );
+      for (const site of sites) site.tags = site.tags.filter((t) => t.id !== id);
+      return ok;
+    },
+  },
   sites: {
     list: (input) => {
       const search = input.search?.toLowerCase() ?? "";
+      const tagIds = (input.tagIds ?? []) as string[];
+      const tagged = (s: Site) =>
+        !tagIds.length ||
+        (input.tagMatch === "all"
+          ? tagIds.every((id) => s.tags.some((t) => t.id === id))
+          : tagIds.some((id) => s.tags.some((t) => t.id === id)));
       const matching = sites.filter(
         (s) =>
           (!input.clusterId || s.clusterId === input.clusterId) &&
+          tagged(s) &&
           (!search ||
             s.name.toLowerCase().includes(search) ||
-            s.domains.some((d) => d.includes(search))),
+            s.domains.some((d) => d.includes(search)) ||
+            s.tags.some((t) => t.name.toLowerCase().includes(search))),
       );
       const ordered = [...matching].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
       const page = Number(input.page ?? 1);
@@ -147,6 +181,75 @@ const core: Fixtures = {
       return { items: ordered.slice((page - 1) * size, page * size), total: matching.length };
     },
     get: ({ id }) => siteById(id),
+    setTags: ({ id, tags }) => {
+      const site = siteById(id);
+      site.tags = tags.map((name) => {
+        let tag = tagSeeds.find((t) => t.name.toLowerCase() === name.toLowerCase());
+        if (!tag) {
+          tag = { id: crypto.randomUUID(), name };
+          tagSeeds.push(tag);
+        }
+        return { id: tag.id, name: tag.name };
+      });
+      return { tags: site.tags };
+    },
+    batchSetEnabled: ({ ids, enabled }) => {
+      const changed = sites.filter((s) => ids.includes(s.id) && s.enabled !== enabled);
+      for (const site of changed) site.enabled = enabled;
+      return { changed: changed.map((s) => ({ id: s.id, name: s.name })), revisions: [] };
+    },
+    batchTags: ({ ids }) => ({
+      changed: sites.filter((s) => ids.includes(s.id)).map((s) => ({ id: s.id, name: s.name })),
+      revisions: [],
+    }),
+    batchDelete: ({ ids }) => ({
+      changed: sites.filter((s) => ids.includes(s.id)).map((s) => ({ id: s.id, name: s.name })),
+      revisions: [],
+    }),
+    copySettingsPreview: ({ id, targetIds, parts }) => ({
+      source: { id, name: siteById(id).name },
+      targets: asList(targetIds).map((targetId, i) => ({
+        id: targetId,
+        name: siteById(targetId).name,
+        // The second target lacks the source's origin group.
+        error:
+          i === 1 && asList(parts).includes("rules")
+            ? { code: "ORIGIN_GROUP_UNKNOWN", message: "", data: { group: "eu", rule: "media" } }
+            : null,
+        changes: asList(parts).map(
+          (part: SiteCopyPart, j): SiteCopyChange =>
+            part === "cacheRules" || part === "rules"
+              ? { part, changed: true, before: j, after: j + 2, fields: null }
+              : {
+                  part,
+                  changed: j % 3 !== 2,
+                  before: null,
+                  after: null,
+                  fields: j % 3 === 2 ? 0 : 2,
+                },
+        ),
+      })),
+    }),
+    copySettings: ({ targetIds, parts }) => ({
+      targets: targetIds.map((targetId, i) => ({
+        id: targetId,
+        name: siteById(targetId).name,
+        ok: i !== 1,
+        changed: i === 1 ? [] : parts,
+        revision: null,
+        error:
+          i === 1
+            ? { code: "ORIGIN_GROUP_UNKNOWN", message: "", data: { group: "eu", rule: "media" } }
+            : null,
+      })),
+    }),
+    clone: ({ id, name, domains }) => {
+      const source = siteById(id);
+      return {
+        site: { ...source, id: crypto.randomUUID(), name: name ?? domains[0] ?? "", domains },
+        revision: revisionsOf(source.clusterId, 1)[0] as never,
+      };
+    },
     starred: () =>
       sites
         .filter((s) => starredIds.has(s.id))

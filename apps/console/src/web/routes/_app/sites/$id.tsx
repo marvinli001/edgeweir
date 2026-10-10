@@ -1,5 +1,11 @@
 import { analyticsRange, displaySiteDomain, type Site, siteDomain } from "@edgeweir/contract";
-import { Add01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
+import {
+  Add01Icon,
+  Copy01Icon,
+  Delete02Icon,
+  Edit02Icon,
+  Layers01Icon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useLocation } from "@tanstack/react-router";
@@ -8,12 +14,15 @@ import { toast } from "sonner";
 import * as z from "zod";
 import { AnalyticsSection } from "@/components/analytics/analytics-section";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { FormDialog } from "@/components/form-dialog";
 import { Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { AccessTab } from "@/components/site/access-tab";
 import { BulkRedirectsTab } from "@/components/site/bulk-redirects-tab";
 import { CacheTab } from "@/components/site/cache-tab";
+import { CloneSiteDialog } from "@/components/site/clone-site-dialog";
 import { DnsSetupCard } from "@/components/site/cname-target";
+import { CopySettingsDialog } from "@/components/site/copy-settings-dialog";
 import { followSiteDelivery } from "@/components/site/delivery-toast";
 import { DomainKindBadge, DomainName } from "@/components/site/domain-name";
 import { ErrorPagesTab } from "@/components/site/error-pages-tab";
@@ -28,6 +37,7 @@ import { SaveBar, useSaveSite } from "@/components/site/save-site";
 import { SecurityTab } from "@/components/site/security-tab";
 import { StarButton, useSiteStars } from "@/components/site-star";
 import { SiteStatus, untilLive } from "@/components/site-status";
+import { TagBadges, TagPicker } from "@/components/site-tags";
 import { QueryView } from "@/components/states";
 import { NotFoundPage } from "@/components/status-page";
 import { Badge } from "@/components/ui/badge";
@@ -40,7 +50,7 @@ import { useDraft } from "@/hooks/use-draft";
 import { useTabBar } from "@/hooks/use-tab-bar";
 import { DEFAULT_RANGE } from "@/lib/analytics";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
-import { orpc } from "@/lib/orpc";
+import { client, orpc } from "@/lib/orpc";
 import { recordRecent } from "@/lib/recents";
 import { needsDomainForms, newDomains } from "@/lib/site-domains";
 import { SITE_TABS, type SiteTab, siteTabLabel } from "@/lib/site-tabs";
@@ -208,6 +218,8 @@ function OverviewTab({ site }: { site: Site }) {
   const { save, error, pending } = useSaveSite(site.id);
   const purge = useMutation(orpc.sites.purgeAll.mutationOptions());
   const remove = useMutation(orpc.sites.delete.mutationOptions());
+  const [copying, setCopying] = React.useState(false);
+  const [cloning, setCloning] = React.useState(false);
 
   return (
     <div className="grid items-start gap-4 @4xl/main:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
@@ -282,6 +294,9 @@ function OverviewTab({ site }: { site: Site }) {
                 <InfoRow label={m.sites_col_cluster()}>
                   <Badge variant="secondary">{site.clusterName}</Badge>
                 </InfoRow>
+                <InfoRow label={m.tags_label()}>
+                  <SiteTagsRow site={site} />
+                </InfoRow>
                 <InfoRow label={m.site_updated_at()}>
                   <span title={formatDateTime(site.updatedAt)}>{timeAgo(site.updatedAt)}</span>
                 </InfoRow>
@@ -297,6 +312,14 @@ function OverviewTab({ site }: { site: Site }) {
         </Card>
         <Card>
           <CardContent className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setCopying(true)} data-testid="site-copy">
+              <HugeiconsIcon icon={Copy01Icon} strokeWidth={2} />
+              {m.copy_title()}
+            </Button>
+            <Button variant="outline" onClick={() => setCloning(true)} data-testid="site-clone">
+              <HugeiconsIcon icon={Layers01Icon} strokeWidth={2} />
+              {m.clone_action()}
+            </Button>
             <ConfirmDialog
               trigger={<Button variant="outline">{m.sites_purge()}</Button>}
               title={m.sites_purge()}
@@ -337,7 +360,61 @@ function OverviewTab({ site }: { site: Site }) {
           </CardContent>
         </Card>
       </div>
+      {copying ? (
+        <CopySettingsDialog
+          open
+          onOpenChange={setCopying}
+          source={{ id: site.id, name: site.name }}
+        />
+      ) : null}
+      {cloning ? <CloneSiteDialog open onOpenChange={setCloning} site={site} /> : null}
     </div>
+  );
+}
+
+/** The site's tags, and a dialog that edits them (saved at once: tags are not published). */
+function SiteTagsRow({ site }: { site: Site }) {
+  const queryClient = useQueryClient();
+  const navigate = Route.useNavigate();
+  const [open, setOpen] = React.useState(false);
+  const [tags, setTags] = React.useState<string[]>([]);
+  return (
+    <>
+      <TagBadges
+        tags={site.tags}
+        onSelect={(tag) => void navigate({ to: "/sites", search: { tags: [tag.id] } })}
+      />
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        aria-label={m.tags_label()}
+        onClick={() => {
+          setTags(site.tags.map((tag) => tag.name));
+          setOpen(true);
+        }}
+        data-testid="site-tags-edit"
+      >
+        <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} />
+      </Button>
+      <FormDialog
+        open={open}
+        onOpenChange={setOpen}
+        title={m.tags_label()}
+        submitLabel={m.common_save()}
+        submitTestId="site-tags-save"
+        onSubmit={async () => {
+          await client.sites.setTags({ id: site.id, tags });
+          toast.success(m.tags_saved());
+          setOpen(false);
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: orpc.sites.key() }),
+            queryClient.invalidateQueries({ queryKey: orpc.siteTags.key() }),
+          ]);
+        }}
+      >
+        <TagPicker id="site-tags" value={tags} onChange={setTags} />
+      </FormDialog>
+    </>
   );
 }
 

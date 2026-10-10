@@ -9,6 +9,7 @@ import {
   Moon02Icon,
   ServerStack01Icon,
   Shield01Icon,
+  Tag01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -17,6 +18,7 @@ import { defaultFilter } from "cmdk";
 import * as React from "react";
 import { accountNav, moreNav, navGroups } from "@/components/nav-items";
 import { useQuickActions } from "@/components/quick-actions";
+import { useSiteTags } from "@/components/site-tags";
 import { useTheme } from "@/components/theme-provider";
 import {
   Command,
@@ -27,6 +29,7 @@ import {
   CommandItem,
   CommandList,
   CommandSeparator,
+  CommandShortcut,
 } from "@/components/ui/command";
 import { getLocale, m, setLocale } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
@@ -36,6 +39,8 @@ import { readRecents } from "@/lib/recents";
 const MAX_SITES = 6;
 /** Found sites that also list their actions. */
 const MAX_SITE_ACTIONS = 3;
+/** Tags listed for a search (each opens the site list filtered by it). */
+const MAX_TAGS = 4;
 /** Items whose value is an id: only their keywords (names, domains) are matched. */
 const BY_KEYWORDS = "#";
 
@@ -51,8 +56,9 @@ type SiteEntry = { id: string; name: string; domains: string[] };
 const ITEM = "*:[svg]:text-muted-foreground";
 
 /**
- * ⌘K / Ctrl+K command palette (shadcn command block): sites by name or domain (starred and recent
- * ones before a search), their Under Attack and purge, pages, and console-wide actions.
+ * ⌘K / Ctrl+K command palette (shadcn command block): sites by name, domain or tag (starred and
+ * recent ones before a search), tags (the site list filtered by one), the sites' Under Attack and
+ * purge, pages, and console-wide actions.
  */
 export function CommandMenu() {
   const [open, setOpen] = React.useState(false);
@@ -87,6 +93,12 @@ export function CommandMenu() {
     placeholderData: keepPreviousData,
   });
   const starred = useQuery({ ...orpc.sites.starred.queryOptions(), enabled: open });
+  const tags = useSiteTags(open);
+  const foundTags = query
+    ? (tags.data ?? [])
+        .filter((tag) => tag.name.toLowerCase().includes(query.toLowerCase()))
+        .slice(0, MAX_TAGS)
+    : [];
   const sites: SiteEntry[] = React.useMemo(() => {
     if (query) return found.data?.items ?? [];
     if (!open) return [];
@@ -142,6 +154,26 @@ export function CommandMenu() {
                       {displaySiteDomain(site.domains[0])}
                     </span>
                   ) : null}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          ) : null}
+          {foundTags.length ? (
+            <CommandGroup heading={m.command_group_tags()}>
+              {foundTags.map((tag) => (
+                <CommandItem
+                  className={ITEM}
+                  key={tag.id}
+                  value={`${BY_KEYWORDS}tag:${tag.id}`}
+                  keywords={[tag.name]}
+                  onSelect={run(() => navigate({ to: "/sites", search: { tags: [tag.id] } }))}
+                  data-testid="command-tag"
+                >
+                  <HugeiconsIcon icon={Tag01Icon} strokeWidth={2} />
+                  <span className="truncate">{m.command_tag({ name: tag.name })}</span>
+                  <CommandShortcut className="tracking-normal tabular-nums">
+                    {m.tags_sites_count({ count: tag.sites })}
+                  </CommandShortcut>
                 </CommandItem>
               ))}
             </CommandGroup>

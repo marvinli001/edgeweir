@@ -1,6 +1,6 @@
 import { type Site, type SiteCreateInput, siteCreateInput } from "@edgeweir/contract";
 import { MAX_HOST_HEADER_LENGTH, validHostHeader } from "@edgeweir/rule-engine";
-import { Add01Icon, GlobeIcon, Search01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, GlobeIcon, Search01Icon, Tag01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -17,10 +17,13 @@ import { followSiteDelivery } from "@/components/site/delivery-toast";
 import { DomainName } from "@/components/site/domain-name";
 import { StarButton, useSiteStars } from "@/components/site-star";
 import { SiteStatus, untilLive } from "@/components/site-status";
+import { TagBadges, TagFilter, TagManagerDialog, useSiteTags } from "@/components/site-tags";
+import { SitesBatchBar } from "@/components/sites-batch-bar";
 import { SitesTabs } from "@/components/sites-tabs";
 import { EmptyState, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -58,6 +61,9 @@ export const Route = createFileRoute("/_app/sites/")({
     create: z.boolean().optional(),
     q: z.string().optional(),
     cluster: z.string().optional(),
+    /** Tag ids: sites with any of them, or with all of them under match "all". */
+    tags: z.array(z.string()).optional(),
+    match: z.literal("all").optional(),
     page: z.number().int().min(1).optional(),
   }),
   component: SitesPage,
@@ -68,11 +74,13 @@ function SitesPage() {
   const createKey = useOpenKey(search.create === true);
   const navigate = Route.useNavigate();
   const page = search.page ?? 1;
+  const tagIds = search.tags ?? [];
   const sites = useQuery({
     ...orpc.sites.list.queryOptions({
       input: {
         search: search.q || undefined,
         clusterId: search.cluster,
+        ...(tagIds.length ? { tagIds, tagMatch: search.match ?? "any" } : {}),
         page,
         pageSize: PAGE_SIZE,
       },
@@ -82,9 +90,35 @@ function SitesPage() {
     meta: { background: true },
   });
   const clusters = useQuery(orpc.clusters.list.queryOptions());
+  const tags = useSiteTags();
+  const [manageTags, setManageTags] = React.useState(false);
   const setCreateOpen = (open: boolean) =>
     navigate({ search: (prev) => ({ ...prev, create: open || undefined }), replace: true });
-  const filtered = !!search.q || !!search.cluster;
+  const filtered = !!search.q || !!search.cluster || tagIds.length > 0;
+  const filterTag = React.useCallback(
+    (id: string) =>
+      navigate({ search: (prev) => ({ ...prev, tags: [id], match: undefined, page: undefined }) }),
+    [navigate],
+  );
+  // Selected sites (id to name) stay selected across pages; another filter starts over.
+  const [selected, setSelected] = React.useState<ReadonlyMap<string, string>>(new Map());
+  const filterKey = JSON.stringify([search.q, search.cluster, tagIds, search.match]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new filter clears the selection
+  React.useEffect(() => setSelected(new Map()), [filterKey]);
+  const pageItems = sites.data?.items ?? [];
+  const pageSelected = pageItems.filter((site) => selected.has(site.id)).length;
+  const selectRows = React.useCallback(
+    (rows: { id: string; name: string }[], checked: boolean) =>
+      setSelected((prev) => {
+        const next = new Map(prev);
+        for (const row of rows) {
+          if (checked) next.set(row.id, row.name);
+          else next.delete(row.id);
+        }
+        return next;
+      }),
+    [],
+  );
 
   // Each site's requests over the last day, for the trend column. The breakdown ranks all sites
   // and returns only the busiest, so it speaks for the rows only when the table lists every site:
@@ -127,9 +161,27 @@ function SitesPage() {
         // The star and the name share the first column, which stays put while the table scrolls
         // sideways on narrow screens.
         id: "name",
-        header: () => <span className="ps-[1.875rem]">{m.sites_col_name()}</span>,
+        header: () => (
+          <span className="flex items-center gap-2">
+            <Checkbox
+              checked={pageItems.length > 0 && pageSelected === pageItems.length}
+              indeterminate={pageSelected > 0 && pageSelected < pageItems.length}
+              onCheckedChange={(checked) => selectRows(pageItems, checked)}
+              aria-label={m.sites_select_page()}
+              data-testid="select-page"
+            />
+            <span className="ps-[1.875rem]">{m.sites_col_name()}</span>
+          </span>
+        ),
         cell: ({ row }) => (
           <div className="flex items-start gap-2">
+            <Checkbox
+              className="mt-0.5"
+              checked={selected.has(row.original.id)}
+              onCheckedChange={(checked) => selectRows([row.original], checked)}
+              aria-label={m.sites_select_site({ name: row.original.name })}
+              data-testid="select-site"
+            />
             <StarButton
               starred={starredIds.has(row.original.id)}
               pending={pendingId === row.original.id}
@@ -148,6 +200,11 @@ function SitesPage() {
               <span className="text-xs text-muted-foreground">
                 {timeAgo(row.original.createdAt)}
               </span>
+              <TagBadges
+                tags={row.original.tags}
+                onSelect={(tag) => void filterTag(tag.id)}
+                className="mt-1 max-w-56"
+              />
             </div>
           </div>
         ),
@@ -217,7 +274,18 @@ function SitesPage() {
         cell: ({ row }) => <Badge variant="secondary">{row.original.clusterName}</Badge>,
       },
     ],
-    [starredIds, pendingId, toggle, showTrends, trendById],
+    [
+      starredIds,
+      pendingId,
+      toggle,
+      showTrends,
+      trendById,
+      selected,
+      pageItems,
+      pageSelected,
+      selectRows,
+      filterTag,
+    ],
   );
 
   return (
@@ -257,6 +325,35 @@ function SitesPage() {
             className="w-full sm:w-44"
           />
         ) : null}
+        {tags.data?.length || tagIds.length ? (
+          <TagFilter
+            tags={tags.data ?? []}
+            selected={tagIds}
+            match={search.match ?? "any"}
+            onChange={(next) =>
+              navigate({
+                search: (prev) => ({
+                  ...prev,
+                  tags: next.selected.length ? next.selected : undefined,
+                  match: next.match === "all" ? "all" : undefined,
+                  page: undefined,
+                }),
+                replace: true,
+              })
+            }
+          />
+        ) : null}
+        {tags.data?.length ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setManageTags(true)}
+            data-testid="manage-tags"
+          >
+            <HugeiconsIcon icon={Tag01Icon} strokeWidth={2} />
+            {m.tags_manage()}
+          </Button>
+        ) : null}
       </FilterBar>
       <QueryView
         query={sites}
@@ -292,6 +389,10 @@ function SitesPage() {
           </>
         )}
       </QueryView>
+      {selected.size ? (
+        <SitesBatchBar selected={selected} onClear={() => setSelected(new Map())} />
+      ) : null}
+      <TagManagerDialog open={manageTags} onOpenChange={setManageTags} />
       <CreateSiteDialog
         key={createKey}
         open={search.create === true}
