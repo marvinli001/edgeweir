@@ -65,6 +65,12 @@
 #              before G16) with the same BENCH_SCENARIO is the baseline.
 #   logs       the same headers on <base|new>.logs.bench.g16.test, which logs
 #              every request (sample rate 100%; G16 lines carry the new fields).
+#   image      cache HITs of a WebP variant: /photo.jpg of bench-img.g18.test,
+#              which scripts/bench-g18.mjs sets up (WebP / AVIF conversion on),
+#              with Accept: image/webp,*/*; checks that the warmed response is
+#              an image/webp HIT.
+#   image-original the same URL with Accept: */* (the site's JPEG HIT), the
+#              baseline of image.
 # pass and challenge default to ua-bench.test, which scripts/e2e-g2.mjs leaves
 # behind (whoami, cache rule on /, Under Attack js); headers to
 # hdr-bench.g8.test, which scripts/e2e-g8.mjs leaves behind; charset to
@@ -96,7 +102,8 @@ case "$BENCH_SCENARIO" in
   body-post) DEFAULT_HOST=body.bench.g14.test DEFAULT_URL="http://127.0.0.1:${E2E_G14_BENCH_NEW_PORT:-18952}/form" ;;
   dims) DEFAULT_HOST=new.cache.bench.g16.test DEFAULT_URL="http://127.0.0.1:${E2E_G16_BENCH_NEW_PORT:-18954}/bench-cache.txt" ;;
   logs) DEFAULT_HOST=new.logs.bench.g16.test DEFAULT_URL="http://127.0.0.1:${E2E_G16_BENCH_NEW_PORT:-18954}/bench-cache.txt" ;;
-  *) echo "BENCH_SCENARIO must be cache, pass, challenge, headers, proxy, proxy-plain, charset, tls, tls-resume, url-auth, access, body, post, body-post, dims or logs, not $BENCH_SCENARIO" >&2; exit 2 ;;
+  image | image-original) DEFAULT_HOST=bench-img.g18.test DEFAULT_URL="http://127.0.0.1:${E2E_NODE_PORT:-18080}/photo.jpg" ;;
+  *) echo "BENCH_SCENARIO must be cache, pass, challenge, headers, proxy, proxy-plain, charset, tls, tls-resume, url-auth, access, body, post, body-post, dims, logs, image or image-original, not $BENCH_SCENARIO" >&2; exit 2 ;;
 esac
 BENCH_URL="${BENCH_URL:-${DEFAULT_URL:-http://127.0.0.1:${E2E_NODE_PORT:-18080}/bench-cache.txt}}"
 BENCH_HOST="${BENCH_HOST:-$DEFAULT_HOST}"
@@ -112,6 +119,11 @@ if [[ "$BENCH_SCENARIO" == dims || "$BENCH_SCENARIO" == logs ]]; then
   BENCH_REFERER="${BENCH_REFERER:-https://search.bench.example/results}"
   OHA_HEADERS+=(-H "User-Agent: $BENCH_BROWSER_UA" -H "Referer: $BENCH_REFERER")
   CURL_HEADERS+=(-A "$BENCH_BROWSER_UA" -e "$BENCH_REFERER")
+fi
+if [[ "$BENCH_SCENARIO" == image* ]]; then
+  BENCH_ACCEPT="$([[ "$BENCH_SCENARIO" == image ]] && echo 'image/webp,*/*' || echo '*/*')"
+  OHA_HEADERS+=(-H "Accept: $BENCH_ACCEPT")
+  CURL_HEADERS+=(-H "Accept: $BENCH_ACCEPT")
 fi
 EXPECT_STATUS=200
 if [[ "$BENCH_SCENARIO" == pass || "$BENCH_SCENARIO" == challenge ]]; then
@@ -223,6 +235,11 @@ if [[ "$BENCH_SCENARIO" != challenge && "$BENCH_SCENARIO" != tls* && "$BENCH_SCE
     { ! printf '%s\n' "$HEADERS" | tr -d '\r' | grep -qi "^access-control-allow-origin: $BENCH_ORIGIN$" ||
       ! printf '%s\n' "$HEADERS" | tr -d '\r' | grep -qi '^x-content-type-options: nosniff$'; }; then
     echo "Refusing to benchmark: $BENCH_HOST does not apply its access control (CORS, security headers)." >&2
+    exit 1
+  fi
+  if [[ "$BENCH_SCENARIO" == image* ]] &&
+    ! printf '%s\n' "$HEADERS" | tr -d '\r' | grep -qi "^content-type: $([[ "$BENCH_SCENARIO" == image ]] && echo image/webp || echo image/jpeg)$"; then
+    echo "Refusing to benchmark: $BENCH_HOST does not answer the expected type (run scripts/bench-g18.mjs first)." >&2
     exit 1
   fi
   if [[ "$BENCH_SCENARIO" == charset ]] &&
