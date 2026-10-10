@@ -222,10 +222,15 @@ async function session(client, host, port) {
   };
 }
 
-/** PIDs of the nginx worker processes of a node container (a reload replaces them). */
-async function workers(service) {
-  const script =
-    "for p in /proc/[0-9]*; do c=$(tr '\\0' ' ' < $p/cmdline 2>/dev/null); case \"$c\" in 'nginx: worker'*) echo ${p#/proc/};; esac; done";
+/**
+ * PIDs of the nginx worker processes of a node container (a reload replaces
+ * them). With active, only workers that are not shutting down: a reload's
+ * old generation drains its connections and exits on its own schedule, so
+ * whether it is still there says nothing about a later reload.
+ */
+async function workers(service, { active = false } = {}) {
+  const draining = active ? "*'shutting down'*) ;; " : "";
+  const script = `for p in /proc/[0-9]*; do c=$(tr '\\0' ' ' < $p/cmdline 2>/dev/null); case "$c" in ${draining}'nginx: worker'*) echo \${p#/proc/};; esac; done`;
   const out = await run(["exec", await containerId(service), "sh", "-c", script]);
   return out.split(/\s+/).filter(Boolean).sort().join(",");
 }
@@ -430,7 +435,7 @@ try {
   );
 
   // -------------------------------------------------------------- f. hot upstream change
-  const workersHot = await workers("node");
+  const workersHot = await workers("node", { active: true });
   await a("PATCH", `/l4-apps/${apps.tcp.id}`, {
     origins: [{ address: "l4-origin-b", port: 7000 }],
   });
@@ -439,7 +444,11 @@ try {
     const r = await tcp("client-a", "node", PORTS.tcp, ["NAME\n"]);
     return r[0] === "b";
   });
-  assert.equal(await workers("node"), workersHot, "an origin change must not reload nginx");
+  assert.equal(
+    await workers("node", { active: true }),
+    workersHot,
+    "an origin change must not reload nginx",
+  );
   pass(
     `hot upstream change: ${PORTS.tcp} moved to origin b without a reload (workers ${workersHot} unchanged)`,
   );

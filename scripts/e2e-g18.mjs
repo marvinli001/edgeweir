@@ -268,7 +268,7 @@ try {
     domains: [HOST],
     origins: ORIGIN,
     clusterId,
-    cacheRules: [{ pathPrefixes: ["/"], edgeTtlSeconds: 300, originCacheControl: "override" }],
+    cacheRules: [{ pathPrefixes: ["/"], edgeTtlSeconds: 3600, originCacheControl: "override" }],
   });
   const features = await admin.ok("GET", `/sites/${site.id}/features`);
   assert.deepEqual(features.imageConvert, { available: true, reason: null });
