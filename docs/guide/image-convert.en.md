@@ -15,7 +15,7 @@ Converts a site's cached JPEG and PNG responses to WebP or AVIF by the visitor's
 
 1. Open **Sites** → choose the site → the **Cache** tab.
 2. Make sure a **cache rule** caches the paths of the images: only cached requests are converted.
-3. In the **Image format conversion** card, turn on **On**, choose WebP, AVIF (or both) and their quality, the source types and, if needed, the range; click **Save**.
+3. In the **Image format conversion** card, turn on **On**, choose WebP, AVIF (or both) and their quality, the source types and, if needed, the size and pixel **Limits**; click **Save**.
 4. The **Saved by conversion** card shows the bytes saved over the chosen range.
 
 Settings are hot updates; nginx does not reload. While an active node of the cluster lacks `image-convert-v1`, the card shows "Some nodes of the site's cluster do not support it yet"; a conversion that is on can still be turned off.

@@ -2481,7 +2481,7 @@
   "image_convert_sources": "Source types",
   "image_convert_jpeg": "JPEG",
   "image_convert_png": "PNG",
-  "image_convert_limits": "Range",
+  "image_convert_limits": "Limits",
   "image_convert_min_size": "Smallest original (bytes)",
   "image_convert_max_size": "Largest original (bytes)",
   "image_convert_max_pixels": "Most pixels",

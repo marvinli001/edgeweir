@@ -2284,7 +2284,7 @@
   "image_convert_sources": "源类型",
   "image_convert_jpeg": "JPEG",
   "image_convert_png": "PNG",
-  "image_convert_limits": "范围",
+  "image_convert_limits": "限制",
   "image_convert_min_size": "最小原图（字节）",
   "image_convert_max_size": "最大原图（字节）",
   "image_convert_max_pixels": "最大像素数",
