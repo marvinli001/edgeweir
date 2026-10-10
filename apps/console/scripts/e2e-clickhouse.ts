@@ -159,7 +159,11 @@ try {
   assert.equal(Number(dims.block_reasons.region), 1);
   assert.equal(Number(dims.challenges_issued), 2);
   // Retention: the access_log TTL follows the setting (ADR-0041 §5).
-  await setLogRetention(app, { type: "user", id: "ch-e2e" }, { postgresDays: 7, clickhouseDays: 30 });
+  await setLogRetention(
+    app,
+    { type: "user", id: "ch-e2e" },
+    { postgresDays: 7, clickhouseDays: 30 },
+  );
   const ddl = await clickhouse(env, "SHOW CREATE TABLE access_log FORMAT TSVRaw");
   assert.match(ddl, /TTL toDateTime\(time\) \+ toIntervalDay\(30\)/);
   console.log(
