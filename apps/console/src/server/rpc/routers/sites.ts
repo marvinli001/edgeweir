@@ -30,7 +30,16 @@ import {
 } from "../../services/l4";
 import { getSiteMaintenance, updateSiteMaintenance } from "../../services/maintenance";
 import { siteOriginHealth } from "../../services/origin-health";
+import { batchDeleteSites, batchSetEnabled } from "../../services/site-batch";
+import { cloneSite, copySiteSettings, previewSiteCopy } from "../../services/site-copy";
 import { siteLaunch } from "../../services/site-launch";
+import {
+  batchSiteTags,
+  deleteSiteTag,
+  listSiteTags,
+  renameSiteTag,
+  setSiteTags,
+} from "../../services/site-tags";
 import {
   createSite,
   deleteSite,
@@ -204,6 +213,42 @@ export const sitesRouter = {
     ),
     features: authed.sites.features.handler(({ input, context }) =>
       siteFeatures(context.app.db, input.id),
+    ),
+    setTags: authed.sites.setTags.handler(({ input, context }) =>
+      setSiteTags(context.app.db, input, context.actor),
+    ),
+    batchSetEnabled: authed.sites.batchSetEnabled.handler(({ input, context }) =>
+      batchSetEnabled(context.app.db, input, { actor: context.actor }),
+    ),
+    batchTags: authed.sites.batchTags.handler(({ input, context }) =>
+      batchSiteTags(context.app.db, input, context.actor),
+    ),
+    batchDelete: authed.sites.batchDelete.handler(({ input, context }) =>
+      batchDeleteSites(context.app.db, input.ids, { actor: context.actor }),
+    ),
+    copySettingsPreview: authed.sites.copySettingsPreview.handler(({ input, context }) =>
+      previewSiteCopy(context.app.db, input, {
+        masterKey: context.app.masterKey,
+        actor: context.actor,
+      }),
+    ),
+    copySettings: authed.sites.copySettings.handler(({ input, context }) =>
+      copySiteSettings(context.app.db, input, {
+        masterKey: context.app.masterKey,
+        actor: context.actor,
+      }),
+    ),
+    clone: authed.sites.clone.handler(({ input, context }) =>
+      cloneSite(context.app.db, input, { masterKey: context.app.masterKey, actor: context.actor }),
+    ),
+  },
+  siteTags: {
+    list: authed.siteTags.list.handler(({ context }) => listSiteTags(context.app.db)),
+    rename: authed.siteTags.rename.handler(({ input, context }) =>
+      renameSiteTag(context.app.db, input, context.actor),
+    ),
+    delete: authed.siteTags.delete.handler(({ input, context }) =>
+      deleteSiteTag(context.app.db, input.id, context.actor),
     ),
   },
   cacheTasks: {

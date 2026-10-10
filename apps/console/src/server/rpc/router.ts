@@ -16,6 +16,7 @@ export const router = os.router({
   serviceAccounts: systemRouter.serviceAccounts,
   rules: accessControlRouter.rules,
   bulkRedirects: sitesRouter.bulkRedirects,
+  siteTags: sitesRouter.siteTags,
   platformRules: accessControlRouter.platformRules,
   ipLists: accessControlRouter.ipLists,
   ipCheck: accessControlRouter.ipCheck,

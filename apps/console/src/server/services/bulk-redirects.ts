@@ -39,7 +39,7 @@ export async function getBulkRedirects(db: Database, siteId: string): Promise<Bu
  * a wildcard domain. Hosts only a `.` suffix or a pattern matches are not
  * accepted as sources.
  */
-function servesHost(domains: { name: string; kind: string }[], host: string): boolean {
+export function servesHost(domains: { name: string; kind: string }[], host: string): boolean {
   const dot = host.indexOf(".");
   return domains.some((domain) =>
     domain.kind === "wildcard"

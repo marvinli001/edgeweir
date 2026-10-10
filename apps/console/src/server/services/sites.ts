@@ -8,7 +8,7 @@ import type {
   siteCreateInput,
   siteUpdateInput,
 } from "@edgeweir/contract";
-import { tlsSettings } from "@edgeweir/contract";
+import { tagKey, tlsSettings } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import {
   and,
@@ -67,6 +67,7 @@ import {
 import { actionOriginGroup, availableLists, failUnknownLists } from "./rules";
 import { siteDeliveries } from "./site-delivery";
 import { assertSitePorts, portsOf } from "./site-ports";
+import { sitesWithTags, siteTagRefs, writeSiteTags } from "./site-tags";
 import { flushSiteUsage } from "./usage";
 
 type SiteCreate = z.output<typeof siteCreateInput>;
@@ -130,6 +131,7 @@ async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
     .select({ siteId: schema.siteSecret.siteId })
     .from(schema.siteSecret)
     .where(and(inArray(schema.siteSecret.siteId, ids), eq(schema.siteSecret.kind, PURGE_KEY)));
+  const tags = await siteTagRefs(db, ids);
   return rows.map((r) => {
     const sitePools = pools
       .filter((p) => p.siteId === r.id)
@@ -153,6 +155,7 @@ async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
       ports: portsOf(r),
       domains: domains.filter((d) => d.siteId === r.id).map(formatDomain),
       cnamePrefix: r.cnamePrefix,
+      tags: tags.get(r.id) ?? [],
       origins: origins
         .filter((o) => poolIds.has(o.poolId))
         .map((o) => ({
@@ -235,13 +238,21 @@ async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
   });
 }
 
-/** One page of sites, filtered by name/domain search and cluster. */
+/** One page of sites, filtered by name/domain/tag search, cluster and tags. */
 export async function listSites(
   db: Database,
-  query: { search?: string; clusterId?: string; page: number; pageSize: number },
+  query: {
+    search?: string;
+    clusterId?: string;
+    tagIds?: string[];
+    tagMatch?: "any" | "all";
+    page: number;
+    pageSize: number;
+  },
 ): Promise<{ items: Site[]; total: number }> {
   const filters: (SQL | undefined)[] = [];
   if (query.clusterId) filters.push(eq(schema.site.clusterId, query.clusterId));
+  if (query.tagIds?.length) filters.push(sitesWithTags(query.tagIds, query.tagMatch ?? "any"));
   if (query.search) {
     const like = (term: string) => `%${term.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     // Unicode host names are stored as Punycode: search both forms.
@@ -274,6 +285,18 @@ export async function listSites(
       or(
         ilike(schema.site.name, like(query.search)),
         unicodeIds.length ? inArray(schema.site.id, unicodeIds) : undefined,
+        exists(
+          db
+            .select({ one: sql`1` })
+            .from(schema.siteTag)
+            .innerJoin(schema.tag, eq(schema.tag.id, schema.siteTag.tagId))
+            .where(
+              and(
+                eq(schema.siteTag.siteId, schema.site.id),
+                ilike(schema.tag.name, like(query.search)),
+              ),
+            ),
+        ),
         exists(
           db
             .select({ one: sql`1` })
@@ -338,7 +361,7 @@ export async function shareSites(
   return new Set(rows.map((row) => row.id));
 }
 
-async function toSiteDto(db: Executor, row: SiteRow): Promise<Site> {
+export async function toSiteDto(db: Executor, row: SiteRow): Promise<Site> {
   const [dto] = await toSiteDtos(db, [row]);
   if (!dto) throw new Error("site not readable");
   return dto;
@@ -355,7 +378,7 @@ export async function getSite(db: Database, id: string): Promise<Site> {
 const ordered = (index: number, base = Date.now()) => new Date(base + index);
 
 /** Every domain (name and form) belongs to exactly one site. */
-async function assertDomainsFree(tx: Tx, domains: DomainRow[], exceptSiteId?: string) {
+export async function assertDomainsFree(tx: Tx, domains: DomainRow[], exceptSiteId?: string) {
   await lockDomains(
     tx,
     domains.map((d) => d.name),
@@ -508,7 +531,7 @@ function assertGrpcOverHttp2(settings: Pick<OriginSettingsInput, "protocol" | "g
  * Pool columns of the settings; health check, affinity, protocol, gRPC,
  * tries and status retries only when given (kept otherwise).
  */
-function poolSettingsValues(
+export function poolSettingsValues(
   settings: Omit<OriginSettingsInput, KeptPoolSettings> &
     Partial<Pick<OriginSettingsInput, KeptPoolSettings>>,
 ) {
@@ -590,7 +613,7 @@ function contentSettingsValues(
 }
 
 /** Cache rule columns that make up a rule's content. */
-const CACHE_RULE_FIELDS = [
+export const CACHE_RULE_FIELDS = [
   "priority",
   "expression",
   "listIds",
@@ -690,7 +713,7 @@ async function assertRuleGroups(tx: Tx, siteId: string, origins: OriginInput[]) 
 }
 
 /** The site's origin pool (the oldest one; sites have exactly one). */
-async function sitePool(tx: Tx, siteId: string) {
+export async function sitePool(tx: Tx, siteId: string) {
   let [pool] = await tx
     .select()
     .from(schema.originPool)
@@ -727,6 +750,16 @@ async function publishSiteChange(
     metadata: { ...change.metadata, revision: row.revision },
   });
   return toRevisionDto(row);
+}
+
+/** The tags of a site created in this transaction (its creation's audit entry names them). */
+export async function setNewSiteTags(tx: Tx, actor: Actor, siteId: string, tags: string[]) {
+  await writeSiteTags(tx, actor, {
+    siteIds: [siteId],
+    wanted: tags,
+    next: (_current, byKey) => tags.flatMap((name) => byKey.get(tagKey(name)) ?? []),
+    metadata: null,
+  });
 }
 
 /**
@@ -789,8 +822,10 @@ export async function createSite(
         name,
         domains: domains.map(formatDomain),
         ...(input.cacheSettings.purgeMethod.enabled ? { purgeMethod: true } : {}),
+        ...(input.tags.length ? { tags: input.tags } : {}),
       },
     });
+    if (input.tags.length) await setNewSiteTags(tx, ctx.actor, siteRow.id, input.tags);
     return { site: await toSiteDto(tx, siteRow), revision };
   });
 }

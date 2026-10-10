@@ -162,7 +162,7 @@ export async function updateAccessControl(
   });
 }
 
-async function checkSiteLists(tx: Executor, lists: AccessControlSettings["siteLists"]) {
+export async function checkSiteLists(tx: Executor, lists: AccessControlSettings["siteLists"]) {
   const ids = [...lists.blockListIds, ...lists.allowListIds];
   if (!ids.length) return;
   const rows = await tx

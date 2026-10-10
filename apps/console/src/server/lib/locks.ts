@@ -88,6 +88,12 @@ export const lockPlatformRules = (tx: Executor) => xactLock(tx, "edgeweir.platfo
 /** Serializes IP list writes (names and the entry quota are checked across lists). */
 export const lockIpLists = (tx: Executor) => xactLock(tx, "edgeweir.ip-lists");
 
+/**
+ * Serializes writes of tags and of the tags of sites (ADR-0042). Taken before
+ * any site row a tag write locks.
+ */
+export const lockTags = (tx: Executor) => xactLock(tx, "edgeweir.tags");
+
 /** Serializes the creation of alert channels (the channel limit). */
 export const lockAlertChannels = (tx: Executor) => xactLock(tx, "edgeweir.alert-channels");
 
