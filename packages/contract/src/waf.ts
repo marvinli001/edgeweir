@@ -244,6 +244,8 @@ export const siteFeatures = z.object({
    * headers and the peer address (access-logs-v2).
    */
   accessLogsV2: featureAvailability,
+  /** WebP / AVIF conversion of cached images (image-convert-v1). */
+  imageConvert: featureAvailability,
 });
 
 const idParam = z.object({ id: uuid });

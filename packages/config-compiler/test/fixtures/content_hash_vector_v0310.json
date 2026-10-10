@@ -1,0 +1,110 @@
+{
+  "description": "proto v0.31.0: site a converts JPEG originals of 1024 to 10485760 bytes and up to 16000000 pixels to WebP (quality 80) and AVIF (quality 50) (Site.image_convert); site b converts nothing. Sites and required features are reversed.",
+  "config": {
+    "revision": "12",
+    "contentHash": "d226ebdf84c2f539396b95fb71c19d8b91aa4908010f4b932c0493eb9adcbc58",
+    "clusterId": "c1",
+    "listeners": [
+      {
+        "port": 80,
+        "protocol": "LISTENER_PROTOCOL_HTTP"
+      }
+    ],
+    "cacheZones": [
+      {
+        "name": "default",
+        "maxSizeMb": "10240",
+        "keysZoneMb": 64,
+        "inactiveSeconds": 604800
+      }
+    ],
+    "sites": [
+      {
+        "id": "b",
+        "name": "b",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "b.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-b",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-b",
+              "address": "origin.test",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ]
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "tls": {
+          "minimumVersion": "1.2",
+          "http2": true,
+          "gzip": true,
+          "gzipMinLength": 256,
+          "gzipTypes": [
+            "text/html"
+          ],
+          "cipherProfile": "modern"
+        }
+      },
+      {
+        "id": "a",
+        "name": "a",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "a.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-a",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-a",
+              "address": "origin.test",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ]
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "tls": {
+          "minimumVersion": "1.2",
+          "http2": true,
+          "gzip": true,
+          "gzipMinLength": 256,
+          "gzipTypes": [
+            "text/html"
+          ],
+          "cipherProfile": "modern"
+        },
+        "imageConvert": {
+          "webp": true,
+          "avif": true,
+          "webpQuality": 80,
+          "avifQuality": 50,
+          "jpeg": true,
+          "minSize": "1024",
+          "maxSize": "10485760",
+          "maxPixels": "16000000"
+        }
+      }
+    ],
+    "requiredFeatures": [
+      "tls-v1",
+      "image-convert-v1"
+    ]
+  },
+  "canonical_hex": "1a0263312204085010012a120a0764656661756c7410805018402080f524327b0a0161120161180122080a06612e746573742a210a03702d6110011a180a036f2d61120b6f726967696e2e746573741850200128013a0764656661756c7440016a1f2a03312e32300138014080024a09746578742f68746d6c5a066d6f6465726ea202170801100118502032280138800840808080054880c8d00732610a0162120162180122080a06622e746573742a210a03702d6210011a180a036f2d62120b6f726967696e2e746573741850200128013a0764656661756c7440016a1f2a03312e32300138014080024a09746578742f68746d6c5a066d6f6465726e4a10696d6167652d636f6e766572742d76314a06746c732d7631",
+  "content_hash": "d226ebdf84c2f539396b95fb71c19d8b91aa4908010f4b932c0493eb9adcbc58"
+}

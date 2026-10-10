@@ -36,6 +36,7 @@ import {
   HotlinkSchema,
   type HttpChallenge,
   type IpList,
+  ImageConvertSchema,
   IpListSchema,
   type L4App,
   L4AppSchema,
@@ -386,6 +387,25 @@ export const RULES_BODY_FEATURE = "rules-body-v1";
 export const CHALLENGE_V2_FEATURE = "challenge-v2";
 /** A site's access log options (proto v0.30.0, Site.log_blocked..log_peer; ADR-0041). */
 export const ACCESS_LOGS_V2_FEATURE = "access-logs-v2";
+/** A site's WebP / AVIF conversion (proto v0.31.0, Site.image_convert; ADR-0043). */
+export const IMAGE_CONVERT_FEATURE = "image-convert-v1";
+
+/**
+ * A site's WebP / AVIF conversion (config.proto ImageConvert), only while it
+ * is on: a site without it compiles as before. The quality of a format the
+ * site does not offer is not sent.
+ */
+export interface ImageConvertModel {
+  webp: boolean;
+  avif: boolean;
+  webpQuality: number;
+  avifQuality: number;
+  jpeg: boolean;
+  png: boolean;
+  minSize: number;
+  maxSize: number;
+  maxPixels: number;
+}
 
 /**
  * A site's access control (config.proto AccessControl). Parts that are off
@@ -529,6 +549,8 @@ export interface SiteModel {
   logQuery?: boolean;
   logHeaders?: readonly string[];
   logPeer?: boolean;
+  /** WebP / AVIF conversion (feature image-convert-v1); absent while off. */
+  imageConvert?: ImageConvertModel;
   /**
    * `tlsPending`: the site's certificate does not cover the domain yet; it
    * is served over HTTP only (feature tls-pending-domains-v1). Ignored on a
@@ -1546,6 +1568,7 @@ function compileSite(
     logQuery: model.logQuery ?? false,
     logHeaders: sortedByteSet(model.logHeaders ?? []),
     logPeer: model.logPeer ?? false,
+    ...(model.imageConvert ? { imageConvert: compileImageConvert(model.imageConvert) } : {}),
     domains: model.domains.map((d) =>
       create(DomainSchema, {
         name: d.name,
@@ -2213,6 +2236,20 @@ const compileListener = (l: ListenerModel): Listener =>
     proxyProtocol: l.proxyProtocol ?? false,
   });
 
+function compileImageConvert(m: ImageConvertModel) {
+  return create(ImageConvertSchema, {
+    webp: m.webp,
+    avif: m.avif,
+    webpQuality: m.webp ? m.webpQuality : 0,
+    avifQuality: m.avif ? m.avifQuality : 0,
+    jpeg: m.jpeg,
+    png: m.png,
+    minSize: BigInt(m.minSize),
+    maxSize: BigInt(m.maxSize),
+    maxPixels: BigInt(m.maxPixels),
+  });
+}
+
 /** requiredFeatures of a compiled configuration, derived from its content. */
 export function derivedFeatures(config: NodeConfig): string[] {
   return [
@@ -2245,6 +2282,7 @@ export function derivedFeatures(config: NodeConfig): string[] {
     ...(config.sites.some((site) => site.authRules.length) ? [ACCESS_AUTH_FEATURE] : []),
     ...accessControlFeatures(config),
     ...g14Features(config),
+    ...(config.sites.some((site) => site.imageConvert) ? [IMAGE_CONVERT_FEATURE] : []),
   ];
 }
 

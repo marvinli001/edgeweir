@@ -27,6 +27,7 @@ import {
 import { dnsContract } from "./dns";
 import { edgeProcedures } from "./edge";
 import { errorPagesContract, maintenanceContract, platformErrorPages } from "./error-pages";
+import { imageConvertContract } from "./image-convert";
 import { l4AppsContract, portPoolProcedures } from "./l4";
 import {
   nodeAddressesInput,
@@ -64,6 +65,7 @@ export * from "./domains";
 export * from "./error-pages";
 export * from "./errors";
 export * from "./expressions";
+export * from "./image-convert";
 export * from "./node-errors";
 export * from "./node-features";
 export * from "./protection";
@@ -125,6 +127,8 @@ export const contract = {
   authRules: authRulesContract,
   /** A site's access control: site lists, geo, CORS, hotlink, user agents, WebSocket origins, security headers. */
   accessControl: accessControlContract,
+  /** A site's WebP / AVIF conversion of cached images and the bytes it saved. */
+  imageConvert: imageConvertContract,
   /** What the console knows about an address: lists, bans and client address settings. */
   ipCheck: ipCheckContract,
   certificates: certificatesContract,

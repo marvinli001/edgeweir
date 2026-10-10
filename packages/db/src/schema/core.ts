@@ -277,6 +277,11 @@ export const site = pgTable(
     logQuery: boolean("log_query").notNull().default(false),
     logHeaders: text("log_headers").array().notNull().default(sql`'{}'`),
     logPeer: boolean("log_peer").notNull().default(false),
+    /**
+     * WebP / AVIF conversion of cached images (contract `imageConvertSettings`,
+     * image-convert-v1); `{}` means never set (off, the defaults).
+     */
+    imageConvert: jsonb("image_convert").$type<Record<string, unknown>>().notNull().default({}),
     cacheGeneration: bigint("cache_generation", { mode: "number" }).notNull().default(1),
     /** Cache key policy (contract `cacheKeyPolicy`); `{}` means the defaults. */
     cacheKey: jsonb("cache_key").$type<Record<string, unknown>>().notNull().default({}),
@@ -738,6 +743,8 @@ export const nodeMinuteStats = pgTable(
     /** Requests access authentication refused (access-auth-v1). */
     authFailures: bigint("auth_failures", { mode: "number" }).notNull().default(0),
     ...statsDimensionColumns(),
+    /** Bytes WebP / AVIF variants saved against their originals (image-convert-v1). */
+    imageBytesSaved: bigint("image_bytes_saved", { mode: "number" }).notNull().default(0),
   },
   (t) => [
     primaryKey({ columns: [t.minute, t.nodeId, t.siteId] }),

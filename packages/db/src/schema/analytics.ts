@@ -71,6 +71,7 @@ const trafficColumns = () => ({
   loggedRules: jsonb("logged_rules").$type<Record<string, number>>().notNull().default({}),
   authFailures: bigint("auth_failures", { mode: "number" }).notNull().default(0),
   ...statsDimensionColumns(),
+  imageBytesSaved: bigint("image_bytes_saved", { mode: "number" }).notNull().default(0),
 });
 const rollup = <T extends string>(name: T) =>
   pgTable(name, trafficColumns(), (t) => [

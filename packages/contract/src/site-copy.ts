@@ -25,7 +25,9 @@ import { MAX_BATCH_SITES, queryList, siteTagNames } from "./site-tags";
  * - authRules: the access authentication rules, their secrets sealed anew
  *   for the target;
  * - originSettings: the origin pool settings without the origins;
- * - logs: the access log sample rate and JA4 logging.
+ * - logs: the access log sample rate and options (blocked requests, the
+ *   query string, request headers, the peer address) and JA4 logging;
+ * - imageConvert: the WebP / AVIF conversion settings.
  */
 export const SITE_COPY_PARTS = [
   "cacheRules",
@@ -42,6 +44,7 @@ export const SITE_COPY_PARTS = [
   "authRules",
   "originSettings",
   "logs",
+  "imageConvert",
 ] as const;
 export const siteCopyPart = z.enum(SITE_COPY_PARTS);
 export type SiteCopyPart = z.infer<typeof siteCopyPart>;
