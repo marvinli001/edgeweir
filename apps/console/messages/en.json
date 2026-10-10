@@ -355,7 +355,7 @@
   "pager_next": "Next page",
   "sites_all_clusters": "All clusters",
   "sites_no_match": "No matching sites",
-  "sites_search_placeholder": "Search name or domain",
+  "sites_search_placeholder": "Search name, domain or tag",
   "sites_selected": "{count} selected",
   "sites_select_page": "Select the sites on this page",
   "sites_select_site": "Select {name}",

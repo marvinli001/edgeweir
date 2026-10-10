@@ -321,7 +321,7 @@
   "pager_next": "下一页",
   "sites_all_clusters": "全部集群",
   "sites_no_match": "没有匹配的网站",
-  "sites_search_placeholder": "搜索名称或域名",
+  "sites_search_placeholder": "搜索名称、域名或标签",
   "sites_selected": "已选 {count} 个",
   "sites_select_page": "选择本页的网站",
   "sites_select_site": "选择 {name}",

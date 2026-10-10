@@ -185,6 +185,15 @@
 #   truncated bodies; rate limit bans; verified crawlers on node-g14 with the
 #   g14-dns test resolver (profile g14); challenge page texts; challenge
 #   failure bans; Playwright e2e/g14.spec.ts.
+#   Site parity G17 (scripts/e2e-g17.mjs, after G14): sites tagged in one
+#   batch and filtered by tag (any, all); the preview of copying rules, cache
+#   rules and the cache key to two sites and one without the origin group the
+#   rules choose; the copy (the third fails with ORIGIN_GROUP_UNKNOWN and
+#   keeps its settings, the others are audited); both nodes serving the
+#   copied rules (block, origin group, response header) and cache settings
+#   (cached, the query left out of the key); a clone serving the same; two
+#   sites turned off in one revision (503 site-disabled) and on again;
+#   Playwright e2e/g17.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -1295,6 +1304,14 @@ if ! $SKIP_UI; then
 fi
 node scripts/e2e-g14.mjs --cleanup || fail "G14 cleanup failed"
 pass "G14 checks passed"
+
+step "G17: site tags, batch operations, copying settings to other sites and cloning"
+node scripts/e2e-g17.mjs || fail "G17 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g17.spec.ts || fail "G17 browser checks failed"
+fi
+node scripts/e2e-g17.mjs --cleanup || fail "G17 cleanup failed"
+pass "G17 checks passed"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"
