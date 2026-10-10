@@ -772,6 +772,42 @@ curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicati
 
 行为见 [规则](../guide/rules.md)、[OWASP CRS 托管规则](../guide/waf.md)、[挑战与 CC 防护](../guide/challenges.md) 与 [封禁](../guide/bans.md)。
 
+### 访问日志字段、保留期与统计维度
+
+日志沿用 `logs.*`，新增系统设置 `settings.logRetention` / `settings.setLogRetention` 与统计过程 `analytics.dimensions`。服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
+
+| 请求 | 字段 |
+| --- | --- |
+| `PUT /sites/{siteId}/logs/settings` | 各字段都可省略，省略时保持原值：`sampleRate`（0–10000）、`logBlocked`、`logQuery`、`logPeer`（布尔）、`logHeaders`（≤ 8 个请求头名称，`[A-Za-z0-9-]`，1–64 个字符，转小写去重；`authorization`、`cookie`、`proxy-authorization` 返回 400） |
+| `GET /sites/{siteId}/logs`、`/logs/export` | 新增筛选（都可省略，组合为「且」）：`host`（精确，不区分大小写）、`method`、`statusClass`（`1xx`–`5xx`）、`cacheStatus`（`HIT`、`MISS`、`BYPASS`、`EXPIRED`、`STALE`、`UPDATING`、`REVALIDATED`）、`blockReason`（下表的原因，或 `any`）、`country`（ISO 3166-1 两位字母）、`asn`（1–4294967295）、`ua`、`referer`（包含，不区分大小写，≤ 256）、`minDuration`（毫秒）、`cidr`（IPv4 或 IPv6 网段或单个地址，主机位清零） |
+| `PUT /settings/log-retention` | `postgresDays`（1–30）、`clickhouseDays`（1–90），两项都必填；审计 `system.log_retention_update` |
+| `GET /analytics/dimensions` | `range`（`1h`、`6h`、`24h`、`7d`、`30d`，默认 `24h`）、`siteId`（可省略：全部网站） |
+
+响应：
+
+| 过程 | 内容 |
+| --- | --- |
+| `logs.settings` | 增加 `retentionDays`（当前统计模式的保留天数）、`logBlocked`、`logQuery`、`logHeaders`、`logPeer` |
+| `logs.query`、`logs.export` | 日志增加 `userAgent`、`referer`（不含查询与片段）、`httpVersion`（`1.0`、`1.1`、`2`、`3`）、`scheme`、`country`（未知为空）、`asn`（未知为 0）、`asName`、`upstreamAddr`、`upstreamStatus`、`upstreamMs`（没有回源时为空、0、0）、`requestBytes`、`contentType`、`tlsVersion`（`1.2`、`1.3`，明文为空）、`blockReason`、`blockRuleId`，以及网站开启时的 `query`、`headers`（名称 → 值）、`peerIp`；CSV 末尾按此顺序增加这些列（`headers` 为 `名称: 值`，以 `; ` 连接） |
+| `settings.logRetention` | `postgresDays`、`clickhouseDays`、`storage`（`lite` 或 `clickhouse`：哪一项生效） |
+| `analytics.dimensions` | `countries`（`{ country, requests, bytesSent }`，按请求数，`country` 为空表示未知）、`asns`（`{ asn, name, requests }`，前 50，近似）、`referers`（`{ host, requests }`，前 50，近似）、`browsers`、`oses`、`devices`、`httpVersions`、`tlsVersions`、`blockReasons`（`{ key, requests }`）、`challenges`（`{ issued, passed }`）、`unsupportedNodes`（缺少 `stats-dims-v1` 的活动节点数，大于 0 时数据不完整） |
+| `sites.features` | 增加 `accessLogsV2`（能力 `access-logs-v2`） |
+
+`blockReason` 的取值：`ip_banned`、`ip_blocked`、`rule`、`rate_limit`、`crs`、`cc`、`challenge`、`auth`、`referer`、`user_agent`、`region`、`cors`、`websocket_origin`、`client_cert`、`maintenance`，含义见[访问日志](../guide/access-logs.md#拦截原因)。终端分类的键：浏览器 `chrome`、`edge`、`firefox`、`safari`、`opera`、`samsung`、`uc`、`qq`、`wechat`、`yandex`、`ie`、`crawler`、`tool`、`other`；操作系统 `windows`、`macos`、`ios`、`android`、`linux`、`chromeos`、`harmonyos`、`other`；设备 `desktop`、`mobile`、`tablet`、`crawler`、`other`；HTTP 版本 `1.0`、`1.1`、`2`、`3`、`other`；TLS 版本 `1.2`、`1.3`、`none`、`other`。
+
+- 用到 `logBlocked`、`logQuery`、`logHeaders`、`logPeer` 任一项的配置要求节点能力 `access-logs-v2`；都没用到时配置不变。
+- 统计维度来自节点能力 `stats-dims-v1`，只用于统计，不阻止发布。
+
+```bash
+curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"logBlocked":true,"logHeaders":["x-request-source"]}' \
+  https://cdn-admin.example.com/api/v1/sites/<网站 ID>/logs/settings
+curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
+  "https://cdn-admin.example.com/api/v1/sites/<网站 ID>/logs?from=2026-10-10T00:00:00Z&to=2026-10-10T01:00:00Z&blockReason=any&country=US"
+```
+
+行为见[访问日志与 AccessKey](../guide/access-logs.md) 与[系统设置](../guide/system.md#访问日志)。
+
 ### 端口池与 L4 应用
 
 | 过程 | 端点 | 说明 |

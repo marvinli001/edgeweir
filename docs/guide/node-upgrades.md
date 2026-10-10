@@ -134,6 +134,8 @@ EDGEWEIR_UPGRADE_PUBLIC_KEY=/etc/edgeweir-node/release.pub
 | `rules-v2` | 规则扩展：函数与新字段、表达式目标与查询参数编辑、源站覆盖、压缩规则、新的覆盖设置、缓存规则的表达式条件与浏览器 TTL、批量重定向、源站组，见[规则](rules.md#节点能力与发布) |
 | `rules-v3` | 表达式变量与报头值：Cookie 与查询参数按名取值、User-Agent / Referer 等新字段、编码与哈希函数、`substring`、`to_string`、通配运算符、请求头 / 响应头 / 查询参数的表达式值、响应头追加、重定向 303、错误页的 `{{time}}` 与 `{{path}}`，见[规则](rules.md#节点能力与发布) |
 | `access-logs-v1` | 访问日志采样 |
+| `access-logs-v2` | 网站开启了「始终记录被拦截、挑战与鉴权失败的请求」、记录查询字符串、请求头或直连对端地址，见[访问日志](access-logs.md#启用访问日志) |
+| `stats-dims-v1` | 统计维度（地区、运营商、来源、终端、协议、拦截原因、挑战），只用于统计；集群有活动节点缺少时统计页提示数据不完整。缺少时不显示「需要升级」 |
 | `geoip-city-v1` / `geoip-asn-v1` | 规则使用 GeoIP 字段；节点有国家 / ASN 数据时才上报 |
 | `geoip-subdivision-v1` | 规则使用 `ip.geoip.subdivision`；节点配置了 City MMDB 时上报，只由控制台检查；未上报 `geoip-country-v1` 的旧版节点以 `geoip-city-v1` 代替 |
 | `stats-sequence-v1` | 带序号的统计上报；缺少时节点始终显示「需要升级」 |
