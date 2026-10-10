@@ -15,8 +15,8 @@
 | 领域 | 能力 |
 | --- | --- |
 | 集群与账户 | 节点组、区域、配置金丝雀、2FA / Passkey、服务账号、审计日志 |
-| 网站管理 | 网站标签（按任一 / 全部标签筛选、改名合并、⌘K 搜索）、批量启停 / 清除缓存 / 加减标签 / 删除、把一个网站的设置（14 个部分）预览后复制到其他网站、克隆网站 |
-| 源站与缓存 | 源站池与源站组、主动与被动健康检查、会话保持、回源 TLS 校验、S3 签名回源、HTTP/2 回源与 gRPC、WebSocket、表达式缓存规则与浏览器 TTL、缓存键、切片、按 URL / 目录 / Host / Cache-Tag 刷新、按设备与站点地图预热、带密钥的 PURGE 方法、可按集群与节点设置的缓存区、缓存带 Set-Cookie 的响应（Cookie 只发给回源的那次请求）、回源尝试次数与状态码重试、请求体上限、字符编码、对象存储预设、按状态码与 4xx / 5xx 的错误页（HTML 或跳转）、维护模式 |
+| 网站管理 | 网站标签（按任一 / 全部标签筛选、改名合并、⌘K 搜索）、批量启停 / 清除缓存 / 加减标签 / 删除、把一个网站的设置（15 个部分）预览后复制到其他网站、克隆网站 |
+| 源站与缓存 | 源站池与源站组、主动与被动健康检查、会话保持、回源 TLS 校验、S3 签名回源、HTTP/2 回源与 gRPC、WebSocket、表达式缓存规则与浏览器 TTL、缓存键、切片、按 URL / 目录 / Host / Cache-Tag 刷新、按设备与站点地图预热、带密钥的 PURGE 方法、可按集群与节点设置的缓存区、缓存带 Set-Cookie 的响应（Cookie 只发给回源的那次请求）、回源尝试次数与状态码重试、请求体上限、字符编码、对象存储预设、按状态码与 4xx / 5xx 的错误页（HTML 或跳转）、维护模式、WebP / AVIF 格式转换（按 Accept 缓存变体，统计节省的字节数） |
 | 四层转发 | 按集群的 TCP / UDP 端口池；L4 应用：权重与备用源站、被动健康检查、连接与空闲超时、向源站发送 PROXY protocol v1 / v2 与接受 PROXY protocol、端口段与同号源站端口、TCP 的 TLS 卸载、放行 / 拦截名单、每节点并发与新建连接上限；与网站共用 DNS 调度（CNAME、解析线路、备用节点组）；按分钟统计连接、拒绝、并发峰值与流量；增删端口时已有连接不断开 |
 | 域名 | 精确、泛域名、任意层级后缀与正则域名，国际化域名（Punycode）；未知域名与节点 IP 访问的处理（平台页、关闭连接、默认网站）与扫描封禁；可重新生成或自定义的 CNAME 前缀 |
 | 证书与协议 | 证书上传、ACME HTTP-01 / DNS-01 签发与续期（Let's Encrypt、ZeroSSL、Google Trust Services 或自定义 ACME 目录，ECDSA / RSA 密钥，ACME 账户列表）、HTTPS、每个网站最多 4 张证书（按 SNI 与客户端能力选择）、客户端证书（双向 TLS）、集群内共享票据密钥的 TLS 会话复用、HSTS、HTTP/2、HTTP/3；80 / 443 之外的监听端口与网站绑定端口、跳转状态码与端口；访客 IP 来自 PROXY protocol 或可信代理报头；Zstandard、Brotli、Gzip 压缩（Gzip 级别、最大压缩长度） |
@@ -252,7 +252,7 @@ doc/                       文档站（Fumadocs），发布至 GitHub Pages
 | 分类 | 文档 |
 | --- | --- |
 | 部署 | [部署概览](docs/deploy/README.md) · [Docker Compose](docs/deploy/docker.md) · [宝塔 / aaPanel](docs/deploy/baota.md) · [deploy.sh](docs/deploy/deploy-script.md) · [Railway](docs/deploy/railway.md) · [Fly.io](docs/deploy/fly.md) · [bunny.net](docs/deploy/bunny.md) · [Render](docs/deploy/render.md) · [Zeabur](docs/deploy/zeabur.md) · [端口与反向代理](docs/deploy/networking.md) · [接入节点](docs/deploy/nodes.md) · [版本与升级](docs/deploy/upgrade.md) · [备份与恢复](docs/deploy/backup.md) |
-| 使用 | [快速上手](docs/guide/first-site.md) · [账户与登录](docs/guide/account.md) · [集群与系统](docs/guide/system.md) · [源站与缓存](docs/guide/origins-and-cache.md) · [HTTPS 与证书](docs/guide/https.md) · [规则](docs/guide/rules.md) · [访问控制](docs/guide/access-control.md) · [管理多个网站](docs/guide/site-management.md) · [封禁](docs/guide/bans.md) · [挑战与 CC 防护](docs/guide/challenges.md) · [OWASP CRS 托管规则](docs/guide/waf.md) · [DNS 调度与告警](docs/guide/dns-and-alerts.md) · [区域探针与智能调度](docs/guide/scheduling.md) · [四层转发](docs/guide/l4.md) · [访问日志与 AccessKey](docs/guide/access-logs.md) · [节点升级](docs/guide/node-upgrades.md) |
+| 使用 | [快速上手](docs/guide/first-site.md) · [账户与登录](docs/guide/account.md) · [集群与系统](docs/guide/system.md) · [源站与缓存](docs/guide/origins-and-cache.md) · [图片格式转换](docs/guide/image-convert.md) · [HTTPS 与证书](docs/guide/https.md) · [规则](docs/guide/rules.md) · [访问控制](docs/guide/access-control.md) · [管理多个网站](docs/guide/site-management.md) · [封禁](docs/guide/bans.md) · [挑战与 CC 防护](docs/guide/challenges.md) · [OWASP CRS 托管规则](docs/guide/waf.md) · [DNS 调度与告警](docs/guide/dns-and-alerts.md) · [区域探针与智能调度](docs/guide/scheduling.md) · [四层转发](docs/guide/l4.md) · [访问日志与 AccessKey](docs/guide/access-logs.md) · [节点升级](docs/guide/node-upgrades.md) |
 | 参考 | [环境变量](docs/reference/environment.md) · [命令行](docs/reference/cli.md) · [API 与端点](docs/reference/api.md) |
 | 项目 | [架构](ARCHITECTURE.md) · [安全](SECURITY.md) · [贡献指南](CONTRIBUTING.md) · [许可证](LICENSING.md) |
 

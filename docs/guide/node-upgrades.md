@@ -136,6 +136,7 @@ EDGEWEIR_UPGRADE_PUBLIC_KEY=/etc/edgeweir-node/release.pub
 | `access-logs-v1` | 访问日志采样 |
 | `access-logs-v2` | 网站开启了「始终记录被拦截、挑战与鉴权失败的请求」、记录查询字符串、请求头或直连对端地址，见[访问日志](access-logs.md#启用访问日志) |
 | `stats-dims-v1` | 统计维度（地区、运营商、来源、终端、协议、拦截原因、挑战），只用于统计；集群有活动节点缺少时统计页提示数据不完整。缺少时不显示「需要升级」 |
+| `image-convert-v1` | 网站开启了图片格式转换，见[图片格式转换](image-convert.md)；节点以 `--image-workers 0` 运行时不上报 |
 | `geoip-city-v1` / `geoip-asn-v1` | 规则使用 GeoIP 字段；节点有国家 / ASN 数据时才上报 |
 | `geoip-subdivision-v1` | 规则使用 `ip.geoip.subdivision`；节点配置了 City MMDB 时上报，只由控制台检查；未上报 `geoip-country-v1` 的旧版节点以 `geoip-city-v1` 代替 |
 | `stats-sequence-v1` | 带序号的统计上报；缺少时节点始终显示「需要升级」 |

@@ -825,9 +825,38 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
 
 `ids`、`targetIds` 为 1–100 个网站 ID；`targetIds` 不能包含源网站（400）。网站不存在时批量操作整体失败 404 `SITE_NOT_FOUND`（复制时只有该目标失败）；加标签后超过 10 个 400 `SITE_TAG_LIMIT`（`data.site`、`data.limit`）。查询串里的数组用方括号写法（`targetIds[]=a&targetIds[]=b`），一个值也可以写 `targetIds=a`。
 
-`parts` 的取值：`cacheRules`、`cacheKey`（缓存键与分片）、`cacheTag`、`compression`、`https`（不含证书与不跳转的域名）、`rules`（含 `rulesBodyLimit`）、`bulkRedirects`、`errorPages`（不含维护模式）、`waf`、`protection`（不含 `logJa4`）、`accessControl`、`authRules`（密钥为目标重新加密）、`originSettings`（不含源站列表）、`logs`（采样率、`logBlocked`、`logQuery`、`logHeaders`、`logPeer` 与 `logJa4`）。复制的部分整体替换目标的该部分；内容与源相同的部分不写入。目标缺少设置用到的对象时该目标失败：规则选择的源站组不存在 400 `ORIGIN_GROUP_UNKNOWN`（`data.group`、`data.rule`）、没有证书却要复制 HTTPS 跳转 / HSTS / 客户端证书 400 `HTTPS_REQUIRES_CERTIFICATE`、跳转端口不是目标的 HTTPS 端口 400 `HTTPS_REDIRECT_PORT_INVALID`、批量重定向的来源主机不是目标的域名 400 `BULK_REDIRECT_HOST_UNKNOWN`、访问鉴权范围的域名不是目标的域名 400 `AUTH_DOMAIN_UNKNOWN`、IP 名单不存在 404 `IP_LIST_NOT_FOUND`。克隆时这些错误使整个克隆失败（证书相关的除外，它们被关闭）。
+`parts` 的取值：`cacheRules`、`cacheKey`（缓存键与分片）、`cacheTag`、`compression`、`https`（不含证书与不跳转的域名）、`rules`（含 `rulesBodyLimit`）、`bulkRedirects`、`errorPages`（不含维护模式）、`waf`、`protection`（不含 `logJa4`）、`accessControl`、`authRules`（密钥为目标重新加密）、`originSettings`（不含源站列表）、`logs`（采样率、`logBlocked`、`logQuery`、`logHeaders`、`logPeer` 与 `logJa4`）、`imageConvert`（图片格式转换）。复制的部分整体替换目标的该部分；内容与源相同的部分不写入。目标缺少设置用到的对象时该目标失败：规则选择的源站组不存在 400 `ORIGIN_GROUP_UNKNOWN`（`data.group`、`data.rule`）、没有证书却要复制 HTTPS 跳转 / HSTS / 客户端证书 400 `HTTPS_REQUIRES_CERTIFICATE`、跳转端口不是目标的 HTTPS 端口 400 `HTTPS_REDIRECT_PORT_INVALID`、批量重定向的来源主机不是目标的域名 400 `BULK_REDIRECT_HOST_UNKNOWN`、访问鉴权范围的域名不是目标的域名 400 `AUTH_DOMAIN_UNKNOWN`、IP 名单不存在 404 `IP_LIST_NOT_FOUND`。克隆时这些错误使整个克隆失败（证书相关的除外，它们被关闭）。
 
 `sites.list` 新增 `tagIds`（`tagIds[]=…`，≤ 10）与 `tagMatch`（`any` 默认 / `all`），`search` 也匹配标签名；网站对象新增 `tags: [{ id, name }]`；`sites.create` 新增 `tags`。只读 AccessKey 只能调用 `GET`（标签列表、预览）；服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）。
+
+### 图片格式转换
+
+| 过程 | 端点 | 说明 |
+| --- | --- | --- |
+| `imageConvert.get` | `GET /sites/{id}/image-convert` | 网站的 WebP / AVIF 转换设置，从未保存时为默认值（关闭） |
+| `imageConvert.update` | `PUT /sites/{id}/image-convert` | 整体替换设置并发布所在集群（热更新；关闭期间的修改不改变节点配置，不产生新修订）。审计 `site.image_convert_update`（`changed`、`enabled`） |
+| `imageConvert.savings` | `GET /sites/{id}/image-convert/savings?range=` | `{ bytesSaved, unsupportedNodes }`：时间范围（`1h`、`6h`、`24h` 默认、`7d`、`30d`）内以变体完整返回的 200 GET 响应比原图少的字节数之和；`unsupportedNodes` 为集群中不支持 `image-convert-v1` 的活动节点数 |
+
+设置的字段（`update` 全部必填，另加 `id`）：
+
+| 字段 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `enabled` | 布尔 | `false` | |
+| `webp`、`avif` | 布尔 | `true`、`false` | 至少一个为 `true` |
+| `webpQuality`、`avifQuality` | 1–100 | 80、50 | |
+| `jpeg`、`png` | 布尔 | `true`、`true` | 源类型，至少一个为 `true` |
+| `minSize`、`maxSize` | 字节 | 1024、10485760 | `minSize` 0–67108864，`maxSize` 1–67108864，`minSize` ≤ `maxSize` |
+| `maxPixels` | 像素 | 16000000 | 1–50000000 |
+
+不满足上述条件（含关闭时）返回 400。只读 AccessKey 只能调用 `GET`；服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）。`sites.features` 增加 `imageConvert`（能力 `image-convert-v1`）；开启的设置要求节点能力 `image-convert-v1`，关闭时配置不变。复制设置的 `parts` 增加 `imageConvert`，克隆一并复制。行为见[图片格式转换](../guide/image-convert.md)。
+
+```bash
+curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"enabled":true,"webp":true,"avif":true,"webpQuality":80,"avifQuality":50,"jpeg":true,"png":true,"minSize":1024,"maxSize":10485760,"maxPixels":16000000}' \
+  https://cdn-admin.example.com/api/v1/sites/<网站 ID>/image-convert
+curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
+  "https://cdn-admin.example.com/api/v1/sites/<网站 ID>/image-convert/savings?range=7d"
+```
 
 ### 端口池与 L4 应用
 

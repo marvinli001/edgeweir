@@ -136,6 +136,7 @@ Signing and verification are covered in the [Sigstore documentation](https://doc
 | `access-logs-v1` | Access log sampling |
 | `access-logs-v2` | A site logs blocked, challenged and authentication-refused requests always, or records query strings, request headers or the peer address, see [Access logs](access-logs.en.md#enable-access-logs) |
 | `stats-dims-v1` | Statistics dimensions (regions, networks, referrers, clients, protocols, block reasons, challenges), for statistics only; while an active node of a cluster lacks it the statistics show a partial-data note. Its absence does not show **Upgrade required** |
+| `image-convert-v1` | A site converts images to WebP / AVIF, see [Image format conversion](image-convert.en.md); nodes running with `--image-workers 0` do not announce it |
 | `geoip-city-v1` / `geoip-asn-v1` | Rules using GeoIP fields; reported only when the node has country / ASN data |
 | `geoip-subdivision-v1` | Rules using `ip.geoip.subdivision`; reported when the node has a City MMDB, checked by the console only; older nodes that do not report `geoip-country-v1` count `geoip-city-v1` instead |
 | `stats-sequence-v1` | Sequenced analytics reports; without it the node always shows **Upgrade required** |

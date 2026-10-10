@@ -59,6 +59,7 @@ const SECTIONS = [
       ["account", "docs/guide/account.md"],
       ["system", "docs/guide/system.md"],
       ["origins-and-cache", "docs/guide/origins-and-cache.md"],
+      ["image-convert", "docs/guide/image-convert.md"],
       ["https", "docs/guide/https.md"],
       ["rules", "docs/guide/rules.md"],
       ["access-control", "docs/guide/access-control.md"],
