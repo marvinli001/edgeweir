@@ -40,6 +40,10 @@ jobs:
       - run: pnpm lint
       - name: Generated TypeScript matches proto/
         run: pnpm proto:gen && git diff --exit-code -- packages/proto
+      - name: proto/ stays compatible with the newest proto tag
+        run: pnpm proto:breaking
+        env:
+          PROTO_REMOTE: https://github.com/${{ github.repository }}.git
       - run: pnpm typecheck
       - run: pnpm test
         env:

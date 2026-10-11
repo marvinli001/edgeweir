@@ -15,6 +15,7 @@
     "lint": "biome check . && buf lint proto",
     "format": "biome check --write .",
     "proto:lint": "buf lint proto",
+    "proto:breaking": "sh scripts/proto-breaking.sh",
     "proto:gen": "buf generate proto --template proto/buf.gen.yaml",
     "db:generate": "pnpm --filter @edgeweir/db generate",
     "e2e": "bash scripts/e2e.sh"
