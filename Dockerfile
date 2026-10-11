@@ -11,16 +11,22 @@
 ARG NODE_IMAGE=node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
 ARG GO_IMAGE=golang:1.27.2-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d
 
+# The certd and build stages run on the build machine's own platform for
+# every target: certd is cross-compiled, and the web + server build is
+# JavaScript and static assets (an arm64 vite build emulated by QEMU crashed
+# with SIGILL).
+
 # --- edgeweir-certd (Go helper) ------------------------------------------------
-FROM ${GO_IMAGE} AS certd
+FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS certd
+ARG TARGETOS TARGETARCH
 WORKDIR /src
 COPY helpers/certd/ ./
 ARG VERSION=dev
-RUN CGO_ENABLED=0 go build -trimpath -buildvcs=false \
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -buildvcs=false \
       -ldflags "-s -w -X main.Version=${VERSION}" -o /out/edgeweir-certd .
 
 # --- web + server build ---------------------------------------------------------
-FROM ${NODE_IMAGE} AS build
+FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS build
 RUN npm install -g pnpm@12.6.0 && pnpm --version
 WORKDIR /repo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./

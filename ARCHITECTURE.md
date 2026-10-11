@@ -647,8 +647,8 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | --- | --- |
 | `vite build` | `apps/console/dist/web`（SPA） |
 | `node scripts/build-server.mjs`（esbuild） | `apps/console/dist/server/main.js`：服务端与全部依赖打成单个 ESM 文件；`dist/server/recover.js`：找回账户命令，同样自带全部依赖，不带 source map；复制 `install/` 到 `dist/server/install`，迁移到 `dist/migrations` |
-| Dockerfile 阶段 `certd` | `golang:1.27.2-alpine` 构建 `edgeweir-certd` |
-| Dockerfile 阶段 `build` | `node:24.21.0-alpine`、pnpm 12.6.0 构建控制台 |
+| Dockerfile 阶段 `certd` | `golang:1.27.2-alpine` 在构建机的平台上交叉编译 `edgeweir-certd`（`$BUILDPLATFORM`，不经 QEMU） |
+| Dockerfile 阶段 `build` | `node:24.21.0-alpine`、pnpm 12.6.0 在构建机的平台上构建控制台一次，产物（JavaScript 与静态资源）供各架构共用 |
 | Dockerfile 阶段 `runtime` | `node:24.21.0-alpine` + tini；无 `node_modules`；以 `node` 用户运行；`EXPOSE 3000 8443`；健康检查 `edgeweir-healthcheck` |
 
 基础镜像按 tag 与多架构 index digest 固定。镜像版本号为 `<YYYYMMDD>-<commit>`（`scripts/image-version.sh`），写入 `EDGEWEIR_VERSION` 与镜像标签 `org.opencontainers.image.version`；完整提交 ID 写入 `org.opencontainers.image.revision`。开发命令与测试见 [CONTRIBUTING.md](CONTRIBUTING.md)。
