@@ -195,7 +195,7 @@ openssl s_client -connect <名称>.proxy.rlwy.net:<端口> -servername <名称>.
 
 ## 自定义域名
 
-在注册节点之前完成。
+在注册节点之前完成。Free 计划没有自定义域名（试用 1 个，Hobby 2 个，Pro 20 个，见 [Railway 价格](https://railway.com/pricing)）。
 
 1. Web 控制台：`edgeweir` 服务 **Settings → Networking → + Custom Domain**，填 `console.example.com`，端口 `3000`；在 DNS 中添加界面给出的 `CNAME` 与 `TXT` 记录。`TXT` 记录缺失时该域名返回 404。
 2. 节点通道：在 DNS 中将 `nodes.example.com` 以 `CNAME` 指向 `<名称>.proxy.rlwy.net`（不含端口）；端口仍为 Railway 分配的端口。DNS 在 Cloudflare 时关闭代理（仅 DNS）。
@@ -252,5 +252,5 @@ railway redeploy --service edgeweir --from-source --yes
 | Serverless | 服务无出站流量 5–10 分钟后休眠 | 必须关闭：休眠停止 worker 定时任务与节点通道 |
 | 健康检查 | 只在部署时请求 `/healthz`，运行期间不检查 | 进程退出由 Restart Policy 处理 |
 | 部署切换 | 新部署通过健康检查后停止旧部署：先发送 SIGTERM，draining 时间后强制结束 | 新旧版本短暂同时运行；旧部署上的节点通道连接随之断开。draining 时间设为 10 秒，控制台才能正常关闭连接 |
-| Restart Policy | 默认 `On Failure`；Free 计划与试用最多重启 10 次，付费计划不限 | PostgreSQL 60 秒内不可达时控制台退出，计入重启次数 |
+| Restart Policy | 所有计划默认 `On Failure`，最多重启 10 次；付费计划可以改为其他策略与次数，Free 计划与试用不能 | PostgreSQL 60 秒内不可达时控制台退出，计入重启次数 |
 | `/downloads/*` | 容器无下载镜像目录，`EDGEWEIR_DOWNLOADS_DIR` 未设置 | 返回 404；`install.sh` 从 GitHub 下载，见 [接入节点](nodes.md#下载镜像) |

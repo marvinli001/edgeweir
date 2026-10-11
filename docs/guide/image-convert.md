@@ -48,9 +48,10 @@
 | 变体响应 | `Content-Type: image/webp` / `image/avif`；`ETag` 在引号内加 `-webp` / `-avif`；缓存时间与原图相同；不带任何元数据（EXIF、XMP、ICC） |
 | 原图带 EXIF 方向 | 像素按方向转正后再编码，显示与原图一致 |
 | 源站响应不是 200、带 `Content-Encoding`、类型不是所选源类型、大小或像素数超出范围 | 原图，照常缓存在该变体下 |
-| 原图带非 sRGB 的 ICC 配置（如 Display P3）、CMYK JPEG、`gAMA` 不是 1/2.2 且没有 `sRGB` 块的 PNG、动画 PNG、算术编码或 12 位 JPEG | 原图，照常缓存 |
+| 原图带非 sRGB 的 ICC 配置（如 Display P3）、超过 64 KiB 的 ICC 配置、CMYK JPEG、`gAMA` 不是 1/2.2 且没有 `sRGB` 块的 PNG、有多个 `iCCP` 块或同时有 `iCCP` 与 `sRGB` 块的 PNG、动画 PNG、算术编码或 12 位 JPEG | 原图，照常缓存 |
 | 转换结果不比原图小、转换失败或超时 | 原图，照常缓存 |
 | 节点繁忙（转换名额或内存都已占满，等待 1 秒） | 原图，最多缓存 60 秒，之后再试 |
+| 原图在 `--image-timeout` 内没有传完 | 原图（边传边转发），最多缓存 60 秒，之后再试 |
 | 刷新 URL、前缀或 Cache-Tag | 同一 URL 的全部变体一起刷新 |
 | HEAD、Range | 由缓存的变体回答 |
 

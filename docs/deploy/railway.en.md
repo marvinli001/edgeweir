@@ -195,7 +195,7 @@ Any other issuer means a device in the path terminates TLS.
 
 ## Custom domains
 
-Complete this before enrolling nodes.
+Complete this before enrolling nodes. The Free plan has no custom domains (a trial 1, Hobby 2, Pro 20; see [Railway pricing](https://railway.com/pricing)).
 
 1. Web console: `edgeweir` service, **Settings → Networking → + Custom Domain**, enter `console.example.com`, port `3000`; add the `CNAME` and `TXT` records shown there in DNS. Without the `TXT` record the domain returns 404.
 2. Node channel: in DNS, point `nodes.example.com` with a `CNAME` to `<name>.proxy.rlwy.net` (no port); the port stays the one Railway assigned. On Cloudflare, turn the proxy off (DNS only).
@@ -252,5 +252,5 @@ Migrations, signature verification, and rollback: [Versions, upgrades, and rollb
 | Serverless | The service sleeps after 5–10 minutes without outbound traffic | Must be off: sleeping stops the worker's scheduled jobs and the node channel |
 | Health check | `/healthz` is requested only during a deployment, not while running | Process exits are handled by the Restart Policy |
 | Deployment switch | The old deployment stops after the new one passes its health check: SIGTERM first, SIGKILL after the draining time | Old and new versions run side by side briefly; node channel connections on the old deployment drop with it. Set the draining time to 10 seconds so the console can close its connections |
-| Restart Policy | Default `On Failure`; at most 10 restarts on the Free plan and trials, unlimited on paid plans | The console exits when PostgreSQL is unreachable for 60 seconds, which counts as a restart |
+| Restart Policy | Default `On Failure` with at most 10 restarts on every plan; paid plans can set another policy and count, the Free plan and trials cannot | The console exits when PostgreSQL is unreachable for 60 seconds, which counts as a restart |
 | `/downloads/*` | No downloads mirror directory in the container; `EDGEWEIR_DOWNLOADS_DIR` unset | Returns 404; `install.sh` downloads from GitHub; see [Adding nodes](nodes.en.md#downloads-mirror) |

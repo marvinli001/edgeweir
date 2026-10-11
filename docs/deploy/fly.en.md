@@ -125,7 +125,7 @@ primary_region = "nrt"
    | `EDGEWEIR_MASTER_KEY` | Contents of `edgeweir-master-key`, as is |
    | `DATABASE_URL` | `postgres://edgeweir:<password>@<host>:5432/edgeweir?sslmode=verify-full` |
 
-3. Keep them staged; do not click **Deploy Secrets**. The secrets take effect with the deployment in step 4.
+3. Keep them staged; do not click **Deploy Secrets**. The secrets take effect with the deployment in step 4; before it, run `fly secrets sync -a edgeweir-console` so that flyctl deploys the secrets set in the Dashboard.
 
 flyctl:
 
@@ -153,7 +153,7 @@ fly deploy --ha=false
 fly ips list
 ```
 
-Expected: one dedicated IPv4 (`v4`) and one dedicated IPv6 (`v6`), no shared IPv4 (`shared_v4`).
+Expected: a `v4` row of type `public ingress (dedicated, $2/mo)` and a `v6` row of type `public ingress (dedicated)`, no row of type `public ingress (shared)` (the shared IPv4; `shared_v4` only in `--json` output).
 
 | Case | Action |
 | --- | --- |
@@ -182,7 +182,7 @@ fly logs --no-tail | grep setupToken
 
 | Variable | Where | Value | Notes |
 | --- | --- | --- | --- |
-| `DATABASE_URL` | Secret | PostgreSQL 18 connection string | Required.When PostgreSQL is reached over the internet, end `DATABASE_URL` with `?sslmode=verify-full` (encrypted, certificate verified); use `sslmode=no-verify` when the provider's certificate is not issued by a public CA. Without `sslmode` the connection is not encrypted: managed databases that require TLS refuse it, and the console exits after waiting 60 seconds. |
+| `DATABASE_URL` | Secret | PostgreSQL 18 connection string | Required. When PostgreSQL is reached over the internet, end `DATABASE_URL` with `?sslmode=verify-full` (encrypted, certificate verified); use `sslmode=no-verify` when the provider's certificate is not issued by a public CA. Without `sslmode` the connection is not encrypted: managed databases that require TLS refuse it, and the console exits after waiting 60 seconds. |
 | `EDGEWEIR_MASTER_KEY` | Secret | Output of `openssl rand -base64 32` | Required. |
 | `EDGEWEIR_PUBLIC_URL` | `[env]` | `https://edgeweir-console.fly.dev` | Required. With a custom domain, use that domain. |
 | `EDGEWEIR_NODE_API_URL` | `[env]` | `https://edgeweir-console.fly.dev:8443` | The host name must resolve to the dedicated IPv4 and IPv6; it is added to the node channel certificate automatically. After setup it can also be changed under "Node channel" in **System settings**, without a deployment; a URL saved there wins over this variable. |

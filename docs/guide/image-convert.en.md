@@ -48,9 +48,10 @@ Settings are hot updates; nginx does not reload. While an active node of the clu
 | A variant response | `Content-Type: image/webp` / `image/avif`; `ETag` with `-webp` / `-avif` inside the quotes; cached as long as the original; no metadata (EXIF, XMP, ICC) |
 | The original has an EXIF orientation | The pixels are turned upright before encoding; it looks like the original |
 | The origin answers other than 200, with a `Content-Encoding`, another type than the source types, or out of the size or pixel range | The original, cached under that variant as usual |
-| An ICC profile that is not sRGB (e.g. Display P3), CMYK JPEG, a PNG whose `gAMA` is not 1/2.2 without an `sRGB` chunk, animated PNG, arithmetic-coded or 12-bit JPEG | The original, cached as usual |
+| An ICC profile that is not sRGB (e.g. Display P3) or over 64 KiB, CMYK JPEG, a PNG whose `gAMA` is not 1/2.2 without an `sRGB` chunk, a PNG with more than one `iCCP` chunk or with both `iCCP` and `sRGB`, animated PNG, arithmetic-coded or 12-bit JPEG | The original, cached as usual |
 | The variant is not smaller, the conversion fails or times out | The original, cached as usual |
 | The node is busy (conversion slots or memory taken, after waiting 1 second) | The original, cached for at most 60 seconds, then tried again |
+| The original has not arrived within `--image-timeout` | The original (streamed on), cached for at most 60 seconds, then tried again |
 | Purging a URL, prefix or Cache-Tag | Every variant of the URL is purged with it |
 | HEAD, Range | Answered from the cached variant |
 

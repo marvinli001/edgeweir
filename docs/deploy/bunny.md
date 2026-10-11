@@ -7,7 +7,7 @@
 | 项目 | 要求 |
 | --- | --- |
 | bunny.net | 已验证付款卡的账户。试用账户限 1 个应用，每个实例 1 CPU、4 GiB 内存 |
-| bunny CLI | 可选：`npm install -g @bunny.net/cli`（0.18），已执行 `bunny login`；用法与限制见 [操作方式](#操作方式) |
+| bunny CLI | 可选：`npm install -g @bunny.net/cli`（0.19），再执行 `bunny login`；用法与限制见 [操作方式](#操作方式) |
 | 控制台镜像 | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`，公开拉取；Magic Containers 只运行 linux/amd64，镜像包含该架构。tag 规则见 [版本、升级与回滚](upgrade.md) |
 | PostgreSQL | PostgreSQL 18，容器可达。按来源地址放行时，放行 `https://api.bunny.net/mc/nodes/plain` 列出的地址，该列表会变化。bunny Database 是 libSQL，不能替代 PostgreSQL |
 | 公网地址 | 一个 Anycast IPv4（每月 2 美元）；Anycast 不提供 IPv6。可以在部署后再添加，见 [后加 Anycast IP](#后加-anycast-ip) |
@@ -28,7 +28,7 @@
 
 ## 操作方式
 
-应用在 Dashboard 或用 bunny CLI 创建。CLI 0.18 的 `bunny apps` 为实验性命令：不下发健康检查；每次 `bunny apps deploy` 按 `bunny.jsonc` 重写容器，删除健康检查与文件中没有的端点。健康检查与升级在 Dashboard 完成，或用 `bunny api` 调用 API。
+应用在 Dashboard 或用 bunny CLI 创建。CLI 0.19 的 `bunny apps` 为实验性命令：不下发健康检查；每次 `bunny apps deploy` 按 `bunny.jsonc` 重写容器，删除健康检查与文件中没有的端点。健康检查与升级在 Dashboard 完成，或用 `bunny api` 调用 API。
 
 | 步骤 | Dashboard | bunny CLI |
 | --- | --- | --- |
@@ -120,7 +120,7 @@ bunny apps deploy ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d
    bunny apps endpoints list
    ```
 
-   CDN 端点为 `mc-<id>.bunny.run`（`ssl` 为 `false` 时 CLI 显示为 `http://…`，变量中仍用 `https://`）；Anycast 端点为 `<Anycast IP>:8443`。
+   列出 CDN 端点的主机 `mc-<id>.bunny.run`（SSL 列为 `No`，变量中仍用 `https://`）与 Anycast 端点。Anycast IP 见应用的 **Endpoints**，或 `bunny apps deploy` 结束时的摘要。
 2. 应用 **Container Settings → Edit → Environment Variables**，补全后点击 **Update Container**，再 **Save Changes**：
 
    ```ini
@@ -177,9 +177,9 @@ CDN 端点创建 pull zone `mc-<id>`。控制台对 `/assets/*` 以外的响应�
 
 | 设置 | 位置 | 值 |
 | --- | --- | --- |
-| Smart Cache | **Caching** | 开启（默认）：HTML 与 JSON 不缓存 |
-| Cache expiration time | **Caching** | Respect origin Cache-Control（默认） |
-| Disable Cookies | **Caching** | 关闭（默认）：开启后 `Set-Cookie` 被移除，无法登录 |
+| Smart Cache | **Caching** | 确认为开启：HTML 与 JSON 不缓存 |
+| Cache expiration time | **Caching** | 确认为 Respect origin Cache-Control |
+| Disable Cookies | **Caching** | 确认为关闭：开启后 `Set-Cookie` 被移除，无法登录 |
 | Force SSL | **General → Hostnames**，每个主机名 | 开启：HTTP 请求重定向到 HTTPS |
 | Edge Rules | **Edge Rules** | 不为控制台路径添加 **Override Cache Time** |
 
@@ -261,7 +261,7 @@ openssl s_client -connect <Anycast IP>:8443 </dev/null 2>/dev/null \
    ```
 
    使用 `bunny.jsonc` 时把同一端点写进文件，否则下次 `bunny apps deploy` 删除它。
-3. 读取 Anycast IP：应用 **Endpoints**，或 `bunny apps endpoints list`。
+3. 读取 Anycast IP：应用 **Endpoints**，或 `bunny apps deploy` 结束时的摘要。
 4. 控制台 **系统设置** →「节点通道」，地址填 `https://<Anycast IP>:8443`，或指向它的域名（见 [自定义域名](#自定义域名)），保存。立即生效：节点通道证书加入该名称，连接检查显示「连接正常」，新的安装命令使用该地址。
 5. 验证：按 [验证](#验证) 执行 `openssl` 命令。
 
@@ -311,8 +311,8 @@ bunny api PATCH /mc/apps/<应用 ID>/containers/<容器 ID> --body '{"imageTag":
 | Anycast | 只有 IPv4 | 无 IPv4 的节点无法连接节点通道 |
 | Anycast IP | 端点存在期间不变；删除后重新添加端点，或 `bunny apps deploy` 按 `bunny.jsonc` 重写端点时，可能得到新 IP | 已注册节点一直连接注册时的地址：节点通道地址用指向 Anycast IP 的域名，IP 变化时只改 DNS 记录 |
 | 变量 | 明文显示在 Dashboard、API 与 CLI 中 | 主密钥在 bunny.net 之外另存 |
-| CLI 0.18 | `bunny apps deploy` 按 `bunny.jsonc` 重写容器：删除健康检查与文件中没有的端点；`env` 块替换全部变量 | 健康检查与升级用 Dashboard 或 `bunny api` |
-| 滚动更新 | 变量、镜像或健康检查修改后先启动新实例，健康检查通过后停止旧实例；端点修改不触发。停止前发送 SIGTERM，宽限 30 秒（2026 年 2 月 1 日之前创建的应用为 1 秒，可经 API 的 `terminationGracePeriodSeconds` 调整）。新实例 10 分钟内没有运行时中止，保留旧实例。挂载持久卷的应用先停旧实例再启动新实例 | 新旧版本短暂同时运行；旧实例上的节点通道连接断开后重连。更新 `EDGEWEIR_TRUSTED_PROXIES` 也是变量修改。单实例挂载持久卷时更新期间短暂中断 |
+| CLI 0.19 | `bunny apps deploy` 按 `bunny.jsonc` 重写容器：删除健康检查与文件中没有的端点；`env` 块替换全部变量 | 健康检查与升级用 Dashboard 或 `bunny api` |
+| 滚动更新 | 变量、镜像或健康检查修改后先启动新实例，健康检查通过后停止旧实例；端点修改不触发。停止前发送 SIGTERM，宽限 30 秒（2026 年 2 月 1 日之前创建的应用为 1 秒，可经 API 的 `PUT /apps/{id}`（整体替换）中的 `terminationGracePeriodSeconds` 调整）。新实例 10 分钟内没有运行时中止，保留旧实例，bunny.net 随后自动重试更新。挂载持久卷的应用先停旧实例再启动新实例 | 新旧版本短暂同时运行；旧实例上的节点通道连接断开后重连。更新 `EDGEWEIR_TRUSTED_PROXIES` 也是变量修改。单实例挂载持久卷时更新期间短暂中断 |
 | 区域 | 应用可运行在多个区域，Anycast 将节点引到最近的区域 | 每个区域都连接同一 PostgreSQL；多实例条件见 [部署概览](README.md#扩展) |
 | 邮件端口 | 25、465、587、2525 默认受限（入站与出站） | 告警通知的 SMTP 渠道无法发送；经 bunny.net 工单开放端口 |
 | 计费 | 最小实例数 1，Anycast IP 按月计费，按使用天数折算 | 应用停止（Undeploy）后 Anycast IP 仍计费，删除端点后停止 |

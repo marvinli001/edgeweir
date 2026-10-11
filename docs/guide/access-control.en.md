@@ -34,6 +34,7 @@ While an active node of the cluster lacks the capability `access-auth-v1`, the t
 | Excluded path prefixes | As path prefixes | Paths starting with one of them are not checked |
 
 - The path is nginx's normalized path (percent-decoded, as the rule field `http.request.uri.path`). Signed URLs of kinds B and C are matched by the path without their two signature segments.
+- The origin receives the raw path the visitor sent. When it holds an encoded `/`, `\` or `.` (`%2F`, `%5C`, `%2E`), a `\`, a `;`, or a `.` or `..` segment, the origin may route it elsewhere than the normalized path (`/admin/..%2Fx` is `/x` on the node, but under `/admin/` at a Go ServeMux origin): such a request is inside every rule's path prefixes and extensions, no excluded prefix applies to it, and it is not cached.
 - **The first enabled rule whose scope the request matches decides**; later rules are not looked at. Disabled rules are not sent to nodes.
 - Domains removed from the site disappear from scopes; when that removes all of a scope's domains, the rule covers every domain of the site (more requests are authenticated, never fewer).
 
@@ -72,7 +73,7 @@ ACME HTTP-01 requests, the reserved prefix `/.edgeweir/` and the node's local pr
 | Refusal | 401, `WWW-Authenticate: Basic realm="…", charset="UTF-8"`, `X-Edgeweir-Error: auth-required`, with the site's 401 page (else its "Other 4xx" page, else the built-in page). A 401 page set to redirect or to another status does not apply to Basic (browsers ask for credentials on a 401 only) |
 | Allowed | By default `Authorization` is removed from the request to the origin and the request is cached as usual; when kept, the usual rule applies: requests with `Authorization` are cached only when a cache rule allows it |
 | Node caches | Results are kept per worker: successes 60 s, failures 10 s, by the hash of the `Authorization` value and the secret's version; changing a password or removing a user ends old results at once |
-| Failure limit | The 11th and later failed verification of one client network (an IPv4 address or an IPv6 /64) on one site within 10 seconds answers 429 (`auth-rate-limited`, with `Retry-After`) without hashing |
+| Limits | Hashing holds the node's worker, so every verification counts before it hashes (results kept do not): per site, 10 in 10 seconds for one client network (an IPv4 address or an IPv6 /64), 100 in 10 seconds for its wider network (IPv4 /24, IPv6 /48), 20 per second per site on a node and 50 per second per node; beyond them 429 (`auth-rate-limited`, with `Retry-After`) without hashing |
 
 Check:
 
@@ -87,7 +88,7 @@ The first answers 401 with `WWW-Authenticate`, the second 200.
 
 | Field | Values | Default |
 | --- | --- | --- |
-| Authentication URL | An `http://` or `https://` URL, ≤ 2048 characters, host name or IP, no user information or fragment | — |
+| Authentication URL | An `http://` or `https://` URL, ≤ 2048 characters, host name or IP, no user information or fragment; stored in plain text and shown in the UI and the API, so put no token in its query string and let the forwarded request headers carry credentials | — |
 | Method | GET / HEAD | GET |
 | Timeout (s) | 0.1–10 | 5 |
 | Forwarded request headers | The visitor's header names, comma-separated, at most 16; not `Host`, hop-by-hop headers or the five headers the node sets | `authorization, cookie` |
@@ -101,7 +102,7 @@ The request the node sends to the service:
 | Item | Content |
 | --- | --- |
 | Path | Through the node's origin layer: the origin address policy (special-purpose addresses outside the [origin allow list](system.en.md#origin-allow-list) are refused), DNS resolution and TLS certificate verification as for origins |
-| Headers | The visitor's headers on the forwarded list, and `X-Original-URI` (the visitor's original request URI, signature and query included), `X-Original-Method`, `X-Original-Host`, `X-Real-IP` (the visitor's IP, as `ip.src`) and `X-Forwarded-For` (as towards origins); no other header |
+| Headers | The visitor's headers on the forwarded list, and the node's own `X-Original-URI` (the visitor's original request URI, signature and query included), `X-Original-Method`, `X-Original-Host`, `X-Original-URL` (`<scheme>://<Host><original URI>`), `X-Forwarded-Method`, `X-Forwarded-Proto`, `X-Forwarded-Host`, `X-Forwarded-Uri` (the names services such as Authelia read), `X-Real-IP` (the visitor's IP, as `ip.src`), `X-Forwarded-For` (as towards origins) and `CDN-Loop`; these never carry the visitor's own values, also when they are on the forwarded list; no other header |
 | Body | None |
 
 | Answer | What the node does |
@@ -110,7 +111,7 @@ The request the node sends to the service:
 | 401, 403 | Passed on: status, `WWW-Authenticate`, `Content-Type` and body (the site's error page when the body is over 64 KiB), `Cache-Control: no-store`, `X-Edgeweir-Error: auth-denied` |
 | 3xx | With "Pass redirects on": status and `Location` (login redirects); otherwise a refusal |
 | Other 4xx | 403 (error page, `auth-denied`) |
-| 5xx, connection failures, timeouts, refused addresses | The service is unavailable: 503 (error page, `auth-unavailable`); with "Allow when the service fails" the request continues without authentication. At most one NOTICE nginx error log line per rule and node every 60 seconds (site ID, rule ID and status) |
+| 5xx, connection failures, timeouts, refused addresses | The service is unavailable: 503 (error page, `auth-unavailable`); with "Allow when the service fails" the request continues without authentication, and the "Response headers copied to the origin" are removed from the origin request (visitors cannot send their own). At most one NOTICE nginx error log line per rule and node every 60 seconds (site ID, rule ID and status) |
 
 > [!WARNING]
 > Cached answers are keyed by the forwarded request headers (names and values) only, not by path or visitor IP. Do not cache answers when the service decides by path or IP. Only 2xx, 401 and 403 answers are cached.
@@ -169,6 +170,8 @@ echo "https://www.example.com${path}?sign=${sign}&t=${ts}"
 3. Click "Sign". The console computes the signed URL with the rule's primary key and shows it with its expiry; nothing is stored or sent to nodes. For a link that expires after P seconds the console takes the timestamp `now − (the rule's validity − P)`.
 
 Each signed URL is audited as `site.auth_sign_url` (rule, path and expiry, never the signature).
+
+The expiry shown leaves out the rule's clock skew: nodes still accept the link for that many seconds after it. A link given out cannot be revoked on its own: replace the key that signed it, without keeping the old key as the backup key.
 
 ## Site lists
 

@@ -125,7 +125,7 @@ primary_region = "nrt"
    | `EDGEWEIR_MASTER_KEY` | `edgeweir-master-key` 的内容，原样使用 |
    | `DATABASE_URL` | `postgres://edgeweir:<密码>@<主机>:5432/edgeweir?sslmode=verify-full` |
 
-3. 保持暂存，不点击 **Deploy Secrets**；secret 随第 4 步部署生效。
+3. 保持暂存，不点击 **Deploy Secrets**；secret 随第 4 步部署生效。部署之前执行 `fly secrets sync -a edgeweir-console`，让 flyctl 部署在 Dashboard 中设置的 secret。
 
 flyctl：
 
@@ -153,7 +153,7 @@ fly deploy --ha=false
 fly ips list
 ```
 
-预期：一个独享 IPv4（`v4`）与一个独享 IPv6（`v6`），没有共享 IPv4（`shared_v4`）。
+预期：一行 `v4`、类型 `public ingress (dedicated, $2/mo)`，一行 `v6`、类型 `public ingress (dedicated)`，没有类型为 `public ingress (shared)` 的行（共享 IPv4；`--json` 输出中为 `shared_v4`）。
 
 | 情况 | 处理 |
 | --- | --- |
