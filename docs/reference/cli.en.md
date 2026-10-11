@@ -200,7 +200,7 @@ Signed out 2 sessions.
 
 ## Development
 
-Requirements: Node.js 24.11.0 or later, pnpm 12.6.0, Docker; `helpers/certd` and `pnpm e2e` also need Go 1.27.1. buf is installed with the dev dependencies.
+Requirements: Node.js 24.11.0 or later, pnpm 12.6.0, Docker; `helpers/certd` and `pnpm e2e` also need Go 1.27.2. buf is installed with the dev dependencies.
 
 ### Run locally
 
@@ -260,7 +260,7 @@ Run from the repository root.
 
 ### End-to-end tests
 
-`scripts/e2e.sh` runs against `compose.e2e.yml`. It needs `curl`, `jq`, `docker`, and `node`; the installer step also needs goreleaser v2, syft, Go 1.27.1, and the sibling `edgeweir-node` checkout, and the signed upgrade step needs cosign v3.1.3; the run needs access to deb.debian.org and openresty.org.
+`scripts/e2e.sh` runs against `compose.e2e.yml`. It needs `curl`, `jq`, `docker`, and `node`; the installer step also needs goreleaser v2, syft, Go 1.27.2, and the sibling `edgeweir-node` checkout, and the signed upgrade step needs cosign v3.1.3; the run needs access to deb.debian.org and openresty.org.
 
 ```bash
 docker compose -f compose.e2e.yml up -d --build

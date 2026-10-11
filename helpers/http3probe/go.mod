@@ -1,6 +1,6 @@
 module github.com/marvinli001/edgeweir/helpers/http3probe
 
-go 1.27.1
+go 1.27.2
 
 require github.com/quic-go/quic-go v0.63.0
 

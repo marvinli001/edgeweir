@@ -647,7 +647,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | --- | --- |
 | `vite build` | `apps/console/dist/web` (SPA) |
 | `node scripts/build-server.mjs` (esbuild) | `apps/console/dist/server/main.js`: the server and all dependencies in one ESM file; `dist/server/recover.js`: the account recovery command, also with all dependencies, without a source map; `install/` copied to `dist/server/install`, migrations to `dist/migrations` |
-| Dockerfile stage `certd` | `golang:1.27.1-alpine` builds `edgeweir-certd` |
+| Dockerfile stage `certd` | `golang:1.27.2-alpine` builds `edgeweir-certd` |
 | Dockerfile stage `build` | `node:24.21.0-alpine` with pnpm 12.6.0 builds the console |
 | Dockerfile stage `runtime` | `node:24.21.0-alpine` + tini; no `node_modules`; runs as user `node`; `EXPOSE 3000 8443`; health check `edgeweir-healthcheck` |
 

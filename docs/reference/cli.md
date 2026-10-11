@@ -200,7 +200,7 @@ Signed out 2 sessions.
 
 ## 开发
 
-要求：Node.js 24.11.0 及以上、pnpm 12.6.0、Docker；`helpers/certd` 与 `pnpm e2e` 另需 Go 1.27.1。buf 随开发依赖安装。
+要求：Node.js 24.11.0 及以上、pnpm 12.6.0、Docker；`helpers/certd` 与 `pnpm e2e` 另需 Go 1.27.2。buf 随开发依赖安装。
 
 ### 本地运行
 
@@ -260,7 +260,7 @@ Signed out 2 sessions.
 
 ### 端到端测试
 
-`scripts/e2e.sh` 针对 `compose.e2e.yml` 运行。需要 `curl`、`jq`、`docker`、`node`；安装脚本步骤另需 goreleaser v2、syft、Go 1.27.1 与同级的 `edgeweir-node` 源码，签名升级步骤需要 cosign v3.1.3；运行时需要访问 deb.debian.org 与 openresty.org。
+`scripts/e2e.sh` 针对 `compose.e2e.yml` 运行。需要 `curl`、`jq`、`docker`、`node`；安装脚本步骤另需 goreleaser v2、syft、Go 1.27.2 与同级的 `edgeweir-node` 源码，签名升级步骤需要 cosign v3.1.3；运行时需要访问 deb.debian.org 与 openresty.org。
 
 ```bash
 docker compose -f compose.e2e.yml up -d --build

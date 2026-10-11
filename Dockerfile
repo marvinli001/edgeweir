@@ -9,7 +9,7 @@
 # what gets pulled (ADR-0017). Refresh tag and digest together (CONTRIBUTING.md).
 
 ARG NODE_IMAGE=node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
-ARG GO_IMAGE=golang:1.27.1-alpine@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414
+ARG GO_IMAGE=golang:1.27.2-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d
 
 # --- edgeweir-certd (Go helper) ------------------------------------------------
 FROM ${GO_IMAGE} AS certd

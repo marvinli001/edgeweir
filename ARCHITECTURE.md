@@ -647,7 +647,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | --- | --- |
 | `vite build` | `apps/console/dist/web`（SPA） |
 | `node scripts/build-server.mjs`（esbuild） | `apps/console/dist/server/main.js`：服务端与全部依赖打成单个 ESM 文件；`dist/server/recover.js`：找回账户命令，同样自带全部依赖，不带 source map；复制 `install/` 到 `dist/server/install`，迁移到 `dist/migrations` |
-| Dockerfile 阶段 `certd` | `golang:1.27.1-alpine` 构建 `edgeweir-certd` |
+| Dockerfile 阶段 `certd` | `golang:1.27.2-alpine` 构建 `edgeweir-certd` |
 | Dockerfile 阶段 `build` | `node:24.21.0-alpine`、pnpm 12.6.0 构建控制台 |
 | Dockerfile 阶段 `runtime` | `node:24.21.0-alpine` + tini；无 `node_modules`；以 `node` 用户运行；`EXPOSE 3000 8443`；健康检查 `edgeweir-healthcheck` |
 

@@ -174,7 +174,7 @@ Both are served from the same oRPC contract in `packages/contract`.
 
 ## Development
 
-Requirements: Node.js 24+, pnpm 12, Docker. Go 1.27.1 for `helpers/certd` and `pnpm e2e`. buf ships with the dev dependencies.
+Requirements: Node.js 24+, pnpm 12, Docker. Go 1.27.2 for `helpers/certd` and `pnpm e2e`. buf ships with the dev dependencies.
 
 ```sh
 pnpm install
@@ -207,7 +207,7 @@ Dependencies:
 
 - curl, jq, Docker (the node containers need `NET_ADMIN`), Node.js
 - an edgeweir-node checkout next to this repository (or `EDGEWEIR_NODE_CONTEXT`)
-- for the install step: goreleaser v2, syft, cosign, Go 1.27.1, and the edgeweir-openresty packages for the Docker architecture in edgeweir-node's `out/openresty` (`make openresty-packages`; `scripts/e2e.sh` builds them when missing, which needs Docker Buildx)
+- for the install step: goreleaser v2, syft, cosign, Go 1.27.2, and the edgeweir-openresty packages for the Docker architecture in edgeweir-node's `out/openresty` (`make openresty-packages`; `scripts/e2e.sh` builds them when missing, which needs Docker Buildx)
 - for the G3 step: a node image from before G3, `edgeweir-node:pre-g3` (`E2E_OLD_NODE_IMAGE`; `scripts/e2e-g3.mjs` builds it from edgeweir-node commit `6da3403` when missing)
 - network access to deb.debian.org and openresty.org; building the node image or the edgeweir-openresty packages for the first time also needs github.com, download.gnome.org and vault.almalinux.org
 

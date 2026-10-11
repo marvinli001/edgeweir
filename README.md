@@ -174,7 +174,7 @@ sudo bash deploy.sh install
 
 ## 开发
 
-环境要求：Node.js 24+、pnpm 12、Docker。`helpers/certd` 与 `pnpm e2e` 另需 Go 1.27.1。buf 随开发依赖安装。
+环境要求：Node.js 24+、pnpm 12、Docker。`helpers/certd` 与 `pnpm e2e` 另需 Go 1.27.2。buf 随开发依赖安装。
 
 ```sh
 pnpm install
@@ -207,7 +207,7 @@ pnpm e2e     # --up 启动环境；--down 结束后删除环境与卷；--skip-u
 
 - curl、jq、Docker（节点容器需要 `NET_ADMIN`）、Node.js
 - 与本仓库同级的 edgeweir-node 检出（或 `EDGEWEIR_NODE_CONTEXT`）
-- 安装步骤：goreleaser v2、syft、cosign、Go 1.27.1；edgeweir-node 的 `out/openresty` 中有 Docker 架构对应的 edgeweir-openresty 包（`make openresty-packages`，缺少时由 `scripts/e2e.sh` 构建，需要 Docker Buildx）
+- 安装步骤：goreleaser v2、syft、cosign、Go 1.27.2；edgeweir-node 的 `out/openresty` 中有 Docker 架构对应的 edgeweir-openresty 包（`make openresty-packages`，缺少时由 `scripts/e2e.sh` 构建，需要 Docker Buildx）
 - G3 步骤：G3 之前的节点镜像 `edgeweir-node:pre-g3`（`E2E_OLD_NODE_IMAGE`，缺少时由 `scripts/e2e-g3.mjs` 从 edgeweir-node 提交 `6da3403` 构建）
 - 网络访问：deb.debian.org、openresty.org；首次构建节点镜像或 edgeweir-openresty 包时另需 github.com、download.gnome.org、vault.almalinux.org
 
