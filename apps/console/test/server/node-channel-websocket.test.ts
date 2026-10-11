@@ -20,6 +20,8 @@ import { type NodeChannel, startNodeChannel } from "../../src/server/node-channe
 import {
   attachNodeChannelWebSocket,
   isNodeChannelUpgrade,
+  MAX_MESSAGE_BYTES,
+  WEBSOCKET_ENTRY_LIMITS,
 } from "../../src/server/node-channel/websocket";
 import { type ApiClient, createTestContext, rpcClient, setupPlatform, signIn } from "./helpers";
 
@@ -168,5 +170,59 @@ describe("the node channel's WebSocket entry", async () => {
     expect(await plainGet()).toBe(426);
     const ws = await openWebSocket();
     expect(ws.protocol).toBe(NODE_CHANNEL_WEBSOCKET_PROTOCOL);
+  });
+
+  it("bounds the bridges at once, idle ones and the message size", async () => {
+    // A second entry with small bounds (the entry is still open: wss:// was saved before).
+    const small = createServer(
+      { shouldUpgradeCallback: isNodeChannelUpgrade },
+      getRequestListener(app.fetch),
+    );
+    attachNodeChannelWebSocket(small, ctx, channel, {
+      ...WEBSOCKET_ENTRY_LIMITS,
+      bridges: 3,
+      bridgesPerClient: 2,
+      idleMs: 2000,
+    });
+    await new Promise<void>((resolve) => small.listen(0, "127.0.0.1", resolve));
+    const { port } = small.address() as AddressInfo;
+    const open = (client: string) =>
+      new Promise<WebSocket>((resolve, reject) => {
+        const ws = new WebSocket(
+          `ws://127.0.0.1:${port}${NODE_CHANNEL_WEBSOCKET_PATH}`,
+          NODE_CHANNEL_WEBSOCKET_PROTOCOL,
+          { headers: { "x-forwarded-for": client } },
+        );
+        sockets.push(ws);
+        ws.once("open", () => resolve(ws));
+        ws.once("unexpected-response", (_req, res) => reject(new Error(`HTTP ${res.statusCode}`)));
+        ws.once("error", reject);
+      });
+    const closed = (ws: WebSocket) =>
+      new Promise<number>((resolve) => {
+        if (ws.readyState === WebSocket.CLOSED) resolve(-1);
+        else ws.once("close", (code) => resolve(code));
+      });
+    try {
+      const a1 = await open("198.51.100.1");
+      await open("198.51.100.1");
+      await expect(open("198.51.100.1")).rejects.toThrow("HTTP 503");
+      await open("198.51.100.2");
+      await expect(open("198.51.100.3")).rejects.toThrow("HTTP 503");
+      // A closed bridge gives its place back.
+      a1.close();
+      await closed(a1);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const again = await open("198.51.100.1");
+      // Nothing either way for idleMs: closed by the entry.
+      expect(await closed(again)).not.toBe(-1);
+      // A message over MAX_MESSAGE_BYTES ends the bridge (1009: too big).
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const big = await open("198.51.100.4");
+      big.send(Buffer.alloc(MAX_MESSAGE_BYTES + 1));
+      expect(await closed(big)).toBe(1009);
+    } finally {
+      await new Promise<void>((resolve) => small.close(() => resolve()));
+    }
   });
 });

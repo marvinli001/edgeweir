@@ -12,7 +12,28 @@ import type { NodeChannel } from "./server";
  * Largest WebSocket message taken. Nodes send TLS records, at most 16 KiB of
  * payload each, one or a few per message.
  */
-export const MAX_MESSAGE_BYTES = 1 << 20;
+export const MAX_MESSAGE_BYTES = 64 << 10;
+
+/**
+ * Bounds of the entry. Upgrades are not authenticated (the node channel's
+ * TLS inside is), so the bridges open at once, in all and from one client
+ * address, are capped (503 beyond); a bridge with no bytes either way for
+ * idleMs is closed (nodes keep their streams busy every 15 seconds); whether
+ * the entry is open is kept for openCacheMs and forgotten when the node
+ * channel settings change.
+ */
+export interface WebSocketEntryLimits {
+  bridges: number;
+  bridgesPerClient: number;
+  idleMs: number;
+  openCacheMs: number;
+}
+export const WEBSOCKET_ENTRY_LIMITS: WebSocketEntryLimits = {
+  bridges: 1024,
+  bridgesPerClient: 64,
+  idleMs: 120_000,
+  openCacheMs: 5_000,
+};
 
 /**
  * An upgrade to the node channel's WebSocket entry: GET with
@@ -86,8 +107,37 @@ export function attachNodeChannelWebSocket(
   server: Server,
   app: AppContext,
   channel: NodeChannel,
+  limits: WebSocketEntryLimits = WEBSOCKET_ENTRY_LIMITS,
 ): void {
   const log = app.log.child({ component: "node-channel-websocket" });
+  let open: { value: boolean; until: number } | undefined;
+  const forget = () => {
+    open = undefined;
+  };
+  app.events.on("node-channel", forget);
+  app.events.on("reconnected", forget);
+  const entryOpen = async () => {
+    if (open && open.until > Date.now()) return open.value;
+    const value = await nodeChannelWebSocketOpen(app);
+    open = { value, until: Date.now() + limits.openCacheMs };
+    return value;
+  };
+  let active = 0;
+  const perClient = new Map<string, number>();
+  /** Takes one of the bridges for client; the returned function gives it back (once). */
+  const reserve = (client: string) => {
+    active++;
+    perClient.set(client, (perClient.get(client) ?? 0) + 1);
+    let held = true;
+    return () => {
+      if (!held) return;
+      held = false;
+      active--;
+      const left = (perClient.get(client) ?? 1) - 1;
+      if (left > 0) perClient.set(client, left);
+      else perClient.delete(client);
+    };
+  };
   const wss = new WebSocketServer({
     noServer: true,
     clientTracking: false,
@@ -97,9 +147,10 @@ export function attachNodeChannelWebSocket(
       protocols.has(NODE_CHANNEL_WEBSOCKET_PROTOCOL) ? NODE_CHANNEL_WEBSOCKET_PROTOCOL : false,
   });
 
-  const bridge = (ws: WebSocket, client: string) => {
+  const bridge = (ws: WebSocket, client: string, release: () => void) => {
     const address = channel.server.address() as AddressInfo | null;
     if (!address) {
+      release();
       ws.close(1011);
       return;
     }
@@ -109,9 +160,15 @@ export function attachNodeChannelWebSocket(
     const close = () => {
       if (key !== undefined) bridged.delete(key);
       key = undefined;
+      release();
       tcp.destroy();
       stream.destroy();
     };
+    // No bytes either way: a dead or idling client gives its bridge back.
+    tcp.setTimeout(limits.idleMs, () => {
+      log.debug("node channel WebSocket idle, closed", { client });
+      close();
+    });
     // Recorded before the first byte reaches the node channel: piping starts here.
     tcp.once("connect", () => {
       key = loopbackKey(tcp.localAddress, tcp.localPort);
@@ -135,20 +192,33 @@ export function attachNodeChannelWebSocket(
     // Browsers always send Origin with a WebSocket handshake; nodes never do.
     if (req.headers.origin !== undefined) return refuse(socket, 403, "Forbidden");
     if (!requestsProtocol(req)) return refuse(socket, 400, "Bad Request");
-    let open: boolean;
+    let isOpen: boolean;
     try {
-      open = await nodeChannelWebSocketOpen(app);
+      isOpen = await entryOpen();
     } catch (error) {
       log.warn("cannot tell whether the node channel WebSocket entry is open", { error });
       return refuse(socket, 503, "Service Unavailable");
     }
-    if (!open) return refuse(socket, 404, "Not Found");
+    if (!isOpen) return refuse(socket, 404, "Not Found");
     const client = resolveClientIp(
       req.socket.remoteAddress ?? "",
       headersOf(req),
       app.env.trustedProxies,
     );
-    wss.handleUpgrade(req, socket, head, (ws) => bridge(ws, client));
+    if (active >= limits.bridges || (perClient.get(client) ?? 0) >= limits.bridgesPerClient) {
+      log.warn("node channel WebSocket entry full", { client, active });
+      return refuse(socket, 503, "Service Unavailable");
+    }
+    // Counted from here: handshakes in flight hold their place too.
+    const release = reserve(client);
+    let upgraded = false;
+    socket.once("close", () => {
+      if (!upgraded) release();
+    });
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      upgraded = true;
+      bridge(ws, client, release);
+    });
   };
 
   server.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {

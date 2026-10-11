@@ -26,6 +26,7 @@ import * as x509 from "@peculiar/x509";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type NodeChannel, startNodeChannel } from "../../src/server/node-channel/server";
+import { MAX_WATCH_STREAMS } from "../../src/server/node-channel/service";
 import { logsCsv, queryLogs } from "../../src/server/services/access-logs";
 import { createCacheTask, getCacheTask } from "../../src/server/services/cache-tasks";
 import { createClusterTx } from "../../src/server/services/clusters";
@@ -252,6 +253,16 @@ describe("node channel", async () => {
     expect(notified.value?.latestRevision).toBe(2n);
     expect(notified.value?.contentHash).toBe(revision.contentHash);
     abort.abort();
+
+    // A node holds at most MAX_WATCH_STREAMS watches: a new one ends the oldest.
+    const watchAborts = [0, 1, 2].map(() => new AbortController());
+    const watches = watchAborts.map((a) =>
+      mtls.watchConfig({ knownRevision: 2n }, { signal: a.signal })[Symbol.asyncIterator](),
+    );
+    for (const w of watches) expect((await w.next()).value?.event).toBe(WatchEvent.REVISION);
+    expect(MAX_WATCH_STREAMS).toBe(2);
+    expect((await watches[0]?.next())?.done).toBe(true);
+    for (const a of watchAborts) a.abort();
 
     // Diff from 1 to 2 contains exactly the new site.
     const diff = await mtls.getConfig({ baseRevision: 1n });

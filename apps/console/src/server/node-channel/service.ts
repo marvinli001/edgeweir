@@ -93,6 +93,13 @@ import { bridgedClientAddress } from "./websocket";
 
 export const HEARTBEAT_SECONDS = 15;
 export const KEEPALIVE_MS = 15_000;
+
+/**
+ * WatchConfig streams one node may hold at once: a new one ends the oldest.
+ * A node needs one (two while it reconnects); more only multiply the reads
+ * every publish and keepalive costs.
+ */
+export const MAX_WATCH_STREAMS = 2;
 /** Ask nodes to renew once less than a third of the lifetime remains. */
 const RENEW_BEFORE_MS = (NODE_CERT_LIFETIME_DAYS * 24 * 3600 * 1000) / 3;
 /** Tasks handed out per PullTasks call unless the node asks for fewer. */
@@ -384,6 +391,8 @@ export function createNodeService(
   { closing }: { closing?: AbortSignal } = {},
 ): ServiceImpl<typeof NodeService> {
   const log = app.log.child({ component: "node-channel" });
+  /** Open WatchConfig streams by node, oldest first. */
+  const watching = new Map<string, AbortController[]>();
 
   /**
    * mTLS gate for every RPC except Enroll. `disabled` lets a disabled node
@@ -673,22 +682,33 @@ export function createNodeService(
     async *watchConfig(_req, ctx) {
       const node = await requireNode(ctx);
       const serial = ctx.values.get(peerKey).serialNumber;
-      yield* watchStream({
-        node,
-        bans: nodeSupportsFeature(node.supportedFeatures, BANS_FEATURE),
-        // A node follows its own target: the candidate in a canary group, else the stable revision.
-        source: {
-          target: () => currentTarget(node.id),
-          hasTasks: () => hasDeliverableTasks(app.db, node.id),
-          assertActive: () => assertStillActive(node.id, serial),
-          banSequence: () => currentBanSequence(app.db),
-        },
-        events: app.events,
-        log,
-        signal: ctx.signal,
-        closing,
-        keepaliveMs: KEEPALIVE_MS,
-      });
+      const own = new AbortController();
+      const streams = watching.get(node.id) ?? [];
+      streams.push(own);
+      while (streams.length > MAX_WATCH_STREAMS) streams.shift()?.abort();
+      watching.set(node.id, streams);
+      try {
+        yield* watchStream({
+          node,
+          bans: nodeSupportsFeature(node.supportedFeatures, BANS_FEATURE),
+          // A node follows its own target: the candidate in a canary group, else the stable revision.
+          source: {
+            target: () => currentTarget(node.id),
+            hasTasks: () => hasDeliverableTasks(app.db, node.id),
+            assertActive: () => assertStillActive(node.id, serial),
+            banSequence: () => currentBanSequence(app.db),
+          },
+          events: app.events,
+          log,
+          signal: AbortSignal.any([ctx.signal, own.signal]),
+          closing,
+          keepaliveMs: KEEPALIVE_MS,
+        });
+      } finally {
+        const left = (watching.get(node.id) ?? []).filter((c) => c !== own);
+        if (left.length > 0) watching.set(node.id, left);
+        else watching.delete(node.id);
+      }
     },
 
     async getConfig(req, ctx) {
