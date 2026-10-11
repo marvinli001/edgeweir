@@ -8,9 +8,9 @@
 #      （主密钥用 openssl rand -base64 32 生成并原样使用，POSTGRES_PASSWORD 会拼进
 #      DATABASE_URL，用 openssl rand -hex 24 生成）。会话密钥由主密钥派生；已经设置过
 #      BETTER_AUTH_SECRET 的部署继续保留它。其余配置在控制台「系统设置」填写。
-#      镜像是公开的 ghcr.io/marvinli001/edgeweir，滚动发布，tag 为「日期-提交」（例如
-#      20260929-a1b2c3d）；生产在 .env 里用 EDGEWEIR_VERSION 固定一个 tag，升级时改 tag 后
-#      「更新镜像」。没有 POSTGRES_PASSWORD 时编排拒绝启动（早先不填的部署用的是 edgeweir）。
+#      镜像是公开的 ghcr.io/marvinli001/edgeweir，tag 为「日期-提交」（例如
+#      20260929-a1b2c3d），不设置 EDGEWEIR_VERSION 时用 stable 渠道；生产在 .env 里用
+#      EDGEWEIR_VERSION 固定一个 tag，升级时改 tag 后「更新镜像」。没有 POSTGRES_PASSWORD 时编排拒绝启动（早先不填的部署用的是 edgeweir）。
 #   2. Web 控制台只监听 127.0.0.1:3000，由宝塔站点「反向代理」到 http://127.0.0.1:3000，
 #      HTTPS 证书在宝塔上配置即可。
 #   3. 节点通道 8443 端口必须直接暴露（或用 nginx stream 四层透传），
@@ -20,7 +20,7 @@ name: edgeweir
 
 services:
   console:
-    image: ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-latest}
+    image: ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-stable}
     container_name: edgeweir-console
     restart: unless-stopped
     environment:

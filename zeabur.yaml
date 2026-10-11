@@ -80,7 +80,7 @@ spec:
       spec:
         source:
           # Pin a dated tag (<YYYYMMDD>-<commit>) after the first deploy: docs/deploy/zeabur.md.
-          image: ghcr.io/marvinli001/edgeweir:latest
+          image: ghcr.io/marvinli001/edgeweir:stable
         ports:
           - id: web
             port: 3000

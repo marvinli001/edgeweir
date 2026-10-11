@@ -451,7 +451,11 @@ version_order() {
 # EDGEWEIR_NO_PULL=1: use images already loaded on this host (docker load), never pull.
 pull() { [[ -n ${EDGEWEIR_NO_PULL:-} ]] || compose pull -q; }
 
-# resolve_version <tag|latest>: pulls the image and prints the dated tag to pin.
+# Release channels: stable (the default) is moved by maintainers to a tested dated
+# tag; latest follows master.
+is_channel() { [[ $1 == stable || $1 == latest ]]; }
+
+# resolve_version <tag|stable|latest>: pulls the image and prints the dated tag to pin.
 resolve_version() {
   local want=$1 version
   if [[ -n ${EDGEWEIR_NO_PULL:-} ]]; then
@@ -461,19 +465,19 @@ resolve_version() {
     docker pull -q "$IMAGE:$want" >/dev/null || die "拉取 ${IMAGE}:${want} 失败，检查网络或 tag 是否存在。"
   fi
   version=$(image_version "$IMAGE:$want")
-  if [[ $want != latest ]]; then
+  if ! is_channel "$want"; then
     printf '%s' "$want"
   elif [[ -n $version && $version != dev ]]; then
     # Compose runs the dated tag: have it locally before anything restarts.
     if [[ -n ${EDGEWEIR_NO_PULL:-} ]]; then
-      docker image inspect "$IMAGE:$version" >/dev/null 2>&1 || docker tag "$IMAGE:latest" "$IMAGE:$version"
+      docker image inspect "$IMAGE:$version" >/dev/null 2>&1 || docker tag "$IMAGE:$want" "$IMAGE:$version"
     else
       docker pull -q "$IMAGE:$version" >/dev/null || die "拉取 ${IMAGE}:${version} 失败。"
     fi
     printf '%s' "$version"
   else
-    warn "latest 镜像没有版本标签，只能跟随 latest。"
-    printf latest
+    warn "${want} 镜像没有版本标签，只能跟随 ${want}。"
+    printf '%s' "$want"
   fi
 }
 
@@ -573,12 +577,12 @@ template_host() {
 #   - 宝塔 nginx 从 127.0.0.1 转发，EDGEWEIR_TRUSTED_PROXIES 默认只信任本机回环地址。
 # .env 至少需要 DATABASE_URL、EDGEWEIR_MASTER_KEY、EDGEWEIR_PUBLIC_URL（连接串也可以放进文件，
 # 在 compose.override.yml 里挂载并设置 DATABASE_URL_FILE）；镜像 tag 用 EDGEWEIR_VERSION
-# 固定（滚动发布的「日期-提交」，例如 20260929-a1b2c3d）。
+# 固定（「日期-提交」，例如 20260929-a1b2c3d；不设置时用 stable 渠道）。
 name: edgeweir
 
 services:
   console:
-    image: ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-latest}
+    image: ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-stable}
     container_name: edgeweir-console
     restart: unless-stopped
     network_mode: host
@@ -633,9 +637,9 @@ template_bundled() {
 #      （主密钥用 openssl rand -base64 32 生成并原样使用，POSTGRES_PASSWORD 会拼进
 #      DATABASE_URL，用 openssl rand -hex 24 生成）。会话密钥由主密钥派生；已经设置过
 #      BETTER_AUTH_SECRET 的部署继续保留它。其余配置在控制台「系统设置」填写。
-#      镜像是公开的 ghcr.io/marvinli001/edgeweir，滚动发布，tag 为「日期-提交」（例如
-#      20260929-a1b2c3d）；生产在 .env 里用 EDGEWEIR_VERSION 固定一个 tag，升级时改 tag 后
-#      「更新镜像」。没有 POSTGRES_PASSWORD 时编排拒绝启动（早先不填的部署用的是 edgeweir）。
+#      镜像是公开的 ghcr.io/marvinli001/edgeweir，tag 为「日期-提交」（例如
+#      20260929-a1b2c3d），不设置 EDGEWEIR_VERSION 时用 stable 渠道；生产在 .env 里用
+#      EDGEWEIR_VERSION 固定一个 tag，升级时改 tag 后「更新镜像」。没有 POSTGRES_PASSWORD 时编排拒绝启动（早先不填的部署用的是 edgeweir）。
 #   2. Web 控制台只监听 127.0.0.1:3000，由宝塔站点「反向代理」到 http://127.0.0.1:3000，
 #      HTTPS 证书在宝塔上配置即可。
 #   3. 节点通道 8443 端口必须直接暴露（或用 nginx stream 四层透传），
@@ -645,7 +649,7 @@ name: edgeweir
 
 services:
   console:
-    image: ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-latest}
+    image: ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-stable}
     container_name: edgeweir-console
     restart: unless-stopped
     environment:
@@ -865,7 +869,7 @@ cmd_install() {
     die "端口无效：Web ${http_port}，节点通道 ${node_port}。"
 
   step "镜像版本"
-  version=$(resolve_version "${EDGEWEIR_VERSION:-latest}")
+  version=$(resolve_version "${EDGEWEIR_VERSION:-stable}")
   ok "固定为 ${version}"
 
   step "确认"
@@ -1164,7 +1168,7 @@ update_template() {
 }
 
 cmd_update() {
-  local target=latest skip_backup='' arg current version
+  local target=stable skip_backup='' arg current version
   for arg in "$@"; do
     case $arg in
       --no-backup) skip_backup=1 ;;
@@ -1175,14 +1179,15 @@ cmd_update() {
   preflight
   find_dir
   current=$(env_get EDGEWEIR_VERSION)
-  step "检查版本（当前 ${current:-latest}）"
+  step "检查版本（当前 ${current:-stable}）"
   version=$(resolve_version "$target")
-  if [[ $version == "$current" && $version != latest ]] && [[ $(running_version) == "$version" ]]; then
+  if [[ $version == "$current" ]] && ! is_channel "$version" && [[ $(running_version) == "$version" ]]; then
     ok "已经是 ${version}。"
     return 0
   fi
-  info "${current:-latest} → ${version}"
-  if [[ -n $current && $target != latest ]]; then
+  info "${current:-stable} → ${version}"
+  # A channel can point at an older build than a pinned tag or latest.
+  if [[ -n $current ]]; then
     case $(version_order "$current" "$version") in
       older)
         warn "这是回退：数据库迁移只向前执行，只有两个版本之间没有新增迁移时才能直接换回旧镜像。"
@@ -1323,7 +1328,7 @@ usage() {
 用法：./deploy.sh <命令>
 
   install            对话式安装（选择数据库方式、生成 .env、启动）
-  update [tag]       备份后升级到最新版本或指定 tag（--no-backup 跳过备份）
+  update [tag]       备份后升级到 stable 渠道的版本或指定 tag（latest 跟随 master；--no-backup 跳过备份）
   backup             备份数据库、.env（不含主密钥）和编排文件到 backups/，保留最近 5 份
   restore <备份>     先备份当前数据库，再用备份目录里的 edgeweir.dump 替换数据库（.env 不变；--no-backup 跳过备份）
   config             修改控制台地址和节点通道地址

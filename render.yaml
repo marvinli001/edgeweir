@@ -11,7 +11,7 @@ services:
     runtime: image
     image:
       # Pin a dated tag (<YYYYMMDD>-<commit>) after the first deploy: docs/deploy/render.md.
-      url: ghcr.io/marvinli001/edgeweir:latest
+      url: ghcr.io/marvinli001/edgeweir:stable
     # The Free plan spins down when idle, which stops the worker and the node channel.
     plan: 0.5c-512mb
     numInstances: 1

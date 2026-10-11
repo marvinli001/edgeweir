@@ -5,9 +5,9 @@
 # POSTGRES_PASSWORD, the console without EDGEWEIR_MASTER_KEY; the session secret
 # is derived from it unless BETTER_AUTH_SECRET is set (deployments that set it
 # keep it). EDGEWEIR_PUBLIC_URL is the URL browsers use. Local changes go into compose.override.yml, which compose merges.
-# The console image is pulled from ghcr.io (rolling <YYYYMMDD>-<commit> tags,
-# pinned with EDGEWEIR_VERSION); `docker compose up -d --build` builds it from
-# this checkout instead.
+# The console image is pulled from ghcr.io: the stable channel by default, or a
+# dated <YYYYMMDD>-<commit> tag pinned with EDGEWEIR_VERSION; `docker compose up
+# -d --build` builds it from this checkout instead.
 name: edgeweir
 
 x-console-env: &console-env
@@ -38,7 +38,7 @@ x-console-env: &console-env
 
 services:
   console:
-    image: ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-latest}
+    image: ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-stable}
     build:
       context: .
     restart: unless-stopped

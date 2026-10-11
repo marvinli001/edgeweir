@@ -586,6 +586,79 @@ describe("deploy.sh", () => {
       );
     });
 
+    describe("channels", () => {
+      // A registry with stable at 20261011-1111111, latest at 20261012-2222222.
+      const registry = `docker() {
+        case "$1 $2" in
+          "pull -q") echo "pull $3" >> "$LOG" ;;
+          "tag "*) echo "tag $2 $3" >> "$LOG" ;;
+          "image inspect")
+            if [[ $3 != -f ]]; then [[ $3 != *:missing ]]; return; fi
+            case "$4 $5" in
+              *version*:stable) echo 20261011-1111111 ;;
+              *version*:latest) echo 20261012-2222222 ;;
+            esac ;;
+        esac
+      }`;
+
+      it.each([
+        ["stable", "20261011-1111111"],
+        ["latest", "20261012-2222222"],
+        ["20261001-0000000", "20261001-0000000"],
+      ])("resolves %s to the dated tag %s and pulls it", (want, pinned) => {
+        const log = resolve(directory(), "log");
+        writeFileSync(log, "");
+        expect(sourced(`${registry}; resolve_version "$W"`, { W: want, LOG: log })).toBe(pinned);
+        const pulls = readFileSync(log, "utf8");
+        expect(pulls).toContain(`pull ghcr.io/marvinli001/edgeweir:${want}\n`);
+        if (want !== pinned)
+          expect(pulls).toContain(`pull ghcr.io/marvinli001/edgeweir:${pinned}\n`);
+      });
+
+      it("tags a loaded channel image with its dated tag under EDGEWEIR_NO_PULL", () => {
+        const log = resolve(directory(), "log");
+        writeFileSync(log, "");
+        const docker = registry.replace("[[ $3 != *:missing ]]", "[[ $3 != *:20261011-1111111 ]]");
+        expect(
+          sourced(`${docker}; resolve_version stable`, { LOG: log, EDGEWEIR_NO_PULL: "1" }),
+        ).toBe("20261011-1111111");
+        expect(readFileSync(log, "utf8")).toBe(
+          "tag ghcr.io/marvinli001/edgeweir:stable ghcr.io/marvinli001/edgeweir:20261011-1111111\n",
+        );
+      });
+
+      it("installs and updates from stable by default", () => {
+        expect(read("deploy.sh")).toContain('resolve_version "${EDGEWEIR_VERSION:-stable}"');
+        expect(read("deploy.sh")).toMatch(/cmd_update\(\) \{\n {2}local target=stable /);
+        for (const file of ["compose.yml", "compose.baota.yml", "compose.baota-host.yml"]) {
+          expect(read(file), file).toContain(
+            "image: ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-stable}",
+          );
+        }
+      });
+
+      it("asks before stable takes a newer pinned version back, and stops unattended", () => {
+        const dir = directory({
+          ".env": "EDGEWEIR_VERSION=20261012-2222222\n",
+          "compose.yml": "services: {}\n",
+        });
+        const log = resolve(dir, "log");
+        writeFileSync(log, "");
+        const result = run(
+          `${registry}; preflight() { :; }; find_dir() { DIR=$D; COMPOSE_FILE=compose.yml; }
+           running_version() { echo 20261012-2222222; }; cmd_backup() { echo backup >> "$LOG"; }
+           cmd_update`,
+          { D: dir, LOG: log },
+        );
+        expect(result.status).not.toBe(0);
+        expect(result.stderr).toContain("这是回退");
+        expect(readFileSync(log, "utf8")).not.toContain("backup");
+        expect(readFileSync(resolve(dir, ".env"), "utf8")).toBe(
+          "EDGEWEIR_VERSION=20261012-2222222\n",
+        );
+      });
+    });
+
     it("reads release timestamps without date -d", () => {
       for (const time of [
         "1970-01-01T00:00:00Z",
