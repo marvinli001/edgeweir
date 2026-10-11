@@ -29,6 +29,7 @@ describe("procedures that return a credential once", () => {
         );
       })
       .map(([name]) => name);
-    expect(returning.sort()).toEqual([...oneTimeSecretProcedures].sort());
+    // A signed URL is a credential too, in a field named url.
+    expect([...returning, "authRules.signUrl"].sort()).toEqual([...oneTimeSecretProcedures].sort());
   });
 });

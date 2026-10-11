@@ -612,6 +612,8 @@ export const oneTimeSecretProcedures: ReadonlySet<string> = new Set([
   "serviceAccounts.createKey",
   "clusters.createEnrollmentToken",
   "probes.createToken",
+  // A signed URL grants access until it expires (up to a year).
+  "authRules.signUrl",
 ]);
 
 export * from "./access-keys";

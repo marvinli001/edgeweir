@@ -794,6 +794,29 @@ describe("access authentication (G12)", async () => {
     });
     expect(signed.status).toBe(200);
     expect(String(signed.json.url)).toMatch(/^\/a\.mp4\?sign=/);
+    // A signed URL is a credential: never kept for an Idempotency-Key replay.
+    const retried = await app.request(
+      `${origin}/api/v1/sites/${siteId}/auth-rules/${rule.id}/sign`,
+      {
+        method: "POST",
+        headers: {
+          "x-api-key": writer,
+          "content-type": "application/json",
+          "idempotency-key": "sign-1",
+        },
+        body: JSON.stringify({ url: "/a.mp4" }),
+      },
+    );
+    expect([retried.status, ((await retried.json()) as { code: string }).code]).toEqual([
+      400,
+      "IDEMPOTENCY_KEY_UNSUPPORTED",
+    ]);
+    // Only the refusal is kept (as for every 4xx), never a signature.
+    const kept = await ctx.db
+      .select()
+      .from(schema.idempotencyKey)
+      .where(eq(schema.idempotencyKey.key, "sign-1"));
+    expect(JSON.stringify(kept)).not.toMatch(/sign=/);
     expect((await api(writer, "PUT", `/sites/${siteId}/auth-rules`, { rules: [] })).status).toBe(
       200,
     );
