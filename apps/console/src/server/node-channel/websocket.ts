@@ -17,7 +17,10 @@ export const MAX_MESSAGE_BYTES = 64 << 10;
 /**
  * Bounds of the entry. Upgrades are not authenticated (the node channel's
  * TLS inside is), so the bridges open at once, in all and from one client
- * address, are capped (503 beyond); a bridge with no bytes either way for
+ * address, are capped (503 beyond); the per-address cap applies only with
+ * EDGEWEIR_TRUSTED_PROXIES (behind a platform proxy without it every client
+ * has the proxy's address, and an attacker would lock the nodes out); a
+ * bridge with no bytes either way for
  * idleMs is closed (nodes keep their streams busy every 15 seconds); whether
  * the entry is open is kept for openCacheMs and forgotten when the node
  * channel settings change.
@@ -123,6 +126,7 @@ export function attachNodeChannelWebSocket(
     return value;
   };
   let active = 0;
+  let fullLoggedAt = 0;
   const perClient = new Map<string, number>();
   /** Takes one of the bridges for client; the returned function gives it back (once). */
   const reserve = (client: string) => {
@@ -205,8 +209,16 @@ export function attachNodeChannelWebSocket(
       headersOf(req),
       app.env.trustedProxies,
     );
-    if (active >= limits.bridges || (perClient.get(client) ?? 0) >= limits.bridgesPerClient) {
-      log.warn("node channel WebSocket entry full", { client, active });
+    // A client gone while the entry was being checked never upgrades: nothing to hold.
+    if (socket.destroyed || !socket.readable || !socket.writable) return;
+    const perClientCap =
+      app.env.trustedProxies.size > 0 ? limits.bridgesPerClient : Number.POSITIVE_INFINITY;
+    if (active >= limits.bridges || (perClient.get(client) ?? 0) >= perClientCap) {
+      // Once a minute at most: refusals can come in floods.
+      if (Date.now() - fullLoggedAt > 60_000) {
+        fullLoggedAt = Date.now();
+        log.warn("node channel WebSocket entry full", { client, active });
+      }
       return refuse(socket, 503, "Service Unavailable");
     }
     // Counted from here: handshakes in flight hold their place too.

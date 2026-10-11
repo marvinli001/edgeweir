@@ -29,12 +29,12 @@ While an active node of the cluster lacks the capability `access-auth-v1`, the t
 | Field | Values | Match |
 | --- | --- | --- |
 | Domains | Any of the site's domains; none means all | Each domain matches the request's Host as written: `a.com` exactly, `*.a.com` one label, `.a.com` any subdomain, `~pattern` the whole host |
-| Path prefixes | One per line, starting with `/`, at most 32, each ≤ 1024 bytes | The path starts with one of them; empty means any |
+| Path prefixes | One per line, starting with `/`, at most 32, each ≤ 1024 bytes | The path starts with one of them, ASCII case ignored (origins such as Express route `/ADMIN/` to `/admin/` by default); empty means any |
 | Extensions | Separated by commas or spaces, at most 64, 1–16 lowercase letters or digits, no dot | The last path segment's extension (as the rule field `http.request.uri.path.extension`, lowercase); empty means any |
 | Excluded path prefixes | As path prefixes | Paths starting with one of them are not checked |
 
 - The path is nginx's normalized path (percent-decoded, as the rule field `http.request.uri.path`). Signed URLs of kinds B and C are matched by the path without their two signature segments.
-- The origin receives the raw path the visitor sent. When it holds an encoded `/`, `\` or `.` (`%2F`, `%5C`, `%2E`), a `\`, a `;`, or a `.` or `..` segment, the origin may route it elsewhere than the normalized path (`/admin/..%2Fx` is `/x` on the node, but under `/admin/` at a Go ServeMux origin): such a request is inside every rule's path prefixes and extensions, no excluded prefix applies to it, and it is not cached.
+- The origin receives the raw path the visitor sent. When it holds an encoded `/`, `\` or `.` (`%2F`, `%5C`, `%2E`), a `\`, a `;`, or a `.` or `..` segment, the origin may route it elsewhere than the normalized path (`/admin/..%2Fx` is `/x` on the node, but under `/admin/` at a Go ServeMux origin): such a request is inside every rule's path prefixes and extensions, no excluded prefix applies to it, and it is not cached; when the domains of more than one rule cover the Host, which rule checks it cannot be told and it gets 400 (`auth-path-ambiguous`). Excluded prefixes compare exactly.
 - **The first enabled rule whose scope the request matches decides**; later rules are not looked at. Disabled rules are not sent to nodes.
 - Domains removed from the site disappear from scopes; when that removes all of a scope's domains, the rule covers every domain of the site (more requests are authenticated, never fewer).
 
@@ -102,7 +102,7 @@ The request the node sends to the service:
 | Item | Content |
 | --- | --- |
 | Path | Through the node's origin layer: the origin address policy (special-purpose addresses outside the [origin allow list](system.en.md#origin-allow-list) are refused), DNS resolution and TLS certificate verification as for origins |
-| Headers | The visitor's headers on the forwarded list, and the node's own `X-Original-URI` (the visitor's original request URI, signature and query included), `X-Original-Method`, `X-Original-Host`, `X-Original-URL` (`<scheme>://<Host><original URI>`), `X-Forwarded-Method`, `X-Forwarded-Proto`, `X-Forwarded-Host`, `X-Forwarded-Uri` (the names services such as Authelia read), `X-Real-IP` (the visitor's IP, as `ip.src`), `X-Forwarded-For` (as towards origins) and `CDN-Loop`; these never carry the visitor's own values, also when they are on the forwarded list; no other header |
+| Headers | The visitor's headers on the forwarded list, and the node's own `X-Original-URI` (the visitor's original request URI, signature and query included), `X-Original-Method`, `X-Original-Host`, `X-Original-URL` (`<scheme>://<Host><original URI>`), `X-Forwarded-Method`, `X-Forwarded-Proto`, `X-Forwarded-Host`, `X-Forwarded-Uri` (the names services such as Authelia read), `X-Real-IP` and `X-Forwarded-For` (both just the visitor's IP, as `ip.src`) and `CDN-Loop`; these never carry the visitor's own values, also when they are on the forwarded list; no other header |
 | Body | None |
 
 | Answer | What the node does |
@@ -325,7 +325,8 @@ Requests authentication refused (401, 403, 429, 503, a browser's first request w
 | `auth-required` | 401 | Basic: no or wrong credentials |
 | `auth-denied` | 403 (forward authentication also 401 or 3xx) | A missing or wrong signature; forward authentication refused |
 | `auth-expired` | 403 | An expired signature or a timestamp ahead |
-| `auth-rate-limited` | 429 | Basic failure limit |
+| `auth-rate-limited` | 429 | Basic verification limit |
+| `auth-path-ambiguous` | 400 | An ambiguous raw path on a Host with more than one authentication rule |
 | `auth-unavailable` | 503 | The authentication service is unavailable |
 
 Access control refusals do not count as authentication failures:
