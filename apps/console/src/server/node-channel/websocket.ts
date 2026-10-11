@@ -1,7 +1,13 @@
 import type { IncomingMessage, Server } from "node:http";
 import { type AddressInfo, connect } from "node:net";
 import type { Duplex } from "node:stream";
-import { NODE_CHANNEL_WEBSOCKET_PATH, NODE_CHANNEL_WEBSOCKET_PROTOCOL } from "@edgeweir/contract";
+import type { TLSSocket } from "node:tls";
+import {
+  formatIp,
+  NODE_CHANNEL_WEBSOCKET_PATH,
+  NODE_CHANNEL_WEBSOCKET_PROTOCOL,
+  parseCidr,
+} from "@edgeweir/contract";
 import { createWebSocketStream, type WebSocket, WebSocketServer } from "ws";
 import { resolveClientIp } from "../lib/client-ip";
 import type { AppContext } from "../lib/context";
@@ -17,10 +23,13 @@ export const MAX_MESSAGE_BYTES = 64 << 10;
 /**
  * Bounds of the entry. Upgrades are not authenticated (the node channel's
  * TLS inside is), so the bridges open at once, in all and from one client
- * address, are capped (503 beyond); the per-address cap applies only with
- * EDGEWEIR_TRUSTED_PROXIES (behind a platform proxy without it every client
- * has the proxy's address, and an attacker would lock the nodes out); a
- * bridge with no bytes either way for
+ * address (an IPv6 client: its /64), are capped (503 beyond); the
+ * per-address cap applies only with EDGEWEIR_TRUSTED_PROXIES (behind a
+ * platform proxy without it every client has the proxy's address, and an
+ * attacker would lock the nodes out); a bridge whose node channel
+ * connection has not presented a verified client certificate within
+ * authenticateMs is closed (without one, a connection can only enroll);
+ * a bridge with no bytes either way for
  * idleMs is closed (nodes keep their streams busy every 15 seconds); whether
  * the entry is open is kept for openCacheMs and forgotten when the node
  * channel settings change.
@@ -28,15 +37,26 @@ export const MAX_MESSAGE_BYTES = 64 << 10;
 export interface WebSocketEntryLimits {
   bridges: number;
   bridgesPerClient: number;
+  authenticateMs: number;
   idleMs: number;
   openCacheMs: number;
 }
 export const WEBSOCKET_ENTRY_LIMITS: WebSocketEntryLimits = {
   bridges: 1024,
   bridgesPerClient: 64,
+  authenticateMs: 30_000,
   idleMs: 120_000,
   openCacheMs: 5_000,
 };
+
+/**
+ * What the per-address cap counts a client as: an IPv4 address, or the /64
+ * of an IPv6 one (a single host usually holds a whole /64).
+ */
+export function clientBucket(client: string): string {
+  const prefix = parseCidr(`${client}/64`);
+  return prefix?.version === 6 ? `${formatIp(prefix)}/64` : client;
+}
 
 /**
  * An upgrade to the node channel's WebSocket entry: GET with
@@ -56,8 +76,12 @@ const requestsProtocol = (req: IncomingMessage) =>
     .split(",")
     .some((protocol) => protocol.trim() === NODE_CHANNEL_WEBSOCKET_PROTOCOL);
 
-/** Loopback connections opened for WebSocket clients: "local address|local port" → client IP. */
-const bridged = new Map<string, string>();
+/**
+ * Loopback connections opened for WebSocket clients, by "local address|local
+ * port": the client IP and whether the node channel verified a client
+ * certificate on the connection.
+ */
+const bridged = new Map<string, { client: string; authorized: boolean }>();
 
 const loopbackKey = (address: string | undefined, port: number | undefined) =>
   address && port ? `${address.replace(/^::ffff:/i, "")}|${port}` : undefined;
@@ -73,7 +97,18 @@ export function bridgedClientAddress(
   remotePort: number | undefined,
 ): string | undefined {
   const key = loopbackKey(remoteAddress, remotePort);
-  return key === undefined ? undefined : bridged.get(key);
+  return key === undefined ? undefined : bridged.get(key)?.client;
+}
+
+/**
+ * Called by the node channel once a TLS handshake completes: a bridged
+ * connection with a verified client certificate keeps its bridge past
+ * authenticateMs.
+ */
+export function noteBridgedHandshake(socket: TLSSocket): void {
+  const key = loopbackKey(socket.remoteAddress, socket.remotePort);
+  const entry = key === undefined ? undefined : bridged.get(key);
+  if (entry && socket.authorized === true) entry.authorized = true;
 }
 
 /** The node channel's own address, seen from this process. */
@@ -92,8 +127,11 @@ function headersOf(req: IncomingMessage): Headers {
   return headers;
 }
 
+/** Answers and closes: the client gets the status, the socket is destroyed once it is written. */
 function refuse(socket: Duplex, status: number, reason: string): void {
-  socket.end(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+  socket.end(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`, () =>
+    socket.destroy(),
+  );
 }
 
 /**
@@ -128,18 +166,18 @@ export function attachNodeChannelWebSocket(
   let active = 0;
   let fullLoggedAt = 0;
   const perClient = new Map<string, number>();
-  /** Takes one of the bridges for client; the returned function gives it back (once). */
-  const reserve = (client: string) => {
+  /** Takes one of the bridges for a client bucket; the returned function gives it back (once). */
+  const reserve = (bucket: string) => {
     active++;
-    perClient.set(client, (perClient.get(client) ?? 0) + 1);
+    perClient.set(bucket, (perClient.get(bucket) ?? 0) + 1);
     let held = true;
     return () => {
       if (!held) return;
       held = false;
       active--;
-      const left = (perClient.get(client) ?? 1) - 1;
-      if (left > 0) perClient.set(client, left);
-      else perClient.delete(client);
+      const left = (perClient.get(bucket) ?? 1) - 1;
+      if (left > 0) perClient.set(bucket, left);
+      else perClient.delete(bucket);
     };
   };
   const wss = new WebSocketServer({
@@ -161,7 +199,15 @@ export function attachNodeChannelWebSocket(
     const stream = createWebSocketStream(ws);
     const tcp = connect({ host: loopbackHost(app.env.nodeApiHost), port: address.port });
     let key: string | undefined;
+    // Without a verified client certificate a connection can only enroll:
+    // it gets authenticateMs for that, then gives its bridge back.
+    const unauthenticated = setTimeout(() => {
+      if (key !== undefined && bridged.get(key)?.authorized) return;
+      log.debug("node channel WebSocket without a client certificate, closed", { client });
+      close();
+    }, limits.authenticateMs);
     const close = () => {
+      clearTimeout(unauthenticated);
       if (key !== undefined) bridged.delete(key);
       key = undefined;
       release();
@@ -176,7 +222,7 @@ export function attachNodeChannelWebSocket(
     // Recorded before the first byte reaches the node channel: piping starts here.
     tcp.once("connect", () => {
       key = loopbackKey(tcp.localAddress, tcp.localPort);
-      if (key !== undefined) bridged.set(key, client);
+      if (key !== undefined) bridged.set(key, { client, authorized: false });
       stream.pipe(tcp).pipe(stream);
     });
     tcp.on("error", (error) => {
@@ -210,10 +256,14 @@ export function attachNodeChannelWebSocket(
       app.env.trustedProxies,
     );
     // A client gone while the entry was being checked never upgrades: nothing to hold.
-    if (socket.destroyed || !socket.readable || !socket.writable) return;
+    if (socket.destroyed || !socket.readable || !socket.writable) {
+      socket.destroy();
+      return;
+    }
     const perClientCap =
       app.env.trustedProxies.size > 0 ? limits.bridgesPerClient : Number.POSITIVE_INFINITY;
-    if (active >= limits.bridges || (perClient.get(client) ?? 0) >= perClientCap) {
+    const bucket = clientBucket(client);
+    if (active >= limits.bridges || (perClient.get(bucket) ?? 0) >= perClientCap) {
       // Once a minute at most: refusals can come in floods.
       if (Date.now() - fullLoggedAt > 60_000) {
         fullLoggedAt = Date.now();
@@ -222,7 +272,7 @@ export function attachNodeChannelWebSocket(
       return refuse(socket, 503, "Service Unavailable");
     }
     // Counted from here: handshakes in flight hold their place too.
-    const release = reserve(client);
+    const release = reserve(bucket);
     let upgraded = false;
     socket.once("close", () => {
       if (!upgraded) release();

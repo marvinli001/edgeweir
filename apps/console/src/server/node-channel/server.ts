@@ -14,6 +14,7 @@ import {
   peerKey,
   recordRefusedCertificate,
 } from "./service";
+import { noteBridgedHandshake } from "./websocket";
 
 /** Reissue the server certificate once less than a third of its lifetime remains. */
 const RENEW_BEFORE_MS = (SERVER_CERT_LIFETIME_DAYS * 24 * 3600 * 1000) / 3;
@@ -152,6 +153,7 @@ export async function startNodeChannel(
     session.once("close", () => sessions.delete(session));
   });
   server.on("secureConnection", (socket: TLSSocket) => {
+    noteBridgedHandshake(socket);
     sockets.add(socket);
     socket.once("close", () => sockets.delete(socket));
   });
