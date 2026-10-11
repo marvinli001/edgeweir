@@ -24,7 +24,7 @@ sudo bash deploy.sh install
 | 命令 | 参数 | 作用 |
 | --- | --- | --- |
 | `install` | — | 对话式安装：选择数据库模式，检查数据库，写入 `.env`、`compose.yml` 与脚本副本，启动并等待健康检查，打印 setup token |
-| `update`（别名 `upgrade`） | `[tag]` `[--no-backup]` | 备份后升级到指定 tag；省略时为 `latest` 对应的日期 tag，见 [update](#update) |
+| `update`（别名 `upgrade`） | `[tag]` `[--no-backup]` | 备份后升级到指定 tag；省略时为 `stable` 对应的日期 tag，见 [update](#update) |
 | `backup` | — | 备份数据库、`.env`（不含主密钥）与编排文件到 `backups/<时间>/`，保留最近 5 份，见 [备份](#备份) |
 | `restore` | `<备份>` `[--no-backup]` | 先备份当前数据库，再用备份中的 `edgeweir.dump` 替换数据库；`.env` 不变，见 [restore](#restore) |
 | `config` | — | 修改控制台地址与节点通道地址并重建容器；只能交互运行 |
@@ -105,7 +105,7 @@ sudo bash deploy.sh install
 | `EDGEWEIR_NODE_API_URL` | `https://主机[:端口]` | `https://<控制台主机名>:<EDGEWEIR_NODE_API_PORT>` | 节点通道地址 |
 | `EDGEWEIR_NODE_API_PORT` | 端口 | `8443` | 只用于节点通道地址的默认值；写入 `.env` 的端口取自节点通道地址 |
 | `EDGEWEIR_HTTP_PORT` | 端口 | `3000` | Web 控制台端口；取最后一个 `:` 之后的部分；已被占用时中止 |
-| `EDGEWEIR_VERSION` | tag | `latest` | 要固定的镜像版本 |
+| `EDGEWEIR_VERSION` | tag | `stable` | 要固定的镜像版本 |
 | `EDGEWEIR_DIR` | 绝对路径 | 见 [提示](#提示) | 安装目录；其他命令优先在此查找部署 |
 | `EDGEWEIR_NO_PULL` | 任意非空值 | 空 | `install` 与 `update` 不拉取镜像，只用本机已有镜像 |
 | `EDGEWEIR_BACKUP_KEEP` | 非负整数 | `5` | `backup` 与 `update` 保留的备份份数；`0` 为全部保留 |
@@ -128,7 +128,7 @@ EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com \
 bash deploy.sh install
 ```
 
-`EDGEWEIR_NO_PULL=1` 需要本机已有控制台镜像的目标 tag（或 `latest`）与 `postgres:18.6-alpine`（host 模式的检查与备份、bundled 模式的数据库）。
+`EDGEWEIR_NO_PULL=1` 需要本机已有控制台镜像的目标 tag（或 `stable`、`latest`）与 `postgres:18.6-alpine`（host 模式的检查与备份、bundled 模式的数据库）。
 
 ## 数据库检查
 
@@ -163,7 +163,7 @@ host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-al
 `./deploy.sh update [tag] [--no-backup]` 依次执行：
 
 1. 解析目标版本，见 [版本解析](#版本解析)。目标等于 `.env` 中的 `EDGEWEIR_VERSION` 且容器已运行该版本时，输出 `已经是 <版本>。` 并以 0 退出。
-2. 目标不是 `latest` 且早于当前版本时视为回退：警告并询问是否继续，默认否。先比较 tag 中的日期；同一天的两个 tag 比较两个镜像的提交时间（标签 `org.opencontainers.image.created`）。无法判断时（tag 不是 `<YYYYMMDD>-<commit>`，或同一天但有镜像不在本机）只提示，不询问。
+2. 目标版本（渠道解析出的日期 tag 也一样）早于当前版本时视为回退：警告并询问是否继续，默认否。先比较 tag 中的日期；同一天的两个 tag 比较两个镜像的提交时间（标签 `org.opencontainers.image.created`）。无法判断时（tag 不是 `<YYYYMMDD>-<commit>`，或同一天但有镜像不在本机）只提示，不询问。
 3. 备份到 `backups/<时间>-before-<目标版本>/`；`--no-backup` 跳过。备份失败时中止，部署不变。
 4. 编排文件与脚本内置模板不同时：
    - 与脚本上次写入的内容相同（按 `.compose.cksum`）：直接替换为新模板。
@@ -181,11 +181,11 @@ host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-al
 
 | 目标 | 行为 |
 | --- | --- |
-| `latest` | 拉取 `ghcr.io/marvinli001/edgeweir:latest`，读取镜像标签 `org.opencontainers.image.version`，拉取该日期 tag 并固定为它；标签为空或为 `dev` 时警告并固定为 `latest` |
+| `stable`、`latest` | 渠道（见[版本与渠道](upgrade.md#版本规则)）：拉取 `ghcr.io/marvinli001/edgeweir:<渠道>`，读取镜像标签 `org.opencontainers.image.version`，拉取该日期 tag 并固定为它；标签为空或为 `dev` 时警告并固定为渠道名 |
 | `<tag>` | 拉取该 tag 并原样固定 |
-| 设置了 `EDGEWEIR_NO_PULL` | 不拉取；镜像必须已在本机。`latest` 对应的日期 tag 不在本机时，从本机的 `latest` 打上该 tag |
+| 设置了 `EDGEWEIR_NO_PULL` | 不拉取；镜像必须已在本机。渠道对应的日期 tag 不在本机时，从本机的渠道镜像打上该 tag |
 
-`install` 使用同一规则解析 `EDGEWEIR_VERSION`（默认 `latest`）。
+`install` 使用同一规则解析 `EDGEWEIR_VERSION`（默认 `stable`）。
 
 ## config
 

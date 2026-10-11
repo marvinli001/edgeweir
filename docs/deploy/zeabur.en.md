@@ -34,7 +34,7 @@ Nodes enroll with `wss://<prefix>.zeabur.app` by default: the node channel's TLS
 | Service | Settings |
 | --- | --- |
 | `postgresql` | `postgres:18.6-alpine` (pinned by digest); volume `data` at `/var/lib/postgresql`; database and user `edgeweir`, password the `${PASSWORD}` Zeabur generates; `portForwarding.enabled: false`; TCP health check |
-| `edgeweir` | `ghcr.io/marvinli001/edgeweir:latest`; ports `web` 3000/HTTP and `node` 8443/TCP; HTTP health check `/healthz`; `PORT=3000`, `DATABASE_URL=${POSTGRES_CONNECTION_STRING}`, `EDGEWEIR_PUBLIC_URL=https://${ZEABUR_WEB_DOMAIN}`, `EDGEWEIR_NODE_API_WEBSOCKET=true`; the deployment instructions show where the setup token is and the direct URL `https://<host>:<port>` |
+| `edgeweir` | `ghcr.io/marvinli001/edgeweir:stable`; ports `web` 3000/HTTP and `node` 8443/TCP; HTTP health check `/healthz`; `PORT=3000`, `DATABASE_URL=${POSTGRES_CONNECTION_STRING}`, `EDGEWEIR_PUBLIC_URL=https://${ZEABUR_WEB_DOMAIN}`, `EDGEWEIR_NODE_API_WEBSOCKET=true`; the deployment instructions show where the setup token is and the direct URL `https://<host>:<port>` |
 | Template variables | `PUBLIC_DOMAIN`: the `zeabur.app` domain prefix, bound to the `web` port; `EDGEWEIR_MASTER_KEY`: the master key |
 
 1. Generate the master key:
@@ -87,7 +87,7 @@ Equivalent to the [one-click template](#one-click-template).
 
 ## Pin the version
 
-The template deploys the `latest` image. Once the first deploy succeeds, pin the tag it runs:
+The template deploys the `stable` image. Once the first deploy succeeds, pin the tag it runs:
 
 1. Read the running version:
 

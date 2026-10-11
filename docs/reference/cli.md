@@ -9,7 +9,7 @@
 | 命令 | 作用 |
 | --- | --- |
 | `install` | 对话式安装：选择数据库方式、生成 `.env`、启动 |
-| `update [tag]` | 备份后升级到最新版本或指定 tag；`--no-backup` 跳过备份。别名 `upgrade` |
+| `update [tag]` | 备份后升级到 `stable` 渠道的版本或指定 tag；`--no-backup` 跳过备份。别名 `upgrade` |
 | `backup` | 备份数据库、`.env`（不含主密钥）和编排文件到 `backups/`，保留最近 5 份 |
 | `restore <备份>` | 先备份当前数据库，再用备份中的 `edgeweir.dump` 替换数据库；`.env` 不变，`--no-backup` 跳过备份 |
 | `config` | 修改控制台地址和节点通道地址 |

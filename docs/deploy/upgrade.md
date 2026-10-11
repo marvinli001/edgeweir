@@ -1,6 +1,6 @@
 # 版本、升级与回滚
 
-控制台镜像的版本规则、版本固定、签名校验、升级与回滚。
+控制台镜像的版本与渠道、版本固定、签名校验、升级与回滚。
 
 ## 版本规则
 
@@ -9,21 +9,32 @@
 | 镜像 | `ghcr.io/marvinli001/edgeweir`，linux/amd64、linux/arm64，公开拉取 |
 | tag | `<YYYYMMDD>-<commit>`：UTC 提交日期与提交 ID 前 7 位，例如 `20260929-a1b2c3d`；同一提交始终得到同一 tag（`scripts/image-version.sh`） |
 | 发布 | `master` 上的推送通过 CI 后，release 工作流构建 CI 验证过的提交并推送其 tag；不使用语义化版本号 |
-| `latest` | 仅在该提交仍是 `master` 最新提交时移动，不回退 |
+| `stable` | 默认渠道：维护者验证过的日期 tag，由 promote 工作流指向它的同一 digest（不重新构建、不重新签名）；每次移动附一个 [GitHub Release](https://github.com/marvinli001/edgeweir/releases)，写明兼容的节点版本与升级说明 |
+| `latest` | 预览渠道：跟随 `master`，仅在该提交仍是 `master` 最新提交时移动，不回退 |
 | 手动发布 | 重建 `master` 最新提交，以同一 tag 推送新的 digest |
 | 源码构建 | 版本为 `dev` |
 | 镜像标签 | `org.opencontainers.image.version` 为 tag；`org.opencontainers.image.revision` 为完整提交 ID |
 | 签名 | cosign keyless 签名，附 SBOM 与 SLSA provenance |
 | 全部 tag | [GitHub Packages](https://github.com/marvinli001/edgeweir/pkgs/container/edgeweir)；tag 中的提交改动见 `https://github.com/marvinli001/edgeweir/commit/<提交 ID>` |
 
-边缘节点使用独立的 `vX.Y.Z` 版本，升级见 [节点升级](../guide/node-upgrades.md)。
+边缘节点使用独立的语义化版本 `vX.Y.Z`，升级见 [节点升级](../guide/node-upgrades.md)。
+
+## 节点兼容
+
+| 节点版本 | 与 `stable` 控制台 |
+| --- | --- |
+| 1.x | 全部次版本都支持 |
+| 0.x | 继续工作，只能使用节点上报的能力：配置用到节点缺少的能力时，该节点保留上一份可用配置，**集群与节点** 中显示「需要升级」；服务账号与后台任务的这类发布被拒绝（`NODE_CAPABILITY_REQUIRED`）。见 [节点能力](../guide/node-upgrades.md#节点能力) |
+| 0.2.0 以下 | 不能经节点通道的 WebSocket 入口注册 |
+
+安全修复只进入 `master`，随下一个 `stable` 与节点补丁版本发布，不回移到旧版本。
 
 ## 查看版本
 
 | 对象 | 命令或位置 |
 | --- | --- |
 | 运行中的版本 | `curl -s http://127.0.0.1:3000/healthz` 的 `version`；**系统设置** 的「系统信息」中的「版本」 |
-| `latest` 对应的 tag | `docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' ghcr.io/marvinli001/edgeweir:latest`（拉取后执行） |
+| 渠道对应的 tag | `docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' ghcr.io/marvinli001/edgeweir:stable`（拉取后执行；`latest` 同理） |
 | tag 的 digest | `docker buildx imagetools inspect ghcr.io/marvinli001/edgeweir:<tag>` 输出的 `Digest` |
 
 ## 固定版本
@@ -37,6 +48,7 @@ EDGEWEIR_VERSION=20260929-a1b2c3d
 
 | 项目 | 约束 |
 | --- | --- |
+| `stable` | 未设置 `EDGEWEIR_VERSION` 时 Compose 的默认值；`deploy.sh` 把它解析为日期 tag 后固定。 |
 | `latest` | 仅用于评估环境。 |
 | digest | 手动发布会以同一 tag 推送新 digest；需要不可变引用时固定 digest。 |
 | 自动更新 | 不使用 Watchtower 等工具无人值守地跟随 `latest`：每次启动都可能执行迁移，升级在备份之后进行。 |
@@ -94,7 +106,7 @@ Docker Compose：
 
 | 部署 | 升级 |
 | --- | --- |
-| `deploy.sh` | `./deploy.sh update` 或 `./deploy.sh update <tag>`，先自动备份，见 [deploy.sh 参考](deploy-script.md)。 |
+| `deploy.sh` | `./deploy.sh update`（`stable` 渠道）或 `./deploy.sh update <tag>`，先自动备份，见 [deploy.sh 参考](deploy-script.md)。 |
 | `docker run` | `docker pull ghcr.io/marvinli001/edgeweir:<新 tag>`，`docker rm -f edgeweir-console`，用相同参数与新 tag 重新创建；数据在 `edgeweir-postgres` 卷中。 |
 | 源码构建 | 检出目标提交，执行 `docker compose up -d --build`。 |
 

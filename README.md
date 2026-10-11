@@ -65,8 +65,8 @@
 
 | 制品 | 地址 | 版本规则 |
 | --- | --- | --- |
-| 控制台镜像 | `ghcr.io/marvinli001/edgeweir`（amd64 / arm64） | 滚动发布：`master` 上通过 CI 的提交发布为 `<YYYYMMDD>-<commit>`（如 `20260929-a1b2c3d`），`latest` 指向最新提交；不使用语义化版本号。镜像经 cosign keyless 签名。 |
-| 边缘节点 | [edgeweir-node Releases](https://github.com/marvinli001/edgeweir-node/releases) | 签名 Release，版本号 `vX.Y.Z`。 |
+| 控制台镜像 | `ghcr.io/marvinli001/edgeweir`（amd64 / arm64） | `master` 上通过 CI 的提交发布为 `<YYYYMMDD>-<commit>`（如 `20260929-a1b2c3d`）；`stable`（默认）指向验证过的日期 tag，每次移动附 [Release](https://github.com/marvinli001/edgeweir/releases)；`latest` 跟随 `master`。不使用语义化版本号，镜像经 cosign keyless 签名。 |
+| 边缘节点 | [edgeweir-node Releases](https://github.com/marvinli001/edgeweir-node/releases) | 签名 Release，语义化版本 `vX.Y.Z`；`stable` 控制台支持 1.x 全部次版本。 |
 
 生产环境通过 `EDGEWEIR_VERSION` 固定日期 tag。
 

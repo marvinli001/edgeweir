@@ -43,10 +43,10 @@ Handling:
 
 | Component | Supported | Not supported |
 | --- | --- | --- |
-| Console | The latest rolling version: the `<YYYYMMDD>-<commit>` image of the newest `master` commit (`latest`) | Earlier rolling versions |
-| edgeweir-node | The latest `master` | Other commits |
+| Console | The dated tag (`<YYYYMMDD>-<commit>`) of the current `stable` channel; the image of the newest `master` commit (`latest`) | Earlier dated tags |
+| edgeweir-node | The latest 1.x release; the latest `master` | Earlier 1.x patch releases, 0.x releases |
 
-Security fixes land on `master` only and are not backported. A console fix ships as a new rolling version with the next `master` commit that passes CI.
+Security fixes land on `master` only and are not backported; there are no maintenance branches. A console fix ships with the next dated tag, which then moves `stable`; a node fix ships with the next patch release. A `stable` console supports every edgeweir-node 1.x minor version; 0.x nodes keep working with the capabilities they report, and the console asks for an upgrade.
 
 ## Trust baseline
 
@@ -161,7 +161,7 @@ better-auth's session secret signs session cookies and encrypts TOTP secrets and
 | Only requests handed to the default site skip "the SNI must equal the Host"; the default site must be an enabled site of the cluster | A handshake with an unknown SNI is used to reach another site |
 | Access logs record no query strings, request headers, cookies or bodies by default, and Referers lose their query string and fragment; query strings, chosen request headers (never `Authorization`, `Cookie`, `Proxy-Authorization`) and the peer address are recorded only while the site turns them on, and the console stops keeping them once off; retention can be as short as 1 day; `edgeweir-node accesslog` collects only while someone views, reads only through the control socket, never enters the upload queue, and nodes write no local log files | Access logs leaking tokens, credentials or excess personal data; a live view that keeps collecting requests when nobody watches |
 | A node collapses a site's purge markers into one site-level marker beyond its cap | Many purge tasks fill a node's purge store and degrade other sites on the node |
-| Image conversion runs in child processes of the agent: pure Go encoders (WebAssembly transpiled to Go) and the standard library's decoders, where an out-of-bounds access is a panic rather than memory corruption; a child has `GOMAXPROCS=1`, `RLIMIT_DATA` (its estimate plus 256 MiB), no file writes, at most 16 descriptors, no capabilities and no environment, is killed at the timeout and dies with the agent; concurrent conversions and the sum of their estimated memory are bounded, larger images keep their original; only nginx's user can connect to `image.sock`, which passes requests only to the origin layers the agent renders | Origin images visitors can influence take over a node through a decoder bug; large or many images exhaust a node's CPU and memory |
+| Image conversion runs in child processes of the agent: pure Go encoders (WebAssembly transpiled to Go) and the standard library's decoders, where an out-of-bounds access is a panic rather than memory corruption; a child has `GOMAXPROCS=1`, `RLIMIT_DATA` (its estimate plus 256 MiB beyond the data it already has), no file writes, at most 16 descriptors, no capabilities and no environment, is killed at the timeout and dies with the agent; concurrent conversions and the sum of their estimated memory are bounded, larger images keep their original; only nginx's user can connect to `image.sock`, which passes requests only to the origin layers the agent renders | Origin images visitors can influence take over a node through a decoder bug; large or many images exhaust a node's CPU and memory |
 | The agent runs typed operations only and has no interface for arbitrary commands | A compromised console runs arbitrary code on nodes |
 | Keyless-signed releases, SBOMs, SLSA provenance | Released programs differ from the source, or are poisoned |
 
@@ -240,7 +240,7 @@ Install only after steps 2 and 3 pass. `install.sh` runs the same checks before 
 
 ### Console image
 
-The console image is released on a rolling basis without version tags: every `master` commit that passes CI is published as `<YYYYMMDD>-<first 7 characters of the commit>` (for example `20260929-a1b2c3d`), and `latest` moves only while that commit is still the tip of `master`. The signing certificate identity is the release workflow on the `master` branch.
+The console image has no semantic version numbers: every `master` commit that passes CI is published as `<YYYYMMDD>-<first 7 characters of the commit>` (for example `20260929-a1b2c3d`), and `latest` moves only while that commit is still the tip of `master`; the promote workflow points `stable` at the same digest as one dated tag, so the signature stays valid for it. The signing certificate identity is the release workflow on the `master` branch. Verify `stable` with the same commands (replace the tag with `stable`).
 
 1. Verify the signature:
 

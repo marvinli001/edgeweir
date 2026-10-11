@@ -204,7 +204,7 @@ Node release source and origin allow list are configured in **System settings**,
 | Variable | Constraint |
 | --- | --- |
 | `.env` field | The panel does not run commands in it; paste the values generated in the terminal. |
-| `EDGEWEIR_VERSION` | A dated tag from [GitHub Packages](https://github.com/marvinli001/edgeweir/pkgs/container/edgeweir); `latest` only for evaluation. |
+| `EDGEWEIR_VERSION` | A dated tag from [GitHub Packages](https://github.com/marvinli001/edgeweir/pkgs/container/edgeweir); `deploy.sh` resolves `stable` to its dated tag; `latest` only for evaluation. |
 | `BETTER_AUTH_SECRET` | Leave unset on new deployments. Deployments that set it keep the value; the console refuses to start once it is removed. |
 | Other variables | See [Environment variables](../reference/environment.en.md). |
 
@@ -247,7 +247,7 @@ Run in the deployment directory:
 
 ```bash
 cd /www/dk_project/edgeweir
-./deploy.sh update                     # back up, then upgrade to the dated tag behind latest
+./deploy.sh update                     # back up, then upgrade to the dated tag behind stable
 ./deploy.sh update 20260929-a1b2c3d    # upgrade or roll back to a given tag
 ./deploy.sh backup                     # back up to backups/<time>/
 ./deploy.sh restore backups/<time>     # back up, then replace the database with that backup

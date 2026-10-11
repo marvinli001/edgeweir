@@ -9,7 +9,7 @@ Installer and operations script for 宝塔 / aaPanel Compose deployments. Usage:
 | Command | Effect |
 | --- | --- |
 | `install` | Interactive install: choose the database mode, write `.env`, start |
-| `update [tag]` | Back up, then upgrade to the latest version or the given tag; `--no-backup` skips the backup. Alias `upgrade` |
+| `update [tag]` | Back up, then upgrade to the version of the `stable` channel or the given tag; `--no-backup` skips the backup. Alias `upgrade` |
 | `backup` | Back up the database, `.env` (without the master key), and the Compose file to `backups/`, keeping the newest 5 |
 | `restore <backup>` | Back up the current database, then replace it with the backup's `edgeweir.dump`; `.env` stays, `--no-backup` skips the backup |
 | `config` | Change the console URL and the node channel URL |

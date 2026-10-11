@@ -84,11 +84,12 @@ pnpm --filter @edgeweir/console exec playwright install chromium
 | `pnpm test` | Vitest 单元与集成测试；PostgreSQL 由进程内 PGlite 提供，不需要 Docker；设置 `TEST_DATABASE_URL` 时另跑并发事务测试 | 每次提交前 |
 | `pnpm build` | 生产构建：Vite 前端与单文件服务端 | 改动构建配置或依赖时 |
 | `pnpm proto:lint` | `buf lint proto` | 改动 `proto/` 时 |
+| `pnpm proto:breaking` | `buf breaking` 对照最新的 `proto/vX.Y.Z` tag（`scripts/proto-breaking.sh`） | 改动 `proto/` 时 |
 | `pnpm proto:gen` | 由 `proto/` 生成 TypeScript 至 `packages/proto` | 改动 `proto/` 时 |
 | `pnpm db:generate` | 由 `packages/db/src/schema` 的变更生成 SQL 迁移（drizzle-kit） | 改动 schema 时 |
 | `pnpm e2e` | 端到端测试（`scripts/e2e.sh`），见[端到端测试](#端到端测试) | 改动节点通道、配置编译、安装脚本或页面流程时 |
 
-CI 在 PR 与 `master` 推送时运行：`pnpm lint`、`pnpm proto:gen` 后 `packages/proto` 无差异、`pnpm typecheck`、`pnpm test`、`pnpm build`、`helpers/certd` 的 `go vet` 与 `go test -race`、镜像构建、端到端测试。
+CI 在 PR 与 `master` 推送时运行：`pnpm lint`、`pnpm proto:gen` 后 `packages/proto` 无差异、`pnpm proto:breaking`（对照 GitHub 上最新的 proto tag）、`pnpm typecheck`、`pnpm test`、`pnpm build`、`helpers/certd` 的 `go vet` 与 `go test -race`、镜像构建、端到端测试。
 
 ## 测试
 
@@ -259,10 +260,10 @@ feat(console)!: drop the public landing page from the open core
    pnpm proto:lint
    ```
 
-3. 与上一个 proto tag 比较，确认没有破坏性变更。
+3. 与最新的 proto tag 比较，确认没有破坏性变更。
 
    ```bash
-   pnpm exec buf breaking proto --against '.git#tag=proto/vX.Y.Z,subdir=proto'
+   pnpm proto:breaking
    ```
 
 4. 生成 TypeScript，把 `proto/` 改动与 `packages/proto` 的生成代码放在同一个提交里。CI 检查生成代码与 `proto/` 一致。
@@ -271,7 +272,7 @@ feat(console)!: drop the public landing page from the open core
    pnpm proto:gen
    ```
 
-5. 合入 `master` 后，维护者打 tag `proto/vX.Y.Z`：新增字段或 RPC 升 minor，只改注释升 patch。
+5. 合入 `master` 后，维护者打 tag `proto/vX.Y.Z`：新增字段或 RPC 升 minor，只改注释升 patch。`proto/v1` 起线格式只做兼容的新增；不兼容的改动需要 proto v2 与 edgeweir-node 2.0.0。
 6. 在 edgeweir-node 中把 `Makefile` 的 `PROTO_TAG` 改为新 tag，重新生成 Go 代码并适配，提交 `internal/gen/`。
 
    ```bash
@@ -350,7 +351,8 @@ feat(console)!: drop the public landing page from the open core
 | 制品 | 触发 | 版本 |
 | --- | --- | --- |
 | 控制台镜像 `ghcr.io/marvinli001/edgeweir` | `master` 上的提交通过 CI 后由 Release 工作流发布；手动运行 Release 只重建 `master` 最新提交 | `<YYYYMMDD>-<提交前 7 位>`（UTC 提交日期，`scripts/image-version.sh`）；该提交仍是 `master` 最新提交时同时移动 `latest` |
-| 节点 | edgeweir-node 的 `v*` tag | `vX.Y.Z` |
+| 控制台 `stable` 渠道 | 维护者手动运行 Promote 工作流并输入日期 tag：工作流核对该 tag 的提交在 `master` 上、镜像由 release 工作流为这个提交签名，再把 `stable` 指向同一 digest；之后以该日期 tag 创建 GitHub Release | 不产生新的镜像 tag；回退即 promote 更早的日期 tag（两者之间没有新增迁移时） |
+| 节点 | edgeweir-node 的 `v*` tag（附注 tag，消息 `edgeweir-node vX.Y.Z`），goreleaser 生成 draft，校验后发布 | 语义化版本：修复升补丁；新能力名、新命令、新可选配置升次版本；去掉能力或 proto 字段、state 目录或 `identity.json` 不兼容、提高安装要求、需要重新注册升主版本 |
 | proto | 维护者在 `master` 上打 tag | `proto/vX.Y.Z` |
 
 版本固定、升级与回滚见[版本、升级与回滚](docs/deploy/upgrade.md)；发布物的签名与校验见 [SECURITY.md](SECURITY.md)。

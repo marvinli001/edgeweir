@@ -43,10 +43,10 @@ English: [summary](#english) · [full policy](SECURITY.en.md)
 
 | 组件 | 支持 | 不支持 |
 | --- | --- | --- |
-| 控制台 | 最新滚动版本：`master` 最新提交对应的 `<YYYYMMDD>-<commit>` 镜像（`latest`） | 更早的滚动版本 |
-| edgeweir-node | `master` 最新代码 | 其他提交 |
+| 控制台 | 当前 `stable` 渠道的日期 tag（`<YYYYMMDD>-<commit>`）；`master` 最新提交的镜像（`latest`） | 更早的日期 tag |
+| edgeweir-node | 最新发布的 1.x 版本；`master` 最新代码 | 更早的 1.x 补丁版本、0.x 版本 |
 
-安全修复只进入 `master`，不回移到旧版本。控制台的修复随 `master` 上下一个通过 CI 的提交发布为新的滚动版本。
+安全修复只进入 `master`，不回移到旧版本，也没有维护分支：控制台的修复随下一个日期 tag 发布并移动 `stable`，节点的修复随下一个补丁版本发布。`stable` 控制台支持 edgeweir-node 1.x 的全部次版本；0.x 节点继续工作，只能使用其上报的能力，控制台提示升级。
 
 ## 信任基线
 
@@ -161,7 +161,7 @@ better-auth 的会话 secret 用于签名会话 cookie，并加密 TOTP 密钥�
 | 「必须」客户端证书的网站在网站逻辑之前拒绝没有通过验证的证书的请求，明文 HTTP 同样拒绝（开启强制 HTTPS 时跳转）；访客自带的 `X-Client-Verify`、`X-Client-Cert-*` 请求头在所有网站删除，源站收到的值只来自节点 | 绕过双向 TLS；伪造客户端证书信息骗过信任这些头的源站 |
 | 访问日志默认不记录查询字符串、请求头、Cookie 与正文，Referer 去掉查询字符串与片段；查询字符串、指定请求头（不能选 `Authorization`、`Cookie`、`Proxy-Authorization`）与直连对端地址只在网站开启后记录，关闭后控制台不再保存；保留期可缩短到 1 天；`edgeweir-node accesslog` 只在有人查看时采集、只经控制套接字读取，不进入上报队列，节点不写本地日志文件 | 访问日志泄露令牌、凭据或过多个人数据；实时查看在没人查看时持续收集请求 |
 | 节点端清缓存标记超过上限时合并为站点级标记 | 大量刷新任务填满节点的清缓存存储，影响同节点其他网站 |
-| 图片格式转换在 agent 的子进程中进行：纯 Go（WebAssembly 转写）的编码器与标准库解码器，内存越界是 panic 而不是内存破坏；子进程只有 `GOMAXPROCS=1`、`RLIMIT_DATA`（估算内存加 256 MiB）、不能写文件、最多 16 个描述符、能力集清空、没有环境变量，超时即杀，随 agent 退出；同时进行的转换数与估算内存总量有上限，超出的图片返回原图；`image.sock` 只有 nginx 的用户能连接，只转发到 agent 渲染的回源层 | 访客可影响的源站图片借解码器漏洞控制节点；大图或大量图片耗尽节点的 CPU 与内存 |
+| 图片格式转换在 agent 的子进程中进行：纯 Go（WebAssembly 转写）的编码器与标准库解码器，内存越界是 panic 而不是内存破坏；子进程只有 `GOMAXPROCS=1`、`RLIMIT_DATA`（已有数据段之外，估算内存加 256 MiB）、不能写文件、最多 16 个描述符、能力集清空、没有环境变量，超时即杀，随 agent 退出；同时进行的转换数与估算内存总量有上限，超出的图片返回原图；`image.sock` 只有 nginx 的用户能连接，只转发到 agent 渲染的回源层 | 访客可影响的源站图片借解码器漏洞控制节点；大图或大量图片耗尽节点的 CPU 与内存 |
 | agent 只执行类型化操作，没有执行任意命令的接口 | 控制台失陷后在节点上执行任意代码 |
 | 发布物 keyless 签名、SBOM、SLSA provenance | 发布的程序与源码不一致，或被投毒 |
 
@@ -242,7 +242,7 @@ better-auth 的会话 secret 用于签名会话 cookie，并加密 TOTP 密钥�
 
 ### 控制台镜像
 
-控制台镜像滚动发布，没有版本 tag：`master` 上通过 CI 的每个提交发布为 `<YYYYMMDD>-<提交前 7 位>`（例如 `20260929-a1b2c3d`），`latest` 只在该提交仍是 `master` 最新提交时移动。签名证书身份是 `master` 分支上的 release 工作流。
+控制台镜像没有语义化版本号：`master` 上通过 CI 的每个提交发布为 `<YYYYMMDD>-<提交前 7 位>`（例如 `20260929-a1b2c3d`），`latest` 只在该提交仍是 `master` 最新提交时移动；`stable` 由 promote 工作流指向某个日期 tag 的同一 digest，签名随 digest 有效。签名证书身份是 `master` 分支上的 release 工作流。`stable` 同样可以按下面的命令验证（把 tag 换成 `stable`）。
 
 1. 验证签名：
 
@@ -293,7 +293,7 @@ Full English policy: [SECURITY.en.md](SECURITY.en.md).
 
 **Reporting a vulnerability.** Do not open a public issue, discussion, or pull request. Open a private GitHub security advisory ([console](https://github.com/marvinli001/edgeweir/security/advisories/new), [node](https://github.com/marvinli001/edgeweir-node/security/advisories/new)). Reports are acknowledged within 3 working days. Coordinated disclosure window: 90 days from the day the report is received; the advisory is published after the fix, with credit when the reporter agrees.
 
-**Supported versions.** Console: the latest rolling image (`<YYYYMMDD>-<commit>` of the newest `master` commit, `latest`). Node: the latest `master`. Security fixes land on `master` only.
+**Supported versions.** Console: the dated tag (`<YYYYMMDD>-<commit>`) of the current `stable` channel, and the image of the newest `master` commit (`latest`). Node: the latest 1.x release and the latest `master`. Security fixes land on `master` only and ship with the next dated tag moved to `stable` and the next node patch release; there are no maintenance branches. A `stable` console supports every 1.x node minor version; 0.x nodes keep working with the capabilities they report.
 
 **Trust baseline.** No phone-home of any kind and no license-check code. Telemetry is off by default and requires explicit opt-in; the current version sends no telemetry, and better-auth's own telemetry is hard-disabled. The console never stores SSH credentials; nodes join only through the one-time install command. Private keys and third-party credentials (internal CA key, certificate keys, ACME accounts and EAB keys, TLS session ticket keys, DNS provider credentials, S3 origin keys, site PURGE keys, Basic password hashes and signed URL keys of access authentication, alert channel and SMTP settings, the setup token) are envelope-encrypted with `EDGEWEIR_MASTER_KEY` before they reach the database: AES-256-GCM with a random data key per record, and additional authenticated data that binds table, column, and record id (envelope format v2; v1 envelopes written by older versions are re-encrypted at startup and rejected otherwise). Copying settings to another site or cloning a site decrypts these secrets in the console's memory only and seals them again for the new records. Enrollment tokens, API keys, and passwords are stored as hashes only. Unless `BETTER_AUTH_SECRET` is set, better-auth's session secret (session cookie signatures, TOTP secrets and backup codes at rest) is derived from `EDGEWEIR_MASTER_KEY` with HKDF-SHA256 (salt `edgeweir/auth-secret/v1`, info `better-auth.secret`, 32 bytes, base64url), independent of the envelope KEK (salt `edgeweir/kek/v1`, info `envelope`); the database keeps only an HMAC check value, and the console refuses to start when the derived secret differs from the one the database was used with (for example `BETTER_AUTH_SECRET` removed from an existing deployment). Before that, the console refuses a master key that is not canonical base64, and one whose key id differs from the one recorded in the internal CA key's envelope ("EDGEWEIR_MASTER_KEY does not match this database"). To rotate the master key, the old one goes into `EDGEWEIR_MASTER_KEY_PREVIOUS`, which only decrypts: at startup every stored envelope it sealed is re-encrypted with the new key under an advisory lock, the log reports how many still use it, and revision receipts held by nodes keep verifying while it is set; a session secret derived from the old key is kept, sealed with the new key in `system_setting`, so sessions and two-factor secrets survive. With the derived secret, a leaked master key also allows forging sessions. Every management action is written to the audit log: Edgeweir's own changes commit their audit entry in the same transaction; sign-ins, password changes, two-factor changes, passkeys, and API keys are completed by better-auth and audited right after it commits. Account recovery has no web or HTTP entry: `recover.js`, run on the server with the console's environment, resets the password or turns two-factor authentication off, signs out every session, and audits the change in the same transaction. Releases are signed with cosign keyless and ship with an SBOM and SLSA provenance.
 

@@ -31,7 +31,7 @@ Render 的每个 Web 服务只转发一个 HTTP 端口，并在负载均衡上�
 
 | 资源 | 设置 |
 | --- | --- |
-| Web 服务 `edgeweir` | `runtime: image`，`ghcr.io/marvinli001/edgeweir:latest`；`plan: 0.5c-512mb`；`healthCheckPath: /healthz` |
+| Web 服务 `edgeweir` | `runtime: image`，`ghcr.io/marvinli001/edgeweir:stable`；`plan: 0.5c-512mb`；`healthCheckPath: /healthz` |
 | 变量 | `PORT=3000`；`EDGEWEIR_MASTER_KEY` 由 Render 生成（base64 编码的 256 位随机值）；`DATABASE_URL` 取 `edgeweir-db` 的内部连接串；`EDGEWEIR_PUBLIC_URL` 取本服务的 `RENDER_EXTERNAL_URL`；`EDGEWEIR_NODE_API_WEBSOCKET=true` |
 | 数据库 `edgeweir-db` | PostgreSQL 18，库与用户 `edgeweir`，`plan: 0.1c-256mb`，`ipAllowList: []`（只开放私有网络） |
 
@@ -76,7 +76,7 @@ Render 的每个 Web 服务只转发一个 HTTP 端口，并在负载均衡上�
 
 ## 固定版本
 
-一键创建的镜像为 `latest`。确认首次部署成功后固定为当时的 tag：
+一键创建的镜像为 `stable`。确认首次部署成功后固定为当时的 tag：
 
 1. 读取运行版本：
 

@@ -1,6 +1,6 @@
 # Versions, upgrades, and rollback
 
-Console image versioning, pinning, signature verification, upgrades, and rollback.
+Console image versions and channels, pinning, signature verification, upgrades, and rollback.
 
 ## Versioning
 
@@ -9,21 +9,32 @@ Console image versioning, pinning, signature verification, upgrades, and rollbac
 | Image | `ghcr.io/marvinli001/edgeweir`, linux/amd64, linux/arm64, public |
 | Tag | `<YYYYMMDD>-<commit>`: UTC commit date and the first 7 characters of the commit ID, e.g. `20260929-a1b2c3d`; the same commit always yields the same tag (`scripts/image-version.sh`) |
 | Publishing | After a push to `master` passes CI, the release workflow builds the commit CI verified and pushes its tag; no semantic version numbers |
-| `latest` | Moves only while that commit is still the tip of `master`; never moves backwards |
+| `stable` | Default channel: a dated tag the maintainer has verified; the promote workflow points it at the same digest (no rebuild, no new signature). Each move comes with a [GitHub Release](https://github.com/marvinli001/edgeweir/releases) naming the compatible node versions and upgrade notes |
+| `latest` | Preview channel: follows `master`, moving only while that commit is still the tip of `master`; never moves backwards |
 | Manual release | Rebuilds the tip of `master` and pushes a new digest under the same tag |
 | Source build | Version `dev` |
 | Image labels | `org.opencontainers.image.version` is the tag; `org.opencontainers.image.revision` is the full commit ID |
 | Signatures | cosign keyless, with SBOM and SLSA provenance |
 | All tags | [GitHub Packages](https://github.com/marvinli001/edgeweir/pkgs/container/edgeweir); the changes of a tag's commit are at `https://github.com/marvinli001/edgeweir/commit/<commit ID>` |
 
-Edge nodes use separate `vX.Y.Z` versions; see [node upgrades](../guide/node-upgrades.en.md).
+Edge nodes use separate semantic versions `vX.Y.Z`; see [node upgrades](../guide/node-upgrades.en.md).
+
+## Node compatibility
+
+| Node version | With a `stable` console |
+| --- | --- |
+| 1.x | Every minor version is supported |
+| 0.x | Keeps working with the capabilities the node reports: when a configuration needs one the node lacks, that node keeps its last good configuration and **Clusters & nodes** shows **Upgrade required**; such a publish by a service account or a background job is refused (`NODE_CAPABILITY_REQUIRED`). See [node capabilities](../guide/node-upgrades.en.md#node-capabilities) |
+| Below 0.2.0 | Cannot enroll through the node channel's WebSocket entry |
+
+Security fixes go into `master` only and ship with the next `stable` and node patch release; they are not backported.
 
 ## Checking versions
 
 | Target | Command or location |
 | --- | --- |
 | Running version | `version` from `curl -s http://127.0.0.1:3000/healthz`; "Version" on the **System settings** page |
-| Tag behind `latest` | `docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' ghcr.io/marvinli001/edgeweir:latest` (after a pull) |
+| Tag behind a channel | `docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' ghcr.io/marvinli001/edgeweir:stable` (after a pull; likewise `latest`) |
 | Digest of a tag | `Digest` in the output of `docker buildx imagetools inspect ghcr.io/marvinli001/edgeweir:<tag>` |
 
 ## Pinning a version
@@ -37,6 +48,7 @@ EDGEWEIR_VERSION=20260929-a1b2c3d
 
 | Item | Constraint |
 | --- | --- |
+| `stable` | Compose's default when `EDGEWEIR_VERSION` is unset; `deploy.sh` resolves it to the dated tag and pins that. |
 | `latest` | Evaluation environments only |
 | Digest | A manual release pushes a new digest under the same tag; pin the digest for an immutable reference. |
 | Automatic updates | Do not follow `latest` unattended with tools such as Watchtower: every start may run migrations, and upgrades follow a backup. |
@@ -94,7 +106,7 @@ Other deployment methods:
 
 | Deployment | Upgrade |
 | --- | --- |
-| `deploy.sh` | `./deploy.sh update` or `./deploy.sh update <tag>`, which backs up first; see [deploy.sh reference](deploy-script.en.md). |
+| `deploy.sh` | `./deploy.sh update` (the `stable` channel) or `./deploy.sh update <tag>`, which backs up first; see [deploy.sh reference](deploy-script.en.md). |
 | `docker run` | `docker pull ghcr.io/marvinli001/edgeweir:<new tag>`, `docker rm -f edgeweir-console`, then recreate it with the same parameters and the new tag; data stays in the `edgeweir-postgres` volume. |
 | Source build | Check out the target commit and run `docker compose up -d --build`. |
 

@@ -24,7 +24,7 @@ Save the script to a file before running it: through a pipe (`curl … | bash`) 
 | Command | Arguments | Effect |
 | --- | --- | --- |
 | `install` | — | Interactive install: choose the database mode, check the database, write `.env`, `compose.yml`, and the script copy, start and wait for health checks, print the setup token |
-| `update` (alias `upgrade`) | `[tag]` `[--no-backup]` | Back up, then upgrade to the given tag; without a tag, the dated tag behind `latest`. See [update](#update) |
+| `update` (alias `upgrade`) | `[tag]` `[--no-backup]` | Back up, then upgrade to the given tag; without a tag, the dated tag behind `stable`. See [update](#update) |
 | `backup` | — | Back up the database, `.env` (without the master key), and compose file to `backups/<time>/`, keeping the newest 5. See [Backups](#backups) |
 | `restore` | `<backup>` `[--no-backup]` | Back up the current database, then replace it with the backup's `edgeweir.dump`; `.env` is left alone. See [restore](#restore) |
 | `config` | — | Change the console URL and node channel URL, then recreate the containers; interactive only |
@@ -105,7 +105,7 @@ When `EDGEWEIR_YES` is non-empty, or `/dev/tty` cannot be opened, the script rea
 | `EDGEWEIR_NODE_API_URL` | `https://host[:port]` | `https://<console host name>:<EDGEWEIR_NODE_API_PORT>` | Node channel URL |
 | `EDGEWEIR_NODE_API_PORT` | Port | `8443` | Only for the node channel URL default; the port written to `.env` comes from the node channel URL |
 | `EDGEWEIR_HTTP_PORT` | Port | `3000` | Web console port; the part after the last `:` is used; aborts when in use |
-| `EDGEWEIR_VERSION` | Tag | `latest` | Image version to pin |
+| `EDGEWEIR_VERSION` | Tag | `stable` | Image version to pin |
 | `EDGEWEIR_DIR` | Absolute path | See [Prompts](#prompts) | Install directory; other commands look here first |
 | `EDGEWEIR_NO_PULL` | Any non-empty value | Empty | `install` and `update` pull no images and use local ones only |
 | `EDGEWEIR_BACKUP_KEEP` | Non-negative integer | `5` | Backups `backup` and `update` keep; `0` keeps all |
@@ -128,7 +128,7 @@ EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com \
 bash deploy.sh install
 ```
 
-`EDGEWEIR_NO_PULL=1` needs the target tag (or `latest`) of the console image and `postgres:18.6-alpine` (host mode checks and backups, the bundled database) on the host.
+`EDGEWEIR_NO_PULL=1` needs the target tag (or `stable`, `latest`) of the console image and `postgres:18.6-alpine` (host mode checks and backups, the bundled database) on the host.
 
 ## Database check
 
@@ -163,7 +163,7 @@ The check and backups connect according to `sslmode` in `DATABASE_URL`:
 `./deploy.sh update [tag] [--no-backup]` runs these steps:
 
 1. Resolve the target version, see [Version resolution](#version-resolution). When the target equals `EDGEWEIR_VERSION` in `.env` and the container already runs it, print `已经是 <version>。` (already at) and exit 0.
-2. A target other than `latest` that is older than the current version is a rollback: warn and ask whether to continue, default no. The dates in the tags are compared first; two tags of the same day compare the commit times of the two images (label `org.opencontainers.image.created`). When the order cannot be told (a tag is not `<YYYYMMDD>-<commit>`, or one image of the same day is not local), only a note is printed.
+2. A target older than the current version (also the dated tag a channel resolves to) is a rollback: warn and ask whether to continue, default no. The dates in the tags are compared first; two tags of the same day compare the commit times of the two images (label `org.opencontainers.image.created`). When the order cannot be told (a tag is not `<YYYYMMDD>-<commit>`, or one image of the same day is not local), only a note is printed.
 3. Back up to `backups/<time>-before-<target version>/`; `--no-backup` skips this. A failed backup aborts with the deployment unchanged.
 4. When the compose file differs from the built-in template:
    - Same as the script last wrote it (per `.compose.cksum`): replaced with the new template.
@@ -181,11 +181,11 @@ Version policy and rollback constraints: [upgrade.en.md](upgrade.en.md).
 
 | Target | Behavior |
 | --- | --- |
-| `latest` | Pull `ghcr.io/marvinli001/edgeweir:latest`, read the image label `org.opencontainers.image.version`, pull that dated tag, and pin it; when the label is empty or `dev`, warn and pin `latest` |
+| `stable`, `latest` | Channels (see [versions and channels](upgrade.en.md#versioning)): pull `ghcr.io/marvinli001/edgeweir:<channel>`, read the image label `org.opencontainers.image.version`, pull that dated tag, and pin it; when the label is empty or `dev`, warn and pin the channel name |
 | `<tag>` | Pull that tag and pin it as given |
-| `EDGEWEIR_NO_PULL` set | No pull; the image must be local. When the dated tag behind `latest` is missing locally, it is tagged from the local `latest` |
+| `EDGEWEIR_NO_PULL` set | No pull; the image must be local. When the dated tag behind a channel is missing locally, it is tagged from the local channel image |
 
-`install` resolves `EDGEWEIR_VERSION` (default `latest`) with the same rules.
+`install` resolves `EDGEWEIR_VERSION` (default `stable`) with the same rules.
 
 ## config
 

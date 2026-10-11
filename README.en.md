@@ -65,8 +65,8 @@ Trust baseline, vulnerability reporting and release verification: [SECURITY.en.m
 
 | Artifact | Location | Versioning |
 | --- | --- | --- |
-| Console image | `ghcr.io/marvinli001/edgeweir` (amd64 / arm64) | Rolling: every `master` commit that passes CI is published as `<YYYYMMDD>-<commit>` (e.g. `20260929-a1b2c3d`); `latest` tracks the newest. No semantic version numbers. Signed with cosign keyless. |
-| Edge node | [edgeweir-node Releases](https://github.com/marvinli001/edgeweir-node/releases) | Signed releases, versioned `vX.Y.Z`. |
+| Console image | `ghcr.io/marvinli001/edgeweir` (amd64 / arm64) | Every `master` commit that passes CI is published as `<YYYYMMDD>-<commit>` (e.g. `20260929-a1b2c3d`); `stable` (the default) points at a verified dated tag, each move with a [release](https://github.com/marvinli001/edgeweir/releases); `latest` follows `master`. No semantic version numbers; signed with cosign keyless. |
+| Edge node | [edgeweir-node Releases](https://github.com/marvinli001/edgeweir-node/releases) | Signed releases, semantic versions `vX.Y.Z`; a `stable` console supports every 1.x minor version. |
 
 Pin a dated tag in production with `EDGEWEIR_VERSION`.
 

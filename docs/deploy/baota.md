@@ -204,7 +204,7 @@ bash deploy.sh install
 | 变量 | 约束 |
 | --- | --- |
 | `.env` 栏 | 面板不执行其中的命令；填入终端生成的实际值。 |
-| `EDGEWEIR_VERSION` | [GitHub Packages](https://github.com/marvinli001/edgeweir/pkgs/container/edgeweir) 上的日期 tag；`latest` 仅用于评估环境。 |
+| `EDGEWEIR_VERSION` | [GitHub Packages](https://github.com/marvinli001/edgeweir/pkgs/container/edgeweir) 上的日期 tag；`stable` 由 `deploy.sh` 解析为日期 tag，`latest` 仅用于评估环境。 |
 | `BETTER_AUTH_SECRET` | 新部署不设置。已设置的部署保留原值；移除后控制台拒绝启动。 |
 | 其他变量 | 见 [环境变量](../reference/environment.md)。 |
 
@@ -247,7 +247,7 @@ bash deploy.sh install
 
 ```bash
 cd /www/dk_project/edgeweir
-./deploy.sh update                     # 备份后升级到 latest 对应的日期 tag
+./deploy.sh update                     # 备份后升级到 stable 对应的日期 tag
 ./deploy.sh update 20260929-a1b2c3d    # 升级或回退到指定 tag
 ./deploy.sh backup                     # 备份到 backups/<时间>/
 ./deploy.sh restore backups/<时间>      # 先备份，再用该备份替换数据库

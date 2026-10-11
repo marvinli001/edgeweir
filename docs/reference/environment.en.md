@@ -105,7 +105,7 @@ Compose reads these variables on the host (`.env` or the shell environment) to i
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `EDGEWEIR_VERSION` | `latest` | Image tag to pull: `ghcr.io/marvinli001/edgeweir:<EDGEWEIR_VERSION>`. Rolling tags are `<YYYYMMDD>-<commit>`; `@sha256:<digest>` may be appended. See [Versions, upgrades, and rollback](../deploy/upgrade.en.md). |
+| `EDGEWEIR_VERSION` | `stable` | Image tag to pull: `ghcr.io/marvinli001/edgeweir:<EDGEWEIR_VERSION>`. The channels `stable` and `latest`, or a dated tag `<YYYYMMDD>-<commit>`; `@sha256:<digest>` may be appended. See [Versions, upgrades, and rollback](../deploy/upgrade.en.md). |
 | `EDGEWEIR_HTTP_PORT` | `3000` | Host port of the web console. `compose.yml`: a port publishing spec, may include a bind address, default `127.0.0.1:3000` (ports Docker publishes bypass ufw and firewalld); `3000` publishes it on every interface. `compose.baota.yml`: number only, bound to `127.0.0.1`. `compose.baota-host.yml`: number only, used as `PORT`. |
 | `EDGEWEIR_NODE_API_PORT` | `8443` | Host port of the node channel. `compose.yml` and `compose.baota.yml`: a port publishing spec, may include a bind address. `compose.baota-host.yml`: number only, used as `NODE_API_PORT`. |
 | `EDGEWEIR_NODE_API_HOST` | `0.0.0.0` | `compose.baota-host.yml` only: listen address of the node channel, used as `NODE_API_HOST`; `127.0.0.1` behind an nginx `stream` passthrough on the same host. |

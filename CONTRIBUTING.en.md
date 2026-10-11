@@ -84,11 +84,12 @@ pnpm --filter @edgeweir/console exec playwright install chromium
 | `pnpm test` | Vitest unit and integration tests; PostgreSQL is in-process PGlite, no Docker; with `TEST_DATABASE_URL` set, also the concurrent transaction tests | Before every commit |
 | `pnpm build` | Production build: Vite front end and single-file server | When build configuration or dependencies change |
 | `pnpm proto:lint` | `buf lint proto` | When `proto/` changes |
+| `pnpm proto:breaking` | `buf breaking` against the newest `proto/vX.Y.Z` tag (`scripts/proto-breaking.sh`) | When `proto/` changes |
 | `pnpm proto:gen` | Generates TypeScript from `proto/` into `packages/proto` | When `proto/` changes |
 | `pnpm db:generate` | Generates a SQL migration from changes in `packages/db/src/schema` (drizzle-kit) | When the schema changes |
 | `pnpm e2e` | End-to-end tests (`scripts/e2e.sh`); see [End-to-end tests](#end-to-end-tests) | When the node channel, config compiler, install script, or UI flows change |
 
-CI runs on pull requests and pushes to `master`: `pnpm lint`, no diff in `packages/proto` after `pnpm proto:gen`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `go vet` and `go test -race` for `helpers/certd`, the image build, and the end-to-end tests.
+CI runs on pull requests and pushes to `master`: `pnpm lint`, no diff in `packages/proto` after `pnpm proto:gen`, `pnpm proto:breaking` (against the newest proto tag on GitHub), `pnpm typecheck`, `pnpm test`, `pnpm build`, `go vet` and `go test -race` for `helpers/certd`, the image build, and the end-to-end tests.
 
 ## Tests
 
@@ -259,10 +260,10 @@ feat(console)!: drop the public landing page from the open core
    pnpm proto:lint
    ```
 
-3. Compare against the previous proto tag to confirm there is no breaking change.
+3. Compare against the newest proto tag to confirm there is no breaking change.
 
    ```bash
-   pnpm exec buf breaking proto --against '.git#tag=proto/vX.Y.Z,subdir=proto'
+   pnpm proto:breaking
    ```
 
 4. Generate TypeScript and commit the `proto/` change together with the generated code in `packages/proto`. CI checks that the generated code matches `proto/`.
@@ -271,7 +272,7 @@ feat(console)!: drop the public landing page from the open core
    pnpm proto:gen
    ```
 
-5. After the merge to `master`, a maintainer tags `proto/vX.Y.Z`: new fields or RPCs bump the minor version, comment-only changes bump the patch version.
+5. After the merge to `master`, a maintainer tags `proto/vX.Y.Z`: new fields or RPCs bump the minor version, comment-only changes bump the patch version. From `proto/v1` on, the wire format only grows compatibly; an incompatible change needs proto v2 and edgeweir-node 2.0.0.
 6. In edgeweir-node, set `PROTO_TAG` in the `Makefile` to the new tag, regenerate the Go code, adapt the node, and commit `internal/gen/`.
 
    ```bash
@@ -350,7 +351,8 @@ After a base image update, run the Release workflow manually in Actions to rebui
 | Artifact | Trigger | Version |
 | --- | --- | --- |
 | Console image `ghcr.io/marvinli001/edgeweir` | The Release workflow publishes each `master` commit whose CI passed; a manual Release run rebuilds only the tip of `master` | `<YYYYMMDD>-<first 7 characters of the commit>` (UTC commit date, `scripts/image-version.sh`); `latest` moves along while that commit is still the tip of `master` |
-| Node | `v*` tags in edgeweir-node | `vX.Y.Z` |
+| Console `stable` channel | A maintainer runs the Promote workflow with a dated tag: it checks that the tag's commit is on `master` and that the release workflow signed the image for that commit, then points `stable` at the same digest; a GitHub Release named after the dated tag follows | No new image tag; rolling back is promoting an earlier dated tag (when no migration was added in between) |
+| Node | Annotated `v*` tags in edgeweir-node (message `edgeweir-node vX.Y.Z`); goreleaser creates a draft, published after it is verified | Semantic versions: fixes bump the patch version; new capability names, commands, or optional settings bump the minor version; removing a capability or proto field, an incompatible state directory or `identity.json`, raised install requirements, or re-enrollment bump the major version |
 | Proto | Tag set by a maintainer on `master` | `proto/vX.Y.Z` |
 
 Version pinning, upgrades, and rollback: [Versions, upgrades, and rollback](docs/deploy/upgrade.en.md). Artifact signatures and verification: [SECURITY.en.md](SECURITY.en.md).

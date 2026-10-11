@@ -105,7 +105,7 @@ Compose 在宿主机读取以下变量（`.env` 或 shell 环境），用于插�
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `EDGEWEIR_VERSION` | `latest` | 拉取的镜像 tag：`ghcr.io/marvinli001/edgeweir:<EDGEWEIR_VERSION>`。滚动 tag 格式 `<YYYYMMDD>-<commit>`，可附加 `@sha256:<digest>`。见[版本、升级与回滚](../deploy/upgrade.md)。 |
+| `EDGEWEIR_VERSION` | `stable` | 拉取的镜像 tag：`ghcr.io/marvinli001/edgeweir:<EDGEWEIR_VERSION>`。渠道 `stable`、`latest`，或日期 tag `<YYYYMMDD>-<commit>`，可附加 `@sha256:<digest>`。见[版本、升级与回滚](../deploy/upgrade.md)。 |
 | `EDGEWEIR_HTTP_PORT` | `3000` | Web 控制台的宿主机端口。`compose.yml`：端口发布规格，可带绑定地址，默认 `127.0.0.1:3000`（Docker 发布的端口绕过 ufw、firewalld），`3000` 发布到所有接口。`compose.baota.yml`：仅数字，绑定 `127.0.0.1`。`compose.baota-host.yml`：仅数字，作为 `PORT`。 |
 | `EDGEWEIR_NODE_API_PORT` | `8443` | 节点通道的宿主机端口。`compose.yml`、`compose.baota.yml`：端口发布规格，可带绑定地址。`compose.baota-host.yml`：仅数字，作为 `NODE_API_PORT`。 |
 | `EDGEWEIR_NODE_API_HOST` | `0.0.0.0` | 只用于 `compose.baota-host.yml`：节点通道的监听地址，作为 `NODE_API_HOST`；同一主机上的 nginx `stream` 透传时设为 `127.0.0.1`。 |

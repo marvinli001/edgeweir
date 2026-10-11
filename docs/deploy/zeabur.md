@@ -34,7 +34,7 @@
 | 服务 | 设置 |
 | --- | --- |
 | `postgresql` | `postgres:18.6-alpine`（按 digest 固定）；卷 `data` 挂载 `/var/lib/postgresql`；库与用户 `edgeweir`，密码为 Zeabur 生成的 `${PASSWORD}`；`portForwarding.enabled: false`；TCP 健康检查 |
-| `edgeweir` | `ghcr.io/marvinli001/edgeweir:latest`；端口 `web` 3000/HTTP、`node` 8443/TCP；HTTP 健康检查 `/healthz`；`PORT=3000`、`DATABASE_URL=${POSTGRES_CONNECTION_STRING}`、`EDGEWEIR_PUBLIC_URL=https://${ZEABUR_WEB_DOMAIN}`、`EDGEWEIR_NODE_API_WEBSOCKET=true`；部署说明列出 setup token 的位置与直连地址 `https://<主机>:<端口>` |
+| `edgeweir` | `ghcr.io/marvinli001/edgeweir:stable`；端口 `web` 3000/HTTP、`node` 8443/TCP；HTTP 健康检查 `/healthz`；`PORT=3000`、`DATABASE_URL=${POSTGRES_CONNECTION_STRING}`、`EDGEWEIR_PUBLIC_URL=https://${ZEABUR_WEB_DOMAIN}`、`EDGEWEIR_NODE_API_WEBSOCKET=true`；部署说明列出 setup token 的位置与直连地址 `https://<主机>:<端口>` |
 | 模板变量 | `PUBLIC_DOMAIN`：`zeabur.app` 域名前缀，绑定到 `web` 端口；`EDGEWEIR_MASTER_KEY`：主密钥 |
 
 1. 生成主密钥：
@@ -87,7 +87,7 @@
 
 ## 固定版本
 
-模板部署的镜像为 `latest`。确认首次部署成功后固定为当时的 tag：
+模板部署的镜像为 `stable`。确认首次部署成功后固定为当时的 tag：
 
 1. 读取运行版本：
 
