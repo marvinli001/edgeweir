@@ -1,5 +1,7 @@
 import { createServer, type Server } from "node:http";
 import { create } from "@bufbuild/protobuf";
+import { decodeNodeConfig, IMAGE_CONVERT_FEATURE } from "@edgeweir/config-compiler";
+import { IMAGE_CONVERT_DEFAULTS } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { ReportTaskResultRequestSchema, TaskState } from "@edgeweir/proto";
 import { and, eq } from "drizzle-orm";
@@ -540,5 +542,197 @@ describe("upgrade refusals and the latest release", async () => {
     mirrorLatest = "0.8.1";
     expect(await latestNodeVersion(ctx, now + LATEST_VERSION_TTL_MS + 1)).toBeNull();
     await admin.settings.setReleaseSource({ url: "" });
+  });
+});
+
+describe("nodes behind only for capabilities they lack take part in an upgrade", async () => {
+  const { ctx, client } = await createTestContext();
+  const app = createApp(ctx);
+  const FULL = ["tls-v1", "rules-v1", "access-logs-v1", "stats-sequence-v1", "self-upgrade-v1"];
+  let admin: ApiClient, clusterId: string, groupId: string, siteId: string;
+  let canary: typeof schema.node.$inferSelect, peer: typeof schema.node.$inferSelect;
+  let fetchMock: { mockRestore(): void };
+  const latest = async () => {
+    const row = await latestRevision(ctx.db, clusterId);
+    if (!row) throw new Error("no revision");
+    return row;
+  };
+  const applied = async (
+    id: string,
+    revision: { revision: number; contentHash: string },
+    status: { state?: string; dataPlaneHealthy?: boolean } = {},
+  ) => {
+    await ctx.db
+      .update(schema.nodeConfigStatus)
+      .set({
+        state: "applied",
+        dataPlaneHealthy: true,
+        appliedRevision: revision.revision,
+        appliedContentHash: revision.contentHash,
+        ...status,
+      })
+      .where(eq(schema.nodeConfigStatus.nodeId, id));
+  };
+  const listed = async (name: string) =>
+    (await admin.nodes.list({ clusterId })).find((n) => n.name === name);
+  const refusal = async () =>
+    rpcError(admin.upgrades.create({ version: "1.0.0", nodeGroupId: groupId }));
+  beforeAll(async () => {
+    fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      const v = String(url).match(/\/v([^/]+)\/checksums\.txt$/)?.[1];
+      if (!v) return new Response("", { status: 404 });
+      return new Response(
+        ["amd64", "arm64"]
+          .map((arch) => `${"a".repeat(64)}  edgeweir-node_${v}_linux_${arch}.tar.gz`)
+          .join("\n"),
+      );
+    });
+    await setupPlatform(ctx);
+    admin = rpcClient(
+      app,
+      ctx.env.EDGEWEIR_PUBLIC_URL,
+      await signIn(app, ctx.env.EDGEWEIR_PUBLIC_URL, "admin@example.com"),
+    );
+    clusterId = (await admin.clusters.list())[0]?.id ?? "";
+    groupId = (await admin.nodeGroups.create({ clusterId, name: "canary" })).id;
+    const defaultGroup = (await admin.nodeGroups.list({ clusterId })).find((g) => g.isDefault);
+    if (!defaultGroup) throw new Error("no default group");
+    siteId = (
+      await admin.sites.create({
+        name: "photos",
+        domains: ["photos.upgrade.test"],
+        origins: [{ address: "origin.example.com" }],
+      })
+    ).site.id;
+    const nodes = await ctx.db
+      .insert(schema.node)
+      .values(
+        [
+          { name: "canary", nodeGroupId: groupId },
+          { name: "peer", nodeGroupId: defaultGroup.id },
+        ].map((n) => ({
+          ...n,
+          clusterId,
+          os: "linux",
+          arch: "arm64",
+          agentVersion: "0.2.1",
+          supportedFeatures: FULL,
+          lastSeenAt: new Date(),
+        })),
+      )
+      .returning();
+    if (!nodes[0] || !nodes[1]) throw new Error("no fixture nodes");
+    canary = nodes[0];
+    peer = nodes[1];
+    const current = await latest();
+    await ctx.db.insert(schema.nodeConfigStatus).values(
+      nodes.map((n) => ({
+        nodeId: n.id,
+        state: "applied",
+        dataPlaneHealthy: true,
+        appliedRevision: current.revision,
+        appliedContentHash: current.contentHash,
+      })),
+    );
+  });
+  afterAll(async () => {
+    fetchMock.mockRestore();
+    await client.close();
+  });
+
+  it("still refuses a node behind a revision it can apply", async () => {
+    const first = await latest();
+    await admin.sites.create({
+      name: "docs",
+      domains: ["docs.upgrade.test"],
+      origins: [{ address: "origin.example.com" }],
+    });
+    const second = await latest();
+    expect(second.revision).toBeGreaterThan(first.revision);
+    await applied(canary.id, second);
+    expect((await listed("peer"))?.upgradeRequired).toBe(false);
+    expect(await refusal()).toMatchObject({
+      code: "UPGRADE_NODES_UNAVAILABLE",
+      data: { nodes: "peer" },
+    });
+  });
+
+  it("lets nodes whose target needs a capability they lack take part, healthy on the revision they applied", async () => {
+    const before = await latest();
+    await admin.imageConvert.update({ id: siteId, ...IMAGE_CONVERT_DEFAULTS, enabled: true });
+    const target = await latest();
+    expect(target.revision).toBeGreaterThan(before.revision);
+    expect(decodeNodeConfig(target.ir).requiredFeatures).toContain(IMAGE_CONVERT_FEATURE);
+    // Neither node can fetch it: the canary stays on `before`, the peer on an older one.
+    expect(await listed("canary")).toMatchObject({
+      upgradeRequired: true,
+      appliedRevision: before.revision,
+      targetRevision: target.revision,
+    });
+    expect((await listed("peer"))?.upgradeRequired).toBe(true);
+
+    // The other checks still hold for such a node.
+    const peerRevision = { revision: before.revision - 1, contentHash: "older" };
+    for (const status of [{ dataPlaneHealthy: false }, { state: "failed" }]) {
+      await applied(peer.id, peerRevision, status);
+      expect(await refusal()).toMatchObject({
+        code: "UPGRADE_NODES_UNAVAILABLE",
+        data: { nodes: "peer" },
+      });
+    }
+    // Never applied a revision.
+    await applied(peer.id, { revision: 0, contentHash: "" });
+    expect((await refusal()).data).toEqual({ nodes: "peer" });
+    // A node with the capability that is behind is behind for another reason.
+    await applied(peer.id, peerRevision);
+    await ctx.db
+      .update(schema.node)
+      .set({ supportedFeatures: [...FULL, IMAGE_CONVERT_FEATURE] })
+      .where(eq(schema.node.id, peer.id));
+    expect((await refusal()).data).toEqual({ nodes: "peer" });
+    await ctx.db
+      .update(schema.node)
+      .set({ supportedFeatures: FULL, lastSeenAt: new Date() })
+      .where(eq(schema.node.id, peer.id));
+    await ctx.db
+      .update(schema.node)
+      .set({ lastSeenAt: new Date() })
+      .where(eq(schema.node.id, canary.id));
+
+    const job = await admin.upgrades.create({ version: "1.0.0", nodeGroupId: groupId });
+    expect(job.deliveries.map((d) => [d.nodeName, d.state])).toEqual([
+      ["canary", "pending"],
+      ["peer", "held"],
+    ]);
+
+    // Success still needs the upgraded node on its target.
+    const task = await pullUpgrade(ctx, canary);
+    if (!task) throw new Error("missing upgrade");
+    await ctx.db
+      .update(schema.node)
+      .set({
+        agentVersion: "1.0.0",
+        supportedFeatures: [...FULL, IMAGE_CONVERT_FEATURE],
+        lastSeenAt: new Date(),
+      })
+      .where(eq(schema.node.id, canary.id));
+    const succeeded = create(ReportTaskResultRequestSchema, {
+      taskId: task.id,
+      state: TaskState.SUCCEEDED,
+      message: "signed release activated and healthy",
+    });
+    await expect(reportUpgrade(ctx, canary.id, succeeded)).rejects.toMatchObject({ code: 9 });
+    await applied(canary.id, target);
+    expect(await reportUpgrade(ctx, canary.id, succeeded)).toBe(true);
+    expect(await listed("canary")).toMatchObject({
+      upgradeRequired: false,
+      appliedRevision: target.revision,
+    });
+    expect(
+      (await admin.upgrades.list({ clusterId }))[0]?.deliveries.map((d) => [d.nodeName, d.state]),
+    ).toEqual([
+      ["canary", "succeeded"],
+      ["peer", "held"],
+    ]);
   });
 });

@@ -15,7 +15,7 @@ Staged node upgrades: canary, promotion, signature checks and automatic rollback
 
 | Item | Requirement |
 | --- | --- |
-| Cluster nodes | Every enabled node of the cluster: heartbeat within 45 seconds, healthy data plane, current cluster revision applied, Linux, architecture (amd64 or arm64) present in the release, reports `self-upgrade-v1` |
+| Cluster nodes | Every enabled node of the cluster: heartbeat within 45 seconds, healthy data plane, current cluster revision applied, Linux, architecture (amd64 or arm64) present in the release, reports `self-upgrade-v1`. A node showing **Upgrade required** because it lacks a [capability](#node-capabilities) the current revision needs only has to have applied an earlier revision |
 | Count | At most 1000 enabled nodes per cluster |
 | Concurrency | No other upgrade is in progress on the cluster's nodes |
 | Supervisor | The node runs `supervise --manage-nginx` (the default of the node image and systemd unit) and finds `cosign`; when `EDGEWEIR_UPGRADE_PUBLIC_KEY` is set, that file exists |
@@ -41,7 +41,7 @@ An upgrade restarts the node's agent. OpenResty runs under the supervisor (node 
 | --- | --- |
 | Target version | Prefilled with the latest version of the release source: the latest GitHub release for the default source, a mirror's `latest` file otherwise (as `install.sh` reads it), cached by the console for 10 minutes; empty when it cannot be read. When every active node already runs that version or a newer one, the dialog says "Every node runs … or newer" and cannot start (nodes refuse downgrades) |
 | Canary node group | Defaults to a canary node group (**Canary** turned on in the group's settings) with active nodes, else the non-default group with the fewest active nodes. Options show the active node count; when the chosen group holds every node (more than one), a note says none are left for the rollout |
-| Nodes not ready | Active nodes of the cluster that stop the upgrade, with the reason: Upgrade in progress, Offline, Not Linux, Unsupported architecture, No signed upgrades, Data plane unhealthy, Configuration not applied, Behind |
+| Nodes not ready | Active nodes of the cluster that stop the upgrade, with the reason: Upgrade in progress, Offline, Not Linux, Unsupported architecture, No signed upgrades, Data plane unhealthy, Configuration not applied, Behind. A node showing **Upgrade required** that runs an earlier revision is not behind |
 
 ### Health window
 
@@ -150,7 +150,7 @@ Signing and verification are covered in the [Sigstore documentation](https://doc
 | `unknown-host-v1` | The cluster's unknown host settings are not the defaults (a handling other than the unknown host page, or scan protection on), see [unknown hosts and node IP access](domains.en.md#unknown-hosts-and-node-ip-access) |
 | `l4-v1` | The cluster has an enabled [L4 app](l4.en.md): layer-4 forwarding and L4 statistics. Without it the node refuses configurations with L4 apps, and the port pools tab, the L4 app list, and the dialog warn "Nodes {nodes} of {cluster} lack L4 forwarding and refuse configurations with L4 apps until upgraded" |
 
-When a node lacks a capability the cluster's current configuration needs, or lacks `stats-sequence-v1`, the node list in **Clusters & nodes** shows **Upgrade required**; the node keeps its last-known-good configuration and rejects configurations with unknown capabilities or enum values.
+When a node lacks a capability the cluster's current configuration needs, or lacks `stats-sequence-v1`, the node list in **Clusters & nodes** shows **Upgrade required**; the node keeps its last-known-good configuration and rejects configurations with unknown capabilities or enum values. Such a node can be [upgraded](#upgrade-nodes) as it is and applies the current configuration afterwards; the target version must have the missing capabilities, otherwise the candidate cannot apply the current configuration and rolls back after 90 seconds.
 
 The console account (session or AccessKey) can publish a configuration that needs a new capability; nodes without it keep their configuration as above. Service accounts and background jobs that publish such a configuration get 409 `NODE_CAPABILITY_REQUIRED`.
 
@@ -180,7 +180,7 @@ The endpoints are under `/api/v1`. Read-only AccessKeys can call the GET endpoin
 | Symptom | Cause | Action |
 | --- | --- | --- |
 | "Use a version such as 0.2.0" | **Target version** is not in `major.minor.patch` form (optionally with a pre-release suffix such as `1.0.0-rc.1`) | Correct the version |
-| "These nodes must be online, healthy, in sync and support signed upgrades: …" | The listed active nodes (at most 10, the rest as "+N") are offline, have not applied the current revision, have an unhealthy data plane, lack `self-upgrade-v1`, or have an architecture missing from the release | Fix or disable those nodes and retry |
+| "These nodes must be online, healthy, in sync and support signed upgrades: …" | The listed active nodes (at most 10, the rest as "+N") are offline, have not applied the current revision (unless they lag only for missing capabilities), have an unhealthy data plane, lack `self-upgrade-v1`, or have an architecture missing from the release | Fix or disable those nodes and retry |
 | "The node group to upgrade first has no active nodes" | The chosen node group has no active node | Choose another node group |
 | "An upgrade covers at most 1000 nodes" | The cluster has more than 1000 active nodes | Split the cluster |
 | "This release manifest is unavailable" | The version does not exist, the release source is unreachable, or the manifest lists no Linux archive | Check the version and the console release source |

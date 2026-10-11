@@ -1,7 +1,13 @@
 import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { releaseVersion, type UpgradeArtifact, type UpgradeJob } from "@edgeweir/contract";
+import { decodeNodeConfig, nodeRequirements } from "@edgeweir/config-compiler";
+import {
+  nodeSupportsFeature,
+  releaseVersion,
+  type UpgradeArtifact,
+  type UpgradeJob,
+} from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import {
   NodeTaskSchema,
@@ -18,6 +24,7 @@ import { type Actor, recordAudit } from "./audit";
 import { getReleaseSource } from "./release-source";
 import {
   type Executor,
+  getRevision,
   nodeTarget,
   type RevisionHead,
   type RolloutTargets,
@@ -426,17 +433,44 @@ export async function createUpgrade(
       now = Date.now();
     if (!canary.length)
       fail("UPGRADE_CANARY_EMPTY", "the node group to upgrade first has no active nodes");
-    const blocked = nodes.filter(
-      ({ node: n, status: s }) =>
-        n.os !== "linux" ||
-        !release.artifacts.some((a) => a.arch === n.arch) ||
-        !n.supportedFeatures.includes("self-upgrade-v1") ||
-        !n.lastSeenAt ||
-        now - n.lastSeenAt.getTime() > FRESH ||
-        !s?.dataPlaneHealthy ||
-        s.state !== "applied" ||
-        s.appliedContentHash !== targetFor(n, clusterTargets)?.contentHash,
-    );
+    // The capabilities each target revision needs, read only for nodes behind it.
+    const needs = new Map<number, string[]>();
+    const lacksCapability = async (features: string[], target: RevisionHead) => {
+      let required = needs.get(target.revision);
+      if (!required) {
+        const row = await getRevision(tx, cluster.id, target.revision);
+        required = row ? nodeRequirements(decodeNodeConfig(row.ir)) : [];
+        needs.set(target.revision, required);
+      }
+      return required.some((f) => !nodeSupportsFeature(features, f));
+    };
+    const blocked: typeof nodes = [];
+    for (const entry of nodes) {
+      const { node: n, status: s } = entry,
+        target = targetFor(n, clusterTargets);
+      const ready =
+        n.os === "linux" &&
+        release.artifacts.some((a) => a.arch === n.arch) &&
+        n.supportedFeatures.includes("self-upgrade-v1") &&
+        !!n.lastSeenAt &&
+        now - n.lastSeenAt.getTime() <= FRESH &&
+        !!s?.dataPlaneHealthy &&
+        s.state === "applied" &&
+        !!target;
+      if (!ready) blocked.push(entry);
+      // A node behind its target only because the target needs capabilities it
+      // lacks (「需要升级」) still runs the revision it applied before: the
+      // upgrade is what lets it apply the target.
+      else if (
+        s.appliedContentHash !== target.contentHash &&
+        !(
+          s.appliedRevision > 0 &&
+          s.appliedRevision < target.revision &&
+          (await lacksCapability(n.supportedFeatures, target))
+        )
+      )
+        blocked.push(entry);
+    }
     if (blocked.length) {
       const names = nodeNameList(blocked.map((n) => n.node.name));
       fail(

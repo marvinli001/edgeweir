@@ -23,6 +23,7 @@ import { Progress } from "@/components/ui/progress";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { taskErrorText } from "@/lib/node-errors";
+import { upgradeBlocker } from "@/lib/node-upgrades";
 import { orpc } from "@/lib/orpc";
 
 type JobState = UpgradeJob["state"] | UpgradeJob["deliveries"][number]["state"];
@@ -49,26 +50,7 @@ const stateTone = (state: JobState): { tone: StatusTone; pulse?: boolean } =>
         ? { tone: "warn", pulse: true }
         : { tone: "idle" };
 
-/** Architectures node releases are built for. */
-const RELEASE_ARCHES = ["amd64", "arm64"];
 const ACTIVE_DELIVERY = ["held", "pending", "running"];
-
-/**
- * Why an active node stops an upgrade from starting, as the console checks
- * it (every active node of the cluster must be ready); null when ready.
- */
-function upgradeBlocker(node: Node, busy: ReadonlySet<string>): string | null {
-  if (busy.has(node.id)) return m.upgrade_reason_busy();
-  if (!node.online) return m.nodes_offline();
-  if (node.os !== "linux") return m.upgrade_reason_os();
-  if (!RELEASE_ARCHES.includes(node.arch)) return m.upgrade_reason_arch();
-  if (!node.supportedFeatures.includes("self-upgrade-v1")) return m.upgrade_reason_feature();
-  if (!node.dataPlaneHealthy) return m.nodes_unhealthy();
-  if (node.applyState !== "applied") return m.upgrade_reason_not_applied();
-  if (node.targetRevision !== null && node.appliedRevision !== node.targetRevision)
-    return m.nodes_behind();
-  return null;
-}
 
 /**
  * The group to upgrade first: a canary group with active nodes, else the
