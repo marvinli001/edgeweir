@@ -6,11 +6,12 @@ import { getConnInfo } from "@hono/node-server/conninfo";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { OpenAPIGenerator } from "@orpc/openapi";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
-import { onError } from "@orpc/server";
+import { ORPCError, onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { SimpleCsrfProtectionHandlerPlugin } from "@orpc/server/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { secureHeaders } from "hono/secure-headers";
 import { serveDownload } from "./downloads";
 import { API_KEY_HEADER, AUTH_BASE_PATH, isAllowedAuthRoute } from "./lib/auth";
@@ -19,6 +20,17 @@ import type { AppContext } from "./lib/context";
 import { withIdempotency } from "./lib/idempotency";
 import { type RequestContext, router } from "./rpc/router";
 import { nodeChannelWebSocketOpen } from "./services/node-channel-url";
+import { authenticateServiceAccountKey, isServiceAccountKey } from "./services/service-accounts";
+
+/**
+ * Request bodies of /rpc and /api/v1: anyone may send MAX_BODY_BYTES; larger
+ * ones, up to MAX_AUTHENTICATED_BODY_BYTES (a full bulk redirect table is
+ * about 8 MiB), only callers whose credentials check out. better-auth's
+ * endpoints take MAX_AUTH_BODY_BYTES.
+ */
+export const MAX_BODY_BYTES = 1 << 20;
+export const MAX_AUTHENTICATED_BODY_BYTES = 16 << 20;
+export const MAX_AUTH_BODY_BYTES = 64 << 10;
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -111,6 +123,77 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
   });
 
   app.get("/healthz", (c) => c.json({ status: "ok", version: ctx.env.version }));
+
+  /** Whether the request's credential for its surface is valid (base.ts decides what it may do). */
+  const credentialValid = async (c: HonoContext, surface: "rpc" | "api") => {
+    const { headers } = requestContext(c, surface);
+    const key = headers.get(API_KEY_HEADER);
+    try {
+      if (key && isServiceAccountKey(key))
+        return (await authenticateServiceAccountKey(ctx.db, key)) !== null;
+      return (await ctx.auth.api.getSession({ headers })) !== null;
+    } catch {
+      return false;
+    }
+  };
+
+  /**
+   * The handlers read the whole body before they check credentials (oRPC
+   * decodes the input first, withIdempotency hashes it), so the body is
+   * bounded before it reaches them; only a valid credential unlocks the
+   * larger bound, checked only for a body over the smaller one.
+   */
+  const limitBody = (surface: "rpc" | "api") => {
+    const tooLarge = (c: HonoContext) => {
+      const error = new ORPCError("PAYLOAD_TOO_LARGE", { message: "request body too large" });
+      return c.json(surface === "rpc" ? { json: error.toJSON() } : error.toJSON(), 413);
+    };
+    return async (c: HonoContext, next: () => Promise<void>) => {
+      const body = c.req.raw.body;
+      if (!body) return next();
+      const length = Number(c.req.header("content-length") ?? Number.NaN);
+      if (c.req.header("transfer-encoding") === undefined && Number.isFinite(length)) {
+        // Node's parser holds the body to its declared length.
+        if (length <= MAX_BODY_BYTES) return next();
+        return length <= MAX_AUTHENTICATED_BODY_BYTES && (await credentialValid(c, surface))
+          ? next()
+          : tooLarge(c);
+      }
+      // A body without a length is counted as it arrives.
+      const reader = body.getReader();
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      let limit = MAX_BODY_BYTES;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > limit) {
+          if (limit === MAX_AUTHENTICATED_BODY_BYTES || !(await credentialValid(c, surface))) {
+            await reader.cancel();
+            return tooLarge(c);
+          }
+          limit = MAX_AUTHENTICATED_BODY_BYTES;
+          if (size > limit) {
+            await reader.cancel();
+            return tooLarge(c);
+          }
+        }
+        chunks.push(value);
+      }
+      c.req.raw = new Request(c.req.raw, { body: new Blob(chunks) });
+      return next();
+    };
+  };
+  app.use("/rpc/*", limitBody("rpc"));
+  app.use("/api/v1/*", limitBody("api"));
+  app.use(
+    "/api/auth/*",
+    bodyLimit({
+      maxSize: MAX_AUTH_BODY_BYTES,
+      onError: (c) => c.json({ code: "PAYLOAD_TOO_LARGE", message: "request body too large" }, 413),
+    }),
+  );
 
   app.on(["GET", "POST"], "/api/auth/*", async (c, next) => {
     // Exact match on the normalized path: no prefixes, encodings or trailing slashes.

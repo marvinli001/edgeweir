@@ -1,6 +1,11 @@
 import { execFileSync } from "node:child_process";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createApp } from "../../src/server/app";
+import {
+  createApp,
+  MAX_AUTH_BODY_BYTES,
+  MAX_AUTHENTICATED_BODY_BYTES,
+  MAX_BODY_BYTES,
+} from "../../src/server/app";
 import { createClusterTx } from "../../src/server/services/clusters";
 import { createTestContext, rpcClient } from "./helpers";
 
@@ -176,5 +181,117 @@ describe("HTTP API", async () => {
 
     // The operator's key reaches the system settings as well.
     expect((await call("/api/v1/settings", { headers: { "x-api-key": key } })).status).toBe(200);
+  });
+
+  it("bounds request bodies before credentials are checked; a valid one allows larger bodies", async () => {
+    const padded = (bytes: number, input: object = {}) =>
+      JSON.stringify({ ...input, padding: "x".repeat(bytes) });
+    /** A body without Content-Length, in 64 KiB chunks. */
+    const streamed = (text: string) => {
+      const bytes = new TextEncoder().encode(text);
+      return new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (let i = 0; i < bytes.length; i += 65536)
+            controller.enqueue(bytes.subarray(i, i + 65536));
+          controller.close();
+        },
+      });
+    };
+    const send = (path: string, body: string | ReadableStream, headers = {}) =>
+      call(path, { method: "POST", headers, body, duplex: "half" } as RequestInit);
+    const code = async (res: Response) => {
+      const json = (await res.json()) as { code?: string; json?: { code?: string } };
+      return [res.status, json.json?.code ?? json.code];
+    };
+    const over = padded(MAX_BODY_BYTES);
+    const declared = { "content-length": String(Buffer.byteLength(over)) };
+
+    // Without credentials: refused, whether the length is declared or streamed.
+    const csrf = { "x-csrf-token": "orpc" };
+    expect(await code(await send("/rpc/sites/list", over, { ...csrf, ...declared }))).toEqual([
+      413,
+      "PAYLOAD_TOO_LARGE",
+    ]);
+    expect(await code(await send("/rpc/sites/list", streamed(over), csrf))).toEqual([
+      413,
+      "PAYLOAD_TOO_LARGE",
+    ]);
+    expect(await code(await send("/api/v1/sites", over, declared))).toEqual([
+      413,
+      "PAYLOAD_TOO_LARGE",
+    ]);
+    expect(await code(await send("/api/v1/sites", streamed(over)))).toEqual([
+      413,
+      "PAYLOAD_TOO_LARGE",
+    ]);
+    // A forged credential is no credential.
+    for (const key of ["ewk_bogus", "ews_bogus"])
+      expect(await code(await send("/api/v1/sites", streamed(over), { "x-api-key": key }))).toEqual(
+        [413, "PAYLOAD_TOO_LARGE"],
+      );
+    expect(
+      await code(
+        await send("/rpc/sites/list", streamed(over), {
+          ...csrf,
+          cookie: "edgeweir.session_token=x",
+        }),
+      ),
+    ).toEqual([413, "PAYLOAD_TOO_LARGE"]);
+    // Smaller bodies still reach the handler, which answers 401.
+    expect((await send("/api/v1/sites", streamed(padded(1000)))).status).toBe(401);
+    // better-auth's endpoints take small JSON only.
+    const signIn = JSON.stringify({
+      email: "admin@example.com",
+      password: "x".repeat(MAX_AUTH_BODY_BYTES),
+    });
+    expect((await send("/api/auth/sign-in/email", streamed(signIn))).status).toBe(413);
+
+    // With a valid credential a body may grow to MAX_AUTHENTICATED_BODY_BYTES.
+    await ctx.auth.api.createUser({
+      body: { email: "big@example.com", password: "correct horse battery", name: "Big" },
+    });
+    const session = await send(
+      "/api/auth/sign-in/email",
+      JSON.stringify({ email: "big@example.com", password: "correct horse battery" }),
+    );
+    const cookie = (session.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
+    const { key } = await rpcClient(app, origin, cookie).accessKeys.create({
+      name: "bodies",
+      scope: "write",
+    });
+    const site = padded(2 * MAX_BODY_BYTES, {
+      name: "big",
+      domains: ["big.test"],
+      origins: [{ address: "whoami", port: 80 }],
+    });
+    expect((await send("/api/v1/sites", streamed(site), { "x-api-key": key })).status).toBe(201);
+    expect(
+      (
+        await send(
+          "/rpc/sites/list",
+          JSON.stringify({ json: { padding: "x".repeat(2 * MAX_BODY_BYTES) } }),
+          {
+            ...csrf,
+            cookie,
+            "content-length": String(2 * MAX_BODY_BYTES + 25),
+          },
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      await code(
+        await send("/api/v1/sites", streamed(padded(MAX_AUTHENTICATED_BODY_BYTES)), {
+          "x-api-key": key,
+        }),
+      ),
+    ).toEqual([413, "PAYLOAD_TOO_LARGE"]);
+    expect(
+      await code(
+        await send("/api/v1/sites", "{}", {
+          "x-api-key": key,
+          "content-length": String(MAX_AUTHENTICATED_BODY_BYTES + 1),
+        }),
+      ),
+    ).toEqual([413, "PAYLOAD_TOO_LARGE"]);
   });
 });

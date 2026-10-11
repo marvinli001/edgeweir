@@ -32,6 +32,7 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 - Header `x-api-key: <key>`: an AccessKey (starts with `ewk_`) or a service account key (starts with `ews_`).
 - An AccessKey acts as the operator (the only account, created by the setup wizard); its scope decides which procedures it can call, see [AccessKey](#accesskey). A service account key can call only the procedures listed under [Service accounts](#service-accounts).
 - Invalid, revoked, or missing key: 401.
+- Request bodies: at most 1 MiB without a valid key, at most 16 MiB with one (or the UI's session); larger bodies get 413 `PAYLOAD_TOO_LARGE`, decided before the body is read.
 - Each AccessKey allows up to 600 requests in a row; the count restarts when more than 60 seconds pass since the previous request. Beyond that the answer is 429 `API_KEY_RATE_LIMITED` with `data.retryAfterSeconds`. Use a service account key for continuous polling; service account keys are not counted.
 - Procedures that need no key (`security: []` in OpenAPI): `GET /system/status` and `POST /system/setup`.
 - `GET /me` returns the caller: `{ user: { id, name, email, twoFactorEnabled }, serviceAccount }`; with an AccessKey, `serviceAccount` is `null`.
@@ -101,7 +102,7 @@ For a service account, `GET /me` returns `serviceAccount: { id, name, scopes }`;
 | Same key, other method, path or body | 422 `IDEMPOTENCY_KEY_MISMATCH` |
 | The first request is still running | 409 `IDEMPOTENCY_IN_PROGRESS` |
 | Invalid key | 400 `IDEMPOTENCY_KEY_INVALID` |
-| The response carries a credential shown once: `POST /access-keys`, `POST /service-accounts/{id}/keys`, `POST /enrollment-tokens`, `POST /probe-tokens` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`, nothing runs; send it again without the header |
+| The response carries a credential shown once: `POST /access-keys`, `POST /service-accounts/{id}/keys`, `POST /enrollment-tokens`, `POST /probe-tokens`, `POST /sites/{id}/auth-rules/{ruleId}/sign` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`, nothing runs; send it again without the header |
 
 - Keys are per caller: all AccessKeys share one set, each service account has its own.
 - Records are kept 24 hours; expired ones are deleted hourly.

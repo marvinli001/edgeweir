@@ -32,6 +32,7 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 - 请求头 `x-api-key: <key>`：AccessKey（`ewk_` 开头）或服务账号 key（`ews_` 开头）。
 - AccessKey 以运营者（初始化向导创建的唯一账户）身份调用，可调用的过程由其权限范围决定，见 [AccessKey](#accesskey)。服务账号 key 只能调用[服务账号](#服务账号)中列出的过程。
 - 密钥无效、已吊销或缺失：401。
+- 请求体：无有效密钥时至多 1 MiB，有有效密钥（或界面的会话）时至多 16 MiB；超出返回 413 `PAYLOAD_TOO_LARGE`，在读取请求体之前判断。
 - 每个 AccessKey 连续最多 600 次请求：距上一次请求超过 60 秒时计数清零。超出返回 429 `API_KEY_RATE_LIMITED`，`data.retryAfterSeconds` 为需等待的秒数。持续轮询用服务账号 key，服务账号 key 不计数。
 - 无需密钥的过程（OpenAPI 中 `security: []`）：`GET /system/status`、`POST /system/setup`。
 - `GET /me` 返回调用方：`{ user: { id, name, email, twoFactorEnabled }, serviceAccount }`；使用 AccessKey 时 `serviceAccount` 为 `null`。
@@ -101,7 +102,7 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 | 同一 key、不同的方法、路径或请求体 | 422 `IDEMPOTENCY_KEY_MISMATCH` |
 | 第一次请求仍在执行 | 409 `IDEMPOTENCY_IN_PROGRESS` |
 | key 格式无效 | 400 `IDEMPOTENCY_KEY_INVALID` |
-| 响应里有只显示一次的凭据：`POST /access-keys`、`POST /service-accounts/{id}/keys`、`POST /enrollment-tokens`、`POST /probe-tokens` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`，不执行；不带该请求头重新发送 |
+| 响应里有只显示一次的凭据：`POST /access-keys`、`POST /service-accounts/{id}/keys`、`POST /enrollment-tokens`、`POST /probe-tokens`、`POST /sites/{id}/auth-rules/{ruleId}/sign` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`，不执行；不带该请求头重新发送 |
 
 - key 按调用方区分：全部 AccessKey 共用一份，每个服务账号单独一份。
 - 保存 24 小时，每小时清理过期记录。
