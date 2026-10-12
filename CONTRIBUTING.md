@@ -143,7 +143,13 @@ pnpm exec vitest run test/server/docs.test.ts
    pnpm e2e
    ```
 
-3. 验证：输出以 `E2E OK` 结束。
+3. 验证：输出以 `E2E OK` 结束，之前列出各段与其中各部分（checks、ui、cleanup 等）的耗时，从慢到快（也写入 `.e2e/timings.tsv`）。
+
+只跑部分段：`--list` 列出各段及其依赖；`--only g12,g15` 只跑这些段，`--from g12` 从该段跑到最后；`--plan` 只显示将要运行的段。新环境先跑 core 与所需的前置段；已跑过 core 的环境在原来的运行上继续（`.e2e/run.env`、`.e2e/run.done`），已通过的前置段不再重跑，例如失败后修好再 `--from <失败的段>`。只跑部分段时输出以 `SECTIONS OK` 结束。
+
+```bash
+pnpm e2e --only g12
+```
 
 并行运行第二套环境所需的变量（`COMPOSE_PROJECT_NAME`、`E2E_CONSOLE_PORT`、`E2E_NODE_PORT`、`E2E_TAG`、`E2E_SUBNET`、`E2E_ISOLATED_SUBNET`、`E2E_INSTALL_IMAGE`、`EDGEWEIR_NODE_CONTEXT`）见 [README 端到端测试](README.md#端到端测试)。
 

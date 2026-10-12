@@ -143,7 +143,13 @@ Every new API procedure has a Vitest case.
    pnpm e2e
    ```
 
-3. Verify: the output ends with `E2E OK`.
+3. Verify: the output ends with `E2E OK`, after the time of every section and of its parts (checks, ui, cleanup, ...), slowest first (also in `.e2e/timings.tsv`).
+
+Running some sections: `--list` prints the sections and what each needs; `--only g12,g15` runs just these, `--from g12` that section and all after it; `--plan` only shows which sections would run. A fresh stack runs core and the needed sections first; on a stack that got past core the run continues (`.e2e/run.env`, `.e2e/run.done`) without repeating needed sections that passed, e.g. `--from <failed section>` after a fix. A partial run ends with `SECTIONS OK`.
+
+```bash
+pnpm e2e --only g12
+```
 
 The variables for a second, parallel stack (`COMPOSE_PROJECT_NAME`, `E2E_CONSOLE_PORT`, `E2E_NODE_PORT`, `E2E_TAG`, `E2E_SUBNET`, `E2E_ISOLATED_SUBNET`, `E2E_INSTALL_IMAGE`, `EDGEWEIR_NODE_CONTEXT`) are listed in [README end-to-end tests](README.en.md#end-to-end-tests).
 

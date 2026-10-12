@@ -213,7 +213,18 @@
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
-#   bash scripts/e2e.sh [--up] [--down] [--skip-ui]
+#   bash scripts/e2e.sh [--up] [--down] [--skip-ui] [--only SECTION,... | --from SECTION] [--list] [--plan]
+# The run is a chain of sections (--list prints them with what each needs).
+# --only runs the named sections, --from a section and all after it. On a
+# fresh stack the core section and the sections they need run first; on a
+# stack where an earlier run got past the core section, the run continues
+# there (.e2e/run.env, .e2e/run.done) and runs a needed section again only
+# when it has not passed on that stack. A section that passed is not
+# guaranteed to pass a second time on the same stack. --plan prints the
+# sections a run would take on the stack and stops. The time of every
+# section and part (checks, ui, cleanup, ...) is printed at the end and kept
+# in .e2e/timings.tsv; output lines of the scripts and Playwright carry the
+# seconds since their part started.
 # Needs curl, jq, docker, node, and for the install step goreleaser, syft and
 # Go (it builds snapshot packages in $EDGEWEIR_NODE_CONTEXT, ../edgeweir-node
 # by default, with the edgeweir-openresty packages of `make
@@ -238,16 +249,54 @@ INSTALL_CONTAINER="${COMPOSE_PROJECT_NAME:-edgeweir-e2e}-install"
 UP=false
 DOWN=false
 SKIP_UI=false
-for arg in "$@"; do
-  case "$arg" in
+ONLY=""
+FROM=""
+LIST=false
+PLAN_ONLY=false
+while (($#)); do
+  case "$1" in
     --up) UP=true ;;
     --down) DOWN=true ;;
     --skip-ui) SKIP_UI=true ;;
-    *) echo "unknown argument: $arg" >&2; exit 2 ;;
+    --only) ONLY="${2:-}"; shift ;;
+    --only=*) ONLY="${1#*=}" ;;
+    --from) FROM="${2:-}"; shift ;;
+    --from=*) FROM="${1#*=}" ;;
+    --list) LIST=true ;;
+    --plan) PLAN_ONLY=true ;;
+    *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
+  shift
 done
 
-step() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
+# Sections in run order, each with the sections whose state it reads
+# (.e2e/*-state.json, or clusters and nodes they create). Every section needs
+# core, which only runs on a fresh stack.
+SECTIONS=(
+  "core:" "m1:" "analytics:" "m2:" "install:" "m3:" "m4:" "m5:" "m6-logs:m5" "m6-upgrades:m5"
+  "p0:m5 m6-upgrades" "g1:p0 m5 m6-upgrades" "g2:m6-upgrades" "g3:m6-upgrades" "g4:m6-upgrades"
+  "g5:m6-upgrades" "dns:m5 m6-upgrades" "g6:dns m5 m6-upgrades" "g7:m6-upgrades" "h2:m6-upgrades"
+  "g8:m6-upgrades" "g9:m6-upgrades" "g15:m6-upgrades" "g10:m5 m6-upgrades" "g11:m6-upgrades"
+  "g12:m6-upgrades" "g13:m6-upgrades" "g14:m6-upgrades" "g16:m6-upgrades" "g17:m6-upgrades"
+  "g18:m6-upgrades" "lifecycle:"
+)
+section_names() { local s; for s in "${SECTIONS[@]}"; do printf '%s\n' "${s%%:*}"; done; }
+section_deps() { local s; for s in "${SECTIONS[@]}"; do [[ "${s%%:*}" != "$1" ]] || { printf '%s\n' "${s#*:}"; return; }; done; }
+if $LIST; then
+  for s in "${SECTIONS[@]}"; do printf '%-12s %s\n' "${s%%:*}" "${s#*:}"; done
+  exit 0
+fi
+[[ -z "$ONLY" || -z "$FROM" ]] || { echo "--only and --from cannot be combined" >&2; exit 2; }
+for s in ${ONLY//,/ } $FROM; do
+  section_names | grep -qx -- "$s" || { echo "unknown section: $s (bash scripts/e2e.sh --list)" >&2; exit 2; }
+done
+
+RUN_STARTED=$SECONDS
+TIMINGS=() # "SECONDS<TAB>SECTION<TAB>PART"
+CURRENT_SECTION=""
+SECTION_STARTED=0
+clock() { printf '%d:%02d' $(($1 / 60)) $(($1 % 60)); }
+step() { printf '\n\033[1;34m==> %s\033[0m \033[2m(%s, +%s)\033[0m\n' "$*" "$(date +%H:%M:%S)" "$(clock $((SECONDS - RUN_STARTED)))"; }
 pass() { printf '\033[1;32mPASS\033[0m %s\n' "$*"; }
 fail() {
   printf '\033[1;31mFAIL\033[0m %s\n' "$*" >&2
@@ -266,6 +315,9 @@ need node
 mkdir -p "$STATE_DIR"
 COOKIES="$STATE_DIR/cookies.txt"
 rm -f "$COOKIES"
+TIMINGS_FILE="$STATE_DIR/timings.tsv"
+RUN_ENV="$STATE_DIR/run.env"   # the stack's run: API key, cluster and site from the core section
+RUN_DONE="$STATE_DIR/run.done" # the sections that passed on that stack
 
 if $UP; then
   step "docker compose -f compose.e2e.yml up -d --build"
@@ -278,10 +330,71 @@ cleanup() {
   docker ps -aq --filter "label=dev.edgeweir.e2e-g8=${COMPOSE_PROJECT_NAME:-edgeweir-e2e}" | xargs docker rm -f >/dev/null 2>&1 || true
   # ... and the PROXY protocol cluster's node of e2e-g9.mjs.
   docker ps -aq --filter "label=dev.edgeweir.e2e-g9=${COMPOSE_PROJECT_NAME:-edgeweir-e2e}" | xargs docker rm -f >/dev/null 2>&1 || true
+  report_timings
   # Every profile: the upgrade peer and ClickHouse keep their state otherwise.
   if $DOWN; then "${COMPOSE[@]}" --profile '*' down -v >/dev/null 2>&1 || true; fi
 }
 trap cleanup EXIT
+
+# part LABEL COMMAND...: runs COMMAND with every output line prefixed by the
+# seconds since the part started, and records the part's time.
+part() {
+  local label="$1" started=$SECONDS status=0
+  shift
+  "$@" 2>&1 | stamp "$started" || status=$?
+  TIMINGS+=("$((SECONDS - started))"$'\t'"$CURRENT_SECTION"$'\t'"$label")
+  return "$status"
+}
+stamp() { # stamp STARTED: prefixes stdin lines with +SECONDS since STARTED
+  local line
+  while IFS= read -r line || [[ -n "$line" ]]; do printf '\033[2m%6s\033[0m %s\n' "+$((SECONDS - $1))s" "$line"; done
+}
+# story NAME [--cleanup]: scripts/e2e-NAME.mjs, e2e/NAME.spec.ts unless
+# --skip-ui and, with --cleanup, the script's own cleanup, each a timed part.
+story() {
+  local name="$1"
+  part checks node "scripts/e2e-$name.mjs" || fail "$name end-to-end checks failed"
+  if ! $SKIP_UI; then
+    part ui env E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+      pnpm --filter @edgeweir/console run test:e2e "e2e/$name.spec.ts" || fail "$name browser checks failed"
+  fi
+  if [[ "${2:-}" == --cleanup ]]; then
+    part cleanup node "scripts/e2e-$name.mjs" --cleanup || fail "$name cleanup failed"
+  fi
+}
+# The time of every section (slowest first) and of its parts, also in $TIMINGS_FILE.
+report_timings() {
+  if [[ -n "$CURRENT_SECTION" ]]; then
+    TIMINGS+=("$((SECONDS - SECTION_STARTED))"$'\t'"$CURRENT_SECTION"$'\t'"unfinished")
+    CURRENT_SECTION=""
+  fi
+  ((${#TIMINGS[@]})) || return 0
+  printf '%s\n' "${TIMINGS[@]}" >"$TIMINGS_FILE"
+  printf '\n\033[1;34m==> timings, slowest first (%s)\033[0m\n' "$TIMINGS_FILE"
+  awk -F'\t' '
+    function clock(s) { return sprintf("%d:%02d", s / 60, s % 60) }
+    $3 == "total" || $3 == "unfinished" { total[$2] = $1; if ($3 == "unfinished") note[$2] = "  (unfinished)"; next }
+    { if (!(($2, $3) in sum)) labels[$2] = labels[$2] " " $3; sum[$2, $3] += $1 }
+    END {
+      for (s in total) {
+        n = split(labels[s], l, " "); parts = ""
+        for (i = 1; i <= n; i++) parts = parts sprintf("  %s %s", l[i], clock(sum[s, l[i]]))
+        printf "%d\t%7s  %-12s%s%s\n", total[s], clock(total[s]), s, parts, note[s]
+      }
+    }
+  ' "$TIMINGS_FILE" | sort -t$'\t' -k1,1nr | cut -f2-
+  printf '%7s  run\n' "$(clock $((SECONDS - RUN_STARTED)))"
+  TIMINGS=()
+}
+# run_section NAME: section_NAME as one timed section, recorded in $RUN_DONE once it passed.
+run_section() {
+  CURRENT_SECTION="$1"
+  SECTION_STARTED=$SECONDS
+  "section_${1//-/_}"
+  TIMINGS+=("$((SECONDS - SECTION_STARTED))"$'\t'"$1"$'\t'"total")
+  CURRENT_SECTION=""
+  echo "$1" >>"$RUN_DONE"
+}
 
 # api METHOD PATH [JSON] -> body on stdout; fails on non-2xx.
 api() {
@@ -339,13 +452,11 @@ wait_for() { # wait_for SECONDS DESCRIPTION COMMAND...
   done
 }
 
-step "wait for the console"
-wait_for 180 "console /healthz" curl -fsS "$CONSOLE/healthz"
-pass "console healthy: $(curl -fsS "$CONSOLE/healthz")"
+node_json() { api GET "/nodes?clusterId=$CLUSTER_ID" | jq -c '.[] | select(.name == "edge-e2e-1")'; }
 
+# ---------------------------------------------------------------- section core
+section_core() {
 step "first-run setup needs the one-time setup token from the console log"
-[[ "$(api GET /system/status | jq -r .initialized)" == "false" ]] ||
-  fail "the e2e environment is not fresh (console already initialized); reset it with: docker compose -f compose.e2e.yml --profile '*' down -v && docker compose -f compose.e2e.yml up -d --build"
 setup_token() {
   "${COMPOSE[@]}" logs console 2>/dev/null | grep -o '"setupToken":"ews_[A-Za-z0-9_-]*"' | tail -n1 | cut -d'"' -f4
 }
@@ -360,7 +471,7 @@ pass "setup with a wrong token refused: $REFUSED"
 
 if ! $SKIP_UI; then
   step "Playwright: setup wizard with the setup token (the operator account + default cluster)"
-  E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+  part ui env E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
     E2E_SETUP_TOKEN="$SETUP_TOKEN" pnpm --filter @edgeweir/console run test:e2e e2e/setup.spec.ts \
     || fail "Playwright setup failed"
 else
@@ -500,7 +611,6 @@ NO_CERT="$("${COMPOSE[@]}" exec -T console node -e '
 [[ "$NO_CERT" == 401* && "$NO_CERT" == *unauthenticated* ]] || fail "node channel must reject calls without a client certificate, got: $NO_CERT"
 pass "node channel without client certificate: $NO_CERT"
 
-node_json() { api GET "/nodes?clusterId=$CLUSTER_ID" | jq -c '.[] | select(.name == "edge-e2e-1")'; }
 node_online() { [[ "$(node_json | jq -r .online)" == "true" ]]; }
 wait_for 60 "node online (heartbeat over mTLS)" node_online
 NODE="$(node_json)"
@@ -515,9 +625,10 @@ SITE="$(api POST /sites "$(jq -nc --arg c "$CLUSTER_ID" '{
   origins: [{address: "whoami", port: 80, scheme: "http"}],
   cacheRules: [{pathPrefixes: ["/"], edgeTtlSeconds: 300, originCacheControl: "override"}]
 }')")"
+SITE_ID="$(jq -r .site.id <<<"$SITE")"
 REVISION="$(jq -r .revision.revision <<<"$SITE")"
 CONTENT_HASH="$(jq -r .revision.contentHash <<<"$SITE")"
-pass "site $(jq -r .site.id <<<"$SITE") created, published revision #$REVISION (${CONTENT_HASH:0:16}…)"
+pass "site $SITE_ID created, published revision #$REVISION (${CONTENT_HASH:0:16}…)"
 
 node_applied() {
   local n
@@ -557,13 +668,22 @@ pass "cluster latest revision #$REVISION, $(jq -r .onlineNodeCount <<<"$CLUSTER"
 
 if ! $SKIP_UI; then
   step "Playwright smoke: login -> clusters & nodes -> sites"
-  E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+  part ui env E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
     E2E_EXPECT_REVISION="$REVISION" pnpm --filter @edgeweir/console run test:e2e e2e/smoke.spec.ts \
     || fail "Playwright smoke test failed"
   pass "Playwright smoke passed"
+fi
 
+# For --from / --only on this stack later on.
+printf 'RUN_PROJECT=%q\nRUN_CONSOLE=%q\nAPI_KEY=%q\nCLUSTER_ID=%q\nSITE_ID=%q\n' \
+  "${COMPOSE_PROJECT_NAME:-edgeweir-e2e}" "$CONSOLE" "$API_KEY" "$CLUSTER_ID" "$SITE_ID" >"$RUN_ENV"
+}
+
+# ------------------------------------------------------------------ section m1
+section_m1() {
+if ! $SKIP_UI; then
   step "Playwright M1: site editing, clusters, node groups, audit, English"
-  E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+  part ui env E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
     E2E_NODE_NAME="edge-e2e-1" pnpm --filter @edgeweir/console run test:e2e e2e/m1.spec.ts \
     || fail "Playwright M1 test failed"
   pass "Playwright M1 passed"
@@ -587,9 +707,11 @@ if ! $SKIP_UI; then
   grep -q "^GET /e2e-edited " <<<"$BODY" || fail "www.edited.test did not reach whoami: $BODY"
   pass "curl -H 'Host: www.edited.test' -> whoami (domain and origin edited in the UI)"
 fi
+}
 
+# ----------------------------------------------------------- section analytics
+section_analytics() {
 step "analytics: the node's per-minute stats reach the console"
-SITE_ID="$(jq -r .site.id <<<"$SITE")"
 site_traffic() { api GET "/analytics/traffic?range=1h&siteId=$SITE_ID"; }
 # The agent uploads completed minutes once a minute.
 stats_arrived() { [[ "$(site_traffic | jq -r '.totals.requests >= 3 and .totals.cacheHits >= 1 and .totals.status2xx >= 3')" == "true" ]]; }
@@ -600,12 +722,15 @@ pass "top nodes: $(api GET "/analytics/top-nodes?range=1h" | jq -c '[.[] | {name
 
 if ! $SKIP_UI; then
   step "Playwright analytics: overview lists and charts, stars, site analytics"
-  E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+  part ui env E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
     E2E_NODE_NAME="edge-e2e-1" pnpm --filter @edgeweir/console run test:e2e e2e/analytics.spec.ts \
     || fail "Playwright analytics test failed"
   pass "Playwright analytics passed"
 fi
+}
 
+# ------------------------------------------------------------------ section m2
+section_m2() {
 step "MVP M2: sites for origins and cache"
 xcache() { # xcache HOST PATH [curl args...] -> value of X-Cache
   local host="$1" path="$2"
@@ -883,12 +1008,15 @@ pass "primary down -> backup, console shows the primary down, primary back -> pr
 
 if ! $SKIP_UI; then
   step "Playwright M2: submit purges and read the per-node results"
-  E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+  part ui env E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
     E2E_NODE_NAME="edge-e2e-1" pnpm --filter @edgeweir/console run test:e2e e2e/m2.spec.ts \
     || fail "Playwright M2 test failed"
   pass "Playwright M2 passed"
 fi
+}
 
+# ------------------------------------------------------------- section install
+section_install() {
 step "N-H1: the console's release mirror serves goreleaser snapshot packages, anything else is 404"
 need goreleaser
 need go
@@ -909,13 +1037,13 @@ OPENRESTY_FILES=("edgeweir-openresty_${OPENRESTY_PKG}_$DOCKER_ARCH.deb" "edgewei
 openresty_packages_built() { for f in "${OPENRESTY_FILES[@]}"; do [[ -f "$NODE_CONTEXT/out/openresty/$f" ]] || return 1; done; }
 if ! openresty_packages_built; then
   echo "make openresty-packages ARCH=$DOCKER_ARCH (in $NODE_CONTEXT, log in $STATE_DIR/openresty-packages.log)"
-  make -C "$NODE_CONTEXT" openresty-packages ARCH="$DOCKER_ARCH" >"$STATE_DIR/openresty-packages.log" 2>&1 ||
+  part openresty-packages make -C "$NODE_CONTEXT" openresty-packages ARCH="$DOCKER_ARCH" >"$STATE_DIR/openresty-packages.log" 2>&1 ||
     { tail -n 40 "$STATE_DIR/openresty-packages.log" >&2; fail "building the edgeweir-openresty packages failed"; }
   openresty_packages_built || fail "make openresty-packages did not produce ${OPENRESTY_FILES[*]}"
 fi
 pass "edgeweir-openresty $OPENRESTY_PKG packages for $DOCKER_ARCH in $NODE_CONTEXT/out/openresty"
 echo "goreleaser release --snapshot --clean (in $NODE_CONTEXT, log in $STATE_DIR/goreleaser.log)"
-(cd "$NODE_CONTEXT" && goreleaser release --snapshot --clean) >"$STATE_DIR/goreleaser.log" 2>&1 ||
+part goreleaser sh -c 'cd "$1" && goreleaser release --snapshot --clean' _ "$NODE_CONTEXT" >"$STATE_DIR/goreleaser.log" 2>&1 ||
   { tail -n 40 "$STATE_DIR/goreleaser.log" >&2; fail "goreleaser snapshot build failed"; }
 DIST="$(cd "$NODE_CONTEXT" && pwd)/dist"
 NODE_VERSION="$(jq -r .version "$DIST/metadata.json")"
@@ -1139,212 +1267,173 @@ for feature in brotli-v1 zstd-v1 modsecurity-v1; do
 done
 docker rm -f "$INSTALL_CONTAINER" >/dev/null 2>&1 || true
 pass "the installed agent ($NODE_VERSION) runs as the edgeweir user, is online over mTLS and reports brotli-v1, zstd-v1 and modsecurity-v1 with the installed packages"
+}
 
+# ------------------------------------- sections m3 ... g18 (scripts/e2e-*.mjs)
+section_m3() {
 step "M3: ACME issuance, HTTPS, HTTP/2, HTTP/3, renewal and TLS policy"
-node scripts/e2e-m3.mjs || fail "M3 protocol test failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
-    pnpm --filter @edgeweir/console test:e2e e2e/m3.spec.ts || fail "M3 browser test failed"
-fi
+story m3
 pass "M3 certificate and protocol checks passed"
+}
 
+section_m4() {
 step "M4: rules, IP lists, rate limits, transformations and local GeoIP"
-node scripts/e2e-m4.mjs || fail "M4 protocol test failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" pnpm --filter @edgeweir/console test:e2e e2e/m4.spec.ts || fail "M4 browser test failed"
-fi
+story m4
 pass "M4 policy checks passed"
+}
 
+section_m5() {
 step "M5: DNS health reconciliation, statistics and notifications"
-node scripts/e2e-m5.mjs || fail "M5 end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/m5.spec.ts || fail "M5 browser test failed"
-fi
+story m5
 pass "M5 DNS, statistics and alert checks passed"
+}
 
+section_m6_logs() {
 step "M6: sampled logs, scoped API keys, optional ClickHouse and backup recovery"
-node scripts/e2e-m6-logs.mjs || fail "M6 logs and AccessKey checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/m6-logs.spec.ts || fail "M6 logs browser test failed"
-fi
-docker compose -f compose.e2e.yml --profile analytics up -d --wait clickhouse
-pnpm --filter @edgeweir/console exec tsx scripts/e2e-clickhouse.ts "http://localhost:${E2E_CLICKHOUSE_PORT:-19123}" || fail "ClickHouse integration failed"
-node scripts/e2e-restore.mjs || fail "backup recovery failed"
+story m6-logs
+part clickhouse-up "${COMPOSE[@]}" --profile analytics up -d --wait clickhouse || fail "ClickHouse did not start"
+part clickhouse pnpm --filter @edgeweir/console exec tsx scripts/e2e-clickhouse.ts "http://localhost:${E2E_CLICKHOUSE_PORT:-19123}" || fail "ClickHouse integration failed"
+part restore node scripts/e2e-restore.mjs || fail "backup recovery failed"
 pass "M6 log, AccessKey, ClickHouse and recovery checks passed"
+}
 
+section_m6_upgrades() {
 step "M6: signed node upgrade, canary promotion and automatic rollback"
-node scripts/e2e-upgrade-fixtures.mjs || fail "could not prepare signed upgrade fixtures"
-docker compose -f compose.e2e.yml --profile upgrades up -d upgrade-files node-upgrade-peer
-node scripts/e2e-m6-upgrades.mjs || fail "signed upgrade checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/m6-upgrades.spec.ts || fail "upgrade browser checks failed"
-fi
+part fixtures node scripts/e2e-upgrade-fixtures.mjs || fail "could not prepare signed upgrade fixtures"
+part peer-up "${COMPOSE[@]}" --profile upgrades up -d upgrade-files node-upgrade-peer || fail "could not start the upgrade peer"
+story m6-upgrades
 pass "M6 signed upgrades and rollback passed"
+}
 
+section_p0() {
 step "P0: idempotency, service accounts, usage, configuration canary, DNS protection"
-node scripts/e2e-p0.mjs || fail "P0 end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/p0.spec.ts || fail "P0 browser checks failed"
-fi
+story p0
 pass "P0 checks passed"
+}
 
+section_g1() {
 step "G1: dynamic bans: delivery latency, site bans at the edge, platform bans in nftables and limits"
-node scripts/e2e-g1.mjs || fail "G1 end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g1.spec.ts || fail "G1 browser checks failed"
-fi
+story g1
 pass "G1 checks passed"
+}
 
+section_g2() {
 step "G2: challenges in a browser, passes across nodes, Under Attack, tiered CC and JA4 rules"
-node scripts/e2e-g2.mjs || fail "G2 end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g2.spec.ts || fail "G2 browser checks failed"
-fi
+story g2
 pass "G2 checks passed"
+}
 
+section_g3() {
 step "G3: custom OpenResty build, Brotli / Zstandard negotiation, OWASP CRS and capability gating"
-node scripts/e2e-g3.mjs || fail "G3 end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g3.spec.ts || fail "G3 browser checks failed"
-fi
-node scripts/e2e-g3.mjs --cleanup || fail "G3 cleanup failed"
+story g3 --cleanup
 pass "G3 checks passed"
+}
 
+section_g4() {
 step "G4: purge by Host and Cache-Tag, variant and sitemap prefetch, active health checks, session affinity, error pages"
-node scripts/e2e-g4.mjs || fail "G4 end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g4.spec.ts || fail "G4 browser checks failed"
-fi
-node scripts/e2e-g4.mjs --cleanup || fail "G4 cleanup failed"
+story g4 --cleanup
 pass "G4 checks passed"
+}
 
+section_g5() {
 step "G5: rule engine extensions: functions, dynamic and bulk redirects, origin, cache and compression rules, config overrides"
-node scripts/e2e-g5.mjs || fail "G5 end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g5.spec.ts || fail "G5 browser checks failed"
-fi
-node scripts/e2e-g5.mjs --cleanup || fail "G5 cleanup failed"
+story g5 --cleanup
 pass "G5 checks passed"
+}
 
+section_dns() {
 step "DNS: cluster bindings on two accounts, offline removal, provider outage, manual zone file, Custom HTTP credentials"
-"${COMPOSE[@]}" --profile dns up -d node-dns
-node scripts/e2e-dns.mjs || fail "DNS end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/dns.spec.ts || fail "DNS browser checks failed"
-fi
+part node-dns-up "${COMPOSE[@]}" --profile dns up -d node-dns || fail "could not start node-dns"
+story dns
 pass "DNS checks passed"
+}
 
+section_g6() {
 step "G6: regional probes, node metrics, resolution lines, backup IPs, backup line groups and scheduling rules"
-node scripts/e2e-g6.mjs || fail "G6 end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g6.spec.ts || fail "G6 browser checks failed"
-fi
-node scripts/e2e-g6.mjs --cleanup || fail "G6 cleanup failed"
+story g6 --cleanup
 pass "G6 checks passed"
+}
 
+section_g7() {
 step "G7: layer-4 forwarding: port pools, TCP and UDP echo, a long connection across a reload, PROXY protocol, hot upstreams, limits, statistics"
-node scripts/e2e-g7.mjs || fail "G7 end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g7.spec.ts || fail "G7 browser checks failed"
-fi
-node scripts/e2e-g7.mjs --cleanup || fail "G7 cleanup failed"
+story g7 --cleanup
 pass "G7 checks passed"
+}
 
+section_h2() {
 step "HTTP/2 and gRPC to origins: h2c origin, gRPC unary, bidirectional streaming and trailers through both nodes"
-node scripts/e2e-h2.mjs || fail "HTTP/2 and gRPC end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/h2.spec.ts || fail "HTTP/2 and gRPC browser checks failed"
-fi
-node scripts/e2e-h2.mjs --cleanup || fail "HTTP/2 and gRPC cleanup failed"
+story h2 --cleanup
 pass "HTTP/2 and gRPC checks passed"
+}
 
+section_g8() {
 step "G8: expression fields, functions and wildcards, header values and query parameters, response header lines, 303, error page placeholders, a node without rules-v3"
-node scripts/e2e-g8.mjs || fail "G8 end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g8.spec.ts || fail "G8 browser checks failed"
-fi
-node scripts/e2e-g8.mjs --cleanup || fail "G8 cleanup failed"
+story g8 --cleanup
 pass "G8 checks passed"
+}
 
+section_g9() {
 step "G9: listener ports, site ports, SNI on an extra HTTPS port, HTTPS redirect options, layer-4 range and TLS, reload with an open connection, PROXY protocol v2 balancer, trusted proxy header"
-node scripts/e2e-g9.mjs || fail "G9 end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g9.spec.ts || fail "G9 browser checks failed"
-fi
-node scripts/e2e-g9.mjs --cleanup || fail "G9 cleanup failed"
+story g9 --cleanup
 pass "G9 checks passed"
+}
+
+section_g15() {
 step "G15: cache zone sizes and usage, Set-Cookie caching, excluded parameters, charset, body limits, gzip level, PURGE, error page classes and redirects, X-Cache, maintenance, origin tries, S3 with MinIO"
-node scripts/e2e-g15.mjs || fail "G15 end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g15.spec.ts || fail "G15 browser checks failed"
-fi
-node scripts/e2e-g15.mjs --cleanup || fail "G15 cleanup failed"
+story g15 --cleanup
 pass "G15 checks passed"
+}
 
+section_g10() {
 step "G10: suffix, wildcard, pattern and internationalized domains, unknown hosts closed or handed to the default site, node IP access, default certificate, scan protection, CNAME prefixes"
-node scripts/e2e-g10.mjs || fail "G10 end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g10.spec.ts || fail "G10 browser checks failed"
-fi
-node scripts/e2e-g10.mjs --cleanup || fail "G10 cleanup failed"
+story g10 --cleanup
 pass "G10 checks passed"
+}
 
+section_g11() {
 step "G11: several certificates by SNI and key type, client certificates, TLS session resumption across nodes and sites, Pebble as the custom ACME directory"
-node scripts/e2e-g11.mjs || fail "G11 end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g11.spec.ts || fail "G11 browser checks failed"
-fi
-node scripts/e2e-g11.mjs --cleanup || fail "G11 cleanup failed"
+story g11 --cleanup
 pass "G11 checks passed"
+}
 
+section_g12() {
 step "G12: Basic, signed URLs A-D and forward authentication before the rules and the cache"
-node scripts/e2e-g12.mjs || fail "G12 end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g12.spec.ts || fail "G12 browser checks failed"
-fi
-node scripts/e2e-g12.mjs --cleanup || fail "G12 cleanup failed"
+story g12 --cleanup
 pass "G12 checks passed"
+}
 
+section_g13() {
 step "G13: site lists, geo, CORS, hotlink, user agents, WebSocket origins and security headers at the edge"
-node scripts/e2e-g13.mjs || fail "G13 end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g13.spec.ts || fail "G13 browser checks failed"
-fi
-node scripts/e2e-g13.mjs --cleanup || fail "G13 cleanup failed"
+story g13 --cleanup
 pass "G13 checks passed"
+}
 
+section_g14() {
 step "G14: WAF actions, request body fields, CRS by path, verified crawlers and challenge additions"
-node scripts/e2e-g14.mjs || fail "G14 end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g14.spec.ts || fail "G14 browser checks failed"
-fi
-node scripts/e2e-g14.mjs --cleanup || fail "G14 cleanup failed"
+story g14 --cleanup
 pass "G14 checks passed"
+}
 
+section_g16() {
 step "G16: access log fields, options, filters and retention, live view on the node, statistics dimensions"
-node scripts/e2e-g16.mjs || fail "G16 end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g16.spec.ts || fail "G16 browser checks failed"
-fi
-node scripts/e2e-g16.mjs --cleanup || fail "G16 cleanup failed"
+story g16 --cleanup
 pass "G16 checks passed"
+}
 
+section_g17() {
 step "G17: site tags, batch operations, copying settings to other sites and cloning"
-node scripts/e2e-g17.mjs || fail "G17 end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g17.spec.ts || fail "G17 browser checks failed"
-fi
-node scripts/e2e-g17.mjs --cleanup || fail "G17 cleanup failed"
+story g17 --cleanup
 pass "G17 checks passed"
+}
 
+section_g18() {
 step "G18: WebP / AVIF variants by Accept, cached once each, limits, savings"
-node scripts/e2e-g18.mjs || fail "G18 end-to-end checks failed"
-if ! $SKIP_UI; then
-  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g18.spec.ts || fail "G18 browser checks failed"
-fi
-node scripts/e2e-g18.mjs --cleanup || fail "G18 cleanup failed"
+story g18 --cleanup
 pass "G18 checks passed"
+}
 
+# ----------------------------------------------------------- section lifecycle
+section_lifecycle() {
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"
 api POST "/nodes/$NODE_ID/disable" >/dev/null
@@ -1365,5 +1454,61 @@ wait_for 60 "agent refused after deletion" node_revoked
 pass "deleted node revoked and refused: $("${COMPOSE[@]}" logs --since "$DELETED_AT" node 2>&1 | grep -i "rejected this node's credentials" | tail -n1 | cut -c1-160)"
 curl -fsS -o /dev/null -H 'Host: demo.test' "$NODE_HTTP/after-revoke" || fail "node must keep serving last-known-good config"
 pass "node keeps serving its last-known-good configuration after being refused"
+}
 
-printf '\n\033[1;32mE2E OK\033[0m\n'
+# ------------------------------------------------------------------------ run
+step "wait for the console"
+wait_for 180 "console /healthz" curl -fsS "$CONSOLE/healthz"
+pass "console healthy: $(curl -fsS "$CONSOLE/healthz")"
+
+DONE=" "
+if [[ "$(api GET /system/status | jq -r .initialized)" == "false" ]]; then
+  FRESH=true
+elif [[ -z "$ONLY$FROM" ]]; then
+  fail "the e2e environment is not fresh (console already initialized); reset it with: docker compose -f compose.e2e.yml --profile '*' down -v && docker compose -f compose.e2e.yml up -d --build, or continue its run with --from or --only"
+else
+  FRESH=false
+  [[ -f "$RUN_ENV" ]] || fail "the console is initialized, but no run on it got past the core section ($RUN_ENV); reset the stack"
+  # shellcheck source=/dev/null
+  source "$RUN_ENV"
+  [[ "$RUN_PROJECT" == "${COMPOSE_PROJECT_NAME:-edgeweir-e2e}" && "$RUN_CONSOLE" == "$CONSOLE" ]] ||
+    fail "$RUN_ENV is the run of $RUN_PROJECT at $RUN_CONSOLE; use that project's variables or reset this stack"
+  export API_KEY
+  api GET "/clusters/$CLUSTER_ID" >/dev/null || fail "$RUN_ENV is not the run of this stack (unknown API key or cluster); reset the stack"
+  [[ ! -f "$RUN_DONE" ]] || DONE=" $(tr '\n' ' ' <"$RUN_DONE")"
+  [[ "$DONE" != *" lifecycle "* ]] || fail "the lifecycle section deleted this stack's node; reset the stack"
+fi
+if [[ -n "$ONLY" ]]; then
+  TARGETS="${ONLY//,/ }"
+else
+  TARGETS="$(section_names | awk -v from="${FROM:-core}" '$0 == from { on = 1 } on' | tr '\n' ' ')"
+fi
+WANT=" "
+want() { # want SECTION [target]: SECTION and the sections it needs that have not passed on this stack
+  local dep
+  [[ "$WANT" != *" $1 "* ]] || return 0
+  [[ -n "${2:-}" || "$DONE" != *" $1 "* ]] || return 0
+  for dep in $(section_deps "$1"); do want "$dep"; done
+  WANT+="$1 "
+}
+if $FRESH; then want core target; fi
+for s in $TARGETS; do
+  [[ "$s" != core ]] || $FRESH || fail "the core section needs a fresh stack"
+  want "$s" target
+done
+PLAN=()
+for s in $(section_names); do [[ "$WANT" != *" $s "* ]] || PLAN+=("$s"); done
+$FRESH || echo "continuing the run on this stack; passed before:${DONE% }"
+echo "sections: ${PLAN[*]}"
+! $PLAN_ONLY || exit 0
+if $FRESH; then rm -f "$RUN_ENV" "$RUN_DONE"; fi
+NETWORK="$(e2e_network)"
+
+for s in "${PLAN[@]}"; do run_section "$s"; done
+
+report_timings
+if [[ -z "$ONLY$FROM" ]]; then
+  printf '\n\033[1;32mE2E OK\033[0m\n'
+else
+  printf '\n\033[1;32mSECTIONS OK\033[0m %s\n' "${PLAN[*]}"
+fi
