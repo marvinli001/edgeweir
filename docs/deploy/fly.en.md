@@ -182,7 +182,7 @@ fly logs --no-tail | grep setupToken
 
 | Variable | Where | Value | Notes |
 | --- | --- | --- | --- |
-| `DATABASE_URL` | Secret | PostgreSQL 18 connection string | Required. When PostgreSQL is reached over the internet, end `DATABASE_URL` with `?sslmode=verify-full` (encrypted, certificate verified); use `sslmode=no-verify` when the provider's certificate is not issued by a public CA. Without `sslmode` the connection is not encrypted: managed databases that require TLS refuse it, and the console exits after waiting 60 seconds. |
+| `DATABASE_URL` | Secret | PostgreSQL 18 connection string | Required. When PostgreSQL is reached over the internet, end `DATABASE_URL` with `?sslmode=verify-full` (encrypted, certificate verified); use `sslmode=no-verify` when the provider's certificate is not issued by a public CA; `sslmode=require` in a provider's connection string verifies the certificate too. Without `sslmode` the connection is not encrypted: managed databases that require TLS refuse it, and the console exits after waiting 60 seconds. |
 | `EDGEWEIR_MASTER_KEY` | Secret | Output of `openssl rand -base64 32` | Required. |
 | `EDGEWEIR_PUBLIC_URL` | `[env]` | `https://edgeweir-console.fly.dev` | Required. With a custom domain, use that domain. |
 | `EDGEWEIR_NODE_API_URL` | `[env]` | `https://edgeweir-console.fly.dev:8443` | The host name must resolve to the dedicated IPv4 and IPv6; it is added to the node channel certificate automatically. After setup it can also be changed under "Node channel" in **System settings**, without a deployment; a URL saved there wins over this variable. |

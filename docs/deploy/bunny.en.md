@@ -204,7 +204,7 @@ Without that line, restart the app (the app's **Restart**, or `bunny apps restar
 
 | Variable | Value | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | PostgreSQL 18 connection string | Required. When PostgreSQL is reached over the internet, end `DATABASE_URL` with `?sslmode=verify-full` (encrypted, certificate verified); use `sslmode=no-verify` when the provider's certificate is not issued by a public CA. Without `sslmode` the connection is not encrypted: managed databases that require TLS refuse it, and the console exits after waiting 60 seconds. |
+| `DATABASE_URL` | PostgreSQL 18 connection string | Required. When PostgreSQL is reached over the internet, end `DATABASE_URL` with `?sslmode=verify-full` (encrypted, certificate verified); use `sslmode=no-verify` when the provider's certificate is not issued by a public CA; `sslmode=require` in a provider's connection string verifies the certificate too. Without `sslmode` the connection is not encrypted: managed databases that require TLS refuse it, and the console exits after waiting 60 seconds. |
 | `EDGEWEIR_MASTER_KEY` | Output of `openssl rand -base64 32` | Required. |
 | `EDGEWEIR_PUBLIC_URL` | `https://mc-<id>.bunny.run` | Required. Change to your domain when you use a custom domain. |
 | `EDGEWEIR_NODE_API_URL` | `https://<Anycast IP>:8443` | Required while no URL is saved under "Node channel" in **System settings**: the default `https://<public host>:8443` points at the CDN and is unreachable. The host name or IP is added to the node channel certificate. |
@@ -217,7 +217,7 @@ The value of `EDGEWEIR_TRUSTED_PROXIES` is built from the two bunny.net edge ser
 
 ```bash
 ( curl -fsS https://api.bunny.net/system/edgeserverlist/plain; echo
-  curl -fsS https://api.bunny.net/system/edgeserverlist/ipv6/plain ) | grep -v '^$' | paste -sd, -
+  curl -fsS https://api.bunny.net/system/edgeserverlist/ipv6/plain ) | tr -d '\r' | grep -v '^$' | paste -sd, -
 ```
 
 `ROLE`, `HOST`, `PORT`, and `NODE_API_PORT` keep the image defaults `all`, `0.0.0.0`, `3000`, and `8443`, which match the endpoints' container ports. All variables: [Environment variables](../reference/environment.en.md).

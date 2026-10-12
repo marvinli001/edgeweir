@@ -135,7 +135,7 @@ sed -i "s|^EDGEWEIR_PUBLIC_URL=.*|EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.
 | `EDGEWEIR_VERSION` | `stable` | 拉取的镜像 tag。生产环境固定日期 tag，见 [固定版本](upgrade.md#固定版本)。 |
 | `EDGEWEIR_NODE_API_URL` | `https://<EDGEWEIR_PUBLIC_URL 的主机名>:8443` | 节点连接节点通道的地址；**系统设置** 的「节点通道」中保存的地址优先，见 [节点通道地址与证书](networking.md#节点通道地址与证书)。 |
 | `EDGEWEIR_TRUSTED_PROXIES` | 空 | 反向代理地址，见 [可信代理](networking.md#可信代理与客户端-ip)。 |
-| `EDGEWEIR_HTTP_PORT`、`EDGEWEIR_NODE_API_PORT` | `127.0.0.1:3000`、`8443` | 宿主机发布端口，可带绑定地址。Web 端口默认只在本机：Docker 发布的端口绕过 ufw、firewalld，由反向代理对外；`EDGEWEIR_HTTP_PORT=3000` 发布到所有接口。 |
+| `EDGEWEIR_HTTP_PORT`、`EDGEWEIR_NODE_API_PORT` | `127.0.0.1:3000`、`8443` | 宿主机发布端口，可带绑定地址。Web 端口默认只在本机：Docker 发布的端口绕过 ufw、firewalld，由反向代理对外；`EDGEWEIR_HTTP_PORT=3000` 发布到所有接口。`EDGEWEIR_NODE_API_PORT` 不是 `8443` 时同时设置 `EDGEWEIR_NODE_API_URL`（或在系统设置中保存节点通道地址）：默认地址的端口是容器内的 `8443`。 |
 | `BETTER_AUTH_SECRET` | 空，由主密钥派生 | 已设置的部署保留原值；移除后控制台拒绝启动。 |
 | `EDGEWEIR_DOWNLOADS_DIR` | 空 | 节点安装包下载镜像目录，见 [下载镜像](nodes.md#下载镜像)。 |
 
@@ -239,13 +239,13 @@ docker run -d --name edgeweir-console --network edgeweir --restart unless-stoppe
   --env-file console.env -e ROLE=all \
   -p 127.0.0.1:3000:3000 -p 8443:8443 \
   --read-only --tmpfs /tmp --security-opt no-new-privileges:true \
-  ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d
+  ghcr.io/marvinli001/edgeweir:stable
 ```
 
 | 项目 | 约束 |
 | --- | --- |
 | `console.env` | 变量与 `compose.yml` 的 `environment` 相同，可选变量按需加入；已设置 `BETTER_AUTH_SECRET` 的部署带上原值。 |
-| `EDGEWEIR_VERSION` | 不写入 `console.env`：镜像内该变量表示运行中的版本。版本由镜像引用的 tag 决定。 |
+| `EDGEWEIR_VERSION` | 不写入 `console.env`：镜像内该变量表示运行中的版本。版本由镜像引用的 tag 决定；生产环境把 `stable` 换成日期 tag，见 [固定版本](upgrade.md#固定版本)。 |
 | `DATABASE_URL` | 容器内的 `127.0.0.1` 指容器自身，不是宿主机。 |
 | PostgreSQL 卷 | 挂载到 `/var/lib/postgresql`：PostgreSQL 18 镜像的数据位于 `/var/lib/postgresql/<主版本>/docker`。 |
 | 加固参数 | `--read-only`、`--tmpfs /tmp`、`--security-opt no-new-privileges:true` 与 `compose.yml` 一致。 |
@@ -256,7 +256,7 @@ docker run -d --name edgeweir-console --network edgeweir --restart unless-stoppe
 
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
-| 日志 `invalid configuration:`，随后列出变量 | 变量缺失或格式错误 | 按列出的变量修正 `.env`，执行 `docker compose up -d`。 |
+| 日志 `invalid configuration: <变量>: <原因>` | 变量缺失或格式错误 | 按列出的变量修正 `.env`，执行 `docker compose up -d`。 |
 | `EDGEWEIR_MASTER_KEY: is not valid base64` 或 `must be at least 32 bytes` | 主密钥被截断或改写，例如面板把 `+` 换成了空格，或值带引号 | 使用 `openssl rand -base64 32` 的原样输出。 |
 | `EDGEWEIR_MASTER_KEY does not match this database` | 主密钥不是这个数据库所用的：更换了主密钥，或数据库来自另一次安装 | 恢复原主密钥（原 `.env` 或其离线副本），或按[轮换主密钥](#轮换主密钥)把它设为 `EDGEWEIR_MASTER_KEY_PREVIOUS`；设置 `BETTER_AUTH_SECRET` 无济于事。 |
 | `BETTER_AUTH_SECRET is not set, but this database was used with another secret` | 已有部署移除了 `BETTER_AUTH_SECRET` | 恢复原值。 |

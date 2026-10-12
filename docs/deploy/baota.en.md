@@ -179,11 +179,11 @@ Node release source and origin allow list are configured in **System settings**,
    POSTGRES_PASSWORD=$(openssl rand -hex 24)
    EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com
    EDGEWEIR_NODE_API_URL=https://cdn-admin.example.com:8443
-   EDGEWEIR_VERSION=20260929-a1b2c3d
+   EDGEWEIR_VERSION=stable
    ENV
    ```
 
-   For host mode, replace the `POSTGRES_PASSWORD` line with `DATABASE_URL=postgres://edgeweir:<URL-encoded password>@127.0.0.1:5432/edgeweir` (append `?sslmode=verify-full` for a cloud database).
+   For host mode, replace the `POSTGRES_PASSWORD` line with `DATABASE_URL=postgres://edgeweir:<URL-encoded password>@127.0.0.1:5432/edgeweir` (append `?sslmode=verify-full` for a cloud database). After the first successful deployment, set `EDGEWEIR_VERSION` to the dated tag it runs, as in [pinning a version](upgrade.en.md#pinning-a-version).
 
 3. Add the compose project: BaoTa **Docker → 容器编排 → 添加容器编排**; aaPanel **Docker → Compose → Add Compose**. Name it `edgeweir`, paste the template as the compose content, paste the previous output into the `.env` field (aaPanel **.env Content**), and create it.
 

@@ -44,7 +44,7 @@ Nodes enroll with `wss://<prefix>.zeabur.app` by default: the node channel's TLS
    openssl rand -base64 32 > edgeweir-master-key
    ```
 
-2. Click **Deploy on Zeabur** at the top of this page and **Deploy** on the template page; when prompted, pick a project or create one on a Server, enter the domain prefix (giving `<prefix>.zeabur.app`) and the master key (the contents of `edgeweir-master-key`).
+2. Click **Deploy on Zeabur** at the top of this page and **Deploy** on the template page; when prompted, pick a project or create one on a Server, enter the domain prefix (giving `<prefix>.zeabur.app`) and the master key (the contents of `edgeweir-master-key`: 44 characters ending in `=`).
 
    CLI equivalent (run `npx zeabur@latest auth login` first); `-f zeabur.yaml` deploys a local copy of the template file:
 
@@ -140,6 +140,12 @@ CLI: `npx zeabur@latest deployment log -t=runtime --service-name edgeweir | grep
 | Node channel URL | "Node channel" in **System settings** | `wss://<prefix>.zeabur.app`, connection check "Reachable" |
 | Node enrollment | **Clusters and nodes** → **Add node** | `--server wss://<prefix>.zeabur.app`; run it on the node as in [Adding nodes](nodes.en.md) |
 | Port forwarding | `edgeweir` service **Networking**; `npx zeabur@latest service network` | The `node` port has a `<host>:<port>`; `postgresql` has none |
+
+## Startup failures
+
+When the `edgeweir` service keeps restarting and the health check reports `connection refused`, look for `invalid configuration` in **Logs**: the variable and the reason follow it. For example, `EDGEWEIR_MASTER_KEY: is not valid base64` means the master key is not the output of `openssl rand -base64 32`. CLI: `npx zeabur@latest deployment log -t=runtime --service-name edgeweir | grep -A2 'invalid configuration'`.
+
+Correct the variable under **Variables** and **Restart** the service. Replacing the master key before the console first started successfully does not affect any data; afterwards, see [Master key rotation](../reference/environment.en.md#master-key-rotation).
 
 ## Custom domain
 

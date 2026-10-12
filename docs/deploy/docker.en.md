@@ -135,7 +135,7 @@ Common optional variables (uncomment in `.env`):
 | `EDGEWEIR_VERSION` | `stable` | Image tag to pull. Pin a dated tag in production; see [pinning a version](upgrade.en.md#pinning-a-version). |
 | `EDGEWEIR_NODE_API_URL` | `https://<host of EDGEWEIR_PUBLIC_URL>:8443` | URL nodes use for the node channel; a URL saved under "Node channel" in **System settings** wins; see [node channel URL and certificate](networking.en.md#node-channel-url-and-certificate). |
 | `EDGEWEIR_TRUSTED_PROXIES` | Empty | Reverse proxy addresses; see [trusted proxies](networking.en.md#trusted-proxies-and-client-ip). |
-| `EDGEWEIR_HTTP_PORT`, `EDGEWEIR_NODE_API_PORT` | `127.0.0.1:3000`, `8443` | Published host ports, optionally with a bind address. The web port is local only by default: ports Docker publishes bypass ufw and firewalld, so a reverse proxy serves it; `EDGEWEIR_HTTP_PORT=3000` publishes it on every interface. |
+| `EDGEWEIR_HTTP_PORT`, `EDGEWEIR_NODE_API_PORT` | `127.0.0.1:3000`, `8443` | Published host ports, optionally with a bind address. The web port is local only by default: ports Docker publishes bypass ufw and firewalld, so a reverse proxy serves it; `EDGEWEIR_HTTP_PORT=3000` publishes it on every interface. When `EDGEWEIR_NODE_API_PORT` is not `8443`, also set `EDGEWEIR_NODE_API_URL` (or save the node channel URL in System settings): the default URL uses the container's port `8443`. |
 | `BETTER_AUTH_SECRET` | Empty, derived from the master key | Deployments that set it keep it; the console refuses to start once it is removed. |
 | `EDGEWEIR_DOWNLOADS_DIR` | Empty | Directory of the node package mirror; see [downloads mirror](nodes.en.md#downloads-mirror). |
 
@@ -239,13 +239,13 @@ docker run -d --name edgeweir-console --network edgeweir --restart unless-stoppe
   --env-file console.env -e ROLE=all \
   -p 127.0.0.1:3000:3000 -p 8443:8443 \
   --read-only --tmpfs /tmp --security-opt no-new-privileges:true \
-  ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d
+  ghcr.io/marvinli001/edgeweir:stable
 ```
 
 | Item | Constraint |
 | --- | --- |
 | `console.env` | Same variables as the `environment` of `compose.yml`; add optional variables as needed. Deployments that set `BETTER_AUTH_SECRET` keep its value. |
-| `EDGEWEIR_VERSION` | Not in `console.env`: inside the image it carries the running version. The tag in the image reference selects the version. |
+| `EDGEWEIR_VERSION` | Not in `console.env`: inside the image it carries the running version. The tag in the image reference selects the version; in production replace `stable` with a dated tag, see [pinning a version](upgrade.en.md#pinning-a-version). |
 | `DATABASE_URL` | `127.0.0.1` inside the container is the container itself, not the host. |
 | PostgreSQL volume | Mount at `/var/lib/postgresql`: PostgreSQL 18 images keep data under `/var/lib/postgresql/<major>/docker`. |
 | Hardening flags | `--read-only`, `--tmpfs /tmp`, and `--security-opt no-new-privileges:true` match `compose.yml`. |
@@ -256,7 +256,7 @@ Upgrading standalone containers: [upgrade](upgrade.en.md#upgrade).
 
 | Symptom | Cause | Action |
 | --- | --- | --- |
-| Log `invalid configuration:` followed by variable names | Variable missing or malformed | Fix the listed variables in `.env`, then run `docker compose up -d`. |
+| Log `invalid configuration: <variable>: <reason>` | Variable missing or malformed | Fix the listed variables in `.env`, then run `docker compose up -d`. |
 | `EDGEWEIR_MASTER_KEY: is not valid base64` or `must be at least 32 bytes` | Master key truncated or edited, for example a panel turned `+` into a space, or the value is quoted | Use the unmodified output of `openssl rand -base64 32`. |
 | `EDGEWEIR_MASTER_KEY does not match this database` | The master key is not the one this database uses: the key changed, or the database comes from another installation | Restore the original master key (the original `.env` or its offline copy), or set it as `EDGEWEIR_MASTER_KEY_PREVIOUS` to [rotate](#rotating-the-master-key) it; setting `BETTER_AUTH_SECRET` does not help. |
 | `BETTER_AUTH_SECRET is not set, but this database was used with another secret` | `BETTER_AUTH_SECRET` removed from an existing deployment | Restore the previous value. |

@@ -182,7 +182,7 @@ fly logs --no-tail | grep setupToken
 
 | 变量 | 位置 | 值 | 说明 |
 | --- | --- | --- | --- |
-| `DATABASE_URL` | secret | PostgreSQL 18 连接串 | 必填。经公网连接 PostgreSQL 时 `DATABASE_URL` 带 `?sslmode=verify-full`（加密并校验证书）；服务商证书不是公共 CA 签发时改用 `sslmode=no-verify`。不带 `sslmode` 时不加密，要求 TLS 的托管数据库拒绝连接，控制台等待 60 秒后退出。 |
+| `DATABASE_URL` | secret | PostgreSQL 18 连接串 | 必填。经公网连接 PostgreSQL 时 `DATABASE_URL` 带 `?sslmode=verify-full`（加密并校验证书）；服务商证书不是公共 CA 签发时改用 `sslmode=no-verify`；服务商连接串中的 `sslmode=require` 同样校验证书。不带 `sslmode` 时不加密，要求 TLS 的托管数据库拒绝连接，控制台等待 60 秒后退出。 |
 | `EDGEWEIR_MASTER_KEY` | secret | `openssl rand -base64 32` 的输出 | 必填。 |
 | `EDGEWEIR_PUBLIC_URL` | `[env]` | `https://edgeweir-console.fly.dev` | 必填。使用自定义域名时改为该域名。 |
 | `EDGEWEIR_NODE_API_URL` | `[env]` | `https://edgeweir-console.fly.dev:8443` | 主机名须解析到独享 IPv4 与 IPv6；自动写入节点通道证书。初始化后也可在 **系统设置** 的「节点通道」修改，不需要部署；那里保存的地址优先于此变量。 |

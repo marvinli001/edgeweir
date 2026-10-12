@@ -83,7 +83,7 @@ sudo bash deploy.sh install
 | 控制台地址 | `http(s)://主机[:端口]`，端口 1–65535，不含路径，末尾 `/` 被去除；不是 `https://` 时警告 |
 | 节点通道地址 | `https://主机[:端口]`，不含路径；其中的端口即对外的节点通道端口，省略时为 443 |
 | 连接串 | `postgres://` 或 `postgresql://`；含用户名与库名；单一主机；不含空白、引号、反引号、`\`、`$`、`#`，密码中的特殊字符做 URL 编码（`$` 写成 `%24`） |
-| 端口 | Web 端口与节点通道端口为数字且不同；节点通道端口已被占用时中止 |
+| 端口 | Web 端口与节点通道端口为数字且不同；节点通道端口已被占用时中止；host 模式下节点通道端口小于 1024 时中止（控制台不以 root 运行） |
 
 ### 结果
 
@@ -128,7 +128,7 @@ EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com \
 bash deploy.sh install
 ```
 
-`EDGEWEIR_NO_PULL=1` 需要本机已有控制台镜像的目标 tag（或 `stable`、`latest`）与 `postgres:18.6-alpine`（host 模式的检查与备份、bundled 模式的数据库）。
+`EDGEWEIR_NO_PULL=1` 需要本机已有控制台镜像的目标 tag（或 `stable`、`latest`）与 `postgres:18.6-alpine`（host 模式的检查与备份、bundled 模式的数据库）。PostgreSQL 镜像按 digest 引用：Docker 使用经典镜像存储时（Docker 28 及更早版本的默认，`docker info -f '{{.DriverStatus}}'` 不含 `io.containerd.snapshotter.v1`），`docker load` 导入的镜像没有 digest，离线安装失败；改用 containerd 镜像存储，或让主机能拉取该镜像。
 
 ## 数据库检查
 

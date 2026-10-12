@@ -83,7 +83,7 @@ Variables supply the defaults; in unattended mode they are the answers. A set `E
 | Console URL | `http(s)://host[:port]` with a port of 1–65535, without a path; a trailing `/` is removed; a warning when it is not `https://` |
 | Node channel URL | `https://host[:port]` without a path; its port is the public node channel port, 443 when omitted |
 | Connection string | `postgres://` or `postgresql://`; with user name and database name; a single host; no whitespace, quotes, backticks, `\`, `$`, or `#` (URL-encode special characters in the password, e.g. `$` as `%24`) |
-| Ports | The web and node channel ports are numbers and differ; the install aborts when the node channel port is in use |
+| Ports | The web and node channel ports are numbers and differ; the install aborts when the node channel port is in use, and in host mode when it is below 1024 (the console does not run as root) |
 
 ### Result
 
@@ -128,7 +128,7 @@ EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com \
 bash deploy.sh install
 ```
 
-`EDGEWEIR_NO_PULL=1` needs the target tag (or `stable`, `latest`) of the console image and `postgres:18.6-alpine` (host mode checks and backups, the bundled database) on the host.
+`EDGEWEIR_NO_PULL=1` needs the target tag (or `stable`, `latest`) of the console image and `postgres:18.6-alpine` (host mode checks and backups, the bundled database) on the host. The PostgreSQL image is referenced by digest: with Docker's classic image store (the default up to Docker 28; `docker info -f '{{.DriverStatus}}'` lacks `io.containerd.snapshotter.v1`), an image imported with `docker load` has no digest and the offline install fails; switch to the containerd image store, or let the host pull that image.
 
 ## Database check
 

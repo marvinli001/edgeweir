@@ -204,7 +204,7 @@ bunny api POST /pullzone/<pull zone ID>/setForceSSL --body '{"Hostname":"mc-<id>
 
 | 变量 | 值 | 说明 |
 | --- | --- | --- |
-| `DATABASE_URL` | PostgreSQL 18 连接串 | 必填。经公网连接 PostgreSQL 时 `DATABASE_URL` 带 `?sslmode=verify-full`（加密并校验证书）；服务商证书不是公共 CA 签发时改用 `sslmode=no-verify`。不带 `sslmode` 时不加密，要求 TLS 的托管数据库拒绝连接，控制台等待 60 秒后退出。 |
+| `DATABASE_URL` | PostgreSQL 18 连接串 | 必填。经公网连接 PostgreSQL 时 `DATABASE_URL` 带 `?sslmode=verify-full`（加密并校验证书）；服务商证书不是公共 CA 签发时改用 `sslmode=no-verify`；服务商连接串中的 `sslmode=require` 同样校验证书。不带 `sslmode` 时不加密，要求 TLS 的托管数据库拒绝连接，控制台等待 60 秒后退出。 |
 | `EDGEWEIR_MASTER_KEY` | `openssl rand -base64 32` 的输出 | 必填。 |
 | `EDGEWEIR_PUBLIC_URL` | `https://mc-<id>.bunny.run` | 必填。使用自定义域名时改为该域名。 |
 | `EDGEWEIR_NODE_API_URL` | `https://<Anycast IP>:8443` | **系统设置** 的「节点通道」没有保存地址时必填：默认值 `https://<公开域名>:8443` 指向 CDN，不可达。主机名或 IP 自动写入节点通道证书。 |
@@ -217,7 +217,7 @@ bunny api POST /pullzone/<pull zone ID>/setForceSSL --body '{"Hostname":"mc-<id>
 
 ```bash
 ( curl -fsS https://api.bunny.net/system/edgeserverlist/plain; echo
-  curl -fsS https://api.bunny.net/system/edgeserverlist/ipv6/plain ) | grep -v '^$' | paste -sd, -
+  curl -fsS https://api.bunny.net/system/edgeserverlist/ipv6/plain ) | tr -d '\r' | grep -v '^$' | paste -sd, -
 ```
 
 `ROLE`、`HOST`、`PORT`、`NODE_API_PORT` 使用镜像默认值 `all`、`0.0.0.0`、`3000`、`8443`，与端点的容器端口一致。全部变量见 [环境变量](../reference/environment.md)。

@@ -33,10 +33,12 @@ spec:
       type: DOMAIN
       name: Console domain
       description: The address of the web console.
+    # STRING, not PASSWORD: a masked field hides a wrong paste, and the
+    # console needs base64 of 32 bytes, not a generated password.
     - key: EDGEWEIR_MASTER_KEY
-      type: PASSWORD
+      type: STRING
       name: Master key
-      description: "The output of `openssl rand -base64 32`. Keep a copy outside Zeabur, apart from database backups: encrypted data cannot be recovered without it."
+      description: "The output of `openssl rand -base64 32`: 44 characters ending in \"=\". Keep a copy outside Zeabur, apart from database backups: encrypted data cannot be recovered without it."
   services:
     - name: postgresql
       icon: https://cdn.zeabur.com/marketplace/postgresql.svg
@@ -130,6 +132,6 @@ localization:
         name: 控制台域名
         description: Web 控制台的访问地址。
       - key: EDGEWEIR_MASTER_KEY
-        type: PASSWORD
+        type: STRING
         name: 主密钥
-        description: "`openssl rand -base64 32` 的输出。在 Zeabur 之外另存一份，与数据库备份分开：丢失后已加密的数据无法恢复。"
+        description: "`openssl rand -base64 32` 的输出：44 个字符，以 \"=\" 结尾。在 Zeabur 之外另存一份，与数据库备份分开：丢失后已加密的数据无法恢复。"

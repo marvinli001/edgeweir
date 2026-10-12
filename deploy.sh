@@ -24,7 +24,9 @@ readonly TEMPLATE_SUM=.compose.cksum
 readonly SCRIPT_URL=${EDGEWEIR_SCRIPT_URL:-https://raw.githubusercontent.com/marvinli001/edgeweir/master/deploy.sh}
 readonly PG_TESTED_MAJOR=18
 
-SELF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")
+# Empty when piped into bash (curl … | bash): there is no script file (see the end).
+SELF=
+[[ -z ${BASH_SOURCE[0]:-} ]] || SELF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")
 SELF_DIR=$(dirname "$SELF")
 DIR=
 COMPOSE_FILE=
@@ -867,6 +869,9 @@ cmd_install() {
   fi
   [[ $http_port =~ ^[0-9]+$ && $node_port =~ ^[0-9]+$ && $http_port != "$node_port" ]] ||
     die "端口无效：Web ${http_port}，节点通道 ${node_port}。"
+  # host network: the console (uid 1000) binds the node channel port itself.
+  [[ $mode != host ]] || ((node_port >= 1024)) ||
+    die "host 模式下节点通道端口不能小于 1024（控制台不以 root 运行），在节点通道地址里写明端口，例如 :8443。"
 
   step "镜像版本"
   version=$(resolve_version "${EDGEWEIR_VERSION:-stable}")
@@ -909,7 +914,7 @@ cmd_install() {
   )
   COMPOSE_FILE=compose.yml
   write_template "$mode"
-  if [[ $SELF != "$DIR/deploy.sh" ]]; then install -m 700 "$SELF" "$DIR/deploy.sh"; fi
+  if [[ $SELF != "$DIR/deploy.sh" ]]; then install -m 700 "$SELF" "$DIR/deploy.sh"; else chmod 700 "$SELF"; fi
   ok "已写入 ${DIR}/.env（600）、${DIR}/${COMPOSE_FILE} 和 ${DIR}/deploy.sh"
 
   step "启动"
@@ -1412,5 +1417,7 @@ main() {
   esac
 }
 
+# Piped into bash there is nothing to install or update from.
+[[ -n $SELF ]] || die "请先下载脚本再运行：curl -fsSL -o deploy.sh ${SCRIPT_URL} && sudo bash deploy.sh install"
 # Sourcing the script (tests) only defines the functions.
 if [[ ${BASH_SOURCE[0]} == "$0" ]]; then main "$@"; fi

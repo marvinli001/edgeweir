@@ -179,11 +179,11 @@ bash deploy.sh install
    POSTGRES_PASSWORD=$(openssl rand -hex 24)
    EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com
    EDGEWEIR_NODE_API_URL=https://cdn-admin.example.com:8443
-   EDGEWEIR_VERSION=20260929-a1b2c3d
+   EDGEWEIR_VERSION=stable
    ENV
    ```
 
-   host 模式把 `POSTGRES_PASSWORD` 一行换成 `DATABASE_URL=postgres://edgeweir:<URL 编码的密码>@127.0.0.1:5432/edgeweir`（云数据库追加 `?sslmode=verify-full`）。
+   host 模式把 `POSTGRES_PASSWORD` 一行换成 `DATABASE_URL=postgres://edgeweir:<URL 编码的密码>@127.0.0.1:5432/edgeweir`（云数据库追加 `?sslmode=verify-full`）。首次部署成功后按 [固定版本](upgrade.md#固定版本) 把 `EDGEWEIR_VERSION` 改为当时的日期 tag。
 
 3. 添加编排：宝塔 **Docker → 容器编排 → 添加容器编排**；aaPanel **Docker → Compose → Add Compose**。名称填 `edgeweir`，编排内容粘贴模板，`.env` 栏（aaPanel **.env Content**）粘贴上一步的输出，创建编排。
 

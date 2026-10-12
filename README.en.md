@@ -86,7 +86,7 @@ EDGEWEIR_PUBLIC_URL=http://localhost:3000
 EOF
 
 docker compose pull        # build from source: docker compose up -d --build
-docker compose up -d
+docker compose up -d --wait
 docker compose logs console | grep setupToken
 ```
 

@@ -75,6 +75,19 @@ describe("deploy.sh", () => {
     execFileSync("bash", ["-n", script]);
   });
 
+  it("asks to download the script first when piped into bash", () => {
+    const bin = directory({ docker: "#!/bin/sh\nexit 0\n" });
+    execFileSync("chmod", ["+x", resolve(bin, "docker")]);
+    const result = spawnSync("/bin/bash", ["-s", "install"], {
+      input: readFileSync(script),
+      cwd: bin,
+      encoding: "utf8",
+      env: { PATH: `${bin}:${process.env.PATH ?? ""}` },
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("请先下载脚本再运行");
+  });
+
   it.each([
     ["host", "compose.baota-host.yml"],
     ["bundled", "compose.baota.yml"],
@@ -208,6 +221,22 @@ describe("deploy.sh", () => {
         env,
       );
       expect(empty.status, empty.stderr).toBe(7);
+    });
+
+    it("stops on a node channel port below 1024 in host mode, which the console cannot bind", () => {
+      const env = {
+        ...unattended,
+        EDGEWEIR_DIR: resolve(scratch, "low-port"),
+        EDGEWEIR_NODE_API_URL: "https://cdn-admin.example.com",
+        DATABASE_URL: "postgres://edgeweir:secret@127.0.0.1:5432/edgeweir",
+      };
+      const stubs = `${DOCKER}; pg_client() { echo "18 t t f"; }; port_in_use() { return 1; }; resolve_version() { exit 7; }`;
+      const host = run(`${stubs}; cmd_install`, { ...env, EDGEWEIR_DB: "host" });
+      expect(host.status).toBe(1);
+      expect(host.stderr).toContain("host 模式下节点通道端口不能小于 1024");
+      // Docker publishes the port in bundled mode.
+      const bundled = run(`${stubs}; cmd_install`, { ...env, EDGEWEIR_DB: "bundled" });
+      expect(bundled.status, bundled.stderr).toBe(7);
     });
 
     it("never writes into a directory that holds other files", () => {

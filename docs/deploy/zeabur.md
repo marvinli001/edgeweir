@@ -44,7 +44,7 @@
    openssl rand -base64 32 > edgeweir-master-key
    ```
 
-2. 点击本页顶部的 **Deploy on Zeabur**，在模板页点击 **Deploy**；按提示选择项目或在 Server 上新建项目，填写域名前缀（得到 `<前缀>.zeabur.app`）与主密钥（`edgeweir-master-key` 的内容）。
+2. 点击本页顶部的 **Deploy on Zeabur**，在模板页点击 **Deploy**；按提示选择项目或在 Server 上新建项目，填写域名前缀（得到 `<前缀>.zeabur.app`）与主密钥（`edgeweir-master-key` 的内容：44 个字符，以 `=` 结尾）。
 
    命令行等效（首次执行 `npx zeabur@latest auth login`）；`-f zeabur.yaml` 部署本地的模板文件：
 
@@ -140,6 +140,12 @@ CLI：`npx zeabur@latest deployment log -t=runtime --service-name edgeweir | gre
 | 节点通道地址 | **系统设置** 的「节点通道」 | `wss://<前缀>.zeabur.app`，连接检查「连接正常」 |
 | 节点注册 | **集群与节点** → **添加节点** | `--server wss://<前缀>.zeabur.app`；在节点上执行见 [接入节点](nodes.md) |
 | 端口转发 | `edgeweir` 服务 **Networking**；`npx zeabur@latest service network` | `node` 端口有 `<主机>:<端口>`；`postgresql` 没有 |
+
+## 启动失败
+
+`edgeweir` 服务不断重启、健康检查报 `connection refused` 时，在 **Logs** 中查找 `invalid configuration`：其后是出错的变量与原因，例如 `EDGEWEIR_MASTER_KEY: is not valid base64` 表示主密钥不是 `openssl rand -base64 32` 的输出。CLI：`npx zeabur@latest deployment log -t=runtime --service-name edgeweir | grep -A2 'invalid configuration'`。
+
+在 **Variables** 中改正该变量，**Restart** 服务。控制台首次启动成功之前更换主密钥不影响数据；之后更换见 [主密钥轮换](../reference/environment.md#主密钥轮换)。
 
 ## 自定义域名
 
