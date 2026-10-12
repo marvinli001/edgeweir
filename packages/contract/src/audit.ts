@@ -138,6 +138,7 @@ export const auditActions = [
   "system.acme_directory_update",
   "system.bans_update",
   "system.cc_template_update",
+  "system.demo_update",
   "system.error_pages_update",
   "system.node_channel_update",
   "system.origin_allow_list_update",

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { NODE_CHANNEL_WEBSOCKET_PATH } from "@edgeweir/contract";
+import { DEMO_USER_ID, NODE_CHANNEL_WEBSOCKET_PATH } from "@edgeweir/contract";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { OpenAPIGenerator } from "@orpc/openapi";
@@ -14,7 +14,12 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { secureHeaders } from "hono/secure-headers";
 import { serveDownload } from "./downloads";
-import { API_KEY_HEADER, AUTH_BASE_PATH, isAllowedAuthRoute } from "./lib/auth";
+import {
+  ACCOUNT_CHANGE_ROUTES,
+  API_KEY_HEADER,
+  AUTH_BASE_PATH,
+  isAllowedAuthRoute,
+} from "./lib/auth";
 import { resolveClientIp, withClientIp } from "./lib/client-ip";
 import type { AppContext } from "./lib/context";
 import { withIdempotency } from "./lib/idempotency";
@@ -199,7 +204,13 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
     // Exact match on the normalized path: no prefixes, encodings or trailing slashes.
     const path = new URL(c.req.url).pathname.slice(AUTH_BASE_PATH.length);
     if (!isAllowedAuthRoute(c.req.method, path)) return next(); // -> the /api/* 404
-    return ctx.auth.handler(authRequest(c));
+    const request = authRequest(c);
+    if (ACCOUNT_CHANGE_ROUTES.has(path)) {
+      const session = await ctx.auth.api.getSession({ headers: request.headers }).catch(() => null);
+      if (session?.user.id === DEMO_USER_ID)
+        return c.json({ code: "DEMO_READ_ONLY", message: "the demo account can only read" }, 403);
+    }
+    return ctx.auth.handler(request);
   });
 
   app.use("/rpc/*", async (c, next) => {

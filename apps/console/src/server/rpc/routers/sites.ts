@@ -17,6 +17,7 @@ import { getBulkRedirects, saveBulkRedirects } from "../../services/bulk-redirec
 import { createCacheTask, getCacheTask, listCacheTasks } from "../../services/cache-tasks";
 import { getHttps, updateHttps } from "../../services/certificates";
 import { setCnamePrefix } from "../../services/cname-prefixes";
+import { demoLogEntry } from "../../services/demo";
 import { getSiteErrorPages, updateSiteErrorPages } from "../../services/error-pages";
 import { checkHttps } from "../../services/https-check";
 import { getImageConvert, imageSavings, updateImageConvert } from "../../services/image-convert";
@@ -152,10 +153,14 @@ export const sitesRouter = {
     configure: authed.logs.configure.handler(({ input, context }) =>
       configureLogs(context.app, context.actor, input),
     ),
-    query: authed.logs.query.handler(({ input, context }) => queryLogs(context.app, input)),
+    query: authed.logs.query.handler(async ({ input, context }) => {
+      const result = await queryLogs(context.app, input);
+      return context.demo ? { ...result, entries: result.entries.map(demoLogEntry) } : result;
+    }),
     export: authed.logs.export.handler(async ({ input, context }) => {
       const result = await queryLogs(context.app, input);
-      return { csv: logsCsv(result.entries), truncated: result.truncated };
+      const entries = context.demo ? result.entries.map(demoLogEntry) : result.entries;
+      return { csv: logsCsv(entries), truncated: result.truncated };
     }),
   },
   analytics: {

@@ -1,12 +1,15 @@
 import type { Me } from "@edgeweir/contract";
 
-/** `/me` of the operator. */
-export function toMe(user: {
-  id: string;
-  name: string;
-  email: string;
-  twoFactorEnabled?: boolean | null;
-}): Me {
+/** `/me` of the operator or the demo account. */
+export function toMe(
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    twoFactorEnabled?: boolean | null;
+  },
+  demo = false,
+): Me {
   return {
     user: {
       id: user.id,
@@ -15,6 +18,7 @@ export function toMe(user: {
       twoFactorEnabled: user.twoFactorEnabled === true,
     },
     serviceAccount: null,
+    demo,
   };
 }
 
@@ -23,5 +27,6 @@ export function serviceAccountMe(account: { id: string; name: string; scopes: st
   return {
     user: { id: account.id, name: account.name, email: "", twoFactorEnabled: false },
     serviceAccount: { id: account.id, name: account.name, scopes: account.scopes },
+    demo: false,
   };
 }

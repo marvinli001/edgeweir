@@ -270,7 +270,7 @@ Page: **System settings** (`/system`), with the tabs:
 
 | Tab | Content |
 | --- | --- |
-| **General** | The sections below: system information, node channel, certificate authorities, origin allow list, node release source, usage, platform error pages |
+| **General** | The sections below: system information, node channel, certificate authorities, origin allow list, node release source, usage, access logs, platform error pages, demo account |
 | **Monitoring** | `/system?tab=probes`: the regional probe list (page action **Add probe**), the **Last round** card (a latency matrix of probers × nodes) and the **Probe settings** card, see [Regional probes](scheduling.en.md#regional-probes); `/regions?tab=probes` redirects there |
 | **Service accounts** | `/system?tab=service-accounts`, see [Service accounts](#service-accounts) |
 
@@ -354,6 +354,23 @@ Changes are audited as `system.log_retention_update`; the next minute's maintena
 | **Site disabled** | Domains of disabled sites | Status 503 |
 
 Each template is at most 65536 bytes (UTF-8); the values of the placeholders `{{status}}`, `{{request_id}}`, `{{client_ip}}`, `{{host}}`, `{{time}}` and `{{path}}` are HTML-escaped; with `{{time}}` or `{{path}}` the configurations of every cluster need the node capability `rules-v3`. Saving publishes one revision in every cluster ("Platform error pages updated") and is audited as `system.error_pages_update`. Older nodes ignore platform error pages. See [Error pages](error-pages.en.md#platform-error-pages).
+
+### Demo account
+
+A view-only account for public demos. It sits beside the operator account and leaves it unchanged.
+
+| Field | Description |
+| --- | --- |
+| **Allow demo sign-in** | On creates the account `demo@edgeweir.com` with the password `demo`, and the sign-in page shows **Sign in to the demo**; off deletes the account and ends all its sessions. Off by default |
+
+The demo account can open every page of the console and change nothing:
+
+- Every change returns `DEMO_READ_ONLY` (403): all non-GET procedures except `rules.validate`. It cannot create AccessKeys, enrollment tokens or service accounts
+- It cannot change its password, turn two-factor authentication on or off, or add or delete passkeys
+- Client addresses in the audit log and access logs show only their network (IPv4 /24, IPv6 /48); access logs leave out recorded request headers, and failed sign-ins leave out the typed e-mail
+- Secrets are never returned to anyone; everything else (sites, nodes, certificates, DNS and alert settings and so on) looks as it does to the operator, so check it before you publish the demo
+
+The switch is refused while the operator account uses `demo@edgeweir.com` (`DEMO_EMAIL_TAKEN`). Changes are audited as `system.demo_update`; the demo account's sign-ins are audited too.
 
 ### Precedence
 

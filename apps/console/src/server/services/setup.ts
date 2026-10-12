@@ -8,10 +8,11 @@ import { tryLockSetup, unlockSetup } from "../lib/locks";
 import type { Logger } from "../lib/logger";
 import { recordAudit } from "./audit";
 import { createClusterTx } from "./clusters";
+import { notDemoUser } from "./demo";
 import type { Executor } from "./revisions";
 
 export async function isInitialized(db: Executor): Promise<boolean> {
-  const [row] = await db.select({ n: count() }).from(schema.user);
+  const [row] = await db.select({ n: count() }).from(schema.user).where(notDemoUser);
   return (row?.n ?? 0) > 0;
 }
 

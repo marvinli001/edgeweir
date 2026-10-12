@@ -20,7 +20,7 @@ export function AppSidebar({
   user,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
-  user: { name: string; email: string };
+  user: { name: string; email: string; demo?: boolean };
 }) {
   const router = useRouter();
   const { setOpenMobile } = useSidebar();

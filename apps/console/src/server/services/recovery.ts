@@ -3,6 +3,7 @@ import { type Database, schema } from "@edgeweir/db";
 import { and, eq, inArray, like, or } from "drizzle-orm";
 import type { Auth } from "../lib/auth";
 import { type Actor, recordAudit } from "./audit";
+import { notDemoUser } from "./demo";
 import type { Executor } from "./revisions";
 
 /**
@@ -35,6 +36,7 @@ export async function findOperator(db: Executor, opts: { lock?: boolean } = {}):
       twoFactorEnabled: schema.user.twoFactorEnabled,
     })
     .from(schema.user)
+    .where(notDemoUser)
     .limit(2);
   const users = await (opts.lock ? query.for("update") : query);
   const [user] = users;

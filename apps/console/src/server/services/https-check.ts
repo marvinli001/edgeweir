@@ -13,6 +13,7 @@ import { caaPermits, defaultResolver } from "../lib/dns-check";
 import { fail } from "../lib/errors";
 import { caaIssuers, defaultAcmeCa } from "./acme-directory";
 import { outsideZone, testDnsCredential } from "./certificates";
+import { notDemoUser } from "./demo";
 import { http01Pointing, http01Readiness } from "./http01-check";
 import type { Executor } from "./revisions";
 
@@ -39,6 +40,7 @@ export async function defaultAcmeEmail(db: Executor): Promise<string> {
   const [operator] = await db
     .select({ email: schema.user.email })
     .from(schema.user)
+    .where(notDemoUser)
     .orderBy(asc(schema.user.createdAt))
     .limit(1);
   return operator?.email ?? "";

@@ -1,4 +1,5 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { DEMO_EMAIL, DEMO_PASSWORD } from "@edgeweir/contract";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import * as z from "zod";
 import { AuthShell } from "@/components/auth-shell";
@@ -28,18 +29,18 @@ function LoginPage() {
     await navigate({ to: target });
   };
   const hasPasskeys = typeof window !== "undefined" && "PublicKeyCredential" in window;
+  const status = useQuery(orpc.system.status.queryOptions());
+  const signIn = async (email: string, password: string) => {
+    const { data, error } = await authClient.signIn.email({ email, password });
+    if (error) return localizeError(error, m.login_failed());
+    if ((data as { twoFactorRedirect?: boolean } | null)?.twoFactorRedirect) return "two-factor";
+    await enter();
+    return "done";
+  };
   return (
     <AuthShell>
       <LoginForm
-        onSubmit={async ({ email, password }) => {
-          const { data, error } = await authClient.signIn.email({ email, password });
-          if (error) return localizeError(error, m.login_failed());
-          if ((data as { twoFactorRedirect?: boolean } | null)?.twoFactorRedirect) {
-            return "two-factor";
-          }
-          await enter();
-          return "done";
-        }}
+        onSubmit={({ email, password }) => signIn(email, password)}
         onVerify={async ({ code, backup }) => {
           const { error } = backup
             ? await authClient.twoFactor.verifyBackupCode({ code })
@@ -55,6 +56,14 @@ function LoginPage() {
                 if (result?.error) return localizeError(result.error, m.login_failed());
                 await enter();
                 return null;
+              }
+            : undefined
+        }
+        onDemo={
+          status.data?.demo
+            ? async () => {
+                const result = await signIn(DEMO_EMAIL, DEMO_PASSWORD);
+                return result === "done" ? null : result;
               }
             : undefined
         }
