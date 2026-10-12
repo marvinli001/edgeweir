@@ -7,7 +7,7 @@
 | 项目 | 要求 |
 | --- | --- |
 | Railway | 可创建项目的账户；[命令行部署](#命令行部署) 另需 `railway` CLI，已执行 `railway login` |
-| 控制台镜像 | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`，公开拉取；tag 规则见 [版本、升级与回滚](upgrade.md) |
+| 控制台镜像 | `ghcr.io/marvinli001/edgeweir:stable`，公开拉取：维护者验证过的版本，每次更新附一个 [GitHub Release](https://github.com/marvinli001/edgeweir/releases)；渠道与 tag 规则见 [版本、升级与回滚](upgrade.md) |
 | PostgreSQL | Railway PostgreSQL 服务，镜像 `ghcr.io/railwayapp-templates/postgres-ssl:18` |
 | 主密钥 | `openssl rand -base64 32` 生成；保存在 Railway 之外，与数据库备份分开 |
 | 常驻运行 | 控制台服务关闭 Serverless |
@@ -36,7 +36,7 @@
 
 ## 3. 添加控制台服务
 
-1. 项目画布 **Create** → **Docker Image**，**Image name** 填 `ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d`（替换为目标 tag），回车。
+1. 项目画布 **Create** → **Docker Image**，**Image name** 填 `ghcr.io/marvinli001/edgeweir:stable`，回车。
 2. 右键服务卡片 → **Update Info**，名称改为 `edgeweir`。
 
 服务进入暂存区，在 [第 7 步](#7-部署设置) 部署。
@@ -110,7 +110,7 @@ openssl rand -base64 32 > edgeweir-master-key
    ```bash
    railway init --name edgeweir
    railway add --database postgres
-   railway add --service edgeweir --image ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d
+   railway add --service edgeweir --image ghcr.io/marvinli001/edgeweir:stable
    ```
 
 2. 公开 3000 与 8443：
@@ -161,7 +161,7 @@ openssl rand -base64 32 > edgeweir-master-key
 | `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | `10` | 旧部署收到 SIGTERM 后的退出时间，见 [第 7 步](#7-部署设置)。 |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | 空 | 节点通道证书的额外名称，逗号分隔。 |
 | `EDGEWEIR_TRUSTED_PROXIES` | 空 | 见 [限制](#限制)。 |
-| `EDGEWEIR_VERSION` | 不设置 | 镜像内置的运行版本；版本由镜像 tag 决定。 |
+| `EDGEWEIR_VERSION` | 不设置 | 镜像内置的运行版本：部署时 `stable` 指向的日期 tag。 |
 | `BETTER_AUTH_SECRET` | 不设置 | 从已设置它的部署迁移时保留原值。 |
 
 引用的域名或 TCP 代理不存在时，`${{…}}` 展开为空：控制台报 `EDGEWEIR_PUBLIC_URL: expected … got "https://"` 或 `EDGEWEIR_NODE_API_URL: expected … got "https://:"` 并反复重启。在 **Settings → Networking** 生成域名与 TCP 代理后重新部署，或改写字面值。
@@ -222,25 +222,27 @@ railway variable set --service edgeweir \
 
 ## 升级
 
+`stable` 每次更新附一个 [GitHub Release](https://github.com/marvinli001/edgeweir/releases)，写明兼容的节点版本与升级说明。Railway 检测到 `stable` 指向新镜像后，`edgeweir` 服务 **Settings** 中出现更新按钮；检测结果最多缓存数小时。
+
 1. 备份数据库，见 [备份与恢复](backup.md)。
-2. `edgeweir` 服务 **Settings → Source**，镜像改为新 tag。
-3. 暂存横幅点击 **Deploy**。
-4. 验证：
+2. 点击该更新按钮：Railway 重新部署 `stable`，拉取它当前指向的镜像。
+3. 验证：
 
    ```bash
    curl -fsS https://<名称>.up.railway.app/healthz
    ```
 
-   预期：`version` 为新 tag。
+   预期：`version` 为 GitHub Releases 最新一条的日期 tag。
 
-命令行（第 2–3 步）：
+命令行（第 2 步，不等更新按钮出现）：
 
 ```bash
-railway service source connect --service edgeweir --image ghcr.io/marvinli001/edgeweir:<新 tag>
 railway redeploy --service edgeweir --from-source --yes
 ```
 
-迁移、签名校验与回滚见 [版本、升级与回滚](upgrade.md)。
+不要为该服务配置自动更新（**Settings → Source → Configure Auto Updates**）：自动更新在维护窗口内无人值守地重新部署，不会先备份 `Postgres` 服务的数据库。
+
+固定版本或回滚：**Settings → Source** 中把镜像的 `stable` 换成日期 tag，暂存横幅点击 **Deploy**；命令行先执行 `railway service source connect --service edgeweir --image ghcr.io/marvinli001/edgeweir:<日期 tag>`，再执行上面的 `railway redeploy`。迁移、签名校验与回滚见 [版本、升级与回滚](upgrade.md)。
 
 ## 限制
 

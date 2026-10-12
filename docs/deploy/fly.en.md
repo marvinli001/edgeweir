@@ -8,7 +8,7 @@ Deploy the console on Fly.io from the console image, with an external PostgreSQL
 | --- | --- |
 | Fly.io | An organization that can create apps |
 | flyctl | The `fly` CLI after `fly auth login`; app creation, deployment, and upgrades use flyctl, see [Methods](#methods) |
-| Console image | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`, public; tag rules in [Versions, upgrades, and rollback](upgrade.en.md) |
+| Console image | `ghcr.io/marvinli001/edgeweir:stable`, public: a version the maintainer verified, each update with a [GitHub Release](https://github.com/marvinli001/edgeweir/releases); channels and tag rules in [Versions, upgrades, and rollback](upgrade.en.md) |
 | PostgreSQL | PostgreSQL 18 reachable from the Machine. Fly Managed Postgres offers only 16 and 17 (October 2026) and does not qualify |
 | Public addresses | Dedicated IPv4 (USD 2 a month) and dedicated IPv6 |
 | Master key | Generated with `openssl rand -base64 32`; stored outside Fly.io and apart from database backups |
@@ -52,14 +52,14 @@ App names are globally unique and set the default host name `<app name>.fly.dev`
 
 ## 2. Write fly.toml
 
-Create `fly.toml` in an empty directory. Adjust `app`, `primary_region`, the image tag, and the app name in the URLs.
+Create `fly.toml` in an empty directory. Adjust `app`, `primary_region`, and the app name in the URLs.
 
 ```toml title="fly.toml"
 app = "edgeweir-console"
 primary_region = "nrt"
 
 [build]
-  image = "ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d"
+  image = "ghcr.io/marvinli001/edgeweir:stable"
 
 [env]
   EDGEWEIR_PUBLIC_URL = "https://edgeweir-console.fly.dev"
@@ -101,7 +101,7 @@ primary_region = "nrt"
 
 | Setting | Effect |
 | --- | --- |
-| `[build] image` | Deploys this image; no build |
+| `[build] image` | Deploys this image; no build. Every `fly deploy` resolves the image `stable` points to at that moment; a Machine restart does not change the image |
 | `[http_service]`: `internal_port = 3000`, `force_https = true` | 80 redirects to HTTPS; Fly Proxy terminates TLS on 443 and forwards to 3000 |
 | `auto_stop_machines = "off"` | Fly Proxy does not stop an idle Machine; `min_machines_running` then has no effect |
 | `[[http_service.checks]]` | `GET /healthz` directly on the Machine over the private network; must return 2xx |
@@ -188,7 +188,7 @@ fly logs --no-tail | grep setupToken
 | `EDGEWEIR_NODE_API_URL` | `[env]` | `https://edgeweir-console.fly.dev:8443` | The host name must resolve to the dedicated IPv4 and IPv6; it is added to the node channel certificate automatically. After setup it can also be changed under "Node channel" in **System settings**, without a deployment; a URL saved there wins over this variable. |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | `[env]` | Empty | Extra names for the node channel certificate, comma separated. |
 | `EDGEWEIR_TRUSTED_PROXIES` | — | Empty | See [Limits](#limits). |
-| `EDGEWEIR_VERSION` | — | Not set | The running version built into the image; the tag in `[build] image` sets the version. |
+| `EDGEWEIR_VERSION` | — | Not set | The running version built into the image: the dated tag `stable` pointed to at deployment. |
 | `BETTER_AUTH_SECRET` | Secret | Not set | Keep the existing value when migrating a deployment that set it. |
 
 A secret takes precedence over an `[env]` entry with the same name. `ROLE`, `HOST`, `PORT`, and `NODE_API_PORT` keep the image defaults `all`, `0.0.0.0`, `3000`, and `8443`, which match `internal_port`. All variables: [Environment variables](../reference/environment.en.md).
@@ -246,23 +246,24 @@ Changing the node channel address for enrolled nodes: [Node channel URL and cert
 
 ## Upgrade
 
+Each update of `stable` comes with a [GitHub Release](https://github.com/marvinli001/edgeweir/releases) naming the compatible node version and the upgrade notes.
+
 1. Back up the database; see [Backup and recovery](backup.en.md).
-2. Change `[build] image` in `fly.toml` to the new tag.
-3. Deploy:
+2. Deploy from the directory with `fly.toml`; `fly.toml` stays as it is:
 
    ```bash
    fly deploy
    ```
 
-4. Verify:
+3. Verify:
 
    ```bash
    curl -fsS https://edgeweir-console.fly.dev/healthz
    ```
 
-   Expected: `version` is the new tag.
+   Expected: `version` is the dated tag of the latest GitHub Release.
 
-Migrations, signature verification, and rollback: [Versions, upgrades, and rollback](upgrade.en.md).
+Pinning a version or rolling back: replace `stable` in `[build] image` with a dated tag, then `fly deploy`. Migrations, signature verification, and rollback: [Versions, upgrades, and rollback](upgrade.en.md).
 
 ## Limits
 
@@ -275,6 +276,7 @@ Migrations, signature verification, and rollback: [Versions, upgrades, and rollb
 | No dedicated IPv4 | 8443 is reachable only over the dedicated IPv6 | Nodes without IPv6 cannot connect |
 | Deployment strategy | Default `rolling`: each old Machine is stopped and replaced in turn. `fly secrets set` without `--stage`, `fly scale vm`, `fly scale memory`, and `fly apps restart` restart the Machine too | With one Machine, the web console and the node channel are down during a deployment or restart; conditions for several instances: [Deployment overview](README.en.md#scaling) |
 | Auto stop | With `auto_stop_machines` set to `stop` or `suspend`, Fly Proxy stops idle Machines | Must be `off`: a stopped Machine halts the worker's scheduled jobs and the node channel |
+| Local image | In CI (with the `CI` environment variable set) or with `--local-only`, flyctl first uses an image of the same name in the local Docker | Run `docker pull ghcr.io/marvinli001/edgeweir:stable` before deploying, or an older local `stable` is deployed |
 | Configuration source | Machine size and HTTP service settings changed in the Dashboard or with `fly scale vm` / `fly scale memory` are reset to `fly.toml` on the next `fly deploy` | Change them in `fly.toml` |
 | Secrets | The Dashboard, API, and flyctl do not return values; anyone with deploy or SSH access can read them inside the Machine | Keep the master key outside Fly.io |
 | `/downloads/*` | No downloads mirror directory in the container; `EDGEWEIR_DOWNLOADS_DIR` unset | Returns 404; `install.sh` downloads from GitHub; see [Adding nodes](nodes.en.md#downloads-mirror) |

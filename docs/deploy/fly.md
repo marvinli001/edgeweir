@@ -8,7 +8,7 @@
 | --- | --- |
 | Fly.io | 可创建应用的组织 |
 | flyctl | `fly` CLI，已执行 `fly auth login`；创建应用、部署与升级使用 flyctl，见 [操作方式](#操作方式) |
-| 控制台镜像 | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`，公开拉取；tag 规则见 [版本、升级与回滚](upgrade.md) |
+| 控制台镜像 | `ghcr.io/marvinli001/edgeweir:stable`，公开拉取：维护者验证过的版本，每次更新附一个 [GitHub Release](https://github.com/marvinli001/edgeweir/releases)；渠道与 tag 规则见 [版本、升级与回滚](upgrade.md) |
 | PostgreSQL | PostgreSQL 18，Machine 可达。Fly Managed Postgres 只提供 16 与 17（2026 年 10 月），不满足要求 |
 | 公网地址 | 独享 IPv4（每月 2 美元）与独享 IPv6 |
 | 主密钥 | `openssl rand -base64 32` 生成；保存在 Fly.io 之外，与数据库备份分开 |
@@ -52,14 +52,14 @@ fly apps create edgeweir-console --org <组织>
 
 ## 2. 编写 fly.toml
 
-在空目录中创建 `fly.toml`。按实际修改 `app`、`primary_region`、镜像 tag 与 URL 中的应用名。
+在空目录中创建 `fly.toml`。按实际修改 `app`、`primary_region` 与 URL 中的应用名。
 
 ```toml title="fly.toml"
 app = "edgeweir-console"
 primary_region = "nrt"
 
 [build]
-  image = "ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d"
+  image = "ghcr.io/marvinli001/edgeweir:stable"
 
 [env]
   EDGEWEIR_PUBLIC_URL = "https://edgeweir-console.fly.dev"
@@ -101,7 +101,7 @@ primary_region = "nrt"
 
 | 配置 | 作用 |
 | --- | --- |
-| `[build] image` | 部署该镜像，不构建 |
+| `[build] image` | 部署该镜像，不构建。每次 `fly deploy` 解析 `stable` 当时指向的镜像；Machine 重启不更换镜像 |
 | `[http_service]`：`internal_port = 3000`、`force_https = true` | 80 重定向到 HTTPS；443 由 Fly Proxy 终结 TLS 后转发到 3000 |
 | `auto_stop_machines = "off"` | Fly Proxy 不停止空闲 Machine；此时 `min_machines_running` 不起作用 |
 | `[[http_service.checks]]` | 经私有网络直连 Machine，`GET /healthz` 须返回 2xx |
@@ -188,7 +188,7 @@ fly logs --no-tail | grep setupToken
 | `EDGEWEIR_NODE_API_URL` | `[env]` | `https://edgeweir-console.fly.dev:8443` | 主机名须解析到独享 IPv4 与 IPv6；自动写入节点通道证书。初始化后也可在 **系统设置** 的「节点通道」修改，不需要部署；那里保存的地址优先于此变量。 |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | `[env]` | 空 | 节点通道证书的额外名称，逗号分隔。 |
 | `EDGEWEIR_TRUSTED_PROXIES` | — | 空 | 见 [限制](#限制)。 |
-| `EDGEWEIR_VERSION` | — | 不设置 | 镜像内置的运行版本；版本由 `[build] image` 的 tag 决定。 |
+| `EDGEWEIR_VERSION` | — | 不设置 | 镜像内置的运行版本：部署时 `stable` 指向的日期 tag。 |
 | `BETTER_AUTH_SECRET` | secret | 不设置 | 从已设置它的部署迁移时保留原值。 |
 
 同名变量 secret 优先于 `[env]`。`ROLE`、`HOST`、`PORT`、`NODE_API_PORT` 使用镜像默认值 `all`、`0.0.0.0`、`3000`、`8443`，与 `internal_port` 一致。全部变量见 [环境变量](../reference/environment.md)。
@@ -246,23 +246,24 @@ openssl s_client -connect edgeweir-console.fly.dev:8443 -servername edgeweir-con
 
 ## 升级
 
+`stable` 每次更新附一个 [GitHub Release](https://github.com/marvinli001/edgeweir/releases)，写明兼容的节点版本与升级说明。
+
 1. 备份数据库，见 [备份与恢复](backup.md)。
-2. 将 `fly.toml` 中 `[build] image` 改为新 tag。
-3. 部署：
+2. 在 `fly.toml` 所在目录部署，`fly.toml` 不需要修改：
 
    ```bash
    fly deploy
    ```
 
-4. 验证：
+3. 验证：
 
    ```bash
    curl -fsS https://edgeweir-console.fly.dev/healthz
    ```
 
-   预期：`version` 为新 tag。
+   预期：`version` 为 GitHub Releases 最新一条的日期 tag。
 
-迁移、签名校验与回滚见 [版本、升级与回滚](upgrade.md)。
+固定版本或回滚：把 `[build] image` 中的 `stable` 换成日期 tag，再 `fly deploy`。迁移、签名校验与回滚见 [版本、升级与回滚](upgrade.md)。
 
 ## 限制
 
@@ -275,6 +276,7 @@ openssl s_client -connect edgeweir-console.fly.dev:8443 -servername edgeweir-con
 | 未分配独享 IPv4 | 8443 只经独享 IPv6 可达 | 无 IPv6 的节点无法连接 |
 | 部署策略 | 默认 `rolling`：逐台停止旧 Machine 并替换。不带 `--stage` 的 `fly secrets set`、`fly scale vm`、`fly scale memory`、`fly apps restart` 同样重启 Machine | 单 Machine 部署或重启期间 Web 控制台与节点通道中断；多实例条件见 [部署概览](README.md#扩展) |
 | 自动停止 | `auto_stop_machines` 为 `stop` 或 `suspend` 时 Fly Proxy 停止空闲 Machine | 必须为 `off`：停止后 worker 定时任务与节点通道中断 |
+| 本机镜像 | 在 CI 中（设置了 `CI` 环境变量）或带 `--local-only` 时，flyctl 先使用本机 Docker 中同名的镜像 | 部署前执行 `docker pull ghcr.io/marvinli001/edgeweir:stable`，否则部署的是本机较旧的 `stable` |
 | 配置来源 | Dashboard、`fly scale vm`、`fly scale memory` 对 Machine 规格与 HTTP 服务设置的修改在下次 `fly deploy` 时按 `fly.toml` 重置 | 在 `fly.toml` 中修改 |
 | secret | Dashboard、API 与 flyctl 不返回明文；有部署或 SSH 权限的人可在 Machine 内读取 | 主密钥在 Fly.io 之外保存 |
 | `/downloads/*` | 容器无下载镜像目录，`EDGEWEIR_DOWNLOADS_DIR` 未设置 | 返回 404；`install.sh` 从 GitHub 下载，见 [接入节点](nodes.md#下载镜像) |

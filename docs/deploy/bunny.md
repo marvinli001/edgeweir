@@ -8,7 +8,7 @@
 | --- | --- |
 | bunny.net | 已验证付款卡的账户。试用账户限 1 个应用，每个实例 1 CPU、4 GiB 内存 |
 | bunny CLI | 可选：`npm install -g @bunny.net/cli`（0.19），再执行 `bunny login`；用法与限制见 [操作方式](#操作方式) |
-| 控制台镜像 | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`，公开拉取；Magic Containers 只运行 linux/amd64，镜像包含该架构。tag 规则见 [版本、升级与回滚](upgrade.md) |
+| 控制台镜像 | `ghcr.io/marvinli001/edgeweir:stable`，公开拉取：维护者验证过的版本，每次更新附一个 [GitHub Release](https://github.com/marvinli001/edgeweir/releases)。Magic Containers 只运行 linux/amd64，镜像包含该架构。渠道与 tag 规则见 [版本、升级与回滚](upgrade.md) |
 | PostgreSQL | PostgreSQL 18，容器可达。按来源地址放行时，放行 `https://api.bunny.net/mc/nodes/plain` 列出的地址，该列表会变化。bunny Database 是 libSQL，不能替代 PostgreSQL |
 | 公网地址 | 一个 Anycast IPv4（每月 2 美元）；Anycast 不提供 IPv6。可以在部署后再添加，见 [后加 Anycast IP](#后加-anycast-ip) |
 | 主密钥 | `openssl rand -base64 32` 生成；保存在 bunny.net 之外，与数据库备份分开 |
@@ -39,7 +39,7 @@
 | [5. Pull zone 设置](#5-pull-zone-设置) | **CDN → Pull Zones →** `mc-<id>` | `bunny api POST` |
 | [6. 初始化](#6-初始化) | **Logging → Logs → Application** | — |
 | [自定义域名](#自定义域名) | Pull zone 的 **Hostnames** | — |
-| [升级](#升级) | **Container Settings → Edit** | `bunny api PATCH` |
+| [升级](#升级) | 新版本提示 → **Apply Update** | `bunny api PATCH` |
 
 ## 1. 生成主密钥
 
@@ -53,7 +53,7 @@ openssl rand -base64 32 > edgeweir-master-key
 ## 2. 创建应用
 
 1. Dashboard → **Magic Containers → + Add App**。
-2. 镜像：搜索 `marvinli001/edgeweir`（GitHub），选择目标 tag，不使用 `latest`。容器名改为 `edgeweir`。
+2. 镜像：搜索 `marvinli001/edgeweir`（GitHub），tag 选择 `stable`，不使用 `latest`。容器名改为 `edgeweir`。
 3. **Endpoints**：删除页面按镜像 `EXPOSE` 预填的端点，再添加：
 
    | 类型 | 容器端口 | 对外端口 | 其他 |
@@ -74,7 +74,7 @@ openssl rand -base64 32 > edgeweir-master-key
 
 此时 `EDGEWEIR_PUBLIC_URL` 未设置，控制台按默认值 `http://localhost:3000` 运行，经 `mc-<id>.bunny.run` 的初始化与登录因来源校验失败：完成第 3 步后再打开初始化向导。
 
-bunny CLI：在空目录中创建 `bunny.jsonc`，按实际修改 `regions` 与镜像 tag：
+bunny CLI：在空目录中创建 `bunny.jsonc`，按实际修改 `regions`：
 
 ```jsonc title="bunny.jsonc"
 {
@@ -86,7 +86,7 @@ bunny CLI：在空目录中创建 `bunny.jsonc`，按实际修改 `regions` 与�
     "scaling": { "min": 1, "max": 1 },
     "containers": {
       "edgeweir": {
-        "image": "ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d",
+        "image": "ghcr.io/marvinli001/edgeweir:stable",
         "endpoints": [
           { "type": "cdn", "ssl": false, "ports": [{ "public": 443, "container": 3000 }] },
           { "type": "anycast", "ports": [{ "public": 8443, "container": 8443 }] }
@@ -107,7 +107,7 @@ bunny CLI：在空目录中创建 `bunny.jsonc`，按实际修改 `regions` 与�
 在该目录执行，首次带上镜像：
 
 ```bash
-bunny apps deploy ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d
+bunny apps deploy ghcr.io/marvinli001/edgeweir:stable
 ```
 
 首次执行创建应用、写入 `.bunny/app.json`（应用 ID）并部署。CLI 询问 `Is ghcr.io public, or do you need credentials?` 时选择 **Public**。不带镜像时 CLI 按 `bunny.jsonc` 重新部署，不询问镜像仓库。
@@ -210,7 +210,7 @@ bunny api POST /pullzone/<pull zone ID>/setForceSSL --body '{"Hostname":"mc-<id>
 | `EDGEWEIR_NODE_API_URL` | `https://<Anycast IP>:8443` | **系统设置** 的「节点通道」没有保存地址时必填：默认值 `https://<公开域名>:8443` 指向 CDN，不可达。主机名或 IP 自动写入节点通道证书。 |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | 空 | 节点通道证书的额外名称，逗号分隔。 |
 | `EDGEWEIR_TRUSTED_PROXIES` | 空，或 bunny.net 边缘服务器地址 | 见 [限制](#限制)。 |
-| `EDGEWEIR_VERSION` | 不设置 | 镜像内置的运行版本；版本由镜像 tag 决定。 |
+| `EDGEWEIR_VERSION` | 不设置 | 镜像内置的运行版本：部署时 `stable` 指向的日期 tag。 |
 | `BETTER_AUTH_SECRET` | 不设置 | 从已设置它的部署迁移时保留原值。 |
 
 `EDGEWEIR_TRUSTED_PROXIES` 的值由 bunny.net 的两个边缘服务器列表生成：
@@ -285,23 +285,28 @@ openssl s_client -connect <Anycast IP>:8443 </dev/null 2>/dev/null \
 
 ## 升级
 
+`stable` 每次更新附一个 [GitHub Release](https://github.com/marvinli001/edgeweir/releases)，写明兼容的节点版本与升级说明。容器部署时固定到 `stable` 当时指向的镜像 digest，重启不更换镜像；`stable` 指向新镜像后，应用页面顶部提示有新版本。
+
 1. 备份数据库，见 [备份与恢复](backup.md)。
-2. 应用 **Container Settings → Edit**，在镜像下拉框选择新 tag，点击 **Update Container**，再 **Save Changes** 并确认。
+2. 点击提示中的 **Apply Update**：容器按 `stable` 的新 digest 滚动更新，变量、端点与健康检查保持不变。
 3. 验证：
 
    ```bash
    curl -fsS https://mc-<id>.bunny.run/healthz
    ```
 
-   预期：`version` 为新 tag。
+   预期：`version` 为 GitHub Releases 最新一条的日期 tag。
 
-bunny CLI（第 2 步）：只修改镜像 tag，变量、端点与健康检查保持不变：
+bunny CLI（第 2 步）：读取 `stable` 当前的 digest，再只更新容器的 digest：
 
 ```bash
-bunny api PATCH /mc/apps/<应用 ID>/containers/<容器 ID> --body '{"imageTag":"<新 tag>"}'
+bunny api POST /mc/registries/digest --body '{"registryId":"github","imageNamespace":"marvinli001","imageName":"edgeweir","tag":"stable"}'
+bunny api PATCH /mc/apps/<应用 ID>/containers/<容器 ID> --body '{"imageDigest":"<上一条输出的 digest>"}'
 ```
 
-`bunny apps deploy <镜像>` 会删除健康检查，不用于升级。迁移、签名校验与回滚见 [版本、升级与回滚](upgrade.md)。
+`bunny apps deploy <镜像>` 会删除健康检查，不用于升级。
+
+固定版本或回滚：**Container Settings → Edit** 中 tag 选择日期 tag，点击 **Update Container**，再 **Save Changes** 并确认；bunny CLI 为 `bunny api PATCH /mc/apps/<应用 ID>/containers/<容器 ID> --body '{"imageTag":"<日期 tag>"}'`。迁移、签名校验与回滚见 [版本、升级与回滚](upgrade.md)。
 
 ## 限制
 

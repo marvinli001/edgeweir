@@ -8,7 +8,7 @@ Deploy the console on bunny.net Magic Containers from the console image, with an
 | --- | --- |
 | bunny.net | An account with a verified payment card. Trial accounts are limited to one app and 1 CPU, 4 GiB of memory per instance |
 | bunny CLI | Optional: `npm install -g @bunny.net/cli` (0.19), then `bunny login`; usage and limits in [Methods](#methods) |
-| Console image | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`, public; Magic Containers runs linux/amd64 only, which the image includes. Tag rules in [Versions, upgrades, and rollback](upgrade.en.md) |
+| Console image | `ghcr.io/marvinli001/edgeweir:stable`, public: a version the maintainer verified, each update with a [GitHub Release](https://github.com/marvinli001/edgeweir/releases). Magic Containers runs linux/amd64 only, which the image includes. Channels and tag rules in [Versions, upgrades, and rollback](upgrade.en.md) |
 | PostgreSQL | PostgreSQL 18 reachable from the container. When it filters by source address, allow the addresses listed at `https://api.bunny.net/mc/nodes/plain`; the list changes. bunny Database is libSQL and does not replace PostgreSQL |
 | Public address | One Anycast IPv4 (USD 2 per month); Anycast has no IPv6. It can be added after deployment, see [Adding the Anycast IP later](#adding-the-anycast-ip-later) |
 | Master key | Generated with `openssl rand -base64 32`; stored outside bunny.net and apart from database backups |
@@ -39,7 +39,7 @@ Create the app in the Dashboard or with the bunny CLI. The `bunny apps` commands
 | [5. Pull zone settings](#5-pull-zone-settings) | **CDN → Pull Zones →** `mc-<id>` | `bunny api POST` |
 | [6. Run setup](#6-run-setup) | **Logging → Logs → Application** | — |
 | [Custom domains](#custom-domains) | **Hostnames** of the pull zone | — |
-| [Upgrade](#upgrade) | **Container Settings → Edit** | `bunny api PATCH` |
+| [Upgrade](#upgrade) | New version notice → **Apply Update** | `bunny api PATCH` |
 
 ## 1. Generate the master key
 
@@ -53,7 +53,7 @@ Use the output as is. Keep `edgeweir-master-key` offline and apart from database
 ## 2. Create the app
 
 1. Dashboard → **Magic Containers → + Add App**.
-2. Image: search for `marvinli001/edgeweir` (GitHub) and pick the target tag, not `latest`. Rename the container to `edgeweir`.
+2. Image: search for `marvinli001/edgeweir` (GitHub) and pick the tag `stable`, not `latest`. Rename the container to `edgeweir`.
 3. **Endpoints**: delete the endpoints the page pre-fills from the image's `EXPOSE`, then add:
 
    | Type | Container port | Exposed port | Other |
@@ -74,7 +74,7 @@ Use the output as is. Keep `edgeweir-master-key` offline and apart from database
 
 `EDGEWEIR_PUBLIC_URL` is not set yet, so the console runs with the default `http://localhost:3000`, and setup and sign-in through `mc-<id>.bunny.run` fail the origin check: open the setup wizard only after step 3.
 
-bunny CLI: create `bunny.jsonc` in an empty directory and adjust `regions` and the image tag:
+bunny CLI: create `bunny.jsonc` in an empty directory and adjust `regions`:
 
 ```jsonc title="bunny.jsonc"
 {
@@ -86,7 +86,7 @@ bunny CLI: create `bunny.jsonc` in an empty directory and adjust `regions` and t
     "scaling": { "min": 1, "max": 1 },
     "containers": {
       "edgeweir": {
-        "image": "ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d",
+        "image": "ghcr.io/marvinli001/edgeweir:stable",
         "endpoints": [
           { "type": "cdn", "ssl": false, "ports": [{ "public": 443, "container": 3000 }] },
           { "type": "anycast", "ports": [{ "public": 8443, "container": 8443 }] }
@@ -107,7 +107,7 @@ bunny CLI: create `bunny.jsonc` in an empty directory and adjust `regions` and t
 In that directory run:
 
 ```bash
-bunny apps deploy ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d
+bunny apps deploy ghcr.io/marvinli001/edgeweir:stable
 ```
 
 Pass the image on the first run: it creates the app, writes `.bunny/app.json` (the app ID), and deploys. When the CLI asks `Is ghcr.io public, or do you need credentials?`, choose **Public**. Without an image the CLI redeploys from `bunny.jsonc` and does not ask about the registry.
@@ -210,7 +210,7 @@ Without that line, restart the app (the app's **Restart**, or `bunny apps restar
 | `EDGEWEIR_NODE_API_URL` | `https://<Anycast IP>:8443` | Required while no URL is saved under "Node channel" in **System settings**: the default `https://<public host>:8443` points at the CDN and is unreachable. The host name or IP is added to the node channel certificate. |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | Empty | Extra names for the node channel certificate, comma-separated. |
 | `EDGEWEIR_TRUSTED_PROXIES` | Empty, or the bunny.net edge server addresses | See [Limits](#limits). |
-| `EDGEWEIR_VERSION` | Not set | The running version built into the image; the image tag sets it. |
+| `EDGEWEIR_VERSION` | Not set | The running version built into the image: the dated tag `stable` pointed to at deployment. |
 | `BETTER_AUTH_SECRET` | Not set | Keep the existing value when migrating from a deployment that set it. |
 
 The value of `EDGEWEIR_TRUSTED_PROXIES` is built from the two bunny.net edge server lists:
@@ -286,23 +286,28 @@ Changing the node channel URL of enrolled nodes: [Node channel URL and certifica
 
 ## Upgrade
 
+Each update of `stable` comes with a [GitHub Release](https://github.com/marvinli001/edgeweir/releases) naming the compatible node version and the upgrade notes. A container is pinned at deployment to the image digest `stable` pointed to then, and restarts do not change the image; once `stable` points to a new image, the app page shows a new version notice at the top.
+
 1. Back up the database, see [Backup and recovery](backup.en.md).
-2. In the app's **Container Settings → Edit**, pick the new tag in the image drop-down, click **Update Container**, then **Save Changes** and confirm.
+2. Click **Apply Update** in the notice: the container rolls to the new digest of `stable`; variables, endpoints, and health checks stay as they are.
 3. Verify:
 
    ```bash
    curl -fsS https://mc-<id>.bunny.run/healthz
    ```
 
-   Expected: `version` is the new tag.
+   Expected: `version` is the dated tag of the latest GitHub Release.
 
-bunny CLI (step 2): change only the image tag; variables, endpoints, and health checks stay as they are:
+bunny CLI (step 2): read the current digest of `stable`, then update only the container's digest:
 
 ```bash
-bunny api PATCH /mc/apps/<app ID>/containers/<container ID> --body '{"imageTag":"<new tag>"}'
+bunny api POST /mc/registries/digest --body '{"registryId":"github","imageNamespace":"marvinli001","imageName":"edgeweir","tag":"stable"}'
+bunny api PATCH /mc/apps/<app ID>/containers/<container ID> --body '{"imageDigest":"<digest from the previous output>"}'
 ```
 
-`bunny apps deploy <image>` removes the health checks and is not used for upgrades. Migrations, signature verification, and rollback: [Versions, upgrades, and rollback](upgrade.en.md).
+`bunny apps deploy <image>` removes the health checks and is not used for upgrades.
+
+Pinning a version or rolling back: in **Container Settings → Edit**, pick a dated tag, click **Update Container**, then **Save Changes** and confirm; with the bunny CLI, `bunny api PATCH /mc/apps/<app ID>/containers/<container ID> --body '{"imageTag":"<dated tag>"}'`. Migrations, signature verification, and rollback: [Versions, upgrades, and rollback](upgrade.en.md).
 
 ## Limits
 

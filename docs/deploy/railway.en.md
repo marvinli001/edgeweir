@@ -7,7 +7,7 @@ Deploy the console on Railway from the console image, with Railway PostgreSQL 18
 | Item | Requirement |
 | --- | --- |
 | Railway | An account that can create projects; [CLI deployment](#cli-deployment) also needs the `railway` CLI after `railway login` |
-| Console image | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`, public; tag rules in [Versions, upgrades, and rollback](upgrade.en.md) |
+| Console image | `ghcr.io/marvinli001/edgeweir:stable`, public: a version the maintainer verified, each update with a [GitHub Release](https://github.com/marvinli001/edgeweir/releases); channels and tag rules in [Versions, upgrades, and rollback](upgrade.en.md) |
 | PostgreSQL | Railway PostgreSQL service, image `ghcr.io/railwayapp-templates/postgres-ssl:18` |
 | Master key | Generated with `openssl rand -base64 32`; stored outside Railway and apart from database backups |
 | Always on | Serverless disabled on the console service |
@@ -36,7 +36,7 @@ On the Railway Dashboard, click **New Project** → **Empty project**.
 
 ## 3. Add the console service
 
-1. On the project canvas: **Create** → **Docker Image**, enter `ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d` (replace with the target tag) in **Image name**, and press Enter.
+1. On the project canvas: **Create** → **Docker Image**, enter `ghcr.io/marvinli001/edgeweir:stable` in **Image name**, and press Enter.
 2. Right-click the service card → **Update Info**, rename it to `edgeweir`.
 
 The service is staged and deployed in [step 7](#7-deployment-settings).
@@ -110,7 +110,7 @@ Equivalent to steps 1–8. **Seal** is available only in the web console.
    ```bash
    railway init --name edgeweir
    railway add --database postgres
-   railway add --service edgeweir --image ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d
+   railway add --service edgeweir --image ghcr.io/marvinli001/edgeweir:stable
    ```
 
 2. Expose 3000 and 8443:
@@ -161,7 +161,7 @@ Equivalent to steps 1–8. **Seal** is available only in the web console.
 | `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | `10` | The time the old deployment gets after SIGTERM; see [step 7](#7-deployment-settings). |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | Empty | Extra names for the node channel certificate, comma separated. |
 | `EDGEWEIR_TRUSTED_PROXIES` | Empty | See [Limits](#limits). |
-| `EDGEWEIR_VERSION` | Not set | The running version built into the image; the image tag sets the version. |
+| `EDGEWEIR_VERSION` | Not set | The running version built into the image: the dated tag `stable` pointed to at deployment. |
 | `BETTER_AUTH_SECRET` | Not set | Keep the existing value when migrating a deployment that set it. |
 
 When the referenced domain or TCP proxy does not exist, `${{…}}` expands to nothing: the console logs `EDGEWEIR_PUBLIC_URL: expected … got "https://"` or `EDGEWEIR_NODE_API_URL: expected … got "https://:"` and keeps restarting. Generate the domain and the TCP proxy under **Settings → Networking** and redeploy, or write literal values.
@@ -222,25 +222,27 @@ Changing the node channel address for enrolled nodes: [Node channel URL and cert
 
 ## Upgrade
 
+Each update of `stable` comes with a [GitHub Release](https://github.com/marvinli001/edgeweir/releases) naming the compatible node version and the upgrade notes. Once Railway detects that `stable` points to a new image, an update button appears in the `edgeweir` service's **Settings**; detection results are cached for up to a few hours.
+
 1. Back up the database; see [Backup and recovery](backup.en.md).
-2. `edgeweir` service, **Settings → Source**: change the image to the new tag.
-3. Click **Deploy** in the staged-changes banner.
-4. Verify:
+2. Click the update button: Railway redeploys `stable` and pulls the image it points to now.
+3. Verify:
 
    ```bash
    curl -fsS https://<name>.up.railway.app/healthz
    ```
 
-   Expected: `version` is the new tag.
+   Expected: `version` is the dated tag of the latest GitHub Release.
 
-CLI (steps 2–3):
+CLI (step 2, without waiting for the update button):
 
 ```bash
-railway service source connect --service edgeweir --image ghcr.io/marvinli001/edgeweir:<new tag>
 railway redeploy --service edgeweir --from-source --yes
 ```
 
-Migrations, signature verification, and rollback: [Versions, upgrades, and rollback](upgrade.en.md).
+Do not configure auto updates for the service (**Settings → Source → Configure Auto Updates**): they redeploy unattended in the maintenance window and do not back up the `Postgres` service's database first.
+
+Pinning a version or rolling back: in **Settings → Source**, replace `stable` in the image with a dated tag and click **Deploy** in the staged-changes banner; with the CLI, run `railway service source connect --service edgeweir --image ghcr.io/marvinli001/edgeweir:<dated tag>`, then the `railway redeploy` above. Migrations, signature verification, and rollback: [Versions, upgrades, and rollback](upgrade.en.md).
 
 ## Limits
 
