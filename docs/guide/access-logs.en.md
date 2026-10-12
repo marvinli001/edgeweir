@@ -24,7 +24,8 @@ Traffic analytics and statistics dimensions, access log sampling, forced logging
 1. Open a page from the table and select a range: **Last hour**, **Last 6 hours**, **Last 24 hours**, **Last 7 days**, or **Last 30 days**.
 2. Read **Total requests**, **Data transferred**, **Cache hit ratio**, **Peak bandwidth**, **4xx rate**, **5xx rate**, **Status codes**, **Top URLs (approximate)**, and **Top IPs (approximate)**; click a metric for details. A site's **Analytics** tab also has **Countries**, **Networks (approximate)**, **Referrers (approximate)**, **Clients** and **Protocols** cards, and the overview **Top countries by traffic** (by data transferred), see [Statistics dimensions](#statistics-dimensions).
 3. Click **Refresh** to reload.
-4. To act on an entry, click **⋯** at the end of its row: a top IP offers **Ban IP** (with the site filled in on a site's **Analytics** tab, with the **Global** scope on the overview); a top URL on a site's **Analytics** tab offers **Purge URL**, which expands the path to each of the site's domains that is not a wildcard and lists the URLs before it submits the purge.
+4. Click **Customize cards** to choose which cards show; the choice on a site's **Analytics** tab applies to every site and is kept apart from the overview's, see [Overview](account.en.md#overview).
+5. To act on an entry, click **⋯** at the end of its row: a top IP offers **Ban IP** (with the site filled in on a site's **Analytics** tab, with the **Global** scope on the overview); a top URL on a site's **Analytics** tab offers **Purge URL**, which expands the path to each of the site's domains that is not a wildcard and lists the URLs before it submits the purge.
 
 Readouts with a fixed window and no range to pick:
 

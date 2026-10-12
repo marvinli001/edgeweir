@@ -1,4 +1,4 @@
-import type { StatsDimensions } from "@edgeweir/contract";
+import type { SiteCard, StatsDimensions } from "@edgeweir/contract";
 import type * as React from "react";
 import { NoTraffic } from "@/components/analytics/breakdowns";
 import { Panel, PanelHeader } from "@/components/analytics/panel";
@@ -175,131 +175,154 @@ function Distribution({
   );
 }
 
+/** A site's dimension cards, in the order they show, with their ids in the cards menu. */
+export const DIMENSION_CARDS = [
+  { id: "countries", title: m.stats_countries },
+  { id: "asns", title: m.stats_asns },
+  { id: "referers", title: m.stats_referers },
+  { id: "clients", title: m.stats_clients },
+  { id: "protocols", title: m.stats_protocols },
+] as const satisfies readonly { id: SiteCard; title: () => string }[];
+
+type DimensionCard = (typeof DIMENSION_CARDS)[number]["id"];
+
 /**
  * A site's countries, networks, referring hosts, clients and protocols, under the top lists.
  * Three columns from @5xl (clients take two), two from @3xl (clients move to a row of their own,
- * so protocols sit beside the referrers).
+ * so protocols sit beside the referrers). Only the cards in `shown`.
  */
 export function DimensionCards({
   query,
+  shown,
   delay = 0,
 }: {
   query: QueryResult<StatsDimensions>;
+  shown: ReadonlySet<DimensionCard>;
   /** Entrance delay of the first card, in ms. */
   delay?: number;
 }) {
-  const enter = (index: number) => ({
+  let order = 0;
+  const enter = () => ({
     className: "animate-enter",
-    style: { animationDelay: `${delay + index * 60}ms` },
+    style: { animationDelay: `${delay + order++ * 60}ms` },
   });
   return (
     <QueryView query={query}>
-      {(data) => (
-        <div className="flex flex-col gap-3" data-testid="stats-dimensions">
-          {data.unsupportedNodes > 0 ? (
-            <SafetyNote data-testid="stats-dims-partial">{m.stats_dims_partial()}</SafetyNote>
-          ) : null}
-          <div className="grid gap-3 @3xl/main:grid-cols-2 @5xl/main:grid-cols-3">
-            <RankCard
-              title={m.stats_countries()}
-              testId="stats-countries"
-              {...enter(0)}
-              items={data.countries.slice(0, RANK_SIZE).map((item) => ({
-                key: item.country || "unknown",
-                label: countryLabel(item.country),
-                value: item.requests,
-                display: formatCompact(item.requests),
-                aside: formatBytes(item.bytesSent),
-              }))}
-            />
-            <RankCard
-              title={m.stats_asns()}
-              testId="stats-asns"
-              {...enter(1)}
-              items={data.asns.slice(0, RANK_SIZE).map((item) => ({
-                key: String(item.asn),
-                label: (
-                  <>
-                    <span className="font-mono text-xs">{asnText(item.asn)}</span>
-                    {item.name ? <span className="ml-1.5">{item.name}</span> : null}
-                  </>
-                ),
-                value: item.requests,
-                display: formatCompact(item.requests),
-              }))}
-            />
-            <RankCard
-              title={m.stats_referers()}
-              testId="stats-referers"
-              {...enter(2)}
-              items={data.referers.slice(0, RANK_SIZE).map((item) => ({
-                key: item.host,
-                label: <span className="font-mono text-xs">{item.host}</span>,
-                value: item.requests,
-                display: formatCompact(item.requests),
-              }))}
-            />
-            <Panel
-              data-testid="stats-clients"
-              className="h-full animate-enter @3xl/main:order-last @3xl/main:col-span-2 @5xl/main:order-none"
-              style={{ animationDelay: `${delay + 3 * 60}ms` }}
-            >
-              <PanelHeader title={m.stats_clients()} />
-              {silent(data.browsers, data.oses, data.devices) ? (
-                <NoTraffic />
-              ) : (
-                <div className="@container px-4 pt-3 pb-4">
-                  <div className="grid gap-5 @xl:grid-cols-3 @xl:gap-6">
-                    <Distribution
-                      title={m.stats_browsers()}
-                      items={data.browsers}
-                      label={browserLabel}
-                      testId="stats-browsers"
-                    />
-                    <Distribution
-                      title={m.stats_oses()}
-                      items={data.oses}
-                      label={osLabel}
-                      testId="stats-oses"
-                    />
-                    <Distribution
-                      title={m.stats_devices()}
-                      items={data.devices}
-                      label={deviceLabel}
-                      testId="stats-devices"
-                    />
-                  </div>
-                </div>
-              )}
-            </Panel>
-            <Panel
-              data-testid="stats-protocols"
-              className="h-full animate-enter"
-              style={{ animationDelay: `${delay + 4 * 60}ms` }}
-            >
-              <PanelHeader title={m.stats_protocols()} />
-              {silent(data.httpVersions, data.tlsVersions) ? (
-                <NoTraffic />
-              ) : (
-                <div className="grid gap-5 px-4 pt-3 pb-4">
-                  <Distribution
-                    title={m.stats_http_versions()}
-                    items={data.httpVersions}
-                    label={httpVersionLabel}
-                    testId="stats-http-versions"
-                  />
-                  <Distribution
-                    title={m.stats_tls_versions()}
-                    items={data.tlsVersions}
-                    label={tlsVersionLabel}
-                    testId="stats-tls-versions"
-                  />
-                </div>
-              )}
-            </Panel>
+      {(data) => {
+        order = 0;
+        return (
+          <div className="flex flex-col gap-3" data-testid="stats-dimensions">
+            {data.unsupportedNodes > 0 ? (
+              <SafetyNote data-testid="stats-dims-partial">{m.stats_dims_partial()}</SafetyNote>
+            ) : null}
+            <div className="grid gap-3 @3xl/main:grid-cols-2 @5xl/main:grid-cols-3">
+              {shown.has("countries") ? (
+                <RankCard
+                  title={m.stats_countries()}
+                  testId="stats-countries"
+                  {...enter()}
+                  items={data.countries.slice(0, RANK_SIZE).map((item) => ({
+                    key: item.country || "unknown",
+                    label: countryLabel(item.country),
+                    value: item.requests,
+                    display: formatCompact(item.requests),
+                    aside: formatBytes(item.bytesSent),
+                  }))}
+                />
+              ) : null}
+              {shown.has("asns") ? (
+                <RankCard
+                  title={m.stats_asns()}
+                  testId="stats-asns"
+                  {...enter()}
+                  items={data.asns.slice(0, RANK_SIZE).map((item) => ({
+                    key: String(item.asn),
+                    label: (
+                      <>
+                        <span className="font-mono text-xs">{asnText(item.asn)}</span>
+                        {item.name ? <span className="ml-1.5">{item.name}</span> : null}
+                      </>
+                    ),
+                    value: item.requests,
+                    display: formatCompact(item.requests),
+                  }))}
+                />
+              ) : null}
+              {shown.has("referers") ? (
+                <RankCard
+                  title={m.stats_referers()}
+                  testId="stats-referers"
+                  {...enter()}
+                  items={data.referers.slice(0, RANK_SIZE).map((item) => ({
+                    key: item.host,
+                    label: <span className="font-mono text-xs">{item.host}</span>,
+                    value: item.requests,
+                    display: formatCompact(item.requests),
+                  }))}
+                />
+              ) : null}
+              {shown.has("clients") ? (
+                <Panel
+                  data-testid="stats-clients"
+                  {...enter()}
+                  className="h-full animate-enter @3xl/main:order-last @3xl/main:col-span-2 @5xl/main:order-none"
+                >
+                  <PanelHeader title={m.stats_clients()} />
+                  {silent(data.browsers, data.oses, data.devices) ? (
+                    <NoTraffic />
+                  ) : (
+                    <div className="@container px-4 pt-3 pb-4">
+                      <div className="grid gap-5 @xl:grid-cols-3 @xl:gap-6">
+                        <Distribution
+                          title={m.stats_browsers()}
+                          items={data.browsers}
+                          label={browserLabel}
+                          testId="stats-browsers"
+                        />
+                        <Distribution
+                          title={m.stats_oses()}
+                          items={data.oses}
+                          label={osLabel}
+                          testId="stats-oses"
+                        />
+                        <Distribution
+                          title={m.stats_devices()}
+                          items={data.devices}
+                          label={deviceLabel}
+                          testId="stats-devices"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </Panel>
+              ) : null}
+              {shown.has("protocols") ? (
+                <Panel data-testid="stats-protocols" {...enter()} className="h-full animate-enter">
+                  <PanelHeader title={m.stats_protocols()} />
+                  {silent(data.httpVersions, data.tlsVersions) ? (
+                    <NoTraffic />
+                  ) : (
+                    <div className="grid gap-5 px-4 pt-3 pb-4">
+                      <Distribution
+                        title={m.stats_http_versions()}
+                        items={data.httpVersions}
+                        label={httpVersionLabel}
+                        testId="stats-http-versions"
+                      />
+                      <Distribution
+                        title={m.stats_tls_versions()}
+                        items={data.tlsVersions}
+                        label={tlsVersionLabel}
+                        testId="stats-tls-versions"
+                      />
+                    </div>
+                  )}
+                </Panel>
+              ) : null}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      }}
     </QueryView>
   );
 }

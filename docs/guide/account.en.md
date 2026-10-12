@@ -142,6 +142,8 @@ The bottom of the sidebar shows the account's name and email; click it to open t
 
 Needs attention, nodes, recent revisions, the edge network, and nodes online refresh every 10 seconds; the other traffic figures and analytics every minute.
 
+**Customize cards**, right of the **Analytics** title, lists the overview's cards grouped as **Right now**, **Analytics**, and **Lists**: clear a check to hide a card, **Reset to default** shows them all. The choice is saved with the account, so other browsers and devices show the same cards; a site's **Analytics** tab keeps its own, see [View analytics](access-logs.en.md#view-analytics). **Needs attention** cannot be hidden. A block whose cards are all hidden disappears; with every analytics card hidden the section shows **All cards hidden** and **Show all**.
+
 ### Other paths
 
 | Path | Description |

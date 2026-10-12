@@ -505,9 +505,10 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | `clusters.rollout` | `GET /clusters/{id}/rollout` | 配置金丝雀的策略、当前发布与金丝雀节点 |
 | `clusters.rollbackPreview` | `GET /clusters/{id}/rollback-preview` | 回滚到查询参数 `revision` 会发布的变化；按回滚的规则拒绝，不写入 |
 | `overview.get` | `GET /overview` | 概览：集群、节点与网站数，最近发布，待处理事项 |
+| `hiddenCards.get`、`hiddenCards.update` | `GET /hidden-cards`、`PATCH /hidden-cards` | 调用方在概览与网站统计中隐藏的卡片 |
 | `settings.nodeChannelCheck` | `GET /settings/node-channel-check` | 控制台对自己的节点通道地址做的 TLS 握手检查 |
 
-`clusters:read` 服务账号可以调用 `clusters.list`、`clusters.get`；其他过程服务账号不能调用（403 `SERVICE_ACCOUNT_FORBIDDEN`）。都是 `GET`，只读 AccessKey 可以调用。
+`clusters:read` 服务账号可以调用 `clusters.list`、`clusters.get`；其他过程服务账号不能调用（403 `SERVICE_ACCOUNT_FORBIDDEN`）。除 `hiddenCards.update` 外都是 `GET`，只读 AccessKey 可以调用。
 
 | 过程 | 响应字段 |
 | --- | --- |
@@ -515,6 +516,7 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | `clusters.rollout` | `candidateChanges`：发布进行中时为 `{ sites: { added, changed, removed }, reasons }`，`sites` 为候选版本相对稳定版本新增、修改、移除的网站（`[{ id, name }]`），`reasons` 为稳定版本之后发布的版本（与 `GET /clusters/{id}/revisions` 的元素相同，原因不重复）；没有进行中的发布时为 `null` |
 | `clusters.rollbackPreview` | `{ revision, currentRevision, unchanged, sites: { added, changed, removed } }`：`currentRevision` 为集群最新版本（没有时为 `null`）；`unchanged` 为 `true` 时内容与最新版本相同；`sites` 为相对最新版本的变化 |
 | `overview.get` | `attention`：`[{ kind, clusterId, clusterName, revision, at, count, version }]`，按下列 `kind` 的顺序排列，没有事项时为 `[]`。`kind`：`nodes_unhealthy`、`dns_failed`、`dns_blocked`、`upgrade_failed`、`canary_rolled_back`、`canary_awaiting_promotion`、`canary_running`、`nodes_lagging`、`nodes_no_address`。`revision`：DNS 版本或候选版本；`at`：`canary_running` 的窗口结束时间、`canary_rolled_back` 的回滚时间；`count`：节点数；`version`：`upgrade_failed` 的目标版本。不适用的字段为 `null`、`0` 或空字符串 |
+| `hiddenCards.get`、`hiddenCards.update` | `{ overview, site }`：概览与网站「统计」页签（所有网站共用）隐藏的卡片 id，按页面上的顺序，未列出的卡片都显示。`update` 只替换请求中给出的页面（至少一个，否则 400 `BAD_REQUEST`），id 去重；不属于该页面的 id 为 400 `BAD_REQUEST`。概览：`live-requests`、`live-egress`、`live-hit-ratio`、`live-nodes`、`requests`、`data-transfer`、`edge-network`、`hit-ratio`、`peak-bandwidth`、`4xx-rate`、`5xx-rate`、`status-codes`、`top-sites`、`top-nodes`、`top-countries`、`top-urls`、`top-ips`、`revisions`、`recents`、`sites`、`nodes`；网站：`requests`、`data-transfer`、`hit-ratio`、`peak-bandwidth`、`4xx-rate`、`5xx-rate`、`status-codes`、`top-urls`、`top-ips`、`countries`、`asns`、`referers`、`clients`、`protocols` |
 | `settings.nodeChannelCheck` | `{ url, result, checkedAt }`：`url` 为当前的节点通道地址；`result` 为 `ok`（证书链含节点通道 CA）、`unreachable`（3 秒内没有完成握手）、`mismatch`（出示了其他证书链，或地址不是 `https`）或 `refused`（系统设置中保存的地址解析到出站策略不允许的特殊用途地址，不连接）。结果缓存 30 秒，只作提示 |
 
 | 错误代码 | 状态 | 场景 |

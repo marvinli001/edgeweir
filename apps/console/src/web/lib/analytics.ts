@@ -34,8 +34,8 @@ export function relativeChange(current: number | null, previous: number | null):
 }
 
 export interface Metric {
-  /** `metric-<id>` is the card's test id. */
-  id: string;
+  /** `metric-<id>` is the card's test id; also its id in the cards menu. */
+  id: "requests" | "data-transfer" | "hit-ratio" | "peak-bandwidth" | "4xx-rate" | "5xx-rate";
   title: () => string;
   size: "lg" | "sm";
   total: (totals: TrafficTotals) => number | null;

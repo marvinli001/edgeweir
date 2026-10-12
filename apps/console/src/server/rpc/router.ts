@@ -38,6 +38,7 @@ export const router = os.router({
   acmeAccounts: certificatesRouter.acmeAccounts,
   system: systemRouter.system,
   account: systemRouter.account,
+  hiddenCards: systemRouter.hiddenCards,
   overview: systemRouter.overview,
   accessKeys: systemRouter.accessKeys,
   alerts: alertsRouter.alerts,

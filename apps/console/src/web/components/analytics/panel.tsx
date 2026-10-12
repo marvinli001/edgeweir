@@ -118,6 +118,7 @@ export function MetricCard({
   onOpen,
   children,
   testId,
+  fill = false,
 }: {
   title: string;
   value: string;
@@ -127,12 +128,14 @@ export function MetricCard({
   onOpen?: () => void;
   children: React.ReactNode;
   testId?: string;
+  /** Grow to the row's height (a large chart alone beside a taller card), the chart with it. */
+  fill?: boolean;
 }) {
   return (
     <Panel
       data-testid={testId}
       className={cn(
-        size === "lg" ? "h-64" : "h-52 @3xl/main:h-60",
+        size === "lg" ? (fill ? "h-full min-h-64" : "h-64") : "h-52 @3xl/main:h-60",
         onOpen &&
           "group/panel transition-shadow duration-200 ease-lit hover:shadow-elev-2 motion-reduce:transition-none",
       )}

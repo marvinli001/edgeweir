@@ -445,6 +445,19 @@ export const siteStar = pgTable(
 );
 
 /**
+ * Cards a user hid on the console home (`overview`) and on every site's statistics (`site`),
+ * by card id (contract hidden-cards.ts); ids a later version drops are ignored on read.
+ */
+export const hiddenCards = pgTable("hidden_cards", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  overview: text("overview").array().notNull().default(sql`'{}'::text[]`),
+  site: text("site").array().notNull().default(sql`'{}'::text[]`),
+  updatedAt: updatedAt(),
+});
+
+/**
  * A tag sites carry (ADR-0042): 1-32 characters, unique regardless of case
  * (`key`: the name NFC-normalized and in lower case). Tags stay until they
  * are deleted, also without sites. Only the console uses them: they never

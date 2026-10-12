@@ -3,7 +3,7 @@
  * file per area. Procedures without a handler answer emptyOutput(); the lab's empty state
  * answers from empty-state.ts.
  */
-import type { Site, SiteCopyChange, SiteCopyPart } from "@edgeweir/contract";
+import type { HiddenCards, Site, SiteCopyChange, SiteCopyPart } from "@edgeweir/contract";
 import { accessFixtures } from "./access";
 import { accessControlFixtures } from "./access-control";
 import { type Fixtures, mergeFixtures, notFound, ok } from "./define";
@@ -48,6 +48,9 @@ function siteById(id: string): Site {
   return site;
 }
 
+/** The cards the operator hid, for this lab session. */
+const hiddenCards: HiddenCards = { overview: [], site: [] };
+
 const core: Fixtures = {
   system: {
     // /setup only renders before the console is initialized.
@@ -64,6 +67,14 @@ const core: Fixtures = {
       },
       serviceAccount: null,
     }),
+  },
+  hiddenCards: {
+    get: () => structuredClone(hiddenCards),
+    update: (input) => {
+      if (input.overview) hiddenCards.overview = [...new Set(input.overview)];
+      if (input.site) hiddenCards.site = [...new Set(input.site)];
+      return structuredClone(hiddenCards);
+    },
   },
   overview: {
     get: () => ({

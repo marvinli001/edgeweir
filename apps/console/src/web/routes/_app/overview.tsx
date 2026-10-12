@@ -5,6 +5,7 @@ import {
   type Cluster,
   displaySiteDomain,
   type Node,
+  type OverviewCard,
   type Revision,
 } from "@edgeweir/contract";
 import { Add01Icon, GitCommitIcon, GlobeIcon, HistoryIcon } from "@hugeicons/core-free-icons";
@@ -15,6 +16,7 @@ import * as React from "react";
 import * as z from "zod";
 import { AnalyticsSection } from "@/components/analytics/analytics-section";
 import { Countdown } from "@/components/appica/countdown";
+import type { CardGroup } from "@/components/cards-menu";
 import { EdgeNetworkCard } from "@/components/overview/edge-network";
 import { LiveKpis } from "@/components/overview/live-kpis";
 import { Page } from "@/components/page";
@@ -23,14 +25,38 @@ import { StarMark, useSiteStars } from "@/components/site-star";
 import { combineQueries, QueryView } from "@/components/states";
 import { Dot, type StatusTone } from "@/components/status-dot";
 import { buttonVariants } from "@/components/ui/button";
+import { useHiddenCards } from "@/hooks/use-hidden-cards";
 import { DEFAULT_RANGE } from "@/lib/analytics";
 import { formatNumber, m, timeAgo } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { RECENT_PAGES, readRecents } from "@/lib/recents";
 import { revisionReason } from "@/lib/revisions";
 import { siteTabLabel } from "@/lib/site-tabs";
+import { cn } from "@/lib/utils";
 
 const LIST_SIZE = 5;
+
+/** The live tiles in the cards menu, above the statistics. */
+const liveGroup = (): CardGroup<"overview"> => ({
+  label: m.overview_live_title(),
+  cards: [
+    { id: "live-requests", label: m.overview_request_rate() },
+    { id: "live-egress", label: m.overview_egress() },
+    { id: "live-hit-ratio", label: m.analytics_hit_ratio() },
+    { id: "live-nodes", label: m.clusters_nodes_online() },
+  ],
+});
+
+/** The lists under the statistics in the cards menu. */
+const listsGroup = (): CardGroup<"overview"> => ({
+  label: m.cards_group_lists(),
+  cards: [
+    { id: "revisions", label: m.revisions_recent() },
+    { id: "recents", label: m.home_recents() },
+    { id: "sites", label: m.nav_sites() },
+    { id: "nodes", label: m.nodes_title() },
+  ],
+});
 const live = { refetchInterval: 10_000, meta: { background: true } } as const;
 
 export const Route = createFileRoute("/_app/overview")({
@@ -109,20 +135,28 @@ function OverviewPage() {
   const overview = useQuery({ ...orpc.overview.get.queryOptions(), ...live });
   const clusters = useQuery({ ...orpc.clusters.list.queryOptions(), ...live });
   const nodes = useQuery({ ...orpc.nodes.list.queryOptions({ input: {} }), ...live });
+  const cards = useHiddenCards("overview");
+  const shows = (id: OverviewCard) => !cards.hidden.has(id);
+  const lists = listsGroup().cards.filter((card) => shows(card.id)).length;
 
   return (
     <Page title={m.overview_title()}>
-      <QueryView query={combineQueries(sites, starred, overview, clusters, nodes)}>
+      <QueryView query={combineQueries(sites, starred, overview, clusters, nodes, cards.query)}>
         {([recent, starredSites, summary, clusterList, nodeList]) => (
           <>
             <AttentionList items={summary.attention} />
-            <LiveKpis online={summary.onlineNodes} total={summary.nodes} />
+            <LiveKpis online={summary.onlineNodes} total={summary.nodes} hidden={cards.hidden} />
             <AnalyticsSection
               range={search.range ?? DEFAULT_RANGE}
               onRangeChange={(range) =>
                 navigate({ search: { range: range === DEFAULT_RANGE ? undefined : range } })
               }
-              aside={<EdgeNetworkCard nodes={nodeList} clusters={clusterList} />}
+              aside={{
+                id: "edge-network",
+                title: m.overview_edge_network(),
+                content: <EdgeNetworkCard nodes={nodeList} clusters={clusterList} />,
+              }}
+              menuGroups={{ before: [liveGroup()], after: [listsGroup()] }}
               topCountries
               topLists={[
                 {
@@ -142,17 +176,25 @@ function OverviewPage() {
               ]}
               delay={200}
             />
-            <div className="grid gap-3 @3xl/main:grid-cols-2">
-              <RevisionsList revisions={summary.revisions} clusters={clusterList} />
-              <RecentsList />
-              <SitesList total={recent.total} starred={starredSites} recent={recent.items} />
-              <NodesList
-                nodes={nodeList}
-                clusters={clusterList}
-                online={summary.onlineNodes}
-                total={summary.nodes}
-              />
-            </div>
+            {lists > 0 ? (
+              <div className={cn("grid gap-3", lists > 1 && "@3xl/main:grid-cols-2")}>
+                {shows("revisions") ? (
+                  <RevisionsList revisions={summary.revisions} clusters={clusterList} />
+                ) : null}
+                {shows("recents") ? <RecentsList /> : null}
+                {shows("sites") ? (
+                  <SitesList total={recent.total} starred={starredSites} recent={recent.items} />
+                ) : null}
+                {shows("nodes") ? (
+                  <NodesList
+                    nodes={nodeList}
+                    clusters={clusterList}
+                    online={summary.onlineNodes}
+                    total={summary.nodes}
+                  />
+                ) : null}
+              </div>
+            ) : null}
           </>
         )}
       </QueryView>

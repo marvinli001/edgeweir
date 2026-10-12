@@ -27,6 +27,7 @@ import {
 import { dnsContract } from "./dns";
 import { edgeProcedures } from "./edge";
 import { errorPagesContract, maintenanceContract, platformErrorPages } from "./error-pages";
+import { hiddenCardsContract } from "./hidden-cards";
 import { imageConvertContract } from "./image-convert";
 import { l4AppsContract, portPoolProcedures } from "./l4";
 import {
@@ -65,6 +66,7 @@ export * from "./domains";
 export * from "./error-pages";
 export * from "./errors";
 export * from "./expressions";
+export * from "./hidden-cards";
 export * from "./image-convert";
 export * from "./node-errors";
 export * from "./node-features";
@@ -153,6 +155,8 @@ export const contract = {
   account: {
     me: oc.route({ method: "GET", path: "/me", tags: ["account"] }).output(s.me),
   },
+  /** The cards the caller hid on the console home and on sites' statistics. */
+  hiddenCards: hiddenCardsContract,
   overview: {
     get: oc.route({ method: "GET", path: "/overview", tags: ["overview"] }).output(s.overview),
   },

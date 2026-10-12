@@ -1,4 +1,4 @@
-import type { Traffic } from "@edgeweir/contract";
+import type { OverviewCard, Traffic } from "@edgeweir/contract";
 import {
   ArrowDataTransferVerticalIcon,
   DatabaseLightningIcon,
@@ -16,6 +16,7 @@ import { QueryView } from "@/components/states";
 import { LiveDot } from "@/components/status-dot";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
+import { cn } from "@/lib/utils";
 
 const BIT_UNITS = ["bps", "Kbps", "Mbps", "Gbps", "Tbps"] as const;
 
@@ -87,99 +88,137 @@ function Tile({
  * value. Until its first answer the traffic tiles are a loader, and a failed first load an error
  * with a retry, never a row of zeros; the nodes tile comes from the overview summary the page has
  * already loaded and stands on its own. The live light is on only while the traffic tiles show
- * live numbers.
+ * live numbers. Tiles the user hid are left out (the traffic query too when all three are); with
+ * none left the section is gone.
  */
-export function LiveKpis({ online, total }: { online: number; total: number }) {
+export function LiveKpis({
+  online,
+  total,
+  hidden,
+}: {
+  online: number;
+  total: number;
+  hidden: ReadonlySet<OverviewCard>;
+}) {
+  const tiles = TRAFFIC_TILES.filter((tile) => !hidden.has(tile));
+  const nodes = !hidden.has("live-nodes");
   const traffic = useQuery({
     ...orpc.analytics.traffic.queryOptions({ input: { range: "1h" } }),
     refetchInterval: 60_000,
     placeholderData: keepPreviousData,
     meta: { background: true },
+    enabled: tiles.length > 0,
   });
+  const count = tiles.length + (nodes ? 1 : 0);
+  if (count === 0) return null;
   return (
     <section className="flex flex-col gap-3" aria-labelledby="live-title">
       <div className="flex items-center gap-3">
         <h2 id="live-title" className="text-base font-semibold">
           {m.overview_live_title()}
         </h2>
-        {traffic.isSuccess ? <LiveDot label={m.overview_live()} /> : null}
+        {tiles.length > 0 && traffic.isSuccess ? <LiveDot label={m.overview_live()} /> : null}
       </div>
       <NumberFlowGroup>
-        <div className="grid gap-3 @sm/main:grid-cols-2 @3xl/main:grid-cols-4">
-          <QueryView query={traffic} frame={TrafficPending} loadingClassName="min-h-36">
-            {(data) => <TrafficTiles traffic={data} />}
-          </QueryView>
-          <NodesTile online={online} total={total} />
+        <div className={cn("grid gap-3", GRID[count])}>
+          {tiles.length > 0 ? (
+            // The loader or the error in the traffic tiles' place; the tiles are cells of the row.
+            <div
+              className={
+                traffic.data
+                  ? "contents"
+                  : cn("col-span-full flex flex-col justify-center", nodes && SPAN[tiles.length])
+              }
+            >
+              <QueryView query={traffic} loadingClassName="min-h-36">
+                {(data) => <TrafficTiles traffic={data} tiles={tiles} />}
+              </QueryView>
+            </div>
+          ) : null}
+          {nodes ? <NodesTile online={online} total={total} index={tiles.length} /> : null}
         </div>
       </NumberFlowGroup>
     </section>
   );
 }
 
-/** The loader or the error in the traffic tiles' place, beside the nodes tile. */
-function TrafficPending({ children }: { children?: React.ReactNode }) {
-  return (
-    <div className="col-span-full flex flex-col justify-center @3xl/main:col-span-3">
-      {children}
-    </div>
-  );
-}
+const TRAFFIC_TILES = ["live-requests", "live-egress", "live-hit-ratio"] as const;
+type TrafficTile = (typeof TRAFFIC_TILES)[number];
 
-function TrafficTiles({ traffic }: { traffic: Traffic }) {
+/** Columns of `count` tiles: four side by side, two by two below @3xl. */
+const GRID = [
+  "",
+  "",
+  "@sm/main:grid-cols-2",
+  "@sm/main:grid-cols-2 @3xl/main:grid-cols-3",
+  "@sm/main:grid-cols-2 @3xl/main:grid-cols-4",
+];
+
+/** Columns the traffic tiles take beside the nodes tile, from @3xl. */
+const SPAN = ["", "@3xl/main:col-span-1", "@3xl/main:col-span-2", "@3xl/main:col-span-3"];
+
+function TrafficTiles({ traffic, tiles }: { traffic: Traffic; tiles: readonly TrafficTile[] }) {
   const now = latest(traffic);
   const rps = useArrival(Math.round(now.rps));
   const bps = useArrival(now.bps);
   const hit = useArrival(now.hit);
   const series = (pick: (p: Traffic["points"][number]) => number) => now.points.map(pick);
+  const index = (tile: TrafficTile) => tiles.indexOf(tile);
 
   return (
     <>
-      <Tile
-        icon={PulseRectangle01Icon}
-        title={m.overview_request_rate()}
-        index={0}
-        footer={<Sparkline tone="signal" data={series((p) => p.requests)} />}
-      >
-        <FlowNumber value={rps} suffix={m.overview_per_second()} />
-      </Tile>
-      <Tile
-        icon={ArrowDataTransferVerticalIcon}
-        title={m.overview_egress()}
-        index={1}
-        footer={<Sparkline tone="signal" data={series((p) => p.bytesSent)} />}
-      >
-        <FlowScaled value={bps} units={BIT_UNITS} />
-      </Tile>
-      <Tile
-        icon={DatabaseLightningIcon}
-        title={m.analytics_hit_ratio()}
-        span={m.analytics_range_1h()}
-        index={2}
-        footer={
-          <Sparkline
-            tone="metric"
-            data={series((p) =>
-              p.cacheHits + p.cacheMisses > 0 ? p.cacheHits / (p.cacheHits + p.cacheMisses) : 0,
-            )}
+      {tiles.includes("live-requests") ? (
+        <Tile
+          icon={PulseRectangle01Icon}
+          title={m.overview_request_rate()}
+          index={index("live-requests")}
+          footer={<Sparkline tone="signal" data={series((p) => p.requests)} />}
+        >
+          <FlowNumber value={rps} suffix={m.overview_per_second()} />
+        </Tile>
+      ) : null}
+      {tiles.includes("live-egress") ? (
+        <Tile
+          icon={ArrowDataTransferVerticalIcon}
+          title={m.overview_egress()}
+          index={index("live-egress")}
+          footer={<Sparkline tone="signal" data={series((p) => p.bytesSent)} />}
+        >
+          <FlowScaled value={bps} units={BIT_UNITS} />
+        </Tile>
+      ) : null}
+      {tiles.includes("live-hit-ratio") ? (
+        <Tile
+          icon={DatabaseLightningIcon}
+          title={m.analytics_hit_ratio()}
+          span={m.analytics_range_1h()}
+          index={index("live-hit-ratio")}
+          footer={
+            <Sparkline
+              tone="metric"
+              data={series((p) =>
+                p.cacheHits + p.cacheMisses > 0 ? p.cacheHits / (p.cacheHits + p.cacheMisses) : 0,
+              )}
+            />
+          }
+        >
+          <FlowNumber
+            value={hit / 100}
+            format={{ style: "percent", maximumFractionDigits: 1, minimumFractionDigits: 1 }}
           />
-        }
-      >
-        <FlowNumber
-          value={hit / 100}
-          format={{ style: "percent", maximumFractionDigits: 1, minimumFractionDigits: 1 }}
-        />
-      </Tile>
+        </Tile>
+      ) : null}
     </>
   );
 }
 
-function NodesTile({ online, total }: { online: number; total: number }) {
+function NodesTile({ online, total, index }: { online: number; total: number; index: number }) {
   const nodes = useArrival(online);
   return (
     <Tile
       icon={ServerStack01Icon}
       title={m.clusters_nodes_online()}
-      index={3}
+      index={index}
       footer={
         <div className="flex flex-col gap-2 px-4 pb-4">
           <Meter

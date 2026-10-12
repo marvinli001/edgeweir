@@ -4,6 +4,7 @@ import { createAccessKey, listAccessKeys, revokeAccessKey } from "../../services
 import { serviceAccountMe, toMe } from "../../services/account";
 import { listAttention } from "../../services/attention";
 import { auditFacets, listAuditLogs } from "../../services/audit";
+import { getHiddenCards, updateHiddenCards } from "../../services/hidden-cards";
 import { ONLINE_WINDOW_SECONDS } from "../../services/nodes";
 import { toRevisionDto } from "../../services/revisions";
 import {
@@ -57,6 +58,14 @@ export const systemRouter = {
   account: {
     me: authed.account.me.handler(({ context }) =>
       context.serviceAccount ? serviceAccountMe(context.serviceAccount) : toMe(context.user),
+    ),
+  },
+  hiddenCards: {
+    get: authed.hiddenCards.get.handler(({ context }) =>
+      getHiddenCards(context.app.db, context.user.id),
+    ),
+    update: authed.hiddenCards.update.handler(({ input, context }) =>
+      updateHiddenCards(context.app.db, context.user.id, input),
     ),
   },
   overview: {

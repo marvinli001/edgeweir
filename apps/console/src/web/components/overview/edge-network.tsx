@@ -71,8 +71,8 @@ function locationsOf(nodes: Node[], clusters: Cluster[]): Location[] {
 /**
  * The edge network at a glance: every edge location on a globe, colored by its health, and the
  * locations listed with their health in words, nodes and egress (the list is the globe's text
- * alternative). Side by side where the card spans the row, stacked where it stands in a column
- * of the bento.
+ * alternative). Side by side where the card is wide (it spans the row), stacked where it is narrow
+ * (a column of the bento).
  */
 export function EdgeNetworkCard({
   nodes,
@@ -107,7 +107,7 @@ export function EdgeNetworkCard({
   return (
     <section
       className={cn(
-        "relative flex min-w-0 flex-col overflow-hidden rounded-2xl bg-card shadow-elev-1 edge-lit",
+        "@container/edge relative flex min-w-0 flex-col overflow-hidden rounded-2xl bg-card shadow-elev-1 edge-lit",
         className,
       )}
       aria-labelledby="edge-network-title"
@@ -128,7 +128,7 @@ export function EdgeNetworkCard({
         </div>
         <LiveDot label={m.overview_live()} className="mt-0.5 shrink-0" />
       </div>
-      <div className="relative z-[1] grid flex-1 content-center items-center gap-2 p-3 @3xl/main:grid-cols-[minmax(0,17rem)_minmax(0,1fr)] @5xl/main:grid-cols-1">
+      <div className="relative z-[1] grid flex-1 content-center items-center gap-2 p-3 @2xl/edge:grid-cols-[minmax(0,17rem)_minmax(0,1fr)]">
         <div className="relative mx-auto w-full max-w-60" aria-hidden>
           {/* Light under the globe, so the sphere sits in it rather than on the card. */}
           <div className="absolute inset-[6%] rounded-full blur-2xl globe-halo" />

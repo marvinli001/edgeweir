@@ -500,6 +500,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `site` | 网站：所属集群、启用状态、缓存键、分片、Cache-Tag 转发、WebSocket、证书、TLS 设置、缓存代际号、日志采样率、错误页是否拦截源站错误与保存时间 |
 | `site_domain` | 网站域名：名称与写法（`kind`：精确、泛域名、后缀、正则），同一写法的同一名称全局唯一 |
 | `site_star` | 用户星标 |
+| `hidden_cards` | 用户在概览与网站统计中隐藏的卡片 |
 | `tag` | 网站标签：名称（1–32 字符）与 `key`（NFC 后小写，唯一，不区分大小写去重）；只在控制台使用，不下发节点 |
 | `site_tag` | 网站与标签（每个网站最多 10 个） |
 | `origin_pool` | 源站池：超时、keepalive、失败阈值、回源 TLS 校验、回源 HTTP 版本与 gRPC、主动健康检查与会话保持（关闭时保留设置） |
@@ -640,6 +641,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0061_g16_access_logs_stats` | `asn_name`；分钟、小时、天统计与视图 `traffic_hour_stats` 的统计维度（`country_requests`、`country_bytes`、`asns`、`referers`、`browsers`、`oses`、`devices`、`http_versions`、`tls_versions`、`block_reasons`、`challenges_issued`、`challenges_passed`）；`site.log_blocked`、`log_query`、`log_headers`、`log_peer`；`access_log` 的 User-Agent、Referer、协议、地区、回源、拦截原因与可选字段等列 |
 | `0062_g17_site_tags` | `tag`、`site_tag` |
 | `0063_g18_image_convert` | `site.image_convert`；分钟、小时、天统计与视图 `traffic_hour_stats` 的 `image_bytes_saved` |
+| `0064_hidden_cards` | `hidden_cards` |
 
 ## 构建产物
 

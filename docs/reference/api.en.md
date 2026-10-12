@@ -505,9 +505,10 @@ Record fields:
 | `clusters.rollout` | `GET /clusters/{id}/rollout` | Configuration canary: policy, current rollout, and canary nodes |
 | `clusters.rollbackPreview` | `GET /clusters/{id}/rollback-preview` | What a rollback to the query parameter `revision` would publish; refuses like the rollback, writes nothing |
 | `overview.get` | `GET /overview` | Overview: cluster, node, and site counts, recent revisions, what needs attention |
+| `hiddenCards.get`, `hiddenCards.update` | `GET /hidden-cards`, `PATCH /hidden-cards` | The cards the caller hid on the overview and on sites' analytics |
 | `settings.nodeChannelCheck` | `GET /settings/node-channel-check` | The console's TLS handshake with its own node channel URL |
 
-Service accounts with `clusters:read` call `clusters.list` and `clusters.get`; they cannot call the others (403 `SERVICE_ACCOUNT_FORBIDDEN`). All are `GET`, so read-only AccessKeys call them.
+Service accounts with `clusters:read` call `clusters.list` and `clusters.get`; they cannot call the others (403 `SERVICE_ACCOUNT_FORBIDDEN`). All but `hiddenCards.update` are `GET`, so read-only AccessKeys call them.
 
 | Procedure | Response fields |
 | --- | --- |
@@ -515,6 +516,7 @@ Service accounts with `clusters:read` call `clusters.list` and `clusters.get`; t
 | `clusters.rollout` | `candidateChanges`: while a rollout runs, `{ sites: { added, changed, removed }, reasons }`; `sites` holds the sites the candidate adds, changes, and removes against the stable revision (`[{ id, name }]`), `reasons` the revisions published after the stable one (elements as in `GET /clusters/{id}/revisions`, without repeated reasons); `null` without a running rollout |
 | `clusters.rollbackPreview` | `{ revision, currentRevision, unchanged, sites: { added, changed, removed } }`: `currentRevision` is the cluster's latest revision (`null` without one); `unchanged` is `true` when the content equals the latest revision; `sites` are the changes against it |
 | `overview.get` | `attention`: `[{ kind, clusterId, clusterName, revision, at, count, version }]` in the order of the `kind` list below, `[]` when nothing needs attention. `kind`: `nodes_unhealthy`, `dns_failed`, `dns_blocked`, `upgrade_failed`, `canary_rolled_back`, `canary_awaiting_promotion`, `canary_running`, `nodes_lagging`, `nodes_no_address`. `revision`: the DNS revision or the candidate; `at`: the window end of `canary_running`, the rollback time of `canary_rolled_back`; `count`: the number of nodes; `version`: the target version of `upgrade_failed`. Fields that do not apply are `null`, `0`, or empty |
+| `hiddenCards.get`, `hiddenCards.update` | `{ overview, site }`: the card ids hidden on the overview and on the **Analytics** tab of sites (one choice for every site), in page order; every card not listed shows. `update` replaces only the pages in the request (at least one, else 400 `BAD_REQUEST`) and drops repeated ids; an id the page does not have is 400 `BAD_REQUEST`. Overview: `live-requests`, `live-egress`, `live-hit-ratio`, `live-nodes`, `requests`, `data-transfer`, `edge-network`, `hit-ratio`, `peak-bandwidth`, `4xx-rate`, `5xx-rate`, `status-codes`, `top-sites`, `top-nodes`, `top-countries`, `top-urls`, `top-ips`, `revisions`, `recents`, `sites`, `nodes`; site: `requests`, `data-transfer`, `hit-ratio`, `peak-bandwidth`, `4xx-rate`, `5xx-rate`, `status-codes`, `top-urls`, `top-ips`, `countries`, `asns`, `referers`, `clients`, `protocols` |
 | `settings.nodeChannelCheck` | `{ url, result, checkedAt }`: `url` is the node channel URL in effect; `result` is `ok` (the chain includes the node channel CA), `unreachable` (no handshake within 3 seconds), `mismatch` (another chain answered, or the URL is not `https`), or `refused` (a URL saved in system settings resolves to a special-purpose address the outbound policy does not allow; no connection is made). A result is reused for 30 seconds; advisory only |
 
 | Error code | Status | When |
