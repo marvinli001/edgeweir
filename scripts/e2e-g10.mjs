@@ -531,6 +531,7 @@ try {
     ],
     "client-b",
   );
+  const bannedAt = Date.now();
   assert.equal(servedBy(last), "unknown-host", `request ${SCAN.threshold + 1}: ${summary(last)}`);
   assert.equal(banned.status, 403, `after request ${SCAN.threshold + 1}: ${summary(banned)}`);
   const [other] = await requests([{ target: "node", host: EXACT }], "client-a");
@@ -560,7 +561,10 @@ try {
     async () => servedBy(await request({ target: "node", host: EXACT }, "client-b")) === "exact",
     60,
   );
-  // Lifted, client-b is counted on: scanning on bans it again.
+  // Lifted, client-b is counted on: scanning on bans it again. The node holds
+  // back another ban of the same network for a second after one
+  // (edgeweir.unknownhost BAN_GUARD), so the new scan starts after that.
+  await sleep(Math.max(0, bannedAt + 1500 - Date.now()));
   const again = await requests(
     [
       ...Array.from({ length: SCAN.threshold + 1 }, (_, i) => ({
