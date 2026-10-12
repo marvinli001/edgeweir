@@ -54,7 +54,11 @@ const hiddenCards: HiddenCards = { overview: [], site: [] };
 const core: Fixtures = {
   system: {
     // /setup only renders before the console is initialized.
-    status: () => ({ initialized: currentPath() !== "/setup", version: "20261006-afad833" }),
+    status: () => ({
+      initialized: currentPath() !== "/setup",
+      version: "20261006-afad833",
+      demo: true,
+    }),
     setup: () => ({ userId: "lab-operator" }),
   },
   account: {
@@ -66,6 +70,7 @@ const core: Fixtures = {
         twoFactorEnabled: true,
       },
       serviceAccount: null,
+      demo: false,
     }),
   },
   hiddenCards: {

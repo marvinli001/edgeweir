@@ -47,7 +47,9 @@ function initials(name: string) {
   );
 }
 
-export function NavUser({ user }: { user: { name: string; email: string } }) {
+/** The account menu; the demo account shows that it can only view in place of its e-mail. */
+export function NavUser({ user }: { user: { name: string; email: string; demo?: boolean } }) {
+  const subtitle = user.demo ? m.user_menu_demo() : user.email;
   const { isMobile } = useSidebar();
   const { theme, resolvedTheme, setTheme } = useTheme();
   const navigate = useNavigate();
@@ -73,7 +75,12 @@ export function NavUser({ user }: { user: { name: string; email: string } }) {
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
               <span className="truncate font-medium">{user.name}</span>
-              <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+              <span
+                className="truncate text-xs text-muted-foreground"
+                data-testid={user.demo ? "demo-account" : undefined}
+              >
+                {subtitle}
+              </span>
             </div>
             <HugeiconsIcon
               icon={MoreVerticalCircle01Icon}
@@ -91,7 +98,7 @@ export function NavUser({ user }: { user: { name: string; email: string } }) {
               <DropdownMenuLabel className="p-0 font-normal">
                 <div className="flex flex-col px-1 py-1.5 text-left text-sm leading-tight">
                   <span className="truncate font-medium text-foreground">{user.name}</span>
-                  <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+                  <span className="truncate text-xs text-muted-foreground">{subtitle}</span>
                 </div>
               </DropdownMenuLabel>
             </DropdownMenuGroup>

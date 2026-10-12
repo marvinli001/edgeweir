@@ -40,7 +40,7 @@ export const Route = createFileRoute("/_app")({
 });
 
 function AppLayout() {
-  const { session } = Route.useRouteContext();
+  const { session, me } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   // Site pages record themselves once their name is known.
   React.useEffect(() => {
@@ -53,7 +53,10 @@ function AppLayout() {
       style={{ "--sidebar-width": "calc(var(--spacing) * 64)" } as React.CSSProperties}
     >
       <QuickActionsProvider>
-        <AppSidebar variant="inset" user={{ name: session.user.name, email: session.user.email }} />
+        <AppSidebar
+          variant="inset"
+          user={{ name: session.user.name, email: session.user.email, demo: me.demo }}
+        />
         <SidebarInset>
           <Outlet />
         </SidebarInset>

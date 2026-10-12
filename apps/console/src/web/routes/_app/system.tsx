@@ -6,6 +6,7 @@ import * as React from "react";
 import * as z from "zod";
 import { AcmeDirectoryCard } from "@/components/acme-directory";
 import { CopyButton } from "@/components/copy-button";
+import { DemoSettingsCard } from "@/components/demo-settings";
 import { LogRetentionCard } from "@/components/log-retention";
 import { NodeChannelCard } from "@/components/node-channel";
 import { UrlScopeBadge } from "@/components/node-enrollment";
@@ -182,6 +183,7 @@ function GeneralSettings() {
       <UsageSettingsCard />
       <LogRetentionCard />
       <PlatformErrorPagesCard />
+      <DemoSettingsCard />
     </>
   );
 }

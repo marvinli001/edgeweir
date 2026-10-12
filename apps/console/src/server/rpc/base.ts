@@ -1,4 +1,9 @@
-import { contract, oneTimeSecretProcedures, serviceAccountScopeFor } from "@edgeweir/contract";
+import {
+  contract,
+  DEMO_USER_ID,
+  oneTimeSecretProcedures,
+  serviceAccountScopeFor,
+} from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { implement, ORPCError } from "@orpc/server";
 import { and, eq } from "drizzle-orm";
@@ -65,6 +70,14 @@ function refuseStoredSecret(context: RequestContext, path: readonly string[]) {
     );
 }
 
+/** POST procedures that change nothing: read-only callers may use them. */
+const READ_ONLY_POSTS: ReadonlySet<string> = new Set(["rules.validate"]);
+
+/** Whether a read-only caller (a read AccessKey, the demo account) may call the procedure. */
+function readOnlyAllowed(method: string, path: readonly string[]): boolean {
+  return method === "GET" || READ_ONLY_POSTS.has(path.join("."));
+}
+
 /** Scope applies before every public/optional-auth procedure as well as authed routes. */
 export const os = implementation.use(async ({ context, next, procedure, path }) => {
   const apiKey = context.headers.get(API_KEY_HEADER);
@@ -91,18 +104,17 @@ export const os = implementation.use(async ({ context, next, procedure, path }) 
     );
   if (!key?.enabled) throw new ORPCError("UNAUTHORIZED");
   const method = procedure["~orpc"].route.method ?? "POST";
-  if (
-    keyScope(key.permissions) === "read" &&
-    method !== "GET" &&
-    path.join(".") !== "rules.validate"
-  )
+  if (keyScope(key.permissions) === "read" && !readOnlyAllowed(method, path))
     fail("ACCESS_KEY_READ_ONLY", "access key is read only");
   refuseStoredSecret(context, path);
   return next({ context: { apiSession: session } });
 });
 
-/** Resolves the caller: the operator's session (cookie or AccessKey) or a service account. */
-export const authed = os.use(async ({ context, next }) => {
+/**
+ * Resolves the caller: the operator's session (cookie or AccessKey), the demo account's session
+ * (reads only) or a service account.
+ */
+export const authed = os.use(async ({ context, next, procedure, path }) => {
   const account = context.serviceAccount;
   if (account) {
     // `os` already enforced its scopes.
@@ -117,12 +129,16 @@ export const authed = os.use(async ({ context, next }) => {
       context: {
         user: { id: account.id, name: account.name, email: "" } as SessionResult["user"],
         actor,
+        demo: false,
       },
     });
   }
   const result = await readSession(context);
   if (!result) throw new ORPCError("UNAUTHORIZED", { message: "authentication required" });
   const { user } = result;
+  const demo = user.id === DEMO_USER_ID;
+  if (demo && !readOnlyAllowed(procedure["~orpc"].route.method ?? "POST", path))
+    fail("DEMO_READ_ONLY", "the demo account can only read");
   const actor: Actor = {
     type: context.headers.has(API_KEY_HEADER) ? "api_key" : "user",
     id: user.id,
@@ -130,7 +146,7 @@ export const authed = os.use(async ({ context, next }) => {
     ip: context.ip,
     userAgent: context.userAgent,
   };
-  return next({ context: { user, actor } });
+  return next({ context: { user, actor, demo } });
 });
 
 /** The response of procedures that return nothing else. */

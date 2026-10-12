@@ -38,6 +38,19 @@ export const AUTH_HTTP_ROUTES: Readonly<Record<string, readonly ("GET" | "POST")
   "/passkey/delete-passkey": ["POST"],
 };
 
+/**
+ * Allowed endpoints that change the signed-in account (its password, second
+ * factor or passkeys): the demo account may not call them.
+ */
+export const ACCOUNT_CHANGE_ROUTES: ReadonlySet<string> = new Set([
+  "/change-password",
+  "/two-factor/enable",
+  "/two-factor/disable",
+  "/passkey/generate-register-options",
+  "/passkey/verify-registration",
+  "/passkey/delete-passkey",
+]);
+
 /** Whether an /api/auth request (path below the base path) is on the allow list. */
 export function isAllowedAuthRoute(method: string, path: string): boolean {
   const methods = Object.hasOwn(AUTH_HTTP_ROUTES, path) ? AUTH_HTTP_ROUTES[path] : undefined;

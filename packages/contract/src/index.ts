@@ -24,6 +24,7 @@ import {
   dnsCredentialsContract,
   httpsContract,
 } from "./certificates";
+import { demoProcedures } from "./demo";
 import { dnsContract } from "./dns";
 import { edgeProcedures } from "./edge";
 import { errorPagesContract, maintenanceContract, platformErrorPages } from "./error-pages";
@@ -591,6 +592,8 @@ export const contract = {
       .route({ method: "PUT", path: "/settings/error-pages", tags: ["settings"] })
       .input(platformErrorPages)
       .output(platformErrorPages),
+    /** The view-only demo account; switching it off deletes the account and its sessions. */
+    ...demoProcedures,
   },
   auditLogs: {
     list: oc
@@ -622,6 +625,7 @@ export const oneTimeSecretProcedures: ReadonlySet<string> = new Set([
 
 export * from "./access-keys";
 export * from "./alerts";
+export * from "./demo";
 export * from "./dns";
 export * from "./dns-providers";
 export * from "./edge";

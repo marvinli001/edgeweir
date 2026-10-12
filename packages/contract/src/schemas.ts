@@ -1222,6 +1222,8 @@ export const siteStarInput = z.object({ id: uuid, starred: z.boolean() });
 export const systemStatus = z.object({
   initialized: z.boolean(),
   version: z.string(),
+  /** The demo account is on (settings.demo): sign-in offers it. */
+  demo: z.boolean(),
 });
 
 export const setupInput = z.object({
@@ -1613,6 +1615,8 @@ export const me = z.object({
   serviceAccount: z
     .object({ id: z.string(), name: z.string(), scopes: z.array(z.string()) })
     .nullable(),
+  /** The caller is the demo account: it can only read. */
+  demo: z.boolean(),
 });
 
 export type OriginAllowList = z.infer<typeof originAllowList>;

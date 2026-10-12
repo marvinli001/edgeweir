@@ -9,7 +9,7 @@ The console has one account, created by the setup wizard (`/setup`, **Create you
 | Item | Description |
 | --- | --- |
 | Setup fields | **Setup token** (the one-time token printed in the console log), **Name** (1–100 characters), **Email** (the sign-in email), **Password** (12–128 characters). For the steps, see [Quick start](first-site.en.md) |
-| Other accounts | Sign-up is closed; the console has no user management and no way to add a second account |
+| Other accounts | Sign-up is closed; the console has no user management and no way to add a second account. The view-only demo account is switched in [System settings → Demo account](system.en.md#demo-account) and is not a second operator account |
 | Name and email | The console offers no way to change them |
 | Password | Changed in [Account security](#account-security); the web UI has no password recovery or reset. A forgotten password is reset on the server, see [Account recovery](#account-recovery) |
 | API | AccessKeys (prefix `ewk_`) call `/api/v1` as this account; create them in [Personal settings](#personal-settings) |

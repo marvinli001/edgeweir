@@ -4,6 +4,7 @@ import { createAccessKey, listAccessKeys, revokeAccessKey } from "../../services
 import { serviceAccountMe, toMe } from "../../services/account";
 import { listAttention } from "../../services/attention";
 import { auditFacets, listAuditLogs } from "../../services/audit";
+import { demoAuditEntry, isDemoEnabled } from "../../services/demo";
 import { getHiddenCards, updateHiddenCards } from "../../services/hidden-cards";
 import { ONLINE_WINDOW_SECONDS } from "../../services/nodes";
 import { toRevisionDto } from "../../services/revisions";
@@ -50,6 +51,7 @@ export const systemRouter = {
     status: os.system.status.handler(async ({ context }) => ({
       initialized: await isInitialized(context.app.db),
       version: context.app.env.version,
+      demo: await isDemoEnabled(context.app.db),
     })),
     setup: os.system.setup.handler(async ({ input, context }) =>
       runSetup(context.app, input, { ip: context.ip, userAgent: context.userAgent }),
@@ -57,7 +59,9 @@ export const systemRouter = {
   },
   account: {
     me: authed.account.me.handler(({ context }) =>
-      context.serviceAccount ? serviceAccountMe(context.serviceAccount) : toMe(context.user),
+      context.serviceAccount
+        ? serviceAccountMe(context.serviceAccount)
+        : toMe(context.user, context.demo),
     ),
   },
   hiddenCards: {
@@ -106,9 +110,10 @@ export const systemRouter = {
     ),
   },
   auditLogs: {
-    list: authed.auditLogs.list.handler(({ input, context }) =>
-      listAuditLogs(context.app.db, input),
-    ),
+    list: authed.auditLogs.list.handler(async ({ input, context }) => {
+      const page = await listAuditLogs(context.app.db, input);
+      return context.demo ? { ...page, items: page.items.map(demoAuditEntry) } : page;
+    }),
     facets: authed.auditLogs.facets.handler(({ context }) => auditFacets(context.app.db)),
   },
 };

@@ -1113,6 +1113,7 @@ export const systemFixtures: Fixtures = {
       source: "setting",
     }),
     usage: () => ({ retentionDays: 90, offlineThresholdMinutes: 30 }),
+    demo: () => ({ enabled: true }),
     logRetention: () => ({ ...logRetention, storage: "lite" }),
     setLogRetention: (input) => {
       Object.assign(logRetention, input);

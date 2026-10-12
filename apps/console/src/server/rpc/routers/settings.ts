@@ -1,6 +1,7 @@
 import { logRetentionSetting, setLogRetention } from "../../services/access-logs";
 import { getAcmeDirectory, setAcmeDirectory } from "../../services/acme-directory";
 import { getBanSettings, setBanSettings } from "../../services/bans";
+import { isDemoEnabled, setDemo } from "../../services/demo";
 import { getPlatformErrorPages, setPlatformErrorPages } from "../../services/error-pages";
 import { checkNodeChannel } from "../../services/node-channel-check";
 import { getNodeChannel, nodeChannelUrl, setNodeChannel } from "../../services/node-channel-url";
@@ -76,6 +77,12 @@ export const settingsRouter = {
     probes: authed.settings.probes.handler(({ context }) => getProbeSettings(context.app.db)),
     setProbes: authed.settings.setProbes.handler(({ input, context }) =>
       setProbeSettings(context.app.db, input, context.actor),
+    ),
+    demo: authed.settings.demo.handler(async ({ context }) => ({
+      enabled: await isDemoEnabled(context.app.db),
+    })),
+    setDemo: authed.settings.setDemo.handler(({ input, context }) =>
+      setDemo(context.app, input, context.actor),
     ),
     usage: authed.settings.usage.handler(({ context }) => getUsageSettings(context.app.db)),
     setUsage: authed.settings.setUsage.handler(({ input, context }) =>

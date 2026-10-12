@@ -1,4 +1,4 @@
-import { ArrowLeft01Icon, FingerPrintIcon } from "@hugeicons/core-free-icons";
+import { ArrowLeft01Icon, FingerPrintIcon, ViewIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
 import { OtpField } from "@/components/appica/otp-field";
@@ -26,10 +26,13 @@ export function LoginForm({
   onSubmit,
   onVerify,
   onPasskey,
+  onDemo,
 }: {
   onSubmit: (values: { email: string; password: string }) => Promise<LoginResult>;
   onVerify: (values: { code: string; backup: boolean }) => Promise<string | null>;
   onPasskey?: () => Promise<string | null>;
+  /** Signs in to the demo account (shown while the console offers it). */
+  onDemo?: () => Promise<string | null>;
 }) {
   const [view, setView] = React.useState<View>("password");
   const [email, setEmail] = React.useState("");
@@ -110,19 +113,29 @@ export function LoginForm({
               {pending ? <Spinner /> : null}
               {m.login_submit()}
             </Button>
+            {onPasskey || onDemo ? <FieldSeparator>{m.login_or()}</FieldSeparator> : null}
+            {onDemo ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pending}
+                onClick={() => void run("password", onDemo)}
+                data-testid="login-demo"
+              >
+                <HugeiconsIcon icon={ViewIcon} strokeWidth={2} />
+                {m.login_demo()}
+              </Button>
+            ) : null}
             {onPasskey ? (
-              <>
-                <FieldSeparator>{m.login_or()}</FieldSeparator>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={pending}
-                  onClick={() => void run("password", onPasskey)}
-                >
-                  <HugeiconsIcon icon={FingerPrintIcon} strokeWidth={2} />
-                  {m.login_passkey()}
-                </Button>
-              </>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pending}
+                onClick={() => void run("password", onPasskey)}
+              >
+                <HugeiconsIcon icon={FingerPrintIcon} strokeWidth={2} />
+                {m.login_passkey()}
+              </Button>
             ) : null}
           </FieldGroup>
         </form>
