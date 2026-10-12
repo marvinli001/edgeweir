@@ -34,8 +34,9 @@ While an active node of the cluster lacks the capability `access-auth-v1`, the t
 | Excluded path prefixes | As path prefixes | Paths starting with one of them are not checked |
 
 - The path is nginx's normalized path (percent-decoded, as the rule field `http.request.uri.path`). Signed URLs of kinds B and C are matched by the path without their two signature segments.
-- The origin receives the raw path the visitor sent. When it holds an encoded `/`, `\`, `.`, `%` or `;` (`%2F`, `%5C`, `%2E`, `%25`, `%3B`, in either case), a `%u` escape, a `\`, a `;`, a `#`, or a `.` or `..` segment, or starts with `//`, the origin may route it elsewhere than the normalized path (`/admin/..%2Fx` is `/x` on the node, but under `/admin/` at a Go ServeMux origin): such a request is inside every rule's path prefixes and extensions, no excluded prefix applies to it, and it is not cached; when the domains of more than one rule cover the Host, which rule checks it cannot be told and it gets 400 (`auth-path-ambiguous`). Ordinary URLs can hold these markers too (`100%25.pdf`, `;jsessionid=`). Excluded prefixes compare exactly.
-- **The first enabled rule whose scope the request matches decides**; later rules are not looked at. Disabled rules are not sent to nodes.
+- The origin receives the raw path the visitor sent. When it holds an encoded `/`, `\`, `.`, `%` or `;` (`%2F`, `%5C`, `%2E`, `%25`, `%3B`, in either case), a `%u` escape, a `\`, a `;`, a `#`, or a `.` or `..` segment, or starts with `//`, the origin may route it elsewhere than the normalized path (`/admin/..%2Fx` is `/x` on the node, but under `/admin/` at a Go ServeMux origin): such a request is inside every rule's path prefixes and extensions, no excluded prefix applies to it, and it is not cached; when the domains of more than one rule cover the Host, which rule checks it cannot be told and it gets 400 (`auth-path-ambiguous`); so does one with a single rule when that rule is forward authentication, without asking the service (it decides on the path it is given, which the origin may read otherwise). Ordinary URLs can hold these markers too (`100%25.pdf`, `;jsessionid=`). Excluded prefixes compare exactly; no excluded prefix applies to a raw path with `//` inside (the node merges slashes, while an origin that keeps the empty segment may hand `/admin//public/x` to its `/admin/` handler), whose scope and caching still follow the merged path.
+- **The first enabled rule whose scope the request matches decides**; later rules are not looked at. Disabled rules are not sent to nodes. Path prefixes ignore case: with an origin that does not (S3, Go, Django), `/TEAM/x` matches an earlier `/team/` rule while the origin treats it as another resource, so put the stricter rule first.
+- The identity headers rules set (Basic's `X-Auth-User`, forward authentication's **Response headers copied to the origin**) are removed from the request when the rule is picked: a visitor's own values neither reach the origin nor show in the rules' `http.request.headers.*`.
 - Domains removed from the site disappear from scopes; when that removes all of a scope's domains, the rule covers every domain of the site (more requests are authenticated, never fewer).
 
 ## Order
@@ -57,6 +58,8 @@ While an active node of the cluster lacks the capability `access-auth-v1`, the t
 
 ACME HTTP-01 requests, the reserved prefix `/.edgeweir/` and the node's local prefetch requests are not authenticated (a prefetched signed URL loses its signature too and fills the same cached object), and skip steps 5–9 and the WebSocket origin check; their responses get the headers as usual. Config rules that override Force HTTPS run after authentication, so they do not apply to requests a rule checks.
 
+Access control (geo, hotlink, user agents) and maintenance mode decide on the normalized path as well; for an ambiguous raw path (see [Scope and selection](#scope-and-selection)) or one with `//` inside, their excluded prefixes, the hotlink redirect target's exemption and maintenance mode's allowed paths do not apply.
+
 ## Basic authentication
 
 | Field | Values | Default |
@@ -72,8 +75,8 @@ ACME HTTP-01 requests, the reserved prefix `/.edgeweir/` and the node's local pr
 | Changes | An existing user's empty password keeps it; new and renamed users need a password |
 | Refusal | 401, `WWW-Authenticate: Basic realm="…", charset="UTF-8"`, `X-Edgeweir-Error: auth-required`, with the site's 401 page (else its "Other 4xx" page, else the built-in page). A 401 page set to redirect or to another status does not apply to Basic (browsers ask for credentials on a 401 only) |
 | Allowed | By default `Authorization` is removed from the request to the origin and the request is cached as usual; when kept, the usual rule applies: requests with `Authorization` are cached only when a cache rule allows it |
-| Node caches | Results are kept per worker: successes 60 s, failures 10 s, by the hash of the `Authorization` value and the secret's version; changing a password or removing a user ends old results at once |
-| Limits | Hashing holds the node's worker, so every verification counts before it hashes (results kept do not): per site, 10 in 10 seconds for one client network (an IPv4 address or an IPv6 /64), 100 in 10 seconds for its wider network (IPv4 /24, IPv6 /48), 20 per second per site on a node and 50 per second per node; beyond them 429 (`auth-rate-limited`, with `Retry-After`) without hashing |
+| Node caches | Results are kept per worker: successes 60 s, failures 10 s, by the decoded user name and password (SHA-256) and the secret's version, so other spellings of the Basic scheme (case, spaces) share one result; changing a password or removing a user ends old results at once |
+| Limits | Hashing holds the node's worker, so every verification counts before it hashes (results kept do not): per site, 10 in 10 seconds for one client network (an IPv4 address or an IPv6 /64), 100 in 10 seconds for its wider network (IPv4 /24, IPv6 /48), 20 per second per site on a node and 50 per second per node; beyond them 429 (`auth-rate-limited`, with `Retry-After`) without hashing; an attempt the site's or the node's limit refuses does not count against the client's networks |
 
 Check:
 
@@ -326,7 +329,7 @@ Requests authentication refused (401, 403, 429, 503, a browser's first request w
 | `auth-denied` | 403 (forward authentication also 401 or 3xx) | A missing or wrong signature; forward authentication refused |
 | `auth-expired` | 403 | An expired signature or a timestamp ahead |
 | `auth-rate-limited` | 429 | Basic verification limit |
-| `auth-path-ambiguous` | 400 | An ambiguous raw path on a Host with more than one authentication rule |
+| `auth-path-ambiguous` | 400 | An ambiguous raw path on a Host with more than one authentication rule, or whose one rule is forward authentication |
 | `auth-unavailable` | 503 | The authentication service is unavailable |
 
 Access control refusals do not count as authentication failures:
