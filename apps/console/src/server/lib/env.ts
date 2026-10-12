@@ -4,6 +4,7 @@ import { normalizeCidr, releaseBaseUrl } from "@edgeweir/contract";
 import * as z from "zod";
 import { TrustedProxies } from "./client-ip";
 import { decodeMasterKey, masterKeyProblem } from "./envelope";
+import { logger } from "./logger";
 
 /**
  * A rejected value for an error message, a password in it masked: a platform
@@ -28,6 +29,8 @@ const originUrl = (schemes: readonly ("http" | "https" | "ws" | "wss")[]) =>
       !schemes.some((scheme) => url.protocol === `${scheme}:`) ||
       url.username ||
       url.password ||
+      // A platform reference that did not expand (`https://${DOMAIN}`) parses too.
+      !/^(?:[a-z0-9_.-]+|\[[0-9a-f:.]+\])$/.test(url.hostname) ||
       url.pathname !== "/" ||
       url.search ||
       url.hash
@@ -201,6 +204,13 @@ export function parseOutboundAllowCidrs(text: string): string[] {
     });
 }
 
+/** Invalid configuration: one "<VARIABLE>: <problem>" entry per problem. */
+export class ConfigError extends Error {
+  constructor(readonly problems: string[]) {
+    super(`invalid configuration:\n${problems.map((p) => `  ${p}`).join("\n")}`);
+  }
+}
+
 /** Rolling image version `<YYYYMMDD>-<commit>` baked in by the Dockerfile; `dev` from source. */
 export const VERSION = process.env.EDGEWEIR_VERSION ?? "dev";
 
@@ -233,7 +243,7 @@ function withSecretFiles(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
     env[name] = value;
   }
   if (problems.length > 0) {
-    throw new Error(`invalid configuration:\n${problems.map((p) => `  ${p}`).join("\n")}`);
+    throw new ConfigError(problems);
   }
   return env;
 }
@@ -255,8 +265,7 @@ export function defaultNodeApiUrl(
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const parsed = schema.safeParse(withSecretFiles(source));
   if (!parsed.success) {
-    const issues = parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n");
-    throw new Error(`invalid configuration:\n${issues}`);
+    throw new ConfigError(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`));
   }
   const env = parsed.data;
   if (
@@ -265,24 +274,20 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
       decodeMasterKey(env.EDGEWEIR_MASTER_KEY),
     )
   ) {
-    throw new Error(
-      "invalid configuration:\n  EDGEWEIR_MASTER_KEY_PREVIOUS: is the same key as EDGEWEIR_MASTER_KEY (set it to the key before the rotation)",
-    );
+    throw new ConfigError([
+      "EDGEWEIR_MASTER_KEY_PREVIOUS: is the same key as EDGEWEIR_MASTER_KEY (set it to the key before the rotation)",
+    ]);
   }
   let trustedProxies: TrustedProxies;
   try {
     trustedProxies = new TrustedProxies(env.EDGEWEIR_TRUSTED_PROXIES);
   } catch (error) {
-    throw new Error(
-      `invalid configuration:\n  EDGEWEIR_TRUSTED_PROXIES: ${(error as Error).message}`,
-    );
+    throw new ConfigError([`EDGEWEIR_TRUSTED_PROXIES: ${(error as Error).message}`]);
   }
   try {
     parseOutboundAllowCidrs(env.EDGEWEIR_OUTBOUND_ALLOW_CIDRS);
   } catch (error) {
-    throw new Error(
-      `invalid configuration:\n  EDGEWEIR_OUTBOUND_ALLOW_CIDRS: ${(error as Error).message}`,
-    );
+    throw new ConfigError([`EDGEWEIR_OUTBOUND_ALLOW_CIDRS: ${(error as Error).message}`]);
   }
   const nodeApiUrl = env.EDGEWEIR_NODE_API_URL ?? defaultNodeApiUrl(env);
   const names = new Set<string>(["localhost", "127.0.0.1", "::1", hostname()]);
@@ -298,4 +303,19 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     trustedProxies,
     version: VERSION,
   };
+}
+
+/**
+ * loadEnv for the console process: invalid configuration exits with one log
+ * line per problem and no stack trace. Log viewers such as Zeabur's fold the
+ * indented lines of a thrown error into the line above, hiding the variable.
+ */
+export function loadEnvOrExit(source: NodeJS.ProcessEnv = process.env): Env {
+  try {
+    return loadEnv(source);
+  } catch (error) {
+    if (!(error instanceof ConfigError)) throw error;
+    for (const problem of error.problems) logger.error(`invalid configuration: ${problem}`);
+    process.exit(1);
+  }
 }

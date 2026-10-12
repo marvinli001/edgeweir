@@ -1,11 +1,12 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import {
   ENV_VARIABLES,
   FILE_VARIABLES,
   loadEnv,
+  loadEnvOrExit,
   parseOutboundAllowCidrs,
 } from "../../src/server/lib/env";
 
@@ -41,6 +42,8 @@ describe("console and node channel URLs", () => {
     "https://admin:secret@cdn-admin.example.com",
     "ftp://cdn-admin.example.com",
     "https://",
+    "https://${ZEABUR_WEB_DOMAIN}",
+    "https://{{RAILWAY_PUBLIC_DOMAIN}}",
   ])("refuses EDGEWEIR_PUBLIC_URL %j at startup, also with a node channel URL", (value) => {
     for (const nodeUrl of [undefined, node]) {
       expect(() =>
@@ -297,5 +300,42 @@ describe("secrets from files", () => {
       expect.stringMatching(/^ {2}DATABASE_URL_FILE: set either DATABASE_URL or/),
       expect.stringMatching(/^ {2}BETTER_AUTH_SECRET_FILE: set either BETTER_AUTH_SECRET or/),
     ]);
+  });
+});
+
+describe("invalid configuration at startup", () => {
+  it("exits with one log line per problem and no stack trace", () => {
+    const lines: string[] = [];
+    const write = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+      lines.push(String(chunk));
+      return true;
+    });
+    const exit = vi.spyOn(process, "exit").mockImplementation((code) => {
+      throw new Error(`exit ${code}`);
+    });
+    try {
+      expect(() =>
+        loadEnvOrExit({ ...base, EDGEWEIR_MASTER_KEY: "not a key", EDGEWEIR_PUBLIC_URL: "x:3000" }),
+      ).toThrow("exit 1");
+    } finally {
+      write.mockRestore();
+      exit.mockRestore();
+    }
+    expect(lines.every((line) => line.endsWith("}\n") && !line.slice(0, -1).includes("\n"))).toBe(
+      true,
+    );
+    expect(lines.map((line) => JSON.parse(line))).toEqual([
+      expect.objectContaining({
+        level: "error",
+        msg: expect.stringMatching(
+          /^invalid configuration: EDGEWEIR_MASTER_KEY: is not valid base64/,
+        ),
+      }),
+      expect.objectContaining({
+        level: "error",
+        msg: expect.stringMatching(/^invalid configuration: EDGEWEIR_PUBLIC_URL: expected http/),
+      }),
+    ]);
+    expect(lines.join("")).not.toContain("stack");
   });
 });

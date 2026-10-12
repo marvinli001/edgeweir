@@ -7,7 +7,7 @@ import { startWorker } from "./jobs/worker";
 import { createAuth } from "./lib/auth";
 import { assertAuthSecret, loadAuthSecret } from "./lib/auth-secret";
 import type { AppContext } from "./lib/context";
-import { loadEnv } from "./lib/env";
+import { loadEnvOrExit } from "./lib/env";
 import { MasterKey } from "./lib/envelope";
 import { ConfigEventBus } from "./lib/events";
 import { logger, setLogLevel } from "./lib/logger";
@@ -93,7 +93,7 @@ export interface Running {
 
 /** Loads config, migrates the database and starts the roles selected by ROLE. */
 export async function bootstrap(): Promise<Running> {
-  const env = loadEnv();
+  const env = loadEnvOrExit();
   setLogLevel(env.LOG_LEVEL);
   const log = logger;
   log.info("starting edgeweir console", { version: env.version, role: env.ROLE });
