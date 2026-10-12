@@ -481,7 +481,9 @@ try {
         peer,
         "sh",
         "-c",
-        `(echo NAME; sleep 2) | openssl s_client -quiet -connect node:25010 -servername ${servername} 2>/dev/null`,
+        // -no_ign_eof: close at the end of the input (-quiet implies -ign_eof, which
+        // waits for the app's 600 s idle timeout).
+        `(echo NAME; sleep 2) | openssl s_client -quiet -no_ign_eof -connect node:25010 -servername ${servername} 2>/dev/null`,
       ]);
     } catch (error) {
       return `error ${error.code ?? ""}`;
