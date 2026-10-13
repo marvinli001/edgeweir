@@ -19,7 +19,43 @@ import { upgradeLegacyEnvelopes } from "./services/envelope-upgrade";
 import { nodeChannelUrl } from "./services/node-channel-url";
 import { announceSetupToken, ensureSetupToken } from "./services/setup";
 
-async function waitForDatabase(pool: import("pg").Pool, timeoutMs = 60_000) {
+/**
+ * Node.js codes of a server certificate that failed verification (tls docs, "X509 certificate
+ * error codes"; ERR_TLS_CERT_ALTNAME_INVALID from checkServerIdentity).
+ */
+const CERTIFICATE_ERRORS = new Set([
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "SELF_SIGNED_CERT_IN_CHAIN",
+  "UNABLE_TO_GET_ISSUER_CERT",
+  "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+  "CERT_UNTRUSTED",
+  "CERT_HAS_EXPIRED",
+  "CERT_NOT_YET_VALID",
+  "HOSTNAME_MISMATCH",
+  "ERR_TLS_CERT_ALTNAME_INVALID",
+]);
+
+/**
+ * pg-connection-string 2.x treats sslmode=prefer, require and verify-ca as verify-full unless
+ * uselibpqcompat=true; sslrootcert is the CA to verify against, sslmode=no-verify skips it.
+ */
+const DATABASE_CERTIFICATE_HINT =
+  "node-postgres verifies the server certificate for sslmode=require too (libpq does not): add the CA to DATABASE_URL with sslrootcert=<file>, or skip the check with uselibpqcompat=true&sslmode=require (libpq's behaviour) or sslmode=no-verify";
+
+/** What the log adds to a failed database connection: the sslmode of a certificate error. */
+export function databaseErrorHint(error: unknown): string | undefined {
+  const code = (error as { code?: unknown } | null | undefined)?.code;
+  return typeof code === "string" && CERTIFICATE_ERRORS.has(code)
+    ? DATABASE_CERTIFICATE_HINT
+    : undefined;
+}
+
+export async function waitForDatabase(
+  pool: import("pg").Pool,
+  log: Pick<typeof logger, "warn"> = logger,
+  timeoutMs = 60_000,
+) {
   const started = Date.now();
   for (let attempt = 1; ; attempt++) {
     try {
@@ -27,7 +63,12 @@ async function waitForDatabase(pool: import("pg").Pool, timeoutMs = 60_000) {
       return;
     } catch (error) {
       if (Date.now() - started > timeoutMs) throw error;
-      logger.warn("database not reachable yet", { attempt, error: (error as Error).message });
+      const hint = databaseErrorHint(error);
+      log.warn("database not reachable yet", {
+        attempt,
+        error: (error as Error).message,
+        ...(hint ? { hint } : {}),
+      });
       await new Promise((r) => setTimeout(r, Math.min(500 * attempt, 3000)));
     }
   }
