@@ -29,6 +29,14 @@
 #   node-wss trusts that CA, enrolls through the proxy, stays online with
 #   heartbeats for more than 30 seconds and applies and serves revisions;
 #   the URL in effect before is saved again.
+#   Node channel URL (scripts/e2e-channel.mjs, profile channel, ADR-0046):
+#   node-channel enrolls with https://channel-old.e2e.test:8443 (a layer-4
+#   relay to the console) and follows the URL saved in the system settings:
+#   to https://channel.e2e.test:8443 (the core node too) without a restart,
+#   staying online once the relay is gone and after a restart; the old name
+#   leaves the certificate; an unreachable URL is reported and not taken;
+#   https -> wss://wss.e2e.test -> https, then the WebSocket entry closes;
+#   `edgeweir-node set-server` brings a lost node back with its identity.
 #   Core gaps P0 (scripts/e2e-p0.mjs): Idempotency-Key, service accounts with
 #   scopes disabling a site, usage and its completeness watermark,
 #   configuration canary with automatic promotion and rollback, DNS mass
@@ -280,7 +288,7 @@ done
 # (.e2e/*-state.json, or clusters and nodes they create). Every section needs
 # core, which only runs on a fresh stack.
 SECTIONS=(
-  "core:" "m1:" "analytics:" "m2:" "install:" "wss:" "m3:" "m4:" "m5:" "m6-logs:m5" "m6-upgrades:m5"
+  "core:" "m1:" "analytics:" "m2:" "install:" "wss:" "channel:" "m3:" "m4:" "m5:" "m6-logs:m5" "m6-upgrades:m5"
   "p0:m5 m6-upgrades" "g1:p0 m5 m6-upgrades" "g2:m6-upgrades" "g3:m6-upgrades" "g4:m6-upgrades"
   "g5:m6-upgrades" "dns:m5 m6-upgrades" "g6:dns m5 m6-upgrades" "g7:m6-upgrades" "h2:m6-upgrades"
   "g8:m6-upgrades" "g9:m6-upgrades" "g15:m6-upgrades" "g10:dns m5 m6-upgrades" "g11:m6-upgrades"
@@ -1290,6 +1298,22 @@ part checks node scripts/e2e-wss.mjs || fail "wss end-to-end checks failed"
 part cleanup node scripts/e2e-wss.mjs --cleanup || fail "wss cleanup failed"
 "${COMPOSE[@]}" --profile wss rm -sfv node-wss wss-proxy >/dev/null 2>&1 || true
 pass "WebSocket entry checks passed"
+}
+
+# ------------------------------------------------------------- section channel
+section_channel() {
+step "Node channel URL: enrolled nodes follow it (https and wss), stay online without the old address, set-server recovers a lost node"
+# A new node state each time: the cleanup deletes the node from the console.
+"${COMPOSE[@]}" --profile channel rm -sfv node-channel channel-relay wss-proxy >/dev/null 2>&1 || true
+docker volume rm -f "${COMPOSE_PROJECT_NAME:-edgeweir-e2e}_node-channel-state" >/dev/null 2>&1 || true
+channel_up() {
+  "${COMPOSE[@]}" --profile channel up -d --no-deps --wait wss-proxy channel-relay &&
+    "${COMPOSE[@]}" --profile channel up -d --no-deps node-channel
+}
+part channel-up channel_up || fail "could not start channel-relay and node-channel"
+part checks node scripts/e2e-channel.mjs || fail "channel end-to-end checks failed"
+part cleanup node scripts/e2e-channel.mjs --cleanup || fail "channel cleanup failed"
+pass "Node channel URL checks passed"
 }
 
 # ------------------------------------- sections m3 ... g18 (scripts/e2e-*.mjs)

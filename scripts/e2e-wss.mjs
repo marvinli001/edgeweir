@@ -161,7 +161,15 @@ await writeFile(STATE, JSON.stringify(state));
 // sections enroll their nodes with it.
 async function checks() {
   const saved = await a("PUT", "/settings/node-channel", { url: URL_WSS });
-  assert.deepEqual(saved, { url: URL_WSS, effectiveUrl: URL_WSS, source: "setting" });
+  assert.deepEqual(
+    {
+      url: saved.url,
+      effectiveUrl: saved.effectiveUrl,
+      source: saved.source,
+      serverName: saved.serverName,
+    },
+    { url: URL_WSS, effectiveUrl: URL_WSS, source: "setting", serverName: PROXY_HOST },
+  );
   // The proxy's own certificate checks out against the test CA; behind it the console's entry.
   const upgradeRequired = await inProxy(
     `printf 'GET /node-channel HTTP/1.1\\r\\nHost: ${PROXY_HOST}\\r\\nConnection: close\\r\\n\\r\\n' |

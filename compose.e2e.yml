@@ -57,6 +57,11 @@ services:
       - "${E2E_CONSOLE_PORT:-13000}:3000"
     volumes:
       - downloads:/srv/downloads:ro
+    networks:
+      default:
+        # channel section (scripts/e2e-channel.mjs): a second name of the node
+        # channel that enrolled nodes move to.
+        aliases: [channel.e2e.test]
     depends_on:
       postgres:
         condition: service_healthy
@@ -426,7 +431,7 @@ services:
   # wss-ca volume for node-wss).
   wss-proxy:
     image: openresty/openresty:1.31.1.1-bookworm@sha256:8005b87dcb25df5e202e71dcc4b8a2c20a4845a75302b2bb6ee816b5392883e4
-    profiles: ["wss"]
+    profiles: ["wss", "channel"]
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >-
@@ -474,6 +479,58 @@ services:
     networks:
       default: {}
     depends_on:
+      wss-proxy:
+        condition: service_healthy
+
+  # channel section (scripts/e2e-channel.mjs): the node channel's old
+  # address, channel-old.e2e.test:8443, relayed at layer 4 to the console
+  # (the node channel terminates its own TLS); stopping it takes the old
+  # address offline.
+  channel-relay:
+    image: node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
+    profiles: ["channel"]
+    command:
+      - node
+      - -e
+      - >-
+        require("node:net").createServer((c) => {
+        const u = require("node:net").connect(8443, "console");
+        c.pipe(u).pipe(c);
+        c.on("error", () => u.destroy()); u.on("error", () => c.destroy());
+        }).listen(8443)
+    init: true
+    read_only: true
+    networks:
+      default:
+        aliases: [channel-old.e2e.test]
+    depends_on:
+      console:
+        condition: service_healthy
+
+  # The node of the channel section: enrolled with the old address, it
+  # follows the node channel URL saved in the system settings
+  # (https://channel.e2e.test:8443, wss://wss.e2e.test through wss-proxy,
+  # whose test CA it trusts next to the system roots).
+  node-channel:
+    image: edgeweir-node:${E2E_TAG:-e2e}
+    profiles: ["channel"]
+    hostname: edge-channel
+    environment:
+      SSL_CERT_DIR: /etc/edgeweir-wss
+      EDGEWEIR_TRUSTED_CA: /etc/edgeweir-e2e/origin-ca.pem
+      EDGEWEIR_GEOIP_IPINFO: /etc/edgeweir-geoip/ipinfo_lite.mmdb
+      EDGEWEIR_GEOIP_CITY: /etc/edgeweir-geoip/city.mmdb
+      EDGEWEIR_GEOIP_ASN: /etc/edgeweir-geoip/asn.mmdb
+    volumes:
+      - node-channel-state:/var/lib/edgeweir-node
+      - wss-ca:/etc/edgeweir-wss:ro
+      - geoip-test-data:/etc/edgeweir-geoip:ro
+      - origin-ca:/etc/edgeweir-e2e:ro
+    networks:
+      default: {}
+    depends_on:
+      channel-relay:
+        condition: service_started
       wss-proxy:
         condition: service_healthy
 
@@ -577,6 +634,7 @@ volumes:
   node-upgrade-peer-state:
   node-dns-state:
   node-g14-state:
+  node-channel-state:
   geoip-test-data:
   node-state:
   probe-a-state:
