@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package edgeweir.node.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// ChannelAddress is a node channel URL and the TLS server name an agent
+// verifies the console's certificate against. The certificate is always
+// verified against the internal CA the agent pinned at enrollment; an
+// address never changes what the agent trusts.
+message ChannelAddress {
+  // https://host[:port] (the node channel port), or wss://host[:port] or
+  // ws://host[:port] (the WebSocket entry on the console's web port). No
+  // userinfo, path, query or fragment.
+  string url = 1;
+  // Name the console's certificate is verified against; empty means the
+  // URL's host.
+  string server_name = 2;
+}
+
+// ChannelSource tells how an agent's current address was set.
+enum ChannelSource {
+  CHANNEL_SOURCE_UNSPECIFIED = 0;
+  // The address of the enrollment.
+  CHANNEL_SOURCE_ENROLL = 1;
+  // The console gave it out and the agent's check of it passed.
+  CHANNEL_SOURCE_CONSOLE = 2;
+  // `edgeweir-node set-server` on the host.
+  CHANNEL_SOURCE_COMMAND = 3;
+}
+
+// ChannelStatus is the node channel address an agent uses and how following
+// the console's address went (feature channel-follow-v1).
+message ChannelStatus {
+  // The persisted address: the one the agent connects to after a restart.
+  ChannelAddress current = 1;
+  // The address used before the last switch, tried while current fails.
+  // Unset until the first switch.
+  ChannelAddress fallback = 2;
+  // The agent runs on the fallback because current failed (not persisted).
+  bool on_fallback = 3;
+  ChannelSource source = 4;
+  // When current was set (the enrollment for CHANNEL_SOURCE_ENROLL).
+  google.protobuf.Timestamp switched_at = 5;
+  // The address the last failed check was for: the console's address the
+  // agent could not switch to, or current while on_fallback. Unset once the
+  // agent uses the console's address.
+  ChannelAddress failed = 6;
+  // Stable code of that failure: unreachable (DNS, connect, timeout),
+  // websocket_refused (no node channel WebSocket entry at the URL),
+  // tls_untrusted (the certificate is not the internal CA's or not for the
+  // server name), rejected (the console refused the agent's certificate),
+  // wrong_identity (the console answered for another node or probe),
+  // invalid_address (the agent refuses the address). The console localizes
+  // the code and falls back to error.
+  string error_code = 7;
+  // Short description of the failure.
+  string error = 8;
+  google.protobuf.Timestamp failed_at = 9;
+}

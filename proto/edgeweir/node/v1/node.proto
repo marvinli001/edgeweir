@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package edgeweir.node.v1;
 
+import "edgeweir/node/v1/channel.proto";
 import "edgeweir/node/v1/config.proto";
 import "google/protobuf/timestamp.proto";
 
@@ -73,6 +74,20 @@ service NodeService {
   // GetSessionTicketKeys returns the TLS session ticket keys named by
   // NodeConfig.session_ticket_keys. Added in v0.26.0.
   rpc GetSessionTicketKeys(GetSessionTicketKeysRequest) returns (GetSessionTicketKeysResponse);
+  // CheckChannel answers an enrolled node, disabled ones included, without
+  // side effects: an agent calls it at an address before it switches to it
+  // (feature channel-follow-v1).
+  rpc CheckChannel(CheckChannelRequest) returns (CheckChannelResponse);
+}
+
+// CheckChannelRequest is empty: the client certificate names the node.
+message CheckChannelRequest {}
+
+// CheckChannelResponse names the node the console authenticated and the
+// address the console gives out now.
+message CheckChannelResponse {
+  string node_id = 1;
+  ChannelAddress channel = 2;
 }
 
 // SubmitPurgeRequest names the URL a PURGE request asked to purge.
@@ -249,6 +264,9 @@ message ReportStatusRequest {
   // certificate-isolation-v1; older nodes fail the whole revision). Empty
   // while every certificate loads. Added in v1.1.0.
   repeated CertificateFailure certificate_failures = 15;
+  // The node channel address in use and how following the console's
+  // address went (feature channel-follow-v1).
+  ChannelStatus channel = 16;
 }
 
 // CertificateFailure is an entry of NodeConfig.certificates a node could not
@@ -376,6 +394,10 @@ message ReportStatusResponse {
   // region: the agent runs the ProbeService loop with its node certificate.
   // Added in v0.14.0.
   bool probe = 5;
+  // The node channel address the console gives out, set for nodes with
+  // channel-follow-v1. A node that uses another address checks this one
+  // (CheckChannel) and switches when the check passes.
+  ChannelAddress channel = 6;
 }
 
 // MinuteStats is traffic of one site during one minute on one node.

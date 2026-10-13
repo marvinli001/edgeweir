@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package edgeweir.node.v1;
 
+import "edgeweir/node/v1/channel.proto";
 import "google/protobuf/timestamp.proto";
 
 // ProbeService runs on the node channel next to NodeService. Probes are
@@ -21,6 +22,20 @@ service ProbeService {
   rpc GetProbeTargets(GetProbeTargetsRequest) returns (GetProbeTargetsResponse);
   // ReportProbeResults stores one round of results.
   rpc ReportProbeResults(ReportProbeResultsRequest) returns (ReportProbeResultsResponse);
+  // CheckProbeChannel answers an enrolled probe without side effects: a
+  // probe calls it at an address before it switches to it (feature
+  // channel-follow-v1).
+  rpc CheckProbeChannel(CheckProbeChannelRequest) returns (CheckProbeChannelResponse);
+}
+
+// CheckProbeChannelRequest is empty: the client certificate names the probe.
+message CheckProbeChannelRequest {}
+
+// CheckProbeChannelResponse names the probe the console authenticated and
+// the address the console gives out now.
+message CheckProbeChannelResponse {
+  string probe_id = 1;
+  ChannelAddress channel = 2;
 }
 
 // ProbeInfo describes the probe process.
@@ -29,6 +44,8 @@ message ProbeInfo {
   string agent_version = 2;
   string os = 3;
   string arch = 4;
+  // Capabilities of the probe process, e.g. channel-follow-v1.
+  repeated string supported_features = 5;
 }
 
 // EnrollProbeRequest carries the token, the probe's CSR (its private key
@@ -65,6 +82,9 @@ message RenewProbeCertificateResponse {
 // identifies the probe).
 message GetProbeTargetsRequest {
   ProbeInfo info = 1;
+  // The node channel address in use and how following the console's
+  // address went (feature channel-follow-v1).
+  ChannelStatus channel = 2;
 }
 
 // ProbeMethod is how a target is probed.
@@ -103,6 +123,9 @@ message GetProbeTargetsResponse {
   uint32 attempts = 4;
   // The probe certificate should be renewed (RenewProbeCertificate).
   bool renew_certificate = 5;
+  // The node channel address the console gives out, set for probes with
+  // channel-follow-v1 (ReportStatusResponse.channel).
+  ChannelAddress channel = 6;
 }
 
 // ProbeResult is one target's outcome in a round.

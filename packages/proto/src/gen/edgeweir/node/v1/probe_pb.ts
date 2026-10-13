@@ -4,6 +4,8 @@
 
 import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { ChannelAddress, ChannelStatus } from "./channel_pb.js";
+import { file_edgeweir_node_v1_channel } from "./channel_pb.js";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { Message } from "@bufbuild/protobuf";
@@ -12,7 +14,47 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file edgeweir/node/v1/probe.proto.
  */
 export const file_edgeweir_node_v1_probe: GenFile = /*@__PURE__*/
-  fileDesc("ChxlZGdld2Vpci9ub2RlL3YxL3Byb2JlLnByb3RvEhBlZGdld2Vpci5ub2RlLnYxIk4KCVByb2JlSW5mbxIQCghob3N0bmFtZRgBIAEoCRIVCg1hZ2VudF92ZXJzaW9uGAIgASgJEgoKAm9zGAMgASgJEgwKBGFyY2gYBCABKAkiXwoSRW5yb2xsUHJvYmVSZXF1ZXN0Eg0KBXRva2VuGAEgASgJEg8KB2Nzcl9wZW0YAiABKAkSKQoEaW5mbxgDIAEoCzIbLmVkZ2V3ZWlyLm5vZGUudjEuUHJvYmVJbmZvIrIBChNFbnJvbGxQcm9iZVJlc3BvbnNlEhAKCHByb2JlX2lkGAEgASgJEhIKCnByb2JlX25hbWUYAiABKAkSEQoJcmVnaW9uX2lkGAMgASgJEhcKD2NlcnRpZmljYXRlX3BlbRgEIAEoCRIaChJjYV9jZXJ0aWZpY2F0ZV9wZW0YBSABKAkSLQoJbm90X2FmdGVyGAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIvChxSZW5ld1Byb2JlQ2VydGlmaWNhdGVSZXF1ZXN0Eg8KB2Nzcl9wZW0YASABKAkigwEKHVJlbmV3UHJvYmVDZXJ0aWZpY2F0ZVJlc3BvbnNlEhcKD2NlcnRpZmljYXRlX3BlbRgBIAEoCRIaChJjYV9jZXJ0aWZpY2F0ZV9wZW0YAiABKAkSLQoJbm90X2FmdGVyGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJDChZHZXRQcm9iZVRhcmdldHNSZXF1ZXN0EikKBGluZm8YASABKAsyGy5lZGdld2Vpci5ub2RlLnYxLlByb2JlSW5mbyKEAQoLUHJvYmVUYXJnZXQSDwoHbm9kZV9pZBgBIAEoCRIPCgdhZGRyZXNzGAIgASgJEgwKBHBvcnQYAyABKA0SLQoGbWV0aG9kGAQgASgOMh0uZWRnZXdlaXIubm9kZS52MS5Qcm9iZU1ldGhvZBIWCg5wcm94eV9wcm90b2NvbBgFIAEoCCKkAQoXR2V0UHJvYmVUYXJnZXRzUmVzcG9uc2USLgoHdGFyZ2V0cxgBIAMoCzIdLmVkZ2V3ZWlyLm5vZGUudjEuUHJvYmVUYXJnZXQSGAoQaW50ZXJ2YWxfc2Vjb25kcxgCIAEoDRISCgp0aW1lb3V0X21zGAMgASgNEhAKCGF0dGVtcHRzGAQgASgNEhkKEXJlbmV3X2NlcnRpZmljYXRlGAUgASgIIqcBCgtQcm9iZVJlc3VsdBIPCgdub2RlX2lkGAEgASgJEg8KB2FkZHJlc3MYAiABKAkSDAoEcG9ydBgDIAEoDRItCgZtZXRob2QYBCABKA4yHS5lZGdld2Vpci5ub2RlLnYxLlByb2JlTWV0aG9kEgwKBHNlbnQYBSABKA0SDAoEbG9zdBgGIAEoDRIOCgZydHRfbXMYByABKA0SDQoFZXJyb3IYCCABKAkiewoZUmVwb3J0UHJvYmVSZXN1bHRzUmVxdWVzdBIuCgpzdGFydGVkX2F0GAEgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgdyZXN1bHRzGAIgAygLMh0uZWRnZXdlaXIubm9kZS52MS5Qcm9iZVJlc3VsdCIuChpSZXBvcnRQcm9iZVJlc3VsdHNSZXNwb25zZRIQCghhY2NlcHRlZBgBIAEoDSpwCgtQcm9iZU1ldGhvZBIcChhQUk9CRV9NRVRIT0RfVU5TUEVDSUZJRUQQABIUChBQUk9CRV9NRVRIT0RfVENQEAESFQoRUFJPQkVfTUVUSE9EX0hUVFAQAhIWChJQUk9CRV9NRVRIT0RfSFRUUFMQAzK9AwoMUHJvYmVTZXJ2aWNlEloKC0Vucm9sbFByb2JlEiQuZWRnZXdlaXIubm9kZS52MS5FbnJvbGxQcm9iZVJlcXVlc3QaJS5lZGdld2Vpci5ub2RlLnYxLkVucm9sbFByb2JlUmVzcG9uc2USeAoVUmVuZXdQcm9iZUNlcnRpZmljYXRlEi4uZWRnZXdlaXIubm9kZS52MS5SZW5ld1Byb2JlQ2VydGlmaWNhdGVSZXF1ZXN0Gi8uZWRnZXdlaXIubm9kZS52MS5SZW5ld1Byb2JlQ2VydGlmaWNhdGVSZXNwb25zZRJmCg9HZXRQcm9iZVRhcmdldHMSKC5lZGdld2Vpci5ub2RlLnYxLkdldFByb2JlVGFyZ2V0c1JlcXVlc3QaKS5lZGdld2Vpci5ub2RlLnYxLkdldFByb2JlVGFyZ2V0c1Jlc3BvbnNlEm8KElJlcG9ydFByb2JlUmVzdWx0cxIrLmVkZ2V3ZWlyLm5vZGUudjEuUmVwb3J0UHJvYmVSZXN1bHRzUmVxdWVzdBosLmVkZ2V3ZWlyLm5vZGUudjEuUmVwb3J0UHJvYmVSZXN1bHRzUmVzcG9uc2ViBnByb3RvMw", [file_google_protobuf_timestamp]);
+  fileDesc("ChxlZGdld2Vpci9ub2RlL3YxL3Byb2JlLnByb3RvEhBlZGdld2Vpci5ub2RlLnYxIhoKGENoZWNrUHJvYmVDaGFubmVsUmVxdWVzdCJgChlDaGVja1Byb2JlQ2hhbm5lbFJlc3BvbnNlEhAKCHByb2JlX2lkGAEgASgJEjEKB2NoYW5uZWwYAiABKAsyIC5lZGdld2Vpci5ub2RlLnYxLkNoYW5uZWxBZGRyZXNzImoKCVByb2JlSW5mbxIQCghob3N0bmFtZRgBIAEoCRIVCg1hZ2VudF92ZXJzaW9uGAIgASgJEgoKAm9zGAMgASgJEgwKBGFyY2gYBCABKAkSGgoSc3VwcG9ydGVkX2ZlYXR1cmVzGAUgAygJIl8KEkVucm9sbFByb2JlUmVxdWVzdBINCgV0b2tlbhgBIAEoCRIPCgdjc3JfcGVtGAIgASgJEikKBGluZm8YAyABKAsyGy5lZGdld2Vpci5ub2RlLnYxLlByb2JlSW5mbyKyAQoTRW5yb2xsUHJvYmVSZXNwb25zZRIQCghwcm9iZV9pZBgBIAEoCRISCgpwcm9iZV9uYW1lGAIgASgJEhEKCXJlZ2lvbl9pZBgDIAEoCRIXCg9jZXJ0aWZpY2F0ZV9wZW0YBCABKAkSGgoSY2FfY2VydGlmaWNhdGVfcGVtGAUgASgJEi0KCW5vdF9hZnRlchgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiLwocUmVuZXdQcm9iZUNlcnRpZmljYXRlUmVxdWVzdBIPCgdjc3JfcGVtGAEgASgJIoMBCh1SZW5ld1Byb2JlQ2VydGlmaWNhdGVSZXNwb25zZRIXCg9jZXJ0aWZpY2F0ZV9wZW0YASABKAkSGgoSY2FfY2VydGlmaWNhdGVfcGVtGAIgASgJEi0KCW5vdF9hZnRlchgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAidQoWR2V0UHJvYmVUYXJnZXRzUmVxdWVzdBIpCgRpbmZvGAEgASgLMhsuZWRnZXdlaXIubm9kZS52MS5Qcm9iZUluZm8SMAoHY2hhbm5lbBgCIAEoCzIfLmVkZ2V3ZWlyLm5vZGUudjEuQ2hhbm5lbFN0YXR1cyKEAQoLUHJvYmVUYXJnZXQSDwoHbm9kZV9pZBgBIAEoCRIPCgdhZGRyZXNzGAIgASgJEgwKBHBvcnQYAyABKA0SLQoGbWV0aG9kGAQgASgOMh0uZWRnZXdlaXIubm9kZS52MS5Qcm9iZU1ldGhvZBIWCg5wcm94eV9wcm90b2NvbBgFIAEoCCLXAQoXR2V0UHJvYmVUYXJnZXRzUmVzcG9uc2USLgoHdGFyZ2V0cxgBIAMoCzIdLmVkZ2V3ZWlyLm5vZGUudjEuUHJvYmVUYXJnZXQSGAoQaW50ZXJ2YWxfc2Vjb25kcxgCIAEoDRISCgp0aW1lb3V0X21zGAMgASgNEhAKCGF0dGVtcHRzGAQgASgNEhkKEXJlbmV3X2NlcnRpZmljYXRlGAUgASgIEjEKB2NoYW5uZWwYBiABKAsyIC5lZGdld2Vpci5ub2RlLnYxLkNoYW5uZWxBZGRyZXNzIqcBCgtQcm9iZVJlc3VsdBIPCgdub2RlX2lkGAEgASgJEg8KB2FkZHJlc3MYAiABKAkSDAoEcG9ydBgDIAEoDRItCgZtZXRob2QYBCABKA4yHS5lZGdld2Vpci5ub2RlLnYxLlByb2JlTWV0aG9kEgwKBHNlbnQYBSABKA0SDAoEbG9zdBgGIAEoDRIOCgZydHRfbXMYByABKA0SDQoFZXJyb3IYCCABKAkiewoZUmVwb3J0UHJvYmVSZXN1bHRzUmVxdWVzdBIuCgpzdGFydGVkX2F0GAEgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgdyZXN1bHRzGAIgAygLMh0uZWRnZXdlaXIubm9kZS52MS5Qcm9iZVJlc3VsdCIuChpSZXBvcnRQcm9iZVJlc3VsdHNSZXNwb25zZRIQCghhY2NlcHRlZBgBIAEoDSpwCgtQcm9iZU1ldGhvZBIcChhQUk9CRV9NRVRIT0RfVU5TUEVDSUZJRUQQABIUChBQUk9CRV9NRVRIT0RfVENQEAESFQoRUFJPQkVfTUVUSE9EX0hUVFAQAhIWChJQUk9CRV9NRVRIT0RfSFRUUFMQAzKrBAoMUHJvYmVTZXJ2aWNlEloKC0Vucm9sbFByb2JlEiQuZWRnZXdlaXIubm9kZS52MS5FbnJvbGxQcm9iZVJlcXVlc3QaJS5lZGdld2Vpci5ub2RlLnYxLkVucm9sbFByb2JlUmVzcG9uc2USeAoVUmVuZXdQcm9iZUNlcnRpZmljYXRlEi4uZWRnZXdlaXIubm9kZS52MS5SZW5ld1Byb2JlQ2VydGlmaWNhdGVSZXF1ZXN0Gi8uZWRnZXdlaXIubm9kZS52MS5SZW5ld1Byb2JlQ2VydGlmaWNhdGVSZXNwb25zZRJmCg9HZXRQcm9iZVRhcmdldHMSKC5lZGdld2Vpci5ub2RlLnYxLkdldFByb2JlVGFyZ2V0c1JlcXVlc3QaKS5lZGdld2Vpci5ub2RlLnYxLkdldFByb2JlVGFyZ2V0c1Jlc3BvbnNlEm8KElJlcG9ydFByb2JlUmVzdWx0cxIrLmVkZ2V3ZWlyLm5vZGUudjEuUmVwb3J0UHJvYmVSZXN1bHRzUmVxdWVzdBosLmVkZ2V3ZWlyLm5vZGUudjEuUmVwb3J0UHJvYmVSZXN1bHRzUmVzcG9uc2USbAoRQ2hlY2tQcm9iZUNoYW5uZWwSKi5lZGdld2Vpci5ub2RlLnYxLkNoZWNrUHJvYmVDaGFubmVsUmVxdWVzdBorLmVkZ2V3ZWlyLm5vZGUudjEuQ2hlY2tQcm9iZUNoYW5uZWxSZXNwb25zZWIGcHJvdG8z", [file_edgeweir_node_v1_channel, file_google_protobuf_timestamp]);
+
+/**
+ * CheckProbeChannelRequest is empty: the client certificate names the probe.
+ *
+ * @generated from message edgeweir.node.v1.CheckProbeChannelRequest
+ */
+export type CheckProbeChannelRequest = Message<"edgeweir.node.v1.CheckProbeChannelRequest"> & {
+};
+
+/**
+ * Describes the message edgeweir.node.v1.CheckProbeChannelRequest.
+ * Use `create(CheckProbeChannelRequestSchema)` to create a new message.
+ */
+export const CheckProbeChannelRequestSchema: GenMessage<CheckProbeChannelRequest> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_probe, 0);
+
+/**
+ * CheckProbeChannelResponse names the probe the console authenticated and
+ * the address the console gives out now.
+ *
+ * @generated from message edgeweir.node.v1.CheckProbeChannelResponse
+ */
+export type CheckProbeChannelResponse = Message<"edgeweir.node.v1.CheckProbeChannelResponse"> & {
+  /**
+   * @generated from field: string probe_id = 1;
+   */
+  probeId: string;
+
+  /**
+   * @generated from field: edgeweir.node.v1.ChannelAddress channel = 2;
+   */
+  channel?: ChannelAddress | undefined;
+};
+
+/**
+ * Describes the message edgeweir.node.v1.CheckProbeChannelResponse.
+ * Use `create(CheckProbeChannelResponseSchema)` to create a new message.
+ */
+export const CheckProbeChannelResponseSchema: GenMessage<CheckProbeChannelResponse> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_probe, 1);
 
 /**
  * ProbeInfo describes the probe process.
@@ -39,6 +81,13 @@ export type ProbeInfo = Message<"edgeweir.node.v1.ProbeInfo"> & {
    * @generated from field: string arch = 4;
    */
   arch: string;
+
+  /**
+   * Capabilities of the probe process, e.g. channel-follow-v1.
+   *
+   * @generated from field: repeated string supported_features = 5;
+   */
+  supportedFeatures: string[];
 };
 
 /**
@@ -46,7 +95,7 @@ export type ProbeInfo = Message<"edgeweir.node.v1.ProbeInfo"> & {
  * Use `create(ProbeInfoSchema)` to create a new message.
  */
 export const ProbeInfoSchema: GenMessage<ProbeInfo> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_probe, 0);
+  messageDesc(file_edgeweir_node_v1_probe, 2);
 
 /**
  * EnrollProbeRequest carries the token, the probe's CSR (its private key
@@ -76,7 +125,7 @@ export type EnrollProbeRequest = Message<"edgeweir.node.v1.EnrollProbeRequest"> 
  * Use `create(EnrollProbeRequestSchema)` to create a new message.
  */
 export const EnrollProbeRequestSchema: GenMessage<EnrollProbeRequest> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_probe, 1);
+  messageDesc(file_edgeweir_node_v1_probe, 3);
 
 /**
  * EnrollProbeResponse returns the probe's identity and certificate.
@@ -120,7 +169,7 @@ export type EnrollProbeResponse = Message<"edgeweir.node.v1.EnrollProbeResponse"
  * Use `create(EnrollProbeResponseSchema)` to create a new message.
  */
 export const EnrollProbeResponseSchema: GenMessage<EnrollProbeResponse> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_probe, 2);
+  messageDesc(file_edgeweir_node_v1_probe, 4);
 
 /**
  * RenewProbeCertificateRequest carries a CSR for a new key.
@@ -139,7 +188,7 @@ export type RenewProbeCertificateRequest = Message<"edgeweir.node.v1.RenewProbeC
  * Use `create(RenewProbeCertificateRequestSchema)` to create a new message.
  */
 export const RenewProbeCertificateRequestSchema: GenMessage<RenewProbeCertificateRequest> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_probe, 3);
+  messageDesc(file_edgeweir_node_v1_probe, 5);
 
 /**
  * RenewProbeCertificateResponse returns the renewed certificate.
@@ -168,7 +217,7 @@ export type RenewProbeCertificateResponse = Message<"edgeweir.node.v1.RenewProbe
  * Use `create(RenewProbeCertificateResponseSchema)` to create a new message.
  */
 export const RenewProbeCertificateResponseSchema: GenMessage<RenewProbeCertificateResponse> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_probe, 4);
+  messageDesc(file_edgeweir_node_v1_probe, 6);
 
 /**
  * GetProbeTargetsRequest identifies the probe process (the certificate
@@ -181,6 +230,14 @@ export type GetProbeTargetsRequest = Message<"edgeweir.node.v1.GetProbeTargetsRe
    * @generated from field: edgeweir.node.v1.ProbeInfo info = 1;
    */
   info?: ProbeInfo | undefined;
+
+  /**
+   * The node channel address in use and how following the console's
+   * address went (feature channel-follow-v1).
+   *
+   * @generated from field: edgeweir.node.v1.ChannelStatus channel = 2;
+   */
+  channel?: ChannelStatus | undefined;
 };
 
 /**
@@ -188,7 +245,7 @@ export type GetProbeTargetsRequest = Message<"edgeweir.node.v1.GetProbeTargetsRe
  * Use `create(GetProbeTargetsRequestSchema)` to create a new message.
  */
 export const GetProbeTargetsRequestSchema: GenMessage<GetProbeTargetsRequest> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_probe, 5);
+  messageDesc(file_edgeweir_node_v1_probe, 7);
 
 /**
  * ProbeTarget is one scheduling address and listener port of a node.
@@ -231,7 +288,7 @@ export type ProbeTarget = Message<"edgeweir.node.v1.ProbeTarget"> & {
  * Use `create(ProbeTargetSchema)` to create a new message.
  */
 export const ProbeTargetSchema: GenMessage<ProbeTarget> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_probe, 6);
+  messageDesc(file_edgeweir_node_v1_probe, 8);
 
 /**
  * GetProbeTargetsResponse lists the targets of one round. Targets are sorted
@@ -272,6 +329,14 @@ export type GetProbeTargetsResponse = Message<"edgeweir.node.v1.GetProbeTargetsR
    * @generated from field: bool renew_certificate = 5;
    */
   renewCertificate: boolean;
+
+  /**
+   * The node channel address the console gives out, set for probes with
+   * channel-follow-v1 (ReportStatusResponse.channel).
+   *
+   * @generated from field: edgeweir.node.v1.ChannelAddress channel = 6;
+   */
+  channel?: ChannelAddress | undefined;
 };
 
 /**
@@ -279,7 +344,7 @@ export type GetProbeTargetsResponse = Message<"edgeweir.node.v1.GetProbeTargetsR
  * Use `create(GetProbeTargetsResponseSchema)` to create a new message.
  */
 export const GetProbeTargetsResponseSchema: GenMessage<GetProbeTargetsResponse> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_probe, 7);
+  messageDesc(file_edgeweir_node_v1_probe, 9);
 
 /**
  * ProbeResult is one target's outcome in a round.
@@ -342,7 +407,7 @@ export type ProbeResult = Message<"edgeweir.node.v1.ProbeResult"> & {
  * Use `create(ProbeResultSchema)` to create a new message.
  */
 export const ProbeResultSchema: GenMessage<ProbeResult> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_probe, 8);
+  messageDesc(file_edgeweir_node_v1_probe, 10);
 
 /**
  * ReportProbeResultsRequest carries one round.
@@ -366,7 +431,7 @@ export type ReportProbeResultsRequest = Message<"edgeweir.node.v1.ReportProbeRes
  * Use `create(ReportProbeResultsRequestSchema)` to create a new message.
  */
 export const ReportProbeResultsRequestSchema: GenMessage<ReportProbeResultsRequest> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_probe, 9);
+  messageDesc(file_edgeweir_node_v1_probe, 11);
 
 /**
  * ReportProbeResultsResponse acknowledges a round.
@@ -385,7 +450,7 @@ export type ReportProbeResultsResponse = Message<"edgeweir.node.v1.ReportProbeRe
  * Use `create(ReportProbeResultsResponseSchema)` to create a new message.
  */
 export const ReportProbeResultsResponseSchema: GenMessage<ReportProbeResultsResponse> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_probe, 10);
+  messageDesc(file_edgeweir_node_v1_probe, 12);
 
 /**
  * ProbeMethod is how a target is probed.
@@ -480,6 +545,18 @@ export const ProbeService: GenService<{
     methodKind: "unary";
     input: typeof ReportProbeResultsRequestSchema;
     output: typeof ReportProbeResultsResponseSchema;
+  },
+  /**
+   * CheckProbeChannel answers an enrolled probe without side effects: a
+   * probe calls it at an address before it switches to it (feature
+   * channel-follow-v1).
+   *
+   * @generated from rpc edgeweir.node.v1.ProbeService.CheckProbeChannel
+   */
+  checkProbeChannel: {
+    methodKind: "unary";
+    input: typeof CheckProbeChannelRequestSchema;
+    output: typeof CheckProbeChannelResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_edgeweir_node_v1_probe, 0);
