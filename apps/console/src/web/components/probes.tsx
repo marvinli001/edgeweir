@@ -10,6 +10,7 @@ import { CodeBlock } from "@/components/copy-button";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
+import { NodeChannelBadge } from "@/components/node-channel-state";
 import { enterDelay } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { SettingsCard } from "@/components/settings-card";
@@ -217,12 +218,15 @@ export function ProbesPanel({
         id: "version",
         header: () => m.probes_col_version(),
         cell: ({ row }) => (
-          <div className="flex flex-col text-xs text-muted-foreground">
+          <div className="flex flex-col items-start gap-0.5 text-xs text-muted-foreground">
             <span>{row.original.agentVersion || "—"}</span>
             {row.original.os ? (
               <span>
                 {row.original.os}/{row.original.arch}
               </span>
+            ) : null}
+            {row.original.enrolledAt ? (
+              <NodeChannelBadge status={row.original.channel} testId="probe-channel-badge" />
             ) : null}
           </div>
         ),

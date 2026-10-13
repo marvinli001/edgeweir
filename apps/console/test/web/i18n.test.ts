@@ -2,6 +2,7 @@ import { globSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   certificateErrorDefs,
+  channelErrorDefs,
   dnsRevisionReasonDefs,
   errorCodes,
   errorDefs,
@@ -267,13 +268,14 @@ describe("i18n messages", () => {
     }
   });
 
-  it("localizes every node error code, task outcome code, expression error code and certificate failure code with the same parameters", () => {
+  it("localizes every node error code, task outcome code, expression error code, certificate failure code and node channel error code with the same parameters", () => {
     const tables: [string, string, Record<string, { params: readonly string[] }>][] = [
       ["node_error_", "nodeErrorDefs", nodeErrorDefs],
       ["task_error_", "taskErrorDefs", taskErrorDefs],
       ["task_error_reason_", "prefetchFailureReasonDefs", prefetchFailureReasonDefs],
       ["rules_expr_", "expressionErrorDefs", expressionErrorDefs],
       ["cert_error_", "certificateErrorDefs", certificateErrorDefs],
+      ["node_channel_error_", "channelErrorDefs", channelErrorDefs],
     ];
     expect(nodeErrorCodes.length).toBeGreaterThanOrEqual(6);
     expect(expressionErrorCodes).toContain("unknown_field");

@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type * as React from "react";
 import { toast } from "sonner";
 import { type NodeAction, NodeActionDialog } from "@/components/clusters/node-dialogs";
+import { NodeChannelBadge } from "@/components/node-channel-state";
 import {
   AuthErrorBadge,
   CertificateFailuresBadge,
@@ -260,6 +261,7 @@ function NodeCard({
               {m.node_upgrade_recommended()}
             </Badge>
           ) : null}
+          <NodeChannelBadge status={node.channel} testId="node-channel-badge" />
           <span className="text-muted-foreground">
             {node.engine} {node.engineVersion}
           </span>

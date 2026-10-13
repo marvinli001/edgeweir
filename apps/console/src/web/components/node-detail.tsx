@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { Meter } from "@/components/appica/meter";
 import { markOverflow } from "@/components/data-table";
 import { OptionSelect } from "@/components/form-select";
+import { NodeChannelFact } from "@/components/node-channel-state";
 import { ProbeResults } from "@/components/probes";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
@@ -296,7 +297,10 @@ function Fact({
   );
 }
 
-/** Data plane health, the connection's source address and the client certificate's lifetime. */
+/**
+ * Data plane health, the connection's source address, the node channel address in use and the
+ * client certificate's lifetime.
+ */
 function NodeFacts({ node }: { node: Node }) {
   const certLeft = node.certNotAfter ? Date.parse(node.certNotAfter) - Date.now() : null;
   return (
@@ -312,6 +316,9 @@ function NodeFacts({ node }: { node: Node }) {
       </Fact>
       <Fact label={m.node_remote_address()} testId="node-remote-address">
         <span className="font-mono">{node.remoteAddress ?? "—"}</span>
+      </Fact>
+      <Fact label={m.system_node_api_url()} testId="node-channel">
+        <NodeChannelFact status={node.channel} />
       </Fact>
       <Fact label={m.node_cert_not_after()} testId="node-cert-not-after">
         {node.certNotAfter ? (
