@@ -778,6 +778,8 @@ describe("site tags, batch operations, copying settings and cloning (G17)", asyn
         "cacheGeneration",
         "certificateId",
         "cnamePrefix",
+        // The site's own history: the authRules part adds the rules it replaces.
+        "authIdentityHeaders",
         "createdAt",
         "updatedAt",
       ];

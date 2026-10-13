@@ -33,6 +33,7 @@ import { formatDomain, normalizeDomains } from "../lib/site-domains";
 import { PURGE_KEY, siteSecretBinding, storeSiteSecret } from "../lib/site-secrets";
 import { checkSiteLists } from "./access-control";
 import { type Actor, recordAudit } from "./audit";
+import { retainIdentityHeaders } from "./auth-identity";
 import { formattedSiteDomains } from "./auth-rules";
 import { servesHost } from "./bulk-redirects";
 import { newCnamePrefix } from "./cname-prefixes";
@@ -590,6 +591,10 @@ export const COPY_PARTS: Record<SiteCopyPart, Part<unknown>> = {
       return rules;
     },
     async write(tx, target, rules, ctx) {
+      const replaced = await tx
+        .select({ kind: schema.siteAuthRule.kind, settings: schema.siteAuthRule.settings })
+        .from(schema.siteAuthRule)
+        .where(eq(schema.siteAuthRule.siteId, target.id));
       await tx.delete(schema.siteAuthRule).where(eq(schema.siteAuthRule.siteId, target.id));
       // Secrets are sealed anew: the envelope is bound to the (new) rule id.
       const rows = rules.map((rule, position) => {
@@ -607,6 +612,8 @@ export const COPY_PARTS: Record<SiteCopyPart, Part<unknown>> = {
         };
       });
       if (rows.length) await tx.insert(schema.siteAuthRule).values(rows);
+      // The target's nodes go on removing the identity headers of the rules replaced.
+      await retainIdentityHeaders(tx, target, replaced, rows);
       await tx
         .update(schema.site)
         .set({ authUpdatedAt: bumped(target.authUpdatedAt) })

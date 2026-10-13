@@ -43,6 +43,7 @@ import { imageConvertModel } from "../lib/image-convert";
 import { activeHealthCheckModel, sessionAffinityModel } from "../lib/pool-settings";
 import { readContentSettings, readMaintenance } from "../lib/site-content";
 import { PURGE_KEY } from "../lib/site-secrets";
+import { siteIdentityHeaders } from "./auth-identity";
 import { loadEdgeModel } from "./edge";
 import { errorPagesModel, loadPlatformErrorPages, loadSiteErrorPages } from "./error-pages";
 import { loadL4AppModels } from "./l4-config";
@@ -134,11 +135,13 @@ export async function loadSiteModels(
     .from(schema.siteSecret)
     .where(and(inArray(schema.siteSecret.siteId, siteIds), eq(schema.siteSecret.kind, PURGE_KEY)));
 
-  const authRules = await db
+  // Disabled rules too: their identity headers are removed all the same.
+  const allAuthRules = await db
     .select()
     .from(schema.siteAuthRule)
-    .where(and(inArray(schema.siteAuthRule.siteId, siteIds), eq(schema.siteAuthRule.enabled, true)))
+    .where(inArray(schema.siteAuthRule.siteId, siteIds))
     .orderBy(asc(schema.siteAuthRule.position));
+  const authRules = allAuthRules.filter((rule) => rule.enabled);
 
   const edgeRules = await db
     .select()
@@ -340,6 +343,10 @@ export async function loadSiteModels(
           domains
             .filter((d) => d.siteId === s.id)
             .map((d) => formatSiteDomain({ kind: d.kind as DomainKind, name: d.name })),
+        ),
+        authIdentityHeaders: siteIdentityHeaders(
+          s.authIdentityHeaders,
+          allAuthRules.filter((rule) => rule.siteId === s.id),
         ),
         accessControl: accessControlModel(readAccessControl(s), listIds),
         certificateId: s.certificateId ?? "",

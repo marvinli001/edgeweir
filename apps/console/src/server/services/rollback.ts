@@ -31,6 +31,7 @@ import { fail } from "../lib/errors";
 import { lockClusterPublish } from "../lib/locks";
 import { formatDomain, namesHosts, protoKind } from "../lib/site-domains";
 import type { Actor } from "./audit";
+import { siteIdentityHeaders } from "./auth-identity";
 import { ensureChallengeKeys } from "./challenge-keys";
 import {
   loadHttpChallenges,
@@ -96,6 +97,22 @@ async function restoreSites(
           ),
         )
     : [];
+  // Every rule, disabled ones included (their identity headers are removed).
+  const currentAuthRules = currentSites.length
+    ? await tx
+        .select({
+          siteId: schema.siteAuthRule.siteId,
+          kind: schema.siteAuthRule.kind,
+          settings: schema.siteAuthRule.settings,
+        })
+        .from(schema.siteAuthRule)
+        .where(
+          inArray(
+            schema.siteAuthRule.siteId,
+            currentSites.map((site) => site.id),
+          ),
+        )
+    : [];
   const siteCertificates = (site: (typeof out.sites)[number]) =>
     site.certificateId ? [site.certificateId, ...site.additionalCertificateIds] : [];
   const certificateIds = [...new Set(out.sites.flatMap(siteCertificates))];
@@ -136,6 +153,13 @@ async function restoreSites(
     site.logHeaders = opts.strict
       ? [...current.logHeaders].sort()
       : site.logHeaders.filter((name) => current.logHeaders.includes(name));
+    // The identity headers removed are current security policy: those of
+    // the rules now and before (the restored rules' own are a part of them,
+    // and nodes add them anyway).
+    site.authIdentityHeaders = siteIdentityHeaders(
+      current.authIdentityHeaders,
+      currentAuthRules.filter((rule) => rule.siteId === site.id),
+    ).sort();
     const ids = siteCertificates(site);
     if (opts.strict && ids.length) {
       const chains: string[] = [];

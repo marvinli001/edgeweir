@@ -205,4 +205,32 @@ describe("configuration rollback", async () => {
     });
     expect(decodeNodeConfig(after.ir).requiredFeatures).not.toContain("access-logs-v2");
   });
+
+  it("keeps removing the identity headers of rules deleted since the revision", async () => {
+    const before = await latestRevision(ctx.db, clusterId);
+    if (!before) throw new Error("no revision");
+    const rules = [
+      {
+        kind: "forward" as const,
+        enabled: true,
+        scope: { domains: [], pathPrefixes: ["/app/"], extensions: [], excludePathPrefixes: [] },
+        forward: {
+          url: "https://auth.example.com/verify",
+          method: "GET" as const,
+          timeoutMs: 2000,
+          requestHeaders: ["cookie"],
+          responseHeaders: ["x-user"],
+          cacheSeconds: 0,
+          passRedirects: false,
+          allowUnavailable: false,
+        },
+      },
+    ];
+    await admin.authRules.update({ id: siteId, rules });
+    await admin.authRules.update({ id: siteId, rules: [] });
+    const restored = await admin.clusters.rollback({ id: clusterId, revision: before.revision });
+    const row = await getRevision(ctx.db, clusterId, restored.revision);
+    if (!row) throw new Error("no restored revision");
+    expect(decodeNodeConfig(row.ir).sites[0]?.authIdentityHeaders).toEqual(["x-user"]);
+  });
 });

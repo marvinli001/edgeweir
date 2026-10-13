@@ -44,6 +44,26 @@ describe("access authentication (access-auth-v1)", () => {
     expect(before.requiredFeatures).not.toContain(ACCESS_AUTH_FEATURE);
   });
 
+  it("sends the identity headers of every rule and former ones, without a feature", () => {
+    const config = compileNodeConfig(
+      {
+        clusterId: "c1",
+        sites: [
+          site("a", { tls: tls(), authIdentityHeaders: ["X-User", "x-auth-user", "x-user"] }),
+        ],
+      },
+      1n,
+    );
+    expect(config.sites[0]?.authIdentityHeaders).toEqual(["x-auth-user", "x-user"]);
+    // Older nodes ignore the field: no rule, no feature required.
+    expect(config.requiredFeatures).not.toContain(ACCESS_AUTH_FEATURE);
+    const shuffled = clone(NodeConfigSchema, config);
+    if (shuffled.sites[0])
+      shuffled.sites[0].authIdentityHeaders = ["x-user", "x-auth-user", "x-user"];
+    expect(contentHash(canonicalize(shuffled))).toBe(config.contentHash);
+    expect(compileNodeConfig(input(), 1n).sites[0]?.authIdentityHeaders).toEqual([]);
+  });
+
   it("requires access-auth-v1 for a site with a rule", () => {
     const config = compileNodeConfig(input([url("r1")]), 1n);
     expect(config.requiredFeatures).toContain(ACCESS_AUTH_FEATURE);

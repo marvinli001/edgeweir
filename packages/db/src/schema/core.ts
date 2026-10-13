@@ -313,6 +313,14 @@ export const site = pgTable(
     /** When the access authentication rules were last saved; null until then. */
     authUpdatedAt: timestamp("auth_updated_at", { withTimezone: true }),
     /**
+     * The identity headers (lowercase) the site's access authentication
+     * rules set, as ever saved, oldest first: those of the current rules and
+     * at most 64 of former ones. Nodes remove them from every request
+     * (Site.auth_identity_headers), so a disabled or deleted rule's header
+     * never reaches the origin from a visitor.
+     */
+    authIdentityHeaders: text("auth_identity_headers").array().notNull().default(sql`'{}'::text[]`),
+    /**
      * Access control (contract `accessControlSettings` without siteLists):
      * hotlink, userAgents, cors, geo, websocket, securityHeaders; `{}` means
      * the defaults (all off).

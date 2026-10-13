@@ -310,11 +310,24 @@ export const siteAuthRules = z.object({
   rules: z.array(authRule),
   /** Null until the rules were first saved. */
   updatedAt: isoDateTime.nullable(),
+  /**
+   * Identity headers of former rules (disabled ones count as current) that
+   * nodes still remove from every request of the site, oldest first;
+   * forgetIdentityHeaders lets them through again.
+   */
+  formerIdentityHeaders: z.array(z.string()),
 });
 
 export const siteAuthRulesInput = z.object({
   id: uuid,
   rules: z.array(authRuleInput).max(AUTH_MAX_RULES),
+  expectedUpdatedAt,
+});
+
+/** Former identity headers nodes are to let through again (from formerIdentityHeaders). */
+export const forgetIdentityHeadersInput = z.object({
+  id: uuid,
+  names: z.array(ruleHeaderName).min(1).max(64),
   expectedUpdatedAt,
 });
 
@@ -360,6 +373,18 @@ export const authRulesContract = {
     .route({ method: "PUT", path: "/sites/{id}/auth-rules", tags: ["sites"] })
     .input(siteAuthRulesInput)
     .output(siteAuthRules),
+  /**
+   * Stops removing former identity headers (names no current rule sets);
+   * publishes the site's cluster (hot update).
+   */
+  forgetIdentityHeaders: oc
+    .route({
+      method: "POST",
+      path: "/sites/{id}/auth-rules/forget-identity-headers",
+      tags: ["sites"],
+    })
+    .input(forgetIdentityHeadersInput)
+    .output(siteAuthRules),
   /** Computed by the console; nothing is sent to nodes or stored. */
   signUrl: oc
     .route({ method: "POST", path: "/sites/{id}/auth-rules/{ruleId}/sign", tags: ["sites"] })
@@ -378,5 +403,6 @@ export type SiteAuthRules = z.infer<typeof siteAuthRules>;
 export type SiteAuthRulesInput = z.infer<typeof siteAuthRulesInput>;
 export type ForwardAuthSettings = z.infer<typeof forwardAuthSettings>;
 export type SignUrlInput = z.infer<typeof signUrlInput>;
+export type ForgetIdentityHeadersInput = z.infer<typeof forgetIdentityHeadersInput>;
 export type SignedUrl = z.infer<typeof signedUrl>;
 export type AuthFailures = z.infer<typeof authFailures>;

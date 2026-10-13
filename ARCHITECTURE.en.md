@@ -642,6 +642,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0063_g18_image_convert` | `site.image_convert`; `image_bytes_saved` in minute, hour and day statistics and the view `traffic_hour_stats` |
 | `0064_hidden_cards` | `hidden_cards` |
 | `0065_cache_rule_respect_default` | `respect` as the default of `cache_rule.origin_cache_control` |
+| `0066_auth_identity_headers` | `site.auth_identity_headers` (filled from the stored access authentication rules, disabled ones included) |
 
 ## Build output
 

@@ -6,6 +6,7 @@ import {
   type AuthKind,
   type AuthRule,
   type AuthRuleInput,
+  type ForgetIdentityHeadersInput,
   forbiddenOriginRange,
   formatSiteDomain,
   forwardUrlHost,
@@ -34,6 +35,7 @@ import { fail } from "../lib/errors";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { rangeWindow, sourceFor } from "./analytics";
 import { type Actor, recordAudit } from "./audit";
+import { formerIdentityHeaders, retainIdentityHeaders } from "./auth-identity";
 import { loadOriginAllowList } from "./origin-allow-list";
 import { type Executor, publishRevision } from "./revisions";
 import { findSite } from "./sites";
@@ -72,10 +74,12 @@ export async function formattedSiteDomains(db: Executor, siteId: string): Promis
 
 export async function getAuthRules(db: Database, siteId: string): Promise<SiteAuthRules> {
   const site = await findSite(db, siteId);
+  const rows = await loadRules(db, site.id);
   return {
     siteId: site.id,
-    rules: (await loadRules(db, site.id)).map(toAuthRuleDto),
+    rules: rows.map(toAuthRuleDto),
     updatedAt: site.authUpdatedAt?.toISOString() ?? null,
+    formerIdentityHeaders: formerIdentityHeaders(site.authIdentityHeaders, rows),
   };
 }
 
@@ -253,6 +257,8 @@ export async function updateAuthRules(
     // Positions are unique per site: the rules are written anew.
     await tx.delete(schema.siteAuthRule).where(eq(schema.siteAuthRule.siteId, site.id));
     if (next.length) await tx.insert(schema.siteAuthRule).values(next);
+    // Nodes go on removing the identity headers of rules disabled or deleted here.
+    const history = await retainIdentityHeaders(tx, site, existing, next);
     const updatedAt = new Date(Math.max(Date.now(), (site.authUpdatedAt?.getTime() ?? 0) + 1));
     const [updated] = await tx
       .update(schema.site)
@@ -280,7 +286,64 @@ export async function updateAuthRules(
       siteId: site.id,
       rules: (await loadRules(tx, site.id)).map(toAuthRuleDto),
       updatedAt: updatedAt.toISOString(),
+      formerIdentityHeaders: formerIdentityHeaders(history, next),
     };
+  });
+}
+
+/**
+ * Lets former identity headers through again: removes `names` that no
+ * current rule (disabled ones included) sets from the site's history,
+ * publishes its cluster and audits the names. Names the history lacks, or a
+ * current rule sets, are left as they are.
+ */
+export async function forgetIdentityHeaders(
+  db: Database,
+  input: ForgetIdentityHeadersInput,
+  ctx: { actor: Actor },
+): Promise<SiteAuthRules> {
+  return db.transaction(async (tx) => {
+    const site = await findSite(tx, input.id, true);
+    if (input.expectedUpdatedAt !== undefined) {
+      if (!site.authUpdatedAt)
+        fail(
+          "UPDATED_AT_MISMATCH",
+          "the access authentication rules changed since they were read",
+          {
+            updatedAt: "",
+          },
+        );
+      assertUpdatedAt(site.authUpdatedAt, input.expectedUpdatedAt);
+    }
+    const rows = await loadRules(tx, site.id);
+    const former = new Set(formerIdentityHeaders(site.authIdentityHeaders, rows));
+    const forget = new Set(input.names.filter((name) => former.has(name)));
+    const result = (history: string[], updatedAt: Date | null) => ({
+      siteId: site.id,
+      rules: rows.map(toAuthRuleDto),
+      updatedAt: updatedAt?.toISOString() ?? null,
+      formerIdentityHeaders: formerIdentityHeaders(history, rows),
+    });
+    if (!forget.size) return result(site.authIdentityHeaders, site.authUpdatedAt);
+    const history = site.authIdentityHeaders.filter((name) => !forget.has(name));
+    const updatedAt = new Date(Math.max(Date.now(), (site.authUpdatedAt?.getTime() ?? 0) + 1));
+    await tx
+      .update(schema.site)
+      .set({ authIdentityHeaders: history, authUpdatedAt: updatedAt })
+      .where(eq(schema.site.id, site.id));
+    const { row: revision } = await publishRevision(tx, {
+      clusterId: site.clusterId,
+      reason: { code: "site_auth_updated", params: { site: site.name } },
+      actor: ctx.actor,
+    });
+    await recordAudit(tx, ctx.actor, {
+      action: "site.auth_identity_forget",
+      targetType: "site",
+      targetId: site.id,
+      targetName: site.name,
+      metadata: { names: [...forget], revision: revision.revision },
+    });
+    return result(history, updatedAt);
   });
 }
 

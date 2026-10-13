@@ -1376,9 +1376,12 @@ function errorPagesOf(site: Site): SiteErrorPages {
 /** The shop protects its admin area with Basic and its videos with signed URLs. */
 function authRulesOf(site: Site): SiteAuthRules {
   const scope = { domains: [], pathPrefixes: [], extensions: [], excludePathPrefixes: [] };
-  if (!isShop(site)) return { siteId: site.id, rules: [], updatedAt: null };
+  if (!isShop(site))
+    return { siteId: site.id, rules: [], updatedAt: null, formerIdentityHeaders: [] };
   return {
     siteId: site.id,
+    // A forward rule removed last month copied its service's X-Auth-Groups.
+    formerIdentityHeaders: ["x-auth-groups"],
     rules: [
       {
         id: id(0xa12, 1),

@@ -691,8 +691,9 @@ DNS 绑定与记录的新增字段：
 
 | 过程 | 端点 | 说明 |
 | --- | --- | --- |
-| `authRules.get` | `GET /sites/{id}/auth-rules` | `{ siteId, rules, updatedAt }`；每条规则 `{ id, kind, enabled, scope, basic, forward, url }`，`kind` 为 `basic`、`forward`、`url_a`–`url_d`，不属于该类型的部分为 `null`。Basic 只返回用户名（`users: [{ name }]`），URL 鉴权只返回 `backupKey`（是否设置了备用密钥）；密码哈希与密钥从不返回 |
+| `authRules.get` | `GET /sites/{id}/auth-rules` | `{ siteId, rules, updatedAt, formerIdentityHeaders }`（`formerIdentityHeaders`：节点仍从请求中删除的、已删除规则的身份头）；每条规则 `{ id, kind, enabled, scope, basic, forward, url }`，`kind` 为 `basic`、`forward`、`url_a`–`url_d`，不属于该类型的部分为 `null`。Basic 只返回用户名（`users: [{ name }]`），URL 鉴权只返回 `backupKey`（是否设置了备用密钥）；密码哈希与密钥从不返回 |
 | `authRules.update` | `PUT /sites/{id}/auth-rules` | 整体替换，最多 16 条，按数组顺序匹配；可带 `expectedUpdatedAt`（不一致 409 `UPDATED_AT_MISMATCH`）。发布配置版本（原因 `site_auth_updated`），审计 `site.auth_update` |
+| `authRules.forgetIdentityHeaders` | `POST /sites/{id}/auth-rules/forget-identity-headers` | `{ names, expectedUpdatedAt? }` → 同 `get`：不再清除这些已删除规则的身份头（`get` 的 `formerIdentityHeaders`，当前规则设置的头除外）；有变化时发布配置版本（原因 `site_auth_updated`），审计 `site.auth_identity_forget` |
 | `authRules.signUrl` | `POST /sites/{id}/auth-rules/{ruleId}/sign` | `{ url, validitySeconds? }` → `{ url, expiresAt }`：用规则的主密钥签名，`url` 为以 `/` 开头的路径或网站域名的 `http(s)` 网址；审计 `site.auth_sign_url` |
 | `authRules.failures` | `GET /sites/{id}/auth-rules/failures?range=` | `{ requests, unsupportedNodes }`：时间范围内被鉴权拒绝的请求数；`unsupportedNodes` 为不上报的活动节点数（缺少 `access-auth-v1`） |
 

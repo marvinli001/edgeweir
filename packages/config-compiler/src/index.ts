@@ -617,6 +617,12 @@ export interface SiteModel {
   requestBodyLimit?: number;
   /** Enabled access authentication rules in order (access-auth-v1); omitted: none. */
   authRules?: AuthRuleModel[];
+  /**
+   * Identity headers nodes remove from every request of the site: those of
+   * all its rules, disabled ones included, and of former ones (proto v1.1.0;
+   * no feature: older nodes remove those of the enabled rules). Omitted: none.
+   */
+  authIdentityHeaders?: string[];
   /** Access control (access-control-v1); omitted or null: none. */
   accessControl?: AccessControlModel | null;
   /**
@@ -1782,6 +1788,9 @@ function compileSite(
       ),
     ports: compileSitePorts(model, edge),
     authRules: (model.authRules ?? []).map(compileAuthRule),
+    authIdentityHeaders: sortedByteSet(
+      (model.authIdentityHeaders ?? []).map((name) => name.toLowerCase()),
+    ),
     accessControl: model.accessControl ? compileAccessControl(model.accessControl) : undefined,
   });
 }
@@ -2032,6 +2041,7 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
       }
       if (access.websocket) access.websocket.origins = sortedByteSet(access.websocket.origins);
     }
+    site.authIdentityHeaders = sortedByteSet(site.authIdentityHeaders);
     // Access authentication rules keep their order; their lists are sets.
     for (const rule of site.authRules) {
       rule.domains = sortedByteSet(rule.domains);

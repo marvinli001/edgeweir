@@ -603,6 +603,97 @@ describe("access authentication (G12)", async () => {
     });
   });
 
+  describe("identity headers", () => {
+    const identity = async (id = siteId) =>
+      (await config()).ir.sites.find((s) => s.id === id)?.authIdentityHeaders ?? [];
+    const forwardSetting = (names: string[], extra = {}) => {
+      const rule = forward("auth.example.com", extra);
+      if (rule.forward) rule.forward = { ...rule.forward, responseHeaders: names };
+      return rule;
+    };
+
+    it("nodes keep removing those of disabled, deleted and replaced rules", async () => {
+      await save([
+        basic([{ name: "alice", password: PASSWORD }]),
+        forwardSetting(["x-user", "X-Groups"], { enabled: false }),
+      ]);
+      // The disabled rule is not shipped, its headers are.
+      expect(await siteRules()).toHaveLength(1);
+      expect(await identity()).toEqual(["x-auth-user", "x-groups", "x-user"]);
+      await save([forwardSetting(["x-team"])]);
+      expect(await identity()).toEqual(["x-auth-user", "x-groups", "x-team", "x-user"]);
+      await save([]);
+      expect(await siteRules()).toEqual([]);
+      expect(await identity()).toEqual(["x-auth-user", "x-groups", "x-team", "x-user"]);
+      const [site] = await ctx.db.select().from(schema.site).where(eq(schema.site.id, siteId));
+      expect([...(site?.authIdentityHeaders ?? [])].sort()).toEqual([
+        "x-auth-user",
+        "x-groups",
+        "x-team",
+        "x-user",
+      ]);
+      // Copying rules over a site's own keeps the target's.
+      await admin.authRules.update({
+        id: otherSiteId,
+        rules: [forwardSetting(["x-other"])],
+        expectedUpdatedAt: (await admin.authRules.get({ id: otherSiteId })).updatedAt ?? undefined,
+      });
+      await admin.sites.copySettings({
+        id: siteId,
+        targetIds: [otherSiteId],
+        parts: ["authRules"],
+      });
+      expect(await identity(otherSiteId)).toEqual(["x-other"]);
+    });
+
+    it("lists former ones and lets them through again on request", async () => {
+      await save([forwardSetting(["x-user"])]);
+      await save([forwardSetting(["x-keep"])]);
+      const listed = await admin.authRules.get({ id: siteId });
+      expect(listed.formerIdentityHeaders).toContain("x-user");
+      expect(listed.formerIdentityHeaders).not.toContain("x-keep");
+      const forgotten = await admin.authRules.forgetIdentityHeaders({
+        id: siteId,
+        // A current rule's name is never let through.
+        names: ["x-user", "x-keep"],
+        expectedUpdatedAt: listed.updatedAt ?? undefined,
+      });
+      expect(forgotten.formerIdentityHeaders).not.toContain("x-user");
+      expect(await identity()).not.toContain("x-user");
+      expect(await identity()).toContain("x-keep");
+      const [entry] = await audits("site.auth_identity_forget");
+      expect(entry?.metadata).toMatchObject({ names: ["x-user"] });
+      // A stale read is refused; nothing left to forget changes nothing.
+      expect(
+        (
+          await rpcError(
+            admin.authRules.forgetIdentityHeaders({
+              id: siteId,
+              names: ["x-team"],
+              expectedUpdatedAt: listed.updatedAt ?? undefined,
+            }),
+          )
+        ).code,
+      ).toBe("UPDATED_AT_MISMATCH");
+      const same = await admin.authRules.forgetIdentityHeaders({ id: siteId, names: ["x-user"] });
+      expect(same.updatedAt).toBe(forgotten.updatedAt);
+    });
+
+    it("keeps at most 64 former ones, the oldest go first", async () => {
+      for (let round = 0; round < 10; round++)
+        await save([forwardSetting(Array.from({ length: 8 }, (_, i) => `x-r${round}-${i}`))]);
+      const kept = await identity();
+      // 64 former and the current rule's 8, plus the 4 above (oldest: gone).
+      expect(kept).toHaveLength(72);
+      expect(kept).toContain("x-r9-7");
+      expect(kept).not.toContain("x-auth-user");
+      expect(kept).not.toContain("x-r0-0");
+      expect(kept).toContain("x-r1-0");
+      await save([]);
+      expect(await identity()).toHaveLength(64);
+    });
+  });
+
   describe("nodes (0.4, 0.5)", () => {
     it("holds rules for changes without the operator while a node lacks access-auth-v1", async () => {
       await setNodeFeatures(["tls-v1"]);
@@ -764,6 +855,7 @@ describe("access authentication (G12)", async () => {
     const writes: [string, string, unknown][] = [
       ["PUT", `/sites/${siteId}/auth-rules`, { rules: [] }],
       ["POST", `/sites/${siteId}/auth-rules/${rule.id}/sign`, { url: "/a.mp4" }],
+      ["POST", `/sites/${siteId}/auth-rules/forget-identity-headers`, { names: ["x-none"] }],
     ];
     for (const [method, path] of reads) {
       expect((await api(reader, method, path)).status, `${method} ${path}`).toBe(200);

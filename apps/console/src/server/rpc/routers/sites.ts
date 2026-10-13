@@ -9,6 +9,7 @@ import {
 } from "../../services/analytics";
 import {
   authFailures,
+  forgetIdentityHeaders,
   getAuthRules,
   signAuthUrl,
   updateAuthRules,
@@ -88,6 +89,9 @@ export const sitesRouter = {
     ),
     update: authed.authRules.update.handler(({ input, context }) =>
       updateAuthRules(context.app.db, context.app.masterKey, input, { actor: context.actor }),
+    ),
+    forgetIdentityHeaders: authed.authRules.forgetIdentityHeaders.handler(({ input, context }) =>
+      forgetIdentityHeaders(context.app.db, input, { actor: context.actor }),
     ),
     signUrl: authed.authRules.signUrl.handler(({ input, context }) =>
       signAuthUrl(context.app.db, context.app.masterKey, input, { actor: context.actor }),

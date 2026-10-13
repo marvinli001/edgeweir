@@ -28,6 +28,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CopyButton } from "@/components/copy-button";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
@@ -469,6 +470,7 @@ function AuthRulesForm({
           testId="auth-save"
         />
       </form>
+      <FormerIdentityHeaders siteId={site.id} saved={initial} disabled={dirty} />
       {editing ? (
         <RuleDialog
           site={site}
@@ -486,6 +488,65 @@ function AuthRulesForm({
         <SignDialog siteId={site.id} rule={signing} onClose={() => setSigning(null)} />
       ) : null}
     </>
+  );
+}
+
+/**
+ * The identity headers of former rules nodes still remove from every request of the site, and
+ * letting them through again (once the origin no longer trusts them). Kept with unsaved edits.
+ */
+function FormerIdentityHeaders({
+  siteId,
+  saved,
+  disabled,
+}: {
+  siteId: string;
+  saved: SiteAuthRules;
+  disabled: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const forget = useMutation(orpc.authRules.forgetIdentityHeaders.mutationOptions());
+  const names = saved.formerIdentityHeaders;
+  if (!names.length) return null;
+  return (
+    <CardContent
+      className="flex flex-wrap items-center gap-2 border-t pt-(--card-spacing)"
+      data-testid="auth-former-headers"
+    >
+      <span className="text-sm text-muted-foreground">{m.auth_former_headers()}</span>
+      {names.map((name) => (
+        <Badge key={name} variant="outline" className="font-mono">
+          {name}
+        </Badge>
+      ))}
+      <ConfirmDialog
+        trigger={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ml-auto"
+            disabled={disabled}
+            data-testid="auth-former-forget"
+          >
+            {m.auth_former_forget()}
+          </Button>
+        }
+        title={m.auth_former_forget_title()}
+        note={m.auth_former_forget_note()}
+        confirmLabel={m.auth_former_forget()}
+        destructive
+        onConfirm={async () => {
+          const result = await forget.mutateAsync({
+            id: siteId,
+            names,
+            ...(saved.updatedAt ? { expectedUpdatedAt: saved.updatedAt } : {}),
+          });
+          queryClient.setQueryData(orpc.authRules.get.queryKey({ input: { id: siteId } }), result);
+          toast.success(m.common_saved());
+        }}
+      />
+    </CardContent>
   );
 }
 
