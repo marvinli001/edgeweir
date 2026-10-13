@@ -342,6 +342,29 @@ export function nodeChannelOrigin(value: string): string | undefined {
   return url.origin;
 }
 
+/** A node channel URL with the TLS server name nodes verify (empty: the URL's host). */
+export interface NodeChannelAddress {
+  url: string;
+  serverName: string;
+}
+
+/** The name a node verifies the node channel certificate against: the server name, or the URL's host. */
+export function nodeChannelName(address: NodeChannelAddress): string {
+  if (address.serverName) return address.serverName.toLowerCase();
+  return (parseUrl(address.url)?.hostname ?? "").replace(/^\[|\]$/g, "").toLowerCase();
+}
+
+/**
+ * Whether two node channel addresses reach the same URL (default ports and the case of the
+ * host aside) and verify the same name, as nodes compare them.
+ */
+export function sameNodeChannelAddress(a: NodeChannelAddress, b: NodeChannelAddress): boolean {
+  const origin = nodeChannelOrigin(a.url);
+  return (
+    !!origin && origin === nodeChannelOrigin(b.url) && nodeChannelName(a) === nodeChannelName(b)
+  );
+}
+
 /** Whether a node channel URL goes through the WebSocket entry (`wss://` or `ws://`). */
 export function isWebSocketNodeChannel(url: string): boolean {
   const protocol = parseUrl(url)?.protocol;

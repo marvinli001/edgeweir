@@ -4,7 +4,13 @@ import { getBanSettings, setBanSettings } from "../../services/bans";
 import { isDemoEnabled, setDemo } from "../../services/demo";
 import { getPlatformErrorPages, setPlatformErrorPages } from "../../services/error-pages";
 import { checkNodeChannel } from "../../services/node-channel-check";
-import { getNodeChannel, nodeChannelUrl, setNodeChannel } from "../../services/node-channel-url";
+import {
+  closeNodeChannelWebSocket,
+  getNodeChannel,
+  nodeChannelUrl,
+  removeNodeChannelName,
+  setNodeChannel,
+} from "../../services/node-channel-url";
 import { getOriginAllowList, setOriginAllowList } from "../../services/origin-allow-list";
 import { getProbeSettings, setProbeSettings } from "../../services/probes";
 import {
@@ -35,6 +41,12 @@ export const settingsRouter = {
     nodeChannel: authed.settings.nodeChannel.handler(({ context }) => getNodeChannel(context.app)),
     setNodeChannel: authed.settings.setNodeChannel.handler(({ input, context }) =>
       setNodeChannel(context.app, input, context.actor),
+    ),
+    removeNodeChannelName: authed.settings.removeNodeChannelName.handler(({ input, context }) =>
+      removeNodeChannelName(context.app, input.name, context.actor),
+    ),
+    closeNodeChannelWebSocket: authed.settings.closeNodeChannelWebSocket.handler(({ context }) =>
+      closeNodeChannelWebSocket(context.app, context.actor),
     ),
     originAllowList: authed.settings.originAllowList.handler(({ context }) =>
       getOriginAllowList(context.app.db),

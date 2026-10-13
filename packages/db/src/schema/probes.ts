@@ -10,7 +10,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth";
-import { cluster, node, region } from "./core";
+import { cluster, type NodeChannelData, node, region } from "./core";
 
 /**
  * A regional probe (`edgeweir-node probe`): it measures the scheduling
@@ -37,6 +37,8 @@ export const probe = pgTable("probe", {
   previousCertSerial: text("previous_cert_serial"),
   enrolledAt: timestamp("enrolled_at", { withTimezone: true }),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+  /** The node channel address of the last round; null before the first since it was added. */
+  channel: jsonb("channel").$type<NodeChannelData>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

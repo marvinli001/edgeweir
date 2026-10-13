@@ -967,6 +967,55 @@ export const nodeCertificateFailure = z.object({
   servingEarlier: z.boolean(),
 });
 
+/**
+ * The node channel address a node (or probe) uses: what it reports
+ * (channel-follow-v1; url null for older agents) and what the console saw
+ * of its latest connection.
+ */
+export const nodeChannelStatus = z.object({
+  url: z.string().nullable(),
+  serverName: z.string(),
+  /** The address before its last switch, tried while url fails. */
+  fallbackUrl: z.string().nullable(),
+  fallbackServerName: z.string(),
+  /** It runs on the fallback because url failed. */
+  onFallback: z.boolean(),
+  /** How url was set: the enrollment, the console's address, or `edgeweir-node set-server`. */
+  source: z.enum(["enroll", "console", "command"]).nullable(),
+  switchedAt: isoDateTime.nullable(),
+  /** The last failed check of an address (channelErrorDefs code; message is the agent's). */
+  error: z
+    .object({
+      code: z.string(),
+      message: z.string(),
+      url: z.string(),
+      serverName: z.string(),
+      at: isoDateTime,
+    })
+    .nullable(),
+  /** TLS server name of the latest connection; "" when it sent none (an IP address). */
+  observedServerName: z.string(),
+  /** The latest connection came through the WebSocket entry. */
+  observedWebSocket: z.boolean(),
+  observedAt: isoDateTime,
+});
+
+/**
+ * How a node or probe stands to the node channel address the console gives
+ * out (nodeChannelStateOf): current, pending (not switched yet), failed (its
+ * check of the address failed), fallback (its own address fails), upgrade
+ * (an agent without channel-follow-v1 on another address), unknown (no
+ * connection seen yet).
+ */
+export const nodeChannelState = z.enum([
+  "current",
+  "pending",
+  "failed",
+  "fallback",
+  "upgrade",
+  "unknown",
+]);
+
 export const node = z.object({
   id: uuid,
   name: z.string(),
@@ -1042,6 +1091,8 @@ export const node = z.object({
    * (servingEarlier) or refuses their TLS handshakes. Empty for other nodes.
    */
   certificateFailures: z.array(nodeCertificateFailure),
+  /** Null until the node connects with a console that records it. */
+  channel: nodeChannelStatus.nullable(),
 });
 
 export const nodeUpdateInput = z.object({
@@ -1298,19 +1349,50 @@ export const nodeChannelUrl = z
   .max(2048)
   .refine((value) => nodeChannelOrigin(value) !== undefined);
 
-/** The URL nodes and probes connect to: install commands carry it. */
+const agentCount = z.number().int();
+
+/** The URL nodes and probes connect to: install commands carry it, enrolled ones follow it. */
 export const nodeChannel = z.object({
   /** Saved in system settings; empty when none is saved. */
   url: z.string(),
-  /** The URL new install commands carry. */
+  /** The URL new install commands carry and enrolled nodes and probes move to. */
   effectiveUrl: z.string(),
   source: z.enum(["setting", "environment", "default"]),
+  /** The name nodes verify at effectiveUrl. */
+  serverName: z.string(),
+  /**
+   * Names earlier URLs left in the node channel certificate (not the environment's), with the
+   * nodes and probes (certificate still valid) that still connect with each: they verified it
+   * on their latest connection, or report it as the address they use (a fallback kept for
+   * later does not count). Removable once both are 0.
+   */
+  previousNames: z.array(z.object({ name: z.string(), nodes: agentCount, probes: agentCount })),
+  /**
+   * The WebSocket entry: open, closable (open only because an earlier URL used it), and the
+   * nodes and probes that may still use it.
+   */
+  webSocket: z.object({
+    open: z.boolean(),
+    closable: z.boolean(),
+    nodes: agentCount,
+    probes: agentCount,
+  }),
+  /** Nodes and probes (certificate still valid), and those on effectiveUrl. */
+  adoption: z.object({
+    nodes: agentCount,
+    nodesCurrent: agentCount,
+    probes: agentCount,
+    probesCurrent: agentCount,
+  }),
 });
 
 /** Empty clears the saved value (EDGEWEIR_NODE_API_URL or the default applies). */
 export const nodeChannelInput = z.object({
   url: z.union([z.literal(""), nodeChannelUrl]),
 });
+
+/** A name an earlier node channel URL left in the certificate (nodeChannel.previousNames). */
+export const nodeChannelNameInput = z.object({ name: z.string().min(1).max(253) });
 
 /** Where the console reads node release manifests unless configured otherwise. */
 export const DEFAULT_NODE_RELEASE_BASE_URL =
@@ -1666,6 +1748,8 @@ export type Settings = z.infer<typeof settings>;
 export type ReleaseSource = z.infer<typeof releaseSource>;
 export type ReleaseSourceInput = z.infer<typeof releaseSourceInput>;
 export type NodeChannel = z.infer<typeof nodeChannel>;
+export type NodeChannelStatus = z.infer<typeof nodeChannelStatus>;
+export type NodeChannelState = z.infer<typeof nodeChannelState>;
 export type NodeChannelInput = z.infer<typeof nodeChannelInput>;
 export type AuditLogEntry = z.infer<typeof auditLogEntry>;
 export type NodeGroup = z.infer<typeof nodeGroup>;

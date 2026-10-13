@@ -1,7 +1,7 @@
 import { oc } from "@orpc/contract";
 import * as z from "zod";
 import { dnsLineName } from "./dns";
-import { isoDateTime, uuid } from "./schemas";
+import { isoDateTime, nodeChannelStatus, uuid } from "./schemas";
 
 /**
  * Regional probes (`edgeweir-node probe`, or a node that also probes from its
@@ -72,6 +72,8 @@ export const probe = z.object({
       avgRttMs: z.number().nullable(),
     })
     .nullable(),
+  /** Null until the probe connects with a console that records it. */
+  channel: nodeChannelStatus.nullable(),
   createdAt: isoDateTime,
 });
 

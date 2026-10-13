@@ -17,6 +17,7 @@ import { and, desc, eq, gt, inArray, isNull, lt, ne, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import { nodeIpRows, schedulingAddressesOf } from "./node-addresses";
+import { toNodeChannelStatus } from "./node-channel-status";
 import { normalizeSerial } from "./nodes";
 import { type Executor, latestRevision, publisher, type Tx } from "./revisions";
 import { defineSetting } from "./settings";
@@ -229,6 +230,7 @@ export async function listProbes(db: Executor, now = Date.now()): Promise<Probe[
       certNotAfter: r.certNotAfter?.toISOString() ?? null,
       targets,
       lastRound: roundSummary(results.filter((x) => x.proberId === r.id)),
+      channel: toNodeChannelStatus(r.channel),
       createdAt: r.createdAt.toISOString(),
     };
   });

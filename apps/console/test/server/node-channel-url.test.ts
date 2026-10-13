@@ -15,6 +15,13 @@ import {
   signIn,
 } from "./helpers";
 
+/** The settings answer of a console no node or probe has enrolled with yet. */
+const unused = (previous: string[]) => ({
+  previousNames: previous.map((name) => ({ name, nodes: 0, probes: 0 })),
+  webSocket: { open: false, closable: false, nodes: 0, probes: 0 },
+  adoption: { nodes: 0, nodesCurrent: 0, probes: 0, probesCurrent: 0 },
+});
+
 describe("node channel URL in system settings", async () => {
   const { ctx, client } = await createTestContext();
   const app = createApp(ctx);
@@ -59,6 +66,8 @@ describe("node channel URL in system settings", async () => {
       url: "",
       effectiveUrl: "https://localhost:8443",
       source: "environment",
+      serverName: "localhost",
+      ...unused([]),
     });
     const env = ctx.env.EDGEWEIR_NODE_API_URL;
     ctx.env.EDGEWEIR_NODE_API_URL = undefined;
@@ -90,6 +99,9 @@ describe("node channel URL in system settings", async () => {
       url: "https://nodes.example.test:9443",
       effectiveUrl: "https://nodes.example.test:9443",
       source: "setting",
+      serverName: "nodes.example.test",
+      // localhost stays: the environment's URL names it.
+      ...unused([]),
     });
     expect((await admin.settings.get()).nodeApiUrl).toBe("https://nodes.example.test:9443");
     const token = await admin.clusters.createEnrollmentToken({ clusterId, nodeName: "edge-1" });
@@ -122,6 +134,8 @@ describe("node channel URL in system settings", async () => {
       url: "",
       effectiveUrl: "https://localhost:8443",
       source: "environment",
+      serverName: "localhost",
+      ...unused(["nodes.example.test", "2001:db8::7"]),
     });
     const names = await nodeChannelNames(ctx);
     expect(names).toEqual(expect.arrayContaining(["nodes.example.test", "2001:db8::7"]));

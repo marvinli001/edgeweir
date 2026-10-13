@@ -4,13 +4,14 @@
  * under high CPU, one failing origin of shop.example.com and the burst on it ~9.5 hours ago.
  * Id kinds 40–49 (see `id()`).
  */
-import type {
-  AlertEventKind,
-  AlertKind,
-  AuditLogEntry,
-  Probe,
-  ProbeResultDto,
-  ServiceAccount,
+import {
+  type AlertEventKind,
+  type AlertKind,
+  type AuditLogEntry,
+  nodeChannelStateOf,
+  type Probe,
+  type ProbeResultDto,
+  type ServiceAccount,
 } from "@edgeweir/contract";
 import type { Fixtures } from "./define";
 import {
@@ -20,6 +21,8 @@ import {
   DAY,
   HOUR,
   id,
+  LAB_CHANNEL_URL,
+  LAB_OLD_CHANNEL_URL,
   logRetention,
   MINUTE,
   NOW,
@@ -49,7 +52,7 @@ const clusterNamed = (name: string) => {
   return cluster;
 };
 
-const NODE_CHANNEL_URL = "https://node.example.net:8443";
+const NODE_CHANNEL_URL = LAB_CHANNEL_URL;
 const CONSOLE_VERSION = "20261006-afad833";
 const CA_SHA256 = Array.from({ length: 32 }, (_, i) =>
   Math.floor(noise(4_000 + i) * 256)
@@ -466,6 +469,21 @@ const probes: Probe[] = probeSeeds.map((seed, index) => {
     certNotAfter: pending ? null : ahead((38 + index * 9) * DAY),
     targets: PROBE_TARGETS,
     lastRound: pending ? null : lastRoundOf(probeId),
+    channel: pending
+      ? null
+      : {
+          url: NODE_CHANNEL_URL,
+          serverName: new URL(NODE_CHANNEL_URL).hostname,
+          fallbackUrl: null,
+          fallbackServerName: "",
+          onFallback: false,
+          source: "enroll",
+          switchedAt: ago(seed.created - 4 * MINUTE),
+          error: null,
+          observedServerName: new URL(NODE_CHANNEL_URL).hostname,
+          observedWebSocket: false,
+          observedAt: offline ? ago(PROBE_OFFLINE_FOR) : ago(1_500 + index * 900),
+        },
     createdAt: ago(seed.created),
   };
 });
@@ -1104,7 +1122,33 @@ export const systemFixtures: Fixtures = {
       analyticsMode: "lite",
       setupCompletedAt: ago(210 * DAY),
     }),
-    nodeChannel: () => ({ url: "", effectiveUrl: NODE_CHANNEL_URL, source: "environment" }),
+    nodeChannel: () => {
+      const desired = { url: NODE_CHANNEL_URL, serverName: new URL(NODE_CHANNEL_URL).hostname };
+      const onIt = nodes.filter((n) => nodeChannelStateOf(n.channel, desired) === "current");
+      const enrolledProbes = probes.filter((p) => p.channel);
+      return {
+        url: NODE_CHANNEL_URL,
+        effectiveUrl: NODE_CHANNEL_URL,
+        source: "setting" as const,
+        serverName: desired.serverName,
+        previousNames: [
+          {
+            name: new URL(LAB_OLD_CHANNEL_URL).hostname,
+            // Nodes still on the old URL (a fallback kept for later does not count).
+            nodes: nodes.filter((n) => n.channel?.url === LAB_OLD_CHANNEL_URL).length,
+            probes: 0,
+          },
+          { name: "console.example.net", nodes: 0, probes: 0 },
+        ],
+        webSocket: { open: false, closable: false, nodes: 0, probes: 0 },
+        adoption: {
+          nodes: nodes.length,
+          nodesCurrent: onIt.length,
+          probes: enrolledProbes.length,
+          probesCurrent: enrolledProbes.length,
+        },
+      };
+    },
     nodeChannelCheck: () => ({ url: NODE_CHANNEL_URL, result: "ok", checkedAt: ago(12_000) }),
     originAllowList: () => ({ cidrs: ["10.40.0.0/16", "fd00:40::/48"] }),
     releaseSource: () => ({

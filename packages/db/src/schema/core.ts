@@ -125,6 +125,27 @@ export interface NodeBanStatus {
   reportedAt: string;
 }
 
+/**
+ * The node channel address a node or probe uses: what it reports
+ * (ChannelStatus, channel-follow-v1; absent for older agents) and what the
+ * console saw of its latest connection (TLS server name, "" when it sent
+ * none, e.g. for an IP address; whether it came through the WebSocket
+ * entry).
+ */
+export interface NodeChannelData {
+  reported?: {
+    url: string;
+    serverName: string;
+    fallbackUrl: string;
+    fallbackServerName: string;
+    onFallback: boolean;
+    source: "enroll" | "console" | "command";
+    switchedAt: string | null;
+    error: { code: string; message: string; url: string; serverName: string; at: string } | null;
+  };
+  observed: { serverName: string; webSocket: boolean; at: string };
+}
+
 /** Disk usage of a node's cache zones as last measured (ReportStatusRequest.cache_usage). */
 export interface NodeCacheUsage {
   zones: { name: string; usedBytes: number; maxBytes: number; measuredAt: string }[];
@@ -226,6 +247,8 @@ export const node = pgTable(
     cacheMaxSizeGb: integer("cache_max_size_gb"),
     /** Cache usage of the last heartbeat that carried one; null until then. */
     cacheUsage: jsonb("cache_usage").$type<NodeCacheUsage>(),
+    /** The node channel address of the last heartbeat; null before the first since it was added. */
+    channel: jsonb("channel").$type<NodeChannelData>(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

@@ -477,6 +477,13 @@
       "when": 1791874075234,
       "tag": "0067_node_certificate_failures",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1791924637576,
+      "tag": "0068_node_channel_status",
+      "breakpoints": true
     }
   ]
 }

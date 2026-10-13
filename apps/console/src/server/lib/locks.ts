@@ -80,6 +80,12 @@ export async function lockDomains(tx: Executor, names: string[]) {
 export const lockPurgeMethod = (tx: Executor, siteId: string) =>
   xactLock(tx, `edgeweir.purge-method.${siteId}`);
 
+/**
+ * Serializes changes to the node channel URL setting (saves, removed names,
+ * closing the WebSocket entry), which all rewrite its earlier names.
+ */
+export const lockNodeChannel = (tx: Executor) => xactLock(tx, "edgeweir.node-channel");
+
 /** Serializes saves of the platform protection settings. */
 export const lockProtectionSettings = (tx: Executor) =>
   xactLock(tx, "edgeweir.protection-settings");

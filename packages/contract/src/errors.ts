@@ -165,6 +165,14 @@ export const errorDefs = {
   /** A rule the cluster cannot evaluate (e.g. backup_group without a line, an unknown line). */
   SCHEDULING_RULE_INVALID: { status: 400, params: [] },
   NODE_NOT_FOUND: { status: 404, params: [] },
+  /** The name is not one an earlier node channel URL left in the certificate. */
+  NODE_CHANNEL_NAME_NOT_FOUND: { status: 404, params: [] },
+  /** Nodes and probes may still connect with the name. */
+  NODE_CHANNEL_NAME_IN_USE: { status: 409, params: ["nodes", "probes"] },
+  /** Nodes and probes may still connect through the WebSocket entry. */
+  NODE_CHANNEL_WEBSOCKET_IN_USE: { status: 409, params: ["nodes", "probes"] },
+  /** The entry stays open: EDGEWEIR_NODE_API_WEBSOCKET or the current URL needs it. */
+  NODE_CHANNEL_WEBSOCKET_REQUIRED: { status: 409, params: [] },
   ENROLLMENT_TOKEN_NOT_FOUND: { status: 404, params: [] },
   SITE_NOT_FOUND: { status: 404, params: [] },
   CACHE_RULE_PRIORITY_DUPLICATE: { status: 400, params: ["priority"] },

@@ -69,6 +69,7 @@ export * from "./errors";
 export * from "./expressions";
 export * from "./hidden-cards";
 export * from "./image-convert";
+export * from "./node-channel";
 export * from "./node-errors";
 export * from "./node-features";
 export * from "./protection";
@@ -501,11 +502,27 @@ export const contract = {
       .output(s.nodeChannel),
     /**
      * Saves the node channel URL (empty: EDGEWEIR_NODE_API_URL or the default). The node
-     * channel's certificate names it from then on; enrolled nodes keep the URL they enrolled with.
+     * channel's certificate names it from then on and keeps the earlier URL's name; enrolled
+     * nodes and probes with channel-follow-v1 check the new URL and switch to it.
      */
     setNodeChannel: oc
       .route({ method: "PUT", path: "/settings/node-channel", tags: ["settings"] })
       .input(s.nodeChannelInput)
+      .output(s.nodeChannel),
+    /**
+     * Removes a name an earlier URL left in the node channel certificate, once no node or
+     * probe may connect with it (NODE_CHANNEL_NAME_IN_USE otherwise).
+     */
+    removeNodeChannelName: oc
+      .route({ method: "DELETE", path: "/settings/node-channel/names/{name}", tags: ["settings"] })
+      .input(s.nodeChannelNameInput)
+      .output(s.nodeChannel),
+    /**
+     * Closes the WebSocket entry an earlier wss:// or ws:// URL opened, once no node or probe
+     * may use it (NODE_CHANNEL_WEBSOCKET_IN_USE, NODE_CHANNEL_WEBSOCKET_REQUIRED otherwise).
+     */
+    closeNodeChannelWebSocket: oc
+      .route({ method: "DELETE", path: "/settings/node-channel/websocket", tags: ["settings"] })
       .output(s.nodeChannel),
     /** Special-purpose origin addresses (private, loopback...) sites may use anyway. */
     originAllowList: oc

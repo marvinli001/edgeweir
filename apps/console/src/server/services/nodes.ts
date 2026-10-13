@@ -20,6 +20,7 @@ import {
   nodeIpRows,
   schedulingAddressesOf,
 } from "./node-addresses";
+import { toNodeChannelStatus } from "./node-channel-status";
 import { findNodeGroup } from "./node-groups";
 import {
   type Executor,
@@ -143,6 +144,7 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
         reason: f.reason,
         servingEarlier: f.servingFingerprint !== "",
       })),
+      channel: toNodeChannelStatus(r.channel),
     };
   });
 }

@@ -18,7 +18,13 @@ import {
   diffNodeConfig,
   nodeRequirements,
 } from "@edgeweir/config-compiler";
-import { formatIp, MAX_REPORTED_BANS, nodeSupportsFeature, parseIp } from "@edgeweir/contract";
+import {
+  CHANNEL_FOLLOW_FEATURE,
+  formatIp,
+  MAX_REPORTED_BANS,
+  nodeSupportsFeature,
+  parseIp,
+} from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import {
   ApplyState,
@@ -86,6 +92,7 @@ import {
   reportUpgrade,
 } from "../services/upgrades";
 import { recordStatsWatermark } from "../services/usage";
+import { channelAddressFor, channelData } from "./channel-status";
 import {
   certificateColumns,
   issuedCertificateResponse,
@@ -278,6 +285,10 @@ export interface PeerInfo {
   serialNumber?: string;
   fingerprintSha256?: string;
   remoteAddress?: string;
+  /** The TLS server name the client sent (SNI); none for an IP address. */
+  serverName?: string;
+  /** The connection came through the WebSocket entry. */
+  webSocket?: boolean;
 }
 
 export const peerKey = createContextKey<PeerInfo>({ authorized: false });
@@ -369,10 +380,12 @@ function tlsSocketOf(req: NodeServerRequest): TLSSocket | undefined {
  */
 export function peerContextValues(req: NodeServerRequest): ContextValues {
   const socket = tlsSocketOf(req);
+  const bridged = bridgedClientAddress(socket?.remoteAddress, socket?.remotePort);
   const info: PeerInfo = {
     authorized: false,
-    remoteAddress:
-      bridgedClientAddress(socket?.remoteAddress, socket?.remotePort) ?? socket?.remoteAddress,
+    remoteAddress: bridged ?? socket?.remoteAddress,
+    serverName: typeof socket?.servername === "string" ? socket.servername : undefined,
+    webSocket: bridged !== undefined,
   };
   if (socket && typeof socket.getPeerCertificate === "function") {
     const cert = socket.getPeerCertificate(false);
@@ -802,6 +815,8 @@ export function createNodeService(
             banStatus: req.bans ? toNodeBanStatus(req.bans, now) : null,
             // Sites above the normal CC level; nodes without challenge-v1 send none.
             securityState: toNodeSecurityState(req.security),
+            // The address the node uses (channel-follow-v1) and what this connection showed.
+            channel: channelData(req.channel, peer, now),
             ...(info ? { ...nodeInfoColumns(info), hostname: info.hostname || node.hostname } : {}),
           })
           .where(eq(schema.node.id, node.id));
@@ -878,6 +893,17 @@ export function createNodeService(
         tasksPending,
         // The node probes only while its node group has a region to probe from.
         probe: node.probeEnabled && !!(await nodeProbeRegion(app.db, node)),
+        // Nodes with channel-follow-v1 check this address and move to it.
+        channel: await channelAddressFor(app, info?.supportedFeatures ?? node.supportedFeatures),
+      };
+    },
+
+    async checkChannel(_req, ctx) {
+      // Disabled nodes too: set-server must find out whether an address reaches the console.
+      const node = await requireNode(ctx, { disabled: true });
+      return {
+        nodeId: node.id,
+        channel: await channelAddressFor(app, [CHANNEL_FOLLOW_FEATURE]),
       };
     },
 

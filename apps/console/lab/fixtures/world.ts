@@ -315,6 +315,38 @@ const FEATURES = [
   "geoip-asn-v1",
 ];
 
+/** The node channel URL the console gives out, and the one the nodes moved away from. */
+export const LAB_CHANNEL_URL = "https://node.example.net:8443";
+export const LAB_OLD_CHANNEL_URL = "https://edge-api.example.net:8443";
+
+/** Most nodes moved to the new URL; one has yet to, one cannot reach it. */
+function channelOf(index: number, lastSeen: string): Node["channel"] {
+  const moved = index !== 1 && index !== 3;
+  const url = moved ? LAB_CHANNEL_URL : LAB_OLD_CHANNEL_URL;
+  return {
+    url,
+    serverName: new URL(url).hostname,
+    fallbackUrl: moved ? LAB_OLD_CHANNEL_URL : null,
+    fallbackServerName: moved ? new URL(LAB_OLD_CHANNEL_URL).hostname : "",
+    onFallback: false,
+    source: moved ? "console" : "enroll",
+    switchedAt: ago((moved ? 3 : 120 - index * 7) * DAY),
+    error:
+      index === 3
+        ? {
+            code: "unreachable",
+            message: "dial tcp 203.0.113.80:8443: i/o timeout",
+            url: LAB_CHANNEL_URL,
+            serverName: new URL(LAB_CHANNEL_URL).hostname,
+            at: ago(4 * MINUTE),
+          }
+        : null,
+    observedServerName: new URL(url).hostname,
+    observedWebSocket: false,
+    observedAt: lastSeen,
+  };
+}
+
 export const nodes: Node[] = nodeSeeds.map((seed, index) => {
   const g = nodeGroups.find((candidate) => candidate.id === id(3, seed.group)) as NodeGroup;
   const cluster = clusterSeeds.find((c) => c.id === g.clusterId) as ClusterSeed;
@@ -399,6 +431,7 @@ export const nodes: Node[] = nodeSeeds.map((seed, index) => {
       },
     },
     certificateFailures: [],
+    channel: channelOf(index, lastSeen),
   };
 });
 

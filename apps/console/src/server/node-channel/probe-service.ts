@@ -1,5 +1,6 @@
 import { create } from "@bufbuild/protobuf";
 import { Code, ConnectError, type HandlerContext, type ServiceImpl } from "@connectrpc/connect";
+import { CHANNEL_FOLLOW_FEATURE } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import {
   GetProbeTargetsResponseSchema,
@@ -21,6 +22,7 @@ import {
   recordProbeResults,
 } from "../services/probes";
 import { evaluateAfterProbeReport } from "../services/scheduling";
+import { channelAddressFor, channelData } from "./channel-status";
 import { certificateColumns, issuedCertificateResponse, keptSerial, signCsr } from "./identity";
 import { clientCertificateError, nodeProbeRegion, peerKey } from "./service";
 
@@ -224,6 +226,8 @@ export function createProbeService(
           .update(schema.probe)
           .set({
             lastSeenAt: now,
+            // The address the probe uses (channel-follow-v1) and what this connection showed.
+            channel: channelData(req.channel, ctx.values.get(peerKey), now),
             ...(info
               ? {
                   hostname: text(info.hostname, 253),
@@ -252,7 +256,26 @@ export function createProbeService(
         attempts: settings.attempts,
         renewCertificate:
           !!prober.certNotAfter && prober.certNotAfter.getTime() - now.getTime() < RENEW_BEFORE_MS,
+        // A node follows through its heartbeats; a probe with channel-follow-v1 here.
+        channel:
+          prober.kind === "probe"
+            ? await channelAddressFor(app, req.info?.supportedFeatures ?? [])
+            : undefined,
       });
+    },
+
+    async checkProbeChannel(_req, ctx) {
+      // Disabled probes too: set-server must find out whether an address reaches the console.
+      const prober = await requireProber(ctx, { disabled: true });
+      if (prober.kind !== "probe")
+        throw new ConnectError(
+          "nodes check an address with NodeService.CheckChannel",
+          Code.FailedPrecondition,
+        );
+      return {
+        probeId: prober.id,
+        channel: await channelAddressFor(app, [CHANNEL_FOLLOW_FEATURE]),
+      };
     },
 
     async reportProbeResults(req, ctx) {

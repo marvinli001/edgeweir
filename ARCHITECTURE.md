@@ -277,11 +277,11 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 | 项 | 值 |
 | --- | --- |
 | 内部 CA | ECDSA P-256，有效期 10 年，首次启动生成；私钥信封加密后存入 `pki_authority` |
-| 服务端证书 | 每次启动由内部 CA 签发，有效期 90 天；进程每小时检查一次，剩余不足三分之一时重新签发，系统设置中的节点通道地址改变时（经 LISTEN/NOTIFY 通知每个实例）立即重新签发，新握手使用新证书，已建立的连接不受影响；SAN 包含 `EDGEWEIR_NODE_API_URL` 的主机名（未设置时为 `EDGEWEIR_PUBLIC_URL` 的主机名）、`EDGEWEIR_NODE_API_HOSTNAMES`、系统设置中保存的节点通道地址及此前生效过的地址的主机名（最近 32 个）、`localhost`、`127.0.0.1`、`::1` 与容器主机名 |
+| 服务端证书 | 每次启动由内部 CA 签发，有效期 90 天；进程每小时检查一次，剩余不足三分之一时重新签发，系统设置中的节点通道地址改变时（经 LISTEN/NOTIFY 通知每个实例）立即重新签发，新握手使用新证书，已建立的连接不受影响；SAN 包含 `EDGEWEIR_NODE_API_URL` 的主机名（未设置时为 `EDGEWEIR_PUBLIC_URL` 的主机名）、`EDGEWEIR_NODE_API_HOSTNAMES`、系统设置中保存的节点通道地址及此前生效过的地址的主机名（最近 32 个，没有节点或探针再用某个名称连接时可在系统设置中移除）、`localhost`、`127.0.0.1`、`::1` 与容器主机名 |
 | 节点证书 | CN 为节点 ID，仅客户端认证，有效期 30 天（服务端证书与节点证书都从签发前 1 小时起生效，容忍节点时钟偏慢）；剩余不足三分之一时 `ReportStatus` 提示调用 `RenewCertificate`。续期后旧证书（`node.previous_cert_serial`）继续有效，直到节点第一次用新证书认证；未装上新证书的节点用旧证书再次续期。已停用的节点也可以续期，其他调用仍被拒绝 |
 | 探针证书 | CN 为探针 ID，`O=Edgeweir Probe`（节点证书为 `O=Edgeweir Node`），仅客户端认证，有效期 30 天；剩余不足三分之一时 `GetProbeTargets` 提示调用 `RenewProbeCertificate`，续期后旧证书的处理与节点相同。节点通道按组织区分：探针证书只能调用 `ProbeService`，`NodeService` 拒绝一切非节点证书；节点证书只在节点兼任探针时调用 `GetProbeTargets`、`ReportProbeResults`，不能注册或续期探针 |
 | 心跳 | 间隔 15 秒；`WatchConfig` 每 15 秒发送 keepalive |
-| WebSocket 入口 | Web 端口的 `GET /node-channel`（子协议 `edgeweir-node-channel`，`node-channel/websocket.ts`）：每个 WebSocket 对应一条到本进程节点通道端口的回环 TCP 连接，节点通道的 TLS 在 WebSocket 内运行，校验与 `:8443` 相同。`EDGEWEIR_NODE_API_WEBSOCKET=true`、生效的节点通道地址为 `wss://` / `ws://`，或系统设置中曾保存过这样的地址时开放，否则 404；拒绝带 `Origin` 的请求（403）与未请求子协议的请求（400）。节点的连接来源地址取 WebSocket 请求的客户端地址（`resolveClientIp`） |
+| WebSocket 入口 | Web 端口的 `GET /node-channel`（子协议 `edgeweir-node-channel`，`node-channel/websocket.ts`）：每个 WebSocket 对应一条到本进程节点通道端口的回环 TCP 连接，节点通道的 TLS 在 WebSocket 内运行，校验与 `:8443` 相同。`EDGEWEIR_NODE_API_WEBSOCKET=true`、生效的节点通道地址为 `wss://` / `ws://`，或系统设置中曾保存过这样的地址（没有节点或探针再经入口连接时可在系统设置中关闭）时开放，否则 404；拒绝带 `Origin` 的请求（403）与未请求子协议的请求（400）。节点的连接来源地址取 WebSocket 请求的客户端地址（`resolveClientIp`） |
 
 注册顺序：
 
@@ -301,7 +301,8 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 | `RenewCertificate` | 轮换节点证书 |
 | `WatchConfig` | 服务端流：revision 通知、任务通知、封禁通知（`bans-v1`）、keepalive |
 | `GetConfig` | 快照或相对 `base_revision` 的 diff，附 revision 回执 |
-| `ReportStatus` | 心跳、应用回执、源站健康状态与错误码（被动检查与主动检查分别上报）、封禁状态、主机指标（`metrics-v1`）、缓存区用量（`cache-zone-v1`，存入 `node.cache_usage`）；响应的 `probe` 告诉节点是否兼任探针 |
+| `ReportStatus` | 心跳、应用回执、源站健康状态与错误码（被动检查与主动检查分别上报）、封禁状态、主机指标（`metrics-v1`）、缓存区用量（`cache-zone-v1`，存入 `node.cache_usage`）、在用的节点通道地址（`channel-follow-v1`，与本次连接的 TLS 服务器名一起存入 `node.channel`）；响应的 `probe` 告诉节点是否兼任探针，`channel` 给出当前的节点通道地址（`channel-follow-v1`） |
+| `CheckChannel` | 无副作用：返回证书对应的节点 ID 与当前的节点通道地址，停用的节点也可调用；节点切换地址前、`edgeweir-node set-server` 用它检查新地址 |
 | `ReportStats`、`ReportStatsV2` | 按分钟预聚合的流量统计（`ReportStatsV2` 另含 L4 应用的分钟统计，`l4-v1`）；按批次序号去重 |
 | `ReportLogs` | 采样访问日志；按批次序号去重 |
 | `GetOriginCredentials` | 本集群网站引用的 S3 源站密钥、PURGE 密钥（`site_secret`）与访问鉴权规则的密钥（`site_auth_rule`，JSON）；后两种 `access_key_id` 为空 |
@@ -312,7 +313,8 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 | `GetBans`、`ReportBans` | 按序号增量拉取本集群的封禁；上报节点的自动封禁 |
 | `EnrollProbe`（`ProbeService`） | 用一次性探针 token（`ewp_`）和 CSR 换取探针证书；与 `Enroll` 相同的请求大小限制，token 只在注册成功时消耗 |
 | `RenewProbeCertificate` | 轮换探针证书（节点经 `RenewCertificate`） |
-| `GetProbeTargets` | 探测目标（节点、地址、端口、方式、PROXY protocol）、间隔、超时与尝试次数 |
+| `GetProbeTargets` | 探测目标（节点、地址、端口、方式、PROXY protocol）、间隔、超时与尝试次数；请求带探针在用的节点通道地址、响应给出当前地址（`channel-follow-v1`，存入 `probe.channel`） |
+| `CheckProbeChannel` | 探针版的 `CheckChannel`（只接受探针证书） |
 | `ReportProbeResults` | 一轮探测结果，每次至多 10000 条；之后立即对涉及的集群求值 |
 
 revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节点 ID），内容为集群、revision 与内容哈希。节点把回执保存在本地并在 `ReportStatus` 中带回；节点报告的已应用 revision 高于控制台最新 revision 且回执无效时，请求被拒绝。轮换主密钥期间，旧主密钥封装的回执仍有效。
@@ -645,6 +647,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0065_cache_rule_respect_default` | `cache_rule.origin_cache_control` 的默认值改为 `respect` |
 | `0066_auth_identity_headers` | `site.auth_identity_headers`（按现有鉴权规则回填，含停用的） |
 | `0067_node_certificate_failures` | `node_config_status.certificate_failures`（节点上报无法加载的证书） |
+| `0068_node_channel_status` | `node.channel`、`probe.channel`（节点与探针在用的节点通道地址、备用地址、切换失败原因，以及控制台看到的 TLS 服务器名与是否经 WebSocket 入口） |
 
 ## 构建产物
 

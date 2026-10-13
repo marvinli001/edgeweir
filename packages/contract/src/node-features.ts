@@ -83,3 +83,9 @@ export const RECOMMENDED_NODE_FEATURES = [
 export function nodeUpgradeRecommended(supported: readonly string[]): boolean {
   return RECOMMENDED_NODE_FEATURES.some((feature) => !supported.includes(feature));
 }
+/**
+ * channel-follow-v1: heartbeats (and a probe's rounds) report the node
+ * channel address in use (ChannelStatus) and take the address the console
+ * gives out; the agent checks it (CheckChannel) before it switches.
+ */
+export const CHANNEL_FOLLOW_FEATURE = "channel-follow-v1";

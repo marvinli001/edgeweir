@@ -61,9 +61,29 @@ export const prefetchFailureReasonDefs = {
   other: { params: [] },
 } as const satisfies Record<string, { params: readonly string[] }>;
 
+/**
+ * ChannelStatus.error_code: why a node or probe could not use a node
+ * channel address (channel-follow-v1).
+ */
+export const channelErrorDefs = {
+  /** DNS, connection or timeout. */
+  unreachable: { params: [] },
+  /** No node channel WebSocket entry answers at the wss:// or ws:// URL. */
+  websocket_refused: { params: [] },
+  /** The certificate is not the internal CA's, or not for the server name. */
+  tls_untrusted: { params: [] },
+  /** The console refused the agent's certificate. */
+  rejected: { params: [] },
+  /** The console answered for another node or probe. */
+  wrong_identity: { params: [] },
+  /** The agent refuses the address (scheme, userinfo, path...). */
+  invalid_address: { params: [] },
+} as const satisfies Record<string, { params: readonly string[] }>;
+
 export type NodeErrorCode = keyof typeof nodeErrorDefs;
 export type TaskErrorCode = keyof typeof taskErrorDefs;
 export type PrefetchFailureReason = keyof typeof prefetchFailureReasonDefs;
+export type ChannelErrorCode = keyof typeof channelErrorDefs;
 
 export const nodeErrorCodes = Object.keys(nodeErrorDefs) as NodeErrorCode[];
 export const taskErrorCodes = Object.keys(taskErrorDefs) as TaskErrorCode[];
@@ -81,4 +101,8 @@ export function isTaskErrorCode(code: unknown): code is TaskErrorCode {
 
 export function isPrefetchFailureReason(reason: unknown): reason is PrefetchFailureReason {
   return typeof reason === "string" && Object.hasOwn(prefetchFailureReasonDefs, reason);
+}
+
+export function isChannelErrorCode(code: unknown): code is ChannelErrorCode {
+  return typeof code === "string" && Object.hasOwn(channelErrorDefs, code);
 }
