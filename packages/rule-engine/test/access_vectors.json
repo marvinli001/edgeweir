@@ -506,6 +506,78 @@
       "prefixes": ["/a"],
       "excluded": [],
       "result": true
+    },
+    {
+      "path": "/ADMIN/x",
+      "prefixes": ["/admin/"],
+      "excluded": [],
+      "result": true
+    },
+    {
+      "path": "/admin/x",
+      "prefixes": ["/Admin/"],
+      "excluded": [],
+      "result": true
+    },
+    {
+      "path": "/AdMiN",
+      "prefixes": ["/admin"],
+      "excluded": [],
+      "result": true
+    },
+    {
+      "path": "/Admin/Public/a",
+      "prefixes": ["/admin/"],
+      "excluded": ["/admin/public/"],
+      "result": true
+    },
+    {
+      "path": "/admin/public/a",
+      "prefixes": ["/ADMIN/"],
+      "excluded": ["/admin/public/"],
+      "result": false
+    },
+    {
+      "path": "/A",
+      "prefixes": [],
+      "excluded": ["/a"],
+      "result": true
+    },
+    {
+      "path": "/%41dmin/x",
+      "prefixes": ["/admin/"],
+      "excluded": [],
+      "result": false
+    },
+    {
+      "path": "/a%2Fb/x",
+      "prefixes": ["/A%2fB/"],
+      "excluded": [],
+      "result": true
+    },
+    {
+      "path": "/a%2fb/x",
+      "prefixes": ["/a/b/"],
+      "excluded": [],
+      "result": false
+    },
+    {
+      "path": "/Ädmin/x",
+      "prefixes": ["/ädmin/"],
+      "excluded": [],
+      "result": false
+    },
+    {
+      "path": "/Key/x",
+      "prefixes": ["/key/"],
+      "excluded": [],
+      "result": false
+    },
+    {
+      "path": "/İd/x",
+      "prefixes": ["/id/"],
+      "excluded": [],
+      "result": false
     }
   ],
   "userAgents": [
@@ -1337,6 +1409,160 @@
       },
       "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
       "result": "pass"
+    },
+    {
+      "name": "prefix scope ignores ASCII case",
+      "cfg": {
+        "allowEmpty": false,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": [],
+        "pathPrefixes": ["/dl/"],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "zip",
+        "origin": "",
+        "path": "/DL/a.zip",
+        "referer": "https://evil.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "deny"
+    },
+    {
+      "name": "prefix scope ignores the prefix's case",
+      "cfg": {
+        "allowEmpty": false,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": [],
+        "pathPrefixes": ["/Dl/"],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "zip",
+        "origin": "",
+        "path": "/dl/a.zip",
+        "referer": "https://evil.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "deny"
+    },
+    {
+      "name": "exclusion stays exact",
+      "cfg": {
+        "allowEmpty": false,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": [],
+        "pathPrefixes": ["/dl/"],
+        "excludePathPrefixes": ["/dl/public/"],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "zip",
+        "origin": "",
+        "path": "/dl/PUBLIC/a.zip",
+        "referer": "https://evil.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "deny"
+    },
+    {
+      "name": "exclusion exact match",
+      "cfg": {
+        "allowEmpty": false,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": [],
+        "pathPrefixes": ["/dl/"],
+        "excludePathPrefixes": ["/DL/public/"],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "zip",
+        "origin": "",
+        "path": "/DL/public/a.zip",
+        "referer": "https://evil.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "skip"
+    },
+    {
+      "name": "percent-encoding is not decoded",
+      "cfg": {
+        "allowEmpty": false,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": [],
+        "pathPrefixes": ["/dl/"],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "zip",
+        "origin": "",
+        "path": "/%64l/a.zip",
+        "referer": "https://evil.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "skip"
+    },
+    {
+      "name": "no Unicode case folding",
+      "cfg": {
+        "allowEmpty": false,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": [],
+        "pathPrefixes": ["/kl/"],
+        "excludePathPrefixes": [],
+        "redirectUrl": ""
+      },
+      "req": {
+        "extension": "zip",
+        "origin": "",
+        "path": "/Kl/a.zip",
+        "referer": "https://evil.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "skip"
+    },
+    {
+      "name": "redirect target exact",
+      "cfg": {
+        "allowEmpty": false,
+        "allowSiteDomains": true,
+        "allowed": [],
+        "denied": [],
+        "checkOrigin": false,
+        "extensions": [],
+        "pathPrefixes": ["/"],
+        "excludePathPrefixes": [],
+        "redirectUrl": "/hotlink.png"
+      },
+      "req": {
+        "extension": "png",
+        "origin": "",
+        "path": "/HOTLINK.png",
+        "referer": "https://evil.com/"
+      },
+      "siteHosts": ["www.site.com", "site.com", "cdn.site.com"],
+      "result": "deny"
     }
   ],
   "geo": [

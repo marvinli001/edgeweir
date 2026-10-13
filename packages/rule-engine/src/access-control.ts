@@ -156,13 +156,27 @@ export function originFormMatches(form: string, origin: string): boolean {
   return f.host.startsWith("*.") ? hostFormMatches(f.host, o.host) : f.host === o.host;
 }
 
-/** Whether `path` is in a scope: under a prefix (none: every path) and under no excluded one. */
+/** Lowercases ASCII letters only, as nodes compare subdivisions and scope prefixes. */
+const asciiLower = (s: string) => s.replace(/[A-Z]/g, (c) => c.toLowerCase());
+
+/** Whether `path` starts with one of `prefixes`, ignoring the case of ASCII letters. */
+const underPrefix = (path: string, prefixes: readonly string[]) => {
+  const folded = asciiLower(path);
+  return prefixes.some((p) => folded.startsWith(asciiLower(p)));
+};
+
+/**
+ * Whether `path` is in a scope: under a prefix (none: every path) and under
+ * no excluded one. Prefixes ignore the case of ASCII letters (an origin may
+ * not tell /Admin from /admin), excluded prefixes match exactly; nothing is
+ * decoded.
+ */
 export function pathInScope(
   path: string,
   prefixes: readonly string[],
   excluded: readonly string[] = [],
 ): boolean {
-  if (prefixes.length && !prefixes.some((p) => path.startsWith(p))) return false;
+  if (prefixes.length && !underPrefix(path, prefixes)) return false;
   return !excluded.some((p) => path.startsWith(p));
 }
 
@@ -220,12 +234,16 @@ export interface HotlinkRequest {
   siteHost: (host: string) => boolean;
 }
 
-/** The hotlink decision: "skip" out of scope, else "pass" or "deny". */
+/**
+ * The hotlink decision: "skip" out of scope, else "pass" or "deny". Path
+ * prefixes ignore ASCII case like pathInScope; excluded prefixes and the
+ * redirect target match exactly.
+ */
 export function hotlinkDecision(cfg: HotlinkModel, req: HotlinkRequest): "skip" | "pass" | "deny" {
   const selected =
     (cfg.extensions.length === 0 && cfg.pathPrefixes.length === 0) ||
     cfg.extensions.includes(req.extension) ||
-    cfg.pathPrefixes.some((p) => req.path.startsWith(p));
+    underPrefix(req.path, cfg.pathPrefixes);
   if (!selected || cfg.excludePathPrefixes.some((p) => req.path.startsWith(p))) return "skip";
   if (cfg.redirectUrl.startsWith("/") && req.path === cfg.redirectUrl.split(/[?#]/)[0])
     return "skip";
@@ -240,9 +258,6 @@ export function hotlinkDecision(cfg: HotlinkModel, req: HotlinkRequest): "skip" 
   }
   return "pass";
 }
-
-/** Lowercases ASCII letters only, as nodes compare subdivisions. */
-const asciiLower = (s: string) => s.replace(/[A-Z]/g, (c) => c.toLowerCase());
 
 export interface GeoAccessModel {
   allowOnly: boolean;
