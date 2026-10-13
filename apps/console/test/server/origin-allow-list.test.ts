@@ -1,12 +1,19 @@
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
-import { schema } from "@edgeweir/db";
-import { count } from "drizzle-orm";
+import { type Database, schema } from "@edgeweir/db";
+import type { PGlite } from "@electric-sql/pglite";
+import { count, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
+import type { Actor } from "../../src/server/services/audit";
+import {
+  getOriginAllowList,
+  setOriginAllowList,
+} from "../../src/server/services/origin-allow-list";
 import { latestRevision } from "../../src/server/services/revisions";
 import {
   type ApiClient,
   createTestContext,
+  createTestDatabase,
   rpcClient,
   rpcError,
   setupPlatform,
@@ -212,5 +219,87 @@ describe("special-purpose origin addresses and the platform allow list", async (
     expect(config.originAllowedCidrs).toEqual(["172.28.0.0/16"]);
     expect(config.contentHash).toBe(rolled.contentHash);
     expect(rolled.contentHash).not.toBe(first?.contentHash);
+  });
+});
+
+describe("the origin allow list's system_setting row", () => {
+  const KEY = "origin_allow_list";
+  const actor: Actor = { type: "user", id: "u1", name: "Operator", ip: "127.0.0.1" };
+  let client: PGlite;
+  let db: Database;
+  const stored = async () =>
+    (await db.select().from(schema.systemSetting).where(eq(schema.systemSetting.key, KEY)))[0]
+      ?.value;
+  const store = (value: Record<string, unknown>) =>
+    db
+      .insert(schema.systemSetting)
+      .values({ key: KEY, value })
+      .onConflictDoUpdate({ target: schema.systemSetting.key, set: { value } });
+  const audits = () =>
+    db
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.targetId, KEY))
+      .orderBy(schema.auditLog.id);
+
+  // After the suite above has closed its database: one PGlite at a time.
+  beforeAll(async () => {
+    ({ client, db } = await createTestDatabase());
+  });
+  afterAll(() => client.close());
+
+  it("reads rows stored in the old format back unchanged", async () => {
+    expect(await getOriginAllowList(db)).toEqual({ cidrs: [] });
+    await store({ cidrs: ["10.0.0.0/8", "172.16.0.0/12", "fd00::/8"] });
+    expect(await getOriginAllowList(db)).toStrictEqual({
+      cidrs: ["10.0.0.0/8", "172.16.0.0/12", "fd00::/8"],
+    });
+    // Entry by entry, as the list was always read: what is no CIDR is left out, the rest is
+    // normalized, sorted and without duplicates; other fields are ignored.
+    await store({
+      cidrs: ["172.16.0.0/12", "10.1.2.3/8", "bogus", 7, null, "10.0.0.0/8", " FD00::/8 "],
+      note: "kept by an older version",
+    });
+    expect(await getOriginAllowList(db)).toStrictEqual({
+      cidrs: ["10.0.0.0/8", "172.16.0.0/12", "fd00::/8"],
+    });
+    for (const value of [{}, { cidrs: "10.0.0.0/8" }, { cidrs: null }, { cidrs: {} }]) {
+      await store(value);
+      expect(await getOriginAllowList(db), JSON.stringify(value)).toStrictEqual({ cidrs: [] });
+    }
+  });
+
+  it("writes the row and its audit entry in the format they always had", async () => {
+    await db.delete(schema.systemSetting).where(eq(schema.systemSetting.key, KEY));
+    const saved = await setOriginAllowList(
+      db,
+      { cidrs: ["172.16.0.0/12", "10.0.0.0/8", "172.16.0.0/12"] },
+      actor,
+    );
+    expect(saved).toStrictEqual({ cidrs: ["10.0.0.0/8", "172.16.0.0/12"] });
+    expect(await stored()).toStrictEqual({ cidrs: ["10.0.0.0/8", "172.16.0.0/12"] });
+    // An empty list is stored as one, not removed.
+    expect(await setOriginAllowList(db, { cidrs: [] }, actor)).toStrictEqual({ cidrs: [] });
+    expect(await stored()).toStrictEqual({ cidrs: [] });
+
+    const entries = await audits();
+    expect(entries.map((e) => e.metadata)).toStrictEqual([
+      {
+        cidrs: ["10.0.0.0/8", "172.16.0.0/12"],
+        added: ["10.0.0.0/8", "172.16.0.0/12"],
+        removed: [],
+        revisions: {},
+      },
+      { cidrs: [], added: [], removed: ["10.0.0.0/8", "172.16.0.0/12"], revisions: {} },
+    ]);
+    for (const entry of entries)
+      expect(entry).toMatchObject({
+        action: "system.origin_allow_list_update",
+        actorType: "user",
+        actorId: "u1",
+        targetType: "system_setting",
+        targetId: KEY,
+        targetName: KEY,
+      });
   });
 });

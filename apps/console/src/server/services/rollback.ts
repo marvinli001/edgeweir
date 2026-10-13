@@ -35,13 +35,13 @@ import { ensureChallengeKeys } from "./challenge-keys";
 import {
   loadHttpChallenges,
   loadOfflineHosts,
-  loadOriginAllowList,
   platformRuleModels,
   previousConfig,
 } from "./config-input";
 import { loadEdgeModel } from "./edge";
 import { loadPlatformErrorPages } from "./error-pages";
 import { restoreL4Apps } from "./l4-config";
+import { loadOriginAllowList } from "./origin-allow-list";
 import { loadPlatformProtection, loadSiteProtectionModels } from "./protection";
 import {
   getRevision,

@@ -19,7 +19,6 @@ import {
   type DomainKind,
   formatSiteDomain,
   nodeSupportsFeature,
-  normalizeCidr,
   patternOrder,
   ruleAction,
   tlsSettings,
@@ -47,31 +46,11 @@ import { PURGE_KEY } from "../lib/site-secrets";
 import { loadEdgeModel } from "./edge";
 import { errorPagesModel, loadPlatformErrorPages, loadSiteErrorPages } from "./error-pages";
 import { loadL4AppModels } from "./l4-config";
+import { loadOriginAllowList } from "./origin-allow-list";
 import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
 import { loadPlatformProtection, loadSiteProtectionModels } from "./protection";
 import { type Executor, latestRevision, type Tx } from "./revisions";
 import { loadSiteWafModels } from "./waf";
-
-/** system_setting key of the platform's origin allow list: `{ cidrs: string[] }`. */
-export const ORIGIN_ALLOW_LIST_KEY = "origin_allow_list";
-
-/**
- * The special-purpose CIDRs origins may use anyway (normalized, sorted,
- * without duplicates). Every cluster's NodeConfig carries it.
- */
-export async function loadOriginAllowList(db: Executor): Promise<string[]> {
-  const [row] = await db
-    .select({ value: schema.systemSetting.value })
-    .from(schema.systemSetting)
-    .where(eq(schema.systemSetting.key, ORIGIN_ALLOW_LIST_KEY));
-  const stored = row?.value.cidrs;
-  const cidrs = Array.isArray(stored) ? stored : [];
-  const normalized = cidrs.flatMap((c) => {
-    const n = typeof c === "string" ? normalizeCidr(c) : null;
-    return n ? [n] : [];
-  });
-  return [...new Set(normalized)].sort();
-}
 
 /**
  * Domains of the cluster's disabled sites: nodes answer them with the

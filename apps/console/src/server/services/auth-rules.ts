@@ -34,7 +34,7 @@ import { fail } from "../lib/errors";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { rangeWindow, sourceFor } from "./analytics";
 import { type Actor, recordAudit } from "./audit";
-import { loadOriginAllowList } from "./config-input";
+import { loadOriginAllowList } from "./origin-allow-list";
 import { type Executor, publishRevision } from "./revisions";
 import { findSite } from "./sites";
 

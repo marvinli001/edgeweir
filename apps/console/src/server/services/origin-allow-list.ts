@@ -1,12 +1,44 @@
-import { forbiddenOriginRange, type OriginAllowList } from "@edgeweir/contract";
+import { forbiddenOriginRange, normalizeCidr, type OriginAllowList } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
+import * as z from "zod";
 import { fail } from "../lib/errors";
-import { type Actor, recordAudit } from "./audit";
-import { loadOriginAllowList, ORIGIN_ALLOW_LIST_KEY } from "./config-input";
+import type { Actor } from "./audit";
 import { type Executor, publishClusters } from "./revisions";
+import { defineSetting } from "./settings";
 
-export async function getOriginAllowList(db: Executor): Promise<OriginAllowList> {
-  return { cidrs: await loadOriginAllowList(db) };
+/** system_setting key of the platform's origin allow list: `{ cidrs: string[] }`. */
+const ORIGIN_ALLOW_LIST_KEY = "origin_allow_list";
+
+/** Normalized, sorted, without duplicates; entries that are no CIDR are left out. */
+function normalizeCidrs(stored: unknown): string[] {
+  const cidrs = Array.isArray(stored) ? stored : [];
+  const normalized = cidrs.flatMap((c) => {
+    const n = typeof c === "string" ? normalizeCidr(c) : null;
+    return n ? [n] : [];
+  });
+  return [...new Set(normalized)].sort();
+}
+
+/**
+ * Read entry by entry: a stored entry that is no CIDR is left out instead of the whole list.
+ * Input is normalized by the contract already.
+ */
+const originAllowListSetting = defineSetting({
+  key: ORIGIN_ALLOW_LIST_KEY,
+  schema: z.object({ cidrs: z.unknown().transform(normalizeCidrs) }),
+  defaults: { cidrs: [] },
+  auditAction: "system.origin_allow_list_update",
+  targetName: ORIGIN_ALLOW_LIST_KEY,
+});
+
+export const getOriginAllowList = originAllowListSetting.read;
+
+/**
+ * The special-purpose CIDRs origins may use anyway (normalized, sorted,
+ * without duplicates). Every cluster's NodeConfig carries it.
+ */
+export async function loadOriginAllowList(db: Executor): Promise<string[]> {
+  return (await getOriginAllowList(db)).cidrs;
 }
 
 /**
@@ -42,39 +74,32 @@ export async function setOriginAllowList(
   actor: Actor,
 ): Promise<OriginAllowList> {
   const cidrs = [...new Set(input.cidrs)].sort();
-  await db.transaction(async (tx) => {
-    const before = await loadOriginAllowList(tx);
-    const value = { cidrs };
-    await tx
-      .insert(schema.systemSetting)
-      .values({ key: ORIGIN_ALLOW_LIST_KEY, value })
-      .onConflictDoUpdate({ target: schema.systemSetting.key, set: { value } });
-    const clusters = await tx
-      .select({ id: schema.cluster.id, name: schema.cluster.name })
-      .from(schema.cluster);
-    const published = await publishClusters(
+  return db.transaction((tx) =>
+    originAllowListSetting.write(
       tx,
-      clusters.map((c) => c.id),
+      actor,
+      { cidrs },
       {
-        reason: { code: "origin_allow_list_updated", params: {} },
-        actor,
+        afterWrite: async () => {
+          const clusters = await tx
+            .select({ id: schema.cluster.id, name: schema.cluster.name })
+            .from(schema.cluster);
+          const published = await publishClusters(
+            tx,
+            clusters.map((c) => c.id),
+            { reason: { code: "origin_allow_list_updated", params: {} }, actor },
+          );
+          const revisions: Record<string, number> = {};
+          for (const cluster of clusters)
+            revisions[cluster.name] = published.get(cluster.id)?.row.revision ?? 0;
+          return { revisions };
+        },
+        metadata: (before) => ({
+          cidrs,
+          added: cidrs.filter((c) => !before.cidrs.includes(c)),
+          removed: before.cidrs.filter((c) => !cidrs.includes(c)),
+        }),
       },
-    );
-    const revisions: Record<string, number> = {};
-    for (const cluster of clusters)
-      revisions[cluster.name] = published.get(cluster.id)?.row.revision ?? 0;
-    await recordAudit(tx, actor, {
-      action: "system.origin_allow_list_update",
-      targetType: "system_setting",
-      targetId: ORIGIN_ALLOW_LIST_KEY,
-      targetName: ORIGIN_ALLOW_LIST_KEY,
-      metadata: {
-        cidrs,
-        added: cidrs.filter((c) => !before.includes(c)),
-        removed: before.filter((c) => !cidrs.includes(c)),
-        revisions,
-      },
-    });
-  });
-  return getOriginAllowList(db);
+    ),
+  );
 }
