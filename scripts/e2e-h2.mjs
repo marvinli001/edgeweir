@@ -262,13 +262,19 @@ const back = await a("PATCH", `/sites/${site.id}`, {
 });
 assert.equal(back.site.originSettings.protocol, "http1");
 await synced("both nodes apply HTTP/1.1");
-for (const [service, address] of Object.entries(addresses)) {
-  const r = await get(address, "/proto");
-  assert.ok(
-    !r.startsWith("200 ") && !r.includes(`HTTP/2.0 ${DOMAIN}`),
-    `${service} with HTTP/1.1 to an h2c-only origin: ${r}`,
-  );
-}
+// Each answer takes about a minute (the edge passes the origin's bytes on only when the node's
+// own hop to its origin layer times out, whatever the site's read timeout), so both nodes are
+// asked at once.
+const unreached = await Promise.all(
+  Object.entries(addresses).map(async ([service, address]) => {
+    const r = await get(address, "/proto");
+    assert.ok(
+      !r.startsWith("200 ") && !r.includes(`HTTP/2.0 ${DOMAIN}`),
+      `${service} with HTTP/1.1 to an h2c-only origin: ${r}`,
+    );
+    return `${service}: ${r.slice(0, 60)}`;
+  }),
+);
 pass(
-  "an update without the protocol keeps HTTP/2 and gRPC; back on HTTP/1.1 the nodes no longer reach the h2c-only origin",
+  `an update without the protocol keeps HTTP/2 and gRPC; back on HTTP/1.1 the nodes no longer reach the h2c-only origin (${unreached.join("; ")})`,
 );
