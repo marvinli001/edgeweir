@@ -53,7 +53,7 @@ Saving an empty field returns to 2 and 3. The format is `https://host[:port]` (t
 
 - The internal CA issues the node channel server certificate. Its names: `localhost`, `127.0.0.1`, `::1`, the container host name, the host of `EDGEWEIR_NODE_API_URL` (of the default URL when unset), every entry of `EDGEWEIR_NODE_API_HOSTNAMES`, the host name or IP of the URL saved in **System settings**, and those of node channel URLs in effect before it (the latest 32).
 - Once a URL is saved in **System settings**, every console instance reissues the certificate for the new name at once: new handshakes get the new certificate, established connections keep theirs. Changes to the variables apply after a restart.
-- Enrolled nodes and probes keep the `server_url` and TLS server name recorded at enrollment (`/var/lib/edgeweir-node/identity.json`); changing the URL does not move them. Keep the old address reachable (its name stays in the certificate), or enroll them again.
+- Enrolled nodes and probes connect with the `server_url` and TLS server name in `/var/lib/edgeweir-node/identity.json` (`/var/lib/edgeweir-probe/probe.json` for probes). From v1.2.0 (capability `channel-follow-v1`) nodes follow the URL the console gives out, see [Changing the node channel URL](#changing-the-node-channel-url); earlier nodes keep the URL they enrolled with.
 - The CA fingerprint (SHA-256) appears as `caSha256` in the `node channel listening` startup log, as "CA fingerprint" in **System settings**, and as `--ca-sha256` in the install command.
 
 | Case | Setting |
@@ -63,8 +63,34 @@ Saving an empty field returns to 2 and 3. The format is `https://host[:port]` (t
 | The platform forwards HTTP only (Render), or 8443 cannot be opened to the internet | Use the [WebSocket entry](#the-node-channels-websocket-entry). |
 | Nodes connect through another name or IP (private address, load balancer name) | Add that name to `EDGEWEIR_NODE_API_HOSTNAMES`. |
 | The node channel's DNS name is on Cloudflare | Turn the proxy off for that record (DNS only): Cloudflare proxies HTTPS on port 8443 too, terminates TLS, and nodes report `CA pin mismatch`. |
-| The node channel URL changes | Change it in **System settings**; enrolled nodes keep connecting to the old address, which must stay reachable. |
-| The host name of `EDGEWEIR_NODE_API_URL` changes (no URL saved in System settings) | Keep the old host name in `EDGEWEIR_NODE_API_HOSTNAMES`: enrolled nodes verify the certificate against the name recorded at enrollment. |
+| The node channel URL changes | See [Changing the node channel URL](#changing-the-node-channel-url). |
+| The host name of `EDGEWEIR_NODE_API_URL` changes (no URL saved in System settings) | Nodes move to the new URL; until they have, keep the old host name in `EDGEWEIR_NODE_API_HOSTNAMES`: an old name from the environment does not stay in the certificate on its own. |
+
+### Changing the node channel URL
+
+The console tells nodes the current node channel URL in every heartbeat answer (region probes with every round of targets). When it differs from the one a node uses, the node checks it first: one call that needs mutual TLS, with the internal CA pinned at enrollment and its own client certificate. Once the check passes, the node rewrites `identity.json` atomically, keeps the previous URL as its fallback and moves to the new one, without a restart or a new enrollment; when it fails, the node stays where it is, reports why in its heartbeats and tries again after 1, 5, 15 and 60 minutes.
+
+- Only the console's current URL counts: a node that was offline while the URL changed several times checks the latest one when it is back.
+- The new address must present a certificate of the same internal CA; the URL only decides which host the node connects to and which name it verifies, never which certificates it trusts. URLs only arrive over the authenticated node channel; nodes refuse URLs with credentials, a path or a query, and schemes other than `https`, `wss` and `ws`.
+- `https://`, `wss://` and `ws://` replace each other; the TLS and mutual TLS inside the WebSocket stay the same.
+- When no call succeeds on the current URL for 3 minutes, the node checks its fallback and, when that passes, uses it for the time being, trying the current URL every 5 minutes and moving back once it answers. The fallback is never written to `identity.json`: after a restart the node connects to the current URL first.
+- A node keeps one fallback: the URL it used before its last switch.
+
+Migration:
+
+1. **Old and new side by side**: make the new URL work (DNS, proxy or platform port), check that the "Node channel" card in **System settings** shows "Connected", then save. The old URL's name stays in the certificate; keep the old address up.
+2. **Everyone switches**: the card shows "Nodes switched" and "Probes switched"; in the node list, nodes not there yet show "Not switched", "Cannot switch" (hover for the reason), "On fallback" or "Upgrade to switch" (nodes before v1.2.0). Offline nodes switch once they are back.
+3. **Take the old URL down**: "Earlier names in the certificate" in the card lists the names earlier URLs left in the certificate, with the nodes and probes still connecting with each. Once both are 0, take the old address down and click "Remove" to drop the name from the certificate.
+
+The counts cover nodes and probes whose certificate is still valid that verified the name on their latest connection, or report an address with that name as the one they use (a fallback in use included). A fallback a node keeps for later does not count: once the name is gone, only a check of that fallback fails. Nodes whose certificate expired (offline for over 30 days) have to enroll again anyway and do not count. Names from the environment (`EDGEWEIR_NODE_API_URL`, `EDGEWEIR_NODE_API_HOSTNAMES` and so on) always stay in the certificate and are not listed. After a `wss://` or `ws://` URL, the card also shows the "WebSocket entry" with the nodes still using it; it can be closed once that is 0.
+
+For a node that already lost the console (the old address went down first, or the new URL failed after its check and so did the fallback), run on the node:
+
+```bash
+sudo edgeweir-node set-server --server https://<new address>:8443
+```
+
+The command checks the new URL with the node's own identity first and only then rewrites `identity.json`, keeping the previous URL as the fallback; the node's identity and certificate stay. A failed check changes no file. A running agent moves to the new URL within seconds. Add `--probe` for a region probe. A node whose certificate expired (offline for over 30 days) can only enroll again.
 
 ## Reverse proxy for the web console
 

@@ -104,7 +104,7 @@ The **Probe settings** card on the **Monitoring** tab applies to every prober; p
 | Region | Region name and code |
 | Status | **Online**: asked for targets or reported within 3 intervals (at least 30 seconds); **Offline**; **Disabled** |
 | Last seen | When it last asked for targets or reported |
-| Version | The probe's agent version |
+| Version | The probe's agent version; a probe not on the current node channel URL yet is also marked **Not switched**, **Cannot switch**, **On fallback**, or **Upgrade to switch**, see [Changing the node channel URL](../deploy/networking.en.md#changing-the-node-channel-url) |
 | Last round | Loss, mean RTT of the answering targets, and targets that lost every attempt (**N targets unreachable**) |
 | Targets | The probe's current target count |
 

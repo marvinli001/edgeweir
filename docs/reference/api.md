@@ -531,10 +531,14 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 
 | 过程 | 端点 | 说明 |
 | --- | --- | --- |
-| `settings.nodeChannel` | `GET /settings/node-channel` | `{ url, effectiveUrl, source }`：`url` 为系统设置中保存的地址（未保存时为空字符串）；`effectiveUrl` 为安装命令使用的地址；`source` 为 `setting`、`environment`（`EDGEWEIR_NODE_API_URL`）或 `default` |
+| `settings.nodeChannel` | `GET /settings/node-channel` | `{ url, effectiveUrl, source, serverName, previousNames, webSocket, adoption }`：`url` 为系统设置中保存的地址（未保存时为空字符串）；`effectiveUrl` 为安装命令使用、已注册节点与探针跟随的地址，`serverName` 为节点在该地址校验的名称；`source` 为 `setting`、`environment`（`EDGEWEIR_NODE_API_URL`）或 `default`；`previousNames` 为此前地址留在证书中的名称 `[{ name, nodes, probes }]`（不含环境变量的名称，计数为仍用它连接的节点与探针）；`webSocket` 为 `{ open, closable, nodes, probes }`；`adoption` 为 `{ nodes, nodesCurrent, probes, probesCurrent }`（证书仍有效的节点与探针，以及已用上 `effectiveUrl` 的） |
 | `settings.setNodeChannel` | `PUT /settings/node-channel` | 请求体 `{ url }`：`https://`、`wss://` 或 `ws://主机[:端口]`，不含路径、查询参数、片段与账号，否则 400；保存为 origin 形式。空字符串清除保存的地址。响应同 `settings.nodeChannel`。立即生效，节点通道证书加入新地址的名称；写审计 `system.node_channel_update` |
+| `settings.removeNodeChannelName` | `DELETE /settings/node-channel/names/{name}` | 从证书中去掉 `previousNames` 中的名称，响应同 `settings.nodeChannel`；仍有节点或探针用它连接时 409 `NODE_CHANNEL_NAME_IN_USE`（`data`：`nodes`、`probes`），不是此前地址留下的名称（含当前地址与环境变量的名称）时 404 `NODE_CHANNEL_NAME_NOT_FOUND`；写审计 `system.node_channel_update`（`removedName`） |
+| `settings.closeNodeChannelWebSocket` | `DELETE /settings/node-channel/websocket` | 关闭此前 `wss://`、`ws://` 地址打开的 WebSocket 入口，响应同 `settings.nodeChannel`；仍有节点或探针经入口连接时 409 `NODE_CHANNEL_WEBSOCKET_IN_USE`，`EDGEWEIR_NODE_API_WEBSOCKET=true` 或当前地址需要入口时 409 `NODE_CHANNEL_WEBSOCKET_REQUIRED`；写审计 `system.node_channel_update`（`webSocket: closed`） |
 
-服务账号不能调用（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `settings.nodeChannel`。已注册的节点继续使用注册时的地址，见 [节点通道地址与证书](../deploy/networking.md#节点通道地址与证书)。
+服务账号不能调用（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `settings.nodeChannel`。已注册的节点与探针（`channel-follow-v1`）跟随 `effectiveUrl`，见 [更换节点通道地址](../deploy/networking.md#更换节点通道地址)。
+
+`nodes.list`、`nodes.get` 与 `probes.list` 的每一项带 `channel`（还没有连接过记录它的控制台时为 `null`）：`url`、`serverName`（在用的地址；不支持 `channel-follow-v1` 的节点 `url` 为 `null`）、`fallbackUrl`、`fallbackServerName`、`onFallback`、`source`（`enroll`、`console`、`command`）、`switchedAt`、`error`（`{ code, message, url, serverName, at }`，`code` 为 `unreachable`、`websocket_refused`、`tls_untrusted`、`rejected`、`wrong_identity`、`invalid_address` 之一）、`observedServerName`、`observedWebSocket`、`observedAt`（最近一次连接的 TLS 服务器名与是否经 WebSocket 入口）。
 
 ### 节点升级
 

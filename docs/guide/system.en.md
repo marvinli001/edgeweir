@@ -64,12 +64,12 @@ The dialog shows the **Install command** (with a countdown, shown once), address
 | **IP** | Unicast addresses in the node's latest heartbeat (replaced on every heartbeat, at most 64); for the addresses DNS and probes use, see [Scheduling addresses and backup IPs](scheduling.en.md#scheduling-addresses-and-backup-ips); marked **No public address** when DNS has no address for the node, see [Nodes without a public address](scheduling.en.md#nodes-without-a-public-address) |
 | **Metrics** | Gauges of the CPU and memory usage reported by the node (`metrics-v1`), in the warning color from 75% and the error color from 90%; also egress, active connections, and the 1-minute load; **No metrics** without metrics |
 | **Applied** | The revision the node has applied; badge **In sync** (the node's target revision reached), **Behind**, **Apply failed** (hover for the reason), or **Upgrade required**; an online node without any configuration yet shows **Awaiting configuration** |
-| **Agent / engine** | Agent version, engine, and engine version |
+| **Agent / engine** | Agent version, engine, and engine version; a node not on the current [node channel URL](#node-channel) yet is also marked **Not switched**, **Cannot switch** (hover for the reason), **On fallback**, or **Upgrade to switch** (nodes before v1.2.0) |
 | **Heartbeat** | How long ago the last heartbeat came; hover for the time |
 
 | Action | Description |
 | --- | --- |
-| **Details** | Also by clicking the node's name (`/clusters?node=<node ID>`): **Metrics**, **Data plane** (Healthy / Data plane unhealthy), **Connects from**, **Certificate expires** (the client certificate; marked **Expires soon** with less than 10 days left, by when nodes normally renewed it already, and **Certificate expired** or **Certificate refused** once past or refused by the node channel), **Also probes**, **Scheduling addresses** (**Edit addresses**), and **Probe results**, see [Regional probes and scheduling](scheduling.en.md); **Cache** shows the cache usage and sets this node's own size, see [Cache zone](origins-and-cache.en.md#cache-zone) |
+| **Details** | Also by clicking the node's name (`/clusters?node=<node ID>`): **Metrics**, **Data plane** (Healthy / Data plane unhealthy), **Connects from**, **Node channel** (the URL in use, the mark above, why the node cannot switch or runs on its fallback, and the fallback it keeps), **Certificate expires** (the client certificate; marked **Expires soon** with less than 10 days left, by when nodes normally renewed it already, and **Certificate expired** or **Certificate refused** once past or refused by the node channel), **Also probes**, **Scheduling addresses** (**Edit addresses**), and **Probe results**, see [Regional probes and scheduling](scheduling.en.md); **Cache** shows the cache usage and sets this node's own size, see [Cache zone](origins-and-cache.en.md#cache-zone) |
 | **Rename** | At most 64 characters |
 | **Move to group** | Node groups of the same cluster only |
 | **Disable** / **Enable** | A disabled node is refused by the node channel (except for certificate renewal, so its certificate is still valid when enabled) and keeps serving its last successfully applied configuration; its unfinished purge & prefetch deliveries are marked **Skipped**. Once the node is enabled and pulls tasks again, it gets one whole-site purge for every site those purges touched |
@@ -295,10 +295,19 @@ Read-only (card **System**).
 | --- | --- |
 | Format | `https://host[:port]` (the node channel port), or `wss://host[:port]` or `ws://host[:port]` (the [WebSocket entry](../deploy/networking.en.md#the-node-channels-websocket-entry) on the web port); without a path, query, or credentials; saved with the host name in lower case, without a trailing `/` or the default port (443, 80 for `ws://`) |
 | Effect | Applies on saving, without a restart: new install and probe commands carry the URL, and the node channel certificate adds its host name or IP |
-| Enrolled nodes | Keep connecting to the URL they enrolled with, whose name stays in the certificate; while editing, the card notes "Enrolled nodes keep connecting to the previous URL: keep it reachable" |
+| Enrolled nodes | Nodes and probes from v1.2.0 check the new URL and switch to it; the previous URL's name stays in the certificate. While editing, the card notes "Enrolled nodes switch once the new URL answers; keep the previous URL reachable until all have". See [Changing the node channel URL](../deploy/networking.en.md#changing-the-node-channel-url) |
 | Clearing | Saving an empty value falls back to the environment variable or the default |
 
 A localhost, loopback, or private address is marked "This machine only" or "Private address": nodes on other networks cannot enroll. Below the URL is the result of the [connection check](../deploy/nodes.en.md#node-channel-connection-check): **Reachable**, **The console cannot connect to this URL**, **Certificate mismatch: a proxy or CDN may be in front**, or **The outbound policy does not allow this address** (the saved URL is a private, loopback, or other special-purpose address that `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` does not allow, so the console does not connect). Changes are audited as `system.node_channel_update`. For the certificate names, see [Node channel URL and certificate](../deploy/networking.en.md#node-channel-url-and-certificate).
+
+With enrolled nodes or probes, the URL is followed by **Nodes switched N/M** and **Probes switched N/M** (those with a valid certificate, and those already on the current URL), refreshed every 15 seconds.
+
+| Item | Description |
+| --- | --- |
+| **Earlier names in the certificate** | Host names or IPs URLs in effect before left in the certificate (names from the environment are not listed), with the nodes and probes still connecting with each (**Nodes N · probes N**, or **Unused**). Once **Unused**, **Remove** takes the name out of every console instance's certificate; while nodes or probes use it the button is disabled and the API answers `NODE_CHANNEL_NAME_IN_USE`. A fallback a node keeps for later does not count |
+| **WebSocket entry** | Shown once a `wss://` or `ws://` URL was used and the current one no longer needs the entry, with the nodes and probes still using it; **Close** once **Unused**. With `EDGEWEIR_NODE_API_WEBSOCKET=true` or a `wss://` or `ws://` current URL the entry stays open and this is not shown |
+
+Removing a name and closing the entry are audited as `system.node_channel_update` too (metadata `removedName`, `webSocket: closed`).
 
 ### Certificate authorities
 
