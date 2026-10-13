@@ -17,6 +17,11 @@ export const platformAlertKind = z.enum([
   "dns_mass_removal_blocked",
   /** A scheduling rule acts on a node (resolved when the action recovers). */
   "scheduling_action",
+  /**
+   * Nodes report a certificate they could not load (certificate-isolation-v1;
+   * resolved when no node reports it).
+   */
+  "certificate_unloadable",
 ]);
 export const alertEventKind = z.enum([...alertKind.options, ...platformAlertKind.options]);
 const endpoint = z

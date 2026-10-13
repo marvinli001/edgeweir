@@ -398,6 +398,7 @@ export const nodes: Node[] = nodeSeeds.map((seed, index) => {
         measuredAt: lastSeen,
       },
     },
+    certificateFailures: [],
   };
 });
 

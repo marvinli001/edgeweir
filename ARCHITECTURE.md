@@ -644,6 +644,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0064_hidden_cards` | `hidden_cards` |
 | `0065_cache_rule_respect_default` | `cache_rule.origin_cache_control` 的默认值改为 `respect` |
 | `0066_auth_identity_headers` | `site.auth_identity_headers`（按现有鉴权规则回填，含停用的） |
+| `0067_node_certificate_failures` | `node_config_status.certificate_failures`（节点上报无法加载的证书） |
 
 ## 构建产物
 

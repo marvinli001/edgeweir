@@ -6,7 +6,7 @@ import type {
   RolloutState,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import { and, asc, eq, gt, inArray, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, lte, notInArray, or, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { lockClusterPublish } from "../lib/locks";
@@ -204,6 +204,38 @@ export async function evaluateRollout(
       }
       if (!isOnline(node.lastSeenAt, now.getTime()) || (fresh && !status.dataPlaneHealthy)) {
         await rollBack(tx, row, "unhealthy", systemActor);
+        return "rolled_back";
+      }
+    }
+    // Nodes with certificate-isolation-v1 apply a candidate without the
+    // certificates they cannot load: one whose handshakes a canary node
+    // refuses (no earlier material) while no other node does fails it too.
+    const refused = (status: { certificateFailures: schema.NodeCertificateFailure[] } | null) =>
+      (status?.certificateFailures ?? [])
+        .filter((f) => f.servingFingerprint === "")
+        .map((f) => f.certificateId);
+    const canaryRefused = nodes.flatMap(({ status }) =>
+      status &&
+      status.reportedAt.getTime() >= started &&
+      status.appliedContentHash === candidate.contentHash
+        ? refused(status)
+        : [],
+    );
+    if (canaryRefused.length) {
+      const others = await tx
+        .select({ certificateFailures: schema.nodeConfigStatus.certificateFailures })
+        .from(schema.nodeConfigStatus)
+        .innerJoin(schema.node, eq(schema.node.id, schema.nodeConfigStatus.nodeId))
+        .where(
+          and(
+            eq(schema.node.clusterId, clusterId),
+            eq(schema.node.status, "active"),
+            notInArray(schema.node.id, row.canaryNodeIds),
+          ),
+        );
+      const before = new Set(others.flatMap(refused));
+      if (canaryRefused.some((id) => !before.has(id))) {
+        await rollBack(tx, row, "apply_failed", systemActor);
         return "rolled_back";
       }
     }

@@ -1,4 +1,4 @@
-import type { AcmeCa, AcmeKeyType, CertificateSettings } from "@edgeweir/contract";
+import type { AcmeCa, AcmeKeyType, CertificateDto, CertificateSettings } from "@edgeweir/contract";
 import { Add01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -31,7 +31,7 @@ import {
   certificateExpired,
   certificateState,
 } from "@/lib/certificate-status";
-import { formatDateTime, m } from "@/lib/i18n";
+import { formatDateTime, formatList, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
 export const Route = createFileRoute("/_app/certificates")({ component: CertificatesPage });
@@ -108,6 +108,7 @@ function CertificatesPage() {
                         {certificateErrorText(cert.lastError)}
                       </SafetyNote>
                     ) : null}
+                    <NodeFailures failures={cert.nodeFailures} />
                   </div>
                   <div className="flex min-w-0 flex-col gap-1 text-sm">
                     {cert.notAfter ? (
@@ -230,6 +231,29 @@ function CertificatesPage() {
         />
       ) : null}
     </Page>
+  );
+}
+
+/**
+ * The nodes that report they cannot load the certificate: those that refuse
+ * its TLS handshakes, then those still serving its earlier version.
+ */
+function NodeFailures({ failures }: { failures: CertificateDto["nodeFailures"] }) {
+  const refused = failures.filter((f) => !f.servingEarlier).map((f) => f.nodeName);
+  const earlier = failures.filter((f) => f.servingEarlier).map((f) => f.nodeName);
+  return (
+    <>
+      {refused.length ? (
+        <SafetyNote className="text-destructive" data-testid="certificate-node-failures">
+          {m.cert_node_failures_refused({ nodes: formatList(refused) })}
+        </SafetyNote>
+      ) : null}
+      {earlier.length ? (
+        <SafetyNote data-testid="certificate-node-failures-earlier">
+          {m.cert_node_failures_earlier({ nodes: formatList(earlier) })}
+        </SafetyNote>
+      ) : null}
+    </>
   );
 }
 

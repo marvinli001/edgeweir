@@ -57,6 +57,11 @@ import {
   purgeMethodRetryAfter,
   reportCacheTaskResult,
 } from "../services/cache-tasks";
+import {
+  changedCertificates,
+  syncCertificateFailureAlerts,
+  toCertificateFailures,
+} from "../services/certificate-failures";
 import { nodeCertificates } from "../services/certificates";
 import { challengeKeySecrets } from "../services/challenge-keys";
 import { mirrorMinuteStats } from "../services/clickhouse";
@@ -800,6 +805,13 @@ export function createNodeService(
             ...(info ? { ...nodeInfoColumns(info), hostname: info.hostname || node.hostname } : {}),
           })
           .where(eq(schema.node.id, node.id));
+        // Certificates of the applied revision the node could not load
+        // (certificate-isolation-v1; older nodes fail the revision instead).
+        const certificateFailures = toCertificateFailures(req.certificateFailures);
+        const [previous] = await tx
+          .select({ certificateFailures: schema.nodeConfigStatus.certificateFailures })
+          .from(schema.nodeConfigStatus)
+          .where(eq(schema.nodeConfigStatus.nodeId, node.id));
         const values = {
           nodeId: node.id,
           appliedRevision: Number(req.appliedRevision),
@@ -810,11 +822,16 @@ export function createNodeService(
           dataPlaneHealthy: req.dataPlaneHealthy,
           appliedAt: req.appliedAt ? timestampDate(req.appliedAt) : null,
           reportedAt: now,
+          certificateFailures,
         };
         await tx
           .insert(schema.nodeConfigStatus)
           .values(values)
           .onConflictDoUpdate({ target: schema.nodeConfigStatus.nodeId, set: values });
+        await syncCertificateFailureAlerts(
+          tx,
+          changedCertificates(previous?.certificateFailures ?? [], certificateFailures),
+        );
         await recordUpgradeHealth(
           tx,
           { ...node, agentVersion: info?.agentVersion ?? node.agentVersion },

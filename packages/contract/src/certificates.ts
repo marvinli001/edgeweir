@@ -2,7 +2,7 @@ import { oc } from "@orpc/contract";
 import * as z from "zod";
 import { type DnsProviderId, dnsProviderIds } from "./dns-providers";
 import { HTTPS_REDIRECT_STATUSES, MAX_REDIRECT_EXCLUDED_DOMAINS } from "./edge";
-import { domainName, port, uuid } from "./schemas";
+import { certificateFailureReason, domainName, port, uuid } from "./schemas";
 
 /** A MIME type compression applies to, without parameters. */
 export const MIME_TYPE_RE = /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/;
@@ -253,6 +253,21 @@ export const certificateDto = z.object({
   lastError: z.string(),
   /** The site the certificate is bound to once issued (certificateRequest.bindSiteId), or null. */
   bindSiteId: uuid.nullable(),
+  /**
+   * Nodes that report they could not load the certificate
+   * (certificate-isolation-v1), by node name; servingEarlier: the node serves
+   * its earlier material, else the TLS handshakes it served are refused.
+   */
+  nodeFailures: z
+    .array(
+      z.object({
+        nodeId: uuid,
+        nodeName: z.string(),
+        reason: certificateFailureReason,
+        servingEarlier: z.boolean(),
+      }),
+    )
+    .default([]),
 });
 const label = z.string().trim().min(1).max(100);
 const names = z

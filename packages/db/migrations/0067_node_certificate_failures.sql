@@ -1,0 +1,1 @@
+ALTER TABLE "node_config_status" ADD COLUMN "certificate_failures" jsonb DEFAULT '[]'::jsonb NOT NULL;

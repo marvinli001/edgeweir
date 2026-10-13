@@ -470,6 +470,13 @@
       "when": 1791873194363,
       "tag": "0066_auth_identity_headers",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1791874075234,
+      "tag": "0067_node_certificate_failures",
+      "breakpoints": true
     }
   ]
 }

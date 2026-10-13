@@ -96,6 +96,7 @@ function certificate(seed: CertificateSeed): CertificateDto {
           : null,
     lastError: seed.lastError ?? "",
     bindSiteId: seed.bindSite ? siteNamed(seed.bindSite).id : null,
+    nodeFailures: [],
   };
 }
 

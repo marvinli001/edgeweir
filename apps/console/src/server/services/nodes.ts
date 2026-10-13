@@ -11,6 +11,7 @@ import { fail } from "../lib/errors";
 import { isOnline, ONLINE_WINDOW_SECONDS } from "../lib/node-online";
 import { type Actor, recordAudit } from "./audit";
 import { skipNodeTasks } from "./cache-tasks";
+import { syncCertificateFailureAlerts } from "./certificate-failures";
 import { publishClusterDns } from "./dns";
 import {
   downAddresses,
@@ -44,6 +45,15 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
     .select()
     .from(schema.nodeConfigStatus)
     .where(inArray(schema.nodeConfigStatus.nodeId, ids));
+  const failedIds = [
+    ...new Set(statuses.flatMap((st) => st.certificateFailures.map((f) => f.certificateId))),
+  ];
+  const failedCertificates = failedIds.length
+    ? await db
+        .select({ id: schema.certificate.id, name: schema.certificate.name })
+        .from(schema.certificate)
+        .where(inArray(schema.certificate.id, failedIds))
+    : [];
   const ips = await nodeIpRows(db, ids);
   const down = await downAddresses(db, ids);
   const clusters = await db
@@ -127,6 +137,12 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
           ? r.lastAuthError
           : null,
       cache: { maxSizeGb: r.cacheMaxSizeGb, usage: cacheUsage(r.cacheUsage) },
+      certificateFailures: (st?.certificateFailures ?? []).map((f) => ({
+        certificateId: f.certificateId,
+        certificateName: failedCertificates.find((c) => c.id === f.certificateId)?.name ?? "",
+        reason: f.reason,
+        servingEarlier: f.servingFingerprint !== "",
+      })),
     };
   });
 }
@@ -300,7 +316,16 @@ export async function deleteNode(db: Database, id: string, actor: Actor): Promis
     await discardNodeUpgrades(tx, id);
     // Results it measured as a probe (results about it go with the row).
     await tx.delete(schema.probeResult).where(eq(schema.probeResult.proberId, id));
+    // The certificates it reported it cannot load: their alerts resolve when no other node does.
+    const [status] = await tx
+      .select({ certificateFailures: schema.nodeConfigStatus.certificateFailures })
+      .from(schema.nodeConfigStatus)
+      .where(eq(schema.nodeConfigStatus.nodeId, id));
     await tx.delete(schema.node).where(eq(schema.node.id, id));
+    await syncCertificateFailureAlerts(
+      tx,
+      (status?.certificateFailures ?? []).map((f) => f.certificateId),
+    );
     await recordAudit(tx, actor, {
       action: "node.delete",
       targetType: "node",

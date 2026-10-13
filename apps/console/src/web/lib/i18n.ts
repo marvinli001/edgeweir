@@ -34,6 +34,11 @@ export function formatClockTime(iso: string): string {
   }).format(new Date(iso));
 }
 
+/** A list of names in the current locale ("a、b 和 c" / "a, b, and c"). */
+export function formatList(items: readonly string[]): string {
+  return new Intl.ListFormat(getLocale(), { style: "long", type: "conjunction" }).format(items);
+}
+
 export function formatNumber(value: number): string {
   return new Intl.NumberFormat(getLocale()).format(value);
 }

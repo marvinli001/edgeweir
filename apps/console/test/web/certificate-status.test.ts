@@ -51,6 +51,24 @@ describe("certificate state", () => {
     expect(certificateExpired(null, now)).toBe(false);
   });
 
+  it("is unusable while a node refuses its handshakes, not while nodes serve its earlier version", () => {
+    const failure = (servingEarlier: boolean) => ({
+      nodeId: "00000000-0000-4000-8000-000000000001",
+      nodeName: "edge-1",
+      reason: "invalid_material" as const,
+      servingEarlier,
+    });
+    expect(
+      certificateState({ status: "ready", notAfter: future, nodeFailures: [failure(false)] }, now),
+    ).toBe("unloadable");
+    expect(
+      certificateState({ status: "ready", notAfter: future, nodeFailures: [failure(true)] }, now),
+    ).toBe("ready");
+    expect(certificateState({ status: "ready", notAfter: future, nodeFailures: [] }, now)).toBe(
+      "ready",
+    );
+  });
+
   it("counts whole days left, rounded up, and none once expired", () => {
     expect(certificateDaysLeft(future, now)).toBe(13);
     expect(certificateDaysLeft("2026-10-07T13:00:00Z", now)).toBe(1);

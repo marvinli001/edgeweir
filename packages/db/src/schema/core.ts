@@ -131,6 +131,22 @@ export interface NodeCacheUsage {
   reportedAt: string;
 }
 
+/**
+ * A certificate of a node's applied revision the node could not load
+ * (ReportStatusRequest.certificate_failures, certificate-isolation-v1).
+ */
+export interface NodeCertificateFailure {
+  certificateId: string;
+  /** The fingerprint the revision names. */
+  fingerprint: string;
+  /** invalid_material, fingerprint_mismatch or unavailable. */
+  reason: "invalid_material" | "fingerprint_mismatch" | "unavailable";
+  /** The node's detail, at most 256 characters. */
+  message: string;
+  /** The earlier material the node still serves; "" when none (handshakes refused). */
+  servingFingerprint: string;
+}
+
 /** Host metrics of a node's last heartbeat (ReportStatusRequest.metrics, metrics-v1). */
 export interface NodeMetricsData {
   cpuPercent: number;
@@ -738,6 +754,11 @@ export const nodeConfigStatus = pgTable("node_config_status", {
   dataPlaneHealthy: boolean("data_plane_healthy").notNull().default(false),
   appliedAt: timestamp("applied_at", { withTimezone: true }),
   reportedAt: timestamp("reported_at", { withTimezone: true }).defaultNow().notNull(),
+  /** Certificates of the applied revision the node could not load, at most 100 (sorted by id). */
+  certificateFailures: jsonb("certificate_failures")
+    .$type<NodeCertificateFailure[]>()
+    .notNull()
+    .default([]),
 });
 
 /** Pre-aggregated per-minute traffic ("lite" analytics mode). */

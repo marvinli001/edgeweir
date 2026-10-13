@@ -16,11 +16,18 @@ export function certificateExpired(notAfter: string | null, now = Date.now()): b
  * ("error", the error still shows); a renewal in progress keeps its status.
  */
 export function certificateState(
-  cert: Pick<CertificateDto, "status" | "notAfter"> & { lastError?: string },
+  cert: Pick<CertificateDto, "status" | "notAfter"> & {
+    lastError?: string;
+    nodeFailures?: CertificateDto["nodeFailures"];
+  },
   now = Date.now(),
 ): CertificateState {
   // An upload nodes cannot load, expired or not: it is replaced either way.
-  if (certificateUnloadable({ status: cert.status, lastError: cert.lastError ?? "" }))
+  // So is one a node reports it cannot load and serves no earlier version of.
+  if (
+    certificateUnloadable({ status: cert.status, lastError: cert.lastError ?? "" }) ||
+    cert.nodeFailures?.some((f) => !f.servingEarlier)
+  )
     return "unloadable";
   const expired = certificateExpired(cert.notAfter, now);
   return expired && (cert.status === "ready" || cert.status === "error") ? "expired" : cert.status;

@@ -28,6 +28,14 @@ export const lockClusterPublish = (tx: Executor, clusterId: string) =>
   xactLock(tx, `edgeweir.publish.${clusterId}`);
 
 /**
+ * Serializes the certificate_unloadable alert of a certificate: the
+ * heartbeats that change what nodes report about it decide it one after
+ * the other (syncCertificateFailureAlerts).
+ */
+export const lockCertificateFailures = (tx: Executor, certificateId: string) =>
+  xactLock(tx, `edgeweir.certificate-failures.${certificateId}`);
+
+/**
  * Statistics writers (ingestion, rollups) hold this lock shared; whatever
  * deletes statistics rows (retention, site deletion) holds it exclusively,
  * so it never removes data a writer is about to aggregate or reference.

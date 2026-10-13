@@ -5,7 +5,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type * as React from "react";
 import { toast } from "sonner";
 import { type NodeAction, NodeActionDialog } from "@/components/clusters/node-dialogs";
-import { AuthErrorBadge, NodeDetailSheet, NodeVitals } from "@/components/node-detail";
+import {
+  AuthErrorBadge,
+  CertificateFailuresBadge,
+  NodeDetailSheet,
+  NodeVitals,
+} from "@/components/node-detail";
 import { enterDelay } from "@/components/page";
 import { EmptyState, QueryView } from "@/components/states";
 import { Dot, StatusDot } from "@/components/status-dot";
@@ -240,6 +245,7 @@ function NodeCard({
             #{node.appliedRevision}
           </span>
           <RevisionBadge node={node} latest={latest} />
+          <CertificateFailuresBadge node={node} />
         </Fact>
         <Fact label={m.nodes_col_agent()}>
           <span className="font-mono">{node.agentVersion || "—"}</span>

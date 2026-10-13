@@ -36,6 +36,7 @@ import {
   formatBitRate,
   formatBytes,
   formatDateTime,
+  formatList,
   formatNumber,
   formatPercent,
   getLocale,
@@ -72,6 +73,25 @@ export function AuthErrorBadge({ node }: { node: Node }) {
   ) : (
     <Badge variant="destructive" title={node.authError} data-testid="node-cert-rejected">
       {m.node_cert_rejected()}
+    </Badge>
+  );
+}
+
+/**
+ * The certificates of its revision the node could not load
+ * (certificate-isolation-v1); their names on hover.
+ */
+export function CertificateFailuresBadge({ node }: { node: Node }) {
+  const failures = node.certificateFailures;
+  if (!failures.length) return null;
+  const names = failures.map((f) => f.certificateName || f.certificateId);
+  return (
+    <Badge
+      variant="destructive"
+      title={m.node_certificate_failures_names({ certificates: formatList(names) })}
+      data-testid="node-certificate-failures"
+    >
+      {m.node_certificate_failures({ count: failures.length })}
     </Badge>
   );
 }

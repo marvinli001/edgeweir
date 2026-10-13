@@ -643,6 +643,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0064_hidden_cards` | `hidden_cards` |
 | `0065_cache_rule_respect_default` | `respect` as the default of `cache_rule.origin_cache_control` |
 | `0066_auth_identity_headers` | `site.auth_identity_headers` (filled from the stored access authentication rules, disabled ones included) |
+| `0067_node_certificate_failures` | `node_config_status.certificate_failures` (certificates a node reports it cannot load) |
 
 ## Build output
 

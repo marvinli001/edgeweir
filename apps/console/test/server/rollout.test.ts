@@ -53,7 +53,12 @@ describe("configuration canary with automatic rollback", async () => {
   const report = async (
     node: typeof canary,
     revision: number,
-    opts: { at?: Date; state?: "applied" | "failed"; healthy?: boolean } = {},
+    opts: {
+      at?: Date;
+      state?: "applied" | "failed";
+      healthy?: boolean;
+      certificateFailures?: schema.NodeCertificateFailure[];
+    } = {},
   ) => {
     const at = opts.at ?? new Date();
     const [row] = await ctx.db
@@ -72,6 +77,7 @@ describe("configuration canary with automatic rollback", async () => {
       state: opts.state ?? "applied",
       dataPlaneHealthy: opts.healthy ?? true,
       reportedAt: at,
+      certificateFailures: opts.certificateFailures ?? [],
     };
     await ctx.db
       .insert(schema.nodeConfigStatus)
@@ -215,6 +221,33 @@ describe("configuration canary with automatic rollback", async () => {
     expect(await target(stable)).toBe(candidateRevision);
     const [entry] = (await admin.auditLogs.list({ action: "cluster.rollout_promote" })).items;
     expect(entry).toMatchObject({ actorType: "system", metadata: { outcome: "auto_promote" } });
+  });
+
+  it("rolls back a candidate whose certificate a canary node refuses handshakes for", async () => {
+    const good = (await rollout()).stableRevision ?? 0;
+    await report(canary, good);
+    await report(stable, good);
+    const failure = (certificateId: string, servingFingerprint = "") => ({
+      certificateId,
+      fingerprint: "a".repeat(64),
+      reason: "invalid_material" as const,
+      message: "x509: invalid ECDSA parameters",
+      servingFingerprint,
+    });
+    const cert = "00000000-0000-4000-8000-0000000000c1";
+    // Earlier material served, or a failure the stable nodes report too: not the candidate's doing.
+    let candidate = await change();
+    await report(canary, candidate, { certificateFailures: [failure(cert, "b".repeat(64))] });
+    expect(await evaluateRollout(ctx, clusterId)).toBe("canary");
+    await report(stable, good, { certificateFailures: [failure(cert)] });
+    await report(canary, candidate, { certificateFailures: [failure(cert)] });
+    expect(await evaluateRollout(ctx, clusterId)).toBe("canary");
+    // Refused on the canary only: rolled back.
+    await report(stable, good);
+    candidate = (await rollout()).candidateRevision ?? 0;
+    await report(canary, candidate, { certificateFailures: [failure(cert)] });
+    expect(await evaluateRollout(ctx, clusterId)).toBe("rolled_back");
+    expect(await rollout()).toMatchObject({ state: "rolled_back", outcome: "apply_failed" });
   });
 
   it("rolls back a candidate a canary node failed to apply; the others never get it", async () => {

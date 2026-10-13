@@ -951,6 +951,22 @@ export const nodeSchedulingAddress = z.object({
   reachable: z.boolean(),
 });
 
+/** Why a node could not load a certificate (CertificateFailure.reason). */
+export const certificateFailureReason = z.enum([
+  "invalid_material",
+  "fingerprint_mismatch",
+  "unavailable",
+]);
+
+export const nodeCertificateFailure = z.object({
+  certificateId: uuid,
+  /** "" when the certificate no longer exists. */
+  certificateName: z.string(),
+  reason: certificateFailureReason,
+  /** The node serves the certificate's earlier material (else its handshakes are refused). */
+  servingEarlier: z.boolean(),
+});
+
 export const node = z.object({
   id: uuid,
   name: z.string(),
@@ -1020,6 +1036,12 @@ export const node = z.object({
       })
       .nullable(),
   }),
+  /**
+   * Certificates of the applied revision the node could not load
+   * (certificate-isolation-v1): it serves earlier material for them
+   * (servingEarlier) or refuses their TLS handshakes. Empty for other nodes.
+   */
+  certificateFailures: z.array(nodeCertificateFailure),
 });
 
 export const nodeUpdateInput = z.object({

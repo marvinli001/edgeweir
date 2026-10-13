@@ -26,6 +26,7 @@ import { fail } from "../lib/errors";
 import { namesHosts } from "../lib/site-domains";
 import { customAcmeDirectory, defaultAcmeCa, readPemCertificates } from "./acme-directory";
 import { type Actor, recordAudit, systemActor } from "./audit";
+import { certificateNodeFailures } from "./certificate-failures";
 import { certdDns, probe, validCredentials } from "./dns-providers";
 import { assertHttp01Ready } from "./http01-check";
 import { type Executor, getRevision, publishRevision } from "./revisions";
@@ -50,7 +51,10 @@ export const dnsCredentialBinding = (id: string) => ({
   recordId: id,
 });
 
-export function certificateDto(row: typeof schema.certificate.$inferSelect): CertificateDto {
+export function certificateDto(
+  row: typeof schema.certificate.$inferSelect,
+  nodeFailures: CertificateDto["nodeFailures"] = [],
+): CertificateDto {
   return {
     id: row.id,
     name: row.name,
@@ -64,6 +68,7 @@ export function certificateDto(row: typeof schema.certificate.$inferSelect): Cer
     renewAt: row.renewAt?.toISOString() ?? null,
     lastError: row.lastError,
     bindSiteId: row.acme.bindSiteId || null,
+    nodeFailures,
   };
 }
 
@@ -397,7 +402,10 @@ export async function markUnloadableCertificates(app: AppContext) {
 }
 
 export async function listCertificates(app: AppContext) {
-  return (await app.db.select().from(schema.certificate)).map(certificateDto);
+  const failures = await certificateNodeFailures(app.db);
+  return (await app.db.select().from(schema.certificate)).map((row) =>
+    certificateDto(row, (failures.get(row.id) ?? []) as CertificateDto["nodeFailures"]),
+  );
 }
 
 export async function certificateSettings(app: AppContext): Promise<CertificateSettings> {

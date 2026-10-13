@@ -70,6 +70,7 @@ export async function deliverNotification(
     config_rule_invalid: m.alert_kind_config_rule_invalid,
     dns_mass_removal_blocked: m.alert_kind_dns_mass_removal_blocked,
     scheduling_action: m.alert_kind_scheduling_action,
+    certificate_unloadable: m.alert_kind_certificate_unloadable,
     test: m.alert_test_message,
   }[event.kind]({}, { locale });
   const status = event.status === "resolved" ? m.alert_recovered({}, { locale }) : kind;
@@ -79,9 +80,11 @@ export async function deliverNotification(
       ? `/sites/${event.siteId}`
       : event.kind === "dns_mass_removal_blocked"
         ? "/dns"
-        : event.kind === "test"
-          ? "/alerts"
-          : "/clusters",
+        : event.kind === "certificate_unloadable"
+          ? "/certificates"
+          : event.kind === "test"
+            ? "/alerts"
+            : "/clusters",
     app.env.EDGEWEIR_PUBLIC_URL,
   ).toString();
   const text = m.alert_notice_body(
