@@ -1815,6 +1815,8 @@
   "node_feature_rules_v3": "Expression fields and header values",
   "node_feature_site_content_v1": "Cache, origin and content settings",
   "node_feature_cache_zone_v1": "Node cache sizes",
+  "node_feature_auth_identity_headers_v1": "Identity headers of disabled and deleted authentication rules removed",
+  "node_feature_certificate_isolation_v1": "Certificates that do not load isolated",
   "node_feature_rule_log_v1": "Log rule match counts",
   "node_feature_session_affinity_v1": "Session affinity",
   "node_feature_origin_http2_v1": "HTTP/2 and gRPC to origins",

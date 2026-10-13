@@ -1645,6 +1645,8 @@
   "node_feature_rules_v3": "表达式变量与报头值",
   "node_feature_site_content_v1": "缓存、源站与内容设置",
   "node_feature_cache_zone_v1": "节点缓存容量",
+  "node_feature_auth_identity_headers_v1": "清除停用与已删除鉴权规则的身份头",
+  "node_feature_certificate_isolation_v1": "按证书隔离无法加载的证书",
   "node_feature_rule_log_v1": "记录规则命中统计",
   "node_feature_session_affinity_v1": "会话保持",
   "node_feature_origin_http2_v1": "HTTP/2 与 gRPC 回源",

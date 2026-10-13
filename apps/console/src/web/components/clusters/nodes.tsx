@@ -1,4 +1,4 @@
-import type { Cluster, Node } from "@edgeweir/contract";
+import { type Cluster, type Node, nodeUpgradeRecommended } from "@edgeweir/contract";
 import { Add01Icon, MoreHorizontalIcon, ServerStack01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -249,6 +249,17 @@ function NodeCard({
         </Fact>
         <Fact label={m.nodes_col_agent()}>
           <span className="font-mono">{node.agentVersion || "—"}</span>
+          {node.agentVersion &&
+          !node.upgradeRequired &&
+          nodeUpgradeRecommended(node.supportedFeatures) ? (
+            <Badge
+              variant="outline"
+              title={m.node_upgrade_recommended_title()}
+              data-testid="node-upgrade-recommended"
+            >
+              {m.node_upgrade_recommended()}
+            </Badge>
+          ) : null}
           <span className="text-muted-foreground">
             {node.engine} {node.engineVersion}
           </span>

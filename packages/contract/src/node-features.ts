@@ -54,3 +54,32 @@ export const L4_FEATURE = "l4-v1";
  * cluster reports it.
  */
 export const CACHE_ZONE_FEATURE = "cache-zone-v1";
+/**
+ * auth-identity-headers-v1: Site.auth_identity_headers, the identity
+ * headers of disabled and former access authentication rules removed from
+ * every request (proto v1.1.0). Never required: older nodes remove those of
+ * the enabled rules only.
+ */
+export const AUTH_IDENTITY_HEADERS_FEATURE = "auth-identity-headers-v1";
+/**
+ * certificate-isolation-v1: a certificate a node cannot load is left out of
+ * the revision, which applies otherwise, and reported
+ * (ReportStatusRequest.certificate_failures, proto v1.1.0). Never required:
+ * older nodes fail the whole revision.
+ */
+export const CERTIFICATE_ISOLATION_FEATURE = "certificate-isolation-v1";
+/**
+ * Features of the node release with security fixes no configuration
+ * requires (path scopes ignoring ASCII case, identity headers of former
+ * rules, body limits without Content-Length, certificate isolation): an
+ * online node without one of them is recommended for an upgrade.
+ */
+export const RECOMMENDED_NODE_FEATURES = [
+  AUTH_IDENTITY_HEADERS_FEATURE,
+  CERTIFICATE_ISOLATION_FEATURE,
+] as const;
+
+/** Whether a node that reports `supported` lacks a recommended feature (needs an upgrade soon). */
+export function nodeUpgradeRecommended(supported: readonly string[]): boolean {
+  return RECOMMENDED_NODE_FEATURES.some((feature) => !supported.includes(feature));
+}
