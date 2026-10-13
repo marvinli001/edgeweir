@@ -36,7 +36,10 @@ COPY packages/contract/package.json packages/contract/
 COPY packages/db/package.json packages/db/
 COPY packages/config-compiler/package.json packages/config-compiler/
 COPY packages/rule-engine/package.json packages/rule-engine/
-RUN pnpm install --frozen-lockfile
+# The pnpm store is a BuildKit cache mount: a lockfile change downloads only
+# what is new. It stays out of the layers; node_modules is the same.
+RUN --mount=type=cache,id=edgeweir-pnpm-store,target=/var/cache/pnpm,sharing=locked \
+    pnpm install --frozen-lockfile --store-dir /var/cache/pnpm
 COPY apps/console apps/console
 COPY packages packages
 ARG VERSION=dev
