@@ -430,6 +430,16 @@ message Site {
   // Accept (ADR-0043); unset means off. Added in v0.31.0 (feature
   // image-convert-v1).
   ImageConvert image_convert = 36;
+  // Request headers the edge removes from every request of the site before
+  // anything reads them and before the origin sees them: the identity
+  // headers of all the site's access authentication rules, disabled ones
+  // included (x-auth-user of Basic rules with user_header, the response
+  // headers forward rules copy), and those of rules the site had before.
+  // Lowercase, sorted and unique, at most 256. A rule that checks a request
+  // sets its own again. Added in v1.1.0; nodes without feature
+  // auth-identity-headers-v1 remove only those of the enabled rules (no
+  // feature required).
+  repeated string auth_identity_headers = 37;
 }
 
 // ImageConvert turns cached JPEG and PNG responses into WebP or AVIF for
