@@ -419,6 +419,64 @@ services:
     networks:
       default: {}
 
+  # wss section (scripts/e2e-wss.mjs): a reverse proxy that terminates TLS
+  # in front of the console's web port, as docs/deploy/networking.md
+  # configures it for the node channel's WebSocket entry: wss.e2e.test:443
+  # with a certificate from a test CA generated at start (written to the
+  # wss-ca volume for node-wss).
+  wss-proxy:
+    image: openresty/openresty:1.31.1.1-bookworm@sha256:8005b87dcb25df5e202e71dcc4b8a2c20a4845a75302b2bb6ee816b5392883e4
+    profiles: ["wss"]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        rm -f /shared/wss-ca.pem &&
+        openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj '/CN=Edgeweir e2e wss CA'
+        -addext basicConstraints=critical,CA:TRUE -addext keyUsage=critical,keyCertSign,cRLSign
+        -keyout /tmp/ca.key -out /tmp/ca.crt 2>/dev/null &&
+        openssl req -new -newkey rsa:2048 -nodes -subj /CN=wss.e2e.test -keyout /tmp/wss.key -out /tmp/wss.csr 2>/dev/null &&
+        printf 'basicConstraints=CA:FALSE\nkeyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:wss.e2e.test\n' > /tmp/wss.ext &&
+        openssl x509 -req -in /tmp/wss.csr -CA /tmp/ca.crt -CAkey /tmp/ca.key -CAcreateserial -days 2
+        -extfile /tmp/wss.ext -out /tmp/wss.crt 2>/dev/null &&
+        cp /tmp/ca.crt /shared/wss-ca.pem.tmp && mv /shared/wss-ca.pem.tmp /shared/wss-ca.pem &&
+        exec openresty -g 'daemon off;' -c /etc/e2e/wss-proxy.conf
+    volumes:
+      - ./docker/e2e/wss-proxy/nginx.conf:/etc/e2e/wss-proxy.conf:ro
+      - wss-ca:/shared
+    networks:
+      default:
+        aliases: [wss.e2e.test]
+    healthcheck:
+      test: ["CMD", "test", "-s", "/shared/wss-ca.pem"]
+      interval: 1s
+      retries: 30
+    depends_on:
+      console:
+        condition: service_healthy
+
+  # The node of the wss section: enrolled by scripts/e2e-wss.mjs with
+  # wss://wss.e2e.test. A wss:// URL's own certificate is checked against
+  # the system roots; SSL_CERT_DIR adds the proxy's test CA to them.
+  node-wss:
+    image: edgeweir-node:${E2E_TAG:-e2e}
+    profiles: ["wss"]
+    hostname: edge-wss
+    environment:
+      SSL_CERT_DIR: /etc/edgeweir-wss
+      EDGEWEIR_TRUSTED_CA: /etc/edgeweir-e2e/origin-ca.pem
+      EDGEWEIR_GEOIP_IPINFO: /etc/edgeweir-geoip/ipinfo_lite.mmdb
+      EDGEWEIR_GEOIP_CITY: /etc/edgeweir-geoip/city.mmdb
+      EDGEWEIR_GEOIP_ASN: /etc/edgeweir-geoip/asn.mmdb
+    volumes:
+      - wss-ca:/etc/edgeweir-wss:ro
+      - geoip-test-data:/etc/edgeweir-geoip:ro
+      - origin-ca:/etc/edgeweir-e2e:ro
+    networks:
+      default: {}
+    depends_on:
+      wss-proxy:
+        condition: service_healthy
+
   # G14 (scripts/e2e-g14.mjs): verified crawlers. g14-dns answers the PTR and
   # A records the test puts on it and forwards everything else to Docker's
   # DNS; node-g14, the only node of the cluster "g14-bots" (enrolled by the
@@ -524,4 +582,5 @@ volumes:
   probe-a-state:
   probe-b-state:
   origin-ca:
+  wss-ca:
   downloads:

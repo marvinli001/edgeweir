@@ -22,6 +22,13 @@
 #   sees 1 MiB slices (CP-M2); S3 origins never receive the client's x-amz-*
 #   headers (N-L); install.sh installs goreleaser snapshot packages in a clean
 #   Debian container and enrolls the node (N-H1, --no-start: no systemd).
+#   WebSocket entry (scripts/e2e-wss.mjs, profile wss): the node channel URL
+#   wss://wss.e2e.test saved in the system settings opens the console's
+#   WebSocket entry behind wss-proxy, nginx terminating TLS with a test CA's
+#   certificate (the /node-channel location of docs/deploy/networking.md);
+#   node-wss trusts that CA, enrolls through the proxy, stays online with
+#   heartbeats for more than 30 seconds and applies and serves revisions;
+#   the URL in effect before is saved again.
 #   Core gaps P0 (scripts/e2e-p0.mjs): Idempotency-Key, service accounts with
 #   scopes disabling a site, usage and its completeness watermark,
 #   configuration canary with automatic promotion and rollback, DNS mass
@@ -273,7 +280,7 @@ done
 # (.e2e/*-state.json, or clusters and nodes they create). Every section needs
 # core, which only runs on a fresh stack.
 SECTIONS=(
-  "core:" "m1:" "analytics:" "m2:" "install:" "m3:" "m4:" "m5:" "m6-logs:m5" "m6-upgrades:m5"
+  "core:" "m1:" "analytics:" "m2:" "install:" "wss:" "m3:" "m4:" "m5:" "m6-logs:m5" "m6-upgrades:m5"
   "p0:m5 m6-upgrades" "g1:p0 m5 m6-upgrades" "g2:m6-upgrades" "g3:m6-upgrades" "g4:m6-upgrades"
   "g5:m6-upgrades" "dns:m5 m6-upgrades" "g6:dns m5 m6-upgrades" "g7:m6-upgrades" "h2:m6-upgrades"
   "g8:m6-upgrades" "g9:m6-upgrades" "g15:m6-upgrades" "g10:dns m5 m6-upgrades" "g11:m6-upgrades"
@@ -1267,6 +1274,22 @@ for feature in brotli-v1 zstd-v1 modsecurity-v1; do
 done
 docker rm -f "$INSTALL_CONTAINER" >/dev/null 2>&1 || true
 pass "the installed agent ($NODE_VERSION) runs as the edgeweir user, is online over mTLS and reports brotli-v1, zstd-v1 and modsecurity-v1 with the installed packages"
+}
+
+# ----------------------------------------------------------------- section wss
+section_wss() {
+step "WebSocket entry: a node enrolls with wss:// through a TLS-terminating proxy, stays online and applies revisions"
+# A new node state each time: the cleanup deletes the node from the console.
+"${COMPOSE[@]}" --profile wss rm -sfv node-wss wss-proxy >/dev/null 2>&1 || true
+# The proxy writes its test CA at start; node-wss reads it from the same volume.
+wss_up() {
+  "${COMPOSE[@]}" --profile wss up -d --no-deps --wait wss-proxy && "${COMPOSE[@]}" --profile wss up -d --no-deps node-wss
+}
+part wss-up wss_up || fail "could not start wss-proxy and node-wss"
+part checks node scripts/e2e-wss.mjs || fail "wss end-to-end checks failed"
+part cleanup node scripts/e2e-wss.mjs --cleanup || fail "wss cleanup failed"
+"${COMPOSE[@]}" --profile wss rm -sfv node-wss wss-proxy >/dev/null 2>&1 || true
+pass "WebSocket entry checks passed"
 }
 
 # ------------------------------------- sections m3 ... g18 (scripts/e2e-*.mjs)
