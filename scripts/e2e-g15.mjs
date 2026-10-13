@@ -13,8 +13,9 @@
 //      left out of the cache key, others are not
 //   d. charset gbk (force, upper case) on text responses, none on an image
 //   e. request body limit 1024 bytes: 413 with the 4xx page above it by
-//      Content-Length, a config rule lifts it under /upload/, a chunked
-//      upload is bounded by the nodes' global limit only
+//      Content-Length, a config rule lifts it under /upload/; bodies without
+//      Content-Length (chunked over HTTP/1.1, HTTP/2 over HTTPS) are checked
+//      by their size the same way
 //   f. gzip level 9 rendered, a response over the largest compressed length
 //      stays uncompressed
 //   g. PURGE with the key: 202 with the task, a URL purge of the cluster
@@ -38,7 +39,9 @@
 // BENCH_SCENARIO=charset in scripts/bench.sh.
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { promisify } from "node:util";
 import { rpc, signInResponse } from "./e2e-auth.mjs";
 
@@ -201,6 +204,91 @@ process.stdin.on("data", (d) => (input += d)).on("end", async () => {
   else for (const r of list) out.push(await one(r));
   process.stdout.write(JSON.stringify(out));
 });`;
+/**
+ * HTTP/2 requests over TLS from a client container (certificates not
+ * verified), sequential: a body of `bodySize` bytes of "a" without
+ * Content-Length, in two DATA frames.
+ */
+const H2_REQUESTS = `
+const http2 = require("node:http2");
+let input = "";
+process.stdin.on("data", (d) => (input += d)).on("end", async () => {
+  const out = [];
+  for (const r of JSON.parse(input)) {
+    out.push(await new Promise((resolve) => {
+      const session = http2.connect("https://" + r.target + ":443", { servername: r.host, rejectUnauthorized: false });
+      let finished = false;
+      const done = (v) => { if (finished) return; finished = true; session.close(); resolve(v); };
+      session.on("error", (e) => done({ status: 0, error: e.message, headers: {}, body: "" }));
+      const req = session.request({ ":method": r.method ?? "GET", ":path": r.path, ":authority": r.host });
+      const chunks = [];
+      let headers = {};
+      req.on("response", (h) => (headers = h));
+      req.on("data", (d) => chunks.push(d));
+      req.on("end", () => done({ status: headers[":status"], headers, body: Buffer.concat(chunks).toString("latin1") }));
+      req.on("error", (e) => done({ status: headers[":status"] ?? 0, error: e.message, headers, body: "" }));
+      req.on("close", () => done({ status: headers[":status"] ?? 0, error: "closed", headers, body: Buffer.concat(chunks).toString("latin1") }));
+      req.setTimeout(20000, () => req.close());
+      if (r.bodySize !== undefined) {
+        const body = "a".repeat(r.bodySize);
+        req.write(body.slice(0, Math.floor(body.length / 2)));
+        req.write(body.slice(Math.floor(body.length / 2)));
+      }
+      req.end();
+    }));
+  }
+  process.stdout.write(JSON.stringify(out));
+});`;
+const h2Requests = async (list) =>
+  JSON.parse(await nodeIn("client-a", H2_REQUESTS, JSON.stringify(list)));
+
+/** A self-signed leaf for names (P-256, named curve), as PEM. */
+async function selfSigned(names) {
+  const dir = await mkdtemp(join(tmpdir(), "g15-"));
+  const config = join(dir, "leaf.cnf");
+  await writeFile(
+    config,
+    [
+      "[req]",
+      "distinguished_name = dn",
+      "x509_extensions = leaf",
+      "prompt = no",
+      "[dn]",
+      `CN = ${names[0]}`,
+      "[leaf]",
+      "basicConstraints = critical,CA:FALSE",
+      `subjectAltName = ${names.map((n) => `DNS:${n}`).join(",")}`,
+      "",
+    ].join("\n"),
+  );
+  await execute("openssl", [
+    "req",
+    "-x509",
+    "-newkey",
+    "ec",
+    "-pkeyopt",
+    "ec_paramgen_curve:P-256",
+    // Go refuses explicit curve parameters (LibreSSL's default encoding).
+    "-pkeyopt",
+    "ec_param_enc:named_curve",
+    "-nodes",
+    "-keyout",
+    join(dir, "key.pem"),
+    "-out",
+    join(dir, "cert.pem"),
+    "-days",
+    "7",
+    "-config",
+    config,
+  ]);
+  const pem = {
+    chainPem: await readFile(join(dir, "cert.pem"), "utf8"),
+    privateKeyPem: await readFile(join(dir, "key.pem"), "utf8"),
+  };
+  await rm(dir, { recursive: true, force: true });
+  return pem;
+}
+
 async function requests(list, { from = "client-a", parallel = false } = {}) {
   if (list.length === 0) return [];
   return JSON.parse(await nodeIn(from, REQUESTS, JSON.stringify({ list, parallel })));
@@ -321,6 +409,8 @@ async function cleanup() {
       removed++;
     }
   }
+  for (const cert of await admin.ok("GET", "/certificates"))
+    if (cert.name === "g15-content") await admin.ok("DELETE", `/certificates/${cert.id}`);
   await restoreCache();
   pass(`G15 cleanup: ${removed} site(s) removed, cache zone sizes restored`);
 }
@@ -434,11 +524,17 @@ try {
       },
     ],
   });
+  // HTTPS for the HTTP/2 requests of step e.
+  const contentCert = await admin.ok("POST", "/certificates/upload", {
+    name: "g15-content",
+    ...(await selfSigned([HOST.content])),
+  });
   const https = await admin.ok("GET", `/sites/${content.id}/https`);
   await admin.ok("PUT", `/sites/${content.id}/https`, {
     id: content.id,
     settings: {
       ...https,
+      certificateId: contentCert.id,
       gzip: true,
       gzipMinLength: 100,
       gzipTypes: ["text/plain"],
@@ -549,7 +645,7 @@ try {
 
   // -------------------------------------------------------------- e. body limit
   for (const target of NODES) {
-    const [over, within, upload, chunked] = await requests([
+    const [over, within, upload, chunked, chunkedWithin, chunkedUpload] = await requests([
       {
         target,
         host: HOST.content,
@@ -561,16 +657,39 @@ try {
       { target, host: HOST.content, path: "/form", method: "POST", bodySize: 1000 },
       { target, host: HOST.content, path: "/upload/x", method: "POST", bodySize: 2000 },
       { target, host: HOST.content, path: "/form", method: "POST", bodySize: 2000, chunked: true },
+      { target, host: HOST.content, path: "/form", method: "POST", bodySize: 1000, chunked: true },
+      {
+        target,
+        host: HOST.content,
+        path: "/upload/x",
+        method: "POST",
+        bodySize: 2000,
+        chunked: true,
+      },
+    ]);
+    const [h2Over, h2Within, h2Upload] = await h2Requests([
+      { target, host: HOST.content, path: "/form", method: "POST", bodySize: 2000 },
+      { target, host: HOST.content, path: "/form", method: "POST", bodySize: 1000 },
+      { target, host: HOST.content, path: "/upload/x", method: "POST", bodySize: 2000 },
     ]);
     assert.equal(over.status, 413, summary(over));
     assert.equal(over.headers["x-edgeweir-error"], "body-too-large", summary(over));
     assert.match(over.body, /<p>c4 413<\/p>/);
     assert.match(within.body, /^received 1000 bytes$/m, summary(within));
     assert.match(upload.body, /^received 2000 bytes$/m, summary(upload));
-    assert.match(chunked.body, /^received 2000 bytes$/m, summary(chunked));
+    assert.equal(chunked.status, 413, summary(chunked));
+    assert.equal(chunked.headers["x-edgeweir-error"], "body-too-large", summary(chunked));
+    assert.match(chunkedWithin.body, /^received 1000 bytes$/m, summary(chunkedWithin));
+    assert.match(chunkedUpload.body, /^received 2000 bytes$/m, summary(chunkedUpload));
+    const h2 = (r) =>
+      `${r.status} ${r.headers["x-edgeweir-error"] ?? "-"}${r.error ? ` ${r.error}` : ""}`;
+    assert.equal(h2Over.status, 413, `${target} HTTP/2 ${h2(h2Over)}`);
+    assert.equal(h2Over.headers["x-edgeweir-error"], "body-too-large", h2(h2Over));
+    assert.match(h2Within.body, /^received 1000 bytes$/m, h2(h2Within));
+    assert.match(h2Upload.body, /^received 2000 bytes$/m, h2(h2Upload));
   }
   pass(
-    "body limit: 413 with the 4xx page over 1024 bytes by Content-Length, 1000 bytes pass, the config rule lifts it under /upload/, a chunked upload is not checked",
+    "body limit: 413 with the 4xx page over 1024 bytes by Content-Length, chunked and over HTTP/2 without Content-Length; 1000 bytes pass; the config rule lifts it under /upload/",
   );
 
   // -------------------------------------------------------------- f. gzip

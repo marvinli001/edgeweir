@@ -9,11 +9,15 @@
 //      ip-blocked (client-b 200); as a site allow list it skips the site's
 //      geo denial of NZ that client-b gets (403 geo-denied)
 //   c. geo on g13-geo: deny NZ 403 geo-denied but not under /status;
-//      deny the subdivision NZ-AUK 403; allow only AU 403
+//      scope prefixes ignore ASCII case (/ADMIN/ is under /admin/), excluded
+//      ones do not (/Admin/Public/ is not under /admin/public/); deny the
+//      subdivision NZ-AUK 403; allow only AU 403
 //   d. hotlink on g13-hot (.png): a denied source 403 hotlink-denied, an
 //      allowed source, the site's own domain and no Referer 200, another
 //      source 403, an unparseable Referer 403, .css not checked; with the
-//      302 action the placeholder (/placeholder.png) is not checked itself
+//      302 action the placeholder (/placeholder.png) is not checked itself;
+//      a path prefix scope ignores ASCII case (/DL/ under /dl/); a target
+//      path with "//" (a redirect that would loop) is refused
 //   e. user agents on g13-ua: deny * and allow *Googlebot*: curl 403
 //      ua-denied, Googlebot 200 (allow first), /robots.txt excluded
 //   f. CORS on g13-cors: a preflight answered at the edge with 204, the
@@ -326,6 +330,21 @@ try {
   await synced("g13-geo denying NZ");
   await expectBoth({ host: HOST.geo, path: "/x" }, 403, "geo-denied");
   await expectBoth({ host: HOST.geo, path: "/status" }, 200);
+  await access(sites.geo.id, {
+    geo: {
+      enabled: true,
+      mode: "deny",
+      countries: ["NZ"],
+      pathPrefixes: ["/admin/"],
+      exceptPathPrefixes: ["/admin/public/"],
+    },
+  });
+  await synced("g13-geo denying NZ under /admin/");
+  await expectBoth({ host: HOST.geo, path: "/admin/x" }, 403, "geo-denied");
+  await expectBoth({ host: HOST.geo, path: "/ADMIN/x" }, 403, "geo-denied");
+  await expectBoth({ host: HOST.geo, path: "/Admin/Public/x" }, 403, "geo-denied");
+  await expectBoth({ host: HOST.geo, path: "/admin/public/x" }, 200);
+  await expectBoth({ host: HOST.geo, path: "/x" }, 200);
   await access(sites.geo.id, { geo: { enabled: true, mode: "deny", subdivisions: ["NZ-AUK"] } });
   await synced("g13-geo denying NZ-AUK");
   await expectBoth({ host: HOST.geo, path: "/x" }, 403, "geo-denied");
@@ -336,7 +355,7 @@ try {
   await synced("g13-geo allowing AU and NZ");
   await expectBoth({ host: HOST.geo, path: "/x" }, 200);
   pass(
-    "c. g13-geo with the test MMDB: deny NZ 403 geo-denied but /status (exception) 200; deny NZ-AUK 403; allow only AU 403; allow AU and NZ 200",
+    "c. g13-geo with the test MMDB: deny NZ 403 geo-denied but /status (exception) 200; under /admin/: /ADMIN/x and /Admin/Public/x 403, /admin/public/x (exception) 200; deny NZ-AUK 403; allow only AU 403; allow AU and NZ 200",
   );
 
   // ---------------------------------------------------------------- d
@@ -391,8 +410,26 @@ try {
     { host: HOST.hot, path: "/placeholder.png", headers: { referer: "https://evil.g13.test/" } },
     200,
   );
+  // A target nodes could not exempt (the redirect would loop) is refused.
+  const looping = await admin.raw("PATCH", `/sites/${sites.hot.id}/access-control`, {
+    hotlink: {
+      enabled: true,
+      extensions: ["png"],
+      action: "redirect",
+      redirectUrl: "/img//placeholder.png",
+    },
+  });
+  assert.equal(looping.status, 400, JSON.stringify(looping.json));
+  await access(sites.hot.id, {
+    hotlink: { enabled: true, extensions: [], pathPrefixes: ["/dl/"], denied: ["evil.g13.test"] },
+  });
+  await synced("g13-hot checking /dl/");
+  const dl = (path) => ({ host: HOST.hot, path, headers: { referer: "https://evil.g13.test/" } });
+  await expectBoth(dl("/dl/a.zip"), 403, "hotlink-denied");
+  await expectBoth(dl("/DL/a.zip"), 403, "hotlink-denied");
+  await expectBoth(dl("/a.zip"), 200);
   pass(
-    "d. g13-hot: denied source 403 hotlink-denied; allowed exact and *. sources, the site's own domain and no Referer 200; another source and an unparseable Referer 403; .css unchecked; a cached object denied the same; the 302 action sends /placeholder.png, which is not checked itself",
+    "d. g13-hot: denied source 403 hotlink-denied; allowed exact and *. sources, the site's own domain and no Referer 200; another source and an unparseable Referer 403; .css unchecked; a cached object denied the same; the 302 action sends /placeholder.png, which is not checked itself; a path with // as the target refused; /DL/a.zip under /dl/ 403",
   );
 
   // ---------------------------------------------------------------- e

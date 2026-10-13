@@ -21,6 +21,9 @@
 //      cached (the service not asked again), /login/ 302 passed on, /down/
 //      503 auth-unavailable, /slow/ (500 ms timeout) 503, /open/ let through
 //   e. failures counted per site (GET /sites/{id}/auth-rules/failures)
+//   f. identity headers on g12-ident: the visitor's X-Auth-User and the
+//      headers a disabled forward rule copies never reach the origin, nor
+//      once the site has no rules left
 // The G12 sites stay for apps/console/e2e/g12.spec.ts (.e2e/g12-state.json);
 // `node scripts/e2e-g12.mjs --cleanup` removes them (and the spec's g12-ui).
 import assert from "node:assert/strict";
@@ -40,8 +43,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const md5 = (s) => createHash("md5").update(s).digest("hex");
 const STATE = ".e2e/g12-state.json";
 
-const HOST = { basic: "basic.g12.test", url: "url.g12.test", fwd: "fwd.g12.test" };
-const SITES = { basic: "g12-basic", url: "g12-url", fwd: "g12-fwd" };
+const HOST = {
+  basic: "basic.g12.test",
+  url: "url.g12.test",
+  fwd: "fwd.g12.test",
+  ident: "ident.g12.test",
+};
+const SITES = { basic: "g12-basic", url: "g12-url", fwd: "g12-fwd", ident: "g12-ident" };
 const NODES = ["node", "node-upgrade-peer"];
 /** Created by apps/console/e2e/g12.spec.ts. */
 const UI_SITE = "g12-ui";
@@ -566,6 +574,51 @@ try {
   );
   assert.equal(failures.unsupportedNodes, 0);
   pass(`e. g12-basic counts ${failures.requests} refused requests in the last hour`);
+
+  // ---------------------------------------------------------------- f
+  const ident = await createSite(SITES.ident, HOST.ident);
+  await saveRules(ident.id, [
+    {
+      kind: "basic",
+      scope: scope({ pathPrefixes: ["/private/"] }),
+      basic: {
+        realm: "G12 ident",
+        userHeader: true,
+        users: [{ name: "alice", password: PASSWORD }],
+      },
+    },
+    {
+      kind: "forward",
+      enabled: false,
+      scope: scope({ pathPrefixes: ["/app/"] }),
+      forward: {
+        url: "http://g12-auth:8080/verify",
+        responseHeaders: ["x-auth-groups", "x-auth-team"],
+      },
+    },
+  ]);
+  await synced("g12-ident with a Basic rule and a disabled forward rule");
+  const forged = { "x-auth-user": "mallory", "x-auth-groups": "admins", "x-auth-team": "ops" };
+  const unforged = (label) => async () => {
+    for (const [i, r] of (
+      await both({ host: HOST.ident, path: "/app/x", headers: forged })
+    ).entries()) {
+      assert.equal(r.status, 200, `${label} ${NODES[i]}: ${summary(r)}`);
+      for (const name of ["X-Auth-User", "X-Auth-Groups", "X-Auth-Team"])
+        assert.equal(
+          echoed(r, name),
+          undefined,
+          `${label} ${NODES[i]}: ${name} reached the origin`,
+        );
+    }
+  };
+  await unforged("rules in place")();
+  await saveRules(ident.id, []);
+  await synced("g12-ident without rules");
+  await unforged("rules deleted")();
+  pass(
+    "f. g12-ident: the visitor's X-Auth-User and the headers of a disabled forward rule never reach the origin, nor after every rule is deleted",
+  );
 
   await mkdir(".e2e", { recursive: true });
   await writeFile(

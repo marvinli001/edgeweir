@@ -31,6 +31,15 @@
 //      for acme.g11.test (HTTP-01 against node), bound to g11-acme, whose
 //      handshake presents it; the account is listed with the directory, its
 //      email and certificate count, and cannot be deleted while in use
+//   f. a certificate nodes cannot load (certificate-isolation-v1): the
+//      stored chains of g11-renewed (bound to e1.g11.test, loaded before) and
+//      g11-broken (bound to e2.g11.test) replaced in the database by an EC
+//      certificate with explicit curve parameters, as uploads stored before
+//      they were refused: the next revision applies on both nodes without
+//      them, e1.g11.test keeps its earlier certificate, e2.g11.test's
+//      handshake is refused (never another site's certificate), the other
+//      sites are served; the console shows both certificates' failures per
+//      node and fires certificate_unloadable
 // The G11 sites stay for apps/console/e2e/g11.spec.ts (.e2e/g11-state.json);
 // `node scripts/e2e-g11.mjs --cleanup` removes them (and the spec's g11-ui),
 // their certificates and the unused G11 ACME account.
@@ -60,11 +69,17 @@ const M = "m.g11.test";
 const ACME = "acme.g11.test";
 const ACME_EMAIL = "acme-g11@e2e.test";
 const PEBBLE = "https://pebble:14000/dir";
+const E1 = "e1.g11.test";
+const E2 = "e2.g11.test";
 const SITES = {
   multi: { name: "g11-multi", domains: [A, B, C] },
   mtls: { name: "g11-mtls", domains: [M] },
   acme: { name: "g11-acme", domains: [ACME] },
+  renewed: { name: "g11-renewed", domains: [E1] },
+  broken: { name: "g11-broken", domains: [E2] },
 };
+/** Created by step f only to publish a revision. */
+const REPUBLISH_SITE = "g11-republish";
 const NODES = ["node", "node-upgrade-peer"];
 /** Created by apps/console/e2e/g11.spec.ts. */
 const UI_SITE = "g11-ui";
@@ -192,6 +207,27 @@ const summary = (r) =>
 /** A request header the whoami origin echoed, or undefined. */
 const echoed = (r, name) => r.body.match(new RegExp(`^${name}: (.*?)\\r?$`, "im"))?.[1];
 
+async function psql(query) {
+  return (
+    await run([
+      ...compose,
+      "exec",
+      "-T",
+      "postgres",
+      "psql",
+      "-U",
+      "edgeweir",
+      "-d",
+      "edgeweir",
+      "-At",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-c",
+      query,
+    ])
+  ).trim();
+}
+
 // ---------------------------------------------------------------- setup
 const upgrade = JSON.parse(await readFile(".e2e/m6-upgrade-state.json", "utf8"));
 const admin = await actor("admin@e2e.test", "e2e-admin-password-123");
@@ -242,7 +278,7 @@ const accountsOf = async () =>
 
 async function cleanup() {
   let removed = 0;
-  for (const name of [...Object.values(SITES).map((s) => s.name), UI_SITE]) {
+  for (const name of [...Object.values(SITES).map((s) => s.name), UI_SITE, REPUBLISH_SITE]) {
     const site = await siteNamed(name);
     if (site) {
       await admin.ok("DELETE", `/sites/${site.id}`);
@@ -349,6 +385,51 @@ async function serverCertificate(name, names, { rsa = false } = {}) {
     cnf,
   );
   return pem(name);
+}
+
+/**
+ * A self-signed certificate for names whose EC key spells out the P-256
+ * parameters (explicit curve, LibreSSL's default encoding), which nodes
+ * cannot load: the chain only.
+ */
+async function explicitCurveChain(name, names) {
+  await openssl(
+    "ecparam",
+    "-name",
+    "prime256v1",
+    "-genkey",
+    "-noout",
+    "-param_enc",
+    "explicit",
+    "-out",
+    `${name}.key`,
+  );
+  const cnf = await config(name, [
+    "[req]",
+    "distinguished_name = dn",
+    "x509_extensions = leaf",
+    "prompt = no",
+    "[dn]",
+    `CN = ${name}`,
+    "[leaf]",
+    "basicConstraints = critical,CA:FALSE",
+    `subjectAltName = ${names.map((n) => `DNS:${n}`).join(",")}`,
+  ]);
+  await openssl(
+    "req",
+    "-x509",
+    "-key",
+    `${name}.key`,
+    "-new",
+    "-out",
+    `${name}.pem`,
+    "-sha256",
+    "-days",
+    "7",
+    "-config",
+    cnf,
+  );
+  return readFile(join(work, `${name}.pem`), "utf8");
 }
 
 /** A self-signed client CA. */
@@ -776,6 +857,91 @@ try {
   assert.equal(inUse.json.code, "ACME_ACCOUNT_IN_USE");
   pass(
     `e. Pebble (custom directory, system settings) issued g11-acme by HTTP-01 with an RSA 2048 key; both nodes present it for ${ACME}; account ${account.email} at ${account.directoryUrl} with ${account.certificates} certificate(s), deleting it refused (ACME_ACCOUNT_IN_USE)`,
+  );
+
+  // -------------------------------------------------------------- f. certificates nodes cannot load
+  await everyNode("both nodes report certificate-isolation-v1", (n) =>
+    n.supportedFeatures.includes("certificate-isolation-v1"),
+  );
+  const renewed = await upload("g11-renewed", await serverCertificate("g11-renewed", [E1]));
+  const broken = await upload("g11-broken", await serverCertificate("g11-broken", [E2]));
+  const bound = await https(sites.renewed.id, { certificateId: renewed.id });
+  assert.equal(bound.status, 200, bound.text);
+  await synced("g11-renewed with its certificate");
+  for (const target of NODES) {
+    const r = await sClient(target, E1);
+    assert.equal(r.cn, "g11-renewed", `${target} ${E1}: ${brief(r)}\n${r.out}`);
+  }
+  // Uploads stored before explicit curves were refused: the chains (for
+  // the same names) replaced in place, g11-broken bound without the
+  // console's checks.
+  for (const [cert, names] of [
+    [renewed, [E1]],
+    [broken, [E2]],
+  ]) {
+    const chain = await explicitCurveChain(`${cert.name}-explicit`, names);
+    const fingerprint = new X509Certificate(chain).fingerprint256.replaceAll(":", "").toLowerCase();
+    await psql(
+      `update certificate set chain_pem = $pem$${chain}$pem$, fingerprint = '${fingerprint}' where id = '${cert.id}'`,
+    );
+  }
+  await psql(`update site set certificate_id = '${broken.id}' where id = '${sites.broken.id}'`);
+  const republish = await admin.ok("POST", "/sites", {
+    name: REPUBLISH_SITE,
+    domains: ["republish.g11.test"],
+    origins: [{ address: "whoami" }],
+    clusterId,
+  });
+  const failing = await everyNode(
+    "the revision applied without the two certificates, both reported",
+    (n) =>
+      n.applyState === "applied" &&
+      n.certificateFailures.some((f) => f.certificateId === renewed.id && f.servingEarlier) &&
+      n.certificateFailures.some((f) => f.certificateId === broken.id && !f.servingEarlier),
+  );
+  const latest = await synced("the revision with the explicit-curve chains");
+  for (const n of failing)
+    for (const f of n.certificateFailures)
+      assert.equal(f.reason, "invalid_material", `${n.name}: ${JSON.stringify(f)}`);
+  for (const target of NODES) {
+    const kept = await sClient(target, E1);
+    assert.equal(kept.cn, "g11-renewed", `${target} ${E1}: ${brief(kept)}\n${kept.out}`);
+    const refused = await sClient(target, E2);
+    assert.equal(
+      refused.cn,
+      "",
+      `${target} ${E2} got a certificate: ${brief(refused)}\n${refused.out}`,
+    );
+    const other = await sClient(target, A, ["-tls1_3"]);
+    assert.equal(other.cn, "g11-a", `${target} ${A}: ${brief(other)}`);
+    const [served] = await requests([{ target, host: "republish.g11.test", path: "/f" }]);
+    assert.equal(served.status, 200, `${target} republish.g11.test: ${summary(served)}`);
+  }
+  const listed = await admin.ok("GET", "/certificates");
+  const failuresOf = (id) => listed.find((c) => c.id === id)?.nodeFailures ?? [];
+  assert.equal(failuresOf(renewed.id).length, 2, JSON.stringify(failuresOf(renewed.id)));
+  assert.ok(failuresOf(renewed.id).every((f) => f.servingEarlier));
+  assert.equal(failuresOf(broken.id).length, 2, JSON.stringify(failuresOf(broken.id)));
+  assert.ok(failuresOf(broken.id).every((f) => !f.servingEarlier));
+  const firing = await psql(
+    `select count(*) from alert_state where kind = 'certificate_unloadable' and active and resource_id in ('${renewed.id}', '${broken.id}')`,
+  );
+  assert.equal(firing, "2", "certificate_unloadable firing for both certificates");
+  // Gone again: the nodes report no failure, the alerts resolve.
+  for (const site of [republish.site, sites.renewed, sites.broken])
+    await admin.ok("DELETE", `/sites/${site.id}`);
+  for (const cert of [renewed, broken]) await admin.ok("DELETE", `/certificates/${cert.id}`);
+  await everyNode("no certificate failure left", (n) => n.certificateFailures.length === 0);
+  await synced("the revision without them");
+  assert.equal(
+    await psql(
+      `select count(*) from alert_state where kind = 'certificate_unloadable' and active and resource_id in ('${renewed.id}', '${broken.id}')`,
+    ),
+    "0",
+    "certificate_unloadable resolved",
+  );
+  pass(
+    `f. explicit-curve chains of g11-renewed and g11-broken: revision #${latest} applied on both nodes without them; ${E1} keeps the earlier g11-renewed certificate, ${E2}'s handshake refused, ${A} and republish.g11.test served; /certificates lists both nodes for each (earlier version served / refused), certificate_unloadable firing for both; resolved once they are gone`,
   );
 
   await mkdir(".e2e", { recursive: true });
