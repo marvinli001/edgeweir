@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
-import { login, logout, pick, saved } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { logout, pick, saved, signedIn, test } from "./helpers";
 
 /**
  * Written by scripts/e2e-g2.mjs: the bench site (Under Attack js, CC off, no
@@ -17,7 +17,6 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/g2-state.json"), "utf8
   /** The path escalated by the CC run. */
   attackedPath: string;
 };
-const ADMIN = ["admin@e2e.test", "e2e-admin-password-123"] as const;
 const SAMPLE_JA4 = "t13d1516h2_8daaf6152771_02713d6af862";
 
 test.describe.configure({ mode: "serial" });
@@ -74,7 +73,7 @@ test("G2: the site's security tab turns Under Attack off and on, edits the CC po
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await openSecurityTab(page);
   const underAttack = page.getByTestId("protection-under-attack");
   const on = page.getByTestId("protection-under-attack-on");
@@ -178,7 +177,7 @@ test("G2: the operator turns global Under Attack on and off and edits the CC tem
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto("/protection");
   const platform = page.getByTestId("platform-under-attack");
   const badge = page.getByTestId("platform-under-attack-on");
@@ -249,7 +248,7 @@ test("G2: the rules editor offers the challenge action and tls.ja4 in expression
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/sites/${state.benchSiteId}`);
   await page.getByTestId("tab-rules").click();
   await expect(page.getByTestId("rule-add-waf-custom")).toBeVisible();

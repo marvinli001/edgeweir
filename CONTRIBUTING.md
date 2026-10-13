@@ -147,6 +147,8 @@ pnpm exec vitest run test/server/docs.test.ts
 
 只跑部分段：`--list` 列出各段及其依赖；`--only g12,g15` 只跑这些段，`--from g12` 从该段跑到最后；`--plan` 只显示将要运行的段。新环境先跑 core 与所需的前置段；已跑过 core 的环境在原来的运行上继续（`.e2e/run.env`、`.e2e/run.done`），已通过的前置段不再重跑，例如失败后修好再 `--from <失败的段>`。只跑部分段时输出以 `SECTIONS OK` 结束。
 
+Playwright 测试以运营者的会话开始，不经登录表单：会话存为 `.e2e/operator-session-<控制台端口>.json`，缺失或失效（测试登出、环境重置）时先经 API 重新登录；登录表单由 `e2e/smoke.spec.ts` 覆盖。
+
 ```bash
 pnpm e2e --only g12
 ```

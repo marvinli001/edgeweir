@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Locator, type Page, test } from "@playwright/test";
-import { login, pick, saved } from "./helpers";
+import { expect, type Locator, type Page } from "@playwright/test";
+import { pick, saved, signedIn, test } from "./helpers";
 
 /**
  * G14 in the browser, on a site of its own created here through the UI (unique per run):
@@ -14,10 +14,6 @@ import { login, pick, saved } from "./helpers";
  * the end: the platform rule, the entry added to g14-crs and the site (scripts/e2e-g14.mjs
  * --cleanup also removes g14-ui-* sites and g14-* platform rules a failed run leaves).
  */
-const ADMIN = [
-  process.env.E2E_ADMIN_EMAIL ?? "admin@e2e.test",
-  process.env.E2E_ADMIN_PASSWORD ?? "e2e-admin-password-123",
-] as const;
 const RUN = Date.now().toString(36);
 const SITE = `g14-ui-${RUN}`;
 const DOMAIN = `${SITE}.test`;
@@ -104,7 +100,7 @@ test("G14: the new WAF actions, rate limit bans, the CRS override and the rules 
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
 
   // The cluster in the address is the new site's (the form's first cluster without one).
   await page.goto(CLUSTER_ID ? `/sites?cluster=${CLUSTER_ID}` : "/sites");
@@ -280,7 +276,7 @@ test("G14: the new WAF actions, rate limit bans, the CRS override and the rules 
 
 test("G14: a platform rule bans everywhere", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto("/rules");
   await expect(page.getByTestId("rule-add-waf-custom")).toBeVisible();
   const rule = await addRule(
@@ -319,7 +315,7 @@ test("G14: CRS exclusions by path and target, and 按路径排除 from the top C
 }) => {
   expect(siteId, "the first test created the site").not.toBe("");
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
 
   await page.goto(`/sites/${siteId}?tab=security`);
   await expect(page.getByTestId("waf-card")).toBeVisible();
@@ -437,7 +433,7 @@ test("G14: verified crawlers, challenge page texts and challenge failure bans", 
 }) => {
   expect(siteId, "the first test created the site").not.toBe("");
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/sites/${siteId}?tab=security`);
   await expect(page.getByTestId("protection-verified-bots")).toHaveAttribute(
     "aria-checked",
@@ -479,7 +475,7 @@ test("G14: verified crawlers, challenge page texts and challenge failure bans", 
 
 test("G14: the bans list filters rule bans", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto("/bans");
   await pick(page, page.getByTestId("ban-filter-source"), "规则");
   await expect(page.getByTestId("ban-filter-source")).toHaveText("规则");
@@ -500,7 +496,7 @@ test("G14: the bans list filters rule bans", async ({ page }) => {
 test("G14: the site goes", async ({ page }) => {
   expect(siteId, "the first test created the site").not.toBe("");
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/sites/${siteId}`);
   await expect(page.getByTestId("page-title")).toHaveText(SITE);
   await page.getByTestId("site-delete").click();

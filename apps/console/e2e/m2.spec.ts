@@ -1,20 +1,18 @@
-import { expect, test } from "@playwright/test";
-import { login } from "./helpers";
+import { expect } from "@playwright/test";
+import { signedIn, test } from "./helpers";
 
 /**
  * MVP M2 console acceptance (dev-docs/specs/mvp.md §2): the platform admin submits a URL purge on
  * 刷新预热 and sees the e2e node report it done, submits a directory purge and sees it listed,
  * then checks the demo site's origin health and the origin pool and cache settings cards.
  */
-const adminEmail = process.env.E2E_ADMIN_EMAIL ?? "admin@e2e.test";
-const adminPassword = process.env.E2E_ADMIN_PASSWORD ?? "e2e-admin-password-123";
 const nodeName = process.env.E2E_NODE_NAME ?? "edge-e2e-1";
 
 test("M2: purge tasks, origin health, origin and cache settings", async ({ page }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
-  await login(page, adminEmail, adminPassword);
+  await signedIn(page);
 
   await test.step("a URL purge reaches the node, which reports the result", async () => {
     await page.getByTestId("nav-purge").click();

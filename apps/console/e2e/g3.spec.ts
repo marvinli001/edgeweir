@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
-import { login, logout, pick, saved } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { logout, pick, saved, signedIn, test } from "./helpers";
 
 /**
  * Written by scripts/e2e-g3.mjs: the compression and CRS sites of the
@@ -19,7 +19,6 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/g3-state.json"), "utf8
   crsLoggedPath: string;
   legacySiteId: string;
 };
-const ADMIN = ["admin@e2e.test", "e2e-admin-password-123"] as const;
 const BY_NODES = "所在集群有节点不支持，暂时无法开启";
 
 test.describe.configure({ mode: "serial" });
@@ -64,7 +63,7 @@ test("G3: the cache tab turns Zstandard and Brotli on with their levels and keep
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await openTab(page, state.compressSiteId, "cache");
   const zstd = page.getByTestId("https-zstd");
   const brotli = page.getByTestId("https-brotli");
@@ -134,7 +133,7 @@ test("G3: the security tab edits the site's OWASP CRS and lists the most-matched
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await openTab(page, state.crsSiteId, "security");
   const card = page.getByTestId("waf-card");
   await expect(card).toBeVisible();
@@ -230,7 +229,7 @@ test("G3: the logs tab shows the CRS rules of sampled requests and which were bl
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await openTab(page, state.crsSiteId, "logs");
   await expect(page.getByTestId("logs-table")).toBeVisible();
   await expect(page.getByTestId("log-waf").first()).toBeVisible();
@@ -253,7 +252,7 @@ test("G3: the logs tab shows the CRS rules of sampled requests and which were bl
 
 test("G3: a cluster with an old node cannot turn Brotli, Zstandard or CRS on", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await openTab(page, state.legacySiteId, "cache");
   for (const algorithm of ["zstd", "brotli"]) {
     await expect(page.getByTestId(`https-${algorithm}`)).toHaveAttribute("aria-checked", "false");

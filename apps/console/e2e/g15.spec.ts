@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
-import { login, pick } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { pick, signedIn, test } from "./helpers";
 
 /**
  * Written by scripts/e2e-g15.mjs: content.g15.test on the default cluster (two nodes with
@@ -17,7 +17,6 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/g15-state.json"), "utf
   clusterId: string;
   nodeId: string;
 };
-const ADMIN = ["admin@e2e.test", "e2e-admin-password-123"] as const;
 
 test.describe.configure({ mode: "serial" });
 
@@ -61,7 +60,7 @@ test("G15: cache tab with excluded parameters, Set-Cookie caching, PURGE, X-Cach
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await openTab(page, state.contentSiteId, "cache");
 
   await test.step("the cache key leaves utm_* out", async () => {
@@ -117,7 +116,7 @@ test("G15: origins tab with tries, status retries, body limit and the S3 presets
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await openTab(page, state.contentSiteId, "origins");
 
   await test.step("tries and status retries keep their defaults", async () => {
@@ -164,7 +163,7 @@ test("G15: origins tab with tries, status retries, body limit and the S3 presets
 
 test("G15: error pages by class and redirect, maintenance mode", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await openTab(page, state.contentSiteId, "errors");
   await expect(page.getByTestId("error-pages-content-unavailable")).toHaveCount(0);
 
@@ -207,7 +206,7 @@ test("G15: error pages by class and redirect, maintenance mode", async ({ page }
 
 test("G15: the cluster's cache zone and a node's own size and usage", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/clusters?cluster=${state.clusterId}`);
   const card = page.getByTestId("cluster-cache");
   await expect(card.getByTestId("cluster-cache-size")).toHaveValue("10");

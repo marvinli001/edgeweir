@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
-import { login, pick, saved } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { pick, saved, signedIn, test } from "./helpers";
 
 /**
  * Written by scripts/e2e-g12.mjs: g12-basic (Basic on /private/, users alice and bob), g12-url
@@ -14,7 +14,6 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/g12-state.json"), "utf
   urlSiteId: string;
   fwdSiteId: string;
 };
-const ADMIN = ["admin@e2e.test", "e2e-admin-password-123"] as const;
 
 test.describe.configure({ mode: "serial" });
 
@@ -59,7 +58,7 @@ const kinds = (page: Page) => page.getByTestId("auth-rule-kind");
 
 test("G12: access authentication rules: add, edit, reorder, delete", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/sites/${state.urlSiteId}?tab=access`);
   await expect(kinds(page)).toHaveText(["URL 鉴权 A", "URL 鉴权 B", "URL 鉴权 C", "URL 鉴权 D"]);
   await check(page, "access-rules");
@@ -127,7 +126,7 @@ test("G12: access authentication rules: add, edit, reorder, delete", async ({ pa
 
 test("G12: failures on the security tab, an empty access tab", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/sites/${state.basicSiteId}?tab=security`);
   await expect(page.getByTestId("auth-failures-count")).not.toHaveText("0");
   await page.getByTestId("auth-failures-card").scrollIntoViewIfNeeded();

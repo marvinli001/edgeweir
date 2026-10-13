@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Locator, type Page, test } from "@playwright/test";
-import { login, logout, pick } from "./helpers";
+import { expect, type Locator, type Page } from "@playwright/test";
+import { logout, pick, signedIn, test } from "./helpers";
 
 /**
  * Written by scripts/e2e-g7.mjs on the upgrade cluster (both nodes report l4-v1, its DNS is on):
@@ -18,7 +18,6 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/g7-state.json"), "utf8
   pools: Pool[];
   apps: { tcp: AppRef; udp: AppRef; proxy?: AppRef; v1?: AppRef } & Record<string, AppRef>;
 };
-const ADMIN = ["admin@e2e.test", "e2e-admin-password-123"] as const;
 const UI_APP = "g7-ui-app";
 /** Outside every pool of the cluster, then a free port inside the TCP pool. */
 const OUTSIDE_PORT = 30000;
@@ -83,7 +82,7 @@ test("G7: port pools are edited on the cluster page and an overlapping pool is r
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/clusters?cluster=${state.clusterId}&tab=ports`);
   await expect(page.getByTestId("cluster-tab-ports")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("cluster-tab-ports")).toHaveText("端口池");
@@ -146,7 +145,7 @@ test("G7: the L4 apps list shows the e2e apps with their ports and DNS targets",
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
 
   await test.step("the sites section leads to the L4 apps; the sidebar fits 800 px", async () => {
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -223,7 +222,7 @@ test("G7: an L4 app is created in the UI, a port outside the pools refused, and 
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/l4?cluster=${state.clusterId}`);
   const table = page.getByTestId("l4-apps-table");
   await expect(row(table, state.apps.tcp.id)).toBeVisible();
@@ -292,7 +291,7 @@ test("G7: an L4 app is created in the UI, a port outside the pools refused, and 
 
 test("G7: an L4 app's statistics show its connections, traffic and nodes", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   const app = state.apps.tcp;
   await page.goto(`/l4/${app.id}`);
   await expect(page.getByTestId("page-title")).toHaveText(app.name);

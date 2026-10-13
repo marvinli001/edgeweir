@@ -147,6 +147,8 @@ Every new API procedure has a Vitest case.
 
 Running some sections: `--list` prints the sections and what each needs; `--only g12,g15` runs just these, `--from g12` that section and all after it; `--plan` only shows which sections would run. A fresh stack runs core and the needed sections first; on a stack that got past core the run continues (`.e2e/run.env`, `.e2e/run.done`) without repeating needed sections that passed, e.g. `--from <failed section>` after a fix. A partial run ends with `SECTIONS OK`.
 
+Playwright tests start with the operator's session instead of the login form: it is kept in `.e2e/operator-session-<console port>.json` and signed in again through the API when missing or no longer valid (a test signed out, the stack was reset); `e2e/smoke.spec.ts` covers the login form.
+
 ```bash
 pnpm e2e --only g12
 ```

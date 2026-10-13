@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
-import { login, pick, saved } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { pick, saved, signedIn, test } from "./helpers";
 
 /**
  * Written by scripts/e2e-g10.mjs: g10-suffix (.multi.g10.test) with the CNAME prefix
@@ -19,7 +19,6 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/g10-state.json"), "utf
   /** The cluster's DNS binding domain: targets are `<prefix>.<domain>`. */
   domain: string;
 };
-const ADMIN = ["admin@e2e.test", "e2e-admin-password-123"] as const;
 
 test.describe.configure({ mode: "serial" });
 
@@ -56,7 +55,7 @@ function errors(page: Page) {
 
 test("G10: Unicode and suffix, wildcard and pattern domains", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto("/sites");
   await page.getByTestId("new-site").click();
   await page.getByLabel("名称", { exact: true }).fill("g10-ui");
@@ -118,7 +117,7 @@ test("G10: Unicode and suffix, wildcard and pattern domains", async ({ page }) =
 
 test("G10: the cluster's unknown host handling", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/clusters?cluster=${state.clusterId}&tab=network`);
   const card = page.getByTestId("unknown-hosts");
   await expect(card).toBeVisible();
@@ -187,7 +186,7 @@ test("G10: the cluster's unknown host handling", async ({ page }) => {
 
 test("G10: the CNAME card regenerates and customizes the prefix", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/sites/${state.suffixSiteId}?tab=domains`);
   const card = page.getByTestId("cname-target");
   const value = card.getByTestId("cname-target-value");

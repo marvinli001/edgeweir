@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
-import { login, saved } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { saved, signedIn, test } from "./helpers";
 
 /**
  * G18 in the browser. A site of its own, g18-ui-<run> (created here through the UI in the cluster
@@ -10,10 +10,6 @@ import { login, saved } from "./helpers";
  * scripts/e2e-g18.mjs leaves converting with saved bytes before its cleanup, shows them in the
  * savings card. The site is removed at the end.
  */
-const ADMIN = [
-  process.env.E2E_ADMIN_EMAIL ?? "admin@e2e.test",
-  process.env.E2E_ADMIN_PASSWORD ?? "e2e-admin-password-123",
-] as const;
 const RUN = Date.now().toString(36);
 const SITE = `g18-ui-${RUN}`;
 const DOMAIN = `${SITE}.test`;
@@ -72,7 +68,7 @@ test("G18: conversion turns on in the cache tab, refuses bad settings and keeps 
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(CLUSTER_ID ? `/sites?cluster=${CLUSTER_ID}` : "/sites");
   await page.getByTestId("new-site").click();
   await page.getByLabel("名称", { exact: true }).fill(SITE);
@@ -129,7 +125,7 @@ test("G18: conversion turns on in the cache tab, refuses bad settings and keeps 
 test("G18: the savings card shows what the nodes saved", async ({ page }) => {
   const pageErrors = errors(page);
   const state = JSON.parse(readFileSync(G18_STATE, "utf8")) as { siteId: string };
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/sites/${state.siteId}?tab=cache`);
   await expect(page.getByTestId("image-convert-enabled")).toHaveAttribute("aria-checked", "true");
   const bytes = page.getByTestId("image-savings-bytes");
@@ -143,7 +139,7 @@ test("G18: the savings card shows what the nodes saved", async ({ page }) => {
 test("G18: the site goes", async ({ page }) => {
   expect(siteId, "the first test created the site").not.toBe("");
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/sites/${siteId}`);
   await expect(page.getByTestId("page-title")).toHaveText(SITE);
   await page.getByTestId("site-delete").click();

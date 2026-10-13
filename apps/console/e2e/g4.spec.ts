@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Locator, type Page, test } from "@playwright/test";
-import { login, logout, pick, saved } from "./helpers";
+import { expect, type Locator, type Page } from "@playwright/test";
+import { logout, pick, saved, signedIn, test } from "./helpers";
 
 /**
  * Written by scripts/e2e-g4.mjs on the default cluster (two G4 nodes): the
@@ -26,7 +26,6 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/g4-state.json"), "utf8
   loggedRequestId: string;
   loggedPath: string;
 };
-const ADMIN = ["admin@e2e.test", "e2e-admin-password-123"] as const;
 const BOTH_VARIANTS = "桌面端 / 移动端";
 
 test.describe.configure({ mode: "serial" });
@@ -101,7 +100,7 @@ test("G4: purges by host and Cache-Tag, device variant prefetches and a sitemap 
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto("/purge");
   await expect(page.getByTestId("page-title")).toHaveText("刷新预热");
 
@@ -199,7 +198,7 @@ test("G4: purges by host and Cache-Tag, device variant prefetches and a sitemap 
 
 test("G4: the cache tab forwards Cache-Tag to clients and back", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await openTab(page, state.tagSiteId, "cache");
   const keep = page.getByTestId("cache-keep-cache-tag");
   const save = page.getByTestId("cache-tag-save");
@@ -228,7 +227,7 @@ test("G4: the origins tab edits active health checks and session affinity and sh
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await openTab(page, state.poolSiteId, "origins");
   const health = page.getByTestId("origins-active-health");
   const path = page.getByTestId("origins-health-path");
@@ -312,7 +311,7 @@ test("G4: the error pages tab edits a site's templates and refuses one over 64 K
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await openTab(page, state.errSiteId, "errors");
   const field = (status: number) => page.getByTestId(`error-page-${status}`);
   const intercept = page.getByTestId("error-pages-intercept");
@@ -362,7 +361,7 @@ test("G4: the error pages tab edits a site's templates and refuses one over 64 K
 
 test("G4: the operator sets and clears the platform error pages", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto("/system");
   const card = page.getByTestId("platform-error-pages-card");
   const pages = {
@@ -391,7 +390,7 @@ test("G4: the operator sets and clears the platform error pages", async ({ page 
 
 test("G4: the logs tab finds a sampled request by its request id", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await openTab(page, state.errSiteId, "logs");
   await page.getByTestId("logs-request-id").fill(state.loggedRequestId);
   await page.getByTestId("logs-search").click();

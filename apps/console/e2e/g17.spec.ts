@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
-import { login } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { signedIn, test } from "./helpers";
 
 /**
  * G17 tags, batch operations, copying settings and cloning in the browser, on the sites
@@ -10,10 +10,6 @@ import { login } from "./helpers";
  * g17-src) and g17-bad (no group "b", nothing copied). Data of its own is unique per run: the
  * tags g17-ui-<run>… and the clone g17-ui-<run>.test, which the batch delete at the end removes.
  */
-const ADMIN = [
-  process.env.E2E_ADMIN_EMAIL ?? "admin@e2e.test",
-  process.env.E2E_ADMIN_PASSWORD ?? "e2e-admin-password-123",
-] as const;
 const RUN = Date.now().toString(36);
 const STATE_FILE = resolve("../../.e2e/g17-state.json");
 const state = existsSync(STATE_FILE)
@@ -76,7 +72,7 @@ test("G17: tags filter the site list, are edited on a site and renamed or delete
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await filterByTag(page, "g17-copy");
   await expect.poll(() => rowNames(page)).toEqual(expect.arrayContaining(["g17-t1", "g17-t2"]));
   expect((await rowNames(page)).sort()).toEqual(["g17-t1", "g17-t2"]);
@@ -127,7 +123,7 @@ test("G17: the copy dialog previews each target and copies to the others when on
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/sites/${state?.src}`);
   await page.getByTestId("site-copy").click();
   const pickTarget = async (name: string) => {
@@ -170,7 +166,7 @@ test("G17: a clone opens with the source's tags; batch actions turn sites off an
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   const domain = `g17-ui-${RUN}.test`;
   await page.goto(`/sites/${state?.src}`);
   await page.getByTestId("site-clone").click();

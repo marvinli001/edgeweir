@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Locator, type Page, test } from "@playwright/test";
-import { login, logout, pick } from "./helpers";
+import { expect, type Locator, type Page } from "@playwright/test";
+import { logout, pick, signedIn, test } from "./helpers";
 
 /**
  * Written by scripts/e2e-g5.mjs on the default cluster (two nodes with rules-v2): dyn
@@ -21,7 +21,6 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/g5-state.json"), "utf8
   gz: SiteRef;
   cfg: SiteRef;
 };
-const ADMIN = ["admin@e2e.test", "e2e-admin-password-123"] as const;
 const OLD_TO_NEW = 'regex_replace(http.request.uri.path, "^/old/(.*)$", "/new/${1}")';
 const V1_TO_V2 = 'wildcard_replace(http.request.uri.path, "/v1/*", "/v2/${1}")';
 const CACHE_EXPRESSION =
@@ -109,7 +108,7 @@ test("G5: the rule editor shows dynamic redirects, rewrites with query edits and
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await openTab(page, state.dyn.id, "rules");
   const save = page.getByTestId("rules-save");
 
@@ -201,7 +200,7 @@ test("G5: compression and origin rules are added, saved and removed; global rule
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
 
   await test.step("a compression rule preferring gzip over zstd", async () => {
     await openTab(page, state.gz.id, "rules");
@@ -311,7 +310,7 @@ test("G5: compression and origin rules are added, saved and removed; global rule
 
 test("G5: bulk redirects are added, imported, saved and removed", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await openTab(page, state.dyn.id, "redirects");
   const count = page.getByTestId("bulk-redirects-count");
   const save = page.getByTestId("bulk-redirects-save");
@@ -387,7 +386,7 @@ test("G5: the cache tab keeps expression rules in advanced mode with their brows
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await openTab(page, state.cache.id, "cache");
   const rows = page.getByTestId("cache-rule-row");
   const save = page.getByTestId("cache-save");
@@ -458,7 +457,7 @@ test("G5: the origins tab edits origin groups and keeps the default group and us
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await openTab(page, state.org.id, "origins");
   const rows = page.getByTestId("origin-row");
   const save = page.getByTestId("origins-save");

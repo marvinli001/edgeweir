@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
-import { login, logout, pick, saved } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { logout, pick, saved, signedIn, test } from "./helpers";
 
 /** Written by scripts/e2e-g1.mjs, which lifts every ban before this spec runs. */
 const state = JSON.parse(readFileSync(resolve("../../.e2e/g1-state.json"), "utf8")) as {
@@ -9,7 +9,6 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/g1-state.json"), "utf8
   siteId: string;
   siteName: string;
 };
-const ADMIN = ["admin@e2e.test", "e2e-admin-password-123"] as const;
 
 test.describe.configure({ mode: "serial" });
 
@@ -72,7 +71,7 @@ async function unban(page: Page, cidr: string) {
 
 test("G1: the operator bans an address on a site and lifts it", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.getByTestId("nav-ip-lists").click();
   await page.getByTestId("access-tab-bans").click();
   await expect(page).toHaveURL(/\/bans$/);
@@ -120,7 +119,7 @@ test("G1: the operator bans an address on a site and lifts it", async ({ page })
 
 test("G1: the operator bans a range on every site and an address on one site", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.getByTestId("nav-ip-lists").click();
   await page.getByTestId("access-tab-bans").click();
   await expect(page.getByTestId("page-title")).toHaveText("封禁");
@@ -171,7 +170,7 @@ test("G1: the operator bans a range on every site and an address on one site", a
 
 test("G1: the operator edits the ban settings", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto("/protection");
   const maxTotal = page.getByTestId("bans-max-total");
   const share = page.getByRole("switch", { name: "集群内共享自动封禁", exact: true });

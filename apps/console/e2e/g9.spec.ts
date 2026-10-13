@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Locator, type Page, test } from "@playwright/test";
-import { login, pick } from "./helpers";
+import { expect, type Locator, type Page } from "@playwright/test";
+import { pick, signedIn, test } from "./helpers";
 
 /**
  * Written by scripts/e2e-g9.mjs: the default cluster listens on 8081, 8082 (HTTP) and 9443
@@ -16,7 +16,6 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/g9-state.json"), "utf8
   rangeAppId: string;
   tlsAppId: string;
 };
-const ADMIN = ["admin@e2e.test", "e2e-admin-password-123"] as const;
 
 test.describe.configure({ mode: "serial" });
 
@@ -55,7 +54,7 @@ const row = (table: Locator, id: string) => table.locator(`[data-row-id="${id}"]
 
 test("G9: listener ports and the client address of a cluster", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/clusters?cluster=${state.clusterId}&tab=network`);
   await expect(page.getByTestId("cluster-tab-network")).toHaveAttribute("aria-selected", "true");
   const ports = page.getByTestId("listen-ports");
@@ -96,7 +95,7 @@ test("G9: listener ports and the client address of a cluster", async ({ page }) 
 
 test("G9: a site's ports and its HTTPS redirect", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/sites/${state.portsSiteId}?tab=domains`);
   const card = page.getByTestId("site-ports");
   for (const [port, checked] of [
@@ -145,7 +144,7 @@ test("G9: a site's ports and its HTTPS redirect", async ({ page }) => {
 
 test("G9: layer-4 port ranges, origins on the arriving port and TLS", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/l4?cluster=${state.clusterId}`);
   const table = page.getByTestId("l4-apps-table");
   await expect(row(table, state.rangeAppId).getByTestId("l4-app-port")).toHaveText("25000-25001");

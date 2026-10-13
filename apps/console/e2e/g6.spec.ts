@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Locator, type Page, test } from "@playwright/test";
-import { login, logout, pick } from "./helpers";
+import { expect, type Locator, type Page } from "@playwright/test";
+import { logout, pick, signedIn, test } from "./helpers";
 
 /**
  * Written by scripts/e2e-g6.mjs: cluster A with the nodes edge (configured
@@ -22,7 +22,6 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/g6-state.json"), "utf8
   ruleId: string;
   bindingProviderId: string;
 };
-const ADMIN = ["admin@e2e.test", "e2e-admin-password-123"] as const;
 const RESOLUTION_LINES = ["默认", "电信", "联通", "移动", "教育网", "境外"];
 
 test.describe.configure({ mode: "serial" });
@@ -79,7 +78,7 @@ test("G6: the probes tab lists the regional probes online and shows a new probe'
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   // Probes are the monitoring tab of the system settings; the old address leads there.
   await page.getByTestId("nav-system").click();
   await expect(page.getByTestId("system-tab-probes")).toHaveText("监控");
@@ -177,7 +176,7 @@ test("G6: a node shows its metrics, scheduling addresses with levels and the pro
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/clusters?cluster=${state.clusterId}`);
   const nodes = page.getByTestId("nodes-table");
   const edge = row(nodes, state.nodes.edge.id);
@@ -275,7 +274,7 @@ test("G6: a scheduling rule is created, edited, switched off and deleted; the pr
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/clusters?cluster=${state.clusterId}&tab=scheduling`);
   await expect(page.getByTestId("cluster-tab-scheduling")).toHaveAttribute("aria-selected", "true");
   const table = page.getByTestId("scheduling-rules-table");
@@ -381,7 +380,7 @@ test("G6: cluster DNS lines pick a resolution line, backup groups and a minimum;
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/clusters?cluster=${state.clusterId}&tab=dns`);
   await expect(page.getByTestId("cluster-dns")).toBeVisible();
   const save = page.getByTestId("dns-binding-save");

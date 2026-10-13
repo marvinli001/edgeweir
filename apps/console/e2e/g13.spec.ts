@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
-import { login, pick, saved } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { pick, saved, signedIn, test } from "./helpers";
 
 /**
  * G13 access control in the browser, on data of its own created here through the UI (unique per
@@ -12,10 +12,6 @@ import { login, pick, saved } from "./helpers";
  * rule, CORS, WebSocket origins and security headers. Both stay after the run: remove the site
  * first, then the list (a site's list cannot be deleted).
  */
-const ADMIN = [
-  process.env.E2E_ADMIN_EMAIL ?? "admin@e2e.test",
-  process.env.E2E_ADMIN_PASSWORD ?? "e2e-admin-password-123",
-] as const;
 const RUN = Date.now().toString(36);
 const SITE = `g13-ui-${RUN}`;
 const DOMAIN = `${SITE}.test`;
@@ -76,7 +72,7 @@ let siteId = "";
 
 test("G13: every access control card renders and saves", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
 
   // The IP list the site will block.
   await page.goto("/ip-lists");
@@ -185,7 +181,7 @@ test("G13: every access control card renders and saves", async ({ page }) => {
 test("G13: the IP check on the access tab and on the IP lists page", async ({ page }) => {
   expect(siteId, "the first test created the site").not.toBe("");
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
 
   // On the site: the address is on its block list.
   await page.goto(`/sites/${siteId}?tab=access`);

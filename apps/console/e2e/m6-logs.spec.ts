@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, test } from "@playwright/test";
-import { login, pick } from "./helpers";
+import { expect } from "@playwright/test";
+import { pick, signedIn, test } from "./helpers";
 
 test("M6: log filters, CSV export and scoped AccessKey revocation", async ({ page }) => {
   const state = JSON.parse(readFileSync(resolve("../../.e2e/m6-logs-state.json"), "utf8")) as {
@@ -10,7 +10,7 @@ test("M6: log filters, CSV export and scoped AccessKey revocation", async ({ pag
   };
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await login(page, "admin@e2e.test", "e2e-admin-password-123");
+  await signedIn(page);
   await page.goto(`/sites/${state.siteId}?tab=logs`);
   await expect(page.getByLabel("访问日志采样率")).toBeVisible();
   await page.getByLabel("状态码", { exact: true }).fill("200");

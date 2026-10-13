@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, test } from "@playwright/test";
-import { login, pick } from "./helpers";
+import { expect } from "@playwright/test";
+import { pick, signedIn, test } from "./helpers";
 
 test("M5: DNS provider controls, statistics and alert subscriptions", async ({ page }) => {
   const state = JSON.parse(readFileSync(resolve("../../.e2e/m5-state.json"), "utf8")) as {
@@ -11,7 +11,7 @@ test("M5: DNS provider controls, statistics and alert subscriptions", async ({ p
   };
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await login(page, "admin@e2e.test", "e2e-admin-password-123");
+  await signedIn(page);
   await page.getByTestId("nav-dns").click();
   await expect(page.getByTestId("page-title")).toHaveText("DNS 调度");
   await page.getByTestId("dns-account-create").click();

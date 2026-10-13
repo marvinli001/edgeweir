@@ -1,14 +1,10 @@
-import { expect, test } from "@playwright/test";
-import { login, pick, saved } from "./helpers";
+import { expect } from "@playwright/test";
+import { pick, saved, signedIn, test } from "./helpers";
 
 test("M4: IP list and rule editing with syntax errors, ordering and mobile", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await login(
-    page,
-    process.env.E2E_ADMIN_EMAIL ?? "admin@e2e.test",
-    process.env.E2E_ADMIN_PASSWORD ?? "e2e-admin-password-123",
-  );
+  await signedIn(page);
   await page.getByTestId("nav-ip-lists").click();
   await page.getByTestId("ip-list-create").click();
   const name = `browser_${Date.now()}`;

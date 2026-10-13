@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
-import { login, logout } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { logout, signedIn, test } from "./helpers";
 
 const state = JSON.parse(readFileSync(resolve("../../.e2e/p0-state.json"), "utf8")) as {
   clusterId: string;
@@ -9,7 +9,6 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/p0-state.json"), "utf8
   /** The node group of the upgrade canary node (named by earlier milestones). */
   canaryGroupName: string;
 };
-const ADMIN = ["admin@e2e.test", "e2e-admin-password-123"] as const;
 
 test.describe.configure({ mode: "serial" });
 
@@ -46,7 +45,7 @@ function errors(page: Page) {
 
 test("P0: the operator disables and enables a site", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/sites/${state.siteId}`);
   const status = page.getByTestId("site-status");
   // Live: every online node of the cluster runs the site's latest version.
@@ -77,7 +76,7 @@ test("P0: the operator creates a service account, creates a key and revokes it",
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   // Service accounts are a tab of the system settings; the old address leads there.
   await page.goto("/service-accounts");
   await expect(page).toHaveURL(/\/system\?tab=service-accounts/);
@@ -114,7 +113,7 @@ test("P0: the operator creates a service account, creates a key and revokes it",
 test("P0: configuration canary status, promote to all and abort", async ({ page }) => {
   test.setTimeout(300_000);
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/clusters?cluster=${state.clusterId}`);
   // Mark the upgrade canary node's group as a canary group.
   const groupRow = page

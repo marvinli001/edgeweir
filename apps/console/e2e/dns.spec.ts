@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
-import { login, logout, pick } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { logout, pick, signedIn, test } from "./helpers";
 
 const state = JSON.parse(readFileSync(resolve("../../.e2e/dns-state.json"), "utf8")) as {
   clusterA: string;
@@ -12,7 +12,6 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/dns-state.json"), "utf
   credential: string;
   credentialZone: string;
 };
-const ADMIN = ["admin@e2e.test", "e2e-admin-password-123"] as const;
 
 test.describe.configure({ mode: "serial" });
 
@@ -51,7 +50,7 @@ test("DNS: an account from the catalog form, zones listed and the connection tes
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.getByTestId("nav-dns").click();
   await expect(page.getByTestId("page-title")).toHaveText("DNS 调度");
   await expect(page.getByTestId("dns-bindings")).toContainText("dns-b");
@@ -92,7 +91,7 @@ test("DNS: a cluster's binding, the manual record list and zone file, then autom
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/clusters?cluster=${state.clusterB}&tab=dns`);
   const tab = page.getByTestId("cluster-dns");
   await expect(tab).toBeVisible();
@@ -125,7 +124,7 @@ test("DNS: the CNAME target on the site page and the Custom HTTP DNS-01 credenti
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/sites/${state.siteB}?tab=domains`);
   await expect(page.getByTestId("cname-target-value")).toHaveText(
     `${state.siteBPrefix}.edge.cdn-b.dns.test`,

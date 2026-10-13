@@ -1,8 +1,6 @@
-import { expect, type Page, test } from "@playwright/test";
-import { login } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { signedIn, test } from "./helpers";
 
-const email = process.env.E2E_ADMIN_EMAIL ?? "admin@e2e.test";
-const password = process.env.E2E_ADMIN_PASSWORD ?? "e2e-admin-password-123";
 const nodeName = process.env.E2E_NODE_NAME ?? "edge-e2e-1";
 
 /** Opens a card's breakdown: its header is the stretched button's uncovered part (the chart sits on top). */
@@ -14,7 +12,7 @@ async function openCard(page: Page, label: string) {
 test("overview lists and charts, stars, site analytics with breakdowns", async ({ page }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
-  await login(page, email, password);
+  await signedIn(page);
 
   await test.step("the home shows the sites, recents and traffic charts", async () => {
     await expect(page.getByTestId("home-sites").getByTestId("home-site").first()).toBeVisible();

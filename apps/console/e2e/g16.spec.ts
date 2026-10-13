@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
-import { login, pick, saved } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { pick, saved, signedIn, test } from "./helpers";
 
 /**
  * G16 in the browser. A site of its own, g16-ui-<run> (created here through the UI in the cluster
@@ -13,10 +13,6 @@ import { login, pick, saved } from "./helpers";
  * removed at the end (scripts/e2e-g16.mjs --cleanup also removes g16-ui-* sites a failed run
  * leaves and resets the retention).
  */
-const ADMIN = [
-  process.env.E2E_ADMIN_EMAIL ?? "admin@e2e.test",
-  process.env.E2E_ADMIN_PASSWORD ?? "e2e-admin-password-123",
-] as const;
 const RUN = Date.now().toString(36);
 const SITE = `g16-ui-${RUN}`;
 const DOMAIN = `${SITE}.test`;
@@ -86,7 +82,7 @@ let siteId = "";
 
 test("G16: a site's access log options save and stay", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(CLUSTER_ID ? `/sites?cluster=${CLUSTER_ID}` : "/sites");
   await page.getByTestId("new-site").click();
   await page.getByLabel("名称", { exact: true }).fill(SITE);
@@ -121,7 +117,7 @@ test("G16: a site's access log options save and stay", async ({ page }) => {
 
 test("G16: the new filters and the line details of the access log", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   const blockId = await siteNamed(page, BLOCK_SITE);
   await page.goto(`/sites/${blockId}?tab=logs`);
   await expect(page.getByTestId("logs-search")).toBeVisible();
@@ -168,7 +164,7 @@ test("G16: the new filters and the line details of the access log", async ({ pag
 
 test("G16: the statistics dimension cards and the overview's countries", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   const logsId = await siteNamed(page, LOGS_SITE);
   await page.goto(`/sites/${logsId}?tab=analytics`);
   const dims = page.getByTestId("stats-dimensions");
@@ -201,7 +197,7 @@ test("G16: the statistics dimension cards and the overview's countries", async (
 
 test("G16: block reasons and the challenge pass rate on the security tab", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   const blockId = await siteNamed(page, BLOCK_SITE);
   await page.goto(`/sites/${blockId}?tab=security`);
   const reasons = page.getByTestId("block-reasons");
@@ -217,7 +213,7 @@ test("G16: block reasons and the challenge pass rate on the security tab", async
 
 test("G16: the access log retention card saves and is set back", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto("/system");
   const days = page.getByTestId("log-retention-days");
   await expect(days).toHaveValue("7");
@@ -242,7 +238,7 @@ test("G16: the access log retention card saves and is set back", async ({ page }
 test("G16: the site goes", async ({ page }) => {
   expect(siteId, "the first test created the site").not.toBe("");
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/sites/${siteId}`);
   await expect(page.getByTestId("page-title")).toHaveText(SITE);
   await page.getByTestId("site-delete").click();

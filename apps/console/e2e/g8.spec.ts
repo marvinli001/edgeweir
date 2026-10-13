@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Locator, type Page, test } from "@playwright/test";
-import { login, pick } from "./helpers";
+import { expect, type Locator, type Page } from "@playwright/test";
+import { pick, signedIn, test } from "./helpers";
 
 /**
  * Written by scripts/e2e-g8.mjs: hdr.g8.test on the default cluster (two nodes with rules-v3)
@@ -14,7 +14,6 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/g8-state.json"), "utf8
   hdrSiteId: string;
   legacySiteId: string;
 };
-const ADMIN = ["admin@e2e.test", "e2e-admin-password-123"] as const;
 
 test.describe.configure({ mode: "serial" });
 
@@ -70,7 +69,7 @@ test("G8: header value expressions, response header lines, 303 and computed quer
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await openTab(page, state.hdrSiteId, "rules");
   const save = page.getByTestId("rules-save");
   await expect(page.getByTestId("rules-v3-unavailable")).toHaveCount(0);
@@ -134,7 +133,7 @@ test("G8: the field menu inserts cookies, query parameters and headers by name; 
   page,
 }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await openTab(page, state.hdrSiteId, "rules");
   await page.getByTestId("rule-add-waf-custom").click();
   const added = phaseRules(page, "waf-custom").last();
@@ -187,7 +186,7 @@ test("G8: the field menu inserts cookies, query parameters and headers by name; 
 
 test("G8: error pages list {{time}} and {{path}}", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await openTab(page, state.hdrSiteId, "errors");
   const variables = page.getByTestId("error-page-variables");
   await expect(variables).toContainText("{{time}}");
@@ -202,7 +201,7 @@ test("G8: error pages list {{time}} and {{path}}", async ({ page }) => {
 
 test("G8: a cluster with a node without rules-v3 locks the additions", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await openTab(page, state.legacySiteId, "rules");
   await expect(page.getByTestId("rules-v3-unavailable")).toHaveText(
     "所在集群有节点不支持，暂时无法开启",

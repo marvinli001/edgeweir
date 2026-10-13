@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, test } from "@playwright/test";
-import { login, pick } from "./helpers";
+import { expect } from "@playwright/test";
+import { pick, signedIn, test } from "./helpers";
 
 test("M6: start signed canary upgrade and explicitly promote healthy nodes", async ({ page }) => {
   test.setTimeout(240000);
@@ -12,7 +12,7 @@ test("M6: start signed canary upgrade and explicitly promote healthy nodes", asy
   };
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await login(page, "admin@e2e.test", "e2e-admin-password-123");
+  await signedIn(page);
   await page.goto(`/clusters?cluster=${fixture.clusterId}`);
   await page.getByTestId("upgrade-create").click();
   await page.getByLabel("目标版本", { exact: true }).fill(fixture.version);

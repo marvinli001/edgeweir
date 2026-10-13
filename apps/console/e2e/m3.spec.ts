@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
-import { login, pick, saved } from "./helpers";
+import { expect } from "@playwright/test";
+import { pick, saved, signedIn, test } from "./helpers";
 
 test("M3: request a certificate and configure HTTPS in both themes and mobile", async ({
   page,
@@ -7,11 +7,7 @@ test("M3: request a certificate and configure HTTPS in both themes and mobile", 
   test.setTimeout(240_000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await login(
-    page,
-    process.env.E2E_ADMIN_EMAIL ?? "admin@e2e.test",
-    process.env.E2E_ADMIN_PASSWORD ?? "e2e-admin-password-123",
-  );
+  await signedIn(page);
   await page.getByTestId("nav-certificates").click();
   await expect(page.getByTestId("page-title")).toHaveText("证书");
   await page.getByTestId("cert-request").click();

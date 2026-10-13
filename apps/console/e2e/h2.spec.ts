@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
-import { login, pick, saved } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { pick, saved, signedIn, test } from "./helpers";
 
 /**
  * Written by scripts/e2e-h2.mjs on cluster A: the site h2-e2e (h2.e2e.test,
@@ -11,7 +11,6 @@ import { login, pick, saved } from "./helpers";
 const state = JSON.parse(readFileSync(resolve("../../.e2e/h2-state.json"), "utf8")) as {
   siteId: string;
 };
-const ADMIN = ["admin@e2e.test", "e2e-admin-password-123"] as const;
 
 /** Screenshots in light and dark, desktop and 375 px, and no horizontal overflow on a phone. */
 async function check(page: Page, name: string) {
@@ -43,7 +42,7 @@ test("HTTP/2 and gRPC: the pool settings switch the protocol towards the origins
 }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/sites/${state.siteId}?tab=origins`);
   await expect(page.getByTestId("tab-origins")).toHaveAttribute("aria-selected", "true");
   const protocol = page.getByTestId("pool-protocol");

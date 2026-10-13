@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
-import { login, pick, saved } from "./helpers";
+import { expect } from "@playwright/test";
+import { pick, saved, signedIn, test } from "./helpers";
 
 /**
  * MVP M1 acceptance (dev-docs/specs/mvp.md §1): the operator creates and edits a site → creates a
@@ -7,8 +7,6 @@ import { login, pick, saved } from "./helpers";
  * sync) → audit log shows names and filters by action → English shows revision reasons and errors
  * in English.
  */
-const adminEmail = process.env.E2E_ADMIN_EMAIL ?? "admin@e2e.test";
-const adminPassword = process.env.E2E_ADMIN_PASSWORD ?? "e2e-admin-password-123";
 const nodeName = process.env.E2E_NODE_NAME ?? "edge-e2e-1";
 
 test("M1: site editing, clusters, node groups, audit and i18n", async ({ page }) => {
@@ -16,7 +14,7 @@ test("M1: site editing, clusters, node groups, audit and i18n", async ({ page })
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
   await test.step("the operator creates a site, then edits its domains and origin", async () => {
-    await login(page, adminEmail, adminPassword);
+    await signedIn(page);
     await page.getByTestId("nav-sites").click();
     await expect(page.getByTestId("page-title")).toHaveText("网站");
     await page.getByTestId("new-site").click();

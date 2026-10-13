@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
-import { login, pick, saved } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { pick, saved, signedIn, test } from "./helpers";
 
 /**
  * Written by scripts/e2e-g11.mjs: g11-multi (a, b and c.g11.test) with g11-wild first and g11-a,
@@ -16,7 +16,6 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/g11-state.json"), "utf
   acmeEmail: string;
   pebble: string;
 };
-const ADMIN = ["admin@e2e.test", "e2e-admin-password-123"] as const;
 
 test.describe.configure({ mode: "serial" });
 
@@ -60,7 +59,7 @@ function errors(page: Page) {
 
 test("G11: several certificates and client certificates on the HTTPS tab", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto(`/sites/${state.multiSiteId}?tab=https`);
   const first = page.getByLabel("证书", { exact: true });
   await expect(first).toContainText("g11-wild");
@@ -111,7 +110,7 @@ test("G11: several certificates and client certificates on the HTTPS tab", async
 
 test("G11: certificate authorities, key types and ACME accounts", async ({ page }) => {
   const pageErrors = errors(page);
-  await login(page, ...ADMIN);
+  await signedIn(page);
   await page.goto("/system");
   await expect(page.getByTestId("acme-directory")).toBeVisible();
   await expect(page.getByTestId("acme-directory-url")).toHaveValue(state.pebble);

@@ -1,4 +1,63 @@
-import { expect, type Locator, type Page } from "@playwright/test";
+import { existsSync, mkdirSync } from "node:fs";
+import { resolve } from "node:path";
+import { test as base, expect, type Locator, type Page, request } from "@playwright/test";
+
+const OPERATOR = {
+  email: process.env.E2E_ADMIN_EMAIL ?? "admin@e2e.test",
+  password: process.env.E2E_ADMIN_PASSWORD ?? "e2e-admin-password-123",
+};
+
+/**
+ * For tests that only need the signed-in operator: every test starts with the operator's
+ * session, kept as Playwright storage state in .e2e/ (one file per console) for the next tests
+ * and spec runs. A missing session, or one that no longer holds (a test signed out, the stack
+ * was reset), is replaced by a sign-in through the API before the test starts. The login form
+ * itself is tested with `login` (smoke.spec.ts).
+ */
+export const test = base.extend({
+  storageState: async ({ baseURL }, use) => {
+    await use(await operatorSession(baseURL ?? "http://localhost:13000"));
+  },
+});
+
+/** The storage state file of the operator's session, signed in again when it no longer holds. */
+async function operatorSession(baseURL: string): Promise<string> {
+  const url = new URL(baseURL);
+  const dir = resolve("../../.e2e");
+  mkdirSync(dir, { recursive: true });
+  const file = resolve(dir, `operator-session-${url.port || "80"}.json`);
+  if (existsSync(file)) {
+    const context = await request.newContext({ baseURL, storageState: file });
+    const response = await context.get("/api/auth/get-session");
+    const session = response.ok() ? await response.json() : null;
+    await context.dispose();
+    if (session?.user?.email === OPERATOR.email) return file;
+  }
+  const context = await request.newContext({ baseURL });
+  // better-auth rate-limits sign-ins (3 per 10 s per client); X-Retry-After says when to retry.
+  for (let attempt = 1; ; attempt++) {
+    const response = await context.post("/api/auth/sign-in/email", {
+      headers: { origin: url.origin },
+      data: OPERATOR,
+    });
+    if (response.status() !== 429) {
+      expect(response.status(), `sign-in: ${await response.text()}`).toBe(200);
+      break;
+    }
+    expect(attempt, "still rate-limited after retries").toBeLessThan(4);
+    const seconds = Number(response.headers()["x-retry-after"]);
+    await new Promise((r) => setTimeout(r, (seconds > 0 ? seconds : 11) * 1000 + 250));
+  }
+  await context.storageState({ path: file });
+  await context.dispose();
+  return file;
+}
+
+/** Opens the console's overview with the session the test started with (see `test`). */
+export async function signedIn(page: Page) {
+  await page.goto("/overview");
+  await expect(page.getByTestId("page-title")).toHaveText("概览");
+}
 
 /**
  * Signs in through the login form. better-auth rate-limits sign-ins (3 per 10 s per client), and
