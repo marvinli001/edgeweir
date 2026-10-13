@@ -7,7 +7,7 @@ import { oc } from "@orpc/contract";
 import * as z from "zod";
 import { ban } from "./bans";
 import { clientIpMode } from "./edge";
-import { staticRedirectTarget } from "./rules";
+import { hotlinkRedirectTarget } from "./rules";
 import { expectedUpdatedAt, extension, isoDateTime, pathPrefix, uuid } from "./schemas";
 
 /**
@@ -122,7 +122,7 @@ export const hotlinkSettings = z
       .string()
       .trim()
       .max(HOTLINK_REDIRECT_MAX)
-      .refine((v) => v === "" || staticRedirectTarget(v), "invalid redirect target")
+      .refine((v) => v === "" || hotlinkRedirectTarget(v), "invalid redirect target")
       .default(""),
   })
   .superRefine((s, ctx) => {

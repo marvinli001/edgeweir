@@ -20,6 +20,22 @@ function part<S extends z.ZodType>(type: S, value: unknown): z.output<S> {
   return parsed.success ? parsed.data : type.parse({});
 }
 
+/**
+ * The stored hotlink part. A redirect target saved before nodes' loop rule
+ * was checked (hotlinkRedirectTarget: e.g. "//" inside the path) is read as
+ * the 403 answer instead, the other settings as saved: the site keeps its
+ * protection and its revisions compile.
+ */
+function hotlinkPart(value: unknown) {
+  const parsed = hotlinkSettings.safeParse(value ?? {});
+  if (parsed.success) return parsed.data;
+  if (value && typeof value === "object") {
+    const denied = hotlinkSettings.safeParse({ ...value, action: "deny", redirectUrl: "" });
+    if (denied.success) return denied.data;
+  }
+  return hotlinkSettings.parse({});
+}
+
 /** A site's access control as stored (site.access_control and the list columns). */
 export function readAccessControl(
   site: Pick<SiteRow, "accessControl" | "blockListIds" | "allowListIds">,
@@ -27,7 +43,7 @@ export function readAccessControl(
   const stored = (site.accessControl ?? {}) as Record<string, unknown>;
   return {
     siteLists: { blockListIds: [...site.blockListIds], allowListIds: [...site.allowListIds] },
-    hotlink: part(hotlinkSettings, stored.hotlink),
+    hotlink: hotlinkPart(stored.hotlink),
     userAgents: part(userAgentSettings, stored.userAgents),
     cors: part(corsSettings, stored.cors),
     geo: part(geoSettings, stored.geo),

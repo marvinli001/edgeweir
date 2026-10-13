@@ -7,7 +7,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type * as z from "zod";
 import { createApp } from "../../src/server/app";
 import { updateAccessControl } from "../../src/server/services/access-control";
-import { latestRevision } from "../../src/server/services/revisions";
+import { systemActor } from "../../src/server/services/audit";
+import { latestRevision, publishRevision } from "../../src/server/services/revisions";
 import {
   type ApiClient,
   createTestContext,
@@ -148,6 +149,18 @@ describe("access control (G13)", async () => {
       expect(
         await refused({ hotlink: { ...hotlink, action: "redirect", redirectUrl: "//evil.com/x" } }),
       ).toBe("BAD_REQUEST");
+      // Paths nodes cannot exempt from the check (the redirect would loop).
+      for (const redirectUrl of [
+        "/img//hotlink.png",
+        "/img/./hotlink.png",
+        "/img/../hotlink.png",
+        "/img/hot%6Cink.png",
+        "/img;x/hotlink.png",
+      ])
+        expect(
+          await refused({ hotlink: { ...hotlink, action: "redirect", redirectUrl } }),
+          redirectUrl,
+        ).toBe("BAD_REQUEST");
       expect(await refused({ hotlink: { ...hotlink, pathPrefixes: ["/a?b"] } })).toBe(
         "BAD_REQUEST",
       );
@@ -403,6 +416,43 @@ describe("access control (G13)", async () => {
       expect((await rpcError(admin.ipLists.delete({ id: lists.office ?? "" }))).code).toBe(
         "IP_LIST_IN_USE",
       );
+    });
+    it("answers 403 for a stored redirect target that would loop, keeping the rest", async () => {
+      await save({
+        hotlink: { enabled: true, action: "deny", allowed: ["friend.test"] },
+      } as Update);
+      // A value saved before the target's path was checked.
+      const [row] = await ctx.db.select().from(schema.site).where(eq(schema.site.id, siteId));
+      const stored = row?.accessControl as { hotlink: Record<string, unknown> };
+      await ctx.db
+        .update(schema.site)
+        .set({
+          accessControl: {
+            ...stored,
+            hotlink: { ...stored.hotlink, action: "redirect", redirectUrl: "/a//hotlink.png?v=1" },
+          },
+        })
+        .where(eq(schema.site.id, siteId));
+      await ctx.db.transaction((tx) =>
+        publishRevision(tx, {
+          clusterId,
+          reason: { code: "site_access_control_updated", params: { site: "media" } },
+          actor: systemActor,
+        }),
+      );
+      const ir = await access();
+      expect(ir?.hotlink).toMatchObject({ allowed: ["friend.test"], redirectUrl: "" });
+      expect((await admin.accessControl.get({ id: siteId })).hotlink).toMatchObject({
+        enabled: true,
+        action: "deny",
+        redirectUrl: "",
+        allowed: ["friend.test"],
+      });
+      // Other paths and URLs still redirect.
+      await save({
+        hotlink: { enabled: true, action: "redirect", redirectUrl: "/img/hotlink.png?u=//x" },
+      } as Update);
+      expect((await access())?.hotlink?.redirectUrl).toBe("/img/hotlink.png?u=//x");
     });
   });
 

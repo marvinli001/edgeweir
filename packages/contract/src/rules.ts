@@ -73,6 +73,21 @@ export function staticRedirectTarget(s: string): boolean {
       })())
   );
 }
+
+/**
+ * A hotlink redirect target (access control): a static redirect target
+ * whose local path nodes exempt from the hotlink check, so that following
+ * the redirect never loops. Nodes compare that path with the request's
+ * normalized path and exempt nothing for a raw path with "//" or one they
+ * find ambiguous: a local path here has no empty segment ("//"), no dot
+ * segment, no ";" and no percent-escape (nginx decodes those).
+ */
+export function hotlinkRedirectTarget(s: string): boolean {
+  if (!staticRedirectTarget(s)) return false;
+  if (!s.startsWith("/")) return true;
+  const path = s.split(/[?#]/)[0] ?? "";
+  return !path.includes("//") && !/[;%]/.test(path) && !/\/\.\.?(\/|$)/.test(path);
+}
 /** A static rewrite path: a single leading "/", no query, fragment or backslash. */
 const staticRewritePath = (s: string) =>
   s.startsWith("/") && !s.startsWith("//") && !/[?\\#]/.test(s);
