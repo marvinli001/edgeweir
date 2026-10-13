@@ -638,7 +638,7 @@ export const cacheRule = pgTable(
     action: text("action").notNull().default("cache"),
     edgeTtlSeconds: integer("edge_ttl_seconds").notNull().default(3600),
     /** override | respect */
-    originCacheControl: text("origin_cache_control").notNull().default("override"),
+    originCacheControl: text("origin_cache_control").notNull().default("respect"),
     staleWhileRevalidateSeconds: integer("stale_while_revalidate_seconds").notNull().default(0),
     staleIfErrorSeconds: integer("stale_if_error_seconds").notNull().default(0),
     /** Cache responses to requests with an Authorization header (RFC 9111 section 3.5). */

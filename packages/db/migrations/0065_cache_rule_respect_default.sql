@@ -1,0 +1,1 @@
+ALTER TABLE "cache_rule" ALTER COLUMN "origin_cache_control" SET DEFAULT 'respect';

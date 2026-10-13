@@ -456,6 +456,13 @@
       "when": 1791777257739,
       "tag": "0064_hidden_cards",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1791873132807,
+      "tag": "0065_cache_rule_respect_default",
+      "breakpoints": true
     }
   ]
 }
