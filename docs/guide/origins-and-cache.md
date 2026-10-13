@@ -246,12 +246,13 @@ WebSocket 升级请求（`Upgrade: websocket`）默认透传，不经过缓存�
 
 | 字段 | 取值 | 默认值 | 作用 |
 | --- | --- | --- | --- |
-| 上限（MiB） | 0–10240，可带小数 | 100 | 请求体按 `Content-Length` 超过上限时返回 413；0 不限制 |
+| 上限（MiB） | 0–10240，可带小数 | 100 | 请求体超过上限时返回 413；0 不限制 |
 
 | 项目 | 行为 |
 | --- | --- |
-| 判断依据 | 只看 `Content-Length`，在规则之后判断；413 带 `X-Edgeweir-Error: body-too-large`，页面按 413 → 「其他 4xx」→ 内置页查找，见[错误页](error-pages.md) |
-| 分块上传 | 不带 `Content-Length` 的分块请求不按网站上限判断，只受节点全局上限约束：集群内所有已启用网站与规则上限的最大值（任一为 0 时不限） |
+| 判断依据 | 带 `Content-Length` 的请求按它判断；不带的请求体（HTTP/1.1 分块上传、HTTP/2 与 HTTP/3 中没有 `Content-Length` 的请求）由节点先读完，按实际大小判断。都在规则之后判断；413 带 `X-Edgeweir-Error: body-too-large`，页面按 413 → 「其他 4xx」→ 内置页查找，见[错误页](error-pages.md) |
+| 读取上限 | 节点读取请求体时以节点全局上限为界：集群内所有已启用网站与规则上限的最大值（任一为 0 时不限），超过时同样返回 413 |
+| 节点版本 | 不带 `Content-Length` 的请求体按网站上限判断需要节点 1.1.0 及以上；更早的节点只按节点全局上限约束它们 |
 | 按请求覆盖 | 配置阶段规则的「请求体上限（MiB）」覆盖网站上限，见[覆盖设置](rules.md#覆盖设置) |
 | gRPC | 不检查 |
 | 节点要求 | 不是 100 MiB 时需要节点能力 `site-content-v1` |
@@ -621,7 +622,7 @@ URL 必须以 `http://` 或 `https://` 开头，不能包含账号，Host 必须
 | 响应始终 `X-Cache: BYPASS` | 没有适用的缓存规则，或适用的都是「不缓存」规则 | 检查规则顺序与条件 |
 | 响应始终 `X-Cache: MISS` | 遵循源站模式下源站未给出有效期；响应带 `Set-Cookie` 而规则没有打开「缓存带 Set-Cookie 的响应」；缓存时间为 0 | 检查规则和源站响应头 |
 | 响应没有 `X-Cache` | 网站关闭了「向访客发送 X-Cache」 | 在「X-Cache」卡片打开 |
-| 413，`X-Edgeweir-Error: body-too-large` | 请求的 `Content-Length` 超过网站或规则的请求体上限 | 调高「请求体上限」，或为上传路径加配置规则 |
+| 413，`X-Edgeweir-Error: body-too-large` | 请求体（`Content-Length`，或没有时读到的大小）超过网站或规则的请求体上限 | 调高「请求体上限」，或为上传路径加配置规则 |
 | `PURGE` 返回 403，`purge-key-invalid` | `X-Purge-Key` 缺失或与保存的密钥不同 | 检查密钥；忘记时生成新密钥并保存 |
 | `PURGE` 返回 429，`purge-rate-limited` | 同一客户端网络超过每秒 20 次、网站的有效请求超过每秒 20 次，或超过每分钟 120 个任务 | 按 `Retry-After` 稍后再试；批量刷新用 **刷新预热** 或 API |
 | `PURGE` 返回 503，`purge-unavailable` | 节点 agent 或控制台不可达 | 检查节点与控制台的连接 |

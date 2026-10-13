@@ -36,7 +36,7 @@ While an active node of the cluster lacks the capability `access-auth-v1`, the t
 - The path is nginx's normalized path (percent-decoded, as the rule field `http.request.uri.path`). Signed URLs of kinds B and C are matched by the path without their two signature segments.
 - The origin receives the raw path the visitor sent. When it holds an encoded `/`, `\`, `.`, `%` or `;` (`%2F`, `%5C`, `%2E`, `%25`, `%3B`, in either case), a `%u` escape, a `\`, a `;`, a `#`, or a `.` or `..` segment, or starts with `//`, the origin may route it elsewhere than the normalized path (`/admin/..%2Fx` is `/x` on the node, but under `/admin/` at a Go ServeMux origin): such a request is inside every rule's path prefixes and extensions, no excluded prefix applies to it, and it is not cached; when the domains of more than one rule cover the Host, which rule checks it cannot be told and it gets 400 (`auth-path-ambiguous`); so does one with a single rule when that rule is forward authentication, without asking the service (it decides on the path it is given, which the origin may read otherwise). Ordinary URLs can hold these markers too (`100%25.pdf`, `;jsessionid=`). Excluded prefixes compare exactly; no excluded prefix applies to a raw path with `//` inside (the node merges slashes, while an origin that keeps the empty segment may hand `/admin//public/x` to its `/admin/` handler), whose scope and caching still follow the merged path.
 - **The first enabled rule whose scope the request matches decides**; later rules are not looked at. Disabled rules are not sent to nodes. Path prefixes ignore case: with an origin that does not (S3, Go, Django), `/TEAM/x` matches an earlier `/team/` rule while the origin treats it as another resource, so put the stricter rule first.
-- The identity headers rules set (Basic's `X-Auth-User`, forward authentication's **Response headers copied to the origin**) are removed from the request when the rule is picked: a visitor's own values neither reach the origin nor show in the rules' `http.request.headers.*`.
+- The identity headers rules set (Basic's `X-Auth-User`, forward authentication's **Response headers copied to the origin**) are removed from the request when the rule is picked: a visitor's own values neither reach the origin nor show in the rules' `http.request.headers.*`. Those of disabled and deleted rules are removed as well, from every request of the site (the console keeps the header names a site has used, at most 64 no longer in use, the oldest dropped first; nodes 1.1.0 and later, earlier nodes remove those of the enabled rules only). Once the origin no longer trusts them, click **Stop removing** under **Headers of former rules still removed** at the bottom of the **Access authentication** card: a new configuration revision is published and `site.auth_identity_forget` audited; headers the current rules (disabled ones included) set are not affected.
 - Domains removed from the site disappear from scopes; when that removes all of a scope's domains, the rule covers every domain of the site (more requests are authenticated, never fewer).
 
 ## Order
@@ -200,8 +200,8 @@ Turn on "Enabled" on the "Geo access" card, choose the mode ("Deny listed" or "A
 | Countries (ISO codes) | ISO 3166-1 alpha-2 codes, at most 256 | Empty |
 | Subdivisions | `country-subdivision`, the subdivision as `ip.geoip.subdivision` reads it (the City MMDB code, else its English name), e.g. `US-CA`; compared ASCII case-insensitively; at most 256 | Empty |
 | ASNs | 1–4294967295, at most 256 | Empty |
-| Path prefixes | One per line, at most 32; empty: every path | Empty |
-| Excluded path prefixes | Paths starting with one of them are not checked (exceptions), at most 32 | Empty |
+| Path prefixes | One per line, at most 32; ASCII case ignored (`/ADMIN/` is under `/admin/`); empty: every path | Empty |
+| Excluded path prefixes | Paths starting with one of them are not checked (exceptions), at most 32; compared byte for byte | Empty |
 
 | Item | Behavior |
 | --- | --- |
@@ -225,7 +225,7 @@ Turn on "Enabled" on the "CORS" card, fill in "Allowed origins" and the rest, an
 | Max-Age (s) | 0–86400 | 600 |
 | Preflights go to the origin | Preflights go to the origin as usual instead of being answered at the edge; for an allowed origin its answer gets the full preflight headers too (methods, request headers, Max-Age and `Vary`), unless the origin's CORS headers are kept and it sent `Access-Control-Allow-Origin` | Off |
 | Keep the origin's CORS headers | When the origin's response has `Access-Control-Allow-Origin`, no `Access-Control-*` header is changed | Off |
-| Path prefixes | At most 32; empty: every path | Empty |
+| Path prefixes | At most 32; compared byte for byte (case matters); empty: every path | Empty |
 
 | Item | Behavior |
 | --- | --- |
@@ -247,9 +247,9 @@ Turn on "Enabled" on the "Hotlink protection" card, adjust the sources and scope
 | Denied sources | The same forms, at most 200; a match is refused, before allowed sources and the site's domains | Empty |
 | Check Origin too | A request's `Origin` is checked the same way | Off |
 | Extensions | At most 64, comma-separated | Common image, audio, video and download types (jpg, png, webp, mp4, m3u8, zip, apk, pdf and others, 49) |
-| Path prefixes | At most 32 | Empty |
-| Excluded path prefixes | At most 32 | Empty |
-| Action | "Answer 403" (error page) or "302 redirect" to "Redirect to" (a site path or an `http(s)` URL, at most 2048 characters) | Answer 403 |
+| Path prefixes | At most 32; ASCII case ignored | Empty |
+| Excluded path prefixes | At most 32; compared byte for byte | Empty |
+| Action | "Answer 403" (error page) or "302 redirect" to "Redirect to" (a site path or an `http(s)` URL, at most 2048 characters; a site path without `//`, `.` or `..` segments, `;` and percent-escapes) | Answer 403 |
 
 | Item | Behavior |
 | --- | --- |
@@ -257,7 +257,7 @@ Turn on "Enabled" on the "Hotlink protection" card, adjust the sources and scope
 | Parsing | Only `http://` and `https://` URLs: their host (lowercase, without user, port and a trailing `.`); a `Referer` that cannot be parsed (`android-app://…`, `Origin: null`) is not allowed, even with "Allow no referer" on |
 | Decision | Every value present must be allowed: denied sources first, then the site's domains and the allowed sources |
 | Refused | 403, `X-Edgeweir-Error: hotlink-denied`; or a 302 with `Cache-Control: no-store` and the same `X-Edgeweir-Error` |
-| Redirect target | A request for a target that is a site path is not checked itself; a full URL of this site in scope would redirect in a loop: exclude its path |
+| Redirect target | A request for a target that is a site path is not checked itself; a full URL of this site in scope would redirect in a loop: exclude its path. Nodes cannot exempt a site path with `//`, a dot segment, `;` or a percent-escape (the redirect would loop): such targets cannot be saved, and one saved earlier answers 403 instead |
 | Limits | Visitors and browsers can drop `Referer` (e.g. `Referrer-Policy: no-referrer`); turn "Allow no referer" off to refuse them |
 
 ## User agents
@@ -268,7 +268,7 @@ Click "Add rule" on the "User agents" card, fill in "Pattern" and choose "Allow"
 | --- | --- |
 | Pattern | Like the rule operator `wildcard`: the whole value, `*` any bytes (at most 8), `\*` and `\\` literals; ASCII case-insensitive; at most 512 printable ASCII characters; an empty pattern matches an empty or missing User-Agent |
 | Rules | At most 200, in their order |
-| Path prefixes, excluded path prefixes | At most 32 each |
+| Path prefixes, excluded path prefixes | At most 32 each; path prefixes ignore ASCII case, excluded ones are compared byte for byte |
 
 | Item | Behavior |
 | --- | --- |

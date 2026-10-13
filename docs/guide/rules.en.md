@@ -313,7 +313,7 @@ Every string is handled as UTF-8 bytes. Arguments are fields, string literals, o
 | --- | --- | --- |
 | `lower(s)`, `upper(s)` | String | Converts ASCII letters only |
 | `len(s)` | Integer | Number of bytes |
-| `starts_with(s, prefix)`, `ends_with(s, suffix)` | Boolean | Byte-wise prefix or suffix; an empty string always matches |
+| `starts_with(s, prefix)`, `ends_with(s, suffix)` | Boolean | Byte-wise prefix or suffix (case matters); an empty string always matches. With an origin that ignores the case of paths, write blocking or cache-bypass conditions as `starts_with(lower(http.request.uri.path), "/admin/")`, or `/ADMIN/` does not match |
 | `url_decode(s)` | String | Decodes once: `%XX` (hexadecimal, case-insensitive) becomes a byte and `+` a space; incomplete or non-hexadecimal `%` sequences stay as they are |
 | `concat(s1, s2, …)` | String | Joins 2–8 arguments in order |
 | `regex_replace(s, "pattern", "replacement")` | String | Replaces the first match; patterns as in [Regular expressions](#regular-expressions); without a match the string is returned unchanged |

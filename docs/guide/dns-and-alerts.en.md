@@ -402,6 +402,7 @@ These alerts belong to a cluster, not to a site. They go only to channels with *
 | Stored rule no longer valid; its last compiled form is kept | A publication found a stored rule the current validator refuses (see [Rules](rules.en.md)); the name is the rule's | The next publication after the rule is rewritten or deleted |
 | DNS mass removal blocked | The [mass removal protection](#mass-removal-protection) held a publication of a cluster back | The cluster's next publication that passes, or a forced one |
 | Scheduling rule acting on a node | A [scheduling rule](scheduling.en.md#scheduling-rules) took effect on a node; the name is "rule · node" | The action recovers; at once when the rule is disabled, deleted, or its line, conditions, or action change |
+| A node cannot load a certificate | A node reports it cannot load a certificate (see [HTTPS](https.en.md)); the name is the certificate's, `resourceId` its ID, the link points to **Certificates** | No node reports it any more |
 
 ## Subscribe to alerts
 

@@ -246,12 +246,13 @@ The **Request body limit** card on the site's **Origins** tab is saved separatel
 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
-| Limit (MiB) | 0–10240, decimals allowed | 100 | Requests whose `Content-Length` exceeds it get 413; 0 means no limit |
+| Limit (MiB) | 0–10240, decimals allowed | 100 | Requests whose body exceeds it get 413; 0 means no limit |
 
 | Item | Behavior |
 | --- | --- |
-| Check | By `Content-Length` only, after the rules; the 413 carries `X-Edgeweir-Error: body-too-large` and its page is looked up as 413 → **Other 4xx** → built-in page, see [Error pages](error-pages.en.md) |
-| Chunked uploads | Chunked requests without `Content-Length` are not checked against the site's limit, only against the node-wide one: the largest limit of all enabled sites and rules of the cluster (none when any is 0) |
+| Check | By `Content-Length` when the request has one; a body without it (chunked HTTP/1.1 uploads, HTTP/2 and HTTP/3 requests without `Content-Length`) is read by the node first and checked by its size. Both after the rules; the 413 carries `X-Edgeweir-Error: body-too-large` and its page is looked up as 413 → **Other 4xx** → built-in page, see [Error pages](error-pages.en.md) |
+| Reading bound | The node reads a body up to the node-wide limit: the largest limit of all enabled sites and rules of the cluster (none when any is 0); past it the answer is 413 as well |
+| Node version | Checking bodies without `Content-Length` against the site's limit needs nodes 1.1.0 or later; earlier nodes bound them by the node-wide limit only |
 | Per request | **Body limit (MiB)** of a configuration rule overrides the site's limit, see [Override settings](rules.en.md#override-settings) |
 | gRPC | Not checked |
 | Node requirement | Another value than 100 MiB needs the node capability `site-content-v1` |
@@ -621,7 +622,7 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 | Responses always show `X-Cache: BYPASS` | No cache rule applies, or only **Bypass** rules apply | Check rule order and conditions |
 | Responses always show `X-Cache: MISS` | In respect mode the origin sent no lifetime; the response has `Set-Cookie` and the rule does not have **Cache responses with Set-Cookie** on; the TTL is 0 | Check the rules and origin headers |
 | Responses lack `X-Cache` | The site has **Send X-Cache to visitors** off | Turn it on in the **X-Cache** card |
-| 413, `X-Edgeweir-Error: body-too-large` | The request's `Content-Length` exceeds the site's or a rule's body limit | Raise **Request body limit**, or add a configuration rule for upload paths |
+| 413, `X-Edgeweir-Error: body-too-large` | The request body (its `Content-Length`, or the size read for one without) exceeds the site's or a rule's body limit | Raise **Request body limit**, or add a configuration rule for upload paths |
 | `PURGE` answers 403, `purge-key-invalid` | `X-Purge-Key` is missing or differs from the saved key | Check the key; if it is lost, generate a new one and save |
 | `PURGE` answers 429, `purge-rate-limited` | Over 20 per second from one client network, 20 accepted requests per second for the site, or 120 tasks per minute | Retry after `Retry-After`; purge in bulk with **Purge & prefetch** or the API |
 | `PURGE` answers 503, `purge-unavailable` | The node agent or the console is unreachable | Check the connection between node and console |

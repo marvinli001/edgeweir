@@ -313,7 +313,7 @@ substring(sha256(http.request.uri.path), 0, 8) eq "a1b2c3d4"
 | --- | --- | --- |
 | `lower(s)`、`upper(s)` | 字符串 | 只转换 ASCII 字母 |
 | `len(s)` | 整数 | 字节数 |
-| `starts_with(s, 前缀)`、`ends_with(s, 后缀)` | 布尔 | 按字节比较前缀、后缀；空串总是匹配 |
+| `starts_with(s, 前缀)`、`ends_with(s, 后缀)` | 布尔 | 按字节比较前缀、后缀（区分大小写）；空串总是匹配。源站不区分路径大小写时，拦截或绕过缓存一类的条件写成 `starts_with(lower(http.request.uri.path), "/admin/")`，否则 `/ADMIN/` 不命中 |
 | `url_decode(s)` | 字符串 | 解码一遍：`%XX`（十六进制不区分大小写）解为字节，`+` 解为空格；不完整或非十六进制的 `%` 原样保留 |
 | `concat(s1, s2, …)` | 字符串 | 2–8 个参数按顺序拼接 |
 | `regex_replace(s, "正则", "替换串")` | 字符串 | 替换第一个匹配；正则见[正则](#正则)；没有匹配时返回原串 |
