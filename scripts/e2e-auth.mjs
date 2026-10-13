@@ -7,8 +7,10 @@ export async function signInResponse(base, email, password) {
       body: JSON.stringify({ email, password }),
     });
     if (response.status !== 429 || attempt >= 3) return response;
+    // better-auth tells when the limiter lets the next sign-in through.
+    const seconds = Number(response.headers.get("x-retry-after"));
     await response.body?.cancel();
-    await new Promise((resolve) => setTimeout(resolve, 11_000));
+    await new Promise((resolve) => setTimeout(resolve, (seconds > 0 ? seconds : 11) * 1000 + 250));
   }
 }
 

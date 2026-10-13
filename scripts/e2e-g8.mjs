@@ -583,6 +583,15 @@ try {
   const features = await admin.ok("GET", `/sites/${legacySite.id}/features`);
   assert.deepEqual(features.rulesV3, { available: false, reason: "nodes" });
   assert.deepEqual(features.rulesV2, { available: true, reason: null });
+  // The console refuses the old node a configuration it cannot apply (FailedPrecondition, which
+  // the agent logs as a failed GetConfig): counted before and after the change.
+  const refusals = async () => {
+    const out = await execute("docker", ["logs", OLD_CONTAINER], { maxBuffer: 64 * 1024 * 1024 });
+    return `${out.stdout}\n${out.stderr}`
+      .split("\n")
+      .filter((l) => l.includes("GetConfig failed") && l.includes("agent upgrade required")).length;
+  };
+  const refusedBefore = await refusals();
   // The operator saves a rule that needs rules-v3 anyway.
   await saveRules(legacySite.id, [
     header("g8 old", "request-transform", "request_header", "x-old", { value: "1" }),
@@ -592,7 +601,12 @@ try {
   ]);
   const forced = await latestRevision(legacyCluster.id);
   assert.ok(forced > before, "the change published no revision");
-  await sleep(15_000);
+  // The old node asked for the new revision and was refused it.
+  await waitFor(
+    "edge-g8-old is refused the revision that needs rules-v3",
+    async () => (await refusals()) > refusedBefore,
+    90,
+  );
   const held = await nodeById(old.id);
   assert.ok(held.appliedRevision < forced, `the old node applied #${held.appliedRevision}`);
   assert.ok(held.online, "the old node went offline");

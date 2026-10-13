@@ -547,8 +547,11 @@ try {
   const textLine = text.out.split("\n").find((l) => l.includes(`${tapPath}-text`));
   assert.ok(textLine, text.out + text.err);
   assert.match(textLine, / 200 /);
-  // g16-block samples nothing: none of these reached the access log.
-  await sleep(12_000);
+  // g16-block samples nothing: none of these reached the access log. The node ships its lines
+  // in order (one queue, numbered batches), so once a later line of g16-logs (sampled in full)
+  // is in the log, every line of g16-block before it would be too.
+  await request({ target: "node", host: HOST.logs, path: `${tapPath}-after` });
+  await linesOf(sites.logs.id, `${tapPath}-after`);
   assert.ok(!(await logsOf(sites.block.id)).some((e) => e.path.startsWith(tapPath)));
   pass(
     `f. accesslog --json --site printed ${tapped.length} request(s) of g16-block (not g16-logs); text: ${textLine.trim().slice(0, 100)}; none sampled`,

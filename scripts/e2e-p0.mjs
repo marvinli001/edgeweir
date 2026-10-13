@@ -491,7 +491,18 @@ const replay = JSON.parse(
 );
 assert.equal(replay.replay.status, 200, JSON.stringify(replay));
 assert.equal(JSON.parse(replay.replay.body).accepted ?? 0, 0);
-await sleep(70_000); // one usage recomputation cycle
+// One usage recomputation after the replay: a run of the worker's usage maintenance (the
+// traffic.rollup job, every minute) that started after it and completed.
+const replayedAt = await psql("select now()");
+const recomputed = await waitFor(
+  "a usage recomputation after the replay",
+  async () =>
+    (await psql(
+      `select to_char(started_on, 'HH24:MI:SS') from pgboss.job where name = 'traffic.rollup' and state = 'completed' and started_on > '${replayedAt}' order by started_on limit 1`,
+    )) || null,
+  180,
+  2000,
+);
 const afterReplay = await ok(
   sa,
   "GET",
@@ -501,7 +512,7 @@ assert.deepEqual(afterReplay.items[0], record);
 const changes = await ok(sa, "GET", "/usage/changes?afterSeq=0&limit=5000");
 assert.ok(changes.items.some((i) => i.id === record.id));
 pass(
-  `usage ${record.id}: requests ${record.requests}, bytes ${record.bytesSent}/${record.bytesReceived} equal the node's minute statistics; replayed batch #${replay.sequence} accepted 0 and changed nothing; completeUntil ${usageBefore.completeUntil} -> ${afterReplay.completeUntil}`,
+  `usage ${record.id}: requests ${record.requests}, bytes ${record.bytesSent}/${record.bytesReceived} equal the node's minute statistics; replayed batch #${replay.sequence} accepted 0 and changed nothing after the recomputation at ${recomputed}; completeUntil ${usageBefore.completeUntil} -> ${afterReplay.completeUntil}`,
 );
 
 // ---------------------------------------------------------------- 5. every node offline
