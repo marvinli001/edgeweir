@@ -11,6 +11,7 @@ import { LogRetentionCard } from "@/components/log-retention";
 import { LoginAllowListCard } from "@/components/login-allow-list";
 import { NodeChannelCard } from "@/components/node-channel";
 import { UrlScopeBadge } from "@/components/node-enrollment";
+import { NodeLogRetentionCard } from "@/components/node-log-retention";
 import { OriginAllowListCard } from "@/components/origin-allow-list";
 import { Page } from "@/components/page";
 import { PlatformErrorPagesCard } from "@/components/platform-error-pages";
@@ -183,6 +184,7 @@ function GeneralSettings() {
       <AcmeDirectoryCard />
       <UsageSettingsCard />
       <LogRetentionCard />
+      <NodeLogRetentionCard />
       <PlatformErrorPagesCard />
       <LoginAllowListCard />
       <DemoSettingsCard />

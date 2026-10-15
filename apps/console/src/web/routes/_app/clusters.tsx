@@ -16,6 +16,7 @@ import { NodesSection } from "@/components/clusters/nodes";
 import { RevisionsSection } from "@/components/clusters/revisions";
 import { ClusterDns } from "@/components/dns/cluster-dns";
 import { PortPoolsSection } from "@/components/l4/port-pools";
+import type { NodeDetailTab } from "@/components/node-detail";
 import { NodeUpgrades } from "@/components/node-upgrades";
 import { Page } from "@/components/page";
 import { RegionsPanel } from "@/components/regions";
@@ -35,6 +36,8 @@ export const Route = createFileRoute("/_app/clusters")({
     enroll: z.boolean().optional(),
     tab: z.enum(["overview", "dns", "scheduling", "network", "ports"]).optional(),
     node: z.string().optional(),
+    /** The tab of the node's details. */
+    nodeTab: z.enum(["logs"]).optional(),
   }),
   component: ClustersPage,
 });
@@ -165,10 +168,25 @@ function ClusterView({
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const tabBar = useTabBar(`cluster-tab-${search.tab ?? "overview"}`);
-  // The node whose details are open (?node=).
+  // The node whose details are open (?node=) and their tab (?nodeTab=).
   const showDetail = React.useCallback(
     (id: string | null) =>
-      navigate({ search: (prev) => ({ ...prev, node: id ?? undefined }), replace: true }),
+      navigate({
+        search: (prev) => ({
+          ...prev,
+          node: id ?? undefined,
+          nodeTab: id && id === prev.node ? prev.nodeTab : undefined,
+        }),
+        replace: true,
+      }),
+    [navigate],
+  );
+  const showDetailTab = React.useCallback(
+    (tab: NodeDetailTab) =>
+      navigate({
+        search: (prev) => ({ ...prev, nodeTab: tab === "logs" ? "logs" : undefined }),
+        replace: true,
+      }),
     [navigate],
   );
   const nodes = (
@@ -176,7 +194,9 @@ function ClusterView({
       cluster={selected}
       onEnroll={onEnroll}
       detailId={search.node}
+      detailTab={search.nodeTab}
       onDetail={showDetail}
+      onDetailTab={showDetailTab}
     />
   );
   return (

@@ -10,6 +10,7 @@ import {
   AuthErrorBadge,
   CertificateFailuresBadge,
   NodeDetailSheet,
+  type NodeDetailTab,
   NodeVitals,
 } from "@/components/node-detail";
 import { enterDelay } from "@/components/page";
@@ -289,18 +290,23 @@ function NodeCard({
 
 /**
  * The cluster's nodes, as cards. `detailId` is the node whose details are open (`onDetail` opens
- * and closes them); they come from the polling list so they stay current.
+ * and closes them) and `detailTab` their tab; they come from the polling list so they stay
+ * current.
  */
 export function NodesSection({
   cluster,
   onEnroll,
   detailId,
+  detailTab,
   onDetail: showDetail,
+  onDetailTab,
 }: {
   cluster: Cluster;
   onEnroll: () => void;
   detailId: string | undefined;
+  detailTab: NodeDetailTab | undefined;
   onDetail: (id: string | null) => void;
+  onDetailTab: (tab: NodeDetailTab) => void;
 }) {
   const nodes = useQuery({
     ...orpc.nodes.list.queryOptions({ input: { clusterId: cluster.id } }),
@@ -359,7 +365,14 @@ export function NodesSection({
           onOpenChange={action.onOpenChange}
         />
       ) : null}
-      {detail ? <NodeDetailSheet node={detail} onClose={() => showDetail(null)} /> : null}
+      {detail ? (
+        <NodeDetailSheet
+          node={detail}
+          tab={detailTab}
+          onTabChange={onDetailTab}
+          onClose={() => showDetail(null)}
+        />
+      ) : null}
     </section>
   );
 }
