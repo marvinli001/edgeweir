@@ -389,7 +389,9 @@ The outgoing mail server of email channels, set in the **SMTP** card of the **Al
 
 **CC mitigation raised** (`cc_mitigation`) has no threshold of its own: it fires when a node reports that the site left the normal level, at most once per site in 15 minutes (a raise held back fires at the next minute check once the 15 minutes are over, if the site is still above normal), and resolves once no online node reports the site above normal. See [Challenges and CC mitigation](challenges.en.md#cc-mitigation).
 
-Site alerts cover only enabled sites with at least one domain.
+**Usage near its limit** (`usage_warning`) and **Usage limit reached** (`usage_limit`) come from a site's usage protection, whose thresholds are set in the site's **Usage protection** card; each metric alerts at most once per period and level, see [Usage protection](usage-protection.en.md#alerts).
+
+Site alerts cover only enabled sites with at least one domain; the two usage protection alerts also cover disabled sites.
 
 ### Cluster and DNS alerts
 
@@ -416,7 +418,7 @@ These alerts belong to a cluster, not to a site. They go only to channels with *
 | --- | --- |
 | Channels | One subscription per channel; **Subscribe** lists only enabled channels without a subscription and is unavailable when there is none |
 | Sites | **All sites** includes sites created later; otherwise tick at least one site |
-| Alert kinds | Node offline, Certificate expiring, Origin unavailable, High server error ratio, CC mitigation raised |
+| Alert kinds | Node offline, Certificate expiring, Origin unavailable, High server error ratio, CC mitigation raised, Usage near its limit, Usage limit reached |
 | Changes | Click **Edit** on the subscription row to change its sites, alert kinds, or **Enable**; a subscription with **Enable** off sends nothing and its row shows **Off** |
 | Deleted sites | The site leaves the subscription; a subscription left without sites is deleted with it |
 | Removal | Click **Unsubscribe** on the subscription row and confirm |

@@ -439,7 +439,7 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificate
 | `alerts.sweep` | Every minute | Alert detection and delivery |
 | `rollouts.evaluate` | Every minute | Evaluates running configuration canaries: promote, await promotion, or roll back (canary node heartbeats trigger an evaluation too) |
 | `dns.reconcile` | Every minute | Deletes expired old CNAME prefixes and publishes the DNS of their clusters; DNS steering publishing and external record maintenance |
-| `traffic.rollup` | Every minute | Traffic rollup and cleanup (L4 app minute statistics included), usage rollup and retention, access log partition maintenance, upgrade expiry; one failing part does not stop the others |
+| `traffic.rollup` | Every minute | Traffic rollup and cleanup (L4 app minute statistics included), usage rollup and retention (then every site's usage protection, with an immediate alert sweep when its alerts change), access log partition maintenance, upgrade expiry; one failing part does not stop the others |
 | `certificates.sweep` | Every minute | Certificate issuance and renewal |
 | `maintenance.recompile` | At start; skipped while `config_recompiled` in `system_setting` matches the current marker | Republishes every cluster once when an upgrade changes what stored data compiles to |
 | `maintenance.check-certificates` | At start | Checks uploaded certificates not marked yet and marks those nodes cannot load (EC keys with explicit curve parameters) as failed |
@@ -555,6 +555,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `node_stats_cursor` | Per-node high-water mark of statistics batch sequences and the statistics watermark (`complete_until`) |
 | `l4_minute_stats` | Per node, layer-4 application and minute: new and refused connections, peak concurrency, bytes in / out, kept 7 days |
 | `site_usage` | Recomputable usage per site and UTC 5-minute window (requests, bytes out and in, exact decimals), revision and global `seq` (sequence `site_usage_seq`) |
+| `site_usage_guard` | A site's usage protection: period (calendar day / month) and time zone, limits on bytes sent / requests / bandwidth, warning threshold, action and recovery, and the current period's state the worker keeps (metrics at the warning threshold / limit, bandwidth peak, the action it applied, how long a manual restore pauses it, the error code of an action that could not be published) |
 | `access_log` | Sampled and forced access logs (request id, User-Agent, Referer, protocol, region, origin, block reason and rule; JA4, the query string, chosen request headers and the peer address while the site records them; matched CRS rules and whether CRS blocked the request), one partition per UTC day, kept as the retention setting says |
 | `security_event` | CC mitigation events reported by nodes: level changes, escalated paths, automatic bans, with the top addresses and paths of the moment |
 | `node_log_cursor` | Per-node high-water mark of log batches |
@@ -644,6 +645,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0065_cache_rule_respect_default` | `respect` as the default of `cache_rule.origin_cache_control` |
 | `0066_auth_identity_headers` | `site.auth_identity_headers` (filled from the stored access authentication rules, disabled ones included) |
 | `0067_node_certificate_failures` | `node_config_status.certificate_failures` (certificates a node reports it cannot load) |
+| `0069_site_usage_guard` | `site_usage_guard`; an index of `site_usage` by site and window |
 
 ## Build output
 

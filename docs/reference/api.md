@@ -866,6 +866,30 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
   "https://cdn-admin.example.com/api/v1/sites/<网站 ID>/image-convert/savings?range=7d"
 ```
 
+### 用量保护
+
+| 过程 | 端点 | 说明 |
+| --- | --- | --- |
+| `usageGuard.get` | `GET /sites/{id}/usage-guard` | 设置（未设置时 `settings` 等为 `null`）、本周期 `period { start, end }`、`usage { bytes, requests, bandwidthBps, bandwidthPeakBps }`（`bytes`、`requests` 为十进制字符串；带宽为最近 5 个完整分钟的平均，bit/s）、`held { action, metric, since }`（用量保护执行且仍在生效的动作）、`pausedUntil`（手动恢复后到此时间前不执行动作）、`lastError`（动作发布失败的错误码，没有时为空） |
+| `usageGuard.update` | `PUT /sites/{id}/usage-guard` | 新建或整体替换设置，下一次检查（1 分钟内）生效；取消手动恢复带来的暂停。可选 `expectedUpdatedAt`（不一致时 409 `UPDATED_AT_MISMATCH`）。审计 `site.usage_guard_update`（`from`、`to`） |
+| `usageGuard.delete` | `DELETE /sites/{id}/usage-guard` | 删除设置，并解除它正在执行的动作（发布 `usage_limit_released`，审计 `site.usage_guard_release`）；审计 `site.usage_guard_delete`。没有设置时不做任何事 |
+| `usageGuard.restore` | `POST /sites/{id}/usage-guard/restore` | 解除正在执行的动作（发布 `usage_limit_released`），本周期结束前不再执行；审计 `site.usage_guard_restore`。没有正在执行的动作时 409 `USAGE_GUARD_NOT_HELD` |
+
+设置的字段（`update` 另加 `id`）：
+
+| 字段 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `period` | `day`、`month` | `month` | 自然日 / 自然月 |
+| `timeZone` | IANA 时区 | 必填 | 周期从该时区的 0 点开始 |
+| `bytesLimit`、`requestsLimit` | 十进制字符串或 `null` | `null` | 正整数，最多 38 位 |
+| `bandwidthBps` | 整数或 `null` | `null` | 1000–10000000000000 bit/s |
+| `warnPercent` | 1–99 或 `null` | 80 | `null` 不预警 |
+| `action` | `alert`、`maintenance`、`disable` | `maintenance` | |
+| `recovery` | `auto`、`manual` | `auto` | |
+| `bandwidthHoldMinutes` | 5–1440 | 30 | 自动恢复时带宽超限后保持的分钟数 |
+
+三个上限都为 `null` 或其他不满足上述条件的输入返回 400。系统执行与解除动作时发布的修订原因为 `usage_limit_reached` / `usage_limit_released`，审计 `site.usage_guard_apply` / `site.usage_guard_release`（操作者为系统，元数据含 `action`、`metric`、`period`、`usage`、`limits`、`revision`）。告警种类 `usage_warning`、`usage_limit` 的 `resourceId` 为 `bytes`、`requests` 或 `bandwidth`。只读 AccessKey 只能调用 `GET`；服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）。行为见[用量保护](../guide/usage-protection.md)。
+
 ### 端口池与 L4 应用
 
 | 过程 | 端点 | 说明 |

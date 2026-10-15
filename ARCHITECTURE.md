@@ -441,7 +441,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `alerts.sweep` | 每分钟 | 告警检测与投递 |
 | `rollouts.evaluate` | 每分钟 | 求值进行中的配置金丝雀：推进、等待推进或回滚（金丝雀节点的心跳也触发求值） |
 | `dns.reconcile` | 每分钟 | 删除到期的旧 CNAME 前缀并发布受影响集群的 DNS；DNS 调度发布与外部记录维护 |
-| `traffic.rollup` | 每分钟 | 流量汇总与清理（含 L4 应用的分钟统计）、用量汇总与保留期清理、访问日志分区维护、升级任务到期；一项失败不影响其他各项 |
+| `traffic.rollup` | 每分钟 | 流量汇总与清理（含 L4 应用的分钟统计）、用量汇总与保留期清理（随后评估各网站的用量保护，告警有变化时立即触发一次告警扫描）、访问日志分区维护、升级任务到期；一项失败不影响其他各项 |
 | `certificates.sweep` | 每分钟 | 证书签发与续期 |
 | `maintenance.recompile` | 启动时；`system_setting` 的 `config_recompiled` 与当前标记一致时跳过 | 升级改变了已存数据的编译结果时，为每个集群重新发布一次 revision |
 | `maintenance.check-certificates` | 启动时 | 检查尚未标记的已上传证书，把节点无法加载的（EC 密钥使用显式曲线参数）标记为错误 |
@@ -558,6 +558,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `node_stats_cursor` | 每个节点统计批次的序号高水位与统计水位（`complete_until`） |
 | `l4_minute_stats` | 按节点、四层应用、分钟的统计：新建与拒绝的连接、并发峰值、入 / 出字节，保留 7 天 |
 | `site_usage` | 按网站、UTC 5 分钟窗口的可复算用量（请求数、出站与入站字节，十进制精确值）、修订号与全局序号 `seq`（序列 `site_usage_seq`） |
+| `site_usage_guard` | 网站的用量保护：周期（自然日 / 月）与时区、发送流量 / 请求数 / 带宽上限、预警阈值、动作与恢复方式，以及 worker 维护的本周期状态（达到预警 / 上限的指标、带宽峰值、由它施加的动作、手动恢复后暂停到何时、动作发布失败的错误码） |
 | `access_log` | 采样与强制记录的访问日志（请求 id、User-Agent、Referer、协议、地区、回源、拦截原因与规则；网站开启时含 JA4、查询字符串、指定请求头与直连对端地址；命中的 CRS 规则与是否被拦截），按 UTC 日分区，保留期由系统设置决定 |
 | `security_event` | 节点上报的 CC 防护事件：级别变化、路径升降级、自动封禁，带当时的 Top IP 与 Top 路径 |
 | `node_log_cursor` | 每个节点日志批次的序号高水位 |
@@ -648,6 +649,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0066_auth_identity_headers` | `site.auth_identity_headers`（按现有鉴权规则回填，含停用的） |
 | `0067_node_certificate_failures` | `node_config_status.certificate_failures`（节点上报无法加载的证书） |
 | `0068_node_channel_status` | `node.channel`、`probe.channel`（节点与探针在用的节点通道地址、备用地址、切换失败原因，以及控制台看到的 TLS 服务器名与是否经 WebSocket 入口） |
+| `0069_site_usage_guard` | `site_usage_guard`；`site_usage` 按网站与窗口的索引 |
 
 ## 构建产物
 

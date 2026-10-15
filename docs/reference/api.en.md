@@ -866,6 +866,30 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
   "https://cdn-admin.example.com/api/v1/sites/<site id>/image-convert/savings?range=7d"
 ```
 
+### Usage protection
+
+| Procedure | Endpoint | Notes |
+| --- | --- | --- |
+| `usageGuard.get` | `GET /sites/{id}/usage-guard` | The settings (`settings` and the rest `null` when not set), the current `period { start, end }`, `usage { bytes, requests, bandwidthBps, bandwidthPeakBps }` (`bytes`, `requests` as decimal strings; bandwidth is the average over the last 5 complete minutes, bit/s), `held { action, metric, since }` (the action usage protection applied and still holds), `pausedUntil` (no action before then after a manual restore), `lastError` (the error code of an action that could not be published, empty when none) |
+| `usageGuard.update` | `PUT /sites/{id}/usage-guard` | Creates or replaces the settings, which apply at the next check (within a minute); ends a pause from a manual restore. Optional `expectedUpdatedAt` (409 `UPDATED_AT_MISMATCH` when it differs). Audit `site.usage_guard_update` (`from`, `to`) |
+| `usageGuard.delete` | `DELETE /sites/{id}/usage-guard` | Removes the settings and lifts the action they hold (publishes `usage_limit_released`, audit `site.usage_guard_release`); audit `site.usage_guard_delete`. Nothing happens without settings |
+| `usageGuard.restore` | `POST /sites/{id}/usage-guard/restore` | Lifts the action held (publishes `usage_limit_released`) and applies none until the period ends; audit `site.usage_guard_restore`. 409 `USAGE_GUARD_NOT_HELD` when no action is held |
+
+Fields of the settings (`update` adds `id`):
+
+| Field | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `period` | `day`, `month` | `month` | Calendar day / month |
+| `timeZone` | IANA time zone | required | The period starts at midnight there |
+| `bytesLimit`, `requestsLimit` | decimal string or `null` | `null` | Positive integer, up to 38 digits |
+| `bandwidthBps` | integer or `null` | `null` | 1000–10000000000000 bit/s |
+| `warnPercent` | 1–99 or `null` | 80 | `null`: no warning |
+| `action` | `alert`, `maintenance`, `disable` | `maintenance` | |
+| `recovery` | `auto`, `manual` | `auto` | |
+| `bandwidthHoldMinutes` | 5–1440 | 30 | With automatic recovery, how long an action for bandwidth holds after it was last over |
+
+All three limits `null`, or anything else outside the above, is 400. Actions the system applies and lifts publish with the reasons `usage_limit_reached` / `usage_limit_released` and are audited as `site.usage_guard_apply` / `site.usage_guard_release` (by the system, with `action`, `metric`, `period`, `usage`, `limits`, `revision`). The alert kinds `usage_warning` and `usage_limit` carry `resourceId` `bytes`, `requests` or `bandwidth`. A read-only AccessKey calls the `GET` only; service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`). Behaviour: [Usage protection](../guide/usage-protection.en.md).
+
 ### Port pools and L4 apps
 
 | Procedure | Endpoint | Notes |

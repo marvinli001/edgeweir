@@ -56,6 +56,7 @@ const SECTIONS = [
       ["first-site", "docs/guide/first-site.md"],
       ["domains", "docs/guide/domains.md"],
       ["site-management", "docs/guide/site-management.md"],
+      ["usage-protection", "docs/guide/usage-protection.md"],
       ["account", "docs/guide/account.md"],
       ["system", "docs/guide/system.md"],
       ["origins-and-cache", "docs/guide/origins-and-cache.md"],
