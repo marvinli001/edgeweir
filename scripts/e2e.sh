@@ -37,6 +37,13 @@
 #   leaves the certificate; an unreachable URL is reported and not taken;
 #   https -> wss://wss.e2e.test -> https, then the WebSocket entry closes;
 #   `edgeweir-node set-server` brings a lost node back with its identity.
+#   Node logs (scripts/e2e-node-logs.mjs, ADR-0050): the core node reports
+#   node-logs-v1 and its agent's and supervisor's events; a site whose
+#   origin does not resolve: the Lua warning reaches the node's logs within
+#   60 s with the query string removed, the secret nowhere in the API or the
+#   database; retention (1 day, 1,000 per node) deletes backdated rows and
+#   rows over the limit at the console's start; Playwright
+#   e2e/node-logs.spec.ts.
 #   Core gaps P0 (scripts/e2e-p0.mjs): Idempotency-Key, service accounts with
 #   scopes disabling a site, usage and its completeness watermark,
 #   configuration canary with automatic promotion and rollback, DNS mass
@@ -304,7 +311,7 @@ done
 # (.e2e/*-state.json, or clusters and nodes they create). Every section needs
 # core, which only runs on a fresh stack.
 SECTIONS=(
-  "core:" "m1:" "analytics:" "m2:" "install:" "wss:" "channel:" "m3:" "m4:" "m5:" "m6-logs:m5" "m6-upgrades:m5"
+  "core:" "m1:" "analytics:" "m2:" "install:" "wss:" "channel:" "node-logs:" "m3:" "m4:" "m5:" "m6-logs:m5" "m6-upgrades:m5"
   "p0:m5 m6-upgrades" "g1:p0 m5 m6-upgrades" "g2:m6-upgrades" "g3:m6-upgrades" "g4:m6-upgrades"
   "g5:m6-upgrades" "dns:m5 m6-upgrades" "g6:dns m5 m6-upgrades" "g7:m6-upgrades" "h2:m6-upgrades"
   "g8:m6-upgrades" "g9:m6-upgrades" "g15:m6-upgrades" "g10:dns m5 m6-upgrades" "g11:m6-upgrades"
@@ -1330,6 +1337,13 @@ part channel-up channel_up || fail "could not start channel-relay and node-chann
 part checks node scripts/e2e-channel.mjs || fail "channel end-to-end checks failed"
 part cleanup node scripts/e2e-channel.mjs --cleanup || fail "channel cleanup failed"
 pass "Node channel URL checks passed"
+}
+
+# ----------------------------------------------------------- section node-logs
+section_node_logs() {
+step "Node logs: the node's warnings and events reach its logs tab without secrets; retention prunes them"
+story node-logs --cleanup
+pass "Node log checks passed"
 }
 
 # ------------------------------------- sections m3 ... g18 (scripts/e2e-*.mjs)
