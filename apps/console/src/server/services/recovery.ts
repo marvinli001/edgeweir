@@ -4,12 +4,13 @@ import { and, eq, inArray, like, or } from "drizzle-orm";
 import type { Auth } from "../lib/auth";
 import { type Actor, recordAudit } from "./audit";
 import { notDemoUser } from "./demo";
+import { clearLoginAllowList } from "./login-allow-list";
 import type { Executor } from "./revisions";
 
 /**
  * Account recovery from the server (`dist/server/recover.js`): sets a new
- * password and/or turns two-factor authentication off for the only account
- * when the operator can no longer sign in. Nothing here is reachable over
+ * password, turns two-factor authentication off and/or clears the login allow
+ * list for the only account when the operator can no longer sign in. Nothing here is reachable over
  * HTTP; whoever runs it already has the console's environment and database.
  */
 
@@ -65,6 +66,8 @@ export interface RecoveryInput {
   password?: string;
   /** Turns two-factor authentication off and deletes the TOTP secret and backup codes. */
   disableTwoFactor?: boolean;
+  /** Removes the login allow list: every address may sign in again. */
+  clearLoginAllowList?: boolean;
 }
 
 export interface RecoveryResult {
@@ -72,6 +75,8 @@ export interface RecoveryResult {
   passwordReset: boolean;
   /** Two-factor authentication was on and is now off. */
   twoFactorDisabled: boolean;
+  /** The ranges the login allow list held before it was cleared (empty: it was off or kept). */
+  loginAllowListCleared: string[];
   /** Sessions signed out. */
   sessionsRevoked: number;
 }
@@ -83,12 +88,15 @@ export interface RecoveryResult {
  *   and stored on the credential account, as `auth.api.setUserPassword` does;
  * - turning two-factor off clears `user.two_factor_enabled` and deletes the
  *   `two_factor` row, as `/two-factor/disable` does;
+ * - clearing the login allow list removes its system_setting row;
  * - every session of the account is deleted, and so are the verification rows
  *   that stand in for one: trusted devices (`trust-device-*`, which skip the
  *   second factor) and pending second-factor steps (`2fa-*` with their
  *   `2fa-attempts-*` counters), which would finish a sign-in started earlier.
  *
- * The entry records what changed, never the password or its hash.
+ * Clearing the allow list signs the sessions out too: a cookie taken outside
+ * the list would work again otherwise. The entry records what changed, never
+ * the password or its hash.
  */
 export async function recoverAccount(
   ctx: { db: Database; auth: Auth },
@@ -96,8 +104,11 @@ export async function recoverAccount(
 ): Promise<RecoveryResult> {
   const { password } = input;
   const disableTwoFactor = input.disableTwoFactor === true;
-  if (password === undefined && !disableTwoFactor) {
-    throw new RecoveryError("nothing to recover: reset the password or turn two-factor off");
+  const clearAllowList = input.clearLoginAllowList === true;
+  if (password === undefined && !disableTwoFactor && !clearAllowList) {
+    throw new RecoveryError(
+      "nothing to recover: reset the password, turn two-factor off or clear the login allow list",
+    );
   }
   const authContext = await ctx.auth.$context;
   let hash: string | undefined;
@@ -140,6 +151,8 @@ export async function recoverAccount(
         .where(eq(schema.user.id, userId));
     }
 
+    const loginAllowListCleared = clearAllowList ? await clearLoginAllowList(tx) : [];
+
     const v = schema.verification;
     const pending = await tx
       .delete(v)
@@ -164,6 +177,7 @@ export async function recoverAccount(
       user: { id: userId, name: operator.name, email: operator.email },
       passwordReset: hash !== undefined,
       twoFactorDisabled: disableTwoFactor && operator.twoFactorEnabled,
+      loginAllowListCleared,
       sessionsRevoked: sessions.length,
     };
     await recordAudit(tx, recoveryActor, {
@@ -174,6 +188,7 @@ export async function recoverAccount(
       metadata: {
         passwordReset: result.passwordReset,
         twoFactorDisabled: result.twoFactorDisabled,
+        ...(clearAllowList ? { loginAllowListCleared } : {}),
         sessionsRevoked: result.sessionsRevoked,
       },
     });

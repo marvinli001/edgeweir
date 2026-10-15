@@ -113,6 +113,7 @@ describe("recovering the account with two-factor on", async () => {
       user: { id: userId, name: "Platform Admin", email: "admin@example.com" },
       passwordReset: true,
       twoFactorDisabled: true,
+      loginAllowListCleared: [],
       sessionsRevoked: sessions,
     });
 

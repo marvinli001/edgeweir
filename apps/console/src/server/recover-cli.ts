@@ -11,15 +11,18 @@ import {
 } from "./services/recovery";
 
 export const RECOVER_USAGE = `Usage: node dist/server/recover.js [--reset-password] [--disable-two-factor]
+                                  [--clear-login-allowlist]
 
 Recovers the console's only account when you can no longer sign in.
 
-  --reset-password      Set a new password: asked for twice without echo on a
-                        terminal, otherwise read from the first line of
-                        standard input.
-  --disable-two-factor  Turn two-factor authentication off and delete the TOTP
-                        secret and backup codes.
-  -h, --help            Show this help.
+  --reset-password         Set a new password: asked for twice without echo on
+                           a terminal, otherwise read from the first line of
+                           standard input.
+  --disable-two-factor     Turn two-factor authentication off and delete the
+                           TOTP secret and backup codes.
+  --clear-login-allowlist  Remove the login allow list, so every address may
+                           sign in again.
+  -h, --help               Show this help.
 
 Signs out every session of the account and writes an audit log entry
 (account.recover). Reads DATABASE_URL and the other settings from the
@@ -148,14 +151,25 @@ export async function readNewPassword(
   return password;
 }
 
-function report(result: RecoveryResult, disableTwoFactor: boolean): string[] {
+function report(
+  result: RecoveryResult,
+  options: { disableTwoFactor: boolean; clearLoginAllowList: boolean },
+): string[] {
   const lines: string[] = [];
   if (result.passwordReset) lines.push("Password reset.");
-  if (disableTwoFactor) {
+  if (options.disableTwoFactor) {
     lines.push(
       result.twoFactorDisabled
         ? "Two-factor authentication turned off."
         : "Two-factor authentication was already off.",
+    );
+  }
+  if (options.clearLoginAllowList) {
+    const n = result.loginAllowListCleared.length;
+    lines.push(
+      n > 0
+        ? `Login allow list cleared (${n} ${n === 1 ? "range" : "ranges"}).`
+        : "The login allow list was already off.",
     );
   }
   const n = result.sessionsRevoked;
@@ -180,13 +194,19 @@ export async function runRecover(
   io: RecoverIo,
   connect: () => RecoverConnection | Promise<RecoverConnection>,
 ): Promise<number> {
-  let values: { "reset-password"?: boolean; "disable-two-factor"?: boolean; help?: boolean };
+  let values: {
+    "reset-password"?: boolean;
+    "disable-two-factor"?: boolean;
+    "clear-login-allowlist"?: boolean;
+    help?: boolean;
+  };
   try {
     ({ values } = parseArgs({
       args: argv,
       options: {
         "reset-password": { type: "boolean" },
         "disable-two-factor": { type: "boolean" },
+        "clear-login-allowlist": { type: "boolean" },
         help: { type: "boolean", short: "h" },
       },
       strict: true,
@@ -202,7 +222,8 @@ export async function runRecover(
   }
   const resetPassword = values["reset-password"] === true;
   const disableTwoFactor = values["disable-two-factor"] === true;
-  if (!resetPassword && !disableTwoFactor) {
+  const clearLoginAllowList = values["clear-login-allowlist"] === true;
+  if (!resetPassword && !disableTwoFactor && !clearLoginAllowList) {
     io.stderr.write(RECOVER_USAGE);
     return 2;
   }
@@ -216,8 +237,13 @@ export async function runRecover(
     const password = resetPassword
       ? await readNewPassword(io, (value) => checkNewPassword(auth, value))
       : undefined;
-    const result = await recoverAccount(connection, { password, disableTwoFactor });
-    for (const line of report(result, disableTwoFactor)) io.stdout.write(`${line}\n`);
+    const result = await recoverAccount(connection, {
+      password,
+      disableTwoFactor,
+      clearLoginAllowList,
+    });
+    for (const line of report(result, { disableTwoFactor, clearLoginAllowList }))
+      io.stdout.write(`${line}\n`);
     return 0;
   } catch (error) {
     io.stderr.write(`error: ${failure(error)}\n`);

@@ -10,7 +10,7 @@ import { defineSetting } from "./settings";
 const ORIGIN_ALLOW_LIST_KEY = "origin_allow_list";
 
 /** Normalized, sorted, without duplicates; entries that are no CIDR are left out. */
-function normalizeCidrs(stored: unknown): string[] {
+export function normalizeCidrs(stored: unknown): string[] {
   const cidrs = Array.isArray(stored) ? stored : [];
   const normalized = cidrs.flatMap((c) => {
     const n = typeof c === "string" ? normalizeCidr(c) : null;

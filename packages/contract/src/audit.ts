@@ -141,6 +141,7 @@ export const auditActions = [
   "system.cc_template_update",
   "system.demo_update",
   "system.error_pages_update",
+  "system.login_allow_list_update",
   "system.node_channel_update",
   "system.origin_allow_list_update",
   "system.probes_update",

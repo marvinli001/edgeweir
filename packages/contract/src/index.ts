@@ -31,6 +31,7 @@ import { errorPagesContract, maintenanceContract, platformErrorPages } from "./e
 import { hiddenCardsContract } from "./hidden-cards";
 import { imageConvertContract } from "./image-convert";
 import { l4AppsContract, portPoolProcedures } from "./l4";
+import { loginAllowListProcedures } from "./login-allow-list";
 import {
   nodeAddressesInput,
   nodeProbeInput,
@@ -611,6 +612,8 @@ export const contract = {
       .output(platformErrorPages),
     /** The view-only demo account; switching it off deletes the account and its sessions. */
     ...demoProcedures,
+    /** The networks the operator may sign in from; empty: anyone may. */
+    ...loginAllowListProcedures,
   },
   auditLogs: {
     list: oc
@@ -647,6 +650,7 @@ export * from "./dns";
 export * from "./dns-providers";
 export * from "./edge";
 export * from "./l4";
+export * from "./login-allow-list";
 export * from "./probes";
 export * from "./service-accounts";
 export * from "./usage";

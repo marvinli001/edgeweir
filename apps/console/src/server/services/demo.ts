@@ -5,6 +5,7 @@ import {
   DEMO_USER_ID,
   type DemoSettings,
   demoAddress,
+  demoCidr,
   type LogEntry,
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
@@ -80,12 +81,28 @@ export async function setDemo(
   return { enabled: input.enabled };
 }
 
+/** Metadata fields of these actions that list login allow list ranges (the operator's networks). */
+const LOGIN_ALLOW_LIST_FIELDS: Readonly<Record<string, readonly string[]>> = {
+  "system.login_allow_list_update": ["cidrs", "added", "removed"],
+  "account.recover": ["loginAllowListCleared"],
+};
+
+/** Ranges as the demo account sees them: cut to /24 or /48 (demoCidr). */
+function demoCidrs(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  const cut = value.map((v) => (typeof v === "string" ? demoCidr(v) : ""));
+  return [...new Set(cut.filter(Boolean))].sort();
+}
+
 /**
- * An audit entry as the demo account sees it: client addresses reduced to
- * their network, and the e-mail a failed sign-in typed left out.
+ * An audit entry as the demo account sees it: client addresses and login allow list ranges
+ * reduced to their network, and the e-mail a failed sign-in typed left out.
  */
 export function demoAuditEntry(entry: AuditLogEntry): AuditLogEntry {
   const { email: _typed, ...metadata } = entry.metadata;
+  for (const field of LOGIN_ALLOW_LIST_FIELDS[entry.action] ?? []) {
+    if (field in metadata) metadata[field] = demoCidrs(metadata[field]);
+  }
   return {
     ...entry,
     ip: demoAddress(entry.ip),

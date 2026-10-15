@@ -24,6 +24,10 @@ export const errorDefs = {
   ACCESS_KEY_SESSION_REQUIRED: { status: 403, params: [] },
   /** The demo account can read everything and change nothing. */
   DEMO_READ_ONLY: { status: 403, params: [] },
+  /** The caller's address is outside the login allow list (settings.loginAllowList). */
+  LOGIN_IP_NOT_ALLOWED: { status: 403, params: [] },
+  /** A login allow list that leaves out the address saving it would lock the caller out. */
+  LOGIN_ALLOW_LIST_EXCLUDES_CURRENT_IP: { status: 400, params: ["ip"] },
   /** The operator's account uses the demo account's e-mail. */
   DEMO_EMAIL_TAKEN: { status: 409, params: [] },
   SCOPE_REQUIRED: { status: 403, params: ["scope"] },

@@ -13,6 +13,7 @@ import { fail } from "../lib/errors";
 import { IDEMPOTENCY_HEADER } from "../lib/idempotency";
 import { keyScope } from "../services/access-keys";
 import type { Actor } from "../services/audit";
+import { type LoginCaller, loginAllowed, logLoginRefusal } from "../services/login-allow-list";
 import {
   authenticateServiceAccountKey,
   isServiceAccountKey,
@@ -24,6 +25,8 @@ export interface RequestContext {
   headers: Headers;
   ip: string;
   userAgent: string;
+  /** Forwarding headers came from a peer outside EDGEWEIR_TRUSTED_PROXIES (and were ignored). */
+  untrustedForwarding?: boolean;
   apiSession?: SessionResult;
   /** Set when the request authenticated with a service account key. */
   serviceAccount?: ServicePrincipal;
@@ -137,6 +140,16 @@ export const authed = os.use(async ({ context, next, procedure, path }) => {
   if (!result) throw new ORPCError("UNAUTHORIZED", { message: "authentication required" });
   const { user } = result;
   const demo = user.id === DEMO_USER_ID;
+  // Sessions (the cookie; /rpc never carries a key) only from the login allow list, the demo
+  // account's excepted. AccessKeys on /api/v1 are not limited (ADR-0047).
+  if (
+    !demo &&
+    !context.headers.has(API_KEY_HEADER) &&
+    !(await loginAllowed(context.app.db, context.ip))
+  ) {
+    logLoginRefusal(context.app.log, context.ip, `/rpc/${path.join("/")}`);
+    fail("LOGIN_IP_NOT_ALLOWED", "this address may not sign in to the console");
+  }
   if (demo && !readOnlyAllowed(procedure["~orpc"].route.method ?? "POST", path))
     fail("DEMO_READ_ONLY", "the demo account can only read");
   const actor: Actor = {
@@ -148,6 +161,15 @@ export const authed = os.use(async ({ context, next, procedure, path }) => {
   };
   return next({ context: { user, actor, demo } });
 });
+
+/** The caller as the login allow list sees it. */
+export function loginCaller(context: RequestContext & { demo: boolean }): LoginCaller {
+  return {
+    ip: context.ip,
+    untrustedForwarding: context.untrustedForwarding === true,
+    demo: context.demo,
+  };
+}
 
 /** The response of procedures that return nothing else. */
 export const ok = { ok: true as const };

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DEMO_USER_ID, NODE_CHANNEL_WEBSOCKET_PATH } from "@edgeweir/contract";
+import { DEMO_EMAIL, DEMO_USER_ID, NODE_CHANNEL_WEBSOCKET_PATH } from "@edgeweir/contract";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { OpenAPIGenerator } from "@orpc/openapi";
@@ -19,11 +19,14 @@ import {
   API_KEY_HEADER,
   AUTH_BASE_PATH,
   isAllowedAuthRoute,
+  LOGIN_ALLOW_LIST_EXEMPT_ROUTES,
 } from "./lib/auth";
-import { resolveClientIp, withClientIp } from "./lib/client-ip";
+import { normalizeIp, resolveClientIp, withClientIp } from "./lib/client-ip";
 import type { AppContext } from "./lib/context";
 import { withIdempotency } from "./lib/idempotency";
 import { type RequestContext, router } from "./rpc/router";
+import { isDemoEnabled } from "./services/demo";
+import { loginAllowed, logLoginRefusal } from "./services/login-allow-list";
 import { nodeChannelWebSocketOpen } from "./services/node-channel-url";
 import { authenticateServiceAccountKey, isServiceAccountKey } from "./services/service-accounts";
 
@@ -79,13 +82,24 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
   const clientIp = (c: HonoContext) =>
     resolveClientIp(peerAddress(c), c.req.raw.headers, ctx.env.trustedProxies);
 
+  /** Forwarding headers came from a peer outside EDGEWEIR_TRUSTED_PROXIES, so they were ignored. */
+  const untrustedForwarding = (c: HonoContext) =>
+    (c.req.raw.headers.has("x-forwarded-for") || c.req.raw.headers.has("x-real-ip")) &&
+    !ctx.env.trustedProxies.has(normalizeIp(peerAddress(c)));
+
   const requestContext = (c: HonoContext, surface: "rpc" | "api"): RequestContext => {
     const ip = clientIp(c);
     // Server-side auth.api.* calls see the same resolved address as /api/auth.
     const headers = withClientIp(c.req.raw.headers, ip);
     if (surface === "rpc") headers.delete(API_KEY_HEADER);
     else headers.delete("cookie");
-    return { app: ctx, headers, ip, userAgent: c.req.header("user-agent") ?? "" };
+    return {
+      app: ctx,
+      headers,
+      ip,
+      userAgent: c.req.header("user-agent") ?? "",
+      untrustedForwarding: untrustedForwarding(c),
+    };
   };
 
   /**
@@ -94,10 +108,34 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
    * The API key header is removed: keys authenticate /api/v1 only (ADR-0005)
    * and must never become a session on better-auth's own endpoints.
    */
-  const authRequest = (c: HonoContext): Request => {
-    const headers = withClientIp(c.req.raw.headers, clientIp(c));
+  const authRequest = (c: HonoContext, ip: string): Request => {
+    const headers = withClientIp(c.req.raw.headers, ip);
     headers.delete(API_KEY_HEADER);
     return new Request(c.req.raw, { headers });
+  };
+
+  /**
+   * Whether an /api/auth request outside the login allow list is the demo account's, which the
+   * list does not limit (ADR-0047): a JSON sign-in with its e-mail (better-auth looks the
+   * address up lowercased, as here) while it exists, or a call with its session.
+   */
+  const demoAuthRequest = async (path: string, request: Request): Promise<boolean> => {
+    if (path === "/sign-in/email") {
+      if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json"))
+        return false;
+      const body: unknown = await request
+        .clone()
+        .json()
+        .catch(() => null);
+      const email = (body as { email?: unknown } | null)?.email;
+      return (
+        typeof email === "string" &&
+        email.toLowerCase() === DEMO_EMAIL &&
+        (await isDemoEnabled(ctx.db))
+      );
+    }
+    const session = await ctx.auth.api.getSession({ headers: request.headers }).catch(() => null);
+    return session?.user.id === DEMO_USER_ID;
   };
 
   app.use(
@@ -131,12 +169,17 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
 
   /** Whether the request's credential for its surface is valid (base.ts decides what it may do). */
   const credentialValid = async (c: HonoContext, surface: "rpc" | "api") => {
-    const { headers } = requestContext(c, surface);
+    const { headers, ip } = requestContext(c, surface);
     const key = headers.get(API_KEY_HEADER);
     try {
       if (key && isServiceAccountKey(key))
         return (await authenticateServiceAccountKey(ctx.db, key)) !== null;
-      return (await ctx.auth.api.getSession({ headers })) !== null;
+      const session = await ctx.auth.api.getSession({ headers });
+      if (!session) return false;
+      // A session outside the login allow list gets no further than `authed`.
+      return (
+        surface === "api" || session.user.id === DEMO_USER_ID || (await loginAllowed(ctx.db, ip))
+      );
     } catch {
       return false;
     }
@@ -204,7 +247,21 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
     // Exact match on the normalized path: no prefixes, encodings or trailing slashes.
     const path = new URL(c.req.url).pathname.slice(AUTH_BASE_PATH.length);
     if (!isAllowedAuthRoute(c.req.method, path)) return next(); // -> the /api/* 404
-    const request = authRequest(c);
+    const ip = clientIp(c);
+    const request = authRequest(c, ip);
+    // Checked before better-auth sees the request: no password check, no sign-in limiter, the
+    // same answer for right and wrong passwords.
+    if (
+      !LOGIN_ALLOW_LIST_EXEMPT_ROUTES.has(path) &&
+      !(await loginAllowed(ctx.db, ip)) &&
+      !(await demoAuthRequest(path, request))
+    ) {
+      logLoginRefusal(log, ip, c.req.path);
+      return c.json(
+        { code: "LOGIN_IP_NOT_ALLOWED", message: "this address may not sign in to the console" },
+        403,
+      );
+    }
     if (ACCOUNT_CHANGE_ROUTES.has(path)) {
       const session = await ctx.auth.api.getSession({ headers: request.headers }).catch(() => null);
       if (session?.user.id === DEMO_USER_ID)

@@ -51,6 +51,12 @@ export const ACCOUNT_CHANGE_ROUTES: ReadonlySet<string> = new Set([
   "/passkey/delete-passkey",
 ]);
 
+/**
+ * Allowed endpoints the login allow list does not limit (ADR-0047): signing out only ends the
+ * session the request carries.
+ */
+export const LOGIN_ALLOW_LIST_EXEMPT_ROUTES: ReadonlySet<string> = new Set(["/sign-out"]);
+
 /** Whether an /api/auth request (path below the base path) is on the allow list. */
 export function isAllowedAuthRoute(method: string, path: string): boolean {
   const methods = Object.hasOwn(AUTH_HTTP_ROUTES, path) ? AUTH_HTTP_ROUTES[path] : undefined;

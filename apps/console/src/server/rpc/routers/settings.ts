@@ -3,6 +3,7 @@ import { getAcmeDirectory, setAcmeDirectory } from "../../services/acme-director
 import { getBanSettings, setBanSettings } from "../../services/bans";
 import { isDemoEnabled, setDemo } from "../../services/demo";
 import { getPlatformErrorPages, setPlatformErrorPages } from "../../services/error-pages";
+import { getLoginAllowList, setLoginAllowList } from "../../services/login-allow-list";
 import { checkNodeChannel } from "../../services/node-channel-check";
 import {
   closeNodeChannelWebSocket,
@@ -22,7 +23,7 @@ import {
 import { getReleaseSource, setReleaseSource } from "../../services/release-source";
 import { setupCompletedAt } from "../../services/setup";
 import { getUsageSettings, setUsageSettings } from "../../services/usage";
-import { authed } from "../base";
+import { authed, loginCaller } from "../base";
 
 /** Platform settings. */
 export const settingsRouter = {
@@ -95,6 +96,12 @@ export const settingsRouter = {
     })),
     setDemo: authed.settings.setDemo.handler(({ input, context }) =>
       setDemo(context.app, input, context.actor),
+    ),
+    loginAllowList: authed.settings.loginAllowList.handler(({ context }) =>
+      getLoginAllowList(context.app.db, loginCaller(context)),
+    ),
+    setLoginAllowList: authed.settings.setLoginAllowList.handler(({ input, context }) =>
+      setLoginAllowList(context.app.db, input, context.actor, loginCaller(context)),
     ),
     usage: authed.settings.usage.handler(({ context }) => getUsageSettings(context.app.db)),
     setUsage: authed.settings.setUsage.handler(({ input, context }) =>
