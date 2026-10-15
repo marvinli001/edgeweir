@@ -133,7 +133,8 @@ test("usage protection: maintenance the guard holds, restored", async ({ page })
   await expect(held).toContainText("请求数达到上限，已开启维护模式");
   await expect(page.getByTestId("site-usage-guard")).toHaveText("用量超限");
   await check(page, "held");
-  await page.goto(CLUSTER_ID ? `/sites?cluster=${CLUSTER_ID}` : "/sites");
+  // The list shows 20 sites a page, oldest first: after a full run D is not on the first one.
+  await page.goto(CLUSTER_ID ? `/sites?cluster=${CLUSTER_ID}&q=ug-` : "/sites?q=ug-");
   await expect(page.getByTestId("site-usage-guard")).toHaveCount(1);
   await page.goto(`/sites/${state.d}`);
   await page.getByTestId("usage-guard-restore").click();
