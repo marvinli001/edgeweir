@@ -4,6 +4,7 @@ package edgeweir.node.v1;
 
 import "edgeweir/node/v1/channel.proto";
 import "edgeweir/node/v1/config.proto";
+import "edgeweir/node/v1/node_log.proto";
 import "google/protobuf/timestamp.proto";
 
 // NodeService is the channel between edgeweir-node agents and the console.
@@ -78,6 +79,10 @@ service NodeService {
   // side effects: an agent calls it at an address before it switches to it
   // (feature channel-follow-v1).
   rpc CheckChannel(CheckChannelRequest) returns (CheckChannelResponse);
+  // ReportNodeLogs uploads the node's warnings, errors and events (agent,
+  // supervisor, OpenResty) in sequenced batches; an empty sequence-zero
+  // request reads the cursor (feature node-logs-v1).
+  rpc ReportNodeLogs(ReportNodeLogsRequest) returns (ReportNodeLogsResponse);
 }
 
 // CheckChannelRequest is empty: the client certificate names the node.

@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package edgeweir.node.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// NodeLogLevel is the level of a node log entry.
+enum NodeLogLevel {
+  NODE_LOG_LEVEL_UNSPECIFIED = 0;
+  // Only entries with an event (NodeLogEntry.event).
+  NODE_LOG_LEVEL_INFO = 1;
+  NODE_LOG_LEVEL_WARN = 2;
+  // Also nginx's crit, alert and emerg (fields["severity"] keeps which).
+  NODE_LOG_LEVEL_ERROR = 3;
+}
+
+// NodeLogSource is the process an entry comes from.
+enum NodeLogSource {
+  NODE_LOG_SOURCE_UNSPECIFIED = 0;
+  // The agent (edgeweir-node run).
+  NODE_LOG_SOURCE_AGENT = 1;
+  // The supervisor that runs the agent and OpenResty (edgeweir-node
+  // supervise).
+  NODE_LOG_SOURCE_SUPERVISOR = 2;
+  // OpenResty's error log.
+  NODE_LOG_SOURCE_NGINX = 3;
+  // OpenResty's error log, written by Lua (ngx.log or a Lua error).
+  NODE_LOG_SOURCE_LUA = 4;
+}
+
+// NodeLogEntry is one warning, error or event of a node. The node removes
+// secrets before it stores an entry: query strings, URL userinfo, PEM
+// blocks, credential headers and values of credential-like keys.
+message NodeLogEntry {
+  google.protobuf.Timestamp time = 1;
+  NodeLogLevel level = 2;
+  NodeLogSource source = 3;
+  // The agent's component ("channel", "imageconv", ...); empty for none.
+  string component = 4;
+  // At most 2048 bytes.
+  string message = 5;
+  // Structured attributes: at most 16, keys at most 64 bytes of
+  // [a-z0-9_.-], values at most 512 bytes. OpenResty's request context
+  // goes into client, server, request, upstream, host and referrer.
+  map<string, string> fields = 6;
+  // Entries like this one (same source, level, component and message
+  // without its request context) the node folded into it.
+  uint32 repeated = 7;
+  // The message or a field was cut to its limit.
+  bool truncated = 8;
+  // An info entry's event: agent_started, config_applied,
+  // last_known_good, engine_started, certificate_renewed,
+  // channel_switched, upgrade_applied, engine_logs_unavailable. Empty for
+  // warnings and errors.
+  string event = 9;
+}
+
+// ReportNodeLogsRequest is an immutable, ordered batch from the node's log
+// spool, or with batch_sequence 0 and no entries a cursor query.
+message ReportNodeLogsRequest {
+  uint64 batch_sequence = 1;
+  // At most 500.
+  repeated NodeLogEntry entries = 2;
+  // Entries the node dropped since the previous batch: over its rate
+  // limits, and because its spool or buffers were full.
+  uint32 dropped_rate_limited = 3;
+  uint32 dropped_overflow = 4;
+}
+
+// ReportNodeLogsResponse acknowledges the batch, including already stored
+// retries, or returns the console's cursor.
+message ReportNodeLogsResponse {
+  uint64 batch_sequence = 1;
+  uint32 accepted = 2;
+}
