@@ -484,6 +484,13 @@
       "when": 1791924637576,
       "tag": "0068_node_channel_status",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1791975453359,
+      "tag": "0069_site_usage_guard",
+      "breakpoints": true
     }
   ]
 }

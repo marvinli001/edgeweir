@@ -51,8 +51,57 @@ export const siteUsage = pgTable(
   (t) => [
     primaryKey({ columns: [t.windowStart, t.siteId] }),
     uniqueIndex("site_usage_seq_uq").on(t.seq),
+    // A site's windows of a period (usage protection).
+    index("site_usage_site_window_idx").on(t.siteId, t.windowStart),
   ],
 );
+
+/**
+ * A site's usage protection (ADR-0049): its settings, then the state the
+ * worker keeps for the current period. The guard only lifts the action it
+ * applied itself (held_action); the operator turning the site on or
+ * maintenance off pauses it until the period ends.
+ */
+export const siteUsageGuard = pgTable("site_usage_guard", {
+  siteId: uuid("site_id")
+    .primaryKey()
+    .references(() => site.id, { onDelete: "cascade" }),
+  /** day or month */
+  period: text("period").notNull(),
+  /** IANA time zone the period starts at midnight in. */
+  timeZone: text("time_zone").notNull(),
+  /** Bytes sent per period; null: no limit. */
+  bytesLimit: numeric("bytes_limit", { precision: 38, scale: 0 }),
+  requestsLimit: numeric("requests_limit", { precision: 38, scale: 0 }),
+  /** Bits per second over the last 5 complete minutes. */
+  bandwidthBps: bigint("bandwidth_bps", { mode: "number" }),
+  /** Warning threshold in percent; null: no warning. */
+  warnPercent: integer("warn_percent"),
+  /** alert, maintenance or disable */
+  action: text("action").notNull(),
+  /** auto or manual */
+  recovery: text("recovery").notNull(),
+  bandwidthHoldMinutes: integer("bandwidth_hold_minutes").notNull().default(30),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  /** The period the state below belongs to. */
+  periodStart: timestamp("period_start", { withTimezone: true }),
+  periodEnd: timestamp("period_end", { withTimezone: true }),
+  /** Metrics at or over the warning threshold / the limit in this period (the alerts held). */
+  warnMetrics: text("warn_metrics").array().notNull().default(sql`'{}'::text[]`),
+  limitMetrics: text("limit_metrics").array().notNull().default(sql`'{}'::text[]`),
+  /** The highest bandwidth seen in this period, and when it was last over the limit. */
+  bandwidthPeakBps: bigint("bandwidth_peak_bps", { mode: "number" }).notNull().default(0),
+  bandwidthBreachedAt: timestamp("bandwidth_breached_at", { withTimezone: true }),
+  /** maintenance or disable: applied by the guard and still in force. */
+  heldAction: text("held_action"),
+  heldMetric: text("held_metric"),
+  heldSince: timestamp("held_since", { withTimezone: true }),
+  /** Restored by the operator: no action before this time (the period's end). */
+  pausedUntil: timestamp("paused_until", { withTimezone: true }),
+  /** Error code of the last action that could not be published; empty when none. */
+  lastError: text("last_error").notNull().default(""),
+  evaluatedAt: timestamp("evaluated_at", { withTimezone: true }),
+});
 const trafficColumns = () => ({
   minute: timestamp("minute", { withTimezone: true }).notNull(),
   nodeId: uuid("node_id").notNull(),
