@@ -73,3 +73,44 @@ export const accessLog = pgTable(
     index("access_log_site_time_idx").on(t.siteId, t.time),
   ],
 );
+/** Node logs (ADR-0050): the last ReportNodeLogs batch stored per node. */
+export const nodeLogEntryCursor = pgTable("node_log_entry_cursor", {
+  nodeId: uuid("node_id")
+    .primaryKey()
+    .references(() => node.id, { onDelete: "cascade" }),
+  sequence: bigint("sequence", { mode: "bigint" }).notNull().default(sql`0`),
+});
+/**
+ * A node's warnings, errors and events (ADR-0050), kept for the
+ * node_log_retention setting. kind "dropped" records how many entries the
+ * node dropped before a batch (message and fields empty).
+ */
+export const nodeLogEntry = pgTable(
+  "node_log_entry",
+  {
+    nodeId: uuid("node_id")
+      .notNull()
+      .references(() => node.id, { onDelete: "cascade" }),
+    sequence: bigint("sequence", { mode: "bigint" }).notNull(),
+    idx: integer("idx").notNull(),
+    /** When it happened on the node (within a day before and 5 minutes after it arrived). */
+    time: timestamp("time", { withTimezone: true }).notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+    kind: text("kind").notNull().default("entry"),
+    level: text("level").notNull(),
+    source: text("source").notNull(),
+    component: text("component").notNull().default(""),
+    message: text("message").notNull().default(""),
+    fields: jsonb("fields").$type<Record<string, string>>().notNull().default({}),
+    repeated: integer("repeated").notNull().default(0),
+    truncated: boolean("truncated").notNull().default(false),
+    event: text("event").notNull().default(""),
+    droppedRateLimited: integer("dropped_rate_limited").notNull().default(0),
+    droppedOverflow: integer("dropped_overflow").notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ columns: [t.nodeId, t.sequence, t.idx] }),
+    index("node_log_entry_node_time_idx").on(t.nodeId, t.time, t.sequence, t.idx),
+    index("node_log_entry_time_idx").on(t.time),
+  ],
+);
