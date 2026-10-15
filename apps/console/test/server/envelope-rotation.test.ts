@@ -33,6 +33,7 @@ import {
   SMTP_KEY,
   smtpBinding,
 } from "../../src/server/services/notification-delivery";
+import { originClientKeyBinding } from "../../src/server/services/origin-pki";
 import { sessionTicketKeyBinding } from "../../src/server/services/session-ticket-keys";
 import {
   ensureSetupToken,
@@ -145,6 +146,7 @@ describe("master key rotation", () => {
       authForward: crypto.randomUUID(),
       ticketKey: crypto.randomUUID(),
       ticketPending: crypto.randomUUID(),
+      originClient: crypto.randomUUID(),
     };
     await db.insert(schema.originCredential).values({
       id: ids.credential,
@@ -230,6 +232,16 @@ describe("master key rotation", () => {
       },
       { id: ids.ticketPending, clusterId, role: "next", secret: null },
     ]);
+    await db.insert(schema.originClientCertificate).values({
+      id: ids.originClient,
+      clusterId,
+      chainPem: "chain",
+      privateKeyEnvelope: seal(originClientKeyBinding(ids.originClient)),
+      fingerprint: "0".repeat(64),
+      serial: "01",
+      notBefore: new Date(),
+      notAfter: new Date(Date.now() + 86_400_000),
+    });
     await db.insert(schema.systemSetting).values([
       {
         key: SETUP_TOKEN_KEY,

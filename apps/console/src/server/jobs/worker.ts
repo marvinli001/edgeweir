@@ -15,6 +15,7 @@ import { rotateChallengeKeys } from "../services/challenge-keys";
 import { expireCnamePrefixes } from "../services/cname-prefixes";
 import { pruneDnsRevisions, reconcileDns } from "../services/dns";
 import { pruneNodeLogs } from "../services/node-logs";
+import { rotateOriginClientCertificates } from "../services/origin-pki";
 import { recompileAfterUpgrade } from "../services/recompile";
 import { pruneRevisions } from "../services/revisions";
 import { evaluateRollouts } from "../services/rollout";
@@ -42,6 +43,7 @@ export const QUEUES = {
   pruneBans: "maintenance.prune-bans",
   rotateChallengeKeys: "maintenance.rotate-challenge-keys",
   rotateSessionTicketKeys: "maintenance.rotate-session-ticket-keys",
+  rotateOriginClientCertificates: "maintenance.rotate-origin-client-certificates",
   pruneSecurityEvents: "maintenance.prune-security-events",
   pruneNodeLogs: "maintenance.prune-node-logs",
 } as const;
@@ -170,6 +172,12 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
     if (rotated.length) log.info("rotated session ticket keys", { clusters: rotated });
   });
 
+  // Hourly check; a cluster's origin client certificate is replaced 30 days before it expires.
+  await boss.work(QUEUES.rotateOriginClientCertificates, async () => {
+    const rotated = await rotateOriginClientCertificates(ctx);
+    if (rotated.length) log.info("replaced origin client certificates", { clusters: rotated });
+  });
+
   await boss.work(QUEUES.pruneSecurityEvents, async () => {
     const removed = await pruneSecurityEvents(ctx.db);
     if (removed) log.info("deleted old security events", { removed });
@@ -202,6 +210,7 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   await boss.schedule(QUEUES.pruneBans, "*/10 * * * *");
   await boss.schedule(QUEUES.rotateChallengeKeys, "11 * * * *");
   await boss.schedule(QUEUES.rotateSessionTicketKeys, "13 * * * *");
+  await boss.schedule(QUEUES.rotateOriginClientCertificates, "19 * * * *");
   await boss.schedule(QUEUES.pruneSecurityEvents, "37 * * * *");
   await boss.schedule(QUEUES.pruneNodeLogs, "*/10 * * * *");
   await boss.schedule(QUEUES.pruneRevisions, "17 * * * *");

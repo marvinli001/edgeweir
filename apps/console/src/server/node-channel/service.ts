@@ -75,6 +75,7 @@ import { claimEnrollmentToken } from "../services/enrollment";
 import { ingestNodeLogs, nodeLogCursor } from "../services/node-logs";
 import { acceptedCertificate, isSerialRevoked, replaceReportedAddresses } from "../services/nodes";
 import { replaceOriginHealth } from "../services/origin-health";
+import { nodeOriginClientCertificates } from "../services/origin-pki";
 import { mintRevisionReceipt, verifyRevisionReceipt } from "../services/revision-receipts";
 import { getRevision, latestRevision, nodeTarget } from "../services/revisions";
 import { evaluateAfterHeartbeat } from "../services/rollout";
@@ -937,7 +938,14 @@ export function createNodeService(
 
     async getCertificates(req, ctx) {
       const node = await requireNode(ctx);
-      return { certificates: await nodeCertificates(app, node.clusterId, req.ids) };
+      const ids = [...new Set(req.ids)].filter((id) => /^[0-9a-f-]{36}$/i.test(id)).slice(0, 100);
+      // Site certificates and the origin client certificates nodes present to origins.
+      return {
+        certificates: [
+          ...(await nodeCertificates(app, node.clusterId, ids)),
+          ...(await nodeOriginClientCertificates(app, node.clusterId, ids)),
+        ],
+      };
     },
 
     async getOriginCredentials(req, ctx) {

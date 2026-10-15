@@ -19,6 +19,7 @@ import {
   exists,
   ilike,
   inArray,
+  isNotNull,
   like as like_,
   ne,
   notExists,
@@ -57,6 +58,7 @@ import { defaultClusterId } from "./clusters";
 import { newCnamePrefix } from "./cname-prefixes";
 import { listBindings } from "./config-input";
 import { assertOriginsAllowed } from "./origin-allow-list";
+import { ensureOriginClientCertificate, ORIGIN_CA_ID, originAuthorityExists } from "./origin-pki";
 import {
   type Executor,
   latestRevision,
@@ -215,6 +217,8 @@ async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
       originSettings: {
         policy: (pool?.policy ?? "weighted_random") as Site["originSettings"]["policy"],
         tlsVerify: pool?.tlsVerify ?? true,
+        tlsTrust: pool?.tlsTrust === "origin_ca" ? "originCa" : "system",
+        clientCertificate: pool?.clientCertificate ?? false,
         maxFails: pool?.maxFails ?? 3,
         recoverySeconds: pool?.recoverySeconds ?? 30,
         connectTimeoutMs: pool?.connectTimeoutMs ?? 10_000,
@@ -529,7 +533,9 @@ type KeptPoolSettings =
   | "protocol"
   | "grpc"
   | "tries"
-  | "statusRetry";
+  | "statusRetry"
+  | "tlsTrust"
+  | "clientCertificate";
 
 /** gRPC goes to the origins over HTTP/2 only. */
 function assertGrpcOverHttp2(settings: Pick<OriginSettingsInput, "protocol" | "grpc">) {
@@ -562,7 +568,36 @@ export function poolSettingsValues(
     ...(settings.sessionAffinity ? { sessionAffinity: settings.sessionAffinity } : {}),
     ...(settings.tries !== undefined ? { tries: settings.tries } : {}),
     ...(settings.statusRetry !== undefined ? { statusRetry: settings.statusRetry } : {}),
+    ...(settings.tlsTrust
+      ? { tlsTrust: settings.tlsTrust === "originCa" ? "origin_ca" : "system" }
+      : {}),
+    ...(settings.clientCertificate !== undefined
+      ? { clientCertificate: settings.clientCertificate }
+      : {}),
   };
+}
+
+/**
+ * Origin protection of a pool's resulting settings: the Origin CA as trust
+ * needs verification, no S3 origin (their certificates are public) and the
+ * Origin CA; presenting a client certificate issues the cluster one when it
+ * has none that is current (ORIGIN_CLIENT_CA_NOT_FOUND without the CA).
+ */
+export async function assertOriginProtection(
+  tx: Tx,
+  masterKey: MasterKey,
+  clusterId: string,
+  settings: { tlsVerify: boolean; tlsTrust: "system" | "originCa"; clientCertificate: boolean },
+  hasS3Origin: boolean,
+) {
+  if (settings.tlsTrust === "originCa") {
+    if (!settings.tlsVerify)
+      fail("ORIGIN_TLS_TRUST_REQUIRES_VERIFY", "the Origin CA as trust needs verification");
+    if (hasS3Origin) fail("ORIGIN_CA_S3", "S3 origins cannot be verified against the Origin CA");
+    if (!(await originAuthorityExists(tx, ORIGIN_CA_ID)))
+      fail("ORIGIN_CA_NOT_FOUND", "the Origin CA has not been created");
+  }
+  if (settings.clientCertificate) await ensureOriginClientCertificate(tx, masterKey, clusterId);
 }
 
 /**
@@ -823,6 +858,13 @@ export async function createSite(
       .values({ siteId: siteRow.id, ...poolSettingsValues(input.originSettings) })
       .returning();
     if (!pool) throw new Error("origin pool insert failed");
+    await assertOriginProtection(
+      tx,
+      ctx.masterKey,
+      clusterId,
+      input.originSettings,
+      input.origins.some((o) => o.s3),
+    );
     await writeOrigins(tx, pool, input.origins, ctx.masterKey);
     await replaceCacheRules(tx, siteRow, input.cacheRules);
     // Before publishing: every transaction takes the tags lock before a cluster's publish lock.
@@ -915,6 +957,25 @@ export async function updateSite(
         .set({ websocket: input.originSettings.websocket })
         .where(eq(schema.site.id, row.id));
       changed.push("originSettings");
+    }
+    if (input.origins || input.originSettings) {
+      const pool = await sitePool(tx, row.id);
+      const s3 = await tx
+        .select({ id: schema.origin.id })
+        .from(schema.origin)
+        .where(and(eq(schema.origin.poolId, pool.id), isNotNull(schema.origin.credentialId)))
+        .limit(1);
+      await assertOriginProtection(
+        tx,
+        ctx.masterKey,
+        row.clusterId,
+        {
+          tlsVerify: pool.tlsVerify,
+          tlsTrust: pool.tlsTrust === "origin_ca" ? "originCa" : "system",
+          clientCertificate: pool.clientCertificate,
+        },
+        s3.length > 0,
+      );
     }
     if (input.cacheSettings) {
       await writePurgeKey(tx, ctx.masterKey, row.id, input.cacheSettings.purgeMethod);

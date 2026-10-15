@@ -48,6 +48,7 @@ import { loadEdgeModel } from "./edge";
 import { errorPagesModel, loadPlatformErrorPages, loadSiteErrorPages } from "./error-pages";
 import { loadL4AppModels } from "./l4-config";
 import { loadOriginAllowList } from "./origin-allow-list";
+import { loadOriginProtection } from "./origin-pki";
 import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
 import { loadPlatformProtection, loadSiteProtectionModels } from "./protection";
 import { type Executor, latestRevision, type Tx } from "./revisions";
@@ -297,6 +298,7 @@ export async function loadSiteModels(
           settings: pool
             ? {
                 tlsVerify: pool.tlsVerify,
+                tlsTrust: pool.tlsTrust === "origin_ca" ? "originCa" : "system",
                 maxFails: pool.maxFails,
                 recoverySeconds: pool.recoverySeconds,
                 connectTimeoutMs: pool.connectTimeoutMs,
@@ -747,6 +749,46 @@ export async function loadCacheZones(db: Executor, clusterId: string): Promise<C
 }
 
 /**
+ * Origin protection of the cluster's served sites: the sites presenting a
+ * client certificate get the cluster's current one (set on their pool
+ * settings), and the Origin CA comes along when a site trusts it.
+ */
+async function loadSiteOriginProtection(tx: Tx, clusterId: string, sites: SiteModel[]) {
+  const enabled = sites.filter((site) => site.enabled);
+  const presenting = enabled.length
+    ? new Set(
+        (
+          await tx
+            .select({ siteId: schema.originPool.siteId })
+            .from(schema.originPool)
+            .where(
+              and(
+                inArray(
+                  schema.originPool.siteId,
+                  enabled.map((site) => site.id),
+                ),
+                eq(schema.originPool.clientCertificate, true),
+              ),
+            )
+        ).map((row) => row.siteId),
+      )
+    : new Set<string>();
+  const protection = await loadOriginProtection(tx, clusterId, {
+    clientCertificate: presenting.size > 0,
+    originCa: enabled.some(
+      (site) =>
+        site.originPool.settings?.tlsVerify && site.originPool.settings.tlsTrust === "originCa",
+    ),
+  });
+  for (const site of enabled) {
+    const settings = site.originPool.settings;
+    if (settings && presenting.has(site.id) && protection.clientCertificateId)
+      settings.clientCertificateId = protection.clientCertificateId;
+  }
+  return protection;
+}
+
+/**
  * What the cluster's configuration is compiled from now, except its
  * challenge keys. Stored rules the current validator refuses keep their
  * last compiled form and raise config_rule_invalid (resolved once they
@@ -800,12 +842,15 @@ export async function loadConfigInput(
   );
   const httpChallenges = await loadHttpChallenges(tx, clusterId);
   const platformProtection = await loadPlatformProtection(tx);
+  const protection = await loadSiteOriginProtection(tx, clusterId, sites);
   return {
     clusterId,
     cacheZones: await loadCacheZones(tx, clusterId),
     sites,
     originAllowedCidrs,
     certificates,
+    originClientCertificates: protection.originClientCertificates,
+    ...(protection.originCa ? { originCa: protection.originCa } : {}),
     httpChallenges,
     ipLists,
     platformRules,

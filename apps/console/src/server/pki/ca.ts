@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { createHash, randomBytes, webcrypto } from "node:crypto";
+import { createHash, createPublicKey, randomBytes, webcrypto } from "node:crypto";
 import { isIP } from "node:net";
 import * as x509 from "@peculiar/x509";
 
@@ -57,15 +57,15 @@ export function pemFromDer(label: string, der: ArrayBuffer | Uint8Array): string
   return `-----BEGIN ${label}-----\n${lines.join("\n")}\n-----END ${label}-----\n`;
 }
 
-/** Generates a fresh internal CA (ECDSA P-256, 10 years, path length 0). */
-export async function generateCa(commonName: string): Promise<CaMaterial> {
+/** Generates a fresh internal CA (ECDSA P-256, 10 years unless given, path length 0). */
+export async function generateCa(commonName: string, years = 10): Promise<CaMaterial> {
   const keys = (await subtle.generateKey(EC_ALG, true, ["sign", "verify"])) as CryptoKeyPair;
   const now = new Date();
   const cert = await x509.X509CertificateGenerator.createSelfSigned({
     serialNumber: randomSerial(),
     name: `CN=${commonName}, O=Edgeweir`,
     notBefore: new Date(now.getTime() - CLOCK_SKEW_MS),
-    notAfter: new Date(now.getTime() + 3650 * DAY),
+    notAfter: new Date(now.getTime() + years * 365 * DAY),
     keys,
     signingAlgorithm: SIGNING_ALG,
     extensions: [
@@ -206,3 +206,224 @@ export class CertificateAuthority {
 }
 
 export class CsrError extends Error {}
+
+/** A certificate and the PKCS#8 key the console generated for it. */
+export interface IssuedKeyPairCertificate {
+  certificatePem: string;
+  privateKeyPem: string;
+  serialNumber: string;
+  fingerprintSha256: string;
+  notBefore: Date;
+  notAfter: Date;
+}
+
+/** An origin server certificate; privateKeyPem is "" when a CSR supplied the key. */
+export interface IssuedOriginCertificate extends IssuedKeyPairCertificate {
+  keyType: string;
+}
+
+export type OriginKeyType = "ec256" | "rsa2048";
+
+const RSA_ALG = {
+  name: "RSASSA-PKCS1-v1_5",
+  modulusLength: 2048,
+  publicExponent: new Uint8Array([1, 0, 1]),
+  hash: "SHA-256",
+} as const;
+
+/**
+ * The key type of a SubjectPublicKeyInfo origin certificates accept: ECDSA
+ * P-256 / P-384 or RSA 2048-4096 bits; null for anything else.
+ */
+export function originKeyType(spki: ArrayBuffer | Uint8Array): string | null {
+  const key = createPublicKey({
+    key: Buffer.from(new Uint8Array(spki)),
+    format: "der",
+    type: "spki",
+  });
+  const details = key.asymmetricKeyDetails ?? {};
+  if (key.asymmetricKeyType === "ec") {
+    if (details.namedCurve === "prime256v1") return "ec256";
+    if (details.namedCurve === "secp384r1") return "ec384";
+    return null;
+  }
+  if (key.asymmetricKeyType === "rsa") {
+    const bits = details.modulusLength ?? 0;
+    return [2048, 3072, 4096].includes(bits) ? `rsa${bits}` : null;
+  }
+  return null;
+}
+
+/** Extra issuing operations of the origin client CA and the Origin CA. */
+export class OriginAuthority {
+  private constructor(
+    readonly certificate: x509.X509Certificate,
+    private readonly privateKey: CryptoKey,
+  ) {}
+
+  static async load(material: CaMaterial): Promise<OriginAuthority> {
+    const cert = new x509.X509Certificate(material.certificatePem);
+    const key = await subtle.importKey("pkcs8", material.privateKeyPkcs8Der, EC_ALG, false, [
+      "sign",
+    ]);
+    return new OriginAuthority(cert, key);
+  }
+
+  /**
+   * Issues a TLS client certificate with a generated ECDSA P-256 key:
+   * CN=<commonName>, O=<organization>, client auth only.
+   */
+  async issueClientCertificate(
+    commonName: string,
+    organization: string,
+    days: number,
+    issuedAt = new Date(),
+  ): Promise<IssuedKeyPairCertificate> {
+    const keys = (await subtle.generateKey(EC_ALG, true, ["sign", "verify"])) as CryptoKeyPair;
+    const now = issuedAt.getTime();
+    const cert = await x509.X509CertificateGenerator.create({
+      serialNumber: randomSerial(),
+      subject: `CN=${commonName}, O=${organization}`,
+      issuer: this.certificate.subject,
+      notBefore: new Date(now - CLOCK_SKEW_MS),
+      notAfter: this.capped(new Date(now + days * DAY)),
+      signingAlgorithm: SIGNING_ALG,
+      publicKey: keys.publicKey,
+      signingKey: this.privateKey,
+      extensions: [
+        new x509.BasicConstraintsExtension(false, undefined, true),
+        new x509.KeyUsagesExtension(x509.KeyUsageFlags.digitalSignature, true),
+        new x509.ExtendedKeyUsageExtension([x509.ExtendedKeyUsage.clientAuth], false),
+        await x509.AuthorityKeyIdentifierExtension.create(this.certificate, false),
+        await x509.SubjectKeyIdentifierExtension.create(keys.publicKey),
+      ],
+    });
+    return this.issued(
+      cert,
+      pemFromDer("PRIVATE KEY", await subtle.exportKey("pkcs8", keys.privateKey)),
+    );
+  }
+
+  /**
+   * Issues an origin server certificate for host names and IP literals:
+   * server auth only, valid for `years` or until the authority expires.
+   * With a CSR its signature is checked and only its public key is used
+   * (CsrError); otherwise a `keyType` key is generated and returned.
+   */
+  async issueOriginCertificate(input: {
+    hostnames: string[];
+    years: number;
+    keyType: OriginKeyType;
+    csrPem?: string;
+    issuedAt?: Date;
+  }): Promise<IssuedOriginCertificate> {
+    let publicKey: CryptoKey | x509.PublicKey;
+    let privateKeyPem = "";
+    let keyType: string;
+    if (input.csrPem) {
+      let csr: x509.Pkcs10CertificateRequest;
+      try {
+        csr = new x509.Pkcs10CertificateRequest(input.csrPem);
+      } catch {
+        throw new CsrError("malformed CSR");
+      }
+      let type: string | null;
+      try {
+        type = originKeyType(csr.publicKey.rawData);
+      } catch {
+        type = null;
+      }
+      if (!type) throw new CsrError("unsupported key");
+      let valid = false;
+      try {
+        valid = await csr.verify();
+      } catch {
+        valid = false;
+      }
+      if (!valid) throw new CsrError("CSR signature verification failed");
+      publicKey = csr.publicKey;
+      keyType = type;
+    } else {
+      const alg = input.keyType === "rsa2048" ? RSA_ALG : EC_ALG;
+      const keys = (await subtle.generateKey(alg, true, ["sign", "verify"])) as CryptoKeyPair;
+      publicKey = keys.publicKey;
+      privateKeyPem = pemFromDer("PRIVATE KEY", await subtle.exportKey("pkcs8", keys.privateKey));
+      keyType = input.keyType;
+    }
+    const now = (input.issuedAt ?? new Date()).getTime();
+    const sans: x509.JsonGeneralName[] = input.hostnames.map((name) =>
+      isIP(name) ? { type: "ip", value: name } : { type: "dns", value: name },
+    );
+    const usage = keyType.startsWith("rsa")
+      ? x509.KeyUsageFlags.digitalSignature | x509.KeyUsageFlags.keyEncipherment
+      : x509.KeyUsageFlags.digitalSignature;
+    const cert = await x509.X509CertificateGenerator.create({
+      serialNumber: randomSerial(),
+      subject: [{ CN: [input.hostnames[0] ?? ""] }],
+      issuer: this.certificate.subject,
+      notBefore: new Date(now - CLOCK_SKEW_MS),
+      notAfter: this.capped(new Date(now + input.years * 365 * DAY)),
+      signingAlgorithm: SIGNING_ALG,
+      publicKey,
+      signingKey: this.privateKey,
+      extensions: [
+        new x509.BasicConstraintsExtension(false, undefined, true),
+        new x509.KeyUsagesExtension(usage, true),
+        new x509.ExtendedKeyUsageExtension([x509.ExtendedKeyUsage.serverAuth], false),
+        new x509.SubjectAlternativeNameExtension(sans, false),
+        await x509.AuthorityKeyIdentifierExtension.create(this.certificate, false),
+        await x509.SubjectKeyIdentifierExtension.create(publicKey),
+      ],
+    });
+    return { ...this.issued(cert, privateKeyPem), keyType };
+  }
+
+  /**
+   * A CRL of the given serial numbers (lowercase hex), valid from an hour
+   * ago until the authority expires: nodes keep enforcing it however long
+   * the console is unreachable, and every change replaces it.
+   */
+  async crl(
+    revoked: { serial: string; revokedAt: Date }[],
+    issuedAt = new Date(),
+  ): Promise<string> {
+    const crl = await x509.X509CrlGenerator.create({
+      issuer: this.certificate.subject,
+      thisUpdate: new Date(issuedAt.getTime() - CLOCK_SKEW_MS),
+      nextUpdate: this.certificate.notAfter,
+      entries: revoked.map((r) => ({ serialNumber: r.serial, revocationDate: r.revokedAt })),
+      signingAlgorithm: SIGNING_ALG,
+      signingKey: this.privateKey,
+      extensions: [await x509.AuthorityKeyIdentifierExtension.create(this.certificate, false)],
+    });
+    // OpenSSL (nginx's *_ssl_crl) reads the label "X509 CRL" only, not the library's "CRL".
+    return pemFromDer("X509 CRL", crl.rawData);
+  }
+
+  private capped(notAfter: Date): Date {
+    return notAfter > this.certificate.notAfter ? this.certificate.notAfter : notAfter;
+  }
+
+  private issued(cert: x509.X509Certificate, privateKeyPem: string): IssuedKeyPairCertificate {
+    return {
+      certificatePem: `${cert.toString("pem").trim()}\n`,
+      privateKeyPem,
+      serialNumber: cert.serialNumber,
+      fingerprintSha256: sha256Fingerprint(cert),
+      notBefore: cert.notBefore,
+      notAfter: cert.notAfter,
+    };
+  }
+}
+
+/** Whether `pem`'s first certificate was signed by the authority certificate `caPem`. */
+export async function issuedBy(pem: string, caPem: string): Promise<boolean> {
+  try {
+    const cert = new x509.X509Certificate(pem);
+    const ca = new x509.X509Certificate(caPem);
+    if (cert.issuer !== ca.subject) return false;
+    return await cert.verify({ publicKey: ca.publicKey, signatureOnly: true });
+  } catch {
+    return false;
+  }
+}

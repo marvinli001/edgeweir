@@ -21,7 +21,7 @@ import {
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import { type AuthSecret, openAuthSecret, sealAuthSecret } from "../lib/access-auth-secrets";
 import { readAccessControl } from "../lib/access-control";
 import { readCacheKey } from "../lib/cache-key";
@@ -45,6 +45,7 @@ import { assertSitePorts, portsOf } from "./site-ports";
 import { siteTagRefs } from "./site-tags";
 import {
   assertDomainsFree,
+  assertOriginProtection,
   CACHE_RULE_FIELDS,
   findSite,
   s3SecretBinding,
@@ -271,6 +272,8 @@ const POOL_COLUMNS = [
   "sessionAffinity",
   "tries",
   "statusRetry",
+  "tlsTrust",
+  "clientCertificate",
 ] as const satisfies readonly (keyof typeof schema.originPool.$inferSelect)[];
 type PoolValue = Pick<typeof schema.originPool.$inferSelect, (typeof POOL_COLUMNS)[number]> & {
   websocket: boolean;
@@ -641,6 +644,8 @@ export const COPY_PARTS: Record<SiteCopyPart, Part<unknown>> = {
         sessionAffinity: {},
         tries: 3,
         statusRetry: true,
+        tlsTrust: "system",
+        clientCertificate: false,
       } satisfies Omit<PoolValue, "websocket">;
       const value = pool ? pick(pool, POOL_COLUMNS) : defaults;
       return {
@@ -650,11 +655,28 @@ export const COPY_PARTS: Record<SiteCopyPart, Part<unknown>> = {
         websocket: site.websocket,
       };
     },
-    async write(tx, target, value) {
+    async write(tx, target, value, ctx) {
       const { websocket, ...columns } = value;
       const pool = await sitePool(tx, target.id);
       await tx.update(schema.originPool).set(columns).where(eq(schema.originPool.id, pool.id));
       await tx.update(schema.site).set({ websocket }).where(eq(schema.site.id, target.id));
+      // The origins stay the target's: an S3 origin there rules out the Origin CA.
+      const s3 = await tx
+        .select({ id: schema.origin.id })
+        .from(schema.origin)
+        .where(and(eq(schema.origin.poolId, pool.id), isNotNull(schema.origin.credentialId)))
+        .limit(1);
+      await assertOriginProtection(
+        tx,
+        ctx.masterKey,
+        target.clusterId,
+        {
+          tlsVerify: columns.tlsVerify,
+          tlsTrust: columns.tlsTrust === "origin_ca" ? "originCa" : "system",
+          clientCertificate: columns.clientCertificate,
+        },
+        s3.length > 0,
+      );
     },
   }),
   logs: part<{

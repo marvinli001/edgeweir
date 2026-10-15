@@ -18,6 +18,7 @@ import {
 import { challengeKeyBinding } from "./challenge-keys";
 import { providerBinding } from "./dns-providers";
 import { channelBinding, SMTP_KEY, smtpBinding } from "./notification-delivery";
+import { originClientKeyBinding } from "./origin-pki";
 import type { Executor } from "./revisions";
 import { sessionTicketKeyBinding } from "./session-ticket-keys";
 import { SETUP_TOKEN_BINDING, SETUP_TOKEN_KEY } from "./setup";
@@ -63,6 +64,12 @@ export const ENVELOPE_COLUMNS: EnvelopeColumn[] = [
     id: schema.pkiAuthority.id,
     column: schema.pkiAuthority.privateKeyEnvelope,
     binding: caKeyBinding,
+  },
+  {
+    table: schema.originClientCertificate,
+    id: schema.originClientCertificate.id,
+    column: schema.originClientCertificate.privateKeyEnvelope,
+    binding: originClientKeyBinding,
   },
   {
     table: schema.alertChannel,

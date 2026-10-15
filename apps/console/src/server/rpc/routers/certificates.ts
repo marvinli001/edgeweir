@@ -13,6 +13,15 @@ import {
   updateDnsCredential,
   uploadCertificate,
 } from "../../services/certificates";
+import {
+  createOriginCa,
+  createOriginClientCa,
+  getOriginCa,
+  getOriginClientCa,
+  issueOriginCertificate,
+  listOriginCertificates,
+  revokeOriginCertificate,
+} from "../../services/origin-pki";
 import { authed } from "../base";
 
 /** Certificates and the DNS credentials of DNS-01 validation. */
@@ -33,6 +42,27 @@ export const certificatesRouter = {
     ),
     delete: authed.certificates.delete.handler(({ input, context }) =>
       deleteCertificate(context.app, input.id, context),
+    ),
+  },
+  originClientCa: {
+    get: authed.originClientCa.get.handler(({ context }) => getOriginClientCa(context.app)),
+    create: authed.originClientCa.create.handler(({ context }) =>
+      createOriginClientCa(context.app, context),
+    ),
+  },
+  originCa: {
+    get: authed.originCa.get.handler(({ context }) => getOriginCa(context.app)),
+    create: authed.originCa.create.handler(({ context }) => createOriginCa(context.app, context)),
+  },
+  originCertificates: {
+    list: authed.originCertificates.list.handler(({ context }) =>
+      listOriginCertificates(context.app),
+    ),
+    issue: authed.originCertificates.issue.handler(({ input, context }) =>
+      issueOriginCertificate(context.app, input, context),
+    ),
+    revoke: authed.originCertificates.revoke.handler(({ input, context }) =>
+      revokeOriginCertificate(context.app, input, context),
     ),
   },
   acmeAccounts: {

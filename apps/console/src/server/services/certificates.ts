@@ -24,11 +24,13 @@ import {
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { namesHosts } from "../lib/site-domains";
+import { issuedBy } from "../pki/ca";
 import { customAcmeDirectory, defaultAcmeCa, readPemCertificates } from "./acme-directory";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import { certificateNodeFailures } from "./certificate-failures";
 import { certdDns, probe, validCredentials } from "./dns-providers";
 import { assertHttp01Ready } from "./http01-check";
+import { originCaCertificate } from "./origin-pki";
 import { type Executor, getRevision, publishRevision } from "./revisions";
 import { publishedRevisions } from "./rollout";
 import { assertSitePorts, portsOf } from "./site-ports";
@@ -423,6 +425,10 @@ export async function uploadCertificate(
   ctx: CertificateContext,
 ) {
   const inspected = inspectCertificate(input.chainPem, input.privateKeyPem);
+  // Origin CA certificates are for origins: only the edge trusts them, visitors do not.
+  const originCa = await originCaCertificate(app.db);
+  if (originCa && (await issuedBy(inspected.chainPem, originCa)))
+    fail("CERTIFICATE_ORIGIN_CA", "certificates of the Origin CA are for origins only");
   const id = randomUUID();
   return app.db.transaction(async (tx) => {
     const [row] = await tx

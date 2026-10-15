@@ -43,6 +43,7 @@ import { loadEdgeModel } from "./edge";
 import { loadPlatformErrorPages } from "./error-pages";
 import { restoreL4Apps } from "./l4-config";
 import { loadOriginAllowList } from "./origin-allow-list";
+import { restoreOriginProtection } from "./origin-pki";
 import { loadPlatformProtection, loadSiteProtectionModels } from "./protection";
 import {
   getRevision,
@@ -71,8 +72,9 @@ const hostKey = (host: { name: string; wildcard: boolean; match: DomainMatch }) 
  * rollback) refuses with ROLLBACK_RESOURCE_UNAVAILABLE, as it does for an
  * expired, unavailable or unloadable certificate; otherwise (the canary's stable
  * revision) it is dropped. Offline hosts follow the current sites; layer-4
- * applications follow the same rules (restoreL4Apps).
- * Derived fields are left to refreshDerived.
+ * applications follow the same rules (restoreL4Apps), origin client
+ * certificates and the Origin CA's CRL are the current ones
+ * (restoreOriginProtection). Derived fields are left to refreshDerived.
  */
 async function restoreSites(
   tx: Tx,
@@ -234,6 +236,7 @@ async function restoreSites(
     out.offlineHosts = [...hosts.values()].filter((h) => !served.has(hostKey(h)));
   }
   out.l4Apps = await restoreL4Apps(tx, clusterId, out.l4Apps, opts);
+  await restoreOriginProtection(tx, clusterId, out, opts);
   return { config: out, currentSites, edge };
 }
 

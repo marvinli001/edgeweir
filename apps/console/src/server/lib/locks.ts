@@ -134,6 +134,13 @@ export const lockEnvelopeUpgrade = (tx: Executor) => xactLock(tx, "edgeweir.enve
 /** Serializes loading the node-channel CA, so exactly one is ever created. */
 export const lockNodeCa = (tx: Executor) => xactLock(tx, "edgeweir.pki.node-channel");
 
+/**
+ * Serializes creating an origin authority (`origin-client`, `origin-ca`),
+ * issuing a cluster's origin client certificate and revoking Origin CA
+ * certificates (the CRL is rebuilt from the rows).
+ */
+export const lockOriginAuthority = (tx: Executor, id: string) => xactLock(tx, `edgeweir.pki.${id}`);
+
 /** Serializes the recompilation of every cluster after an upgrade. */
 export const lockRecompile = (tx: Executor) => xactLock(tx, "edgeweir.recompile");
 
