@@ -661,7 +661,10 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0065_cache_rule_respect_default` | `respect` as the default of `cache_rule.origin_cache_control` |
 | `0066_auth_identity_headers` | `site.auth_identity_headers` (filled from the stored access authentication rules, disabled ones included) |
 | `0067_node_certificate_failures` | `node_config_status.certificate_failures` (certificates a node reports it cannot load) |
+| `0068_node_channel_status` | `node.channel`, `probe.channel` (the node channel address a node or probe uses, its fallbacks, why a switch failed, and the TLS server name and WebSocket entry the console sees) |
 | `0069_site_usage_guard` | `site_usage_guard`; an index of `site_usage` by site and window |
+| `0070_node_logs` | `node_log_entry`, `node_log_entry_cursor` |
+| `0071_origin_protection` | `origin_client_certificate`, `origin_certificate`; `origin_pool.tls_trust`, `origin_pool.client_certificate`, `pki_authority.crl_pem` |
 
 ## Build output
 
