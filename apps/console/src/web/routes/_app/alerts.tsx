@@ -55,6 +55,8 @@ const label = (kind: AlertEventKind) =>
     origin_unavailable: m.alert_kind_origin_unavailable,
     high_5xx: m.alert_kind_high_5xx,
     cc_mitigation: m.alert_kind_cc_mitigation,
+    usage_warning: m.alert_kind_usage_warning,
+    usage_limit: m.alert_kind_usage_limit,
     config_rollout_failed: m.alert_kind_config_rollout_failed,
     config_rollout_no_canary: m.alert_kind_config_rollout_no_canary,
     config_rule_invalid: m.alert_kind_config_rule_invalid,

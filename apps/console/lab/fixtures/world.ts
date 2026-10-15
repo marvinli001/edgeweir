@@ -957,6 +957,7 @@ export const sites: Site[] = siteSeeds.map((seed, index) => {
     id: id(5, index + 1),
     name: seed.name,
     enabled: seed.enabled ?? true,
+    usageGuardHeld: null,
     clusterId: seed.cluster.id,
     clusterName: seed.cluster.name,
     domains: seed.domains,

@@ -1,5 +1,6 @@
 import type { Site, SiteDelivery } from "@edgeweir/contract";
 import { StatusDot } from "@/components/status-dot";
+import { Badge } from "@/components/ui/badge";
 import { formatClockTime, m } from "@/lib/i18n";
 
 /** "Canary 1/3, all nodes at 14:05" (or awaiting promotion), or null outside a canary. */
@@ -11,8 +12,28 @@ export function canaryLabel(delivery: SiteDelivery): string | null {
     : m.site_state_canary_waiting({ current, total });
 }
 
-/** Whether the site runs on its cluster's online nodes: disabled, pending, rolling out or live. */
-export function SiteStatus({ site }: { site: Pick<Site, "enabled" | "delivery"> }) {
+/**
+ * Whether the site runs on its cluster's online nodes: disabled, pending, rolling out or live;
+ * and a badge while its usage protection holds maintenance mode or the site disabled.
+ */
+export function SiteStatus({
+  site,
+}: {
+  site: Pick<Site, "enabled" | "delivery"> & Partial<Pick<Site, "usageGuardHeld">>;
+}) {
+  const dot = <SiteStatusDot site={site} />;
+  if (!site.usageGuardHeld) return dot;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      {dot}
+      <Badge variant="outline" data-testid="site-usage-guard">
+        {m.usage_guard_badge()}
+      </Badge>
+    </span>
+  );
+}
+
+function SiteStatusDot({ site }: { site: Pick<Site, "enabled" | "delivery"> }) {
   const { state, currentNodes, totalNodes } = site.delivery;
   if (!site.enabled || state === "disabled")
     return (

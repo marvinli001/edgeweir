@@ -35,6 +35,7 @@ import { SitePortsCard } from "@/components/site/ports-card";
 import { RulesTab } from "@/components/site/rules-tab";
 import { SaveBar, useSaveSite } from "@/components/site/save-site";
 import { SecurityTab } from "@/components/site/security-tab";
+import { UsageGuardCard } from "@/components/site/usage-guard-card";
 import { StarButton, useSiteStars } from "@/components/site-star";
 import { SiteStatus, untilLive } from "@/components/site-status";
 import { TagBadges, TagPicker } from "@/components/site-tags";
@@ -310,6 +311,7 @@ function OverviewTab({ site }: { site: Site }) {
             />
           </form>
         </Card>
+        <UsageGuardCard site={site} />
         <Card>
           <CardContent className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => setCopying(true)} data-testid="site-copy">

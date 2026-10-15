@@ -82,6 +82,15 @@ export function formatBitRate(bytesPerSecond: number): string {
   return scaled(bytesPerSecond * 8, ["bps", "Kbps", "Mbps", "Gbps", "Tbps"]);
 }
 
+/** Date and time to the minute ("2026年10月16日 00:00" / "Oct 16, 2026, 00:00"). */
+export function formatDateMinutes(iso: string): string {
+  return new Intl.DateTimeFormat(getLocale(), {
+    dateStyle: "medium",
+    timeStyle: "short",
+    hourCycle: "h23",
+  }).format(new Date(iso));
+}
+
 /** Date and time of a chart point ("9月25日 18:25" / "Sep 25, 18:25"). */
 export function formatChartTime(iso: string): string {
   return new Intl.DateTimeFormat(getLocale(), {
