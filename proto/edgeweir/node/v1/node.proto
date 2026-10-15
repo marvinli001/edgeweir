@@ -43,7 +43,9 @@ service NodeService {
   // referenced by the node's cluster configuration. Secrets only travel over
   // this mutually authenticated channel and never inside NodeConfig.
   rpc GetOriginCredentials(GetOriginCredentialsRequest) returns (GetOriginCredentialsResponse);
-  // Certificate material is returned only to nodes serving the referencing site.
+  // Certificate material is returned only to nodes serving the referencing site,
+  // or, for origin client certificates (NodeConfig.origin_client_certificates),
+  // to nodes whose cluster configuration references them.
   rpc GetCertificates(GetCertificatesRequest) returns (GetCertificatesResponse);
   // PullTasks hands out pending typed tasks (cache purge, prefetch). Tasks
   // are idempotent: a task is handed out again when no result arrives.

@@ -28,7 +28,8 @@ import "google/protobuf/timestamp.proto";
 //     maintenance allowed_cidrs and allowed_path_prefixes sorted and unique
 //     (v0.24.0);
 //   - inside a site domains, and offline_hosts, by (name, wildcard, match)
-//     (v0.25.0; a name sorts before the same name with wildcard).
+//     (v0.25.0; a name sorts before the same name with wildcard);
+//   - origin_client_certificates by id (v1.3.0).
 // content_hash is the lowercase hex SHA-256 of the deterministic binary
 // encoding of this message with `revision` and `content_hash` cleared.
 message NodeConfig {
@@ -95,6 +96,28 @@ message NodeConfig {
   // when the cluster serves a site with a certificate. Added in v0.26.0;
   // older nodes ignore it and resume no sessions (no feature required).
   repeated SessionTicketKeyRef session_ticket_keys = 20;
+  // Client certificates the nodes present to HTTPS origins that request one
+  // (OriginPool.client_certificate_id), sorted by id; empty names. Chain and
+  // key are fetched with NodeService.GetCertificates over mutual TLS and
+  // never travel here. Added in v1.3.0 (feature origin-mtls-v1).
+  repeated CertificateRef origin_client_certificates = 21;
+  // The console's origin certificate authority, present when a site trusts
+  // it (OriginPool.tls_trust ORIGIN_TLS_TRUST_ORIGIN_CA). Changing it is a
+  // structural change. Added in v1.3.0 (feature origin-ca-v1).
+  OriginCa origin_ca = 22;
+}
+
+// OriginCa is the certificate authority that signs certificates for origin
+// servers which only the edge trusts. It is used to verify origins and
+// never for the certificates the edge presents to clients.
+message OriginCa {
+  // PEM of the authority's certificate (the trust anchor).
+  string certificate_pem = 1;
+  // PEM of a CRL the authority signed, listing the serial numbers of the
+  // certificates it revoked that have not expired. Nodes refuse origins
+  // presenting a listed certificate. Its next update is the authority's
+  // expiry, so it never goes stale while the console is unreachable.
+  string crl_pem = 2;
 }
 
 // UnknownHosts is the cluster's handling of requests no site serves.
@@ -208,6 +231,9 @@ message NodeConfigDiff {
   UnknownHosts unknown_hosts = 21;
   // Always sent in full (NodeConfig field 20). Added in v0.26.0.
   repeated SessionTicketKeyRef session_ticket_keys = 22;
+  // Always sent in full (NodeConfig fields 21 and 22). Added in v1.3.0.
+  repeated CertificateRef origin_client_certificates = 23;
+  OriginCa origin_ca = 24;
 }
 
 // L4Protocol is the transport of a layer-4 application.
@@ -1331,6 +1357,27 @@ message OriginPool {
   // Retry only after connection errors and timeouts, not after a 502, 503
   // or 504 response of the origin (which then reaches the client).
   bool status_retry_disabled = 12;
+  // Client certificate presented to HTTPS origins that request one (origin
+  // mutual TLS): the id of an entry of NodeConfig.origin_client_certificates,
+  // empty for none. Never presented to S3 origins. Connections are reused
+  // only by requests presenting the same certificate. Added in v1.3.0
+  // (feature origin-mtls-v1).
+  string client_certificate_id = 13;
+  // Certificates that verify HTTPS origins unless skip_tls_verify is set.
+  // ORIGIN_TLS_TRUST_ORIGIN_CA requires NodeConfig.origin_ca, skip_tls_verify
+  // false and no S3 origin in the pool. Connections are reused only by
+  // requests with the same trust. Added in v1.3.0 (feature origin-ca-v1).
+  OriginTlsTrust tls_trust = 14;
+}
+
+// OriginTlsTrust selects the trust anchors of a pool's HTTPS origins.
+// Added in v1.3.0.
+enum OriginTlsTrust {
+  // The node's trust store (the system's CA bundle or --trusted-ca).
+  ORIGIN_TLS_TRUST_UNSPECIFIED = 0;
+  ORIGIN_TLS_TRUST_SYSTEM = 1;
+  // Only NodeConfig.origin_ca; certificates its CRL lists are refused.
+  ORIGIN_TLS_TRUST_ORIGIN_CA = 2;
 }
 
 // OriginProtocol is the HTTP version of the requests to a pool's origins.

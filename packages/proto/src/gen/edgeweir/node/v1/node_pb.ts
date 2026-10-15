@@ -3217,7 +3217,9 @@ export const NodeService: GenService<{
     output: typeof GetOriginCredentialsResponseSchema;
   },
   /**
-   * Certificate material is returned only to nodes serving the referencing site.
+   * Certificate material is returned only to nodes serving the referencing site,
+   * or, for origin client certificates (NodeConfig.origin_client_certificates),
+   * to nodes whose cluster configuration references them.
    *
    * @generated from rpc edgeweir.node.v1.NodeService.GetCertificates
    */
