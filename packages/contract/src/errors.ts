@@ -209,6 +209,7 @@ export const errorDefs = {
   USAGE_CURSOR_INVALID: { status: 400, params: [] },
   /** Restoring a site whose usage protection holds no action. */
   USAGE_GUARD_NOT_HELD: { status: 409, params: [] },
+  NODE_LOG_CURSOR_INVALID: { status: 400, params: [] },
   CACHE_TASK_URL_INVALID: { status: 400, params: ["urls"] },
   CACHE_TASK_HOST_UNKNOWN: { status: 400, params: ["hosts"] },
   CACHE_TASK_HOST_INVALID: { status: 400, params: ["hosts"] },

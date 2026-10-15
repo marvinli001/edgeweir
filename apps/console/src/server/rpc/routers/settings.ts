@@ -12,6 +12,7 @@ import {
   removeNodeChannelName,
   setNodeChannel,
 } from "../../services/node-channel-url";
+import { nodeLogRetentionSetting } from "../../services/node-logs";
 import { getOriginAllowList, setOriginAllowList } from "../../services/origin-allow-list";
 import { getProbeSettings, setProbeSettings } from "../../services/probes";
 import {
@@ -112,6 +113,12 @@ export const settingsRouter = {
     ),
     setLogRetention: authed.settings.setLogRetention.handler(({ input, context }) =>
       setLogRetention(context.app, context.actor, input),
+    ),
+    nodeLogRetention: authed.settings.nodeLogRetention.handler(({ context }) =>
+      nodeLogRetentionSetting.read(context.app.db),
+    ),
+    setNodeLogRetention: authed.settings.setNodeLogRetention.handler(({ input, context }) =>
+      context.app.db.transaction((tx) => nodeLogRetentionSetting.write(tx, context.actor, input)),
     ),
   },
 };

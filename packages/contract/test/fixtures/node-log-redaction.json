@@ -1,0 +1,97 @@
+[
+  {
+    "name": "request line and upstream of an nginx message",
+    "in": "connect() failed (111: Connection refused) while connecting to upstream, request: \"GET /x?token=e2e-secret HTTP/1.1\", upstream: \"http://127.0.0.1:9/x?token=e2e-secret\", host: \"a.test\"",
+    "out": "connect() failed (111: Connection refused) while connecting to upstream, request: \"GET /x?[redacted] HTTP/1.1\", upstream: \"http://127.0.0.1:9/x?[redacted]\", host: \"a.test\""
+  },
+  {
+    "name": "request field value",
+    "in": "GET /download/a.zip?X-Amz-Signature=abc&X-Amz-Expires=60 HTTP/2.0",
+    "out": "GET /download/a.zip?[redacted] HTTP/2.0"
+  },
+  {
+    "name": "URL without a path",
+    "in": "Get \"https://s3.test?X-Amz-Signature=abc&X-Amz-Credential=def\": dial tcp 192.0.2.1:443: i/o timeout",
+    "out": "Get \"https://s3.test?[redacted]\": dial tcp 192.0.2.1:443: i/o timeout"
+  },
+  {
+    "name": "path in a Lua message",
+    "in": "fetch.lua:12: prefetch(): /a/b?sig=1&t=2 failed: timeout",
+    "out": "fetch.lua:12: prefetch(): /a/b?[redacted] failed: timeout"
+  },
+  {
+    "name": "URL userinfo",
+    "in": "dial https://user:pa55@origin.test/path failed",
+    "out": "dial https://[redacted]@origin.test/path failed"
+  },
+  {
+    "name": "PEM block",
+    "in": "bad key -----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIBx\n-----END EC PRIVATE KEY----- rest",
+    "out": "bad key [redacted] rest"
+  },
+  {
+    "name": "PEM block cut off",
+    "in": "cannot parse -----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg",
+    "out": "cannot parse [redacted]"
+  },
+  {
+    "name": "Authorization header",
+    "in": "upstream sent Authorization: Bearer abc.def.ghi",
+    "out": "upstream sent Authorization: [redacted]"
+  },
+  {
+    "name": "Proxy-Authorization header",
+    "in": "Proxy-Authorization: Basic dXNlcjpwYXNz",
+    "out": "Proxy-Authorization: [redacted]"
+  },
+  {
+    "name": "cookie as key=value",
+    "in": "cookie=sid=abc; other=1",
+    "out": "cookie=[redacted]"
+  },
+  {
+    "name": "x-api-key header",
+    "in": "x-api-key: ewk_abc",
+    "out": "x-api-key: [redacted]"
+  },
+  {
+    "name": "bearer token",
+    "in": "token rejected: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghij",
+    "out": "token rejected: Bearer [redacted]"
+  },
+  {
+    "name": "credential-like keys",
+    "in": "apply failed: secret_key=AKIA123 region=x password=\"a b\" api-key=k1 sessionid=9",
+    "out": "apply failed: secret_key=[redacted] region=x password=[redacted] api-key=[redacted] sessionid=[redacted]"
+  },
+  {
+    "name": "JSON key",
+    "in": "{\"password\": \"hunter2\", \"user\": \"a\"}",
+    "out": "{\"password\": [redacted], \"user\": \"a\"}"
+  },
+  {
+    "name": "console token",
+    "in": "enroll with ewt_AbCdEfGhIjKlMnOpQrStUv012345 failed",
+    "out": "enroll with [redacted] failed"
+  },
+  {
+    "name": "JWT",
+    "in": "id_token eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJodHRwcyJ9.c2lnbmF0dXJlLXZhbHVl",
+    "out": "id_token [redacted]"
+  },
+  {
+    "name": "question mark in a sentence",
+    "in": "is the origin up? check /health first",
+    "out": "is the origin up? check /health first"
+  },
+  {
+    "name": "nothing to remove",
+    "in": "configuration applied",
+    "out": "configuration applied"
+  },
+  {
+    "name": "words near credential names",
+    "in": "bearer token required; cookie expired; invalid token: expired",
+    "out": "bearer token required; cookie expired; invalid token: expired"
+  }
+]

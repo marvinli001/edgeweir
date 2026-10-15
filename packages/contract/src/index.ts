@@ -5,6 +5,7 @@ export * from "./upgrades";
 import { oc } from "@orpc/contract";
 import * as z from "zod";
 import { logRetention, logRetentionSetting, logsContract } from "./logs";
+import { nodeLogRetention, nodeLogsContract } from "./node-logs";
 import { statsDimensions, statsDimensionsInput } from "./stats-dims";
 
 export * from "./logs";
@@ -74,6 +75,7 @@ export * from "./image-convert";
 export * from "./node-channel";
 export * from "./node-errors";
 export * from "./node-features";
+export * from "./node-logs";
 export * from "./protection";
 export * from "./rules";
 export * from "./s3-presets";
@@ -378,6 +380,8 @@ export const contract = {
       .route({ method: "PUT", path: "/nodes/{id}/cache", tags: ["nodes"] })
       .input(s.nodeCacheInput)
       .output(s.node),
+    /** The node's warnings, errors and events (node-logs-v1), newest first. */
+    ...nodeLogsContract,
   },
   sites: {
     list: oc
@@ -570,6 +574,14 @@ export const contract = {
       .route({ method: "PUT", path: "/settings/log-retention", tags: ["settings"] })
       .input(logRetention)
       .output(logRetentionSetting),
+    /** Days node logs are kept, and at most how many per node. */
+    nodeLogRetention: oc
+      .route({ method: "GET", path: "/settings/node-log-retention", tags: ["settings"] })
+      .output(nodeLogRetention),
+    setNodeLogRetention: oc
+      .route({ method: "PUT", path: "/settings/node-log-retention", tags: ["settings"] })
+      .input(nodeLogRetention)
+      .output(nodeLogRetention),
     /** Platform limit of manual bans and sharing of automatic bans in a cluster. */
     bans: oc
       .route({ method: "GET", path: "/settings/bans", tags: ["settings"] })

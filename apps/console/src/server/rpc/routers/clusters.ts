@@ -27,6 +27,7 @@ import {
   listNodeGroups,
   updateNodeGroup,
 } from "../../services/node-groups";
+import { listNodeLogs } from "../../services/node-logs";
 import {
   deleteNode,
   getNode,
@@ -257,6 +258,9 @@ export const clustersRouter = {
     ),
     setCache: authed.nodes.setCache.handler(({ input, context }) =>
       setNodeCache(context.app.db, input, context.actor),
+    ),
+    logs: authed.nodes.logs.handler(({ input, context }) =>
+      listNodeLogs(context.app.db, input, context.demo),
     ),
   },
 };

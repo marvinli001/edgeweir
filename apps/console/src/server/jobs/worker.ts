@@ -14,6 +14,7 @@ import { markUnloadableCertificates } from "../services/certificates";
 import { rotateChallengeKeys } from "../services/challenge-keys";
 import { expireCnamePrefixes } from "../services/cname-prefixes";
 import { pruneDnsRevisions, reconcileDns } from "../services/dns";
+import { pruneNodeLogs } from "../services/node-logs";
 import { recompileAfterUpgrade } from "../services/recompile";
 import { pruneRevisions } from "../services/revisions";
 import { evaluateRollouts } from "../services/rollout";
@@ -42,6 +43,7 @@ export const QUEUES = {
   rotateChallengeKeys: "maintenance.rotate-challenge-keys",
   rotateSessionTicketKeys: "maintenance.rotate-session-ticket-keys",
   pruneSecurityEvents: "maintenance.prune-security-events",
+  pruneNodeLogs: "maintenance.prune-node-logs",
 } as const;
 
 /**
@@ -173,6 +175,14 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
     if (removed) log.info("deleted old security events", { removed });
   });
 
+  // Node logs past their retention or beyond each node's limit (ADR-0050):
+  // at start (a worker that was down catches up), then every 10 minutes.
+  await boss.work(QUEUES.pruneNodeLogs, async () => {
+    const removed = await pruneNodeLogs(ctx.db);
+    if (removed) log.info("deleted old node logs", { removed });
+  });
+  await boss.send(QUEUES.pruneNodeLogs, {}, { singletonKey: "prune-node-logs" });
+
   // Scheduling (probe reachability and rules) every 10 s: pg-boss cron runs
   // at most once a minute, so an in-process timer, and a lease lets one
   // console process evaluate at a time. A run that is still busy skips a tick.
@@ -193,6 +203,7 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   await boss.schedule(QUEUES.rotateChallengeKeys, "11 * * * *");
   await boss.schedule(QUEUES.rotateSessionTicketKeys, "13 * * * *");
   await boss.schedule(QUEUES.pruneSecurityEvents, "37 * * * *");
+  await boss.schedule(QUEUES.pruneNodeLogs, "*/10 * * * *");
   await boss.schedule(QUEUES.pruneRevisions, "17 * * * *");
   await boss.schedule(QUEUES.pruneIdempotencyKeys, "29 * * * *");
   await boss.schedule(QUEUES.expireCacheTasks, "43 * * * *");

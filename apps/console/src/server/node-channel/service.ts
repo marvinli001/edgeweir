@@ -72,6 +72,7 @@ import { nodeCertificates } from "../services/certificates";
 import { challengeKeySecrets } from "../services/challenge-keys";
 import { mirrorMinuteStats } from "../services/clickhouse";
 import { claimEnrollmentToken } from "../services/enrollment";
+import { ingestNodeLogs, nodeLogCursor } from "../services/node-logs";
 import { acceptedCertificate, isSerialRevoked, replaceReportedAddresses } from "../services/nodes";
 import { replaceOriginHealth } from "../services/origin-health";
 import { mintRevisionReceipt, verifyRevisionReceipt } from "../services/revision-receipts";
@@ -923,6 +924,16 @@ export function createNodeService(
     },
     reportStats: statsHandler,
     reportStatsV2: statsHandler,
+
+    async reportNodeLogs(req, ctx) {
+      const node = await requireNode(ctx);
+      if (req.batchSequence === 0n && !req.entries.length)
+        return { accepted: 0, batchSequence: await nodeLogCursor(app.db, node.id) };
+      return {
+        accepted: await ingestNodeLogs(app, node, req),
+        batchSequence: req.batchSequence,
+      };
+    },
 
     async getCertificates(req, ctx) {
       const node = await requireNode(ctx);

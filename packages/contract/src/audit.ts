@@ -157,6 +157,7 @@ export const auditActions = [
   "system.setup_rejected",
   "system.usage_update",
   "system.log_retention_update",
+  "system.node_log_retention_update",
 ] as const;
 export type AuditAction = (typeof auditActions)[number];
 

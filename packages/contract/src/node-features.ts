@@ -89,3 +89,10 @@ export function nodeUpgradeRecommended(supported: readonly string[]): boolean {
  * gives out; the agent checks it (CheckChannel) before it switches.
  */
 export const CHANNEL_FOLLOW_FEATURE = "channel-follow-v1";
+
+/**
+ * node-logs-v1: the node uploads its warnings, errors and events
+ * (ReportNodeLogs, ADR-0050). Nothing is sent to the node for it, so it is
+ * never required; the node's logs view tells older nodes apart.
+ */
+export const NODE_LOGS_FEATURE = "node-logs-v1";

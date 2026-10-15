@@ -9,6 +9,7 @@ import { compressionGzip, createConnectTransport } from "@connectrpc/connect-nod
 import {
   type CacheTaskCreateInput,
   cacheTaskCreateInput,
+  NODE_LOGS_FEATURE,
   siteCreateInput,
   tlsSettings,
 } from "@edgeweir/contract";
@@ -16,6 +17,8 @@ import { schema } from "@edgeweir/db";
 import {
   ApplyState,
   DeviceVariant,
+  NodeLogLevel,
+  NodeLogSource,
   NodeService,
   OriginHealthSource,
   PurgeType,
@@ -31,6 +34,7 @@ import { logsCsv, queryLogs } from "../../src/server/services/access-logs";
 import { createCacheTask, getCacheTask } from "../../src/server/services/cache-tasks";
 import { createClusterTx } from "../../src/server/services/clusters";
 import { createEnrollmentToken } from "../../src/server/services/enrollment";
+import { listNodeLogs } from "../../src/server/services/node-logs";
 import {
   deleteNode,
   listNodes,
@@ -382,6 +386,32 @@ describe("node channel", async () => {
       expect.arrayContaining(["node.enroll", "node.certificate_renew"]),
     );
     expect((await latestRevision(ctx.db, clusterId))?.revision).toBe(2);
+  });
+
+  it("stores node log batches over mTLS once and answers the cursor (node-logs-v1)", async () => {
+    await expect(
+      anonymous().reportNodeLogs({ batchSequence: 1n, entries: [] }),
+    ).rejects.toMatchObject({ code: Code.Unauthenticated });
+    const { nodeId, mtls } = await enroll("node-logs", {}, [...AGENT_FEATURES, NODE_LOGS_FEATURE]);
+    expect(await mtls.reportNodeLogs({})).toMatchObject({ batchSequence: 0n, accepted: 0 });
+    const batch = {
+      batchSequence: 1n,
+      entries: [
+        {
+          time: timestampFromDate(new Date()),
+          level: NodeLogLevel.ERROR,
+          source: NodeLogSource.NGINX,
+          message: "upstream timed out",
+          fields: { request: "GET /a?sig=s3cr3t HTTP/1.1" },
+        },
+      ],
+    };
+    expect(await mtls.reportNodeLogs(batch)).toMatchObject({ batchSequence: 1n, accepted: 1 });
+    expect(await mtls.reportNodeLogs(batch)).toMatchObject({ batchSequence: 1n, accepted: 0 });
+    expect(await mtls.reportNodeLogs({})).toMatchObject({ batchSequence: 1n });
+    const page = await listNodeLogs(ctx.db, { id: nodeId, limit: 10 });
+    expect(page.supported).toBe(true);
+    expect(page.entries.map((e) => e.fields.request)).toEqual(["GET /a?[redacted] HTTP/1.1"]);
   });
 
   it("refuses disabled nodes, ends their watch stream and revokes deleted nodes", async () => {

@@ -151,6 +151,14 @@ export async function tryLockNodeLogs(tx: Executor, nodeId: string): Promise<boo
   return result.rows[0]?.locked === true;
 }
 
+/** One node log batch (ReportNodeLogs) per node at a time: false while another one holds it. */
+export async function tryLockNodeLogEntries(tx: Executor, nodeId: string): Promise<boolean> {
+  const result = await tx.execute<{ locked: boolean }>(
+    sql`select pg_try_advisory_xact_lock(hashtext(${`node-logs/${nodeId}`})) AS locked`,
+  );
+  return result.rows[0]?.locked === true;
+}
+
 type Session = Pick<pg.PoolClient, "query">;
 
 /**
