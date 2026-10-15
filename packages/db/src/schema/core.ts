@@ -572,6 +572,10 @@ export const originPool = pgTable(
     policy: text("policy").notNull().default("weighted_random"),
     /** Verify certificates of HTTPS origins. */
     tlsVerify: boolean("tls_verify").notNull().default(true),
+    /** system | origin_ca: trust anchors of the verification. */
+    tlsTrust: text("tls_trust").notNull().default("system"),
+    /** Present the cluster's origin client certificate to HTTPS origins (origin mutual TLS). */
+    clientCertificate: boolean("client_certificate").notNull().default(false),
     /** Passive health check: consecutive failures that mark an origin down. */
     maxFails: integer("max_fails").notNull().default(3),
     /** Passive health check: seconds before a down origin is tried again. */
@@ -817,7 +821,7 @@ export const nodeMinuteStats = pgTable(
   ],
 );
 
-/** Internal certificate authorities (e.g. the node-channel CA). Keys are envelope-encrypted. */
+/** Internal certificate authorities: node-channel, origin-client and origin-ca. Keys are envelope-encrypted. */
 export const pkiAuthority = pgTable("pki_authority", {
   id: text("id").primaryKey(),
   certificatePem: text("certificate_pem").notNull(),
@@ -825,6 +829,8 @@ export const pkiAuthority = pgTable("pki_authority", {
   /** JSON envelope produced by the server's master-key crypto. Never plaintext. */
   privateKeyEnvelope: text("private_key_envelope").notNull(),
   notAfter: timestamp("not_after", { withTimezone: true }).notNull(),
+  /** The Origin CA's current CRL (PEM), rebuilt on every revocation; "" for the others. */
+  crlPem: text("crl_pem").notNull().default(""),
   createdAt: createdAt(),
 });
 
