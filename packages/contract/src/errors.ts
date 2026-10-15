@@ -207,6 +207,8 @@ export const errorDefs = {
   CACHE_TASK_NOT_FOUND: { status: 404, params: [] },
   USAGE_RANGE_INVALID: { status: 400, params: [] },
   USAGE_CURSOR_INVALID: { status: 400, params: [] },
+  /** Restoring a site whose usage protection holds no action. */
+  USAGE_GUARD_NOT_HELD: { status: 409, params: [] },
   CACHE_TASK_URL_INVALID: { status: 400, params: ["urls"] },
   CACHE_TASK_HOST_UNKNOWN: { status: 400, params: ["hosts"] },
   CACHE_TASK_HOST_INVALID: { status: 400, params: ["hosts"] },
@@ -341,6 +343,8 @@ export const revisionReasonDefs = {
   sites_deleted: { params: ["count"], en: "{count} sites deleted" },
   site_settings_copied: { params: ["site", "source"], en: "settings of {source} copied to {site}" },
   site_cloned: { params: ["site", "source"], en: "site {site} cloned from {source}" },
+  usage_limit_reached: { params: ["site"], en: "usage limit of {site} reached" },
+  usage_limit_released: { params: ["site"], en: "usage protection of {site} lifted" },
 } as const satisfies Record<string, { params: readonly string[]; en: string }>;
 
 export type RevisionReasonCode = keyof typeof revisionReasonDefs;

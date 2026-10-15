@@ -23,6 +23,7 @@ import { rotateSessionTicketKeys } from "../services/session-ticket-keys";
 import { maintainTraffic } from "../services/stats-rollup";
 import { expireUpgrades } from "../services/upgrades";
 import { maintainUsage } from "../services/usage";
+import { enforceUsageGuards } from "../services/usage-guard";
 
 export const QUEUES = {
   alerts: "alerts.sweep",
@@ -86,7 +87,12 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
     // Each maintenance family must run even when another one needs a retry.
     const results = await Promise.allSettled([
       maintainTraffic(ctx.db),
-      maintainUsage(ctx.db),
+      // Usage protection right after the windows it reads are recomputed;
+      // an alert it starts or ends is swept at once.
+      maintainUsage(ctx.db).finally(async () => {
+        if (await enforceUsageGuards(ctx))
+          await boss.send(QUEUES.alerts, {}, { singletonKey: "alerts-sweep" });
+      }),
       maintainLogs(ctx.db, Date.now(), ctx.env),
       expireUpgrades(ctx.db),
     ]);

@@ -536,7 +536,30 @@ export async function alertConditions(app: AppContext, policy: AlertPolicy, now:
     // Fired by the nodes' events (reportSecurityEvents); held while a node reports the site above normal.
     if (elevated.has(site.id)) add("cc_mitigation", site.id);
   }
-  return { active, sites, nodes };
+  // Usage protection (usage-guard.ts): the metrics its last evaluation found
+  // at the warning threshold / the limit, until the period ends. Disabled
+  // sites too: the guard may be the one that disabled them.
+  const guards = await app.db
+    .select({
+      id: schema.site.id,
+      name: schema.site.name,
+      warn: schema.siteUsageGuard.warnMetrics,
+      limit: schema.siteUsageGuard.limitMetrics,
+      periodEnd: schema.siteUsageGuard.periodEnd,
+    })
+    .from(schema.siteUsageGuard)
+    .innerJoin(schema.site, eq(schema.site.id, schema.siteUsageGuard.siteId));
+  for (const guard of guards) {
+    if (!guard.periodEnd || guard.periodEnd.getTime() <= now) continue;
+    const base = { siteId: guard.id, siteName: guard.name, domain: domainOf.get(guard.id) ?? "" };
+    for (const [kind, metrics] of [
+      ["usage_warning", guard.warn],
+      ["usage_limit", guard.limit],
+    ] as const)
+      for (const metric of metrics)
+        active.set(keyOf(kind, guard.id, metric), { ...base, kind, resourceId: metric });
+  }
+  return { active, sites, nodes, guardSites: guards };
 }
 /**
  * A platform channel gets every alert; others the site alerts of the sites
@@ -627,7 +650,9 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
         });
       }
       const nodeNames = new Map(snapshot.nodes.map((n) => [n.id, n.name]));
-      const siteNames = new Map(snapshot.sites.map((s) => [s.id, s.name]));
+      const siteNames = new Map(
+        [...snapshot.guardSites, ...snapshot.sites].map((s) => [s.id, s.name]),
+      );
       for (const old of resolved) {
         if (gone(old.siteId)) continue;
         await tx

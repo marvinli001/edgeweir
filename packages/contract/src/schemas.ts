@@ -636,6 +636,8 @@ export const site = z.object({
   name: z.string(),
   /** A disabled site is not shipped to nodes. */
   enabled: z.boolean(),
+  /** The action the site's usage protection applied and holds (maintenance mode or disabled). */
+  usageGuardHeld: z.enum(["maintenance", "disable"]).nullable(),
   clusterId: uuid,
   clusterName: z.string(),
   /** In ASCII (Punycode) form: `a.com`, `*.a.com`, `.a.com`, `~pattern`. */

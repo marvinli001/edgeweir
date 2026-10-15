@@ -55,6 +55,7 @@ import {
 } from "./site-tags";
 import { cnamePrefixInput, cnamePrefixState, unknownHostProcedures } from "./unknown-hosts";
 import { usageContract, usageSettings } from "./usage";
+import { usageGuardContract } from "./usage-guard";
 import { siteFeatures, wafContract } from "./waf";
 
 export * from "./access-control";
@@ -128,6 +129,8 @@ export const contract = {
   errorPages: errorPagesContract,
   /** A site's maintenance mode. */
   maintenance: maintenanceContract,
+  /** A site's usage protection: limits on bytes sent, requests and bandwidth. */
+  usageGuard: usageGuardContract,
   /** A site's access authentication: Basic, forward authentication and signed URLs. */
   authRules: authRulesContract,
   /** A site's access control: site lists, geo, CORS, hotlink, user agents, WebSocket origins, security headers. */
@@ -654,3 +657,4 @@ export * from "./login-allow-list";
 export * from "./probes";
 export * from "./service-accounts";
 export * from "./usage";
+export * from "./usage-guard";

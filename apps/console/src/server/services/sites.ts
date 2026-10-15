@@ -69,6 +69,7 @@ import { siteDeliveries } from "./site-delivery";
 import { assertSitePorts, portsOf } from "./site-ports";
 import { sitesWithTags, siteTagRefs, writeSiteTags } from "./site-tags";
 import { flushSiteUsage } from "./usage";
+import { noteOperatorRestore } from "./usage-guard";
 
 type SiteCreate = z.output<typeof siteCreateInput>;
 type SiteUpdate = z.output<typeof siteUpdateInput>;
@@ -88,6 +89,9 @@ export const s3SecretBinding = (credentialId: string) => ({
 export const LEGACY_S3_SECRET_PURPOSE = "origin-credential/s3-secret";
 
 type SiteRow = typeof schema.site.$inferSelect;
+
+const usageGuardHeld = (held: string | null | undefined) =>
+  held === "maintenance" || held === "disable" ? held : null;
 
 async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
   if (rows.length === 0) return [];
@@ -132,6 +136,11 @@ async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
     .from(schema.siteSecret)
     .where(and(inArray(schema.siteSecret.siteId, ids), eq(schema.siteSecret.kind, PURGE_KEY)));
   const tags = await siteTagRefs(db, ids);
+  const guards = await db
+    .select({ siteId: schema.siteUsageGuard.siteId, held: schema.siteUsageGuard.heldAction })
+    .from(schema.siteUsageGuard)
+    .where(inArray(schema.siteUsageGuard.siteId, ids));
+  const heldOf = new Map(guards.map((g) => [g.siteId, g.held]));
   return rows.map((r) => {
     const sitePools = pools
       .filter((p) => p.siteId === r.id)
@@ -142,6 +151,7 @@ async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
       id: r.id,
       name: r.name,
       enabled: r.enabled,
+      usageGuardHeld: usageGuardHeld(heldOf.get(r.id)),
       clusterId: r.clusterId,
       clusterName: clusters.find((c) => c.id === r.clusterId)?.name ?? "",
       delivery: deliveries.get(r.id) ?? {
@@ -1031,6 +1041,7 @@ export async function setSiteEnabled(
       .where(eq(schema.site.id, row.id))
       .returning();
     if (!updated) throw new Error("site update failed");
+    if (input.enabled) await noteOperatorRestore(tx, updated);
     const revision = await publishSiteChange(tx, ctx.actor, updated, {
       reason: input.enabled ? "site_enabled" : "site_disabled",
       action: input.enabled ? "site.enable" : "site.disable",

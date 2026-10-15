@@ -45,6 +45,14 @@ export async function loadSmtp(app: AppContext) {
     JSON.parse(app.masterKey.open(JSON.parse(envelope), smtpBinding).toString("utf8")),
   );
 }
+function usageMetricLabel(metric: string, locale: "zh-CN" | "en") {
+  const label = {
+    bytes: m.usage_guard_metric_bytes,
+    requests: m.usage_guard_metric_requests,
+    bandwidth: m.usage_guard_metric_bandwidth,
+  }[metric];
+  return label ? label({}, { locale }) : "";
+}
 export async function deliverNotification(
   app: AppContext,
   channel: typeof schema.alertChannel.$inferSelect,
@@ -65,6 +73,8 @@ export async function deliverNotification(
     origin_unavailable: m.alert_kind_origin_unavailable,
     high_5xx: m.alert_kind_high_5xx,
     cc_mitigation: m.alert_kind_cc_mitigation,
+    usage_warning: m.alert_kind_usage_warning,
+    usage_limit: m.alert_kind_usage_limit,
     config_rollout_failed: m.alert_kind_config_rollout_failed,
     config_rollout_no_canary: m.alert_kind_config_rollout_no_canary,
     config_rule_invalid: m.alert_kind_config_rule_invalid,
@@ -73,7 +83,17 @@ export async function deliverNotification(
     certificate_unloadable: m.alert_kind_certificate_unloadable,
     test: m.alert_test_message,
   }[event.kind]({}, { locale });
-  const status = event.status === "resolved" ? m.alert_recovered({}, { locale }) : kind;
+  // Usage protection names the metric (the resource).
+  const metric =
+    (event.kind === "usage_warning" || event.kind === "usage_limit") && event.resourceId
+      ? usageMetricLabel(event.resourceId, locale)
+      : "";
+  const status =
+    event.status === "resolved"
+      ? m.alert_recovered({}, { locale })
+      : metric
+        ? m.alert_usage_event({ kind, metric }, { locale })
+        : kind;
   const site = event.siteName.replace(/[\r\n\0]/g, " ").slice(0, 100);
   const url = new URL(
     event.siteId

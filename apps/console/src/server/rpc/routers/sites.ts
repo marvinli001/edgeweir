@@ -54,6 +54,12 @@ import {
   updateSite,
 } from "../../services/sites";
 import { statsDimensions } from "../../services/stats-dimensions";
+import {
+  deleteUsageGuard,
+  getUsageGuard,
+  restoreUsageGuard,
+  updateUsageGuard,
+} from "../../services/usage-guard";
 import { siteFeatures } from "../../services/waf";
 import { authed, ok } from "../base";
 
@@ -81,6 +87,20 @@ export const sitesRouter = {
     ),
     update: authed.maintenance.update.handler(({ input, context }) =>
       updateSiteMaintenance(context.app.db, input, { actor: context.actor }),
+    ),
+  },
+  usageGuard: {
+    get: authed.usageGuard.get.handler(({ input, context }) =>
+      getUsageGuard(context.app.db, input.id),
+    ),
+    update: authed.usageGuard.update.handler(({ input, context }) =>
+      updateUsageGuard(context.app.db, input, { actor: context.actor }),
+    ),
+    delete: authed.usageGuard.delete.handler(({ input, context }) =>
+      deleteUsageGuard(context.app.db, input.id, { actor: context.actor }),
+    ),
+    restore: authed.usageGuard.restore.handler(({ input, context }) =>
+      restoreUsageGuard(context.app.db, input.id, { actor: context.actor }),
     ),
   },
   authRules: {

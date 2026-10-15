@@ -8,6 +8,13 @@ export const alertKind = z.enum([
   "origin_unavailable",
   "high_5xx",
   "cc_mitigation",
+  /**
+   * Usage protection (usage-guard.ts): the period's usage of a metric (the
+   * resource) reached the warning threshold / 100%. Held until the period
+   * ends or the usage is no longer over: at most once per period and level.
+   */
+  "usage_warning",
+  "usage_limit",
 ]);
 /** Platform alerts (clusters, DNS): platform channels only, no subscriptions. */
 export const platformAlertKind = z.enum([

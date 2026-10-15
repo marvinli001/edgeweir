@@ -25,6 +25,7 @@ export const router = os.router({
   waf: accessControlRouter.waf,
   errorPages: sitesRouter.errorPages,
   maintenance: sitesRouter.maintenance,
+  usageGuard: sitesRouter.usageGuard,
   authRules: sitesRouter.authRules,
   imageConvert: sitesRouter.imageConvert,
   accessControl: sitesRouter.accessControl,

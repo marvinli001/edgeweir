@@ -6,6 +6,7 @@ import { lockStats } from "../lib/locks";
 import { type Actor, recordAudit } from "./audit";
 import { publishRevision, type Tx } from "./revisions";
 import { flushSiteUsage } from "./usage";
+import { noteOperatorRestore } from "./usage-guard";
 
 type SiteRow = typeof schema.site.$inferSelect;
 
@@ -83,7 +84,7 @@ export async function batchSetEnabled(
 ): Promise<BatchResult> {
   return db.transaction(async (tx) => {
     const sites = (await findSites(tx, input.ids)).filter((site) => site.enabled !== input.enabled);
-    if (sites.length)
+    if (sites.length) {
       await tx
         .update(schema.site)
         .set({ enabled: input.enabled, updatedAt: new Date() })
@@ -93,6 +94,9 @@ export async function batchSetEnabled(
             sites.map((site) => site.id),
           ),
         );
+      if (input.enabled)
+        for (const site of sites) await noteOperatorRestore(tx, { ...site, enabled: true });
+    }
     return publishBatch(tx, ctx.actor, sortByName(sites), {
       single: input.enabled ? "site_enabled" : "site_disabled",
       several: input.enabled ? "sites_enabled" : "sites_disabled",

@@ -8,6 +8,7 @@ import { type Actor, recordAudit } from "./audit";
 import { assertTemplateSize } from "./error-pages";
 import { publishRevision } from "./revisions";
 import { findSite } from "./sites";
+import { noteOperatorRestore } from "./usage-guard";
 
 type SiteRow = typeof schema.site.$inferSelect;
 
@@ -61,6 +62,7 @@ export async function updateSiteMaintenance(
       .where(eq(schema.site.id, site.id))
       .returning();
     if (!updated) throw new Error("site update failed");
+    if (!after.enabled) await noteOperatorRestore(tx, updated);
     const { row: revision } = await publishRevision(tx, {
       clusterId: site.clusterId,
       reason: { code: "site_maintenance_updated", params: { site: site.name } },
