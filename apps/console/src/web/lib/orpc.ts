@@ -27,6 +27,15 @@ export function isUnauthorized(error: unknown): boolean {
   return !!error && typeof error === "object" && (error as { status?: number }).status === 401;
 }
 
+/** The session works, but not from this address (the login allow list). */
+export function isLoginIpRefused(error: unknown): boolean {
+  return (
+    !!error &&
+    typeof error === "object" &&
+    (error as { code?: string }).code === "LOGIN_IP_NOT_ALLOWED"
+  );
+}
+
 /** A record that does not exist (any `*_NOT_FOUND` code answers 404). */
 export function isNotFound(error: unknown): boolean {
   return !!error && typeof error === "object" && (error as { status?: number }).status === 404;

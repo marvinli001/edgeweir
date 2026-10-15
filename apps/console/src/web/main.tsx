@@ -9,15 +9,16 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getLocale } from "@/lib/i18n";
-import { isNotFound, isUnauthorized } from "@/lib/orpc";
+import { isLoginIpRefused, isNotFound, isUnauthorized } from "@/lib/orpc";
 import { routeTree } from "./routeTree.gen";
 
 /**
- * An expired or revoked session answers 401 to every call: go to the sign-in page, which brings
- * the user back here, instead of leaving "Please sign in" with a retry that cannot work.
+ * An expired or revoked session answers 401 to every call, and a session used from outside the
+ * login allow list LOGIN_IP_NOT_ALLOWED: go to the sign-in page, which brings the user back here
+ * (or says why it cannot), instead of leaving "Please sign in" with a retry that cannot work.
  */
 function onUnauthorized(error: unknown) {
-  if (!isUnauthorized(error)) return;
+  if (!isUnauthorized(error) && !isLoginIpRefused(error)) return;
   const { pathname, href } = router.state.location;
   if (pathname === "/login" || pathname === "/setup") return;
   void router.navigate({ to: "/login", search: { redirect: href }, replace: true });
@@ -30,7 +31,8 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 5_000,
       // Asking again cannot sign in or bring back a deleted record.
-      retry: (count, error) => !isUnauthorized(error) && !isNotFound(error) && count < 2,
+      retry: (count, error) =>
+        !isUnauthorized(error) && !isLoginIpRefused(error) && !isNotFound(error) && count < 2,
     },
   },
 });

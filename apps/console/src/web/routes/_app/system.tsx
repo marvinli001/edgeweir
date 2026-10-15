@@ -8,6 +8,7 @@ import { AcmeDirectoryCard } from "@/components/acme-directory";
 import { CopyButton } from "@/components/copy-button";
 import { DemoSettingsCard } from "@/components/demo-settings";
 import { LogRetentionCard } from "@/components/log-retention";
+import { LoginAllowListCard } from "@/components/login-allow-list";
 import { NodeChannelCard } from "@/components/node-channel";
 import { UrlScopeBadge } from "@/components/node-enrollment";
 import { OriginAllowListCard } from "@/components/origin-allow-list";
@@ -183,6 +184,7 @@ function GeneralSettings() {
       <UsageSettingsCard />
       <LogRetentionCard />
       <PlatformErrorPagesCard />
+      <LoginAllowListCard />
       <DemoSettingsCard />
     </>
   );
