@@ -248,6 +248,17 @@
 #   usage_limit_reached), a site disabled and enabled again by a higher
 #   limit, a bandwidth alert without an action; a manual restore that the
 #   next evaluation leaves alone; Playwright e2e/usage-guard.spec.ts.
+#   Origin protection G19 (scripts/e2e-g19.mjs, after G18): both nodes report
+#   origin-mtls-v1 and origin-ca-v1; without the authorities sites refuse
+#   client certificates and the Origin CA, then both are created and Origin
+#   CA certificates issued (a generated key, a CSR); with the cluster's
+#   client certificate the nodes reach an origin that requires one over
+#   HTTP/1.1, HTTP/2 and gRPC, without it the origin refuses them even after
+#   the keep-alive pool held a connection with it, the active checks agree;
+#   trusting the Origin CA alone the nodes reach its certificates and refuse
+#   the test CA's, on the system store they refuse the Origin CA's, a system
+#   store site is unaffected; a revoked certificate fails on both nodes and
+#   in the active checks; Playwright e2e/g19.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -316,7 +327,7 @@ SECTIONS=(
   "g5:m6-upgrades" "dns:m5 m6-upgrades" "g6:dns m5 m6-upgrades" "g7:m6-upgrades" "h2:m6-upgrades"
   "g8:m6-upgrades" "g9:m6-upgrades" "g15:m6-upgrades" "g10:dns m5 m6-upgrades" "g11:m6-upgrades"
   "g12:m6-upgrades" "g13:m6-upgrades" "g14:m6-upgrades" "g16:m6-upgrades" "g17:m6-upgrades"
-  "g18:m6-upgrades" "usage-guard:m6-upgrades" "allowlist:" "lifecycle:"
+  "g18:m6-upgrades" "g19:m6-upgrades" "usage-guard:m6-upgrades" "allowlist:" "lifecycle:"
 )
 section_names() { local s; for s in "${SECTIONS[@]}"; do printf '%s\n' "${s%%:*}"; done; }
 section_deps() { local s; for s in "${SECTIONS[@]}"; do [[ "${s%%:*}" != "$1" ]] || { printf '%s\n' "${s#*:}"; return; }; done; }
@@ -1346,7 +1357,7 @@ story node-logs --cleanup
 pass "Node log checks passed"
 }
 
-# ------------------------------------- sections m3 ... g18 (scripts/e2e-*.mjs)
+# ------------------------------------- sections m3 ... g19 (scripts/e2e-*.mjs)
 section_m3() {
 step "M3: ACME issuance, HTTPS, HTTP/2, HTTP/3, renewal and TLS policy"
 story m3
@@ -1507,6 +1518,12 @@ section_g18() {
 step "G18: WebP / AVIF variants by Accept, cached once each, limits, savings"
 story g18 --cleanup
 pass "G18 checks passed"
+}
+
+section_g19() {
+step "G19: origin protection: client certificates to origins and the Origin CA"
+story g19 --cleanup
+pass "G19 checks passed"
 }
 
 section_usage_guard() {
