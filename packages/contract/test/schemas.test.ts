@@ -65,6 +65,8 @@ describe("siteCreateInput", () => {
     expect(parsed.originSettings).toEqual({
       policy: "weighted_random",
       tlsVerify: true,
+      tlsTrust: "system",
+      clientCertificate: false,
       maxFails: 3,
       recoverySeconds: 30,
       connectTimeoutMs: 10_000,
