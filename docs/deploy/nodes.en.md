@@ -318,6 +318,8 @@ The release source for agent self-upgrades is set in **System settings → Node 
 
 ## Troubleshooting
 
+A node's warnings, errors and key events are also in the **Logs** tab of its details, see [Node logs](../guide/node-logs.en.md).
+
 | Symptom | Cause | Action |
 | --- | --- | --- |
 | `no enrollment token` | `sudo` dropped `EDGEWEIR_TOKEN` | Run the generated command unchanged: `export` and `sudo --preserve-env=EDGEWEIR_TOKEN`. |

@@ -305,6 +305,7 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 | `CheckChannel` | 无副作用：返回证书对应的节点 ID 与当前的节点通道地址，停用的节点也可调用；节点切换地址前、`edgeweir-node set-server` 用它检查新地址 |
 | `ReportStats`、`ReportStatsV2` | 按分钟预聚合的流量统计（`ReportStatsV2` 另含 L4 应用的分钟统计，`l4-v1`）；按批次序号去重 |
 | `ReportLogs` | 采样访问日志；按批次序号去重 |
+| `ReportNodeLogs` | 节点自己的警告、错误与白名单事件（agent、监督进程、OpenResty 的 error log，`node-logs-v1`）；按批次序号去重，存入 `node_log_entry`；控制台入库前再脱敏一次，节点报告的限速与积压丢弃条数记为一行 `dropped` |
 | `GetOriginCredentials` | 本集群网站引用的 S3 源站密钥、PURGE 密钥（`site_secret`）与访问鉴权规则的密钥（`site_auth_rule`，JSON）；后两种 `access_key_id` 为空 |
 | `SubmitPurge` | 节点转交的 PURGE 请求（`site-content-v1`）：控制台确认节点所在集群服务该网站、网站开启了 PURGE 且 URL 属于网站，以节点身份创建 URL 刷新任务（来源 `purge_method`），每个网站每分钟至多 120 个 |
 | `GetCertificates` | 本集群网站引用的证书链与私钥（含网站的其他证书） |
@@ -427,6 +428,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | 数据 | 保留 |
 | --- | --- |
 | 访问日志 | 系统设置 `log_retention`：PostgreSQL 1–30 天、ClickHouse 1–90 天，默认 7 天 |
+| 节点日志 | 系统设置 `node_log_retention`：1–30 天（默认 7 天），每个节点最多 1,000–100,000 条（默认 10,000） |
 | 分钟统计（PostgreSQL 与 ClickHouse） | 7 天 |
 | L4 应用的分钟统计 | 7 天 |
 | 小时统计 | 90 天 |
@@ -454,6 +456,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `maintenance.rotate-challenge-keys` | 每小时第 11 分 | 轮换满一天的挑战密钥 |
 | `maintenance.rotate-session-ticket-keys` | 每小时第 13 分 | 轮换满 12 小时的 TLS 会话票据密钥 |
 | `maintenance.prune-security-events` | 每小时第 37 分 | 删除超过保留天数的安全事件 |
+| `maintenance.prune-node-logs` | 启动时，之后每 10 分钟 | 删除超过保留天数的节点日志，以及每个节点超出条数上限的最旧条目 |
 | 调度求值（进程内定时器，不是 pg-boss 队列） | 每 10 秒；同一时间一个进程（租约），上一次未完成时跳过 | 探针判定的地址可达性与智能调度规则，见 [区域探针与智能调度](#区域探针与智能调度) |
 
 ## 数据模型
@@ -561,7 +564,9 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `site_usage_guard` | 网站的用量保护：周期（自然日 / 月）与时区、发送流量 / 请求数 / 带宽上限、预警阈值、动作与恢复方式，以及 worker 维护的本周期状态（达到预警 / 上限的指标、带宽峰值、由它施加的动作、手动恢复后暂停到何时、动作发布失败的错误码） |
 | `access_log` | 采样与强制记录的访问日志（请求 id、User-Agent、Referer、协议、地区、回源、拦截原因与规则；网站开启时含 JA4、查询字符串、指定请求头与直连对端地址；命中的 CRS 规则与是否被拦截），按 UTC 日分区，保留期由系统设置决定 |
 | `security_event` | 节点上报的 CC 防护事件：级别变化、路径升降级、自动封禁，带当时的 Top IP 与 Top 路径 |
-| `node_log_cursor` | 每个节点日志批次的序号高水位 |
+| `node_log_cursor` | 每个节点访问日志批次的序号高水位 |
+| `node_log_entry` | 节点的警告、错误与白名单事件（时间、级别、来源、组件、消息、结构化字段、折叠条数、是否截断、事件），`kind = dropped` 的行记录节点丢弃的条数；按（节点、批次、序号）去重 |
+| `node_log_entry_cursor` | 每个节点 `ReportNodeLogs` 批次的序号高水位 |
 | `origin_health` | 节点上报的源站健康状态与错误码，被动检查与主动检查各一行 |
 | `cache_task` | 刷新预热任务 |
 | `cache_task_node` | 任务在每个节点上的交付与结果 |
@@ -650,6 +655,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0067_node_certificate_failures` | `node_config_status.certificate_failures`（节点上报无法加载的证书） |
 | `0068_node_channel_status` | `node.channel`、`probe.channel`（节点与探针在用的节点通道地址、备用地址、切换失败原因，以及控制台看到的 TLS 服务器名与是否经 WebSocket 入口） |
 | `0069_site_usage_guard` | `site_usage_guard`；`site_usage` 按网站与窗口的索引 |
+| `0070_node_logs` | `node_log_entry`、`node_log_entry_cursor` |
 
 ## 构建产物
 

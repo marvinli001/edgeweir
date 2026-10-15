@@ -304,6 +304,7 @@ Every RPC other than `Enroll` and `EnrollProbe` requires a client certificate ve
 | `ReportStatus` | Heartbeat, apply receipt, origin health and error codes (passive and active checks reported apart), ban state, host metrics (`metrics-v1`), cache zone usage (`cache-zone-v1`, kept in `node.cache_usage`); `probe` in the response tells the node whether it also probes |
 | `ReportStats`, `ReportStatsV2` | Per-minute pre-aggregated traffic statistics (`ReportStatsV2` also carries the L4 apps' minute statistics, `l4-v1`); deduplicated by batch sequence |
 | `ReportLogs` | Sampled access logs; deduplicated by batch sequence |
+| `ReportNodeLogs` | The node's own warnings, errors and whitelisted events (agent, supervisor, OpenResty's error log; `node-logs-v1`); deduplicated by batch sequence and stored in `node_log_entry`; the console removes secrets again before storing, and the drops the node counts (rate limit, backlog) become one `dropped` row |
 | `GetOriginCredentials` | S3 origin keys, PURGE keys (`site_secret`) and access authentication secrets (`site_auth_rule`, JSON) referenced by the cluster's sites; the latter two with an empty `access_key_id` |
 | `SubmitPurge` | A PURGE request the node hands on (`site-content-v1`): the console checks that the node's cluster serves the site, that the site has PURGE on and that the URL belongs to it, then creates a URL purge task as the node (source `purge_method`), at most 120 per site and minute |
 | `GetCertificates` | Certificate chains and private keys referenced by the cluster's sites (further certificates included) |
@@ -425,6 +426,7 @@ Access logs are sampled per site; the sample rate defaults to 0 (off). Per-minut
 | Data | Retention |
 | --- | --- |
 | Access logs | System setting `log_retention`: PostgreSQL 1–30 days, ClickHouse 1–90 days, 7 by default |
+| Node logs | System setting `node_log_retention`: 1–30 days (7 by default), at most 1,000–100,000 entries per node (10,000 by default) |
 | Per-minute statistics (PostgreSQL and ClickHouse) | 7 days |
 | Per-minute statistics of L4 apps | 7 days |
 | Hourly statistics | 90 days |
@@ -452,6 +454,7 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificate
 | `maintenance.rotate-challenge-keys` | Hourly at minute 11 | Rotates challenge keys that are a day old |
 | `maintenance.rotate-session-ticket-keys` | Hourly at minute 13 | Rotates TLS session ticket keys that are 12 hours old |
 | `maintenance.prune-security-events` | Hourly at minute 37 | Deletes security events past the retention |
+| `maintenance.prune-node-logs` | At start, then every 10 minutes | Deletes node logs past the retention and each node's oldest entries beyond its limit |
 | Scheduling evaluation (an in-process timer, not a pg-boss queue) | Every 10 seconds; one process at a time (lease), a tick is skipped while the previous run is busy | Probe-driven address reachability and scheduling rules, see [Regional probes and scheduling](#regional-probes-and-scheduling) |
 
 ## Data model
@@ -558,7 +561,9 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `site_usage_guard` | A site's usage protection: period (calendar day / month) and time zone, limits on bytes sent / requests / bandwidth, warning threshold, action and recovery, and the current period's state the worker keeps (metrics at the warning threshold / limit, bandwidth peak, the action it applied, how long a manual restore pauses it, the error code of an action that could not be published) |
 | `access_log` | Sampled and forced access logs (request id, User-Agent, Referer, protocol, region, origin, block reason and rule; JA4, the query string, chosen request headers and the peer address while the site records them; matched CRS rules and whether CRS blocked the request), one partition per UTC day, kept as the retention setting says |
 | `security_event` | CC mitigation events reported by nodes: level changes, escalated paths, automatic bans, with the top addresses and paths of the moment |
-| `node_log_cursor` | Per-node high-water mark of log batches |
+| `node_log_cursor` | Per-node high-water mark of access log batches |
+| `node_log_entry` | Nodes' warnings, errors and whitelisted events (time, level, source, component, message, structured fields, folded count, truncation, event); rows with `kind = dropped` record how many entries the node dropped; deduplicated by (node, batch, index) |
+| `node_log_entry_cursor` | Per-node high-water mark of `ReportNodeLogs` batches |
 | `origin_health` | Origin health and error codes reported by nodes, one row each for the passive and the active check |
 | `cache_task` | Purge and prefetch tasks |
 | `cache_task_node` | Delivery and result of a task on each node |

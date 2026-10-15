@@ -72,6 +72,7 @@ const SECTIONS = [
       ["scheduling", "docs/guide/scheduling.md"],
       ["l4", "docs/guide/l4.md"],
       ["access-logs", "docs/guide/access-logs.md"],
+      ["node-logs", "docs/guide/node-logs.md"],
       ["node-upgrades", "docs/guide/node-upgrades.md"],
     ],
   },

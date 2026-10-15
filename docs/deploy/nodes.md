@@ -318,6 +318,8 @@ downloads/
 
 ## 排障
 
+节点的警告、错误与关键事件也在节点详情的「日志」页签，见[节点日志](../guide/node-logs.md)。
+
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
 | `no enrollment token` | `sudo` 未保留 `EDGEWEIR_TOKEN` | 原样执行生成的命令：`export` 与 `sudo --preserve-env=EDGEWEIR_TOKEN`。 |
