@@ -134,7 +134,7 @@ docker compose logs --no-color --no-log-prefix console \
 
 ## 找回账户
 
-`dist/server/recover.js` 为控制台唯一的账户重置密码、停用两步验证，用于无法登录时。它读取与控制台相同的环境变量（`DATABASE_URL`、`EDGEWEIR_MASTER_KEY` 等），直接修改数据库，不经过 Web 界面与 HTTP。步骤见 [找回账户](../guide/account.md#找回账户)。
+`dist/server/recover.js` 为控制台唯一的账户重置密码、停用两步验证或清空登录 IP 白名单，用于无法登录时。它读取与控制台相同的环境变量（`DATABASE_URL`、`EDGEWEIR_MASTER_KEY` 等），直接修改数据库，不经过 Web 界面与 HTTP。步骤见 [找回账户](../guide/account.md#找回账户)。
 
 ```bash
 docker compose exec console node dist/server/recover.js --reset-password --disable-two-factor
@@ -153,9 +153,10 @@ docker compose exec console node dist/server/recover.js --reset-password --disab
 | --- | --- |
 | `--reset-password` | 设置新密码，12–128 字符 |
 | `--disable-two-factor` | 停用两步验证，删除 TOTP 密钥与备用码 |
+| `--clear-login-allowlist` | 清空 [登录 IP 白名单](../guide/system.md#登录-ip-白名单)，任何地址都能再次登录 |
 | `-h`、`--help` | 输出用法 |
 
-至少指定 `--reset-password`、`--disable-two-factor` 之一。
+至少指定 `--reset-password`、`--disable-two-factor`、`--clear-login-allowlist` 之一。
 
 ### 新密码
 
@@ -178,8 +179,9 @@ docker compose exec -T console node dist/server/recover.js --reset-password < ne
 | --- | --- |
 | 密码 | 由 better-auth 哈希（scrypt）后写入账户的密码凭据 |
 | 两步验证 | 关闭；删除 TOTP 密钥与备用码 |
+| 登录 IP 白名单 | 删除；清空后在名单外取得的会话 cookie 也会重新可用，所以会话同样全部删除 |
 | 会话 | 删除该账户的全部会话，以及尚未完成两步验证的登录与受信任设备记录 |
-| 审计日志 | `account.recover`，操作者为系统（名称 `recover`）；元数据 `passwordReset`、`twoFactorDisabled`、`sessionsRevoked` |
+| 审计日志 | `account.recover`，操作者为系统（名称 `recover`）；元数据 `passwordReset`、`twoFactorDisabled`、`sessionsRevoked`，清空白名单时还有 `loginAllowListCleared`（清空前的地址段） |
 
 姓名、邮箱、通行密钥与 AccessKey 不变。标准输出为账户的姓名与邮箱和完成的操作，不含密码、密码哈希或会话 token：
 
@@ -189,6 +191,8 @@ Password reset.
 Two-factor authentication turned off.
 Signed out 2 sessions.
 ```
+
+`--clear-login-allowlist` 输出 `Login allow list cleared (N ranges).`，白名单本来为空时输出 `The login allow list was already off.`。
 
 ### 退出码
 

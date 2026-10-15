@@ -28,6 +28,7 @@ Page: `/login`.
 | --- | --- |
 | Redirect | After sign-in, the console returns to the page opened before, otherwise to **Overview** |
 | Sign-in rate limit | Sign-in, two-factor authentication, and password change: 3 attempts per 10 seconds per client IP, active in production (`NODE_ENV=production`). For how the client IP is determined, see [Trusted proxies and client IP](../deploy/networking.en.md#trusted-proxies-and-client-ip) |
+| Login IP allow list | Once set, only addresses on the list may sign in and use sessions, see [Login IP allow list](system.en.md#login-ip-allow-list) |
 | Audit | Successful (`auth.sign_in`, with the sign-in method) and failed (`auth.sign_in_failed`) sign-ins are written to the [audit log](system.en.md#audit-log) |
 
 ## Sessions
@@ -161,6 +162,7 @@ Needs attention, nodes, recent revisions, the edge network, and nodes online ref
 | **Invalid code** | The two-factor code is wrong | Check the time on the authenticator device and retry, or use a backup code |
 | **Verification expired, sign in again** | The two-factor step took longer than 10 minutes | Sign in again |
 | **Too many requests, try again later** | Sign-in rate limit reached | Retry after 10 seconds |
+| **This IP is not on the login allow list** | The current address is outside the [login IP allow list](system.en.md#login-ip-allow-list) | Sign in from a network on the list; if the list no longer holds any of your addresses, clear it on the server, see [Account recovery](#account-recovery) |
 | **Incorrect password** | **Current password** is wrong when changing the password or enabling or disabling two-factor authentication | Enter the current password again |
 | A passkey no longer signs in | The console host name changed | Sign in with the password, delete the old passkey, and add it again |
 | Forgotten password | The web UI has no password recovery | Reset the password on the server, see [Account recovery](#account-recovery) |
@@ -169,9 +171,9 @@ Needs attention, nodes, recent revisions, the edge network, and nodes online ref
 
 ### Account recovery
 
-When nobody can sign in, run `recover.js` on the server that runs the console: it resets the password of the only account, turns two-factor authentication off, or both. The command does not go through the web UI; it reads the console container's environment and changes the database directly.
+When nobody can sign in, run `recover.js` on the server that runs the console: it resets the password of the only account, turns two-factor authentication off, clears the [login IP allow list](system.en.md#login-ip-allow-list), or several of these at once. The command does not go through the web UI; it reads the console container's environment and changes the database directly.
 
-1. Run the command; drop the option you do not need:
+1. Run the command with the options you need (add `--clear-login-allowlist` to clear the allow list):
 
    ```bash
    docker compose exec console node dist/server/recover.js --reset-password --disable-two-factor

@@ -134,7 +134,7 @@ Values: `all` (default), `app`, and `worker`. Components, listeners, and scaling
 
 ## Account recovery
 
-`dist/server/recover.js` resets the password of the console's only account and turns two-factor authentication off, for when nobody can sign in. It reads the same environment variables as the console (`DATABASE_URL`, `EDGEWEIR_MASTER_KEY`, and so on) and changes the database directly, without the web UI or HTTP. Steps: [Account recovery](../guide/account.en.md#account-recovery).
+`dist/server/recover.js` resets the password of the console's only account, turns two-factor authentication off or clears the login IP allow list, for when nobody can sign in. It reads the same environment variables as the console (`DATABASE_URL`, `EDGEWEIR_MASTER_KEY`, and so on) and changes the database directly, without the web UI or HTTP. Steps: [Account recovery](../guide/account.en.md#account-recovery).
 
 ```bash
 docker compose exec console node dist/server/recover.js --reset-password --disable-two-factor
@@ -153,9 +153,10 @@ docker compose exec console node dist/server/recover.js --reset-password --disab
 | --- | --- |
 | `--reset-password` | Set a new password, 12–128 characters |
 | `--disable-two-factor` | Turn two-factor authentication off; delete the TOTP secret and backup codes |
+| `--clear-login-allowlist` | Clear the [login IP allow list](../guide/system.en.md#login-ip-allow-list), so every address may sign in again |
 | `-h`, `--help` | Print usage |
 
-At least one of `--reset-password` and `--disable-two-factor` is required.
+At least one of `--reset-password`, `--disable-two-factor` and `--clear-login-allowlist` is required.
 
 ### New password
 
@@ -178,8 +179,9 @@ These changes commit in one transaction with the audit entry; if any step fails,
 | --- | --- |
 | Password | Hashed by better-auth (scrypt) and stored on the account's password credential |
 | Two-factor authentication | Off; the TOTP secret and backup codes are deleted |
+| Login IP allow list | Removed; session cookies taken outside the list would work again, so the sessions are deleted as well |
 | Sessions | All sessions of the account are deleted, as are sign-ins waiting for their two-factor code and trusted-device records |
-| Audit log | `account.recover`, actor System (name `recover`); metadata `passwordReset`, `twoFactorDisabled`, `sessionsRevoked` |
+| Audit log | `account.recover`, actor System (name `recover`); metadata `passwordReset`, `twoFactorDisabled`, `sessionsRevoked`, and `loginAllowListCleared` (the ranges before) when clearing the allow list |
 
 Name, email, passkeys, and AccessKeys do not change. Standard output shows the account's name and email and what changed, never the password, its hash, or a session token:
 
@@ -189,6 +191,8 @@ Password reset.
 Two-factor authentication turned off.
 Signed out 2 sessions.
 ```
+
+`--clear-login-allowlist` prints `Login allow list cleared (N ranges).`, or `The login allow list was already off.` when it was empty.
 
 ### Exit codes
 

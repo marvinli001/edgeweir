@@ -270,7 +270,7 @@ Page: **System settings** (`/system`), with the tabs:
 
 | Tab | Content |
 | --- | --- |
-| **General** | The sections below: system information, node channel, certificate authorities, origin allow list, node release source, usage, access logs, platform error pages, demo account |
+| **General** | The sections below: system information, node channel, certificate authorities, origin allow list, node release source, usage, access logs, platform error pages, login IP allow list, demo account |
 | **Monitoring** | `/system?tab=probes`: the regional probe list (page action **Add probe**), the **Last round** card (a latency matrix of probers × nodes) and the **Probe settings** card, see [Regional probes](scheduling.en.md#regional-probes); `/regions?tab=probes` redirects there |
 | **Service accounts** | `/system?tab=service-accounts`, see [Service accounts](#service-accounts) |
 
@@ -364,6 +364,32 @@ Changes are audited as `system.log_retention_update`; the next minute's maintena
 
 Each template is at most 65536 bytes (UTF-8); the values of the placeholders `{{status}}`, `{{request_id}}`, `{{client_ip}}`, `{{host}}`, `{{time}}` and `{{path}}` are HTML-escaped; with `{{time}}` or `{{path}}` the configurations of every cluster need the node capability `rules-v3`. Saving publishes one revision in every cluster ("Platform error pages updated") and is audited as `system.error_pages_update`. Older nodes ignore platform error pages. See [Error pages](error-pages.en.md#platform-error-pages).
 
+### Login IP allow list
+
+Only addresses on the list may sign in to the console. An empty list turns it off (the default).
+
+| Field | Description |
+| --- | --- |
+| **Networks that may sign in** | One IPv4 or IPv6 CIDR per line; a single address counts as /32 or /128; at most 64 entries. IPv4-mapped IPv6 addresses (`::ffff:1.2.3.4`) compare as IPv4 |
+| **Current IP** | The address the console resolved for this request, see [Trusted proxies and client IP](../deploy/networking.en.md#trusted-proxies-and-client-ip); **Add current IP** puts it on the list |
+
+While the list is not empty:
+
+| Scope | Addresses outside the list |
+| --- | --- |
+| Sign-in: password, two-factor authentication, passkeys | `LOGIN_IP_NOT_ALLOWED` (403), without checking the password or counting toward the sign-in rate limit |
+| Existing sessions: `/rpc` and `/api/auth` (reading the session, password, two-factor and passkey changes) | `LOGIN_IP_NOT_ALLOWED`; the session itself stays and works again from an address on the list. Signing out is not limited |
+| AccessKeys and service account keys on `/api/v1` | Not limited |
+| The [demo account](#demo-account) | Not limited |
+| The setup wizard (`system.setup`), the sign-in page, the node channel and the install script | Not limited |
+
+| Item | Description |
+| --- | --- |
+| Lockout protection | A list without the current IP is refused (`LOGIN_ALLOW_LIST_EXCLUDES_CURRENT_IP`); saving through an AccessKey checks the caller's address the same way |
+| Proxy hint | When the current IP is a private, CGNAT, loopback or similar address, or the request carried forwarding headers from a peer outside `EDGEWEIR_TRUSTED_PROXIES`, the card notes it may be a proxy's address. Behind the proxy of Zeabur, Render, Fly.io, Railway, bunny.net and the like without `EDGEWEIR_TRUSTED_PROXIES`, every visitor shows the same proxy address and the list does not help |
+| Locked out | Run `recover.js --clear-login-allowlist` on the server, see [Account recovery](account.en.md#account-recovery) |
+| Records | Changes are audited as `system.login_allow_list_update` (`cidrs`, `added`, `removed`); refused requests only go to the console log (one line per address and minute, at most 20 lines a minute), not to the audit log |
+
 ### Demo account
 
 A view-only account for public demos. It sits beside the operator account and leaves it unchanged.
@@ -377,6 +403,7 @@ The demo account can open every page of the console and change nothing:
 - Every change returns `DEMO_READ_ONLY` (403): all non-GET procedures except `rules.validate`. It cannot create AccessKeys, enrollment tokens or service accounts
 - It cannot change its password, turn two-factor authentication on or off, or add or delete passkeys
 - Client addresses in the audit log and access logs show only their network (IPv4 /24, IPv6 /48); access logs leave out recorded request headers, and failed sign-ins leave out the typed e-mail
+- The [login IP allow list](#login-ip-allow-list) does not limit the demo account; the list and its audit entries show it only the networks (/24, /48) as well
 - Secrets are never returned to anyone; everything else (sites, nodes, certificates, DNS and alert settings and so on) looks as it does to the operator, so check it before you publish the demo
 
 The switch is refused while the operator account uses `demo@edgeweir.com` (`DEMO_EMAIL_TAKEN`). Changes are audited as `system.demo_update`; the demo account's sign-ins are audited too.
@@ -395,6 +422,7 @@ A value saved in the console wins over the environment variable, which wins over
 | SMTP CA certificates | **Alerts → SMTP → CA certificates (PEM)** | `EDGEWEIR_SMTP_CA_FILE` (path to a PEM file) | System trust store |
 | SMTP server and account | **Alerts → SMTP** | None | Not configured |
 | Origin allow list | **System settings → Origin allow list** | None | Empty |
+| Login IP allow list | **System settings → Login IP allow list** | None | Empty (off) |
 | Usage | **System settings → Usage** | None | 100 days retention, 60-minute offline threshold |
 | Bans | **Protection settings → Bans** | None | Limit 10000, automatic bans shared |
 | Protection | **Protection settings → Protection** | None | Global Under Attack off, challenge type JavaScript, events kept 30 days |
