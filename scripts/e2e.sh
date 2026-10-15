@@ -225,6 +225,15 @@
 #   limit served and cached as JPEG; AVIF off serves the WebP variant; the
 #   saved bytes reach imageConvert.savings; off again, the cached JPEG;
 #   Playwright e2e/g18.spec.ts.
+#   Login IP allow list (scripts/e2e-allowlist.mjs, ADR-0047): the console
+#   sees the host through the port mapping (a private address, the proxy
+#   hint); a list without it is refused; client-a saves only its own address
+#   with an AccessKey; the host's sign-in (right or wrong password) and its
+#   session cookie on /rpc and get-session get LOGIN_IP_NOT_ALLOWED while the
+#   AccessKey, sign-out and the demo account still work and the refusals are
+#   logged; client-a signs in; `recover.js --clear-login-allowlist` lets the
+#   host sign in again and signs the old session out; Playwright
+#   e2e/allowlist.spec.ts (the card, the sign-in page's reason).
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -293,7 +302,7 @@ SECTIONS=(
   "g5:m6-upgrades" "dns:m5 m6-upgrades" "g6:dns m5 m6-upgrades" "g7:m6-upgrades" "h2:m6-upgrades"
   "g8:m6-upgrades" "g9:m6-upgrades" "g15:m6-upgrades" "g10:dns m5 m6-upgrades" "g11:m6-upgrades"
   "g12:m6-upgrades" "g13:m6-upgrades" "g14:m6-upgrades" "g16:m6-upgrades" "g17:m6-upgrades"
-  "g18:m6-upgrades" "lifecycle:"
+  "g18:m6-upgrades" "allowlist:" "lifecycle:"
 )
 section_names() { local s; for s in "${SECTIONS[@]}"; do printf '%s\n' "${s%%:*}"; done; }
 section_deps() { local s; for s in "${SECTIONS[@]}"; do [[ "${s%%:*}" != "$1" ]] || { printf '%s\n' "${s#*:}"; return; }; done; }
@@ -1477,6 +1486,13 @@ section_g18() {
 step "G18: WebP / AVIF variants by Accept, cached once each, limits, savings"
 story g18 --cleanup
 pass "G18 checks passed"
+}
+
+# ----------------------------------------------------------- section allowlist
+section_allowlist() {
+step "Login IP allow list: sign-in and sessions only from the list, AccessKeys and the demo account not limited, recover.js clears it"
+story allowlist --cleanup
+pass "Login IP allow list checks passed"
 }
 
 # ----------------------------------------------------------- section lifecycle
