@@ -538,6 +538,10 @@ type HealthMethod = ActiveHealthCheck["method"];
 interface PoolDraft {
   policy: PolicyValue;
   tlsVerify: boolean;
+  /** Trust anchors of the verification; only with tlsVerify. */
+  tlsTrust: TlsTrust;
+  /** Present the cluster's origin client certificate (origin mutual TLS). */
+  clientCertificate: boolean;
   maxFails: string;
   recoverySeconds: string;
   connectTimeout: string;
@@ -584,6 +588,8 @@ const HEALTH_METHODS = [
   { label: "HEAD", value: "HEAD" },
 ] satisfies { label: string; value: HealthMethod }[];
 
+type TlsTrust = Site["originSettings"]["tlsTrust"];
+
 const PROTOCOLS = [
   { label: "HTTP/1.1", value: "http1" },
   { label: "HTTP/2", value: "http2" },
@@ -601,6 +607,8 @@ function PoolSettingsCard({ site }: { site: Site }) {
     () => ({
       policy: s.policy,
       tlsVerify: s.tlsVerify,
+      tlsTrust: s.tlsTrust,
+      clientCertificate: s.clientCertificate,
       maxFails: String(s.maxFails),
       recoverySeconds: String(s.recoverySeconds),
       connectTimeout: msToSeconds(s.connectTimeoutMs),
@@ -641,6 +649,12 @@ function PoolSettingsCard({ site }: { site: Site }) {
   const healthAvailability = features.data?.activeHealthCheck;
   const affinityAvailability = features.data?.sessionAffinity;
   const http2Availability = features.data?.originHttp2;
+  const mtlsAvailability = features.data?.originMtls;
+  const originCaAvailability = features.data?.originCa;
+  const trusts: { label: string; value: TlsTrust }[] = [
+    { label: m.site_pool_tls_trust_system(), value: "system" },
+    { label: m.site_pool_tls_trust_origin_ca(), value: "originCa" },
+  ];
   const contentLocked = features.data?.siteContent.available === false;
   const interval = toInt(draft.healthInterval, health.intervalSeconds);
 
@@ -656,6 +670,8 @@ function PoolSettingsCard({ site }: { site: Site }) {
               ...s,
               policy: draft.policy,
               tlsVerify: draft.tlsVerify,
+              tlsTrust: draft.tlsVerify ? draft.tlsTrust : "system",
+              clientCertificate: draft.clientCertificate,
               maxFails: toInt(draft.maxFails, s.maxFails),
               recoverySeconds: toInt(draft.recoverySeconds, s.recoverySeconds),
               connectTimeoutMs: secondsToMs(draft.connectTimeout, s.connectTimeoutMs),
@@ -730,7 +746,10 @@ function PoolSettingsCard({ site }: { site: Site }) {
                   id="pool-tls-verify"
                   label={m.site_pool_tls_verify()}
                   checked={draft.tlsVerify}
-                  onCheckedChange={(tlsVerify) => set({ tlsVerify })}
+                  // The Origin CA as trust needs verification.
+                  onCheckedChange={(tlsVerify) =>
+                    set({ tlsVerify, tlsTrust: tlsVerify ? draft.tlsTrust : "system" })
+                  }
                   testId="pool-tls-verify"
                 />
                 <SwitchField
@@ -756,6 +775,34 @@ function PoolSettingsCard({ site }: { site: Site }) {
                 {m.site_pool_grpc_note()}
               </SafetyNote>
             )}
+          </div>
+          <div className="flex flex-col gap-2" data-testid="origins-tls-group">
+            <SettingsGroup legend={m.site_pool_origin_tls()}>
+              <FormSelect
+                id="pool-tls-trust"
+                label={m.site_pool_tls_trust()}
+                value={draft.tlsTrust}
+                options={trusts}
+                disabled={
+                  !draft.tlsVerify || lockedFor(originCaAvailability, s.tlsTrust === "originCa")
+                }
+                onChange={(tlsTrust) => set({ tlsTrust })}
+                testId="pool-tls-trust"
+              />
+              <SwitchField
+                id="pool-client-certificate"
+                label={m.site_pool_client_certificate()}
+                checked={draft.clientCertificate}
+                disabled={lockedFor(mtlsAvailability, s.clientCertificate)}
+                onCheckedChange={(clientCertificate) => set({ clientCertificate })}
+                testId="pool-client-certificate"
+              />
+            </SettingsGroup>
+            <Unavailable availability={originCaAvailability} testId="pool-tls-trust-unavailable" />
+            <Unavailable
+              availability={mtlsAvailability}
+              testId="pool-client-certificate-unavailable"
+            />
           </div>
           <div className="flex flex-col gap-2" data-testid="origins-affinity-group">
             <SettingsGroup legend={m.site_pool_affinity()}>

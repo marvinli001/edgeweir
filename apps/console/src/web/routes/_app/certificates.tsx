@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
+import * as z from "zod";
 import { AcmeAccountsCard } from "@/components/acme-accounts";
 import { AcmeCaFields, type Eab, eabMissing, eabParams } from "@/components/acme-ca";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -12,6 +13,7 @@ import { DnsCredentialDialog, type EditableCredential } from "@/components/dns/c
 import { providerLabel } from "@/components/dns/labels";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
+import { OriginCaPanel, OriginClientPanel } from "@/components/origin-pki";
 import { enterDelay, Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
@@ -22,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { certificateErrorText } from "@/lib/certificate-errors";
@@ -34,9 +37,108 @@ import {
 import { formatDateTime, formatList, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
-export const Route = createFileRoute("/_app/certificates")({ component: CertificatesPage });
+export const Route = createFileRoute("/_app/certificates")({
+  validateSearch: z.object({ tab: z.enum(["origin-ca", "origin-client"]).optional() }),
+  component: CertificatesPage,
+});
 
+type Tab = "certificates" | "origin-ca" | "origin-client";
+
+/** Certificates for visitors, the Origin CA for origins, and the origin client CA. */
 function CertificatesPage() {
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const tab: Tab = search.tab ?? "certificates";
+  // A DNS credential is edited in the dialog that adds one ("dns").
+  const dialog = useDialogState<CertificateDialog>();
+  const issue = useDialogState();
+  return (
+    <Page
+      title={m.cert_title()}
+      actions={
+        tab === "certificates" ? (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => dialog.show("dns")}>
+              {m.cert_dns_add()}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => dialog.show("upload")}
+              data-testid="cert-upload"
+            >
+              {m.cert_upload()}
+            </Button>
+            <Button onClick={() => dialog.show("request")} data-testid="cert-request">
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+              {m.cert_request()}
+            </Button>
+          </div>
+        ) : tab === "origin-ca" ? (
+          <Button onClick={() => issue.show()} data-testid="origin-cert-issue">
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+            {m.origin_cert_issue()}
+          </Button>
+        ) : null
+      }
+    >
+      <Tabs
+        value={tab}
+        onValueChange={(value) =>
+          navigate({
+            search: { tab: value === "origin-ca" || value === "origin-client" ? value : undefined },
+            replace: true,
+          })
+        }
+      >
+        {/* The page's tab bar: line tabs over a hairline, scrolling sideways on phones. */}
+        <TabsList
+          variant="line"
+          className="h-11 w-full max-w-full justify-start gap-0.5 overflow-x-auto overflow-y-hidden border-b px-0 pt-1 pb-[5px] [scrollbar-width:none]"
+        >
+          <TabsTrigger
+            value="certificates"
+            className="flex-none px-2.5"
+            data-testid="cert-tab-certificates"
+          >
+            {m.cert_tab_certificates()}
+          </TabsTrigger>
+          <TabsTrigger
+            value="origin-ca"
+            className="flex-none px-2.5"
+            data-testid="cert-tab-origin-ca"
+          >
+            {m.cert_tab_origin_ca()}
+          </TabsTrigger>
+          <TabsTrigger
+            value="origin-client"
+            className="flex-none px-2.5"
+            data-testid="cert-tab-origin-client"
+          >
+            {m.cert_tab_origin_client()}
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="certificates" className="flex flex-col gap-6 pt-4 animate-enter">
+          <CertificatesPanel dialog={dialog} />
+        </TabsContent>
+        <TabsContent value="origin-ca" className="pt-4 animate-enter">
+          <OriginCaPanel issue={issue} />
+        </TabsContent>
+        <TabsContent value="origin-client" className="pt-4 animate-enter">
+          <OriginClientPanel />
+        </TabsContent>
+      </Tabs>
+    </Page>
+  );
+}
+
+type CertificateDialog = "upload" | "request" | "dns" | EditableCredential;
+
+/** Certificates visitors are served, the DNS credentials of DNS-01 and the ACME accounts. */
+function CertificatesPanel({
+  dialog,
+}: {
+  dialog: ReturnType<typeof useDialogState<CertificateDialog>>;
+}) {
   const client = useQueryClient();
   const certificates = useQuery({
     ...orpc.certificates.list.queryOptions(),
@@ -48,27 +150,9 @@ function CertificatesPage() {
   const remove = useMutation(orpc.certificates.delete.mutationOptions());
   const renew = useMutation(orpc.certificates.renew.mutationOptions());
   const removeDns = useMutation(orpc.dnsCredentials.delete.mutationOptions());
-  // A DNS credential is edited in the dialog that adds one ("dns").
-  const dialog = useDialogState<"upload" | "request" | "dns" | EditableCredential>();
   const refresh = () => client.invalidateQueries();
   return (
-    <Page
-      title={m.cert_title()}
-      actions={
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => dialog.show("dns")}>
-            {m.cert_dns_add()}
-          </Button>
-          <Button variant="outline" onClick={() => dialog.show("upload")} data-testid="cert-upload">
-            {m.cert_upload()}
-          </Button>
-          <Button onClick={() => dialog.show("request")} data-testid="cert-request">
-            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-            {m.cert_request()}
-          </Button>
-        </div>
-      }
-    >
+    <>
       <QueryView
         query={certificates}
         empty={
@@ -230,7 +314,7 @@ function CertificatesPage() {
           }}
         />
       ) : null}
-    </Page>
+    </>
   );
 }
 

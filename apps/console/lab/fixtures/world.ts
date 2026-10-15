@@ -637,6 +637,8 @@ function deliveryOf(seed: SiteSeed): SiteDelivery {
 const DEFAULT_ORIGIN_SETTINGS: Site["originSettings"] = {
   policy: "weighted_random",
   tlsVerify: true,
+  tlsTrust: "system",
+  clientCertificate: false,
   maxFails: 3,
   recoverySeconds: 30,
   connectTimeoutMs: 10_000,

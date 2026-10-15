@@ -316,6 +316,8 @@ const core: Fixtures = {
         activeHealthCheck: on,
         sessionAffinity: on,
         originHttp2: on,
+        originMtls: on,
+        originCa: older,
         errorPages: on,
         purgeByTag: on,
         prefetchVariants: on,

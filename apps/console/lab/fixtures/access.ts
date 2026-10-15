@@ -937,7 +937,67 @@ const page = <T>(items: T[], pageInput: unknown, sizeInput: unknown, fallback: n
   return { items: items.slice((number - 1) * size, number * size), total: items.length };
 };
 
+// Origin protection: both authorities created, two origin certificates (one revoked) and the
+// clusters' client certificates. The PEM bodies are placeholders; only downloads show them.
+const PEM = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n";
+const authority = (fingerprint: string, years: number) => ({
+  certificatePem: PEM,
+  fingerprint,
+  notBefore: ago(120 * DAY),
+  notAfter: ahead(years * 365 * DAY - 120 * DAY),
+});
+const originCertificates = [
+  {
+    id: id(41, 2),
+    hostnames: ["origin.shop.example.com", "*.assets.example.com"],
+    keyType: "ec256",
+    source: "generated" as const,
+    serial: "4b1f0e9a27c3d5e8f1a2b3c4d5e6f708",
+    fingerprint: "9f".repeat(32),
+    certificatePem: PEM,
+    notBefore: ago(30 * DAY),
+    notAfter: ahead(15 * 365 * DAY - 30 * DAY),
+    revokedAt: null,
+    createdAt: ago(30 * DAY),
+  },
+  {
+    id: id(41, 1),
+    hostnames: ["203.0.113.40"],
+    keyType: "rsa2048",
+    source: "csr" as const,
+    serial: "1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f",
+    fingerprint: "3a".repeat(32),
+    certificatePem: PEM,
+    notBefore: ago(90 * DAY),
+    notAfter: ahead(365 * DAY - 90 * DAY),
+    revokedAt: ago(2 * DAY),
+    createdAt: ago(90 * DAY),
+  },
+];
+
 export const accessFixtures: Fixtures = {
+  originCa: {
+    get: () => ({ authority: authority("7c".repeat(32), 20) }),
+  },
+  originClientCa: {
+    get: () => ({
+      authority: authority("d4".repeat(32), 10),
+      certificates: [
+        {
+          id: id(42, 1),
+          clusterId: id(2, 1),
+          clusterName: "apac-edge",
+          serial: "5e6f708192a3b4c5d6e7f8091a2b3c4d",
+          fingerprint: "e1".repeat(32),
+          notBefore: ago(20 * DAY),
+          notAfter: ahead(70 * DAY),
+        },
+      ],
+    }),
+  },
+  originCertificates: {
+    list: () => originCertificates,
+  },
   certificates: {
     list: () => certificates,
     settings: () => ({ acmeDirectory: null, acmeDirectoryEab: false, defaultCa: "letsencrypt" }),
