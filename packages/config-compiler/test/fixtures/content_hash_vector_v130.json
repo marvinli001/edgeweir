@@ -1,0 +1,221 @@
+{
+  "description": "proto v1.3.0: site a presents the origin client certificate occ-2 (OriginPool.client_certificate_id), site b verifies its origin against the Origin CA alone (OriginPool.tls_trust ORIGIN_TLS_TRUST_ORIGIN_CA, NodeConfig.origin_ca with an empty CRL), site c does both, site d neither. Sites and required features are reversed.",
+  "config": {
+    "revision": "13",
+    "contentHash": "63ff10325ee973d28c9d15b007beeb48a580f3c72203245fe6eabc011242bec3",
+    "clusterId": "c1",
+    "listeners": [
+      {
+        "port": 80,
+        "protocol": "LISTENER_PROTOCOL_HTTP"
+      }
+    ],
+    "cacheZones": [
+      {
+        "name": "default",
+        "maxSizeMb": "10240",
+        "keysZoneMb": 64,
+        "inactiveSeconds": 604800
+      }
+    ],
+    "sites": [
+      {
+        "id": "d",
+        "name": "d",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "d.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-d",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-d",
+              "address": "origin.test",
+              "port": 443,
+              "scheme": "ORIGIN_SCHEME_HTTPS",
+              "weight": 1,
+              "sni": "origin.test"
+            }
+          ],
+          "healthCheck": {
+            "maxFails": 3,
+            "recoverySeconds": 30
+          },
+          "connection": {
+            "connectTimeoutMs": 10000,
+            "sendTimeoutMs": 60000,
+            "readTimeoutMs": 60000,
+            "keepaliveIdleSeconds": 60,
+            "keepaliveMaxRequests": 1000
+          }
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "tls": {
+          "minimumVersion": "1.2",
+          "http2": true,
+          "gzip": true,
+          "gzipMinLength": 256,
+          "gzipTypes": ["text/html"],
+          "cipherProfile": "modern"
+        }
+      },
+      {
+        "id": "c",
+        "name": "c",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "c.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-c",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-c",
+              "address": "origin.test",
+              "port": 443,
+              "scheme": "ORIGIN_SCHEME_HTTPS",
+              "weight": 1,
+              "sni": "origin.test"
+            }
+          ],
+          "healthCheck": {
+            "maxFails": 3,
+            "recoverySeconds": 30
+          },
+          "connection": {
+            "connectTimeoutMs": 10000,
+            "sendTimeoutMs": 60000,
+            "readTimeoutMs": 60000,
+            "keepaliveIdleSeconds": 60,
+            "keepaliveMaxRequests": 1000
+          },
+          "clientCertificateId": "occ-2",
+          "tlsTrust": "ORIGIN_TLS_TRUST_ORIGIN_CA"
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "tls": {
+          "minimumVersion": "1.2",
+          "http2": true,
+          "gzip": true,
+          "gzipMinLength": 256,
+          "gzipTypes": ["text/html"],
+          "cipherProfile": "modern"
+        }
+      },
+      {
+        "id": "b",
+        "name": "b",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "b.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-b",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-b",
+              "address": "origin.test",
+              "port": 443,
+              "scheme": "ORIGIN_SCHEME_HTTPS",
+              "weight": 1,
+              "sni": "origin.test"
+            }
+          ],
+          "healthCheck": {
+            "maxFails": 3,
+            "recoverySeconds": 30
+          },
+          "connection": {
+            "connectTimeoutMs": 10000,
+            "sendTimeoutMs": 60000,
+            "readTimeoutMs": 60000,
+            "keepaliveIdleSeconds": 60,
+            "keepaliveMaxRequests": 1000
+          },
+          "tlsTrust": "ORIGIN_TLS_TRUST_ORIGIN_CA"
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "tls": {
+          "minimumVersion": "1.2",
+          "http2": true,
+          "gzip": true,
+          "gzipMinLength": 256,
+          "gzipTypes": ["text/html"],
+          "cipherProfile": "modern"
+        }
+      },
+      {
+        "id": "a",
+        "name": "a",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "a.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-a",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-a",
+              "address": "origin.test",
+              "port": 443,
+              "scheme": "ORIGIN_SCHEME_HTTPS",
+              "weight": 1,
+              "sni": "origin.test"
+            }
+          ],
+          "healthCheck": {
+            "maxFails": 3,
+            "recoverySeconds": 30
+          },
+          "connection": {
+            "connectTimeoutMs": 10000,
+            "sendTimeoutMs": 60000,
+            "readTimeoutMs": 60000,
+            "keepaliveIdleSeconds": 60,
+            "keepaliveMaxRequests": 1000
+          },
+          "clientCertificateId": "occ-2"
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "tls": {
+          "minimumVersion": "1.2",
+          "http2": true,
+          "gzip": true,
+          "gzipMinLength": 256,
+          "gzipTypes": ["text/html"],
+          "cipherProfile": "modern"
+        }
+      }
+    ],
+    "requiredFeatures": ["tls-v1", "origin-mtls-v1", "origin-ca-v1"],
+    "originClientCertificates": [
+      {
+        "id": "occ-2",
+        "sha256Fingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ],
+    "originCa": {
+      "certificatePem": "-----BEGIN CERTIFICATE-----\nMIIBfjCCASOgAwIBAgIJAMNby8wL02L2MAoGCCqGSM49BAMCMDAxGzAZBgNVBAMM\nEkVkZ2V3ZWlyIE9yaWdpbiBDQTERMA8GA1UECgwIRWRnZXdlaXIwHhcNMjYxMDE0\nMTEwNTQ4WhcNNDYxMDA5MTEwNTQ4WjAwMRswGQYDVQQDDBJFZGdld2VpciBPcmln\naW4gQ0ExETAPBgNVBAoMCEVkZ2V3ZWlyMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcD\nQgAEs8Geila/nM+LAbqiu8JjDbIf41bE3G1r82LO2xq8TjV5i2oSIkJ4j5Lovhyj\nkkhzLerv5HjFM2mxGv7ZZCE6OqMmMCQwEgYDVR0TAQH/BAgwBgEB/wIBADAOBgNV\nHQ8BAf8EBAMCAQYwCgYIKoZIzj0EAwIDSQAwRgIhAP3vrvLSFSqa9S0RTGqrZq41\nGpQy9lxVmASpPMN0utj/AiEA4shYb+8N787yD9sVGQ8heh+fixBspdo1pQL+p+RI\nyVE=\n-----END CERTIFICATE-----\n",
+      "crlPem": "-----BEGIN X509 CRL-----\nMIHIMG8CAQEwCgYIKoZIzj0EAwIwMDEbMBkGA1UEAwwSRWRnZXdlaXIgT3JpZ2lu\nIENBMREwDwYDVQQKDAhFZGdld2VpchcNMjYxMDE0MTEwNTQ4WhcNNDYxMDA5MTEw\nNTQ4WqAOMAwwCgYDVR0UBAMCAQEwCgYIKoZIzj0EAwIDSQAwRgIhAIOCGaXLs8M0\nLrf8h0ADnuwgH6D5HFUY+WZlkJMJS75oAiEA8kskg/qYmjLq2arbH4kTt+ersvGP\nr5WZzdFVIldV5cI=\n-----END X509 CRL-----\n"
+    }
+  },
+  "canonical_hex": "1a0263312204085010012a120a0764656661756c7410805018402080f524328e010a0161120161180122080a06612e746573742a4e0a03702d6110011a260a036f2d61120b6f726967696e2e7465737418bb0320022801420b6f726967696e2e746573742a040803101e321008904e10e0d40318e0d403283c30e8076a056f63632d323a0764656661756c7440016a1f2a03312e32300138014080024a09746578742f68746d6c5a066d6f6465726e3289010a0162120162180122080a06622e746573742a490a03702d6210011a260a036f2d62120b6f726967696e2e7465737418bb0320022801420b6f726967696e2e746573742a040803101e321008904e10e0d40318e0d403283c30e80770023a0764656661756c7440016a1f2a03312e32300138014080024a09746578742f68746d6c5a066d6f6465726e3290010a0163120163180122080a06632e746573742a500a03702d6310011a260a036f2d63120b6f726967696e2e7465737418bb0320022801420b6f726967696e2e746573742a040803101e321008904e10e0d40318e0d403283c30e8076a056f63632d3270023a0764656661756c7440016a1f2a03312e32300138014080024a09746578742f68746d6c5a066d6f6465726e3287010a0164120164180122080a06642e746573742a470a03702d6410011a260a036f2d64120b6f726967696e2e7465737418bb0320022801420b6f726967696e2e746573742a040803101e321008904e10e0d40318e0d403283c30e8073a0764656661756c7440016a1f2a03312e32300138014080024a09746578742f68746d6c5a066d6f6465726e4a0c6f726967696e2d63612d76314a0e6f726967696e2d6d746c732d76314a06746c732d7631aa01490a056f63632d321a4062626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262b2018e070ac3042d2d2d2d2d424547494e2043455254494649434154452d2d2d2d2d0a4d494942666a434341534f67417749424167494a414d4e627938774c30324c324d416f4743437147534d343942414d434d444178477a415a42674e5642414d4d0a456b566b5a3256335a576c79494539796157647062694244515445524d41384741315545436777495257526e5a58646c615849774868634e4d6a59784d4445300a4d5445774e5451345768634e4e4459784d4441354d5445774e545134576a41774d527377475159445651514444424a465a47646c6432567063694250636d6c6e0a61573467513045784554415042674e5642416f4d4345566b5a3256335a576c794d466b77457759484b6f5a497a6a3043415159494b6f5a497a6a3044415163440a5167414573384765696c612f6e4d2b4c4162716975384a6a44624966343162453347317238324c4f32787138546a563569326f53496b4a346a354c6f7668796a0a6b6b687a4c65727635486a464d326d784776375a5a4345364f714d6d4d43517745675944565230544151482f42416777426745422f7749424144414f42674e560a485138424166384542414d4341515977436759494b6f5a497a6a30454177494453514177526749684150337672764c534653716139533052544771725a7134310a47705179396c78566d415370504d4e3075746a2f4169454134736859622b384e37383779443973564751386865682b666978427370646f3170514c2b702b52490a7956453d0a2d2d2d2d2d454e442043455254494649434154452d2d2d2d2d0a12c5022d2d2d2d2d424547494e20583530392043524c2d2d2d2d2d0a4d4948494d47384341514577436759494b6f5a497a6a3045417749774d4445624d426b4741315545417777535257526e5a58646c6158496754334a705a326c750a49454e424d524577447759445651514b444168465a47646c643256706368634e4d6a59784d4445304d5445774e5451345768634e4e4459784d4441354d5445770a4e5451345771414f4d417777436759445652305542414d4341514577436759494b6f5a497a6a304541774944535141775267496841494f434761584c73384d300a4c726638683041446e75776748364435484655592b575a6c6b4a4d4a5337356f41694541386b736b672f71596d6a4c713261726248346b54742b6572737647500a7235575a7a644656496c64563563493d0a2d2d2d2d2d454e4420583530392043524c2d2d2d2d2d0a",
+  "content_hash": "63ff10325ee973d28c9d15b007beeb48a580f3c72203245fe6eabc011242bec3"
+}

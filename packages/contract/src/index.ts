@@ -33,6 +33,7 @@ import { hiddenCardsContract } from "./hidden-cards";
 import { imageConvertContract } from "./image-convert";
 import { l4AppsContract, portPoolProcedures } from "./l4";
 import { loginAllowListProcedures } from "./login-allow-list";
+import { originCaContract, originCertificatesContract, originClientCaContract } from "./origin-pki";
 import {
   nodeAddressesInput,
   nodeProbeInput,
@@ -76,6 +77,7 @@ export * from "./node-channel";
 export * from "./node-errors";
 export * from "./node-features";
 export * from "./node-logs";
+export * from "./origin-pki";
 export * from "./protection";
 export * from "./rules";
 export * from "./s3-presets";
@@ -143,6 +145,12 @@ export const contract = {
   ipCheck: ipCheckContract,
   certificates: certificatesContract,
   acmeAccounts: acmeAccountsContract,
+  /** The origin client CA and the clusters' certificates nodes present to origins (origin mutual TLS). */
+  originClientCa: originClientCaContract,
+  /** The Origin CA, which signs origin server certificates only the edge trusts. */
+  originCa: originCaContract,
+  /** Certificates the Origin CA issued: issue, list, revoke. */
+  originCertificates: originCertificatesContract,
   /** Regional probes and their latest results. */
   probes: probesContract,
   /** Scheduling rules of a cluster: conditions on node and probe metrics, DNS actions. */

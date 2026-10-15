@@ -199,6 +199,20 @@ export const errorDefs = {
   ORIGIN_ADDRESS_FORBIDDEN: { status: 400, params: ["address", "range"] },
   /** originSettings.grpc on a pool whose protocol towards the origins is not http2. */
   ORIGIN_GRPC_REQUIRES_HTTP2: { status: 400, params: [] },
+  /** originSettings.tlsTrust originCa with tlsVerify off. */
+  ORIGIN_TLS_TRUST_REQUIRES_VERIFY: { status: 400, params: [] },
+  /** originSettings.tlsTrust originCa on a site with S3 origins, which use public certificates. */
+  ORIGIN_CA_S3: { status: 400, params: [] },
+  /** The Origin CA has not been created. */
+  ORIGIN_CA_NOT_FOUND: { status: 409, params: [] },
+  /** The origin client CA has not been created. */
+  ORIGIN_CLIENT_CA_NOT_FOUND: { status: 409, params: [] },
+  ORIGIN_CERTIFICATE_NOT_FOUND: { status: 404, params: [] },
+  ORIGIN_CERTIFICATE_REVOKED: { status: 409, params: [] },
+  /** A CSR that cannot be read, whose signature fails, or with a key other than RSA 2048-4096 or ECDSA P-256 / P-384. */
+  ORIGIN_CERTIFICATE_CSR_INVALID: { status: 400, params: [] },
+  /** An uploaded certificate the Origin CA issued: those are for origins only, never for visitors. */
+  CERTIFICATE_ORIGIN_CA: { status: 400, params: [] },
   /**
    * The Host header of an origin or origin rule is not a host name or IP literal with an optional
    * port as nodes accept it (validHostHeader of @edgeweir/rule-engine).
@@ -346,6 +360,8 @@ export const revisionReasonDefs = {
   site_cloned: { params: ["site", "source"], en: "site {site} cloned from {source}" },
   usage_limit_reached: { params: ["site"], en: "usage limit of {site} reached" },
   usage_limit_released: { params: ["site"], en: "usage protection of {site} lifted" },
+  origin_certificate_revoked: { params: [], en: "origin certificate revoked" },
+  origin_client_certificate_rotated: { params: [], en: "origin client certificate replaced" },
 } as const satisfies Record<string, { params: readonly string[]; en: string }>;
 
 export type RevisionReasonCode = keyof typeof revisionReasonDefs;

@@ -335,8 +335,21 @@ export const sessionAffinity = z.object({
 /** Origin pool behaviour: load balancing, health, TLS, connections, WebSocket. */
 export const originSettings = z.object({
   policy: loadBalancePolicy.default("weighted_random"),
-  /** Verify certificates of HTTPS origins against the system trust store. */
+  /** Verify certificates of HTTPS origins (against tlsTrust). */
   tlsVerify: z.boolean().default(true),
+  /**
+   * The trust anchors of the verification: the node's trust store, or only
+   * the Origin CA (feature origin-ca-v1), whose revoked certificates nodes
+   * refuse. originCa needs tlsVerify (ORIGIN_TLS_TRUST_REQUIRES_VERIFY), no
+   * S3 origin (ORIGIN_CA_S3) and the Origin CA (ORIGIN_CA_NOT_FOUND).
+   */
+  tlsTrust: z.enum(["system", "originCa"]).default("system"),
+  /**
+   * Present the cluster's origin client certificate to HTTPS origins that
+   * request one (feature origin-mtls-v1; not to S3 origins). Needs the origin
+   * client CA (ORIGIN_CLIENT_CA_NOT_FOUND).
+   */
+  clientCertificate: z.boolean().default(false),
   /** Passive health check: consecutive failures that mark an origin down. */
   maxFails: z.number().int().min(1).max(100).default(3),
   /** Passive health check: seconds before a down origin is tried again. */
@@ -1472,9 +1485,9 @@ export const siteUpdateInput = z.object({
   cacheRules: z.array(cacheRuleInput).max(64).optional(),
   /**
    * Replaces the pool settings; omitted fields take their defaults, except
-   * activeHealthCheck, sessionAffinity, protocol, grpc, tries and
-   * statusRetry, which stay as they are when omitted. The resulting grpc
-   * needs protocol http2 (ORIGIN_GRPC_REQUIRES_HTTP2).
+   * activeHealthCheck, sessionAffinity, protocol, grpc, tries, statusRetry,
+   * tlsTrust and clientCertificate, which stay as they are when omitted.
+   * The resulting grpc needs protocol http2 (ORIGIN_GRPC_REQUIRES_HTTP2).
    */
   originSettings: originSettings
     .extend({
@@ -1484,6 +1497,8 @@ export const siteUpdateInput = z.object({
       grpc: z.boolean().optional(),
       tries: z.number().int().min(1).max(5).optional(),
       statusRetry: z.boolean().optional(),
+      tlsTrust: z.enum(["system", "originCa"]).optional(),
+      clientCertificate: z.boolean().optional(),
     })
     .optional(),
   /**

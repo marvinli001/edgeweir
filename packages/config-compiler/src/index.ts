@@ -54,11 +54,13 @@ import {
   type OfflineHost,
   OfflineHostSchema,
   OriginCacheControl,
+  OriginCaSchema,
   OriginConnectionSchema,
   OriginPoolSchema,
   OriginProtocol,
   OriginSchema,
   OriginScheme,
+  OriginTlsTrust,
   PassiveHealthCheckSchema,
   type PlatformErrorPages,
   PlatformErrorPagesSchema,
@@ -169,6 +171,13 @@ export interface CacheRuleModel {
 
 export interface OriginPoolSettingsModel {
   tlsVerify: boolean;
+  /** Trust anchors when tlsVerify: omitted or system, the node's trust store (origin-ca-v1 otherwise). */
+  tlsTrust?: "system" | "originCa";
+  /**
+   * Id of the cluster's origin client certificate (CompileInput.originClientCertificates)
+   * the nodes present to HTTPS origins; omitted: none (origin-mtls-v1 otherwise).
+   */
+  clientCertificateId?: string;
   /** HTTP version towards the origins; omitted: HTTP/1.1. */
   protocol?: "http1" | "http2";
   /** gRPC proxied over HTTP/2 end to end (protocol http2 only). */
@@ -215,6 +224,21 @@ export const ERROR_PAGES_FEATURE = "error-pages-v1";
  * over HTTP/2 end to end (proto v0.21.0, OriginPool.protocol and grpc).
  */
 export const ORIGIN_HTTP2_FEATURE = "origin-http2-v1";
+/**
+ * Features of origin protection (proto v1.3.0): client certificates presented
+ * to origins (OriginPool.client_certificate_id) and the Origin CA as the
+ * only trust anchor (OriginPool.tls_trust, NodeConfig.origin_ca).
+ */
+export const ORIGIN_MTLS_FEATURE = "origin-mtls-v1";
+export const ORIGIN_CA_FEATURE = "origin-ca-v1";
+
+/** Compiling a site that uses an origin authority the input does not carry. */
+export class OriginAuthorityMissingError extends Error {
+  constructor(what: string) {
+    super(`origin protection: ${what} is missing`);
+    this.name = "OriginAuthorityMissingError";
+  }
+}
 /**
  * Feature of the rule engine extensions (proto v0.13.0): functions and the
  * new fields, dynamic redirects and rewrites with query edits, origin,
@@ -1180,6 +1204,13 @@ export interface CompileInput {
    */
   originAllowedCidrs?: string[];
   certificates?: CertificateRef[];
+  /**
+   * The cluster's origin client certificates; compiled are those a served
+   * site presents (OriginPoolSettingsModel.clientCertificateId), sorted by id.
+   */
+  originClientCertificates?: CertificateRef[];
+  /** The Origin CA and its CRL; compiled only when a served site trusts it. */
+  originCa?: { certificatePem: string; crlPem: string };
   httpChallenges?: HttpChallenge[];
   ipLists?: IpListModel[];
   platformRules?: RuleModel[];
@@ -1342,9 +1373,9 @@ export function moduleFeatures(config: NodeConfig): string[] {
 
 /**
  * Features of the active health checks, session affinity, HTTP/2 towards
- * the origins and error pages that the sites of a compiled configuration
- * use: active-health-v1, session-affinity-v1, origin-http2-v1 and
- * error-pages-v1.
+ * the origins, origin protection and error pages that the sites of a
+ * compiled configuration use: active-health-v1, session-affinity-v1,
+ * origin-http2-v1, origin-mtls-v1, origin-ca-v1 and error-pages-v1.
  */
 export function poolAndPageFeatures(config: NodeConfig): string[] {
   return [
@@ -1357,6 +1388,10 @@ export function poolAndPageFeatures(config: NodeConfig): string[] {
     ...(config.sites.some((site) => site.originPool?.protocol === OriginProtocol.HTTP2)
       ? [ORIGIN_HTTP2_FEATURE]
       : []),
+    ...(config.sites.some((site) => site.originPool?.clientCertificateId)
+      ? [ORIGIN_MTLS_FEATURE]
+      : []),
+    ...(usesOriginCa(config.sites) ? [ORIGIN_CA_FEATURE] : []),
     ...(config.sites.some((site) => site.errorPages) ? [ERROR_PAGES_FEATURE] : []),
   ];
 }
@@ -1611,6 +1646,13 @@ function compileSite(
       ...(settings
         ? {
             skipTlsVerify: !settings.tlsVerify,
+            // The node's trust store and no client certificate stay unset.
+            ...(settings.tlsVerify && settings.tlsTrust === "originCa"
+              ? { tlsTrust: OriginTlsTrust.ORIGIN_CA }
+              : {}),
+            ...(settings.clientCertificateId
+              ? { clientCertificateId: settings.clientCertificateId }
+              : {}),
             // HTTP/1.1 stays unset: configurations encode as before.
             ...(settings.protocol === "http2"
               ? { protocol: OriginProtocol.HTTP2, grpc: !!settings.grpc }
@@ -1960,6 +2002,7 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
   out.cacheZones.sort(byString((z: CacheZone) => z.name));
   for (const zone of out.cacheZones) zone.nodeSizes.sort(byString((n) => n.nodeId));
   out.certificates.sort(byString((c: CertificateRef) => c.id));
+  out.originClientCertificates.sort(byString((c: CertificateRef) => c.id));
   out.sites.sort(byString((s: Site) => s.id));
   // A set: ascending (byte order, ASCII) without duplicates, as the Go agent sorts it.
   out.originAllowedCidrs = sortedSet(out.originAllowedCidrs);
@@ -2394,10 +2437,38 @@ export function refreshDerived(config: NodeConfig, edge?: EdgeModel): NodeConfig
   );
   out.certificates = out.certificates.filter((c) => used.has(c.id));
   if (!usesSessionTickets(out.sites)) out.sessionTicketKeys = [];
+  const presented = clientCertificateIds(out.sites);
+  out.originClientCertificates = out.originClientCertificates.filter((c) => presented.has(c.id));
+  if (!usesOriginCa(out.sites)) out.originCa = undefined;
   out.requiredFeatures = derivedFeatures(out);
   const canonical = canonicalize(out);
   canonical.contentHash = contentHash(canonical);
   return canonical;
+}
+
+/** Whether a site of the configuration verifies its origins against the Origin CA alone. */
+export const usesOriginCa = (sites: readonly Site[]) =>
+  sites.some((site) => site.originPool?.tlsTrust === OriginTlsTrust.ORIGIN_CA);
+
+/** Ids of the origin client certificates the sites present. */
+const clientCertificateIds = (sites: readonly Site[]) =>
+  new Set(sites.map((site) => site.originPool?.clientCertificateId ?? "").filter(Boolean));
+
+function compileOriginClientCertificates(sites: Site[], input: CompileInput): CertificateRef[] {
+  const ids = clientCertificateIds(sites);
+  const refs = (input.originClientCertificates ?? []).filter((c) => ids.has(c.id));
+  for (const id of ids) {
+    if (!refs.some((c) => c.id === id))
+      throw new OriginAuthorityMissingError(`client certificate ${id}`);
+  }
+  return refs;
+}
+
+function compileOriginCa(sites: Site[], input: CompileInput) {
+  if (!usesOriginCa(sites)) return undefined;
+  // Never fall back to the node's trust store: that would accept public certificates.
+  if (!input.originCa) throw new OriginAuthorityMissingError("Origin CA");
+  return create(OriginCaSchema, input.originCa);
 }
 
 /** Compiles console models into a canonical, hashed NodeConfig for `revision`. */
@@ -2452,6 +2523,8 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
     sessionTicketKeys: usesSessionTickets(sites)
       ? (input.sessionTicketKeys ?? []).map((key) => create(SessionTicketKeyRefSchema, key))
       : [],
+    originClientCertificates: compileOriginClientCertificates(sites, input),
+    originCa: compileOriginCa(sites, input),
     platformErrorPages: compilePlatformErrorPages(input.platformErrorPages),
     offlineHosts: compileOfflineHosts(input.offlineHosts),
     l4Apps: compileL4Apps(input.l4Apps),
@@ -2479,7 +2552,7 @@ export const siteBytes = (site: Site) => Buffer.from(toBinary(SiteSchema, site))
  * Computes the diff that turns `base` into `target`: sites are upserted or
  * removed by id, everything else (listeners, cache zones, certificates, the
  * origin allow list, platform error pages, offline hosts, layer-4
- * applications) is sent in full.
+ * applications, origin client certificates and the Origin CA) is sent in full.
  */
 export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfigDiff {
   const baseSites = new Map(base.sites.map((s) => [s.id, siteBytes(s)]));
@@ -2505,6 +2578,8 @@ export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfig
     clientAddress: target.clientAddress,
     unknownHosts: target.unknownHosts,
     sessionTicketKeys: target.sessionTicketKeys,
+    originClientCertificates: target.originClientCertificates,
+    originCa: target.originCa,
     upsertedSites: target.sites.filter((s) => baseSites.get(s.id) !== siteBytes(s)),
     removedSiteIds: base.sites
       .filter((s) => !targetIds.has(s.id))
@@ -2543,6 +2618,8 @@ export function applyNodeConfigDiff(base: NodeConfig, diff: NodeConfigDiff): Nod
       clientAddress: diff.clientAddress,
       unknownHosts: diff.unknownHosts,
       sessionTicketKeys: diff.sessionTicketKeys,
+      originClientCertificates: diff.originClientCertificates,
+      originCa: diff.originCa,
       sites,
     }),
   );
