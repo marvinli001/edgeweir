@@ -55,6 +55,8 @@ The **Pool settings** card is saved separately. It also holds the [active health
 | --- | --- | --- | --- |
 | Load balancing | Weighted random / Round robin / Consistent hash | Weighted random | Selection among primaries |
 | Verify origin certificates | On / off | On | Verifies HTTPS origin certificates, see [Origin TLS](#origin-tls) |
+| Trust | System CAs / Origin CA | System CAs | CAs the verification trusts; with Origin CA only the console's Origin CA, see [Origin protection](https.en.md#origin-protection) |
+| Present client certificate | On / off | Off | Presents the cluster's origin client certificate to the origins, see [Origin protection](https.en.md#origin-protection) |
 | WebSocket | On / off | On | Proxies WebSocket upgrades |
 | Origin HTTP version | HTTP/1.1 / HTTP/2 | HTTP/1.1 | HTTP version of the node's requests to the origins, see [HTTP/2 and gRPC](#http2-and-grpc) |
 | gRPC | On / off | Off | Proxies gRPC requests over HTTP/2 end to end; can only be turned on with **Origin HTTP version** HTTP/2 |
@@ -182,7 +184,9 @@ When every origin is down, the node still tries primaries, then backups (fail op
 | CA file | The first existing file of `/etc/ssl/certs/ca-certificates.crt`, `/etc/pki/tls/certs/ca-bundle.crt`, `/etc/ssl/ca-bundle.pem`, `/etc/ssl/cert.pem`; a node can set `--trusted-ca <absolute path>` |
 | IP origins | HTTPS origins configured by IP need an **SNI** or **Origin Host** that the certificate covers |
 | Verification off | Affects only that site; unverified HTTPS connections are not pooled |
-| Connection pool | Keyed by origin IP, port, and SNI; verified connections are never reused for requests that verify another name |
+| Origin CA | With **Trust** Origin CA, only the console's Origin CA is trusted and certificates it revoked are refused; the node's CA file plays no part |
+| Client certificate | With **Present client certificate** on, the cluster's certificate is presented to HTTPS origins that ask for one (not to S3 origins), over HTTP/1.1, HTTP/2 and gRPC and by the active health checks |
+| Connection pool | Keyed by origin IP, port, SNI, trust, and client certificate; verified connections are never reused for requests that verify another name, trust other CAs or present another certificate |
 
 ### WebSocket
 

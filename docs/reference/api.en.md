@@ -958,6 +958,28 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 
 Behavior: [Layer-4 forwarding](../guide/l4.en.md).
 
+### Origin protection
+
+| Procedure | Endpoint | Description |
+| --- | --- | --- |
+| `originClientCa.get` | `GET /origin-client-ca` | `{ authority, certificates }`: `authority` is `{ certificatePem, fingerprint, notBefore, notAfter }`, `null` until created; `certificates` are the current origin client certificate of each cluster `{ id, clusterId, clusterName, serial, fingerprint, notBefore, notAfter }` (no keys) |
+| `originClientCa.create` | `POST /origin-client-ca` | Creates the origin client CA (ECDSA P-256, 10 years); returns it unchanged when it exists. Audited as `origin_client_ca.create` |
+| `originCa.get` | `GET /origin-ca` | `{ authority }`, as above |
+| `originCa.create` | `POST /origin-ca` | Creates the Origin CA (ECDSA P-256, 20 years); returns it unchanged when it exists. Audited as `origin_ca.create` |
+| `originCertificates.list` | `GET /origin-certificates` | Certificates the Origin CA issued, newest first: `{ id, hostnames, keyType, source, serial, fingerprint, certificatePem, notBefore, notAfter, revokedAt, createdAt }`; `keyType` is `ec256`, `ec384`, `rsa2048`, `rsa3072` or `rsa4096`, `source` `generated` or `csr` |
+| `originCertificates.issue` | `POST /origin-certificates` | See below; the response is a list item plus `privateKeyPem` (the PKCS#8 key the console generated, returned this once; an empty string for a CSR). Audited as `origin_certificate.issue` (without the key) |
+| `originCertificates.revoke` | `POST /origin-certificates/{id}/revoke` | Revokes, signs a new CRL and publishes the clusters with a site that trusts the Origin CA (reason `origin_certificate_revoked`); 409 `ORIGIN_CERTIFICATE_REVOKED` when revoked already, 404 `ORIGIN_CERTIFICATE_NOT_FOUND`. Audited as `origin_certificate.revoke` |
+
+Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys only the `GET` ones.
+
+| Request | Fields |
+| --- | --- |
+| `POST /origin-certificates` | `hostnames`: 1–50 domains, `*.` wildcards or IP addresses (deduplicated); `validityYears`: 1, 3, 5, 10, 15, default 15, never past the Origin CA's expiry; `keyType`: `ec256` (default) or `rsa2048`; `csrPem`: optional, at most 16384 bytes, only its public key is used (RSA 2048–4096, ECDSA P-256 / P-384); unreadable, an invalid signature or an unsupported key is 400 `ORIGIN_CERTIFICATE_CSR_INVALID`. Without the Origin CA 409 `ORIGIN_CA_NOT_FOUND` |
+| `POST /sites`, `PATCH /sites/{id}` | `originSettings` adds `tlsTrust` (`system` / `originCa`, default `system`) and `clientCertificate` (default `false`); `PATCH` keeps them when omitted. `originCa` needs `tlsVerify` (400 `ORIGIN_TLS_TRUST_REQUIRES_VERIFY`), no S3 origin in the pool (400 `ORIGIN_CA_S3`) and the Origin CA (409 `ORIGIN_CA_NOT_FOUND`); `clientCertificate` needs the origin client CA (409 `ORIGIN_CLIENT_CA_NOT_FOUND`), and a cluster without a current certificate gets one with the save. Copying settings and cloning check the same |
+| `POST /certificates/upload` | A certificate the Origin CA issued is 400 `CERTIFICATE_ORIGIN_CA` |
+
+`GET /sites/{id}/features` adds `originMtls` and `originCa`. Revision reasons add `origin_certificate_revoked` and `origin_client_certificate_rotated`; audit adds `origin_client_certificate.rotate` (actor system). Node features add `origin-mtls-v1` and `origin-ca-v1`; the node channel's `GetCertificates` also returns the origin client certificates the cluster's published configurations reference.
+
 ### Example
 
 List sites (procedure `sites.list`, `GET /api/v1/sites`):

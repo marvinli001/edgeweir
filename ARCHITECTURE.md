@@ -351,6 +351,14 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 3. 会话复用：节点的 HTTPS 监听使用 `ssl_session_cache shared:edgeweir_tls:16m`、`ssl_session_timeout 1h`，`ssl_early_data off` 显式写出；每个网站有自己的会话上下文（`SSL_set_session_id_context`），会话只在同一网站复用。票据密钥按集群（`session_ticket_key`，`next`、`current`、`previous`），有网站使用证书的集群在发布时创建；IR 只含 id 与角色（`NodeConfig.session_ticket_keys`，按 id 排序，不要求能力，旧节点忽略），节点以 `GetSessionTicketKeys` 取得 80 字节密钥，密钥在第一次被取用时生成，信封加密保存（用途 `session_ticket_key.secret`）。
 4. `maintenance.rotate-session-ticket-keys` 每小时检查一次，最新的密钥满 12 小时就轮换（与挑战密钥相同的方式）；最新 revision 带票据密钥的集群发布新 revision（原因 `session_ticket_keys_rotated`），审计 `cluster.session_ticket_keys_rotate`。节点按 current、previous、next 的顺序写 `ssl_session_ticket_key`，文件名随密钥变化，轮换时 reload。
 
+## 源站保护：回源客户端证书与 Origin CA
+
+1. 两个 CA 与节点通道 CA 分开，都在 `pki_authority`（`origin-client`、`origin-ca`），ECDSA P-256，私钥信封加密（用途 `pki_authority.private_key_envelope`，绑定行 ID），由运营者在证书页创建：回源客户端 CA 有效 10 年，Origin CA 20 年。
+2. 回源客户端证书按集群签发（`origin_client_certificate`，CN 为集群 ID，O 为 `Edgeweir Origin Client`，仅 clientAuth，90 天），私钥信封加密（用途 `origin_client_certificate.private_key_envelope`）；网站开启「出示客户端证书」时签发，`maintenance.rotate-origin-client-certificates` 每小时检查，剩余不足 30 天时签发新证书并为最新 revision 带客户端证书的集群发布新 revision（原因 `origin_client_certificate_rotated`）。旧证书留到过期，过期 7 天后删除。IR：`OriginPool.client_certificate_id` 与 `NodeConfig.origin_client_certificates`（`CertificateRef`，按 id 排序），要求 `origin-mtls-v1`；节点以 `GetCertificates` 取得证书与私钥（只发给已发布 revision 引用它的集群）。
+3. 节点把私钥写到 `<prefix>/conf/origin-client/<id>-<指纹前 16 位>.key`（0600，属主为 nginx worker 用户），证书写到同名 `.crt`；三种回源层（HTTP/1.1、HTTP/2、gRPC）都渲染 `*_ssl_certificate $edgeweir_origin_cert` 与 `*_ssl_certificate_cache`，由 `balancer_by_lua` 按所选源站设置（S3 与 HTTP 源站为空，不出示）。保持连接池的键是 SNI、信任方式与客户端证书（`edgeweir.origin.pool_key`），不同证书或信任方式的请求不复用连接。主动健康检查出示同一张证书。
+4. Origin CA 签发的源站证书在 `origin_certificate`（主机名、密钥类型、来源 `generated` / `csr`、序列号、吊销时间），不保存私钥（生成的私钥只返回一次），也不能作为面向访客的证书上传（`CERTIFICATE_ORIGIN_CA`）。吊销时控制台用 Origin CA 重新签发 CRL（只列未过期的已吊销证书，`nextUpdate` 为 CA 到期时间），存于 `pki_authority.crl_pem`，并为信任 Origin CA 的集群发布新 revision（原因 `origin_certificate_revoked`）；回滚也使用当前的 CRL 与客户端证书。
+5. 信任：`OriginPool.tls_trust`（`ORIGIN_TLS_TRUST_ORIGIN_CA`）只在校验开启、池中没有 S3 源站时可用，配合 `NodeConfig.origin_ca`（证书与 CRL），要求 `origin-ca-v1`。节点只在有网站信任 Origin CA 时渲染 `origin-oca[-h2|-grpc].sock` 三个回源层，用 `*_ssl_trusted_certificate` 与 `*_ssl_crl` 指向 `<prefix>/conf/origin-ca/<内容哈希>.pem` / `.crl`（文件名随内容变化，吊销触发 reload）。nginx 的 CRL 检查覆盖整条链，因此 Origin CA 只能单独作为信任，不能与系统 CA 合用。
+
 ## 访问鉴权
 
 1. 网站最多 16 条鉴权规则（`site_auth_rule`，按 `position` 排序）：类型 `basic`、`forward`、`url_a`–`url_d`，范围（域名、路径前缀、扩展名、排除路径前缀）与该类型的设置；密钥（Basic 用户与 PBKDF2-HMAC-SHA256 哈希、URL 鉴权的主备密钥）是一份 JSON，信封加密在同一行（用途 `site_auth_rule.secret_envelope`，绑定规则 ID），每次变化 `secret_version` 加一。IR 为 `Site.auth_rules`（启用的规则按顺序，范围列表排序），只含密钥的引用（`credential_id`、`credential_version`），要求 `access-auth-v1`。
@@ -455,6 +463,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `maintenance.prune-bans` | 每 10 分钟 | 删除到期超过一小时的封禁 |
 | `maintenance.rotate-challenge-keys` | 每小时第 11 分 | 轮换满一天的挑战密钥 |
 | `maintenance.rotate-session-ticket-keys` | 每小时第 13 分 | 轮换满 12 小时的 TLS 会话票据密钥 |
+| `maintenance.rotate-origin-client-certificates` | 每小时第 19 分 | 为剩余不足 30 天的集群签发新的回源客户端证书，删除过期 7 天的 |
 | `maintenance.prune-security-events` | 每小时第 37 分 | 删除超过保留天数的安全事件 |
 | `maintenance.prune-node-logs` | 启动时，之后每 10 分钟 | 删除超过保留天数的节点日志，以及每个节点超出条数上限的最旧条目 |
 | 调度求值（进程内定时器，不是 pg-boss 队列） | 每 10 秒；同一时间一个进程（租约），上一次未完成时跳过 | 探针判定的地址可达性与智能调度规则，见 [区域探针与智能调度](#区域探针与智能调度) |
@@ -494,7 +503,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `probe_result` | 每个探测者（探针或兼任探针的节点）对每个节点地址与端口的最新结果：发送、丢失、延迟、错误码 |
 | `enrollment_token` | 注册 token 的 SHA-256 与使用状态 |
 | `node_certificate_revocation` | 删除节点时吊销的证书序列号 |
-| `pki_authority` | 内部 CA，私钥信封加密 |
+| `pki_authority` | 内部 CA（节点通道、回源客户端、Origin CA），私钥信封加密；Origin CA 的当前 CRL |
 | `system_setting` | 平台键值设置：setup token、会话 secret 的 HMAC 校验值、源站允许清单、SMTP、节点发布源、告警策略、封禁、平台防护与 CC 模板、平台错误页、一次性迁移标记 |
 | `audit_log` | 管理操作审计 |
 
@@ -548,6 +557,8 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `dns_managed_name` | 已登记的托管 DNS 名称及所属集群 |
 | `dns_lease` | DNS 工作的租约（集群绑定、DNS-01 凭据），同一时间只有一个进程处理同一绑定或凭据 |
 | `cname_retired` | 网站或 L4 应用修改 CNAME 前缀后保留 24 小时的旧前缀：所属集群、网站或应用、前缀（全局唯一）、到期时间 |
+| `origin_client_certificate` | 集群的回源客户端证书：证书链、指纹、序列号、有效期，私钥信封加密 |
+| `origin_certificate` | Origin CA 签发的源站证书：主机名、密钥类型、来源、序列号、有效期、吊销时间（不含私钥） |
 
 ### 统计、日志、任务与告警
 
@@ -656,6 +667,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0068_node_channel_status` | `node.channel`、`probe.channel`（节点与探针在用的节点通道地址、备用地址、切换失败原因，以及控制台看到的 TLS 服务器名与是否经 WebSocket 入口） |
 | `0069_site_usage_guard` | `site_usage_guard`；`site_usage` 按网站与窗口的索引 |
 | `0070_node_logs` | `node_log_entry`、`node_log_entry_cursor` |
+| `0071_origin_protection` | `origin_client_certificate`、`origin_certificate`；`origin_pool.tls_trust`、`origin_pool.client_certificate`、`pki_authority.crl_pem` |
 
 ## 构建产物
 

@@ -371,6 +371,62 @@ The **Ports** card on a site's **Domains** tab chooses where the site is served:
 | Refresh | Checked every 5 minutes and on every configuration apply; refreshed when less than 1 hour of validity remains |
 | No OCSP URL | Certificates without an OCSP responder URL get no staple |
 
+## Origin protection
+
+Makes origins accept connections from the edge nodes only: the nodes present a client certificate the console issued (the origin verifies it), and origins use certificates of the console's Origin CA (which only the nodes trust). Use either or both; they are managed in the **Origin certificates** and **Origin client** tabs of **Certificates** and turned on in the site's **Origin pool settings**.
+
+### Origin CA
+
+Create the Origin CA in the **Origin certificates** tab, then issue origin certificates. The Origin CA is for origins only: browsers and other clients do not trust it, and its certificates cannot be uploaded as site certificates ("Origin CA certificates are for origins only").
+
+| Item | Description |
+| --- | --- |
+| Origin CA | ECDSA P-256, valid for 20 years, private key envelope-encrypted in the console; separate from the node channel's CA and the origin client CA |
+| Host names | 1–50, one per line: domains, `*.` wildcards or IP addresses; they must cover the name nodes verify (the origin's **SNI**, else its **Origin Host** or address) |
+| Validity | 1, 3, 5, 10 or 15 years, 15 by default; never past the Origin CA's expiry |
+| Key type | ECDSA P-256 (default) or RSA 2048 |
+| CSR | Optional: with a CSR the key stays on the origin and the console only takes its public key (RSA 2048–4096 or ECDSA P-256 / P-384); host names come from the form; an invalid signature or unsupported key is refused |
+| Private key | A key the console generates is shown once after issuing and never stored |
+| Download | The certificate and the CA certificate download as PEM; the origin only needs its own certificate and key |
+| Revoke | The console signs a new certificate revocation list (CRL), shipped with the configuration, and publishes every cluster that trusts the Origin CA; nodes then refuse the certificate, and so do the active health checks. Revocations cannot be undone, and rolling a configuration back keeps them |
+
+Use the certificate on the origin, for example with nginx:
+
+```nginx
+ssl_certificate     /etc/nginx/origin.pem;
+ssl_certificate_key /etc/nginx/origin.key;
+```
+
+Then set **Trust** in the site's **Origin pool settings** to **Origin CA** (needs **Verify origin certificates**). The site then accepts only unrevoked origin certificates of the Origin CA, never those of public CAs; S3 origins use public certificates and cannot be combined with it ("S3 origins cannot be verified against the Origin CA").
+
+### Origin client certificates
+
+Create the origin client CA in the **Origin client** tab, download its certificate and configure it on the origin, for example with nginx:
+
+```nginx
+ssl_client_certificate /etc/nginx/origin-client-ca.pem;
+ssl_verify_client      on;
+```
+
+Then turn on **Present client certificate** in the site's **Origin pool settings**.
+
+| Item | Description |
+| --- | --- |
+| Origin client CA | ECDSA P-256, valid for 10 years, private key envelope-encrypted |
+| Cluster certificate | One per cluster, CN the cluster id, `O=Edgeweir Origin Client`, TLS client authentication only, valid for 90 days; issued when the first site turning it on is saved, replaced automatically 30 days before expiry |
+| Replacement | The new certificate ships with a new configuration; the previous one stays valid until it expires, open connections are not interrupted |
+| Presented to | The site's HTTPS origins over HTTP/1.1, HTTP/2 and gRPC, and by the active health checks; not to S3 origins |
+| Private key | Delivered over the node channel (mTLS) only; the key file on the node has mode 0600 |
+| Connection reuse | Requests with and without a client certificate, or with another trust, never share an origin connection |
+
+Origins can further restrict on the certificate's CN (the cluster id), for example with nginx's `$ssl_client_s_dn`.
+
+| Error | Cause |
+| --- | --- |
+| Create the Origin CA first | A site trusts the Origin CA, or a certificate is issued, before the Origin CA exists |
+| Create the origin client CA first | A site presents a client certificate before the origin client CA exists |
+| Trusting the Origin CA requires verifying origin certificates | Trust cannot be chosen with verification off |
+
 ## Certificates on nodes
 
 | Item | Behavior |
@@ -386,7 +442,7 @@ The **Ports** card on a site's **Domains** tab chooses where the site is served:
 
 ## Key handling
 
-ACME account keys, certificate private keys, EAB HMAC keys (of certificates and of the custom directory in system settings), DNS credentials, and TLS session ticket keys are each envelope-encrypted with the master key, bound to their record ID. The certificate helper `edgeweir-certd` is started by background jobs and receives credentials only over stdin/stdout, never on the command line, in logs, or in the node configuration.
+ACME account keys, certificate private keys, EAB HMAC keys (of certificates and of the custom directory in system settings), DNS credentials, TLS session ticket keys, the keys of the Origin CA and the origin client CA, and the keys of the clusters' origin client certificates are each envelope-encrypted with the master key, bound to their record ID. The certificate helper `edgeweir-certd` is started by background jobs and receives credentials only over stdin/stdout, never on the command line, in logs, or in the node configuration.
 
 ## Node capabilities
 
@@ -401,6 +457,8 @@ ACME account keys, certificate private keys, EAB HMAC keys (of certificates and 
 | `edge-ports-v1` | The cluster has extra listener ports, a site is bound to ports other than the defaults, or the HTTPS redirect uses a status, port or excluded domains other than the defaults |
 | `multi-certificate-v1` | A site has more than one certificate |
 | `client-cert-v1` | A site has client certificates on, or a rule reads a `tls.client.*` field |
+| `origin-mtls-v1` | A site presents a client certificate to its origins |
+| `origin-ca-v1` | A site trusts the Origin CA |
 
 A change saved in the console or with an AccessKey is published even when it needs a capability some active nodes of the cluster lack; those nodes keep their last-known-good configuration and **Clusters & nodes** shows **Upgrade required**, see [Node upgrades](node-upgrades.en.md). A configuration published by a service account or a background job that introduces a capability an active node lacks is refused (`NODE_CAPABILITY_REQUIRED`) and the configuration stays unchanged.
 

@@ -349,6 +349,14 @@ DNS steering is bound per cluster (`dns_binding`, mode Not managed, Manual, or A
 3. Session resumption: nodes' HTTPS listeners use `ssl_session_cache shared:edgeweir_tls:16m` and `ssl_session_timeout 1h`, with `ssl_early_data off` written out; each site has its own session context (`SSL_set_session_id_context`), so sessions resume on the same site only. Ticket keys are per cluster (`session_ticket_key`: `next`, `current`, `previous`), created when a cluster with a site using a certificate publishes; the IR holds ids and roles only (`NodeConfig.session_ticket_keys`, sorted by id, no capability required, ignored by older nodes), and nodes fetch the 80-byte keys with `GetSessionTicketKeys`. A key is generated the first time it is fetched and stored envelope-encrypted (purpose `session_ticket_key.secret`).
 4. `maintenance.rotate-session-ticket-keys` checks hourly and rotates once the newest key is 12 hours old (the same way as challenge keys); clusters whose latest revision carries ticket keys publish a new revision (reason `session_ticket_keys_rotated`), audited as `cluster.session_ticket_keys_rotate`. Nodes write `ssl_session_ticket_key` in the order current, previous, next; file names follow the keys, so a rotation reloads.
 
+## Origin protection: origin client certificates and the Origin CA
+
+1. Two authorities apart from the node channel's CA, both in `pki_authority` (`origin-client`, `origin-ca`), ECDSA P-256, private keys envelope-encrypted (purpose `pki_authority.private_key_envelope`, bound to the row id), created by the operator on the certificates page: the origin client CA for 10 years, the Origin CA for 20.
+2. Origin client certificates are issued per cluster (`origin_client_certificate`: CN the cluster id, O `Edgeweir Origin Client`, client auth only, 90 days), keys envelope-encrypted (purpose `origin_client_certificate.private_key_envelope`); one is issued when a site turns on presenting a client certificate, and `maintenance.rotate-origin-client-certificates` checks hourly, issuing a new one 30 days before expiry and publishing the clusters whose latest revision carries client certificates (reason `origin_client_certificate_rotated`). Earlier ones stay until they expire and are deleted 7 days later. IR: `OriginPool.client_certificate_id` and `NodeConfig.origin_client_certificates` (`CertificateRef`, sorted by id), requiring `origin-mtls-v1`; nodes fetch chain and key with `GetCertificates` (only for clusters whose published revisions reference them).
+3. Nodes write the key to `<prefix>/conf/origin-client/<id>-<first 16 of the fingerprint>.key` (0600, owned by the nginx worker user) and the chain to the `.crt` of the same name; the three origin layers (HTTP/1.1, HTTP/2, gRPC) render `*_ssl_certificate $edgeweir_origin_cert` and `*_ssl_certificate_cache`, set per chosen origin in `balancer_by_lua` (empty for S3 and HTTP origins, which present nothing). Keep-alive pools are keyed by SNI, trust and client certificate (`edgeweir.origin.pool_key`): requests with another certificate or trust never reuse the connection. Active health checks present the same certificate.
+4. Certificates the Origin CA issues for origins are in `origin_certificate` (host names, key type, source `generated` / `csr`, serial, revocation time); keys are never stored (a generated key is returned once), and they cannot be uploaded as certificates for visitors (`CERTIFICATE_ORIGIN_CA`). A revocation re-signs the CRL with the Origin CA (unexpired revoked certificates only, `nextUpdate` the CA's expiry), stored in `pki_authority.crl_pem`, and publishes the clusters that trust the Origin CA (reason `origin_certificate_revoked`); rollbacks also get the current CRL and client certificate.
+5. Trust: `OriginPool.tls_trust` (`ORIGIN_TLS_TRUST_ORIGIN_CA`) needs verification and no S3 origin in the pool, with `NodeConfig.origin_ca` (certificate and CRL), requiring `origin-ca-v1`. Nodes render the three origin layers `origin-oca[-h2|-grpc].sock` only while a site trusts it, with `*_ssl_trusted_certificate` and `*_ssl_crl` pointing at `<prefix>/conf/origin-ca/<content hash>.pem` / `.crl` (the names follow the content, so a revocation reloads). nginx checks CRLs along the whole chain, which is why the Origin CA is a trust of its own and never combined with the system CAs.
+
 ## Access authentication
 
 1. A site has at most 16 authentication rules (`site_auth_rule`, ordered by `position`): kind `basic`, `forward` or `url_a`–`url_d`, a scope (domains, path prefixes, extensions, excluded path prefixes) and the kind's settings; the secret (Basic users with PBKDF2-HMAC-SHA256 hashes, the primary and backup keys of signed URLs) is one JSON document envelope-encrypted in the same row (purpose `site_auth_rule.secret_envelope`, bound to the rule ID), and `secret_version` grows with every change. The IR is `Site.auth_rules` (the enabled rules in order, scope lists sorted) with references to the secrets only (`credential_id`, `credential_version`); it requires `access-auth-v1`.
@@ -453,6 +461,7 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificate
 | `maintenance.prune-bans` | Every 10 minutes | Deletes bans that expired more than an hour ago |
 | `maintenance.rotate-challenge-keys` | Hourly at minute 11 | Rotates challenge keys that are a day old |
 | `maintenance.rotate-session-ticket-keys` | Hourly at minute 13 | Rotates TLS session ticket keys that are 12 hours old |
+| `maintenance.rotate-origin-client-certificates` | Hourly at minute 19 | Issues clusters a new origin client certificate 30 days before expiry, deletes those expired a week ago |
 | `maintenance.prune-security-events` | Hourly at minute 37 | Deletes security events past the retention |
 | `maintenance.prune-node-logs` | At start, then every 10 minutes | Deletes node logs past the retention and each node's oldest entries beyond its limit |
 | Scheduling evaluation (an in-process timer, not a pg-boss queue) | Every 10 seconds; one process at a time (lease), a tick is skipped while the previous run is busy | Probe-driven address reachability and scheduling rules, see [Regional probes and scheduling](#regional-probes-and-scheduling) |
@@ -492,7 +501,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `probe_result` | Latest result of each prober (probe or node that also probes) per node address and port: sent, lost, latency, error code |
 | `enrollment_token` | SHA-256 and usage of enrollment tokens |
 | `node_certificate_revocation` | Certificate serials revoked when a node is deleted |
-| `pki_authority` | Internal CA, private key envelope-encrypted |
+| `pki_authority` | Internal CAs (node channel, origin client, Origin CA), private keys envelope-encrypted; the Origin CA's current CRL |
 | `system_setting` | Platform key/value settings: setup token, session secret HMAC check value, origin allow list, SMTP, node release source, alert policy, bans, platform protection and the CC template, platform error pages, one-time migration markers |
 | `audit_log` | Audit of management actions |
 
@@ -545,6 +554,8 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `dns_managed_name` | Registered managed DNS names and the cluster they belong to |
 | `dns_lease` | Leases for DNS work (cluster bindings, DNS-01 credentials): one process at a time handles a binding or credential |
 | `cname_retired` | Old CNAME prefixes of sites and L4 apps kept for 24 hours after a change: cluster, site or app, prefix (unique), expiry |
+| `origin_client_certificate` | A cluster's origin client certificates: chain, fingerprint, serial, validity, private key envelope-encrypted |
+| `origin_certificate` | Certificates the Origin CA issued for origins: host names, key type, source, serial, validity, revocation time (no private key) |
 
 ### Statistics, logs, tasks, and alerts
 

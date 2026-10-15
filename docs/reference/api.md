@@ -958,6 +958,28 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 
 行为见[四层转发](../guide/l4.md)。
 
+### 源站保护
+
+| 过程 | 端点 | 说明 |
+| --- | --- | --- |
+| `originClientCa.get` | `GET /origin-client-ca` | `{ authority, certificates }`：`authority` 为 `{ certificatePem, fingerprint, notBefore, notAfter }`，未创建时为 `null`；`certificates` 为每个集群当前的回源客户端证书 `{ id, clusterId, clusterName, serial, fingerprint, notBefore, notAfter }`（不含私钥） |
+| `originClientCa.create` | `POST /origin-client-ca` | 创建回源客户端 CA（ECDSA P-256，10 年）；已存在时原样返回。审计 `origin_client_ca.create` |
+| `originCa.get` | `GET /origin-ca` | `{ authority }`，同上 |
+| `originCa.create` | `POST /origin-ca` | 创建 Origin CA（ECDSA P-256，20 年）；已存在时原样返回。审计 `origin_ca.create` |
+| `originCertificates.list` | `GET /origin-certificates` | Origin CA 签发的证书，新的在前：`{ id, hostnames, keyType, source, serial, fingerprint, certificatePem, notBefore, notAfter, revokedAt, createdAt }`；`keyType` 为 `ec256`、`ec384`、`rsa2048`、`rsa3072`、`rsa4096`，`source` 为 `generated` 或 `csr` |
+| `originCertificates.issue` | `POST /origin-certificates` | 见下表；响应同列表项，另有 `privateKeyPem`（控制台生成的 PKCS#8 私钥，只返回这一次；提交 CSR 时为空字符串）。审计 `origin_certificate.issue`（不含私钥） |
+| `originCertificates.revoke` | `POST /origin-certificates/{id}/revoke` | 吊销并重新签发 CRL，为有网站信任 Origin CA 的集群发布配置版本（原因 `origin_certificate_revoked`）；已吊销 409 `ORIGIN_CERTIFICATE_REVOKED`，不存在 404 `ORIGIN_CERTIFICATE_NOT_FOUND`。审计 `origin_certificate.revoke` |
+
+服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
+
+| 请求 | 字段 |
+| --- | --- |
+| `POST /origin-certificates` | `hostnames`：1–50 个域名、`*.` 泛域名或 IP 地址（去重）；`validityYears`：1、3、5、10、15，默认 15，不超过 Origin CA 到期；`keyType`：`ec256`（默认）或 `rsa2048`；`csrPem`：可选，最长 16384 字节，只取公钥（RSA 2048–4096、ECDSA P-256 / P-384），无法读取、签名无效或密钥不支持时 400 `ORIGIN_CERTIFICATE_CSR_INVALID`。Origin CA 未创建时 409 `ORIGIN_CA_NOT_FOUND` |
+| `POST /sites`、`PATCH /sites/{id}` | `originSettings` 新增 `tlsTrust`（`system` / `originCa`，默认 `system`）与 `clientCertificate`（默认 `false`）；`PATCH` 省略时保留原值。`originCa` 需要 `tlsVerify`（400 `ORIGIN_TLS_TRUST_REQUIRES_VERIFY`）、池中没有 S3 源站（400 `ORIGIN_CA_S3`）且 Origin CA 已创建（409 `ORIGIN_CA_NOT_FOUND`）；`clientCertificate` 需要回源客户端 CA（409 `ORIGIN_CLIENT_CA_NOT_FOUND`），集群没有当前证书时随保存签发。复制设置与克隆同样检查 |
+| `POST /certificates/upload` | Origin CA 签发的证书 400 `CERTIFICATE_ORIGIN_CA` |
+
+`GET /sites/{id}/features` 新增 `originMtls`、`originCa`。配置版本的原因新增 `origin_certificate_revoked`、`origin_client_certificate_rotated`，审计新增 `origin_client_certificate.rotate`（操作者 system）。节点能力新增 `origin-mtls-v1`、`origin-ca-v1`；节点通道的 `GetCertificates` 也返回本集群已发布配置引用的回源客户端证书。
+
 ### 示例
 
 列出网站（过程 `sites.list`，`GET /api/v1/sites`）：

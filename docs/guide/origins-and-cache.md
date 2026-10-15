@@ -55,6 +55,8 @@
 | --- | --- | --- | --- |
 | 负载均衡 | 加权随机 / 轮询 / 一致性哈希 | 加权随机 | 主源之间的选择策略 |
 | 校验源站证书 | 开 / 关 | 开 | 校验 HTTPS 源站证书，见[回源 TLS](#回源-tls) |
+| 信任 | 系统 CA / Origin CA | 系统 CA | 校验时信任的 CA；Origin CA 时只信任控制台的 Origin CA，见[源站保护](https.md#源站保护) |
+| 出示客户端证书 | 开 / 关 | 关 | 回源时出示集群的回源客户端证书，见[源站保护](https.md#源站保护) |
 | WebSocket | 开 / 关 | 开 | 透传 WebSocket 升级请求 |
 | 回源 HTTP 版本 | HTTP/1.1 / HTTP/2 | HTTP/1.1 | 节点请求源站用的 HTTP 版本，见 [HTTP/2 与 gRPC](#http2-与-grpc) |
 | gRPC | 开 / 关 | 关 | 以 HTTP/2 端到端转发 gRPC 请求；「回源 HTTP 版本」为 HTTP/2 时才能打开 |
@@ -182,7 +184,9 @@
 | CA 文件 | 默认使用第一个存在的文件：`/etc/ssl/certs/ca-certificates.crt`、`/etc/pki/tls/certs/ca-bundle.crt`、`/etc/ssl/ca-bundle.pem`、`/etc/ssl/cert.pem`；节点可用 `--trusted-ca <绝对路径>` 指定 |
 | IP 源站 | 按 IP 配置的 HTTPS 源站须填写证书覆盖的「SNI」或「回源 Host」 |
 | 关闭校验 | 只影响该网站；不校验的 HTTPS 连接不进入连接池 |
-| 连接池 | 按源站 IP、端口和 SNI 区分；校验过的连接不会被需要校验其他名称的请求复用 |
+| Origin CA | 「信任」为 Origin CA 时只信任控制台的 Origin CA，拒绝它吊销的证书；节点的 CA 文件不参与 |
+| 客户端证书 | 「出示客户端证书」打开时，HTTPS 源站要求客户端证书就出示集群的证书（S3 源站除外），HTTP/1.1、HTTP/2、gRPC 与主动健康检查相同 |
+| 连接池 | 按源站 IP、端口、SNI、信任方式和客户端证书区分；校验过的连接不会被需要校验其他名称、信任其他 CA 或出示其他证书的请求复用 |
 
 ### WebSocket
 
