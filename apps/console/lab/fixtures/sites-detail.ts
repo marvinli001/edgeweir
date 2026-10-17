@@ -7,6 +7,8 @@
  */
 import {
   type AnalyticsRange,
+  AUTO_MITIGATION_DEFAULTS,
+  type AutoMitigation,
   type BulkRedirect,
   CC_PRESETS,
   type CcThresholds,
@@ -43,6 +45,7 @@ import { infraFixtures } from "./infra";
 import { NETWORKS, trafficOf } from "./traffic";
 import {
   ago,
+  ahead,
   clusters,
   DAY,
   HOUR,
@@ -695,7 +698,7 @@ function protectionOf(site: Site): SiteProtection {
   const template = ccTemplate;
   const base: SiteProtection = {
     siteId: site.id,
-    underAttack: false,
+    underAttack: !!mitigations.get(site.id)?.active,
     underAttackChallenge: "js",
     ...CHALLENGE_PRESETS.standard,
     cc: withCc(template, false, true),
@@ -2502,6 +2505,36 @@ async function siteTarget(site: Site) {
 
 // ---------------------------------------------------------------------------------------------
 
+/** Automatic mitigation: the shop holds Under Attack from the /search wave, the other sites set nothing. */
+const mitigations = new Map<string, AutoMitigation>([
+  [
+    SHOP.id,
+    {
+      siteId: SHOP.id,
+      settings: { enabled: true, threshold: "pow", durationMinutes: 30 },
+      updatedAt: ago(3 * DAY),
+      level: "pow",
+      active: { since: ago(11 * MINUTE), expiresAt: ahead(19 * MINUTE), level: "pow" },
+      paused: false,
+      lastError: "",
+    },
+  ],
+]);
+
+function mitigationOf(site: Site): AutoMitigation {
+  return (
+    mitigations.get(site.id) ?? {
+      siteId: site.id,
+      settings: null,
+      updatedAt: null,
+      level: "normal",
+      active: null,
+      paused: false,
+      lastError: "",
+    }
+  );
+}
+
 const rangeOf = (range: AnalyticsRange | undefined) => range ?? "24h";
 
 export const siteDetailFixtures: Fixtures = {
@@ -2523,6 +2556,31 @@ export const siteDetailFixtures: Fixtures = {
   },
   protection: {
     get: ({ id: siteId }) => protectionOf(siteOf(siteId)),
+  },
+  autoMitigation: {
+    get: ({ id: siteId }) => mitigationOf(siteOf(siteId)),
+    update: ({ id: siteId, ...input }) => {
+      const before = mitigationOf(siteOf(siteId));
+      const settings = { ...AUTO_MITIGATION_DEFAULTS, ...input };
+      const next: AutoMitigation = {
+        ...before,
+        settings: {
+          enabled: settings.enabled,
+          threshold: settings.threshold,
+          durationMinutes: settings.durationMinutes,
+        },
+        updatedAt: new Date().toISOString(),
+        active: settings.enabled ? before.active : null,
+        paused: false,
+      };
+      mitigations.set(siteId, next);
+      return next;
+    },
+    restore: ({ id: siteId }) => {
+      const next: AutoMitigation = { ...mitigationOf(siteOf(siteId)), active: null, paused: true };
+      mitigations.set(siteId, next);
+      return next;
+    },
   },
   security: {
     state: (input) => securityState(siteOf(input.id), Number(input.hours ?? 24)),
