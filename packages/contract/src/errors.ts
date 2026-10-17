@@ -223,6 +223,8 @@ export const errorDefs = {
   USAGE_CURSOR_INVALID: { status: 400, params: [] },
   /** Restoring a site whose usage protection holds no action. */
   USAGE_GUARD_NOT_HELD: { status: 409, params: [] },
+  /** Ending the automatic mitigation of a site that holds no Under Attack. */
+  AUTO_MITIGATION_NOT_ACTIVE: { status: 409, params: [] },
   NODE_LOG_CURSOR_INVALID: { status: 400, params: [] },
   CACHE_TASK_URL_INVALID: { status: 400, params: ["urls"] },
   CACHE_TASK_HOST_UNKNOWN: { status: 400, params: ["hosts"] },
@@ -360,6 +362,14 @@ export const revisionReasonDefs = {
   site_cloned: { params: ["site", "source"], en: "site {site} cloned from {source}" },
   usage_limit_reached: { params: ["site"], en: "usage limit of {site} reached" },
   usage_limit_released: { params: ["site"], en: "usage protection of {site} lifted" },
+  auto_mitigation_started: {
+    params: ["site"],
+    en: "automatic mitigation turned on Under Attack for {site}",
+  },
+  auto_mitigation_ended: {
+    params: ["site"],
+    en: "automatic mitigation turned off Under Attack for {site}",
+  },
   origin_certificate_revoked: { params: [], en: "origin certificate revoked" },
   origin_client_certificate_rotated: { params: [], en: "origin client certificate replaced" },
 } as const satisfies Record<string, { params: readonly string[]; en: string }>;

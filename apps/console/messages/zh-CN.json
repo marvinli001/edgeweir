@@ -2907,5 +2907,12 @@
   "audit_action_system_node_log_retention_update": "修改节点日志保留期",
   "error_node_log_cursor_invalid": "分页游标无效",
   "site_tab_attacks": "攻击",
-  "attacks_view_logs": "查看日志"
+  "attacks_view_logs": "查看日志",
+  "audit_action_site_auto_mitigation_apply": "自动缓解开启 Under Attack",
+  "audit_action_site_auto_mitigation_release": "自动缓解关闭 Under Attack",
+  "audit_action_site_auto_mitigation_restore": "手动结束自动缓解",
+  "audit_action_site_auto_mitigation_update": "修改自动缓解",
+  "revision_reason_auto_mitigation_started": "自动缓解为 {site} 开启 Under Attack",
+  "revision_reason_auto_mitigation_ended": "自动缓解为 {site} 关闭 Under Attack",
+  "error_auto_mitigation_not_active": "自动缓解没有开启 Under Attack"
 }

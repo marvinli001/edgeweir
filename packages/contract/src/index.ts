@@ -15,6 +15,7 @@ import { accessControlContract, ipCheckContract } from "./access-control";
 import { accessKeysContract } from "./access-keys";
 import { alertsContract } from "./alerts";
 import { authRulesContract } from "./auth-rules";
+import { autoMitigationContract } from "./auto-mitigation";
 import { banSettings, bansContract } from "./bans";
 import { bulkRedirectsContract } from "./bulk-redirects";
 import {
@@ -135,6 +136,8 @@ export const contract = {
   maintenance: maintenanceContract,
   /** A site's usage protection: limits on bytes sent, requests and bandwidth. */
   usageGuard: usageGuardContract,
+  /** A site's automatic mitigation: CC escalation turns on Under Attack for a while. */
+  autoMitigation: autoMitigationContract,
   /** A site's access authentication: Basic, forward authentication and signed URLs. */
   authRules: authRulesContract,
   /** A site's access control: site lists, geo, CORS, hotlink, user agents, WebSocket origins, security headers. */
@@ -668,6 +671,7 @@ export const oneTimeSecretProcedures: ReadonlySet<string> = new Set([
 
 export * from "./access-keys";
 export * from "./alerts";
+export * from "./auto-mitigation";
 export * from "./demo";
 export * from "./dns";
 export * from "./dns-providers";

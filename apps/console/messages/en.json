@@ -3104,5 +3104,12 @@
   "audit_action_system_node_log_retention_update": "Node log retention updated",
   "error_node_log_cursor_invalid": "Invalid page cursor",
   "site_tab_attacks": "Attacks",
-  "attacks_view_logs": "View logs"
+  "attacks_view_logs": "View logs",
+  "audit_action_site_auto_mitigation_apply": "Automatic mitigation turned on Under Attack",
+  "audit_action_site_auto_mitigation_release": "Automatic mitigation turned off Under Attack",
+  "audit_action_site_auto_mitigation_restore": "Automatic mitigation ended by hand",
+  "audit_action_site_auto_mitigation_update": "Automatic mitigation updated",
+  "revision_reason_auto_mitigation_started": "Automatic mitigation turned on Under Attack for {site}",
+  "revision_reason_auto_mitigation_ended": "Automatic mitigation turned off Under Attack for {site}",
+  "error_auto_mitigation_not_active": "Automatic mitigation holds no Under Attack"
 }
