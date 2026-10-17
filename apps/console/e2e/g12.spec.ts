@@ -124,10 +124,10 @@ test("G12: access authentication rules: add, edit, reorder, delete", async ({ pa
   expect(pageErrors).toEqual([]);
 });
 
-test("G12: failures on the security tab, an empty access tab", async ({ page }) => {
+test("G12: failures on the attacks tab, an empty access tab", async ({ page }) => {
   const pageErrors = errors(page);
   await signedIn(page);
-  await page.goto(`/sites/${state.basicSiteId}?tab=security`);
+  await page.goto(`/sites/${state.basicSiteId}?tab=attacks`);
   await expect(page.getByTestId("auth-failures-count")).not.toHaveText("0");
   await page.getByTestId("auth-failures-card").scrollIntoViewIfNeeded();
   await check(page, "security-failures");

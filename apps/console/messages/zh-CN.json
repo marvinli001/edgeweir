@@ -2905,5 +2905,7 @@
   "system_node_log_retention_days": "保留天数",
   "system_node_log_retention_per_node": "每个节点最多条数",
   "audit_action_system_node_log_retention_update": "修改节点日志保留期",
-  "error_node_log_cursor_invalid": "分页游标无效"
+  "error_node_log_cursor_invalid": "分页游标无效",
+  "site_tab_attacks": "攻击",
+  "attacks_view_logs": "查看日志"
 }

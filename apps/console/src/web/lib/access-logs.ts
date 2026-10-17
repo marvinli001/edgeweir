@@ -191,6 +191,53 @@ export interface LogFilters {
   cidr: string;
 }
 
+/** What the console links to in a site's logs: the filters of a search and its time window (ISO). */
+export interface LogJump {
+  blockReason?: BlockReason | "any";
+  ip?: string;
+  /** A network, for a client that is an IPv6 /64. */
+  cidr?: string;
+  path?: string;
+  from?: string;
+  to?: string;
+}
+
+/** The jump to a CC event's or top list's client: an address, or a network for an IPv6 /64. */
+export const clientJump = (client: string): Pick<LogJump, "ip" | "cidr"> =>
+  client.includes("/") ? { cidr: client } : { ip: client };
+
+/** An instant as a datetime-local value in the viewer's time zone, to the minute. */
+export const localDateTime = (date: Date) =>
+  new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
+/**
+ * The form a log search starts from: the last hour, or the window of a jump. Without an end the
+ * window stays "a minute from now" (`endIsNow`), so searching again shows new logs. A jump sets
+ * the filters, so the ones behind "more filters" start open when it uses one of them.
+ */
+export function initialLogFilters(jump: LogJump | undefined, now = Date.now()) {
+  const time = (iso: string | undefined, fallback: number) => {
+    const ms = iso ? Date.parse(iso) : Number.NaN;
+    return localDateTime(new Date(Number.isFinite(ms) ? ms : fallback));
+  };
+  const filters: LogFilters = {
+    from: time(jump?.from, now - 3_600_000),
+    to: time(jump?.to, now + 60_000),
+    status: "",
+    ip: jump?.ip ?? "",
+    path: jump?.path ?? "",
+    requestId: "",
+    ...emptyMoreFilters(),
+    blockReason: jump?.blockReason ?? "",
+    cidr: jump?.cidr ?? "",
+  };
+  return {
+    filters,
+    endIsNow: !jump?.to || !Number.isFinite(Date.parse(jump.to)),
+    more: activeMoreFilters(filters) > 0,
+  };
+}
+
 /** Filters behind "more filters", in the form's order. */
 export const MORE_FILTERS = [
   "host",

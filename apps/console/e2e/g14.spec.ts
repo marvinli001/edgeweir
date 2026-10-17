@@ -392,7 +392,7 @@ test("G14: CRS exclusions by path and target, and 按路径排除 from the top C
   } else {
     await link.click();
     await expect(page.getByTestId("page-title")).toHaveText(CRS_SITE);
-    await page.getByTestId("tab-security").click();
+    await page.getByTestId("tab-attacks").click();
     const top = page.getByTestId("waf-top-rules");
     const item = top
       .locator("li")
@@ -415,6 +415,7 @@ test("G14: CRS exclusions by path and target, and 按路径排除 from the top C
     await dialog.getByTestId("exclusion-submit").click();
     expect((await answered).ok()).toBe(true);
     await expect(dialog).toBeHidden();
+    await page.getByTestId("tab-security").click();
     const added = page.locator(`[data-testid="waf-exclusion-entry"][data-path="${path}"]`);
     await expect(added).toHaveCount(1);
     await expect(added.getByTestId("waf-exclusion-entry-rules")).toHaveText(ruleIdText);

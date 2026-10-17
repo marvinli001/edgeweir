@@ -3102,5 +3102,7 @@
   "system_node_log_retention_days": "Days kept",
   "system_node_log_retention_per_node": "Entries per node",
   "audit_action_system_node_log_retention_update": "Node log retention updated",
-  "error_node_log_cursor_invalid": "Invalid page cursor"
+  "error_node_log_cursor_invalid": "Invalid page cursor",
+  "site_tab_attacks": "Attacks",
+  "attacks_view_logs": "View logs"
 }
