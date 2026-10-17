@@ -553,6 +553,30 @@ describe("automatic mitigation", async () => {
     expect(await auditOf(second, "site.auto_mitigation_release")).toHaveLength(1);
   });
 
+  it("does not copy Under Attack it holds, and lets go when a copy sets the switch", async () => {
+    const source = await held();
+    const plain = await createSite();
+    await admin.sites.copySettings({ id: source, targetIds: [plain], parts: ["protection"] });
+    // The source's switch is the mitigation's, not its setting.
+    expect(await underAttack(plain)).toBe(false);
+    expect(await underAttack(source)).toBe(true);
+
+    // A site that holds it keeps the switch the copy leaves as it is (off), other settings change.
+    const target = await held();
+    await admin.protection.update({ id: plain, passTtlSeconds: 600 });
+    await admin.sites.copySettings({ id: plain, targetIds: [target], parts: ["protection"] });
+    expect((await admin.protection.get({ id: target })).passTtlSeconds).toBe(600);
+    expect(await underAttack(target)).toBe(true);
+    expect(await row(target)).toMatchObject({ activeSince: at(0), paused: false });
+    // A copy that turns it on is the operator's: it is never lifted.
+    const opted = await createSite();
+    await admin.protection.update({ id: opted, underAttack: true });
+    const taken = await held();
+    await admin.sites.copySettings({ id: opted, targetIds: [taken], parts: ["protection"] });
+    expect(await underAttack(taken)).toBe(true);
+    expect(await row(taken)).toMatchObject({ activeSince: null, paused: false });
+  });
+
   it("goes with the site", async () => {
     const siteId = await held();
     await admin.sites.delete({ id: siteId });

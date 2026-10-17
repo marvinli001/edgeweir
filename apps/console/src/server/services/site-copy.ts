@@ -35,6 +35,7 @@ import { checkSiteLists } from "./access-control";
 import { type Actor, recordAudit } from "./audit";
 import { retainIdentityHeaders } from "./auth-identity";
 import { formattedSiteDomains } from "./auth-rules";
+import { noteOperatorUnderAttack } from "./auto-mitigation";
 import { servesHost } from "./bulk-redirects";
 import { newCnamePrefix } from "./cname-prefixes";
 import { loadSiteErrorPages, storedStatus } from "./error-pages";
@@ -528,10 +529,29 @@ export const COPY_PARTS: Record<SiteCopyPart, Part<unknown>> = {
   }),
   protection: part<ProtectionValue>({
     async read(db, site) {
-      return columnsOf(PROTECTION_COLUMNS, await protectionRow(db, site.id));
+      const columns = columnsOf(PROTECTION_COLUMNS, await protectionRow(db, site.id));
+      // Under Attack that automatic mitigation holds is not the site's setting: it started with
+      // the switch off and goes back to it.
+      const [held] = await db
+        .select({ since: schema.siteAutoMitigation.activeSince })
+        .from(schema.siteAutoMitigation)
+        .where(eq(schema.siteAutoMitigation.siteId, site.id));
+      return held?.since ? { ...columns, underAttack: false } : columns;
     },
     async write(tx, target, value) {
+      const [held] = await tx
+        .select({ since: schema.siteAutoMitigation.activeSince })
+        .from(schema.siteAutoMitigation)
+        .where(eq(schema.siteAutoMitigation.siteId, target.id));
+      if (held?.since && !value.underAttack) {
+        // The target's setting is off (what its mitigation will go back to): keep what it holds.
+        const { underAttack: _held, ...rest } = value;
+        await upsertProtection(tx, target.id, rest);
+        return;
+      }
       await upsertProtection(tx, target.id, value);
+      // A copy that turns the switch on is the operator's: the mitigation never lifts it.
+      if (value.underAttack) await noteOperatorUnderAttack(tx, target.id, true);
     },
   }),
   accessControl: part<ReturnType<typeof readAccessControl>>({
