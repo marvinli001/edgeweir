@@ -14,6 +14,11 @@ import {
   signAuthUrl,
   updateAuthRules,
 } from "../../services/auth-rules";
+import {
+  getAutoMitigation,
+  restoreAutoMitigation,
+  updateAutoMitigation,
+} from "../../services/auto-mitigation";
 import { getBulkRedirects, saveBulkRedirects } from "../../services/bulk-redirects";
 import { createCacheTask, getCacheTask, listCacheTasks } from "../../services/cache-tasks";
 import { getHttps, updateHttps } from "../../services/certificates";
@@ -101,6 +106,17 @@ export const sitesRouter = {
     ),
     restore: authed.usageGuard.restore.handler(({ input, context }) =>
       restoreUsageGuard(context.app.db, input.id, { actor: context.actor }),
+    ),
+  },
+  autoMitigation: {
+    get: authed.autoMitigation.get.handler(({ input, context }) =>
+      getAutoMitigation(context.app.db, input.id),
+    ),
+    update: authed.autoMitigation.update.handler(({ input, context }) =>
+      updateAutoMitigation(context.app.db, input, { actor: context.actor }),
+    ),
+    restore: authed.autoMitigation.restore.handler(({ input, context }) =>
+      restoreAutoMitigation(context.app.db, input.id, { actor: context.actor }),
     ),
   },
   authRules: {

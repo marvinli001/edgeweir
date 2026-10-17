@@ -26,6 +26,7 @@ export const router = os.router({
   errorPages: sitesRouter.errorPages,
   maintenance: sitesRouter.maintenance,
   usageGuard: sitesRouter.usageGuard,
+  autoMitigation: sitesRouter.autoMitigation,
   authRules: sitesRouter.authRules,
   imageConvert: sitesRouter.imageConvert,
   accessControl: sitesRouter.accessControl,

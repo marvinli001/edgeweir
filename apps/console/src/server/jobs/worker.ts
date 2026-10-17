@@ -7,6 +7,7 @@ import { deleteInBatches } from "../lib/retention";
 import { maintainLogs } from "../services/access-logs";
 import { reconcileAcmeCertificates } from "../services/acme-accounts";
 import { sweepAlerts } from "../services/alerts";
+import { sweepAutoMitigation } from "../services/auto-mitigation";
 import { pruneBans } from "../services/bans";
 import { expireCacheTasks, pruneCacheTasks } from "../services/cache-tasks";
 import { sweepCertificates } from "../services/certificate-worker";
@@ -29,6 +30,7 @@ import { enforceUsageGuards } from "../services/usage-guard";
 
 export const QUEUES = {
   alerts: "alerts.sweep",
+  mitigation: "mitigation.evaluate",
   rollouts: "rollouts.evaluate",
   dns: "dns.reconcile",
   recompile: "maintenance.recompile",
@@ -64,6 +66,13 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   });
   await boss.schedule(QUEUES.alerts, "* * * * *");
   await boss.send(QUEUES.alerts, {}, { singletonKey: "alerts-sweep" });
+  // State and expiry live in site_auto_mitigation, so a restart or a repeated job only
+  // evaluates again; row locks serialise it with the nodes' reports and the operator.
+  await boss.work(QUEUES.mitigation, async () => {
+    await sweepAutoMitigation(ctx);
+  });
+  await boss.schedule(QUEUES.mitigation, "* * * * *");
+  await boss.send(QUEUES.mitigation, {}, { singletonKey: "mitigation-evaluate" });
   await boss.work(QUEUES.rollouts, async () => {
     await evaluateRollouts(ctx);
   });

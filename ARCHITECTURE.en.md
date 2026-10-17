@@ -447,6 +447,7 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificate
 | Queue | Schedule | Work |
 | --- | --- | --- |
 | `alerts.sweep` | Every minute | Alert detection and delivery |
+| `mitigation.evaluate` | Every minute (one job at start) | Evaluates every site's automatic mitigation: turns on the site's Under Attack when a node's CC level reaches the threshold, and turns it off once the level has stayed below it for the configured time; the state and the expiry are in `site_auto_mitigation`, so a restart or a repeated job only evaluates again |
 | `rollouts.evaluate` | Every minute | Evaluates running configuration canaries: promote, await promotion, or roll back (canary node heartbeats trigger an evaluation too) |
 | `dns.reconcile` | Every minute | Deletes expired old CNAME prefixes and publishes the DNS of their clusters; DNS steering publishing and external record maintenance |
 | `traffic.rollup` | Every minute | Traffic rollup and cleanup (L4 app minute statistics included), usage rollup and retention (then every site's usage protection, with an immediate alert sweep when its alerts change), access log partition maintenance, upgrade expiry; one failing part does not stop the others |
@@ -570,6 +571,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `l4_minute_stats` | Per node, layer-4 application and minute: new and refused connections, peak concurrency, bytes in / out, kept 7 days |
 | `site_usage` | Recomputable usage per site and UTC 5-minute window (requests, bytes out and in, exact decimals), revision and global `seq` (sequence `site_usage_seq`) |
 | `site_usage_guard` | A site's usage protection: period (calendar day / month) and time zone, limits on bytes sent / requests / bandwidth, warning threshold, action and recovery, and the current period's state the worker keeps (metrics at the warning threshold / limit, bandwidth peak, the action it applied, how long a manual restore pauses it, the error code of an action that could not be published) |
+| `site_auto_mitigation` | A site's automatic mitigation: switch, trigger level, hold in minutes, and the state the worker keeps (since when, until when, trigger level, the pause after the operator took over, error code of the last change that failed); no row means off |
 | `access_log` | Sampled and forced access logs (request id, User-Agent, Referer, protocol, region, origin, block reason and rule; JA4, the query string, chosen request headers and the peer address while the site records them; matched CRS rules and whether CRS blocked the request), one partition per UTC day, kept as the retention setting says |
 | `security_event` | CC mitigation events reported by nodes: level changes, escalated paths, automatic bans, with the top addresses and paths of the moment |
 | `node_log_cursor` | Per-node high-water mark of access log batches |
@@ -665,6 +667,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0069_site_usage_guard` | `site_usage_guard`; an index of `site_usage` by site and window |
 | `0070_node_logs` | `node_log_entry`, `node_log_entry_cursor` |
 | `0071_origin_protection` | `origin_client_certificate`, `origin_certificate`; `origin_pool.tls_trust`, `origin_pool.client_certificate`, `pki_authority.crl_pem` |
+| `0072_site_auto_mitigation` | `site_auto_mitigation` |
 
 ## Build output
 
