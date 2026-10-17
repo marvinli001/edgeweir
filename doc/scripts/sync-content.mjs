@@ -66,6 +66,7 @@ const SECTIONS = [
       ["access-control", "docs/guide/access-control.md"],
       ["bans", "docs/guide/bans.md"],
       ["challenges", "docs/guide/challenges.md"],
+      ["attack-dashboard", "docs/guide/attack-dashboard.md"],
       ["waf", "docs/guide/waf.md"],
       ["error-pages", "docs/guide/error-pages.md"],
       ["dns-and-alerts", "docs/guide/dns-and-alerts.md"],

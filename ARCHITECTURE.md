@@ -364,7 +364,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 1. 网站最多 16 条鉴权规则（`site_auth_rule`，按 `position` 排序）：类型 `basic`、`forward`、`url_a`–`url_d`，范围（域名、路径前缀、扩展名、排除路径前缀）与该类型的设置；密钥（Basic 用户与 PBKDF2-HMAC-SHA256 哈希、URL 鉴权的主备密钥）是一份 JSON，信封加密在同一行（用途 `site_auth_rule.secret_envelope`，绑定规则 ID），每次变化 `secret_version` 加一。IR 为 `Site.auth_rules`（启用的规则按顺序，范围列表排序），只含密钥的引用（`credential_id`、`credential_version`），要求 `access-auth-v1`。
 2. 节点以 `GetOriginCredentials` 取得本集群网站的规则密钥（与 S3、PURGE 密钥同一条路径），存进状态目录的 `credentials.json`（0600），解析后附到站点表进入数据面共享内存；密钥缺失时规则照常生效但没有用户或密钥，范围内的请求全部拒绝。
 3. 边缘层 access 阶段：PURGE 方法之后选出第一条命中范围的启用规则，URL 鉴权立即解析并去掉签名（A、D 删查询参数，B、C 从规范化后的 `$uri` 去掉两段）；平台放行与拦截名单之后、规则阶段之前判定（明文 HTTP 且网站强制 HTTPS 时先跳转）。Basic 在 worker 内缓存结果（成功 60 秒、失败 10 秒），失败按网站与客户端网络限速（共享字典 `edgeweir_auth`）。转发鉴权以 `ngx.location.capture` 发子请求到内部 location `/./edgeweir-auth`，经回源层发往鉴权服务（源站地址策略、TLS 校验、规则的超时、只发转发列表中的请求头）；2xx 与 401 / 403 的应答可缓存在 `edgeweir_auth`。
-4. 被拒绝的请求计入 `MinuteStats.auth_failures`（`node_minute_stats.auth_failures` 及小时、天汇总与 ClickHouse 镜像），网站「安全」页签显示。控制台的「生成签名 URL」用主密钥在服务端计算，不保存、不下发。详见 [访问控制](docs/guide/access-control.md)。
+4. 被拒绝的请求计入 `MinuteStats.auth_failures`（`node_minute_stats.auth_failures` 及小时、天汇总与 ClickHouse 镜像），网站「攻击」页签显示。控制台的「生成签名 URL」用主密钥在服务端计算，不保存、不下发。详见 [访问控制](docs/guide/access-control.md)。
 
 ## 访问控制
 
