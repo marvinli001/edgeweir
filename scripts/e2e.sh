@@ -323,7 +323,7 @@ done
 # core, which only runs on a fresh stack.
 SECTIONS=(
   "core:" "m1:" "analytics:" "m2:" "install:" "wss:" "channel:" "node-logs:" "m3:" "m4:" "m5:" "m6-logs:m5" "m6-upgrades:m5"
-  "p0:m5 m6-upgrades" "g1:p0 m5 m6-upgrades" "g2:m6-upgrades" "g3:m6-upgrades" "g4:m6-upgrades"
+  "p0:m5 m6-upgrades" "g1:p0 m5 m6-upgrades" "g2:m3 m6-upgrades" "g3:m6-upgrades" "g4:m6-upgrades"
   "g5:m6-upgrades" "dns:m5 m6-upgrades" "g6:dns m5 m6-upgrades" "g7:m6-upgrades" "h2:m6-upgrades"
   "g8:m6-upgrades" "g9:m6-upgrades" "g15:m6-upgrades" "g10:dns m5 m6-upgrades" "g11:m6-upgrades"
   "g12:m6-upgrades" "g13:m6-upgrades" "g14:m6-upgrades" "g16:m6-upgrades" "g17:m6-upgrades"
