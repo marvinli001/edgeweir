@@ -169,6 +169,7 @@ test("G3: the security tab edits the site's OWASP CRS and lists the most-matched
   await expect(page.getByTestId("attacks-range")).toHaveText("过去 1 小时");
   for (const rule of detection) await expect(top).toContainText(String(rule));
 
+  await page.getByTestId("tab-security").click();
   await pick(page, mode, "拦截");
   await pick(page, preset, "自定义");
   await expect(paranoia).toHaveText("1 级");
