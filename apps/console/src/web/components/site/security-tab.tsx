@@ -56,7 +56,7 @@ import { Switch } from "@/components/ui/switch";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { useDraft } from "@/hooks/use-draft";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
-import { m } from "@/lib/i18n";
+import { formatDateMinutes, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { challengeLabel, levelLabel, wafModeLabel } from "@/lib/protection";
 import {
@@ -78,6 +78,9 @@ function useUpdateProtection(siteId: string) {
   const apply = async (patch: Omit<SiteProtectionUpdateInput, "id">) => {
     const saved = await mutation.mutateAsync({ id: siteId, ...patch });
     queryClient.setQueryData(orpc.protection.get.queryKey({ input: { id: siteId } }), saved);
+    // Saving the switch hands an automatic mitigation's hold to the operator.
+    if (patch.underAttack !== undefined)
+      await queryClient.invalidateQueries({ queryKey: orpc.autoMitigation.key() });
     toast.success(m.common_saved());
   };
   const save = async (patch: Omit<SiteProtectionUpdateInput, "id">) => {
@@ -254,6 +257,14 @@ function SecuritySummary({ siteId, protection }: { siteId: string; protection: S
 
 function UnderAttackCard({ siteId, protection }: { siteId: string; protection: SiteProtection }) {
   const { apply, save, pending } = useUpdateProtection(siteId);
+  const mitigation = useQuery(
+    orpc.autoMitigation.get.queryOptions({
+      input: { id: siteId },
+      refetchInterval: 30_000,
+      meta: { background: true },
+    }),
+  );
+  const automatic = protection.underAttack ? mitigation.data?.active : null;
   const turningOn = !protection.underAttack;
   const toggle = (
     <Switch
@@ -282,6 +293,11 @@ function UnderAttackCard({ siteId, protection }: { siteId: string; protection: S
           {protection.underAttack ? (
             <Badge variant="destructive" data-testid="protection-under-attack-on">
               {m.protection_on()}
+            </Badge>
+          ) : null}
+          {automatic ? (
+            <Badge variant="outline" data-testid="protection-under-attack-auto">
+              {m.protection_under_attack_auto({ time: formatDateMinutes(automatic.expiresAt) })}
             </Badge>
           ) : null}
         </Field>

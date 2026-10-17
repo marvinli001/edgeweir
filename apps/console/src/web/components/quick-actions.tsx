@@ -355,6 +355,8 @@ function UnderAttackConfirm({ action, open, onOpenChange }: DialogProps<"under-a
           orpc.protection.get.queryKey({ input: { id: action.siteId } }),
           saved,
         );
+        // Turning it off or on by hand ends what an automatic mitigation holds.
+        await queryClient.invalidateQueries({ queryKey: orpc.autoMitigation.key() });
         toast.success(m.common_saved());
       }}
     >

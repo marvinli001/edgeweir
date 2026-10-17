@@ -205,6 +205,7 @@ function SiteDetailPage() {
             <TabsContent value="attacks" className="animate-enter">
               <AttacksTab
                 siteId={data.id}
+                siteName={data.name}
                 range={search.range ?? DEFAULT_RANGE}
                 onRangeChange={(range) =>
                   navigate({

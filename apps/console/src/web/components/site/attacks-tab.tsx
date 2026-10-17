@@ -22,6 +22,7 @@ import { FormSelect } from "@/components/form-select";
 import { Pager } from "@/components/pager";
 import { RowMenu, type RowMenuItem } from "@/components/quick-actions";
 import { SafetyNote } from "@/components/safety-note";
+import { AutoMitigationCard } from "@/components/site/auto-mitigation-card";
 import { combineQueries, EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
@@ -81,10 +82,12 @@ function LogsLink({ siteId, jump, testId }: { siteId: string; jump: LogJump; tes
 /** The site's attack dashboard: what was refused and why, who is behind it, and where to look. */
 export function AttacksTab({
   siteId,
+  siteName,
   range,
   onRangeChange,
 }: {
   siteId: string;
+  siteName: string;
   range: AnalyticsRange;
   onRangeChange: (range: AnalyticsRange) => void;
 }) {
@@ -102,6 +105,7 @@ export function AttacksTab({
           />
         </div>
       </div>
+      <AutoMitigationCard siteId={siteId} siteName={siteName} />
       <BlockReasonsCard siteId={siteId} range={range} />
       <NodeLevelsCard siteId={siteId} />
       <TopCard siteId={siteId} range={range} />
