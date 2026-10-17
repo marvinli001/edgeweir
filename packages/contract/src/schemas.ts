@@ -1262,21 +1262,21 @@ export const trafficBreakdownInput = z.object({
   range: analyticsRange.default("24h"),
   /** Only this site; it must be visible to the caller. */
   siteId: uuid.optional(),
-  /** Sites, edge nodes or HTTP status codes. */
-  by: z.enum(["site", "node", "status"]),
-  /** What the items are ranked and plotted by; status codes always count requests. */
+  /** Sites, edge nodes, HTTP status codes or block reasons (requests refused or challenged). */
+  by: z.enum(["site", "node", "status", "block_reason"]),
+  /** What the items are ranked and plotted by; status codes and block reasons always count requests. */
   metric: z.enum(["requests", "bytesSent"]).default("requests"),
   /** With `by: status`, only codes of this class (4 → 4xx). */
   statusClass: z.coerce.number().int().min(1).max(5).optional(),
   limit: z.coerce.number().int().min(1).max(20).default(10),
 });
 
-/** One site, node or status code with its share of the metric. */
+/** One site, node, status code or block reason with its share of the metric. */
 export const trafficBreakdownItem = z.object({
-  /** Site or node id, or the status code ("404"). */
+  /** Site or node id, the status code ("404") or the block reason ("cc"). */
   id: z.string(),
   name: z.string(),
-  /** The cluster of the site or node; null for status codes. */
+  /** The cluster of the site or node; null for status codes and block reasons. */
   parentId: z.string().nullable(),
   parentName: z.string().nullable(),
   total: z.number().int(),

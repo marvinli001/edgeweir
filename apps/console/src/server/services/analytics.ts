@@ -226,8 +226,18 @@ export async function trafficBreakdown(
     query.siteId ? eq(stats.siteId, query.siteId) : undefined,
   );
   const result = await (query.by === "status"
-    ? statusBreakdown(db, where, window.bucketSeconds, query.statusClass, stats)
-    : entityBreakdown(db, where, window.bucketSeconds, query.by, query.metric, query.limit, stats));
+    ? keyedBreakdown(db, where, window.bucketSeconds, stats.statusCodes, query.statusClass, stats)
+    : query.by === "block_reason"
+      ? keyedBreakdown(db, where, window.bucketSeconds, stats.blockReasons, undefined, stats)
+      : entityBreakdown(
+          db,
+          where,
+          window.bucketSeconds,
+          query.by,
+          query.metric,
+          query.limit,
+          stats,
+        ));
 
   const seriesOf = (rows: { bucket: number; value: number }[]) => {
     const series = times.map(() => 0);
@@ -341,11 +351,15 @@ async function entityBreakdown(
   return { items, points, totals };
 }
 
-/** Status codes: one pass over each row's per-code counters, ranked here. */
-async function statusBreakdown(
+/**
+ * Status codes or block reasons: one pass over each row's per-key counters (a jsonb map), ranked
+ * here. `statusClass` keeps the codes that start with the digit.
+ */
+async function keyedBreakdown(
   db: Database,
   where: SQL | undefined,
   bucketSeconds: number,
+  counters: SQLWrapper,
   statusClass: number | undefined,
   stats: StatsSource,
 ): Promise<BreakdownRows> {
@@ -359,7 +373,7 @@ async function statusBreakdown(
     sql`select ${bucketOf(bucketSeconds, stats)} as bucket, code.key as code, sum(code.value::bigint)::bigint as value
       from ${stats}
       inner join ${schema.site} on ${schema.site.id} = ${stats.siteId}
-      cross join lateral jsonb_each_text(${stats.statusCodes}) as code(key, value)
+      cross join lateral jsonb_each_text(${counters}) as code(key, value)
       where ${where ?? sql`true`}${classFilter}
       group by 1, 2`,
   );
