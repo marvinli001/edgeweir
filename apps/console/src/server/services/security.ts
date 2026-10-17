@@ -9,7 +9,7 @@ import {
   type SiteSecurityState,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import { and, count, desc, eq, gt, inArray, lt, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, inArray, lt, sql } from "drizzle-orm";
 import { isOnline } from "../lib/node-online";
 import { deleteInBatches } from "../lib/retention";
 import { getProtectionSettings } from "./protection";
@@ -314,12 +314,16 @@ export async function siteSecurityState(
 /** The site's events, newest first. */
 export async function listSecurityEvents(
   db: Database,
-  input: { id: string; kind?: SecurityEventKind; page: number; pageSize: number },
+  input: { id: string; kind?: SecurityEventKind; hours?: number; page: number; pageSize: number },
+  now = new Date(),
 ): Promise<{ items: SecurityEvent[]; total: number }> {
   const site = await findSite(db, input.id);
   const where = and(
     eq(schema.securityEvent.siteId, site.id),
     input.kind ? eq(schema.securityEvent.kind, input.kind) : undefined,
+    input.hours
+      ? gte(schema.securityEvent.occurredAt, new Date(now.getTime() - input.hours * 3600_000))
+      : undefined,
   );
   const [total] = await db.select({ n: count() }).from(schema.securityEvent).where(where);
   const rows = await db
