@@ -198,6 +198,14 @@ const eventSeeds: EventSeed[] = [
   { kind: "node_offline", name: "fra-edge-03", firing: 45 * MINUTE },
   { kind: "scheduling_action", name: "Probe loss · fra-edge-03", firing: 46 * MINUTE },
   { kind: "certificate_expiring", site: "blog.example.org", firing: 5.2 * HOUR },
+  // sin-edge-02 runs without time sync (its clock is 94 s ahead).
+  { kind: "node_clock_skew", name: "sin-edge-02", firing: 7 * HOUR },
+  {
+    kind: "dns_reconcile_failed",
+    name: "apac-edge",
+    firing: 30 * HOUR,
+    resolved: 29 * HOUR + 35 * MINUTE,
+  },
   // The burst on shop.example.com, answered with 403 / 429.
   {
     kind: "cc_mitigation",
@@ -1080,6 +1088,7 @@ export const systemFixtures: Fixtures = {
       errorRatio: 0.1,
       minimumRequests: 200,
       windowMinutes: 5,
+      clockSkewSeconds: 30,
     }),
     smtp: () => ({
       host: "smtp.example.net",

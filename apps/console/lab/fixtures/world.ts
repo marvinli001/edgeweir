@@ -432,6 +432,12 @@ export const nodes: Node[] = nodeSeeds.map((seed, index) => {
     },
     certificateFailures: [],
     channel: channelOf(index, lastSeen),
+    // One node without time sync: its clock runs 94 s ahead.
+    clock: {
+      offsetMs: index === 3 ? 94_300 : Math.round((noise(index * 17) - 0.5) * 80),
+      measuredAt: lastSeen,
+      skewed: index === 3,
+    },
   };
 });
 
