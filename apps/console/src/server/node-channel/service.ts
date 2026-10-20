@@ -547,6 +547,17 @@ export function createNodeService(
                   blockReasons: counts(s.blockReasons),
                   challengesIssued: Number(s.challengesIssued),
                   challengesPassed: Number(s.challengesPassed),
+                  origins: s.origins.map((o) => ({
+                    originId: o.originId,
+                    requests: Number(o.requests),
+                    connectFailures: Number(o.connectFailures),
+                    timeouts: Number(o.timeouts),
+                    tlsFailures: Number(o.tlsFailures),
+                    invalidResponses: Number(o.invalidResponses),
+                    serverErrors: Number(o.serverErrors),
+                    headerTimeBuckets: o.headerTimeBuckets.map(Number),
+                    headerTimeMsSum: Number(o.headerTimeMsSum),
+                  })),
                 },
               },
             ]

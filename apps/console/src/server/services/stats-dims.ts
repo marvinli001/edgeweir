@@ -3,8 +3,10 @@ import {
   BROWSERS,
   DEVICES,
   MAX_STATS_COUNTRIES,
+  MAX_STATS_ORIGINS,
   MAX_STATS_TOP,
   OPERATING_SYSTEMS,
+  ORIGIN_HEADER_TIME_BUCKETS,
   STATS_HTTP_VERSIONS,
   STATS_TLS_VERSIONS,
 } from "@edgeweir/contract";
@@ -14,7 +16,7 @@ import { addTrafficCounter } from "./stats-counter";
 
 /**
  * Statistics dimensions of a minute (MinuteStats 14-24, stats-dims-v1,
- * ADR-0041 §7) as nodes report them; ingestion keeps only valid keys and
+ * ADR-0041 §7; 26, origin-stats-v1, ADR-0052) as nodes report them; ingestion keeps only valid keys and
  * bounded maps.
  */
 export interface ReportedDimensions {
@@ -29,6 +31,21 @@ export interface ReportedDimensions {
   blockReasons?: Record<string, number>;
   challengesIssued?: number;
   challengesPassed?: number;
+  /** Each origin's fetches (MinuteStats.origins, origin-stats-v1, ADR-0052). */
+  origins?: ReportedOrigin[];
+}
+
+/** An origin's minute as nodes report it (OriginCounter). */
+export interface ReportedOrigin {
+  originId: string;
+  requests: number;
+  connectFailures: number;
+  timeouts: number;
+  tlsFailures: number;
+  invalidResponses: number;
+  serverErrors: number;
+  headerTimeBuckets: number[];
+  headerTimeMsSum: number;
 }
 
 /** The dimension columns of node_minute_stats / node_hour_stats / node_day_stats. */
@@ -45,6 +62,8 @@ export interface DimensionBucket {
   block_reasons: Record<string, number>;
   challenges_issued: number;
   challenges_passed: number;
+  /** `<origin id>:<field>` → count (ORIGIN_STATS_FIELDS), at most MAX_STATS_ORIGINS origins. */
+  origin_stats: Record<string, number>;
 }
 
 /** Map columns and how many keys a bucket keeps (null: the key list bounds them). */
@@ -61,6 +80,8 @@ export const DIMENSION_MAPS = [
   ["http_versions", null],
   ["tls_versions", null],
   ["block_reasons", null],
+  // Bounded by originsBounded (MAX_STATS_ORIGINS origins of 18 counters).
+  ["origin_stats", null],
 ] as const satisfies readonly (readonly [keyof DimensionBucket, number | null])[];
 export const DIMENSION_COUNTERS = ["challenges_issued", "challenges_passed"] as const;
 export const DIMENSION_COLUMNS = [
@@ -88,6 +109,29 @@ export const cleanAsName = (name: string) =>
     .trim()
     .slice(0, 128);
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** origin_stats keeping the MAX_STATS_ORIGINS origins with the most attempts (ties by id). */
+function originsBounded(values: Record<string, number>): Record<string, number> {
+  const attempts = new Map<string, number>();
+  for (const [key, n] of Object.entries(values)) {
+    const at = key.lastIndexOf(":");
+    const id = key.slice(0, at);
+    if (!attempts.has(id)) attempts.set(id, 0);
+    if (key.slice(at + 1) === "n") attempts.set(id, n);
+  }
+  if (attempts.size <= MAX_STATS_ORIGINS) return values;
+  const kept = new Set(
+    [...attempts]
+      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+      .slice(0, MAX_STATS_ORIGINS)
+      .map(([id]) => id),
+  );
+  return Object.fromEntries(
+    Object.entries(values).filter(([key]) => kept.has(key.slice(0, key.lastIndexOf(":")))),
+  );
+}
+
 /** Heaviest `limit` entries (ties by key), all when limit is null. */
 function bounded(values: Record<string, number>, limit: number | null) {
   const entries = Object.entries(values).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
@@ -111,6 +155,7 @@ export function cleanDimensions(input: ReportedDimensions | undefined): Dimensio
     http_versions: Object.create(null),
     tls_versions: Object.create(null),
     block_reasons: Object.create(null),
+    origin_stats: Object.create(null),
     challenges_issued:
       Number.isSafeInteger(d.challengesIssued) && (d.challengesIssued ?? 0) > 0
         ? (d.challengesIssued as number)
@@ -143,7 +188,28 @@ export function cleanDimensions(input: ReportedDimensions | undefined): Dimensio
   for (const [column, values] of keyed)
     for (const [key, n] of Object.entries(values ?? {}))
       if (KEYS[column]?.has(key) && isCount(n)) add(out[column], key, n);
+  for (const o of d.origins ?? []) {
+    if (!UUID_RE.test(o.originId) || !isCount(o.requests)) continue;
+    const counters: [string, number][] = [
+      ["n", o.requests],
+      ["cf", o.connectFailures],
+      ["to", o.timeouts],
+      ["tls", o.tlsFailures],
+      ["inv", o.invalidResponses],
+      ["e5", o.serverErrors],
+    ];
+    // Header times only with one bucket per bound and one above.
+    if (o.headerTimeBuckets?.length === ORIGIN_HEADER_TIME_BUCKETS) {
+      counters.push(["ms", o.headerTimeMsSum]);
+      o.headerTimeBuckets.forEach((n, i) => {
+        counters.push([`h${i}`, n]);
+      });
+    }
+    for (const [field, n] of counters)
+      if (isCount(n)) add(out.origin_stats, `${o.originId}:${field}`, n);
+  }
   for (const [column, limit] of DIMENSION_MAPS) out[column] = bounded(out[column], limit);
+  out.origin_stats = originsBounded(out.origin_stats);
   out.country_requests = bounded(out.country_requests, MAX_STATS_COUNTRIES);
   out.country_bytes = Object.fromEntries(
     Object.entries(out.country_bytes).filter(([country]) => country in out.country_requests),
@@ -160,6 +226,7 @@ export function mergeDimensions(a: DimensionBucket, b: DimensionBucket): Dimensi
     out[column] = bounded(values, limit);
   }
   for (const column of DIMENSION_COUNTERS) out[column] = addTrafficCounter(a[column], b[column]);
+  out.origin_stats = originsBounded(out.origin_stats);
   return out;
 }
 

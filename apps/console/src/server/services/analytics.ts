@@ -90,7 +90,7 @@ function totalsOf(points: Counters[], bucketSeconds: number): TrafficTotals {
 }
 
 /** Epoch seconds of the bucket a row's minute falls in. */
-function bucketOf(bucketSeconds: number, stats: StatsSource = schema.nodeMinuteStats) {
+export function bucketOf(bucketSeconds: number, stats: StatsSource = schema.nodeMinuteStats) {
   // A fixed literal from RANGES, so the expression renders the same in SELECT and GROUP BY.
   return sql<number>`extract(epoch from date_bin(${sql.raw(`'${bucketSeconds} seconds'`)}::interval, ${stats.minute}, timestamptz 'epoch'))::bigint`;
 }

@@ -102,7 +102,8 @@ describe("G16 over the node channel: statistics dimensions and log fields", asyn
     await pglite.close();
   });
 
-  it("stores MinuteStats 14-24 as the node reports them", async () => {
+  it("stores MinuteStats 14-24 and 26 as the node reports them", async () => {
+    const ORIGIN = "00000000-0000-4000-8000-0000000000a1";
     const response = await mtls.reportStatsV2({
       batchSequence: 1n,
       stats: [
@@ -126,10 +127,35 @@ describe("G16 over the node channel: statistics dimensions and log fields", asyn
           blockReasons: { ip_banned: 2n, challenge: 1n },
           challengesIssued: 1n,
           challengesPassed: 1n,
+          origins: [
+            {
+              originId: ORIGIN,
+              requests: 5n,
+              connectFailures: 1n,
+              timeouts: 0n,
+              tlsFailures: 0n,
+              invalidResponses: 0n,
+              serverErrors: 1n,
+              headerTimeBuckets: [0n, 3n, 1n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n],
+              headerTimeMsSum: 70n,
+            },
+          ],
         },
       ],
     });
     expect(response.accepted).toBe(1);
+    const [stored] = await ctx.db
+      .select({ originStats: schema.nodeMinuteStats.originStats })
+      .from(schema.nodeMinuteStats)
+      .where(eq(schema.nodeMinuteStats.siteId, siteId));
+    expect(stored?.originStats).toEqual({
+      [`${ORIGIN}:n`]: 5,
+      [`${ORIGIN}:cf`]: 1,
+      [`${ORIGIN}:e5`]: 1,
+      [`${ORIGIN}:ms`]: 70,
+      [`${ORIGIN}:h1`]: 3,
+      [`${ORIGIN}:h2`]: 1,
+    });
     const dims = await statsDimensions(ctx.db, { siteId, range: "1h" });
     expect(dims).toMatchObject({
       countries: [

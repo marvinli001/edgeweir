@@ -38,6 +38,7 @@ import {
 } from "../../services/l4";
 import { getSiteMaintenance, updateSiteMaintenance } from "../../services/maintenance";
 import { siteOriginHealth } from "../../services/origin-health";
+import { originQuality } from "../../services/origin-quality";
 import { batchDeleteSites, batchSetEnabled } from "../../services/site-batch";
 import { cloneSite, copySiteSettings, previewSiteCopy } from "../../services/site-copy";
 import { siteLaunch } from "../../services/site-launch";
@@ -272,6 +273,9 @@ export const sitesRouter = {
     launch: authed.sites.launch.handler(({ input, context }) => siteLaunch(context.app, input.id)),
     originHealth: authed.sites.originHealth.handler(({ input, context }) =>
       siteOriginHealth(context.app.db, input.id),
+    ),
+    originQuality: authed.sites.originQuality.handler(({ input, context }) =>
+      originQuality(context.app.db, input),
     ),
     features: authed.sites.features.handler(({ input, context }) =>
       siteFeatures(context.app.db, input.id),
