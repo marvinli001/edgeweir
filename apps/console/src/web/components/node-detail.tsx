@@ -335,9 +335,31 @@ function Fact({
   );
 }
 
+/** How far the node's clock is from the console's, as the node last measured it. */
+function NodeClockFact({ clock }: { clock: Node["clock"] }) {
+  if (!clock) return <span className="text-muted-foreground">—</span>;
+  const seconds = formatNumber(Math.round(Math.abs(clock.offsetMs) / 100) / 10);
+  return (
+    <>
+      <span className="tabular-nums">
+        {Math.abs(clock.offsetMs) < 100
+          ? m.node_clock_in_sync()
+          : clock.offsetMs > 0
+            ? m.node_clock_ahead({ seconds })
+            : m.node_clock_behind({ seconds })}
+      </span>
+      {clock.skewed ? (
+        <Badge variant="destructive" data-testid="node-clock-skewed">
+          {m.node_clock_skewed()}
+        </Badge>
+      ) : null}
+    </>
+  );
+}
+
 /**
- * Data plane health, the connection's source address, the node channel address in use and the
- * client certificate's lifetime.
+ * Data plane health, the connection's source address, the node channel address in use, the
+ * client certificate's lifetime and the clock offset.
  */
 function NodeFacts({ node }: { node: Node }) {
   const certLeft = node.certNotAfter ? Date.parse(node.certNotAfter) - Date.now() : null;
@@ -375,6 +397,9 @@ function NodeFacts({ node }: { node: Node }) {
             {m.node_cert_expiring()}
           </Badge>
         ) : null}
+      </Fact>
+      <Fact label={m.node_clock()} testId="node-clock">
+        <NodeClockFact clock={node.clock} />
       </Fact>
     </dl>
   );

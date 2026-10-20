@@ -57,12 +57,14 @@ const label = (kind: AlertEventKind) =>
     cc_mitigation: m.alert_kind_cc_mitigation,
     usage_warning: m.alert_kind_usage_warning,
     usage_limit: m.alert_kind_usage_limit,
+    node_clock_skew: m.alert_kind_node_clock_skew,
     config_rollout_failed: m.alert_kind_config_rollout_failed,
     config_rollout_no_canary: m.alert_kind_config_rollout_no_canary,
     config_rule_invalid: m.alert_kind_config_rule_invalid,
     dns_mass_removal_blocked: m.alert_kind_dns_mass_removal_blocked,
     scheduling_action: m.alert_kind_scheduling_action,
     certificate_unloadable: m.alert_kind_certificate_unloadable,
+    dns_reconcile_failed: m.alert_kind_dns_reconcile_failed,
   })[kind]();
 const kindLabel = (kind: AlertChannelConfig["kind"]) =>
   ({
@@ -463,6 +465,7 @@ function PolicyEditor({ initial }: { initial: AlertPolicy }) {
             ["certificateHours", m.alert_certificate_hours(), 1, 720],
             ["minimumRequests", m.alert_minimum_requests(), 1, 1000000],
             ["windowMinutes", m.alert_window_minutes(), 1, 60],
+            ["clockSkewSeconds", m.alert_clock_skew_seconds(), 5, 3600],
           ] as const
         ).map(([key, label, min, max]) => (
           <NumberField
