@@ -75,12 +75,14 @@ export async function deliverNotification(
     cc_mitigation: m.alert_kind_cc_mitigation,
     usage_warning: m.alert_kind_usage_warning,
     usage_limit: m.alert_kind_usage_limit,
+    node_clock_skew: m.alert_kind_node_clock_skew,
     config_rollout_failed: m.alert_kind_config_rollout_failed,
     config_rollout_no_canary: m.alert_kind_config_rollout_no_canary,
     config_rule_invalid: m.alert_kind_config_rule_invalid,
     dns_mass_removal_blocked: m.alert_kind_dns_mass_removal_blocked,
     scheduling_action: m.alert_kind_scheduling_action,
     certificate_unloadable: m.alert_kind_certificate_unloadable,
+    dns_reconcile_failed: m.alert_kind_dns_reconcile_failed,
     test: m.alert_test_message,
   }[event.kind]({}, { locale });
   // Usage protection names the metric (the resource).
@@ -98,7 +100,7 @@ export async function deliverNotification(
   const url = new URL(
     event.siteId
       ? `/sites/${event.siteId}`
-      : event.kind === "dns_mass_removal_blocked"
+      : event.kind === "dns_mass_removal_blocked" || event.kind === "dns_reconcile_failed"
         ? "/dns"
         : event.kind === "certificate_unloadable"
           ? "/certificates"

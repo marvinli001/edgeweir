@@ -6,7 +6,6 @@ import {
   type AlertPolicy,
   alertEventKind,
   alertKind,
-  alertPolicy,
   type SmtpInput,
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
@@ -15,6 +14,7 @@ import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { lockAlertChannels, tryLockAlertSweep, unlockAlertSweep } from "../lib/locks";
 import { deleteInBatches } from "../lib/retention";
+import { alertPolicySetting } from "./alert-policy";
 import { type Actor, recordAudit } from "./audit";
 import {
   channelBinding,
@@ -26,10 +26,8 @@ import {
 } from "./notification-delivery";
 import type { Executor } from "./revisions";
 import { elevatedSites, raiseCcAlert } from "./security";
-import { defineSetting } from "./settings";
 import { findSite, shareSites } from "./sites";
 
-const POLICY_KEY = "alert_policy";
 /** Notifications a sweep sends at most, and for how long it keeps starting new ones. */
 const DELIVERY_BATCH = 200;
 const DELIVERY_BUDGET_MS = 40_000;
@@ -182,18 +180,12 @@ export async function testAlertChannel(app: AppContext, id: string, actor: Actor
   });
   return { ok: true as const };
 }
-const policySetting = defineSetting({
-  key: POLICY_KEY,
-  schema: alertPolicy,
-  defaults: alertPolicy.parse({}),
-  auditAction: "alert.policy_update",
-});
 export async function getAlertPolicy(app: AppContext): Promise<AlertPolicy> {
-  return policySetting.read(app.db);
+  return alertPolicySetting.read(app.db);
 }
 export async function setAlertPolicy(app: AppContext, input: AlertPolicy, actor: Actor) {
   return app.db.transaction((tx) =>
-    policySetting.write(tx, actor, input, { metadata: () => input }),
+    alertPolicySetting.write(tx, actor, input, { metadata: () => input }),
   );
 }
 export async function getSmtpConfig(app: AppContext) {
@@ -419,7 +411,7 @@ export async function listAlertEvents(app: AppContext, siteId?: string) {
             eq(schema.site.id, siteId),
             // Nodes that serve the site.
             and(
-              eq(schema.alertEvent.kind, "node_offline"),
+              inArray(schema.alertEvent.kind, [...NODE_KINDS]),
               isNull(schema.alertEvent.siteId),
               sql`${schema.alertEvent.resourceId} in (select n.id::text from node n join site s on s.cluster_id = n.cluster_id where s.id = ${siteId}::uuid)`,
             ),
@@ -439,11 +431,13 @@ export async function listAlertEvents(app: AppContext, siteId?: string) {
   }));
 }
 
+/** Alerts of one node (no site), for subscribers of the sites the node serves. */
+const NODE_KINDS: ReadonlySet<string> = new Set<AlertKind>(["node_offline", "node_clock_skew"]);
 /** Site alerts are keyed by site; platform alerts (no site) by "platform". */
 const keyOf = (kind: string, siteId: string | null, resourceId: string) =>
   `${kind}/${siteId ?? "platform"}/${resourceId}`;
 interface Condition {
-  /** Null for node_offline: one alert per node, whatever sites it serves. */
+  /** Null for node alerts (NODE_KINDS): one alert per node, whatever sites it serves. */
   siteId: string | null;
   kind: AlertKind;
   resourceId: string;
@@ -513,6 +507,20 @@ export async function alertConditions(app: AppContext, policy: AlertPolicy, now:
         siteName: node.name,
         domain: "",
       });
+    // The offset the node measured against the console in a recent heartbeat.
+    if (
+      node.clockOffsetMs !== null &&
+      node.clockMeasuredAt &&
+      node.clockMeasuredAt.getTime() >= offlineSince &&
+      Math.abs(node.clockOffsetMs) >= policy.clockSkewSeconds * 1000
+    )
+      active.set(keyOf("node_clock_skew", null, node.id), {
+        siteId: null,
+        kind: "node_clock_skew",
+        resourceId: node.id,
+        siteName: node.name,
+        domain: "",
+      });
   }
   for (const site of sites) {
     const base = { siteId: site.id, siteName: site.name, domain: domainOf.get(site.id) ?? "" };
@@ -563,14 +571,14 @@ export async function alertConditions(app: AppContext, policy: AlertPolicy, now:
 }
 /**
  * A platform channel gets every alert; others the site alerts of the sites
- * their subscription covers (all sites, or its set), and node_offline of a
- * node in the cluster of such a site.
+ * their subscription covers (all sites, or its set), and the node alerts
+ * of a node in the cluster of such a site.
  */
 async function eligible(app: AppContext, c: Channel, event: Event) {
   if (!c.enabled) return false;
   if (c.platform) return true;
   // Platform alerts have no subscribers: platform channels only.
-  if (event.siteId === null && event.kind !== "node_offline") return false;
+  if (event.siteId === null && !NODE_KINDS.has(event.kind)) return false;
   const sub = schema.alertSubscription,
     member = schema.alertSubscriptionSite;
   // The sites the alert concerns: its own, or those the offline node serves.
@@ -603,12 +611,10 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
       const firing = new Set(previous.filter((s) => s.active).map((s) => s.key));
       const raised = [...snapshot.active].filter(([key]) => !firing.has(key));
       // Platform alerts (no site) are raised and resolved where they happen,
-      // not here; node_offline is the exception.
+      // not here; node alerts are the exception.
       const resolved = previous.filter(
         (s) =>
-          s.active &&
-          (s.siteId !== null || s.kind === "node_offline") &&
-          !snapshot.active.has(s.key),
+          s.active && (s.siteId !== null || NODE_KINDS.has(s.kind)) && !snapshot.active.has(s.key),
       );
       // Lock order with site deletion (shareSites): the sites whose states
       // and events are written below, before any of them; a site deleted

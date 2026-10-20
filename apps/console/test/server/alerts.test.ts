@@ -148,6 +148,40 @@ describe("M5 notification delivery and subscription authorization", async () => 
     expect(received()).toHaveLength(2);
     expect(received()[1]?.status).toBe("resolved");
   });
+  it("raises node_clock_skew for a node whose recent offset reaches the threshold", async () => {
+    await admin.alerts.subscribe({ channelId, kinds: ["node_clock_skew"], siteIds: [siteId] });
+    const before = received().length;
+    const clock = (clockOffsetMs: number, clockMeasuredAt = new Date()) =>
+      ctx.db
+        .update(schema.node)
+        .set({ clockOffsetMs, clockMeasuredAt })
+        .where(eq(schema.node.id, nodeId));
+    // Below the default 30 s, or reported too long ago: nothing.
+    await clock(-29_999);
+    await sweepAlerts(ctx);
+    await clock(-90_000, new Date(Date.now() - 3600_000));
+    await sweepAlerts(ctx);
+    expect(received()).toHaveLength(before);
+    await clock(-30_000);
+    await sweepAlerts(ctx);
+    await sweepAlerts(ctx);
+    expect(received().slice(before)).toMatchObject([
+      { kind: "node_clock_skew", status: "firing", resourceId: nodeId, siteId: null },
+    ]);
+    expect((await admin.alerts.events({ siteId }))[0]).toMatchObject({
+      kind: "node_clock_skew",
+      status: "firing",
+    });
+    await clock(150);
+    await sweepAlerts(ctx);
+    expect(
+      received()
+        .slice(before)
+        .map((d) => d.status),
+    ).toEqual(["firing", "resolved"]);
+    // Channels created later would be offered the last day's latest event.
+    await ctx.db.delete(schema.alertEvent).where(eq(schema.alertEvent.kind, "node_clock_skew"));
+  });
   it("removes a subscription", async () => {
     const [sub] = await admin.alerts.subscriptions();
     if (!sub) throw new Error("subscription missing");

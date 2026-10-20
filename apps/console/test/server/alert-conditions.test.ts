@@ -25,6 +25,8 @@ interface FixtureNode {
   lastSeenAt: number | null;
   /** node_config_status.data_plane_healthy; undefined: no receipt. */
   dataPlaneHealthy?: boolean;
+  /** node.clock_offset_ms and clock_measured_at; null: never reported. */
+  clock: { offsetMs: number; measuredAt: number } | null;
   security: { siteId: string; level: string; escalatedPaths: number }[];
 }
 interface FixtureSite {
@@ -74,8 +76,17 @@ function generate(seed: number, clusterIds: string[], now: number): Fixture {
     enrolledAt: chance(0.1) ? null : chance(0.2) ? ago(400_000) : ago(30 * 86400_000),
     lastSeenAt: chance(0.1) ? null : chance(0.7) ? ago(40_000) : ago(900_000),
     dataPlaneHealthy: chance(0.15) ? undefined : chance(0.85),
+    clock: null,
     security: [],
   }));
+  // Clock offsets from a stream of their own: the draws above stay what they were.
+  const clockRand = random(seed + 1);
+  for (const node of nodes)
+    if (clockRand() >= 0.2)
+      node.clock = {
+        offsetMs: Math.round((clockRand() * 2 - 1) * (clockRand() < 0.5 ? 2_000 : 400_000)),
+        measuredAt: now - Math.floor(clockRand() * (clockRand() < 0.8 ? 40_000 : 900_000)),
+      };
   const certificates = Array.from({ length: 12 }, () => ({
     id: randomUUID(),
     notAfter: chance(0.15)
@@ -206,6 +217,19 @@ function expected(f: Fixture, policy: AlertPolicy, now: number) {
         siteName: node.name,
         domain: "",
       });
+  for (const node of watched)
+    if (
+      node.clock &&
+      node.clock.measuredAt >= offline &&
+      Math.abs(node.clock.offsetMs) >= policy.clockSkewSeconds * 1000
+    )
+      active.set(`node_clock_skew/platform/${node.id}`, {
+        siteId: null,
+        kind: "node_clock_skew",
+        resourceId: node.id,
+        siteName: node.name,
+        domain: "",
+      });
   const elevated = new Set<string>();
   for (const node of f.nodes)
     if (node.status === "active" && node.lastSeenAt !== null && now - node.lastSeenAt <= 45_000)
@@ -280,6 +304,8 @@ describe("alert conditions", async () => {
         status: n.status,
         enrolledAt: date(n.enrolledAt),
         lastSeenAt: date(n.lastSeenAt),
+        clockOffsetMs: n.clock?.offsetMs ?? null,
+        clockMeasuredAt: date(n.clock?.measuredAt ?? null),
         securityState: n.security,
       })),
     );
@@ -351,6 +377,7 @@ describe("alert conditions", async () => {
         errorRatio: 0.2,
         minimumRequests: 100,
         windowMinutes: 5,
+        clockSkewSeconds: 30,
       },
       {
         nodeOfflineSeconds: 300,
@@ -358,6 +385,7 @@ describe("alert conditions", async () => {
         errorRatio: 0.5,
         minimumRequests: 10,
         windowMinutes: 15,
+        clockSkewSeconds: 120,
       },
     ];
     const sorted = (map: Map<string, Condition>) =>
@@ -370,6 +398,7 @@ describe("alert conditions", async () => {
       expect(new Set([...want.values()].map((c) => c.kind))).toEqual(
         new Set([
           "node_offline",
+          "node_clock_skew",
           "certificate_expiring",
           "origin_unavailable",
           "high_5xx",
