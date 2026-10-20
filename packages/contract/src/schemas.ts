@@ -1108,6 +1108,14 @@ export const node = z.object({
   certificateFailures: z.array(nodeCertificateFailure),
   /** Null until the node connects with a console that records it. */
   channel: nodeChannelStatus.nullable(),
+  /**
+   * How far the node's clock is ahead of the console's (ms, negative:
+   * behind) as last reported, and whether that is beyond the alert policy's
+   * clockSkewSeconds. Null for nodes before v1.5.0.
+   */
+  clock: z
+    .object({ offsetMs: z.number().int(), measuredAt: isoDateTime, skewed: z.boolean() })
+    .nullable(),
 });
 
 export const nodeUpdateInput = z.object({

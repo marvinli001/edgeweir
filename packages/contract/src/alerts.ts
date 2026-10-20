@@ -15,6 +15,11 @@ export const alertKind = z.enum([
    */
   "usage_warning",
   "usage_limit",
+  /**
+   * A node's clock is off from the console's by clockSkewSeconds or more
+   * (one alert per node, like node_offline; nodes since v1.5.0 report it).
+   */
+  "node_clock_skew",
 ]);
 /** Platform alerts (clusters, DNS): platform channels only, no subscriptions. */
 export const platformAlertKind = z.enum([
@@ -29,6 +34,12 @@ export const platformAlertKind = z.enum([
    * resolved when no node reports it).
    */
   "certificate_unloadable",
+  /**
+   * DNS reconciliation of a cluster has failed for 5 minutes without a
+   * success (resolved by the next success, or when nothing is written any
+   * more).
+   */
+  "dns_reconcile_failed",
 ]);
 export const alertEventKind = z.enum([...alertKind.options, ...platformAlertKind.options]);
 const endpoint = z
@@ -78,6 +89,7 @@ export const alertPolicy = z.object({
   errorRatio: z.number().min(0.01).max(1).default(0.2),
   minimumRequests: z.number().int().min(1).max(1000000).default(100),
   windowMinutes: z.number().int().min(1).max(60).default(5),
+  clockSkewSeconds: z.number().int().min(5).max(3600).default(30),
 });
 export const smtpInput = z.object({
   host: z.string().trim().min(1).max(253),
