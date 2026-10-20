@@ -320,8 +320,11 @@ downloads/
 
 节点的警告、错误与关键事件也在节点详情的「日志」页签，见[节点日志](../guide/node-logs.md)。
 
+在节点上执行 `sudo edgeweir-node diagnose`（v1.5.0 起）逐项检查身份、节点证书、控制台连通性、与控制台的时钟偏差、运行中的 agent、配置与数据面，每项一行（`ok`、`warn`、`fail`、`skip`），有 `fail` 时退出码 1；`--json` 输出完整结果。需要分析 agent 本身时，`sudo edgeweir-node pprof heap --output heap.pb.gz`（或 `profile`、`goroutine` 等）从本机诊断 socket 取 Go profile。
+
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
+| 节点详情的「时钟偏差」标「偏差过大」，或收到「节点时钟偏差过大」告警 | 节点主机没有时间同步，时钟比控制台快或慢超过告警规则的秒数 | 在节点上开启 NTP（如 `timedatectl set-ntp true`，或 chrony），之后的心跳会更新偏差。 |
 | `no enrollment token` | `sudo` 未保留 `EDGEWEIR_TOKEN` | 原样执行生成的命令：`export` 与 `sudo --preserve-env=EDGEWEIR_TOKEN`。 |
 | `the enrollment token is malformed (expected ewt_...)` | token 复制不完整 | 重新复制安装命令。 |
 | `systemd is required` | 主机无 systemd | 使用 systemd 主机，或加 `--no-start` 只安装与注册。 |

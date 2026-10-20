@@ -384,6 +384,7 @@ The outgoing mail server of email channels, set in the **SMTP** card of the **Al
 | Minimum requests | 1–1000000 | 100 | High server error ratio | Requests in the window reach this value |
 | Window (minutes) | 1–60 | 5 | High server error ratio | Time window for the 5xx ratio |
 | 5xx threshold (%) | 1–100 | 20 | High server error ratio | The 5xx ratio in the window reaches this value |
+| Clock skew (seconds) | 5–3600 | 30 | Node clock skewed | The clock offset (ahead or behind) a node reported within the offline threshold reaches this value; one alert per node, like Node offline. Nodes report it since v1.5.0; **Clock offset** on the node's details shows the last value |
 
 **Origin unavailable** has no threshold of its own: it fires when one node reports, within the offline threshold, every origin of the site unavailable. An origin is unavailable on that node when its passive or its active check result (either source) is unhealthy; see [Passive health check](origins-and-cache.en.md#passive-health-check) and [Active health check](origins-and-cache.en.md#active-health-check).
 
@@ -405,6 +406,9 @@ These alerts belong to a cluster, not to a site. They go only to channels with *
 | DNS mass removal blocked | The [mass removal protection](#mass-removal-protection) held a publication of a cluster back | The cluster's next publication that passes, or a forced one |
 | Scheduling rule acting on a node | A [scheduling rule](scheduling.en.md#scheduling-rules) took effect on a node; the name is "rule · node" | The action recovers; at once when the rule is disabled, deleted, or its line, conditions, or action change |
 | A node cannot load a certificate | A node reports it cannot load a certificate (see [HTTPS](https.en.md)); the name is the certificate's, `resourceId` its ID, the link points to **Certificates** | No node reports it any more |
+| DNS reconciliation failing | A cluster's DNS reconciliation has failed for 5 minutes in a row (provider unreachable, credentials no longer valid, a name conflict, …; the cause is the error of the cluster's DNS revision); the name is the cluster's, the link points to **DNS** | The cluster's next successful reconciliation, or the binding switched to manual / off with no records left to clean up |
+
+Deleting a cluster resolves its cluster alerts that are still firing.
 
 ## Subscribe to alerts
 
@@ -418,7 +422,7 @@ These alerts belong to a cluster, not to a site. They go only to channels with *
 | --- | --- |
 | Channels | One subscription per channel; **Subscribe** lists only enabled channels without a subscription and is unavailable when there is none |
 | Sites | **All sites** includes sites created later; otherwise tick at least one site |
-| Alert kinds | Node offline, Certificate expiring, Origin unavailable, High server error ratio, CC mitigation raised, Usage near its limit, Usage limit reached |
+| Alert kinds | Node offline, Node clock skewed, Certificate expiring, Origin unavailable, High server error ratio, CC mitigation raised, Usage near its limit, Usage limit reached |
 | Changes | Click **Edit** on the subscription row to change its sites, alert kinds, or **Enable**; a subscription with **Enable** off sends nothing and its row shows **Off** |
 | Deleted sites | The site leaves the subscription; a subscription left without sites is deleted with it |
 | Removal | Click **Unsubscribe** on the subscription row and confirm |
@@ -430,7 +434,7 @@ These alerts belong to a cluster, not to a site. They go only to channels with *
 | Item | Behavior |
 | --- | --- |
 | Events | A condition creates one event when it starts and one when it recovers; event IDs are stable |
-| Receiving channels | Channels with **Receive every alert** receive every alert; other channels receive only the alerts of the sites their subscription covers, and **Node offline** when the subscription covers any site in the node's cluster (or **All sites**) and includes that kind |
+| Receiving channels | Channels with **Receive every alert** receive every alert; other channels receive only the alerts of the sites their subscription covers, and **Node offline** and **Node clock skewed** when the subscription covers any site in the node's cluster (or **All sites**) and includes that kind |
 | Retries | After a failure, retries back off 2, 4, 8, and 16 minutes; each channel gets 5 attempts |
 | Batches | Checked every minute; at most 200 notifications per check, and deliveries that would start after 40 seconds wait for the next minute |
 | Duplicates | A lost receipt can cause duplicate notifications; webhook receivers deduplicate by event ID |

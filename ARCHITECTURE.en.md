@@ -301,7 +301,8 @@ Every RPC other than `Enroll` and `EnrollProbe` requires a client certificate ve
 | `RenewCertificate` | Rotate the node certificate |
 | `WatchConfig` | Server stream: revision notifications, task notifications, ban notifications (`bans-v1`), keepalives |
 | `GetConfig` | Snapshot, or diff against `base_revision`, with a revision receipt |
-| `ReportStatus` | Heartbeat, apply receipt, origin health and error codes (passive and active checks reported apart), ban state, host metrics (`metrics-v1`), cache zone usage (`cache-zone-v1`, kept in `node.cache_usage`); `probe` in the response tells the node whether it also probes |
+| `ReportStatus` | Heartbeat, apply receipt, origin health and error codes (passive and active checks reported apart), ban state, host metrics (`metrics-v1`), cache zone usage (`cache-zone-v1`, kept in `node.cache_usage`), the node's clock offset from the console (`clock_offset_millis`, kept in `node.clock_offset_ms`); `probe` in the response tells the node whether it also probes, and `console_time` is the console's time when it answered: the node reports the difference to the middle of the request's round trip as its next clock offset |
+| `CheckChannel` | No side effects: returns the node id of the certificate, the current node channel address and the console's time, also for disabled nodes; used before a node switches address, by `edgeweir-node set-server` to check a new address and by `edgeweir-node diagnose` to check connectivity and the clock |
 | `ReportStats`, `ReportStatsV2` | Per-minute pre-aggregated traffic statistics (`ReportStatsV2` also carries the L4 apps' minute statistics, `l4-v1`); deduplicated by batch sequence |
 | `ReportLogs` | Sampled access logs; deduplicated by batch sequence |
 | `ReportNodeLogs` | The node's own warnings, errors and whitelisted events (agent, supervisor, OpenResty's error log; `node-logs-v1`); deduplicated by batch sequence and stored in `node_log_entry`; the console removes secrets again before storing, and the drops the node counts (rate limit, backlog) become one `dropped` row |
@@ -441,7 +442,7 @@ Access logs are sampled per site; the sample rate defaults to 0 (off). Per-minut
 | Hourly statistics | 90 days |
 | Daily statistics | 365 days |
 
-Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificates, unavailable origins, and high 5xx rates (the `cc_mitigation` alert fires on a node's event and resolves once no node reports the site above normal), create `alert_event` rows, fan them out to `alert_delivery` by `alert_subscription` (one per channel, covering a set of sites in `alert_subscription_site` or all sites with `all_sites`), and send them through an `alert_channel` (webhook, email, DingTalk, WeCom, or Telegram); at delivery the channel must still be enabled and the subscription still valid, and "receive every alert" channels get every alert. Cluster alerts (configuration canary rolled back, DNS mass removal blocked, a scheduling rule acting on a node `scheduling_action`, and others) are raised and resolved by their own flows and go only to "receive every alert" channels. Access logs and AccessKeys: [Access logs and AccessKeys](docs/guide/access-logs.en.md).
+Alerts (`alerts.sweep`, every minute) detect offline nodes, skewed node clocks (the offset of the last heartbeat at or above the alert policy's seconds; one alert per node, like offline nodes), expiring certificates, unavailable origins, and high 5xx rates (the `cc_mitigation` alert fires on a node's event and resolves once no node reports the site above normal), create `alert_event` rows, fan them out to `alert_delivery` by `alert_subscription` (one per channel, covering a set of sites in `alert_subscription_site` or all sites with `all_sites`), and send them through an `alert_channel` (webhook, email, DingTalk, WeCom, or Telegram); at delivery the channel must still be enabled and the subscription still valid, and "receive every alert" channels get every alert. Cluster alerts (configuration canary rolled back, DNS mass removal blocked, DNS reconciliation failing `dns_reconcile_failed` (5 minutes of failures; resolved by a success or once nothing needs writing), a scheduling rule acting on a node `scheduling_action`, and others) are raised and resolved by their own flows, resolved when the cluster is deleted, and go only to "receive every alert" channels. Access logs and AccessKeys: [Access logs and AccessKeys](docs/guide/access-logs.en.md).
 
 ## Background jobs
 
@@ -495,7 +496,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `region` | Region dictionary |
 | `cluster` | Clusters: sets of nodes that share one revision stream; extra listener ports, client IP, unknown host settings (`unknown_hosts`) and the default site (`default_site_id`, cleared when the site is deleted) |
 | `node_group` | Node groups, optionally tied to a region |
-| `node` | Nodes: status, capabilities, certificate serial and fingerprint (after a renewal also the replaced certificate's serial), last heartbeat and its connection's source address, why its certificate was last refused, last reported ban state, CC level per site and host metrics, whether the node also probes |
+| `node` | Nodes: status, capabilities, certificate serial and fingerprint (after a renewal also the replaced certificate's serial), last heartbeat and its connection's source address, why its certificate was last refused, last reported ban state, CC level per site and host metrics, whether the node also probes, last reported clock offset and when |
 | `node_ip` | Node IP addresses: reported by the node (`reported`) and scheduling addresses the operator configured (`configured`, level 0 primary, 1 backup 1, 2 backup 2) |
 | `node_address_state` | Probe reachability of scheduling addresses: failing since, down flag, answering since |
 | `probe` | Regional probes: name, region, enabled, certificate serial and expiry, last seen, version |
@@ -549,7 +550,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `dns_credential` | DNS provider credentials and zone for ACME DNS-01, envelope-encrypted |
 | `dns_challenge_lease` | Cleanup obligations of DNS-01 TXT records |
 | `platform_dns_provider` | DNS steering provider accounts and their zones, credentials envelope-encrypted |
-| `dns_binding` | A cluster's DNS binding: mode, provider account, cluster domain, TTL, lines (node group, resolution line, ordered backup node groups, minimum healthy IPs), desired / applied DNS revision |
+| `dns_binding` | A cluster's DNS binding: mode, provider account, cluster domain, TTL, lines (node group, resolution line, ordered backup node groups, minimum healthy IPs), desired / applied DNS revision, since when reconciliation has kept failing |
 | `dns_revision` | A cluster's DNS revisions: binding settings, record set (with resolution lines), managed names, status, reason code and parameters |
 | `scheduling_rule` | A cluster's scheduling rules: optional line, conditions (metric, aggregate, comparator, threshold, duration, region), and / or, action, hold and recovery times |
 | `scheduling_state` | Each rule's state per node: since when each condition holds, when the action started, since when it is clear |
@@ -670,6 +671,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0071_origin_protection` | `origin_client_certificate`, `origin_certificate`; `origin_pool.tls_trust`, `origin_pool.client_certificate`, `pki_authority.crl_pem` |
 | `0072_site_auto_mitigation` | `site_auto_mitigation` |
 | `0073_origin_stats` | `origin_stats` (fetches per origin) in minute, hour and day statistics and the view `traffic_hour_stats` |
+| `0074_node_clock_dns_failures` | `node.clock_offset_ms`, `node.clock_measured_at` (node clock offset); `dns_binding.failing_since` (since when DNS reconciliation has kept failing) |
 
 ## Build output
 

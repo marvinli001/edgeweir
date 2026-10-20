@@ -320,8 +320,11 @@ The release source for agent self-upgrades is set in **System settings → Node 
 
 A node's warnings, errors and key events are also in the **Logs** tab of its details, see [Node logs](../guide/node-logs.en.md).
 
+On the node, `sudo edgeweir-node diagnose` (from v1.5.0) checks the identity, the node certificate, the connection to the console, the clock offset from the console, the running agent, the configuration and the data plane, one line each (`ok`, `warn`, `fail`, `skip`), and exits with 1 when a check fails; `--json` prints the full results. To look into the agent itself, `sudo edgeweir-node pprof heap --output heap.pb.gz` (or `profile`, `goroutine`, …) fetches a Go profile from the node's local diagnostics socket.
+
 | Symptom | Cause | Action |
 | --- | --- | --- |
+| **Clock offset** on the node's details is marked **Skewed**, or a **Node clock skewed** alert arrives | The node's host does not synchronize its time: its clock is ahead or behind the console's by the alert rule's seconds or more | Turn on NTP on the node (for example `timedatectl set-ntp true`, or chrony); later heartbeats update the offset. |
 | `no enrollment token` | `sudo` dropped `EDGEWEIR_TOKEN` | Run the generated command unchanged: `export` and `sudo --preserve-env=EDGEWEIR_TOKEN`. |
 | `the enrollment token is malformed (expected ewt_...)` | Token copied incompletely | Copy the install command again. |
 | `systemd is required` | No systemd on the host | Use a systemd host, or add `--no-start` to install and enroll only. |

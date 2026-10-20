@@ -301,8 +301,8 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 | `RenewCertificate` | 轮换节点证书 |
 | `WatchConfig` | 服务端流：revision 通知、任务通知、封禁通知（`bans-v1`）、keepalive |
 | `GetConfig` | 快照或相对 `base_revision` 的 diff，附 revision 回执 |
-| `ReportStatus` | 心跳、应用回执、源站健康状态与错误码（被动检查与主动检查分别上报）、封禁状态、主机指标（`metrics-v1`）、缓存区用量（`cache-zone-v1`，存入 `node.cache_usage`）、在用的节点通道地址（`channel-follow-v1`，与本次连接的 TLS 服务器名一起存入 `node.channel`）；响应的 `probe` 告诉节点是否兼任探针，`channel` 给出当前的节点通道地址（`channel-follow-v1`） |
-| `CheckChannel` | 无副作用：返回证书对应的节点 ID 与当前的节点通道地址，停用的节点也可调用；节点切换地址前、`edgeweir-node set-server` 用它检查新地址 |
+| `ReportStatus` | 心跳、应用回执、源站健康状态与错误码（被动检查与主动检查分别上报）、封禁状态、主机指标（`metrics-v1`）、缓存区用量（`cache-zone-v1`，存入 `node.cache_usage`）、在用的节点通道地址（`channel-follow-v1`，与本次连接的 TLS 服务器名一起存入 `node.channel`）、节点时钟相对控制台的偏差（`clock_offset_millis`，存入 `node.clock_offset_ms`）；响应的 `probe` 告诉节点是否兼任探针，`channel` 给出当前的节点通道地址（`channel-follow-v1`），`console_time` 是控制台应答时的时间，节点以它与本次请求往返的中点之差作为下次上报的时钟偏差 |
+| `CheckChannel` | 无副作用：返回证书对应的节点 ID、当前的节点通道地址与控制台时间，停用的节点也可调用；节点切换地址前、`edgeweir-node set-server` 用它检查新地址，`edgeweir-node diagnose` 用它检查连通性与时钟 |
 | `ReportStats`、`ReportStatsV2` | 按分钟预聚合的流量统计（`ReportStatsV2` 另含 L4 应用的分钟统计，`l4-v1`）；按批次序号去重 |
 | `ReportLogs` | 采样访问日志；按批次序号去重 |
 | `ReportNodeLogs` | 节点自己的警告、错误与白名单事件（agent、监督进程、OpenResty 的 error log，`node-logs-v1`）；按批次序号去重，存入 `node_log_entry`；控制台入库前再脱敏一次，节点报告的限速与积压丢弃条数记为一行 `dropped` |
@@ -443,7 +443,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | 小时统计 | 90 天 |
 | 天统计 | 365 天 |
 
-告警（`alerts.sweep`，每分钟）检测节点离线、证书即将到期、源站不可用与 5xx 过高（CC 防护升级 `cc_mitigation` 由节点事件触发，节点不再报告升级后恢复），生成 `alert_event`，按 `alert_subscription` 生成 `alert_delivery`，经 `alert_channel`（webhook、邮件、钉钉、企业微信或 Telegram）发送；订阅按渠道，覆盖一组网站（`alert_subscription_site`）或全部网站（`all_sites`）；投递时重新检查渠道是否启用与订阅是否仍然有效，「接收所有告警」的渠道接收全部告警。集群告警（配置金丝雀回滚、DNS 大面积摘除被阻止、调度规则作用于节点 `scheduling_action` 等）由各自的流程触发与解除，只投递到「接收所有告警」的渠道。访问日志与 AccessKey 的使用见 [访问日志与 AccessKey](docs/guide/access-logs.md)。
+告警（`alerts.sweep`，每分钟）检测节点离线、节点时钟偏差（最近一次心跳上报的偏差达到告警策略的秒数，与节点离线一样每个节点一条）、证书即将到期、源站不可用与 5xx 过高（CC 防护升级 `cc_mitigation` 由节点事件触发，节点不再报告升级后恢复），生成 `alert_event`，按 `alert_subscription` 生成 `alert_delivery`，经 `alert_channel`（webhook、邮件、钉钉、企业微信或 Telegram）发送；订阅按渠道，覆盖一组网站（`alert_subscription_site`）或全部网站（`all_sites`）；投递时重新检查渠道是否启用与订阅是否仍然有效，「接收所有告警」的渠道接收全部告警。集群告警（配置金丝雀回滚、DNS 大面积摘除被阻止、DNS 对账持续失败 `dns_reconcile_failed`（连续失败 5 分钟，成功或不再需要写入时解除）、调度规则作用于节点 `scheduling_action` 等）由各自的流程触发与解除，集群删除时一并解除，只投递到「接收所有告警」的渠道。访问日志与 AccessKey 的使用见 [访问日志与 AccessKey](docs/guide/access-logs.md)。
 
 ## 后台任务
 
@@ -497,7 +497,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `region` | 区域字典 |
 | `cluster` | 集群：共享一条 revision 序列的节点集合；附加监听端口、访客 IP、未知域名设置（`unknown_hosts`）与默认网站（`default_site_id`，删除网站时置空） |
 | `node_group` | 节点组，可关联区域 |
-| `node` | 节点：状态、能力清单、证书序列号与指纹（续期后还有被替换证书的序列号）、最近心跳与其连接的源地址、最近一次证书被拒绝的原因、最近上报的封禁状态、各网站的 CC 级别与主机指标、是否兼任探针 |
+| `node` | 节点：状态、能力清单、证书序列号与指纹（续期后还有被替换证书的序列号）、最近心跳与其连接的源地址、最近一次证书被拒绝的原因、最近上报的封禁状态、各网站的 CC 级别与主机指标、是否兼任探针、最近上报的时钟偏差与上报时间 |
 | `node_ip` | 节点的 IP 地址：节点上报的（`reported`）与运营者配置的调度地址（`configured`，级别 0 主、1 备 1、2 备 2） |
 | `node_address_state` | 调度地址的探针可达性：失败起点、不可达标记、恢复起点 |
 | `probe` | 区域探针：名称、区域、启用、证书序列号与到期、最后在线、版本 |
@@ -552,7 +552,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `dns_credential` | ACME DNS-01 使用的 DNS 服务商凭据与区域，信封加密 |
 | `dns_challenge_lease` | DNS-01 TXT 记录的清理责任 |
 | `platform_dns_provider` | DNS 调度的服务商账号与区域，凭据信封加密 |
-| `dns_binding` | 集群的 DNS 绑定：模式、服务商账号、集群域名、TTL、线路（节点组、解析线路、有序备用节点组、最少健康 IP 数）、期望 / 已应用的 DNS revision |
+| `dns_binding` | 集群的 DNS 绑定：模式、服务商账号、集群域名、TTL、线路（节点组、解析线路、有序备用节点组、最少健康 IP 数）、期望 / 已应用的 DNS revision、对账连续失败的起始时间 |
 | `dns_revision` | 集群的 DNS revision：绑定设置、记录集（含解析线路）、托管名称、状态、原因码与参数 |
 | `scheduling_rule` | 集群的智能调度规则：可选线路、条件（指标、聚合、比较、阈值、持续时间、区域）、and / or、动作、保持与恢复时间 |
 | `scheduling_state` | 每条规则对每个节点的状态：各条件成立起点、动作起点、解除起点 |
@@ -673,6 +673,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0071_origin_protection` | `origin_client_certificate`、`origin_certificate`；`origin_pool.tls_trust`、`origin_pool.client_certificate`、`pki_authority.crl_pem` |
 | `0072_site_auto_mitigation` | `site_auto_mitigation` |
 | `0073_origin_stats` | 分钟、小时、天统计与视图 `traffic_hour_stats` 的 `origin_stats`（按源站的回源计数） |
+| `0074_node_clock_dns_failures` | `node.clock_offset_ms`、`node.clock_measured_at`（节点时钟偏差）；`dns_binding.failing_since`（对账连续失败的起始时间） |
 
 ## 构建产物
 
