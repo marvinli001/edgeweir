@@ -1,6 +1,6 @@
 # Origins and cache
 
-A site's origin pool and origin groups, health checks and session affinity, origin connections and the request body limit, cache rules, cache key, the PURGE method, X-Cache and charset, the cluster's cache zone, and purge and prefetch.
+A site's origin pool and origin groups, health checks, origin quality and session affinity, origin connections and the request body limit, cache rules, cache key, the PURGE method, X-Cache and charset, the cluster's cache zone, and purge and prefetch.
 
 ## Concepts
 
@@ -155,6 +155,19 @@ Error codes need node proto v0.2.1 or later; other errors and older nodes show t
 | Healthy | Up | Selected |
 
 When every origin is down, the node still tries primaries, then backups (fail open).
+
+### Origin quality
+
+The "Origin quality" card on the Origins tab shows how each origin answered over the selected range. The numbers come from counters the nodes report every minute, so the access log sample rate does not affect them.
+
+| Item | Meaning |
+| --- | --- |
+| Fetches | Every attempt sent to the origin; a retry counts again. Cache-lock, background update and prefetch fetches count; cache hits and active health checks do not |
+| Error rate | (no connection + timeout + TLS failed + invalid answer + 5xx) ÷ fetches; hover the rate for each count. No connection, timeout and TLS failed are judged as in the passive health check; an invalid answer is one that is no HTTP/1.x response; 5xx includes 500 |
+| p50 / p95 time | Time from the attempt to the response header for attempts the origin answered (body transfer not included). Nodes count in buckets of 10, 25, 50, 100, 250 and 500 ms and 1, 2.5, 5 and 10 s; percentiles are interpolated inside a bucket, and anything above 10 s shows as "> 10 s" |
+| Lines | Each origin's p95 time and error rate over time; periods without fetches have no point |
+| Range | Shared with the Statistics tab; 7 days and 30 days read the hourly rollups. An origin removed and added again starts a new record |
+| Partial | While a node of the cluster runs a version before 1.4.0, a one-line note says so and the numbers cover the newer nodes only |
 
 ### Session affinity
 

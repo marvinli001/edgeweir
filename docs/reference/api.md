@@ -336,6 +336,7 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
 | `sites.purgeAll` | `POST /sites/{id}/purge`：全站刷新，等同 `POST /cache-tasks` 的 `{"type":"site","siteIds":["<网站 ID>"]}`，返回任务（不再发布配置版本、不再修改 `cacheGeneration`） |
 | `sites.update` | `PATCH /sites/{id}`（`originSettings`、`cacheSettings`） |
 | `sites.originHealth` | `GET /sites/{id}/origin-health` |
+| `sites.originQuality` | `GET /sites/{id}/origins/quality` |
 | `errorPages.get` | `GET /sites/{id}/error-pages` |
 | `errorPages.update` | `PUT /sites/{id}/error-pages` |
 | `settings.errorPages`、`settings.setErrorPages` | `GET`、`PUT /settings/error-pages` |

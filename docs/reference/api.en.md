@@ -336,6 +336,7 @@ Behavior: [HTTPS and certificates](../guide/https.en.md#compression) and [OWASP 
 | `sites.purgeAll` | `POST /sites/{id}/purge`: a whole-site purge, the same as `POST /cache-tasks` with `{"type":"site","siteIds":["<site ID>"]}`; returns the task (it no longer publishes a revision or changes `cacheGeneration`) |
 | `sites.update` | `PATCH /sites/{id}` (`originSettings`, `cacheSettings`) |
 | `sites.originHealth` | `GET /sites/{id}/origin-health` |
+| `sites.originQuality` | `GET /sites/{id}/origins/quality` |
 | `errorPages.get` | `GET /sites/{id}/error-pages` |
 | `errorPages.update` | `PUT /sites/{id}/error-pages` |
 | `settings.errorPages`, `settings.setErrorPages` | `GET`, `PUT /settings/error-pages` |

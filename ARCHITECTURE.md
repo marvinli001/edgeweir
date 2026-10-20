@@ -386,8 +386,9 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 1. 节点在边缘层确定网站后对每个请求查一次 GeoIP（worker 缓存命中时不访问 agent；这类查询 50 毫秒超时、失败后该 worker 5 秒内不再查询），日志与统计共用结果。日志的回源地址由回源层的内部响应头 `X-Edgeweir-Upstream` 带回边缘层（边缘层 `proxy_hide_header`，缓存命中不记录回源信息）。
 2. 拦截原因由节点在拒绝处记录（`edgeweir.reasons`，同一请求以第一个为准）；确定网站之后被拒绝的请求都计入统计与日志。网站开启 `Site.log_blocked`（proto `v0.30.0`，能力 `access-logs-v2`）时，有拦截原因的请求不论采样率写日志，与记录规则共用每节点每网站每秒 100 条的额度；`log_query`、`log_headers`、`log_peer` 决定可选字段，控制台只在网站当前开启时保存。
 3. 统计维度（`MinuteStats` 14–24，能力 `stats-dims-v1`，只用于统计）在节点每个 worker 的分钟桶中累积，分钟结束时与热门 URL / IP 一起写入共享字典 `edgeweir_topstats`；控制台按键相加（运营商与来源保留前 50），随分钟 / 小时 / 天汇总，`analytics.dimensions` 读取。AS 名称存 `asn_name`。
-4. 访问日志保留期是系统设置 `log_retention`：PostgreSQL 的分区维护与写入、查询的最早时间按它计算；ClickHouse 在保存与进程启动后的第一次维护时执行 `ALTER TABLE access_log MODIFY TTL`。
-5. `edgeweir-node accesslog` 经控制接口 `GET /v1/logs/tap` 读取共享字典 `edgeweir_tap`：只有查看者续期的标记存在时，log 阶段才为请求生成记录（10 秒过期，每节点每秒至多 2000 条），不受采样率影响，也不进入上报队列。节点不把访问日志写入本地文件。详见 [访问日志与 AccessKey](docs/guide/access-logs.md)。
+4. 按源站的回源计数（`MinuteStats.origins`，能力 `origin-stats-v1`，只用于统计）：节点在回源层的 log 阶段对每次回源尝试按网站与源站 ID 计数（尝试、无法连接、超时、TLS 失败、无效回答、5xx，以及有回答的尝试到响应头的时间：11 档直方图与总和），放进同一个分钟桶，每站每分钟至多 64 个源站。控制台只收 UUID 形式的源站 ID，存为 `origin_stats`（键 `<源站 ID>:<字段>`）并按键相加、随分钟 / 小时 / 天汇总；`sites.originQuality` 只给网站当前的源站，百分位在直方图档内线性估算。详见 [源站与缓存](docs/guide/origins-and-cache.md#回源质量)。
+5. 访问日志保留期是系统设置 `log_retention`：PostgreSQL 的分区维护与写入、查询的最早时间按它计算；ClickHouse 在保存与进程启动后的第一次维护时执行 `ALTER TABLE access_log MODIFY TTL`。
+6. `edgeweir-node accesslog` 经控制接口 `GET /v1/logs/tap` 读取共享字典 `edgeweir_tap`：只有查看者续期的标记存在时，log 阶段才为请求生成记录（10 秒过期，每节点每秒至多 2000 条），不受采样率影响，也不进入上报队列。节点不把访问日志写入本地文件。详见 [访问日志与 AccessKey](docs/guide/access-logs.md)。
 
 ## 网站标签、批量操作与复制设置
 
@@ -671,6 +672,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0070_node_logs` | `node_log_entry`、`node_log_entry_cursor` |
 | `0071_origin_protection` | `origin_client_certificate`、`origin_certificate`；`origin_pool.tls_trust`、`origin_pool.client_certificate`、`pki_authority.crl_pem` |
 | `0072_site_auto_mitigation` | `site_auto_mitigation` |
+| `0073_origin_stats` | 分钟、小时、天统计与视图 `traffic_hour_stats` 的 `origin_stats`（按源站的回源计数） |
 
 ## 构建产物
 
