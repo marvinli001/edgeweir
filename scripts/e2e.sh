@@ -208,13 +208,14 @@
 #   g14-dns test resolver (profile g14); challenge page texts; challenge
 #   failure bans; Playwright e2e/g14.spec.ts.
 #   Site parity G16 (scripts/e2e-g16.mjs, after G14): both nodes report
-#   access-logs-v2 and stats-dims-v1; access log lines carry User-Agent,
+#   access-logs-v2, stats-dims-v1 and origin-stats-v1; access log lines carry User-Agent,
 #   Referer, HTTP version, scheme, country and network, the query string and
 #   a chosen header, request bytes, content type and the origin; blocked and
 #   rate limited requests of a site that samples nothing are logged with
 #   their reason and rule; every new filter; log retention moves the
 #   PostgreSQL partitions; edgeweir-node accesslog prints live requests;
-#   statistics dimensions appear; Playwright e2e/g16.spec.ts.
+#   statistics dimensions and each origin's fetches (origin-stats-v1)
+#   appear; Playwright e2e/g16.spec.ts.
 #   Site parity G17 (scripts/e2e-g17.mjs, after G16): sites tagged in one
 #   batch and filtered by tag (any, all); the preview of copying rules, cache
 #   rules and the cache key to two sites and one without the origin group the

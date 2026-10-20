@@ -2,7 +2,7 @@
 // G14. `node` and `node-upgrade-peer` serve the default cluster; client-a and
 // client-b send the requests (the GeoIP fixture puts the e2e network in NZ,
 // AS64513 "Synthetic AS64513"); whoami is the origin.
-//   a. both nodes report access-logs-v2 and stats-dims-v1; the site's
+//   a. both nodes report access-logs-v2, stats-dims-v1 and origin-stats-v1; the site's
 //      features allow the log options
 //   b. g16-logs (sample 100%, query string and X-Trace-Id recorded, cached):
 //      a line carries User-Agent, Referer without its query, HTTP 1.1, http,
@@ -27,6 +27,8 @@
 //      name, the referring host, chrome / windows / desktop, HTTP 1.1, no
 //      TLS, block reasons rule and rate_limit; the overview's countries
 //      include NZ
+//   h. origin quality (ADR-0052): g16-logs' one origin, whoami, has fetches
+//      the nodes answered, header time percentiles and no errors
 // `node scripts/e2e-g16.mjs --cleanup` removes its sites and those
 // apps/console/e2e/g16.spec.ts leaves (g16-ui-*) and resets the retention.
 import assert from "node:assert/strict";
@@ -45,7 +47,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const HOST = { logs: "logs.g16.test", block: "block.g16.test" };
 const SITES = { logs: "g16-logs", block: "g16-block" };
-const G16_FEATURES = ["access-logs-v2", "stats-dims-v1"];
+const G16_FEATURES = ["access-logs-v2", "stats-dims-v1", "origin-stats-v1"];
 const CHROME =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36";
 const REFERER = "https://ref.g16.example/from?secret=g16";
@@ -609,6 +611,34 @@ try {
   assert.ok(overview.countries.some((c) => c.country === "NZ"));
   pass(
     `g. dimensions: ${dims.countries.map((c) => `${c.country || "?"} ${c.requests}`).join(", ")}; AS64513 ${dims.asns[0]?.name}; referrer ${dims.referers[0]?.host}; ${dims.browsers.map((b) => b.key).join("/")}; block reasons ${blockDims.blockReasons.map((r) => `${r.key} ${r.requests}`).join(", ")}; overview NZ`,
+  );
+
+  // ---------------------------------------------------------------- h
+  // Fetches from each origin (origin-stats-v1, ADR-0052): g16-logs' requests reached whoami.
+  let quality;
+  await waitFor(
+    "origin quality after the traffic",
+    async () => {
+      quality = await admin.ok("GET", `/sites/${sites.logs.id}/origins/quality?range=1h`);
+      const [whoami] = quality.items;
+      return whoami?.requests > 0 && whoami.answered > 0 && whoami.p95Ms !== null;
+    },
+    200,
+    5000,
+    () => JSON.stringify(quality?.items),
+  );
+  const [whoami] = quality.items;
+  assert.equal(quality.items.length, 1);
+  assert.equal(whoami.address, "whoami");
+  assert.equal(whoami.errors, 0, JSON.stringify(whoami.failures));
+  assert.ok(whoami.p50Ms <= whoami.p95Ms && whoami.p95Ms <= whoami.p99Ms, JSON.stringify(whoami));
+  assert.equal(
+    whoami.series.requests.reduce((a, b) => a + b, 0),
+    whoami.requests,
+  );
+  assert.equal(quality.unsupportedNodes, 0);
+  pass(
+    `h. origin quality: whoami ${whoami.requests} fetch(es), ${whoami.answered} answered, p50 ${whoami.p50Ms} ms, p95 ${whoami.p95Ms} ms, ${whoami.errors} error(s)`,
   );
 
   finished = true;

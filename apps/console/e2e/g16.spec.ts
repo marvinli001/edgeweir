@@ -195,6 +195,24 @@ test("G16: the statistics dimension cards and the overview's countries", async (
   expect(pageErrors).toEqual([]);
 });
 
+test("G16: origin quality on the origins tab", async ({ page }) => {
+  const pageErrors = errors(page);
+  await signedIn(page);
+  const logsId = await siteNamed(page, LOGS_SITE);
+  await page.goto(`/sites/${logsId}?tab=origins&range=1h`);
+  const card = page.getByTestId("origin-quality");
+  await expect(card).toBeVisible();
+  const row = card.getByTestId("origin-quality-row");
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText("whoami:80");
+  await expect(row.getByTestId("origin-quality-error-rate")).toHaveText("0%");
+  await expect(row.getByTestId("origin-quality-p95")).toContainText("毫秒");
+  await expect(card.getByTestId("origin-quality-charts")).toBeVisible();
+  await expect(card.getByTestId("origin-quality-partial")).toHaveCount(0);
+  await check(page, "origin-quality");
+  expect(pageErrors).toEqual([]);
+});
+
 test("G16: block reasons and the challenge pass rate on the attacks tab", async ({ page }) => {
   const pageErrors = errors(page);
   await signedIn(page);
