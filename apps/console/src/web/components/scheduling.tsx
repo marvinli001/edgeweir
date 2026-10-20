@@ -526,7 +526,8 @@ function RuleDialog({
       />
       <FieldSet className="gap-3">
         <FieldLegend variant="label">{m.scheduling_conditions()}</FieldLegend>
-        <ol className="flex flex-col gap-3">
+        {/* Flat rows split by hairlines, as lists in cards are. */}
+        <ol className="flex flex-col divide-y border-y">
           {draft.conditions.map((c, index) => (
             <ConditionEditor
               key={c.key}
@@ -581,7 +582,7 @@ function ConditionEditor({
   const id = (field: string) => `scheduling-condition-${c.key}-${field}`;
   return (
     <li
-      className="grid gap-3 rounded-xl border p-3 animate-enter"
+      className="grid gap-3 py-3 animate-enter"
       style={{ animationDelay: `${index * 40}ms` }}
       data-testid="scheduling-condition"
     >

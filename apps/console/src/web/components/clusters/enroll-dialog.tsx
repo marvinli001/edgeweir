@@ -215,7 +215,7 @@ function EnrollDialog({
           ) : null}
           {optionsOpen ? (
             <form
-              className="animate-enter rounded-xl border p-3"
+              className="animate-enter border-t pt-4"
               onSubmit={async (event) => {
                 event.preventDefault();
                 try {
