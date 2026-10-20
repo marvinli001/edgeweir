@@ -44,6 +44,10 @@
 #   database; retention (1 day, 1,000 per node) deletes backdated rows and
 #   rows over the limit at the console's start; Playwright
 #   e2e/node-logs.spec.ts.
+#   Node diagnostics (scripts/e2e-diagnostics.mjs, ADR-0053): the core node
+#   reports its clock offset (within 2 s, not skewed); `edgeweir-node
+#   diagnose` passes every check; `edgeweir-node pprof` writes heap and CPU
+#   profiles from the agent's diagnostics socket.
 #   Core gaps P0 (scripts/e2e-p0.mjs): Idempotency-Key, service accounts with
 #   scopes disabling a site, usage and its completeness watermark,
 #   configuration canary with automatic promotion and rollback, DNS mass
@@ -323,7 +327,7 @@ done
 # (.e2e/*-state.json, or clusters and nodes they create). Every section needs
 # core, which only runs on a fresh stack.
 SECTIONS=(
-  "core:" "m1:" "analytics:" "m2:" "install:" "wss:" "channel:" "node-logs:" "m3:" "m4:" "m5:" "m6-logs:m5" "m6-upgrades:m5"
+  "core:" "m1:" "analytics:" "m2:" "install:" "wss:" "channel:" "node-logs:" "diagnostics:" "m3:" "m4:" "m5:" "m6-logs:m5" "m6-upgrades:m5"
   "p0:m5 m6-upgrades" "g1:p0 m5 m6-upgrades" "g2:m3 m6-upgrades" "g3:m6-upgrades" "g4:m6-upgrades"
   "g5:m6-upgrades" "dns:m5 m6-upgrades" "g6:dns m5 m6-upgrades" "g7:m6-upgrades" "h2:m6-upgrades"
   "g8:m6-upgrades" "g9:m6-upgrades" "g15:m6-upgrades" "g10:dns m5 m6-upgrades" "g11:m6-upgrades"
@@ -1356,6 +1360,13 @@ section_node_logs() {
 step "Node logs: the node's warnings and events reach its logs tab without secrets; retention prunes them"
 story node-logs --cleanup
 pass "Node log checks passed"
+}
+
+# --------------------------------------------------------- section diagnostics
+section_diagnostics() {
+step "Node diagnostics: clock offset in the heartbeats, edgeweir-node diagnose and pprof"
+part checks node scripts/e2e-diagnostics.mjs || fail "diagnostics end-to-end checks failed"
+pass "Node diagnostics checks passed"
 }
 
 # ------------------------------------- sections m3 ... g19 (scripts/e2e-*.mjs)
