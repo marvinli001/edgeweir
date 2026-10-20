@@ -11,9 +11,10 @@
 //      origin), bidirectional streaming (each message only after the echo
 //      of the one before) and an error status in the trailers
 //   e. omitted from an update, HTTP/2 and gRPC stay; back on HTTP/1.1 the
-//      nodes no longer reach the h2c-only origin (its HTTP/2 answer to an
-//      HTTP/1.1 request is no HTTP/1.1 response: nginx passes such bytes on
-//      as an HTTP/0.9 body, or answers 502)
+//      nodes no longer reach the h2c-only origin: its HTTP/2 answer to an
+//      HTTP/1.1 request is no HTTP/1.1 response, and the node answers 502 at
+//      once (nginx alone would pass the bytes on as an HTTP/0.9 body after
+//      its 65 s keepalive timeout)
 // State for apps/console/e2e/h2.spec.ts: .e2e/h2-state.json (the site, left
 // on HTTP/1.1). `node scripts/e2e-h2.mjs --cleanup` deletes the site.
 import assert from "node:assert/strict";
@@ -262,19 +263,26 @@ const back = await a("PATCH", `/sites/${site.id}`, {
 });
 assert.equal(back.site.originSettings.protocol, "http1");
 await synced("both nodes apply HTTP/1.1");
-// Each answer takes about a minute (the edge passes the origin's bytes on only when the node's
-// own hop to its origin layer times out, whatever the site's read timeout), so both nodes are
-// asked at once.
+// Both nodes are asked at once. The origin's answer is no HTTP/1.1 response: the node's origin
+// layer drops it and the edge answers 502 within seconds (before the node's fix each answer took
+// about a minute: the edge passed the origin's bytes on only when its hop to the origin layer
+// timed out, whatever the site's read timeout, and the client got them as HTTP/0.9).
+const asked = Date.now();
 const unreached = await Promise.all(
   Object.entries(addresses).map(async ([service, address]) => {
     const r = await get(address, "/proto");
     assert.ok(
-      !r.startsWith("200 ") && !r.includes(`HTTP/2.0 ${DOMAIN}`),
-      `${service} with HTTP/1.1 to an h2c-only origin: ${r}`,
+      r.startsWith("502 "),
+      `${service} with HTTP/1.1 to an h2c-only origin: ${r.slice(0, 80)}`,
+    );
+    assert.ok(
+      !r.includes(`HTTP/2.0 ${DOMAIN}`),
+      `${service}: the origin's answer reached the client: ${r.slice(0, 80)}`,
     );
     return `${service}: ${r.slice(0, 60)}`;
   }),
 );
+assert.ok(Date.now() - asked < 20_000, `the 502 took ${Date.now() - asked} ms`);
 pass(
-  `an update without the protocol keeps HTTP/2 and gRPC; back on HTTP/1.1 the nodes no longer reach the h2c-only origin (${unreached.join("; ")})`,
+  `an update without the protocol keeps HTTP/2 and gRPC; back on HTTP/1.1 the nodes answer 502 at once for the h2c-only origin (${unreached.join("; ")})`,
 );
