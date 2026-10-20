@@ -1,8 +1,9 @@
 import { schema } from "@edgeweir/db";
-import { eq, like } from "drizzle-orm";
+import { and, desc, eq, like } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/server/app";
-import { massRemoval, reconcileDns } from "../../src/server/services/dns";
+import { DNS_FAILURE_ALERT_MS, massRemoval, reconcileDns } from "../../src/server/services/dns";
+import { raisePlatformAlert } from "../../src/server/services/platform-alerts";
 import { latestRevision } from "../../src/server/services/revisions";
 import { dnsFixture, resolve } from "./dns-fixture";
 import {
@@ -295,6 +296,42 @@ describe("cluster DNS bindings", async () => {
     expect((await rpcError(admin.dns.reconcile({ clusterId: a.clusterId }))).code).toBe(
       "DNS_PROVIDER_UNREACHABLE",
     );
+    // dns_reconcile_failed fires once the failures have lasted 5 minutes.
+    const reconcileAlert = async () =>
+      (
+        await ctx.db
+          .select({ status: schema.alertEvent.status })
+          .from(schema.alertEvent)
+          .where(
+            and(
+              eq(schema.alertEvent.kind, "dns_reconcile_failed"),
+              eq(schema.alertEvent.resourceId, a.clusterId),
+            ),
+          )
+          .orderBy(desc(schema.alertEvent.ordinal))
+          .limit(1)
+      )[0]?.status;
+    const streak = async () =>
+      (
+        await ctx.db
+          .select({ failingSince: schema.dnsBinding.failingSince })
+          .from(schema.dnsBinding)
+          .where(eq(schema.dnsBinding.clusterId, a.clusterId))
+      )[0]?.failingSince;
+    expect(await streak()).toBeInstanceOf(Date);
+    expect(await reconcileAlert()).toBeUndefined();
+    await ctx.db
+      .update(schema.dnsBinding)
+      .set({ failingSince: new Date(Date.now() - DNS_FAILURE_ALERT_MS + 1000) })
+      .where(eq(schema.dnsBinding.clusterId, a.clusterId));
+    await reconcileDns(ctx);
+    expect(await reconcileAlert()).toBeUndefined();
+    await ctx.db
+      .update(schema.dnsBinding)
+      .set({ failingSince: new Date(Date.now() - DNS_FAILURE_ALERT_MS) })
+      .where(eq(schema.dnsBinding.clusterId, a.clusterId));
+    await reconcileDns(ctx);
+    expect(await reconcileAlert()).toBe("firing");
     const overview = await admin.dns.bindings();
     expect(overview.find((x) => x.clusterId === b.clusterId)).toMatchObject({
       mode: "auto",
@@ -305,6 +342,8 @@ describe("cluster DNS bindings", async () => {
     dnsFixture.down.delete("token-a");
     await admin.dns.reconcile({});
     expect((await admin.dns.binding({ clusterId: a.clusterId })).applied).toBe(true);
+    expect(await reconcileAlert()).toBe("resolved");
+    expect(await streak()).toBeNull();
   });
 
   it("removes an offline node only from its cluster's records and adds it back", async () => {
@@ -684,7 +723,25 @@ describe("cluster DNS bindings", async () => {
     );
     await admin.dns.saveBinding({ clusterId: empty.id, binding: { mode: "off" } });
     await admin.dns.reconcile({ clusterId: empty.id });
+    // A failure streak ends once nothing is left to write.
+    const firing = async (kind: string) =>
+      (
+        await ctx.db
+          .select({ active: schema.alertState.active })
+          .from(schema.alertState)
+          .where(eq(schema.alertState.key, `${kind}/platform/${empty.id}`))
+      )[0]?.active;
+    await ctx.db
+      .update(schema.dnsBinding)
+      .set({ failingSince: new Date(0) })
+      .where(eq(schema.dnsBinding.clusterId, empty.id));
+    await raisePlatformAlert(ctx.db, "dns_reconcile_failed", empty.id, "empty");
+    await admin.dns.reconcile({ clusterId: empty.id });
+    expect(await firing("dns_reconcile_failed")).toBe(false);
+    // The cluster's platform alerts end with it.
+    await raisePlatformAlert(ctx.db, "config_rollout_failed", empty.id, "empty");
     await admin.clusters.delete({ id: empty.id });
+    expect(await firing("config_rollout_failed")).toBe(false);
   });
 
   it("measures mass removal by record sets and share, with an adjustable threshold", async () => {

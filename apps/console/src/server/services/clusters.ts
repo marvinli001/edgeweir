@@ -7,6 +7,7 @@ import { type Actor, recordAudit } from "./audit";
 import { siteChanges } from "./config-changes";
 import { assertBindingReleased } from "./dns";
 import { isOnline, ONLINE_WINDOW_SECONDS } from "./nodes";
+import { resolvePlatformAlert } from "./platform-alerts";
 import {
   type Executor,
   latestRevision,
@@ -227,6 +228,14 @@ export async function deleteCluster(db: Database, id: string, actor: Actor): Pro
       });
     }
     await assertBindingReleased(tx, id);
+    // The cluster's platform alerts end with it (nothing would resolve them later).
+    for (const kind of [
+      "config_rollout_failed",
+      "config_rollout_no_canary",
+      "dns_mass_removal_blocked",
+      "dns_reconcile_failed",
+    ] as const)
+      await resolvePlatformAlert(tx, kind, id, row.name);
     await tx.delete(schema.cluster).where(eq(schema.cluster.id, id));
     await recordAudit(tx, actor, {
       action: "cluster.delete",

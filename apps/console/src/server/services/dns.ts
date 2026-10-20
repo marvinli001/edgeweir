@@ -112,6 +112,7 @@ const defaultRow = (clusterId: string): BindingRow => ({
   lineAliases: false,
   desiredRevision: null,
   appliedRevision: null,
+  failingSince: null,
   updatedAt: new Date(0),
 });
 async function assertCluster(db: Executor, clusterId: string) {
@@ -1416,15 +1417,20 @@ export async function reconcileBinding(
       .from(schema.dnsManagedName)
       .where(eq(schema.dnsManagedName.clusterId, clusterId));
     // Manual bindings are not written; off bindings only while they still own records.
-    if (row.mode === "manual" || (row.mode === "off" && !owned.length && !row.desiredRevision))
+    if (row.mode === "manual" || (row.mode === "off" && !owned.length && !row.desiredRevision)) {
+      await settleReconcileFailure(app.db, clusterId);
       return;
+    }
     const revision = await app.db.transaction(async (tx) => {
       const current = await lockBinding(tx, clusterId);
       return publishBinding(tx, clusterId, bindingPolicy(current), "health");
     });
     const policy = parsePolicy(revision.policy, row.allLabel);
     // Switched to manual meanwhile (hands off), or held back with nothing to keep.
-    if (!policy || policy.mode === "manual" || revision.status === "blocked") return;
+    if (!policy || policy.mode === "manual" || revision.status === "blocked") {
+      await settleReconcileFailure(app.db, clusterId);
+      return;
+    }
     const applied = await revisionRow(app.db, clusterId, row.appliedRevision);
     const compareTtl = parsePolicy(applied?.policy ?? {}, row.allLabel)?.ttl !== policy.ttl;
     try {
@@ -1468,6 +1474,7 @@ export async function reconcileBinding(
               eq(schema.dnsBinding.desiredRevision, revision.revision),
             ),
           );
+        await settleReconcileFailure(tx, clusterId);
         if (revision.status !== "applied")
           await recordAudit(tx, actor, {
             action: "dns.applied",
@@ -1484,10 +1491,17 @@ export async function reconcileBinding(
           .where(eq(schema.dnsRevision.revision, revision.revision));
         return;
       }
-      await app.db
-        .update(schema.dnsRevision)
-        .set({ status: "failed", lastError: errorCode(error), lastErrorParams: errorParams(error) })
-        .where(eq(schema.dnsRevision.revision, revision.revision));
+      await app.db.transaction(async (tx) => {
+        await tx
+          .update(schema.dnsRevision)
+          .set({
+            status: "failed",
+            lastError: errorCode(error),
+            lastErrorParams: errorParams(error),
+          })
+          .where(eq(schema.dnsRevision.revision, revision.revision));
+        await noteReconcileFailure(tx, clusterId, new Date());
+      });
       app.log.warn("DNS reconciliation failed", {
         clusterId,
         revision: revision.revision,
@@ -1498,6 +1512,62 @@ export async function reconcileBinding(
   };
   const { ran } = await withLease(app.db, `binding:${clusterId}`, 15 * 60, reconcile, waitMs);
   return ran;
+}
+
+/** How long a cluster's reconciliation fails without a success before dns_reconcile_failed fires. */
+export const DNS_FAILURE_ALERT_MS = 5 * 60_000;
+
+async function clusterName(db: Executor, clusterId: string) {
+  const [row] = await db
+    .select({ name: schema.cluster.name })
+    .from(schema.cluster)
+    .where(eq(schema.cluster.id, clusterId));
+  return row?.name ?? "";
+}
+
+/**
+ * Records a failed reconciliation of the cluster: the failure streak starts
+ * now unless one is running, and dns_reconcile_failed fires once it is
+ * DNS_FAILURE_ALERT_MS old.
+ */
+async function noteReconcileFailure(tx: Executor, clusterId: string, now: Date) {
+  const [row] = await tx
+    .update(schema.dnsBinding)
+    .set({
+      failingSince: sql`coalesce(${schema.dnsBinding.failingSince}, ${now.toISOString()}::timestamptz)`,
+    })
+    .where(eq(schema.dnsBinding.clusterId, clusterId))
+    .returning({ failingSince: schema.dnsBinding.failingSince });
+  if (row?.failingSince && now.getTime() - row.failingSince.getTime() >= DNS_FAILURE_ALERT_MS)
+    await raisePlatformAlert(
+      tx,
+      "dns_reconcile_failed",
+      clusterId,
+      await clusterName(tx, clusterId),
+      now,
+    );
+}
+
+/**
+ * Ends the cluster's failure streak (a success, or nothing left to write)
+ * and resolves its dns_reconcile_failed; nothing while no streak runs (the
+ * alert fires only during one).
+ */
+async function settleReconcileFailure(tx: Executor, clusterId: string) {
+  const ended = await tx
+    .update(schema.dnsBinding)
+    .set({ failingSince: null })
+    .where(
+      and(eq(schema.dnsBinding.clusterId, clusterId), isNotNull(schema.dnsBinding.failingSince)),
+    )
+    .returning({ clusterId: schema.dnsBinding.clusterId });
+  if (ended.length)
+    await resolvePlatformAlert(
+      tx,
+      "dns_reconcile_failed",
+      clusterId,
+      await clusterName(tx, clusterId),
+    );
 }
 
 /** How long reconciling one cluster on request waits for a run already in progress. */
