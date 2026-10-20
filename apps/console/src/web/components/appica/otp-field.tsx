@@ -3,7 +3,8 @@ import { AppicaScope } from "@/components/appica/scope";
 
 /**
  * One-time code input (TOTP), one slot per digit; each slot is a sunk field like the console's
- * inputs (appica's soft variant with the well's fill, input-well's inner shadow and hairline).
+ * inputs (appica's soft variant with the well's fill, input-well's inner shadow and hairline),
+ * taller than a text input with digits at a reading size (appica's md slot sets them at 14px).
  */
 export function OtpField({
   length = 6,
@@ -34,13 +35,14 @@ export function OtpField({
         validationType="numeric"
         autoComplete="one-time-code"
         aria-label={label}
+        className="gap-1.5"
         data-testid="otp-field"
       >
         {Array.from({ length }, (_, index) => (
           <OTPFieldInput
             // biome-ignore lint/suspicious/noArrayIndexKey: slots are positional
             key={index}
-            className="rounded-xl bg-well input-well"
+            className="h-12 w-11 rounded-xl bg-well text-xl font-medium tabular-nums input-well pointer-coarse:text-xl"
             aria-invalid={invalid || undefined}
             autoFocus={autoFocus && index === 0}
           />
