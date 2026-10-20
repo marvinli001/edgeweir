@@ -95,6 +95,9 @@ message CheckChannelRequest {}
 message CheckChannelResponse {
   string node_id = 1;
   ChannelAddress channel = 2;
+  // The console's clock when it answered (`edgeweir-node diagnose`
+  // compares it with the node's).
+  google.protobuf.Timestamp console_time = 3;
 }
 
 // SubmitPurgeRequest names the URL a PURGE request asked to purge.
@@ -274,6 +277,11 @@ message ReportStatusRequest {
   // The node channel address in use and how following the console's
   // address went (feature channel-follow-v1).
   ChannelStatus channel = 16;
+  // How far the node's clock is ahead of the console's (negative: behind),
+  // in milliseconds, from the last ReportStatusResponse.console_time: the
+  // console's time against the middle of the node's send and receive times.
+  // Unset until a response carried console_time, and on nodes before v1.5.0.
+  optional sint64 clock_offset_millis = 17;
 }
 
 // CertificateFailure is an entry of NodeConfig.certificates a node could not
@@ -405,6 +413,9 @@ message ReportStatusResponse {
   // channel-follow-v1. A node that uses another address checks this one
   // (CheckChannel) and switches when the check passes.
   ChannelAddress channel = 6;
+  // The console's clock when it answered (the node's clock offset is
+  // measured against it; ReportStatusRequest.clock_offset_millis).
+  google.protobuf.Timestamp console_time = 7;
 }
 
 // MinuteStats is traffic of one site during one minute on one node.
