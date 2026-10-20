@@ -42,6 +42,12 @@ export const RULE_LOG_FEATURE = "rule-log-v1";
  */
 export const STATS_DIMS_FEATURE = "stats-dims-v1";
 /**
+ * origin-stats-v1: MinuteStats.origins, each origin's fetches per minute
+ * (ADR-0052). A site's origin quality is partial while an active node of
+ * its cluster lacks it.
+ */
+export const ORIGIN_STATS_FEATURE = "origin-stats-v1";
+/**
  * l4-v1: layer-4 applications (NodeConfig.l4_apps, required by
  * configurations with applications) and their statistics
  * (ReportStatsV2Request.l4_stats).

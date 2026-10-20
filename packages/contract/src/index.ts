@@ -6,9 +6,11 @@ import { oc } from "@orpc/contract";
 import * as z from "zod";
 import { logRetention, logRetentionSetting, logsContract } from "./logs";
 import { nodeLogRetention, nodeLogsContract } from "./node-logs";
+import { originQuality, originQualityInput } from "./origin-stats";
 import { statsDimensions, statsDimensionsInput } from "./stats-dims";
 
 export * from "./logs";
+export * from "./origin-stats";
 export * from "./stats-dims";
 
 import { accessControlContract, ipCheckContract } from "./access-control";
@@ -455,6 +457,15 @@ export const contract = {
       .route({ method: "GET", path: "/sites/{id}/origin-health", tags: ["sites"] })
       .input(idParam)
       .output(z.array(s.originHealth)),
+    /**
+     * Fetches from each of the site's origins over a range (attempts,
+     * failures, 5xx answers, time to the response header), as the nodes
+     * count them (origin-stats-v1).
+     */
+    originQuality: oc
+      .route({ method: "GET", path: "/sites/{id}/origins/quality", tags: ["sites"] })
+      .input(originQualityInput)
+      .output(originQuality),
     /**
      * Whether Brotli, Zstandard, OWASP CRS, active health checks, session
      * affinity, HTTP/2 and gRPC towards the origins, error pages and the rule
