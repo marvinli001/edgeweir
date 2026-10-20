@@ -130,8 +130,8 @@ function DnsPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="cell-pinned">{m.dns_cluster()}</TableHead>
-                        <TableHead>{m.dns_mode()}</TableHead>
                         <TableHead>{m.dns_cluster_domain()}</TableHead>
+                        <TableHead>{m.dns_mode()}</TableHead>
                         <TableHead>{m.dns_status()}</TableHead>
                         <TableHead>
                           <span className="sr-only">{m.common_actions()}</span>
@@ -143,12 +143,12 @@ function DnsPage() {
                         <TableRow key={b.clusterId}>
                           <TableCell className="cell-pinned font-medium">{b.clusterName}</TableCell>
                           <TableCell>
+                            {b.domain ? <ValueWell>{b.domain}</ValueWell> : "—"}
+                          </TableCell>
+                          <TableCell>
                             <Badge variant={b.mode === "off" ? "outline" : "secondary"}>
                               {modeLabel(b.mode)}
                             </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {b.domain ? <ValueWell>{b.domain}</ValueWell> : "—"}
                           </TableCell>
                           <TableCell>
                             {b.mode === "auto" && b.revision ? (
