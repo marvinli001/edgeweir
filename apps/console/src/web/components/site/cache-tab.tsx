@@ -230,6 +230,42 @@ const newRule = (): RuleDraft => ({
   cacheSetCookie: false,
 });
 
+/** Extensions of the static assets template: styles, scripts, images, fonts and media. */
+const STATIC_EXTENSIONS = [
+  "css",
+  "js",
+  "mjs",
+  "map",
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "avif",
+  "svg",
+  "ico",
+  "woff",
+  "woff2",
+  "ttf",
+  "otf",
+  "eot",
+  "mp4",
+  "webm",
+  "mp3",
+  "ogg",
+  "wav",
+  "pdf",
+];
+
+/** Static assets by extension, cached for 30 days whatever the origin says. */
+const staticAssetsRule = (): RuleDraft => ({
+  ...newRule(),
+  prefixes: "",
+  extensions: STATIC_EXTENSIONS.join(", "),
+  ttl: String(30 * 86400),
+  respect: false,
+});
+
 /** Rows only move up and down. */
 const restrictToVerticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 });
 
@@ -359,17 +395,28 @@ function CacheRulesCard({ site }: { site: Site }) {
               </ol>
             </SortableContext>
           </DndContext>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="self-start"
-            onClick={() => setRows([...rows, newRule()])}
-            data-testid="cache-rule-add"
-          >
-            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-            {m.site_rule_add()}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setRows([...rows, newRule()])}
+              data-testid="cache-rule-add"
+            >
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+              {m.site_rule_add()}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setRows([...rows, staticAssetsRule()])}
+              data-testid="cache-rule-add-static"
+            >
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+              {m.site_rule_add_static()}
+            </Button>
+          </div>
         </CardContent>
         <SaveBar
           dirty={dirty && !badExpression}

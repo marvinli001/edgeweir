@@ -467,6 +467,7 @@
   "site_rule_bypass": "不缓存",
   "site_rule_respect": "遵循源站",
   "site_rule_add": "添加规则",
+  "site_rule_add_static": "静态资源",
   "site_rule_invalid": "规则 {index}：{problem}",
   "security_title": "账户安全",
   "security_password": "密码",

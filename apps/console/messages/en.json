@@ -501,6 +501,7 @@
   "site_rule_bypass": "Bypass",
   "site_rule_respect": "Respect origin",
   "site_rule_add": "Add rule",
+  "site_rule_add_static": "Static assets",
   "site_rule_invalid": "Rule {index}: {problem}",
   "security_title": "Account security",
   "security_password": "Password",
