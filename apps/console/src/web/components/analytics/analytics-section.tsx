@@ -171,7 +171,11 @@ export function AnalyticsSection({
     ],
   };
 
-  const chart = (item: Metric, series: NonNullable<typeof traffic.data>, fill = false) => {
+  type Series = NonNullable<typeof traffic.data>;
+  /** Every small metric is null or zero in every bucket: the row drops its charts. */
+  const quiet = (series: Series) =>
+    small.every((item) => series.points.every((p) => !item.point(p, series.bucketSeconds)));
+  const chart = (item: Metric, series: Series, fill = false, empty = false) => {
     const data = series.points.map((point) => ({
       time: point.time,
       value: item.point(point, series.bucketSeconds),
@@ -189,6 +193,7 @@ export function AnalyticsSection({
           onOpen={open}
           testId={`metric-${item.id}`}
           fill={fill}
+          empty={empty}
         >
           <MetricChart
             data={data}
@@ -271,7 +276,7 @@ export function AnalyticsSection({
               ) : null}
               {small.length > 0 ? (
                 <div className={cn("grid gap-3", SMALL_GRID[small.length])}>
-                  {small.map((item) => chart(item, series))}
+                  {small.map((item) => chart(item, series, false, quiet(series)))}
                 </div>
               ) : null}
               {statusCells > 0 ? (

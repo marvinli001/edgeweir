@@ -47,10 +47,15 @@ function TrailCursor(props: {
   );
 }
 
+/** Whether the point at `index` has a value and neither neighbour does: no line reaches it. */
+const isolated = (data: MetricDatum[], index: number) =>
+  data[index]?.value != null && data[index - 1]?.value == null && data[index + 1]?.value == null;
+
 /**
  * One series as a lit line over a gradient wash (a soft glow on the line in dark mode). With
  * `axis`, horizontal hairlines and value ticks on the right; without, the area runs to the card's
- * edges. Hovering reads a point and dims what comes after it.
+ * edges. Buckets without a value leave gaps; a value between two gaps is a dot, so sparse
+ * series still show. Hovering reads a point and dims what comes after it.
  */
 export function MetricChart({
   data,
@@ -137,6 +142,13 @@ export function MetricChart({
           strokeLinejoin="round"
           fill={`url(#${fill})`}
           fillOpacity={1}
+          dot={({ cx, cy, index }: { cx?: number; cy?: number; index: number }) =>
+            cx !== undefined && cy !== undefined && isolated(data, index) ? (
+              <circle key={index} cx={cx} cy={cy} r={2} fill="var(--color-value)" />
+            ) : (
+              <g key={index} />
+            )
+          }
           activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--card)" }}
           isAnimationActive={!reducedMotion}
           animationDuration={600}

@@ -108,7 +108,11 @@ export function OpenCardHint() {
   );
 }
 
-/** Title, headline value with its change, and a chart underneath. */
+/**
+ * Title, headline value with its change, and a chart underneath. Small cards of a row with
+ * nothing to draw (`empty`: no value above zero in any of them) drop their charts, so a quiet
+ * range is a row of values, not of blank plots.
+ */
 export function MetricCard({
   title,
   value,
@@ -119,6 +123,7 @@ export function MetricCard({
   children,
   testId,
   fill = false,
+  empty = false,
 }: {
   title: string;
   value: string;
@@ -130,12 +135,21 @@ export function MetricCard({
   testId?: string;
   /** Grow to the row's height (a large chart alone beside a taller card), the chart with it. */
   fill?: boolean;
+  /** A small card's row has no value above zero to draw. */
+  empty?: boolean;
 }) {
+  const compact = empty && size === "sm";
   return (
     <Panel
       data-testid={testId}
       className={cn(
-        size === "lg" ? (fill ? "h-full min-h-64" : "h-64") : "h-52 @3xl/main:h-60",
+        size === "lg"
+          ? fill
+            ? "h-full min-h-64"
+            : "h-64"
+          : compact
+            ? "h-full pb-4"
+            : "h-52 @3xl/main:h-60",
         onOpen &&
           "group/panel transition-shadow duration-200 ease-lit hover:shadow-elev-2 motion-reduce:transition-none",
       )}
@@ -150,15 +164,17 @@ export function MetricCard({
         </span>
         <ChangeIndicator change={change} better={better} />
       </div>
-      <div
-        className={cn(
-          "relative min-h-0 flex-1",
-          size === "lg" ? "px-4 pt-3 pb-3" : "pt-3",
-          onOpen && "cursor-pointer",
-        )}
-      >
-        {children}
-      </div>
+      {compact ? null : (
+        <div
+          className={cn(
+            "relative min-h-0 flex-1",
+            size === "lg" ? "px-4 pt-3 pb-3" : "pt-3",
+            onOpen && "cursor-pointer",
+          )}
+        >
+          {children}
+        </div>
+      )}
     </Panel>
   );
 }
