@@ -5,6 +5,7 @@
  */
 import type {
   AnalyticsRange,
+  OriginQuality,
   StatsDimensions,
   Traffic,
   TrafficBreakdown,
@@ -562,5 +563,69 @@ export function dimensionsOf(range: AnalyticsRange, siteId?: string): StatsDimen
     blockReasons,
     challenges: { issued, passed: Math.round(issued * 0.41) },
     unsupportedNodes: !site || PARTIAL_SITES.has(site.name) ? 1 : 0,
+  };
+}
+
+/**
+ * Fetches from each origin of a site: the misses of its traffic, shared by weight (backups get
+ * a trickle); header times drift around each origin's own base, the second origin is slower
+ * and, during the burst, times out more often.
+ */
+export function originQualityOf(range: AnalyticsRange, siteId: string): OriginQuality {
+  const site = sites.find((s) => s.id === siteId);
+  const traffic = trafficOf(range, siteId);
+  const origins = site?.origins ?? [];
+  const weights = origins.map((o) => (o.backup ? 0.01 : o.weight || 1));
+  const weightSum = weights.reduce((a, b) => a + b, 0) || 1;
+  const times = traffic.points.map((p) => p.time);
+  const items = origins.map((o, index) => {
+    const share = (weights[index] ?? 0) / weightSum;
+    const base = 28 + index * 64 + noise(o.address.length * 17) * 20;
+    const requests = traffic.points.map((p) => Math.round(p.cacheMisses * share));
+    const strain = traffic.points.map((p) => burst(Date.parse(p.time)) * (index === 1 ? 1 : 0.2));
+    const errors = requests.map((n, i) =>
+      Math.round(n * (0.002 + (strain[i] ?? 0) * 0.04 + noise(i * 11 + index) * 0.002)),
+    );
+    const p95 = requests.map((n, i) =>
+      n > 0
+        ? Math.round(
+            base *
+              (2.2 + drift(Date.parse(times[i] ?? ""), 3 * HOUR, index + 3)) *
+              (1 + (strain[i] ?? 0)),
+          )
+        : null,
+    );
+    const total = requests.reduce((a, b) => a + b, 0);
+    const errorTotal = errors.reduce((a, b) => a + b, 0);
+    const timeout = Math.round(errorTotal * (index === 1 ? 0.6 : 0.2));
+    const server = Math.round(errorTotal * 0.3);
+    const connect = Math.max(0, errorTotal - timeout - server);
+    return {
+      originId: o.id,
+      address: o.address,
+      port: o.port,
+      scheme: o.scheme,
+      group: o.group,
+      backup: o.backup,
+      requests: total,
+      failures: { connect, timeout, tls: 0, invalid: 0, server },
+      errors: errorTotal,
+      errorRate: total > 0 ? errorTotal / total : 0,
+      answered: Math.max(0, total - connect - timeout),
+      meanMs: total > 0 ? Math.round(base * 1.1) : null,
+      p50Ms: total > 0 ? Math.round(base) : null,
+      p95Ms: total > 0 ? Math.round(base * 2.6) : null,
+      p99Ms: total > 0 ? Math.round(base * 4.8) : null,
+      series: { requests, errors, p95Ms: p95 },
+    };
+  });
+  return {
+    range,
+    bucketSeconds: RANGES[range].bucketSeconds,
+    from: traffic.from,
+    to: traffic.to,
+    times,
+    items,
+    unsupportedNodes: site && PARTIAL_SITES.has(site.name) ? 1 : 0,
   };
 }

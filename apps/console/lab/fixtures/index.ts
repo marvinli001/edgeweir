@@ -13,6 +13,7 @@ import { systemFixtures } from "./system";
 import {
   breakdownOf,
   dimensionsOf,
+  originQualityOf,
   topNodesOf,
   topRequestsOf,
   topSitesOf,
@@ -302,6 +303,7 @@ const core: Fixtures = {
       };
     },
     originHealth: ({ id }) => originHealthOf(id),
+    originQuality: ({ id, range }) => originQualityOf(range ?? "24h", id),
     features: ({ id }) => {
       const on = { available: true, reason: null };
       // download.example.com's cluster has a node of an older release (traffic.ts PARTIAL_SITES).
