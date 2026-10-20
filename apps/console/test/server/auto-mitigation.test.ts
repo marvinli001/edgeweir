@@ -1,7 +1,7 @@
 import type { CcLevel } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { and, desc, eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/server/app";
 import {
   evaluateAutoMitigation,
@@ -194,14 +194,20 @@ describe("automatic mitigation", async () => {
       activeSince: at(SECOND * 10),
       expiresAt: at(SECOND * 10 + 30 * MINUTE),
     });
-    expect(await admin.autoMitigation.get({ id: siteId })).toMatchObject({
-      level: "pow",
-      active: {
-        since: at(SECOND * 10).toISOString(),
-        expiresAt: at(SECOND * 10 + 30 * MINUTE).toISOString(),
+    // The DTO reads the level now: read it on the test's clock, while the heartbeat is fresh.
+    vi.useFakeTimers({ toFake: ["Date"], now: at(SECOND * 20) });
+    try {
+      expect(await admin.autoMitigation.get({ id: siteId })).toMatchObject({
         level: "pow",
-      },
-    });
+        active: {
+          since: at(SECOND * 10).toISOString(),
+          expiresAt: at(SECOND * 10 + 30 * MINUTE).toISOString(),
+          level: "pow",
+        },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
     // The protection the operator sees says Under Attack is on.
     expect((await admin.protection.get({ id: siteId })).underAttack).toBe(true);
   });
