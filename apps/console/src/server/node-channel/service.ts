@@ -144,6 +144,12 @@ function toNodeBanStatus(status: BanStatus, now: Date): schema.NodeBanStatus {
   };
 }
 
+/** ReportStatusRequest.clock_offset_millis as stored (an integer column: ±24 days at most). */
+export function clockOffset(millis: bigint): number {
+  const limit = 2n ** 31n - 1n;
+  return Number(millis > limit ? limit : millis < -limit ? -limit : millis);
+}
+
 /** ReportStatusRequest.metrics as stored on the node row: finite, non-negative, CPU 0-100. */
 export function toNodeMetrics(m: NodeMetrics, now: Date): schema.NodeMetricsData {
   const real = (value: number, max = Number.MAX_SAFE_INTEGER) =>
@@ -831,6 +837,10 @@ export function createNodeService(
             securityState: toNodeSecurityState(req.security),
             // The address the node uses (channel-follow-v1) and what this connection showed.
             channel: channelData(req.channel, peer, now),
+            // Nodes since v1.5.0, from the previous response's console_time.
+            ...(req.clockOffsetMillis !== undefined
+              ? { clockOffsetMs: clockOffset(req.clockOffsetMillis), clockMeasuredAt: now }
+              : {}),
             ...(info ? { ...nodeInfoColumns(info), hostname: info.hostname || node.hostname } : {}),
           })
           .where(eq(schema.node.id, node.id));
@@ -909,6 +919,7 @@ export function createNodeService(
         probe: node.probeEnabled && !!(await nodeProbeRegion(app.db, node)),
         // Nodes with channel-follow-v1 check this address and move to it.
         channel: await channelAddressFor(app, info?.supportedFeatures ?? node.supportedFeatures),
+        consoleTime: timestampFromDate(new Date()),
       };
     },
 
@@ -918,6 +929,7 @@ export function createNodeService(
       return {
         nodeId: node.id,
         channel: await channelAddressFor(app, [CHANNEL_FOLLOW_FEATURE]),
+        consoleTime: timestampFromDate(new Date()),
       };
     },
 

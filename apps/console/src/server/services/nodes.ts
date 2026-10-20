@@ -9,6 +9,7 @@ import { type Database, schema } from "@edgeweir/db";
 import { and, asc, eq, inArray, notInArray } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { isOnline, ONLINE_WINDOW_SECONDS } from "../lib/node-online";
+import { alertPolicySetting } from "./alert-policy";
 import { type Actor, recordAudit } from "./audit";
 import { skipNodeTasks } from "./cache-tasks";
 import { syncCertificateFailureAlerts } from "./certificate-failures";
@@ -72,6 +73,7 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
         .leftJoin(schema.region, eq(schema.region.id, schema.nodeGroup.regionId))
         .where(inArray(schema.nodeGroup.id, groupIds))
     : [];
+  const { clockSkewSeconds } = await alertPolicySetting.read(db);
   const required = new Map<string, string[]>();
   const targets = new Map<string, RolloutTargets<RevisionHead>>();
   for (const clusterId of new Set(rows.map((r) => r.clusterId))) {
@@ -145,6 +147,14 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
         servingEarlier: f.servingFingerprint !== "",
       })),
       channel: toNodeChannelStatus(r.channel),
+      clock:
+        r.clockOffsetMs !== null && r.clockMeasuredAt
+          ? {
+              offsetMs: r.clockOffsetMs,
+              measuredAt: r.clockMeasuredAt.toISOString(),
+              skewed: Math.abs(r.clockOffsetMs) >= clockSkewSeconds * 1000,
+            }
+          : null,
     };
   });
 }

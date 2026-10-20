@@ -248,6 +248,39 @@ describe("enrolled nodes and probes follow the node channel URL", async () => {
     expect(ConnectError.from(refused).code).toBe(Code.Unauthenticated);
   });
 
+  it("answers with its clock and keeps the offset the node measured against it", async () => {
+    const client = nodeAt("new.example.test", follower.cert);
+    const before = Date.now();
+    const checked = await client.checkChannel({});
+    const consoleTime = (t?: { seconds: bigint; nanos: number }) =>
+      t ? Number(t.seconds) * 1000 + Math.floor(t.nanos / 1e6) : 0;
+    expect(consoleTime(checked.consoleTime)).toBeGreaterThanOrEqual(before - 1000);
+    expect(consoleTime(checked.consoleTime)).toBeLessThanOrEqual(Date.now() + 1000);
+    // Before its first measurement a node sends no offset.
+    const first = await client.reportStatus({});
+    expect(consoleTime(first.consoleTime)).toBeGreaterThanOrEqual(before - 1000);
+    expect((await getNode(ctx.db, follower.id)).clock).toBeNull();
+    await client.reportStatus({ clockOffsetMillis: -42_000n });
+    expect((await getNode(ctx.db, follower.id)).clock).toMatchObject({
+      offsetMs: -42_000,
+      skewed: true,
+    });
+    // Skewed against the alert policy's threshold.
+    await admin.alerts.setPolicy({ clockSkewSeconds: 60 });
+    expect((await getNode(ctx.db, follower.id)).clock?.skewed).toBe(false);
+    await admin.alerts.setPolicy({});
+    // A heartbeat without an offset keeps the last one; an absurd one is clamped.
+    await client.reportStatus({});
+    expect((await getNode(ctx.db, follower.id)).clock?.offsetMs).toBe(-42_000);
+    await client.reportStatus({ clockOffsetMillis: 10n ** 15n });
+    expect((await getNode(ctx.db, follower.id)).clock?.offsetMs).toBe(2 ** 31 - 1);
+    await client.reportStatus({ clockOffsetMillis: 12n });
+    expect((await getNode(ctx.db, follower.id)).clock).toMatchObject({
+      offsetMs: 12,
+      skewed: false,
+    });
+  });
+
   it("keeps an earlier name while a node connects with it, and drops it once none does", async () => {
     // The node switched: it connects with the new name and keeps the old URL as its fallback.
     await nodeAt("new.example.test", follower.cert).reportStatus({

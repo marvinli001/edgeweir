@@ -43,6 +43,7 @@ const ready: Node = {
   cache: { maxSizeGb: null, usage: null },
   certificateFailures: [],
   channel: null,
+  clock: null,
 };
 
 describe("nodes that stop an upgrade from starting", () => {
