@@ -83,11 +83,18 @@ export function GeoIpSettings({
                   <TableCell className={cn("font-medium", EDGE)}>{node.name}</TableCell>
                   {features.map(([feature]) => {
                     const ready = nodeSupportsFeature(node.supportedFeatures, feature);
+                    const word = ready ? m.geo_available() : m.geo_unavailable();
                     return (
                       <TableCell key={feature} className={EDGE}>
-                        <StatusDot tone={ready ? "good" : "idle"}>
-                          <span className={ready ? undefined : "text-muted-foreground"}>
-                            {ready ? m.geo_available() : m.geo_unavailable()}
+                        {/* Narrow, the light alone keeps the table inside its card. */}
+                        <StatusDot tone={ready ? "good" : "idle"} title={word}>
+                          <span
+                            className={cn(
+                              "@max-lg/main:sr-only",
+                              !ready && "text-muted-foreground",
+                            )}
+                          >
+                            {word}
                           </span>
                         </StatusDot>
                       </TableCell>
