@@ -463,6 +463,33 @@ message MinuteStats {
   // included), the original's length minus the variant's (ImageConvert).
   // Added in v0.31.0 (feature image-convert-v1).
   uint64 image_bytes_saved = 25;
+  // Fetches from each origin of the site (every attempt, cache-lock,
+  // background and prefetch fetches included; active health checks and cache
+  // hits not), at most 64 origins. Added in v1.4.0 (feature origin-stats-v1).
+  repeated OriginCounter origins = 26;
+}
+
+// OriginCounter is a minute of one origin's fetches on a node.
+message OriginCounter {
+  // Origin.id of the site's configuration.
+  string origin_id = 1;
+  // Attempts sent to the origin.
+  uint64 requests = 2;
+  // Failed attempts, classified as the passive health check does: no
+  // connection, a timeout, a failed TLS handshake or certificate check, an
+  // answer that is no HTTP/1.x response.
+  uint64 connect_failures = 3;
+  uint64 timeouts = 4;
+  uint64 tls_failures = 5;
+  uint64 invalid_responses = 6;
+  // Attempts the origin answered with a 5xx status (500 included).
+  uint64 server_errors = 7;
+  // Answered attempts per time to the response header
+  // ($upstream_header_time): 11 counts with the upper bounds 10, 25, 50,
+  // 100, 250, 500, 1000, 2500, 5000 and 10000 ms, and above.
+  repeated uint64 header_time_buckets = 8;
+  // Sum of the answered attempts' times to the response header, in ms.
+  uint64 header_time_ms_sum = 9;
 }
 
 // CountryCounter is a client country's traffic in a minute.
