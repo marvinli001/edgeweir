@@ -512,6 +512,13 @@
       "when": 1792223456797,
       "tag": "0072_site_auto_mitigation",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1792461865418,
+      "tag": "0073_origin_stats",
+      "breakpoints": true
     }
   ]
 }

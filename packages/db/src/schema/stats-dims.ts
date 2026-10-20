@@ -18,4 +18,9 @@ export const statsDimensionColumns = () => ({
   blockReasons: jsonb("block_reasons").$type<Record<string, number>>().notNull().default({}),
   challengesIssued: bigint("challenges_issued", { mode: "number" }).notNull().default(0),
   challengesPassed: bigint("challenges_passed", { mode: "number" }).notNull().default(0),
+  /**
+   * Fetches from each origin (origin-stats-v1, ADR-0052): counters keyed
+   * `<origin id>:<field>` (ORIGIN_STATS_FIELDS), at most 64 origins.
+   */
+  originStats: jsonb("origin_stats").$type<Record<string, number>>().notNull().default({}),
 });

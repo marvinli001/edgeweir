@@ -265,6 +265,42 @@ describe("migrations", () => {
     await db.delete(schema.site).where(eq(schema.site.id, site.id));
   });
 
+  it("carries each origin's fetches through the traffic view (0073)", async () => {
+    const [cl] = await db.insert(schema.cluster).values({ name: "origin-stats" }).returning();
+    if (!cl) throw new Error("cluster not inserted");
+    const [site] = await db
+      .insert(schema.site)
+      .values({ clusterId: cl.id, name: "origin-stats", cnamePrefix: "origin-stats" })
+      .returning();
+    if (!site) throw new Error("site not inserted");
+    const nodeId = "00000000-0000-4000-8000-0000000000c3";
+    const origin = "00000000-0000-4000-8000-0000000000d1";
+    await db.insert(schema.nodeMinuteStats).values({
+      minute: new Date("2026-10-20T10:05:00Z"),
+      nodeId,
+      siteId: site.id,
+      requests: 5,
+      originStats: { [`${origin}:n`]: 5, [`${origin}:cf`]: 1, [`${origin}:h2`]: 4 },
+    });
+    await db.insert(schema.nodeHourStats).values({
+      minute: new Date("2026-10-20T08:00:00Z"),
+      nodeId,
+      siteId: site.id,
+      requests: 7,
+      originStats: { [`${origin}:n`]: 7 },
+    });
+    const rows = await db
+      .select()
+      .from(schema.trafficHourStats)
+      .where(eq(schema.trafficHourStats.siteId, site.id));
+    expect(rows.map((row) => row.originStats[`${origin}:n`]).sort()).toEqual([5, 7]);
+    const [old] = await db
+      .insert(schema.nodeMinuteStats)
+      .values({ minute: new Date("2026-10-20T10:06:00Z"), nodeId, siteId: site.id })
+      .returning();
+    expect(old?.originStats).toEqual({});
+  });
+
   it("carries statistics dimensions through the traffic view and defaults G16 columns", async () => {
     const [cl] = await db.insert(schema.cluster).values({ name: "g16" }).returning();
     if (!cl) throw new Error("cluster not inserted");
