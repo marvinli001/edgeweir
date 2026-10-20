@@ -93,8 +93,9 @@ export function SiteSelect({
           <FormSelect
             id={id}
             label={label}
-            value={value?.id ?? (noneLabel !== undefined ? NO_SITE : "")}
+            value={value?.id ?? (noneLabel !== undefined ? NO_SITE : null)}
             options={choices}
+            placeholder={m.bans_site_placeholder()}
             onChange={(picked) =>
               onChange(
                 picked === NO_SITE

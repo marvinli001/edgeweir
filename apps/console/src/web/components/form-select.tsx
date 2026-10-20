@@ -77,21 +77,23 @@ export function OptionSelect<T extends string>({
   );
 }
 
-/** An OptionSelect under its FieldLabel. */
+/** An OptionSelect under its FieldLabel; `placeholder` shows while `value` is null. */
 export function FormSelect<T extends string>({
   id,
   label,
   value,
   options,
   onChange,
+  placeholder,
   disabled,
   testId,
 }: {
   id: string;
   label: string;
-  value: T;
+  value: T | null;
   options: readonly Option<T>[];
   onChange: (value: T) => void;
+  placeholder?: string;
   disabled?: boolean;
   testId?: string;
 }) {
@@ -103,6 +105,7 @@ export function FormSelect<T extends string>({
         value={value}
         options={options}
         onChange={onChange}
+        placeholder={placeholder}
         disabled={disabled}
         testId={testId}
       />

@@ -1697,6 +1697,7 @@
   "bans_col_expires": "Expires",
   "bans_site": "Site",
   "bans_site_search": "Search sites",
+  "bans_site_placeholder": "Choose a site",
   "bans_site_required": "Choose a site",
   "bans_address": "IP or CIDR",
   "bans_reason": "Reason",

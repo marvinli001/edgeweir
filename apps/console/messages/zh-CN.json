@@ -1554,6 +1554,7 @@
   "bans_col_expires": "到期",
   "bans_site": "网站",
   "bans_site_search": "搜索网站",
+  "bans_site_placeholder": "选择网站",
   "bans_site_required": "请选择网站",
   "bans_address": "IP 或 CIDR",
   "bans_reason": "原因",
