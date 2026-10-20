@@ -505,6 +505,13 @@
       "when": 1792053916123,
       "tag": "0071_origin_protection",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1792223456797,
+      "tag": "0072_site_auto_mitigation",
+      "breakpoints": true
     }
   ]
 }

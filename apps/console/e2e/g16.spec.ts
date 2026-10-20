@@ -195,11 +195,11 @@ test("G16: the statistics dimension cards and the overview's countries", async (
   expect(pageErrors).toEqual([]);
 });
 
-test("G16: block reasons and the challenge pass rate on the security tab", async ({ page }) => {
+test("G16: block reasons and the challenge pass rate on the attacks tab", async ({ page }) => {
   const pageErrors = errors(page);
   await signedIn(page);
   const blockId = await siteNamed(page, BLOCK_SITE);
-  await page.goto(`/sites/${blockId}?tab=security`);
+  await page.goto(`/sites/${blockId}?tab=attacks`);
   const reasons = page.getByTestId("block-reasons");
   await expect(reasons).toContainText("自定义规则");
   await expect(reasons).toContainText("限速");

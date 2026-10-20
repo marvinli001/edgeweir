@@ -362,7 +362,7 @@ DNS steering is bound per cluster (`dns_binding`, mode Not managed, Manual, or A
 1. A site has at most 16 authentication rules (`site_auth_rule`, ordered by `position`): kind `basic`, `forward` or `url_a`–`url_d`, a scope (domains, path prefixes, extensions, excluded path prefixes) and the kind's settings; the secret (Basic users with PBKDF2-HMAC-SHA256 hashes, the primary and backup keys of signed URLs) is one JSON document envelope-encrypted in the same row (purpose `site_auth_rule.secret_envelope`, bound to the rule ID), and `secret_version` grows with every change. The IR is `Site.auth_rules` (the enabled rules in order, scope lists sorted) with references to the secrets only (`credential_id`, `credential_version`); it requires `access-auth-v1`.
 2. Nodes fetch the rules' secrets of their cluster's sites with `GetOriginCredentials` (the path of S3 and PURGE keys), keep them in `credentials.json` in the state directory (0600) and attach them, parsed, to the site table in the data plane's shared memory; a rule without its secret stays but has no users or keys and refuses every request in its scope.
 3. In the edge layer's access phase the first enabled rule whose scope the request matches is chosen after the PURGE method, and a signed URL loses its signature at once (A and D their query parameters, B and C two segments of the normalized `$uri`); the check runs after the platform allow and block lists and before the rule phases (a plain HTTP request the site forces to HTTPS is redirected first). Basic keeps results per worker (successes 60 s, failures 10 s) and limits failures per site and client network (shared dictionary `edgeweir_auth`). Forward authentication sends an `ngx.location.capture` subrequest to the internal location `/./edgeweir-auth`, which goes through the origin layer to the service (origin address policy, TLS verification, the rule's timeout, only the forwarded request headers); 2xx and 401/403 answers may be cached in `edgeweir_auth`.
-4. Refused requests are counted in `MinuteStats.auth_failures` (`node_minute_stats.auth_failures`, the hourly and daily rollups and the ClickHouse mirror) and shown on the site's Security tab. The console's "Sign a URL" computes with the primary key on the server and neither stores nor sends the result. See [Access control](docs/guide/access-control.en.md).
+4. Refused requests are counted in `MinuteStats.auth_failures` (`node_minute_stats.auth_failures`, the hourly and daily rollups and the ClickHouse mirror) and shown on the site's Attacks tab. The console's "Sign a URL" computes with the primary key on the server and neither stores nor sends the result. See [Access control](docs/guide/access-control.en.md).
 
 ## Access control
 
@@ -447,6 +447,7 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificate
 | Queue | Schedule | Work |
 | --- | --- | --- |
 | `alerts.sweep` | Every minute | Alert detection and delivery |
+| `mitigation.evaluate` | Every minute (one job at start) | Evaluates every site's automatic mitigation: turns on the site's Under Attack when a node's CC level reaches the threshold, and turns it off once the level has stayed below it for the configured time; the state and the expiry are in `site_auto_mitigation`, so a restart or a repeated job only evaluates again |
 | `rollouts.evaluate` | Every minute | Evaluates running configuration canaries: promote, await promotion, or roll back (canary node heartbeats trigger an evaluation too) |
 | `dns.reconcile` | Every minute | Deletes expired old CNAME prefixes and publishes the DNS of their clusters; DNS steering publishing and external record maintenance |
 | `traffic.rollup` | Every minute | Traffic rollup and cleanup (L4 app minute statistics included), usage rollup and retention (then every site's usage protection, with an immediate alert sweep when its alerts change), access log partition maintenance, upgrade expiry; one failing part does not stop the others |
@@ -570,6 +571,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `l4_minute_stats` | Per node, layer-4 application and minute: new and refused connections, peak concurrency, bytes in / out, kept 7 days |
 | `site_usage` | Recomputable usage per site and UTC 5-minute window (requests, bytes out and in, exact decimals), revision and global `seq` (sequence `site_usage_seq`) |
 | `site_usage_guard` | A site's usage protection: period (calendar day / month) and time zone, limits on bytes sent / requests / bandwidth, warning threshold, action and recovery, and the current period's state the worker keeps (metrics at the warning threshold / limit, bandwidth peak, the action it applied, how long a manual restore pauses it, the error code of an action that could not be published) |
+| `site_auto_mitigation` | A site's automatic mitigation: switch, trigger level, hold in minutes, and the state the worker keeps (since when, until when, trigger level, the pause after the operator took over, error code of the last change that failed); no row means off |
 | `access_log` | Sampled and forced access logs (request id, User-Agent, Referer, protocol, region, origin, block reason and rule; JA4, the query string, chosen request headers and the peer address while the site records them; matched CRS rules and whether CRS blocked the request), one partition per UTC day, kept as the retention setting says |
 | `security_event` | CC mitigation events reported by nodes: level changes, escalated paths, automatic bans, with the top addresses and paths of the moment |
 | `node_log_cursor` | Per-node high-water mark of access log batches |
@@ -665,6 +667,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0069_site_usage_guard` | `site_usage_guard`; an index of `site_usage` by site and window |
 | `0070_node_logs` | `node_log_entry`, `node_log_entry_cursor` |
 | `0071_origin_protection` | `origin_client_certificate`, `origin_certificate`; `origin_pool.tls_trust`, `origin_pool.client_certificate`, `pki_authority.crl_pem` |
+| `0072_site_auto_mitigation` | `site_auto_mitigation` |
 
 ## Build output
 

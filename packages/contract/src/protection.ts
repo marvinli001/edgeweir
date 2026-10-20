@@ -284,6 +284,8 @@ export const securityEventList = z.object({
 export const securityEventListInput = z.object({
   id: uuid,
   kind: securityEventKind.optional(),
+  /** Only events of the last this many hours. */
+  hours: z.coerce.number().int().min(1).max(720).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(50),
 });
@@ -325,7 +327,7 @@ export const protectionContract = {
 export const securityContract = {
   state: oc
     .route({ method: "GET", path: "/sites/{id}/security", tags: ["protection"] })
-    .input(idParam.extend({ hours: z.coerce.number().int().min(1).max(168).default(24) }))
+    .input(idParam.extend({ hours: z.coerce.number().int().min(1).max(720).default(24) }))
     .output(siteSecurityState),
   events: oc
     .route({ method: "GET", path: "/sites/{id}/security/events", tags: ["protection"] })

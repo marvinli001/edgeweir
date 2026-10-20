@@ -1,5 +1,4 @@
 import {
-  type AnalyticsRange,
   CC_LEVELS,
   CC_PRESETS,
   CHALLENGE_PRESETS,
@@ -7,7 +6,6 @@ import {
   CHALLENGE_TYPES,
   type ChallengeText,
   type ChallengeType,
-  crsDetectionRule,
   FAILURE_BAN_DEFAULTS,
   FAILURE_BAN_SECONDS_RANGE,
   FAILURE_THRESHOLD_RANGE,
@@ -16,11 +14,9 @@ import {
   PASS_TTL_RANGE,
   POW_DIFFICULTY_RANGE,
   POW_HIGH_DIFFICULTY_RANGE,
-  type SecurityEventKind,
   type SiteProtection,
   type SiteProtectionUpdateInput,
   type SiteWaf,
-  securityEventKind,
   WAF_ANOMALY_THRESHOLD_RANGE,
   WAF_BODY_LIMIT_RANGE,
   WAF_MAX_EXCLUSION_ENTRIES,
@@ -33,7 +29,7 @@ import {
 } from "@edgeweir/contract";
 import { Add01Icon, Cancel01Icon, PencilEdit01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
@@ -45,15 +41,12 @@ import {
 } from "@/components/cc-thresholds";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormSelect } from "@/components/form-select";
-import { Pager } from "@/components/pager";
 import { PresetSelect, presetLabel, usePreset } from "@/components/preset-select";
-import { RowMenu, type RowMenuItem } from "@/components/quick-actions";
 import { SafetyNote } from "@/components/safety-note";
 import { ExclusionDialog } from "@/components/site/exclusion-dialog";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
-import { combineQueries, EmptyState, QueryView } from "@/components/states";
-import { StatusDot } from "@/components/status-dot";
+import { combineQueries, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,18 +56,9 @@ import { Switch } from "@/components/ui/switch";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { useDraft } from "@/hooks/use-draft";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
-import { blockReasonLabel } from "@/lib/access-logs";
-import { ANALYTICS_RANGES, rangeLabel } from "@/lib/analytics";
-import { formatDateTime, formatNumber, formatPercent, m, timeAgo } from "@/lib/i18n";
+import { formatDateMinutes, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
-import {
-  challengeLabel,
-  eventKindLabel,
-  levelLabel,
-  metricLabel,
-  wafModeLabel,
-} from "@/lib/protection";
-import { cn } from "@/lib/utils";
+import { challengeLabel, levelLabel, wafModeLabel } from "@/lib/protection";
 import {
   type Exclusion,
   isSiteWide,
@@ -85,10 +69,6 @@ import {
   withSiteWideRuleIds,
 } from "@/lib/waf-exclusions";
 
-const PAGE_SIZE = 20;
-const ALL = "all";
-const HOURS = [1, 24, 168] as const;
-
 /** Saves part of the site's protection and refreshes it; returns whether it worked. */
 function useUpdateProtection(siteId: string) {
   const queryClient = useQueryClient();
@@ -98,6 +78,9 @@ function useUpdateProtection(siteId: string) {
   const apply = async (patch: Omit<SiteProtectionUpdateInput, "id">) => {
     const saved = await mutation.mutateAsync({ id: siteId, ...patch });
     queryClient.setQueryData(orpc.protection.get.queryKey({ input: { id: siteId } }), saved);
+    // Saving the switch hands an automatic mitigation's hold to the operator.
+    if (patch.underAttack !== undefined)
+      await queryClient.invalidateQueries({ queryKey: orpc.autoMitigation.key() });
     toast.success(m.common_saved());
   };
   const save = async (patch: Omit<SiteProtectionUpdateInput, "id">) => {
@@ -154,14 +137,6 @@ export function SecurityTab({ siteId }: { siteId: string }) {
         )}
       </QueryView>
       <WafCard siteId={siteId} />
-      <NodeLevelsCard siteId={siteId} />
-      <TopCard siteId={siteId} />
-      <WafRulesCard siteId={siteId} />
-      <LoggedRulesCard siteId={siteId} />
-      <AuthFailuresCard siteId={siteId} />
-      <BlockReasonsCard siteId={siteId} />
-      <ChallengesCard siteId={siteId} />
-      <EventsCard siteId={siteId} />
     </div>
   );
 }
@@ -172,12 +147,11 @@ const CARD_IDS = {
   challenges: "security-challenges",
   cc: "security-cc",
   waf: "security-waf",
-  nodes: "security-nodes",
 } as const;
 
 /**
  * One line of what is in effect: Under Attack, the CC policy, CRS, challenges and, when raised,
- * the nodes' level. Each part scrolls to its card.
+ * the nodes' level. Each part scrolls to its card; the nodes' level opens the attacks tab.
  */
 function SecuritySummary({ siteId, protection }: { siteId: string; protection: SiteProtection }) {
   const reducedMotion = useReducedMotion();
@@ -194,7 +168,7 @@ function SecuritySummary({ siteId, protection }: { siteId: string; protection: S
     .filter((node) => node.online && node.level !== "normal")
     .map((node) => CC_LEVELS.indexOf(node.level));
   const top = levels.length ? CC_LEVELS[Math.max(...levels)] : undefined;
-  const parts: { key: keyof typeof CARD_IDS; label: string; alert?: boolean }[] = [
+  const parts: { key: keyof typeof CARD_IDS | "nodes"; label: string; alert?: boolean }[] = [
     protection.underAttack || protection.platformUnderAttack
       ? {
           key: "underAttack",
@@ -256,15 +230,21 @@ function SecuritySummary({ siteId, protection }: { siteId: string; protection: S
           variant={part.alert ? "destructive" : "outline"}
           className="h-6 cursor-pointer px-2.5 hover:bg-wash"
           render={
-            <button
-              type="button"
-              onClick={() =>
-                document.getElementById(CARD_IDS[part.key])?.scrollIntoView({
-                  behavior: reducedMotion ? "auto" : "smooth",
-                  block: "start",
-                })
-              }
-            />
+            part.key === "nodes" ? (
+              <Link to="/sites/$id" params={{ id: siteId }} search={{ tab: "attacks" }} />
+            ) : (
+              <button
+                type="button"
+                onClick={() =>
+                  document
+                    .getElementById(CARD_IDS[part.key as keyof typeof CARD_IDS])
+                    ?.scrollIntoView({
+                      behavior: reducedMotion ? "auto" : "smooth",
+                      block: "start",
+                    })
+                }
+              />
+            )
           }
           data-testid={`security-summary-${part.key}`}
         >
@@ -277,6 +257,14 @@ function SecuritySummary({ siteId, protection }: { siteId: string; protection: S
 
 function UnderAttackCard({ siteId, protection }: { siteId: string; protection: SiteProtection }) {
   const { apply, save, pending } = useUpdateProtection(siteId);
+  const mitigation = useQuery(
+    orpc.autoMitigation.get.queryOptions({
+      input: { id: siteId },
+      refetchInterval: 30_000,
+      meta: { background: true },
+    }),
+  );
+  const automatic = protection.underAttack ? mitigation.data?.active : null;
   const turningOn = !protection.underAttack;
   const toggle = (
     <Switch
@@ -305,6 +293,11 @@ function UnderAttackCard({ siteId, protection }: { siteId: string; protection: S
           {protection.underAttack ? (
             <Badge variant="destructive" data-testid="protection-under-attack-on">
               {m.protection_on()}
+            </Badge>
+          ) : null}
+          {automatic ? (
+            <Badge variant="outline" data-testid="protection-under-attack-auto">
+              {m.protection_under_attack_auto({ time: formatDateMinutes(automatic.expiresAt) })}
             </Badge>
           ) : null}
         </Field>
@@ -1041,591 +1034,5 @@ function ExclusionEntries({
         />
       ) : null}
     </FieldSet>
-  );
-}
-
-/** Most-matched CRS rules of the site over a range (approximate). */
-function WafRulesCard({ siteId }: { siteId: string }) {
-  const [range, setRange] = React.useState<AnalyticsRange>("24h");
-  const rules = useQuery({
-    ...orpc.waf.topRules.queryOptions({ input: { id: siteId, range, limit: 10 } }),
-    placeholderData: keepPreviousData,
-  });
-  return (
-    <Card className="animate-enter" style={{ animationDelay: "270ms" }}>
-      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-        <CardTitle>{m.waf_top_title()}</CardTitle>
-        <div className="w-full sm:w-44">
-          <FormSelect
-            id="waf-top-range"
-            label={m.security_hours()}
-            value={range}
-            testId="waf-top-range"
-            options={ANALYTICS_RANGES.map((value) => ({ value, label: rangeLabel(value) }))}
-            onChange={(value) => setRange(value as AnalyticsRange)}
-          />
-        </div>
-      </CardHeader>
-      <CardContent>
-        <QueryView query={rules}>
-          {({ items }) => (
-            <TopList
-              title={m.waf_top_rules()}
-              items={items.map((item) => ({ value: String(item.ruleId), count: item.requests }))}
-              testId="waf-top-rules"
-              mono
-              actions={(value) =>
-                crsDetectionRule(Number(value))
-                  ? [
-                      {
-                        label: m.quick_exclude_rule({ id: value }),
-                        action: { kind: "exclude-rule", siteId, ruleId: Number(value) },
-                        testId: "waf-top-exclude-rule",
-                      },
-                      {
-                        label: m.quick_exclude_path(),
-                        action: { kind: "exclude-path", siteId, ruleIds: [Number(value)] },
-                        testId: "waf-top-exclude-path",
-                      },
-                    ]
-                  : []
-              }
-            />
-          )}
-        </QueryView>
-      </CardContent>
-    </Card>
-  );
-}
-
-/** Requests that matched rules with the log action, per rule, over a range (approximate). */
-function LoggedRulesCard({ siteId }: { siteId: string }) {
-  const [range, setRange] = React.useState<AnalyticsRange>("24h");
-  const logged = useQuery({
-    ...orpc.rules.topLogged.queryOptions({ input: { id: siteId, range, limit: 10 } }),
-    placeholderData: keepPreviousData,
-  });
-  return (
-    <Card className="animate-enter" style={{ animationDelay: "285ms" }}>
-      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-        <CardTitle>{m.rules_logged_title()}</CardTitle>
-        <div className="w-full sm:w-44">
-          <FormSelect
-            id="logged-rules-range"
-            label={m.security_hours()}
-            value={range}
-            testId="logged-rules-range"
-            options={ANALYTICS_RANGES.map((value) => ({ value, label: rangeLabel(value) }))}
-            onChange={(value) => setRange(value as AnalyticsRange)}
-          />
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <QueryView query={logged}>
-          {({ items, unsupportedNodes }) => (
-            <>
-              <TopList
-                title={m.rules_logged_rule()}
-                items={items.map((item) => ({
-                  id: item.ruleId,
-                  value:
-                    item.name === null
-                      ? m.rules_logged_deleted()
-                      : item.platform
-                        ? m.rules_logged_platform({ name: item.name })
-                        : item.name,
-                  count: item.requests,
-                }))}
-                testId="logged-rules"
-              />
-              {unsupportedNodes > 0 ? (
-                <SafetyNote data-testid="logged-rules-partial">
-                  {m.rules_logged_partial()}
-                </SafetyNote>
-              ) : null}
-            </>
-          )}
-        </QueryView>
-      </CardContent>
-    </Card>
-  );
-}
-
-/** Requests the site's access authentication refused over a range. */
-function AuthFailuresCard({ siteId }: { siteId: string }) {
-  const [range, setRange] = React.useState<AnalyticsRange>("24h");
-  const failures = useQuery({
-    ...orpc.authRules.failures.queryOptions({ input: { id: siteId, range } }),
-    placeholderData: keepPreviousData,
-  });
-  return (
-    <Card
-      className="animate-enter"
-      style={{ animationDelay: "300ms" }}
-      data-testid="auth-failures-card"
-    >
-      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-        <CardTitle>{m.auth_failures_title()}</CardTitle>
-        <div className="w-full sm:w-44">
-          <FormSelect
-            id="auth-failures-range"
-            label={m.security_hours()}
-            value={range}
-            testId="auth-failures-range"
-            options={ANALYTICS_RANGES.map((value) => ({ value, label: rangeLabel(value) }))}
-            onChange={(value) => setRange(value as AnalyticsRange)}
-          />
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <QueryView query={failures}>
-          {({ requests, unsupportedNodes }) => (
-            <>
-              <p
-                className="font-heading text-3xl font-medium tabular-nums"
-                data-testid="auth-failures-count"
-              >
-                {formatNumber(requests)}
-              </p>
-              {unsupportedNodes > 0 ? (
-                <SafetyNote data-testid="auth-failures-partial">
-                  {m.auth_failures_partial()}
-                </SafetyNote>
-              ) : null}
-            </>
-          )}
-        </QueryView>
-      </CardContent>
-    </Card>
-  );
-}
-
-/** The site's statistics dimensions over a range of its own (block reasons, challenges). */
-function useDimensions(siteId: string, range: AnalyticsRange) {
-  return useQuery({
-    ...orpc.analytics.dimensions.queryOptions({ input: { range, siteId } }),
-    placeholderData: keepPreviousData,
-  });
-}
-
-/** A card's title with the range select of its own. */
-function RangeHeader({
-  title,
-  range,
-  onRangeChange,
-  id,
-}: {
-  title: string;
-  range: AnalyticsRange;
-  onRangeChange: (range: AnalyticsRange) => void;
-  id: string;
-}) {
-  return (
-    <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-      <CardTitle>{title}</CardTitle>
-      <div className="w-full sm:w-44">
-        <FormSelect
-          id={id}
-          label={m.security_hours()}
-          value={range}
-          testId={id}
-          options={ANALYTICS_RANGES.map((value) => ({ value, label: rangeLabel(value) }))}
-          onChange={(value) => onRangeChange(value as AnalyticsRange)}
-        />
-      </div>
-    </CardHeader>
-  );
-}
-
-/** Requests the nodes refused or challenged over a range, by reason. */
-function BlockReasonsCard({ siteId }: { siteId: string }) {
-  const [range, setRange] = React.useState<AnalyticsRange>("24h");
-  const dimensions = useDimensions(siteId, range);
-  return (
-    <Card
-      className="animate-enter"
-      style={{ animationDelay: "315ms" }}
-      data-testid="block-reasons-card"
-    >
-      <RangeHeader
-        title={m.block_reasons_title()}
-        range={range}
-        onRangeChange={setRange}
-        id="block-reasons-range"
-      />
-      <CardContent className="flex flex-col gap-4">
-        <QueryView query={dimensions}>
-          {({ blockReasons, unsupportedNodes }) => (
-            <>
-              <TopList
-                title={m.block_reasons_reason()}
-                items={[...blockReasons]
-                  .filter((item) => item.requests > 0)
-                  .sort((a, b) => b.requests - a.requests)
-                  .map((item) => ({
-                    id: item.key,
-                    value: blockReasonLabel(item.key),
-                    count: item.requests,
-                  }))}
-                testId="block-reasons"
-              />
-              {unsupportedNodes > 0 ? (
-                <SafetyNote data-testid="block-reasons-partial">
-                  {m.stats_dims_partial()}
-                </SafetyNote>
-              ) : null}
-            </>
-          )}
-        </QueryView>
-      </CardContent>
-    </Card>
-  );
-}
-
-/** Challenges issued and passed over a range, and the share that passed. */
-function ChallengesCard({ siteId }: { siteId: string }) {
-  const [range, setRange] = React.useState<AnalyticsRange>("24h");
-  const dimensions = useDimensions(siteId, range);
-  return (
-    <Card
-      className="animate-enter"
-      style={{ animationDelay: "330ms" }}
-      data-testid="challenges-card"
-    >
-      <RangeHeader
-        title={m.challenges_title()}
-        range={range}
-        onRangeChange={setRange}
-        id="challenges-range"
-      />
-      <CardContent className="flex flex-col gap-4">
-        <QueryView query={dimensions}>
-          {({ challenges, unsupportedNodes }) => (
-            <>
-              {challenges.issued === 0 && challenges.passed === 0 ? (
-                <p className="text-sm text-muted-foreground" data-testid="challenges-empty">
-                  {m.security_top_empty()}
-                </p>
-              ) : (
-                <dl className="grid grid-cols-3 gap-4 sm:max-w-xl">
-                  {(
-                    [
-                      // A pass can be counted by another node than the challenge (or fall in
-                      // the next range): the rate stops at 100%, and needs issued challenges.
-                      ...(challenges.issued > 0
-                        ? ([
-                            [
-                              "rate",
-                              m.challenges_rate(),
-                              formatPercent(
-                                Math.min(100, (challenges.passed / challenges.issued) * 100),
-                              ),
-                            ],
-                          ] as const)
-                        : []),
-                      ["issued", m.challenges_issued(), formatNumber(challenges.issued)],
-                      ["passed", m.challenges_passed(), formatNumber(challenges.passed)],
-                    ] as const
-                  ).map(([key, label, value]) => (
-                    <div key={key} className="flex min-w-0 flex-col gap-1">
-                      <dt className="text-xs text-muted-foreground">{label}</dt>
-                      <dd
-                        className={cn(
-                          "font-heading font-medium tabular-nums",
-                          key === "rate" ? "text-3xl" : "text-xl",
-                        )}
-                        data-testid={`challenges-${key}`}
-                      >
-                        {value}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              )}
-              {unsupportedNodes > 0 ? (
-                <SafetyNote data-testid="challenges-partial">{m.stats_dims_partial()}</SafetyNote>
-              ) : null}
-            </>
-          )}
-        </QueryView>
-      </CardContent>
-    </Card>
-  );
-}
-
-function NodeLevelsCard({ siteId }: { siteId: string }) {
-  const state = useQuery(
-    orpc.security.state.queryOptions({
-      input: { id: siteId, hours: 24 },
-      refetchInterval: 15_000,
-      meta: { background: true },
-    }),
-  );
-  return (
-    <Card
-      id={CARD_IDS.nodes}
-      className="scroll-mt-4 animate-enter"
-      style={{ animationDelay: "180ms" }}
-    >
-      <CardHeader>
-        <CardTitle>{m.security_nodes_title()}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <QueryView
-          query={state}
-          isEmpty={(data) => data.nodes.length === 0}
-          empty={<EmptyState title={m.security_no_nodes()} />}
-        >
-          {({ nodes }) => (
-            <ul className="divide-y rounded-2xl sunk-well" data-testid="security-nodes">
-              {nodes.map((node, index) => (
-                <li
-                  key={node.id}
-                  className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2.5 animate-enter"
-                  style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
-                  data-testid="security-node-row"
-                  data-node-id={node.id}
-                  data-level={node.level}
-                >
-                  <span className="min-w-32 flex-1 truncate text-sm font-medium">{node.name}</span>
-                  <StatusDot tone={node.online ? "good" : "idle"}>
-                    {node.online ? m.security_online() : m.security_offline()}
-                  </StatusDot>
-                  <Badge
-                    variant={node.level === "normal" ? "outline" : "destructive"}
-                    data-testid="security-node-level"
-                  >
-                    {levelLabel(node.level)}
-                  </Badge>
-                  {node.escalatedPaths ? (
-                    <span className="text-xs text-muted-foreground tabular-nums">
-                      {m.security_escalated_paths({ count: formatNumber(node.escalatedPaths) })}
-                    </span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
-        </QueryView>
-      </CardContent>
-    </Card>
-  );
-}
-
-function TopList({
-  title,
-  items,
-  testId,
-  mono,
-  actions,
-}: {
-  title: string;
-  /** `id` keys an entry whose value may repeat (e.g. rule names). */
-  items: { id?: string; value: string; count: number }[];
-  testId: string;
-  mono?: boolean;
-  /** The row menu of an entry. */
-  actions?: (value: string) => RowMenuItem[];
-}) {
-  return (
-    <div className="flex min-w-0 flex-col gap-2" data-testid={testId}>
-      <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
-      {items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{m.security_top_empty()}</p>
-      ) : (
-        <ol className="divide-y rounded-2xl sunk-well">
-          {items.map((item) => (
-            <li key={item.id ?? item.value} className="flex items-center gap-3 px-3 py-2 text-sm">
-              <span className={`min-w-0 flex-1 break-all ${mono ? "font-mono text-xs" : ""}`}>
-                {item.value}
-              </span>
-              <span className="tabular-nums text-muted-foreground">{formatNumber(item.count)}</span>
-              {actions ? <TopListActions items={actions(item.value)} /> : null}
-            </li>
-          ))}
-        </ol>
-      )}
-    </div>
-  );
-}
-
-/** An entry's menu, or the menu's room so the counts of a list stay aligned. */
-function TopListActions({ items }: { items: RowMenuItem[] }) {
-  return items.length ? <RowMenu items={items} /> : <span aria-hidden className="w-6 shrink-0" />;
-}
-
-function TopCard({ siteId }: { siteId: string }) {
-  const [hours, setHours] = React.useState<(typeof HOURS)[number]>(24);
-  const state = useQuery({
-    ...orpc.security.state.queryOptions({ input: { id: siteId, hours } }),
-    placeholderData: keepPreviousData,
-  });
-  return (
-    <Card className="animate-enter" style={{ animationDelay: "240ms" }}>
-      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-        <CardTitle>{m.security_top_title()}</CardTitle>
-        <div className="w-full sm:w-44">
-          <FormSelect
-            id="security-hours"
-            label={m.security_hours()}
-            value={String(hours)}
-            testId="security-hours"
-            options={HOURS.map((value) => ({
-              value: String(value),
-              label: m.security_hours_value({ hours: value }),
-            }))}
-            onChange={(value) => setHours(Number(value) as (typeof HOURS)[number])}
-          />
-        </div>
-      </CardHeader>
-      <CardContent>
-        <QueryView query={state}>
-          {({ topIps, topPaths }) => (
-            <div className="grid gap-4 md:grid-cols-2">
-              <TopList
-                title={m.security_top_ips()}
-                items={topIps}
-                testId="security-top-ips"
-                mono
-                actions={(address) => [
-                  { label: m.quick_ban_ip(), action: { kind: "ban", address, siteId } },
-                ]}
-              />
-              <TopList
-                title={m.security_top_paths()}
-                items={topPaths}
-                testId="security-top-paths"
-                mono
-                actions={(path) => [
-                  {
-                    label: m.quick_purge_url(),
-                    action: { kind: "purge", targets: [path], siteId },
-                  },
-                ]}
-              />
-            </div>
-          )}
-        </QueryView>
-      </CardContent>
-    </Card>
-  );
-}
-
-function EventsCard({ siteId }: { siteId: string }) {
-  const [page, setPage] = React.useState(1);
-  const [kind, setKind] = React.useState<SecurityEventKind | undefined>();
-  const events = useQuery({
-    ...orpc.security.events.queryOptions({
-      input: { id: siteId, kind, page, pageSize: PAGE_SIZE },
-    }),
-    placeholderData: keepPreviousData,
-    refetchInterval: 30_000,
-    meta: { background: true },
-  });
-  return (
-    <Card className="animate-enter" style={{ animationDelay: "300ms" }}>
-      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-        <CardTitle>{m.security_events_title()}</CardTitle>
-        <div className="w-full sm:w-44">
-          <FormSelect
-            id="security-event-kind"
-            label={m.security_event_kind()}
-            value={kind ?? ALL}
-            testId="security-event-kind"
-            options={[
-              { value: ALL, label: m.security_event_kind_all() },
-              ...securityEventKind.options.map((value) => ({
-                value,
-                label: eventKindLabel(value),
-              })),
-            ]}
-            onChange={(value) => {
-              setPage(1);
-              setKind(value === ALL ? undefined : (value as SecurityEventKind));
-            }}
-          />
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <QueryView
-          query={events}
-          isEmpty={(data) => data.items.length === 0}
-          empty={<EmptyState title={m.security_events_empty()} />}
-        >
-          {({ items, total }) => (
-            <>
-              <ol
-                className="flex flex-col divide-y rounded-2xl sunk-well"
-                data-testid="security-events"
-              >
-                {items.map((event, index) => (
-                  <li
-                    key={event.id}
-                    className="flex flex-col gap-1 px-3 py-2.5 animate-enter"
-                    style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
-                    data-testid="security-event-row"
-                    data-kind={event.kind}
-                  >
-                    <div className="flex flex-wrap items-center gap-2 text-sm">
-                      <Badge variant={event.kind === "ip_banned" ? "destructive" : "secondary"}>
-                        {eventKindLabel(event.kind)}
-                      </Badge>
-                      {event.kind === "ip_banned" ? (
-                        <span className="font-mono text-xs break-all">{event.address}</span>
-                      ) : (
-                        <span>
-                          {m.security_level_change({
-                            from: levelLabel(event.previousLevel),
-                            to: levelLabel(event.level),
-                          })}
-                        </span>
-                      )}
-                      {event.path ? (
-                        <span className="font-mono text-xs break-all">{event.path}</span>
-                      ) : null}
-                      <span
-                        className="ml-auto text-xs text-muted-foreground"
-                        title={formatDateTime(event.occurredAt)}
-                      >
-                        {timeAgo(event.occurredAt)}
-                      </span>
-                      {event.kind === "ip_banned" && event.address ? (
-                        <RowMenu
-                          items={[
-                            {
-                              label: m.quick_ban_everywhere(),
-                              action: { kind: "ban", address: event.address, scope: "platform" },
-                              testId: "event-ban-everywhere",
-                            },
-                            {
-                              label: m.bans_unban(),
-                              action: { kind: "unban", address: event.address, siteId },
-                              testId: "event-unban",
-                            },
-                          ]}
-                        />
-                      ) : null}
-                    </div>
-                    <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
-                      <span>{event.node?.name || m.security_node_deleted()}</span>
-                      {event.metric ? (
-                        <span className="tabular-nums">
-                          {m.security_metric_value({
-                            metric: metricLabel(event.metric),
-                            observed: formatNumber(event.observed),
-                            threshold: formatNumber(event.threshold),
-                          })}
-                        </span>
-                      ) : null}
-                    </div>
-                  </li>
-                ))}
-              </ol>
-              <Pager page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
-            </>
-          )}
-        </QueryView>
-      </CardContent>
-    </Card>
   );
 }

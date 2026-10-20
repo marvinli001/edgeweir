@@ -12,6 +12,15 @@ export const ANALYTICS_RANGES = [
 
 export const DEFAULT_RANGE: AnalyticsRange = "24h";
 
+/** Hours a range spans, for lists kept by the hour (security events). */
+export const RANGE_HOURS: Record<AnalyticsRange, number> = {
+  "1h": 1,
+  "6h": 6,
+  "24h": 24,
+  "7d": 168,
+  "30d": 720,
+};
+
 export function rangeLabel(range: AnalyticsRange): string {
   return {
     "1h": m.analytics_range_1h,

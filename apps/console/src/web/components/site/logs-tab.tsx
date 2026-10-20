@@ -36,11 +36,13 @@ import {
   authKindLabel,
   blockReasonLabel,
   countryName,
-  emptyMoreFilters,
   headerLines,
+  initialLogFilters,
   LOG_STATUS_CLASSES,
   type LogFilterError,
   type LogFilters,
+  type LogJump,
+  localDateTime,
   logHeadersError,
   logQueryOf,
   METHODS,
@@ -54,10 +56,7 @@ import { requestUrl } from "@/lib/purge";
 import { cn } from "@/lib/utils";
 import { exclusionPath } from "@/lib/waf-exclusions";
 
-const localTime = (date: Date) =>
-  new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-
-export function LogsTab({ siteId }: { siteId: string }) {
+export function LogsTab({ siteId, jump }: { siteId: string; jump?: LogJump }) {
   const settings = useQuery(orpc.logs.settings.queryOptions({ input: { siteId } }));
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: siteId } }));
   return (
@@ -73,7 +72,7 @@ export function LogsTab({ siteId }: { siteId: string }) {
           )}
         </QueryView>
       </Card>
-      <LogSearch siteId={siteId} />
+      <LogSearch key={JSON.stringify(jump ?? null)} siteId={siteId} jump={jump} />
     </div>
   );
 }
@@ -244,16 +243,6 @@ function LogSettingsForm({
   );
 }
 
-const initialFilters = (): LogFilters => ({
-  from: localTime(new Date(Date.now() - 3600000)),
-  to: localTime(new Date(Date.now() + 60000)),
-  status: "",
-  ip: "",
-  path: "",
-  requestId: "",
-  ...emptyMoreFilters(),
-});
-
 /** Field ids and test ids are `log-filter-<kebab name>`. */
 const kebab = (key: string) => key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 
@@ -267,18 +256,19 @@ const INVALID_TEXT: Record<LogFilterError, () => string> = {
 const ALL = "__all__";
 
 /** The query form (the common filters, the others behind "more filters") and the results. */
-function LogSearch({ siteId }: { siteId: string }) {
-  const [filters, setFilters] = React.useState(initialFilters);
+function LogSearch({ siteId, jump }: { siteId: string; jump?: LogJump }) {
+  const [start] = React.useState(() => initialLogFilters(jump));
+  const [filters, setFilters] = React.useState(start.filters);
   // The end stays "a minute from now" until the user sets one, so searching again shows new logs.
-  const [endIsNow, setEndIsNow] = React.useState(true);
-  const [more, setMore] = React.useState(false);
+  const [endIsNow, setEndIsNow] = React.useState(start.endIsNow);
+  const [more, setMore] = React.useState(start.more);
   const [invalid, setInvalid] = React.useState<LogFilterError | null>(null);
   const [query, setQuery] = React.useState<LogQuery>(() => {
     const result = logQueryOf(
       siteId,
-      initialFilters(),
-      new Date(Date.now() - 3600000).toISOString(),
-      new Date(Date.now() + 60000).toISOString(),
+      start.filters,
+      new Date(start.filters.from).toISOString(),
+      new Date(start.endIsNow ? Date.now() + 60000 : start.filters.to).toISOString(),
     );
     return "query" in result ? result.query : ({} as LogQuery);
   });
@@ -363,7 +353,7 @@ function LogSearch({ siteId }: { siteId: string }) {
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            const toText = endIsNow ? localTime(new Date(Date.now() + 60000)) : filters.to;
+            const toText = endIsNow ? localDateTime(new Date(Date.now() + 60000)) : filters.to;
             if (toText !== filters.to) setFilters({ ...filters, to: toText });
             const from = new Date(filters.from),
               to = new Date(toText);

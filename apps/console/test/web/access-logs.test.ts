@@ -12,11 +12,13 @@ import {
   activeMoreFilters,
   blockReasonLabel,
   browserLabel,
+  clientJump,
   countryName,
   deviceLabel,
   emptyMoreFilters,
   headerLines,
   httpVersionLabel,
+  initialLogFilters,
   type LogFilters,
   logHeadersError,
   logQueryOf,
@@ -204,5 +206,61 @@ describe("log filters", () => {
     expect(activeMoreFilters(filters({ host: "a.example", cidr: " ", blockReason: "crs" }))).toBe(
       2,
     );
+  });
+});
+
+describe("jumping into the logs", () => {
+  const NOW = Date.UTC(2026, 9, 10, 12, 0, 0);
+
+  it("starts from the last hour with every filter empty, and the end follows the clock", () => {
+    const start = initialLogFilters(undefined, NOW);
+    expect(start.endIsNow).toBe(true);
+    expect(start.more).toBe(false);
+    expect(start.filters).toEqual(
+      filters({
+        from: new Date(NOW - 3_600_000 - new Date(NOW).getTimezoneOffset() * 60_000)
+          .toISOString()
+          .slice(0, 16),
+        to: new Date(NOW + 60_000 - new Date(NOW).getTimezoneOffset() * 60_000)
+          .toISOString()
+          .slice(0, 16),
+      }),
+    );
+  });
+
+  it("takes the window and filters of a jump, opening the filters behind more filters", () => {
+    const local = (iso: string) =>
+      new Date(Date.parse(iso) - new Date(iso).getTimezoneOffset() * 60_000)
+        .toISOString()
+        .slice(0, 16);
+    const from = "2026-10-10T08:00:00.000Z";
+    const to = "2026-10-10T09:30:00.000Z";
+    const reason = initialLogFilters({ blockReason: "cc", from, to }, NOW);
+    expect(reason.filters).toEqual(
+      filters({ blockReason: "cc", from: local(from), to: local(to) }),
+    );
+    expect(reason.endIsNow).toBe(false);
+    expect(reason.more).toBe(true);
+
+    // The common filters are not behind "more filters"; a start without an end still follows now.
+    const path = initialLogFilters({ path: "/login", ip: "192.0.2.1", from }, NOW);
+    expect(path.filters).toMatchObject({ path: "/login", ip: "192.0.2.1", from: local(from) });
+    expect(path.endIsNow).toBe(true);
+    expect(path.more).toBe(false);
+    // An unreadable time falls back to the default window.
+    expect(initialLogFilters({ from: "x", to: "y" }, NOW).endIsNow).toBe(true);
+  });
+
+  it("sends an IPv6 /64 as a network and any other client as an address", () => {
+    expect(clientJump("192.0.2.7")).toEqual({ ip: "192.0.2.7" });
+    expect(clientJump("2001:db8::1")).toEqual({ ip: "2001:db8::1" });
+    expect(clientJump("2001:db8:1:2::/64")).toEqual({ cidr: "2001:db8:1:2::/64" });
+    const query = logQueryOf(
+      SITE,
+      initialLogFilters({ ...clientJump("2001:db8:1:2::/64"), from: FROM, to: TO }, NOW).filters,
+      FROM,
+      TO,
+    );
+    expect(query).toMatchObject({ query: { cidr: "2001:db8:1:2::/64" } });
   });
 });

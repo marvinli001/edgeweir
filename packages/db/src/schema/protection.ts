@@ -111,6 +111,34 @@ export const siteProtection = pgTable("site_protection", {
 });
 
 /**
+ * A site's automatic mitigation (ADR-0051): when a node's CC level for the
+ * site reaches `threshold`, Under Attack is turned on and held until the
+ * escalation has been over for `duration_minutes`. No row means off. The
+ * columns from `active_since` are the state the worker keeps; the
+ * mitigation only lifts the Under Attack it turned on itself.
+ */
+export const siteAutoMitigation = pgTable("site_auto_mitigation", {
+  siteId: uuid("site_id")
+    .primaryKey()
+    .references(() => site.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").notNull().default(true),
+  /** cookie302 | js | pow | captcha: the CC level that starts it. */
+  threshold: text("threshold").notNull(),
+  /** Minutes Under Attack stays on after the level was last at the threshold, 5 to 1440. */
+  durationMinutes: integer("duration_minutes").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  /** Set while the mitigation holds Under Attack: since when, until when, at which level. */
+  activeSince: timestamp("active_since", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  triggerLevel: text("trigger_level"),
+  /** The operator took over: no new mitigation until the level is below the threshold again. */
+  paused: boolean("paused").notNull().default(false),
+  /** Error code of the last change that could not be published; empty when none. */
+  lastError: text("last_error").notNull().default(""),
+  evaluatedAt: timestamp("evaluated_at", { withTimezone: true }),
+});
+
+/**
  * HMAC keys of challenge passes, three per cluster once a cluster uses
  * challenges: next, current and previous. Nodes sign with current and accept
  * all three; the daily rotation shifts the roles and creates a new next. The

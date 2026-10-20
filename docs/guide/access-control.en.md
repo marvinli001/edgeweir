@@ -321,7 +321,7 @@ An IPv4-mapped IPv6 address (`::ffff:a.b.c.d`) is checked as the IPv4 address, l
 
 ## Failure counts and error codes
 
-Requests authentication refused (401, 403, 429, 503, a browser's first request without credentials included) are counted per site and minute; the "Authentication failures" card of the site's Security tab shows the count over the chosen range (`GET /sites/{id}/auth-rules/failures`). Requests let through (also when the service fails) are not counted.
+Requests authentication refused (401, 403, 429, 503, a browser's first request without credentials included) are counted per site and minute; the "Authentication failures" card of the site's Attacks tab shows the count over the chosen range (`GET /sites/{id}/auth-rules/failures`). Requests let through (also when the service fails) are not counted.
 
 | `X-Edgeweir-Error` | Status | Cause |
 | --- | --- | --- |

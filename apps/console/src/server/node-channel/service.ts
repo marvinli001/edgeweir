@@ -52,6 +52,7 @@ import { PURGE_KEY, siteSecretBinding } from "../lib/site-secrets";
 import { NODE_CERT_LIFETIME_DAYS, NODE_ORGANIZATION } from "../pki/ca";
 import { ingestLogs } from "../services/access-logs";
 import { recordAudit } from "../services/audit";
+import { nudgeAutoMitigation } from "../services/auto-mitigation";
 import { banChanges, currentBanSequence, reportAutoBans } from "../services/bans";
 import {
   type CacheTaskItem,
@@ -1243,6 +1244,16 @@ export function createNodeService(
         })),
       );
       log.debug("security events", { nodeId: node.id, reported: req.events.length, accepted });
+      // A site's level going up may start its automatic mitigation: evaluate now, not at the
+      // next minute. After the answer: the node does not wait for a publish.
+      if (accepted > 0)
+        void nudgeAutoMitigation(app, [
+          ...new Set(
+            req.events
+              .filter((e) => e.kind === SecurityEventKind.SITE_LEVEL && e.level !== "normal")
+              .map((e) => e.siteId.toLowerCase()),
+          ),
+        ]);
       return { accepted };
     },
   };

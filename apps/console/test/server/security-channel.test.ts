@@ -289,6 +289,19 @@ describe("challenge keys, security events and JA4 over the node channel", async 
       pageSize: 50,
     });
     expect(banned.items.map((e) => e.address)).toEqual(["203.0.113.9"]);
+    // Within the last hours: the events above happened a moment ago, none an hour from now.
+    expect(
+      (await listSecurityEvents(ctx.db, { id: siteId, hours: 1, page: 1, pageSize: 50 })).total,
+    ).toBe(5);
+    const later = new Date(Date.now() + 2 * 3_600_000);
+    expect(
+      (await listSecurityEvents(ctx.db, { id: siteId, hours: 1, page: 1, pageSize: 50 }, later))
+        .total,
+    ).toBe(0);
+    expect(
+      (await listSecurityEvents(ctx.db, { id: siteId, hours: 3, page: 1, pageSize: 50 }, later))
+        .total,
+    ).toBe(5);
   });
 
   it("takes IPv6 clients as their /64", async () => {

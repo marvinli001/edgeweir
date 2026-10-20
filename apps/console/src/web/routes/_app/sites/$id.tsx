@@ -1,4 +1,10 @@
-import { analyticsRange, displaySiteDomain, type Site, siteDomain } from "@edgeweir/contract";
+import {
+  analyticsRange,
+  BLOCK_REASONS,
+  displaySiteDomain,
+  type Site,
+  siteDomain,
+} from "@edgeweir/contract";
 import {
   Add01Icon,
   Copy01Icon,
@@ -18,6 +24,7 @@ import { FormDialog } from "@/components/form-dialog";
 import { Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { AccessTab } from "@/components/site/access-tab";
+import { AttacksTab } from "@/components/site/attacks-tab";
 import { BulkRedirectsTab } from "@/components/site/bulk-redirects-tab";
 import { CacheTab } from "@/components/site/cache-tab";
 import { CloneSiteDialog } from "@/components/site/clone-site-dialog";
@@ -60,6 +67,13 @@ export const Route = createFileRoute("/_app/sites/$id")({
   validateSearch: z.object({
     tab: z.enum(SITE_TABS).optional(),
     range: analyticsRange.optional(),
+    // A jump into the logs tab: the filters and the time window of the search.
+    blockReason: z.enum([...BLOCK_REASONS, "any"]).optional(),
+    ip: z.string().max(64).optional(),
+    cidr: z.string().max(64).optional(),
+    path: z.string().max(2048).optional(),
+    from: z.iso.datetime().optional(),
+    to: z.iso.datetime().optional(),
   }),
   component: SiteDetailPage,
 });
@@ -117,9 +131,16 @@ function SiteDetailPage() {
             value={tab}
             onValueChange={(value) =>
               navigate({
+                // A jump's filters belong to the tab it opened.
                 search: (prev) => ({
                   ...prev,
                   tab: value === "overview" ? undefined : (value as SiteTab),
+                  blockReason: undefined,
+                  ip: undefined,
+                  cidr: undefined,
+                  path: undefined,
+                  from: undefined,
+                  to: undefined,
                 }),
                 replace: true,
               })
@@ -181,11 +202,46 @@ function SiteDetailPage() {
             <TabsContent value="security" className="animate-enter">
               <SecurityTab siteId={data.id} />
             </TabsContent>
+            <TabsContent value="attacks" className="animate-enter">
+              <AttacksTab
+                siteId={data.id}
+                siteName={data.name}
+                range={search.range ?? DEFAULT_RANGE}
+                onRangeChange={(range) =>
+                  navigate({
+                    search: (prev) => ({
+                      ...prev,
+                      range: range === DEFAULT_RANGE ? undefined : range,
+                    }),
+                    replace: true,
+                  })
+                }
+              />
+            </TabsContent>
             <TabsContent value="errors" className="animate-enter">
               <ErrorPagesTab siteId={data.id} />
             </TabsContent>
             <TabsContent value="logs" className="animate-enter">
-              <LogsTab siteId={data.id} />
+              <LogsTab
+                siteId={data.id}
+                jump={
+                  search.blockReason ||
+                  search.ip ||
+                  search.cidr ||
+                  search.path ||
+                  search.from ||
+                  search.to
+                    ? {
+                        blockReason: search.blockReason,
+                        ip: search.ip,
+                        cidr: search.cidr,
+                        path: search.path,
+                        from: search.from,
+                        to: search.to,
+                      }
+                    : undefined
+                }
+              />
             </TabsContent>
             <TabsContent value="cache" className="animate-enter">
               <CacheTab site={data} />

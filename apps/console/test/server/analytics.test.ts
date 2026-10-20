@@ -33,6 +33,7 @@ async function addStats(
     cacheHits?: number;
     cacheMisses?: number;
     statusCodes?: Record<string, number>;
+    blockReasons?: Record<string, number>;
     topUrls?: Record<string, number>;
     topIps?: Record<string, number>;
   },
@@ -256,6 +257,94 @@ describe("analytics", async () => {
       NOW,
     );
     expect(one.items.map((i) => [i.name, i.total])).toEqual([["edge-a", 10]]);
+  });
+
+  it("breaks requests down by block reason per bucket, for one site or all, from minutes or hours", async () => {
+    // Far from the other tests' rows: another day, so the sums below are only these.
+    const now = Date.UTC(2020, 1, 10, 8, 20, 30);
+    const day = (hh: number, mm: number) => new Date(Date.UTC(2020, 1, 10, hh, mm));
+    await addStats(db, {
+      minute: day(8, 10),
+      nodeId: nodeA,
+      siteId: siteA,
+      requests: 100,
+      blockReasons: { cc: 30, crs: 5 },
+    });
+    await addStats(db, {
+      minute: day(8, 11),
+      nodeId: nodeA,
+      siteId: siteA,
+      requests: 100,
+      blockReasons: { cc: 10, challenge: 2 },
+    });
+    await addStats(db, {
+      minute: day(8, 11),
+      nodeId: nodeA,
+      siteId: siteB,
+      requests: 100,
+      blockReasons: { rule: 4 },
+    });
+    // Outside the hour, and a row without any block.
+    await addStats(db, {
+      minute: day(6, 0),
+      nodeId: nodeA,
+      siteId: siteA,
+      requests: 100,
+      blockReasons: { cc: 999 },
+    });
+    await addStats(db, { minute: day(8, 12), nodeId: nodeA, siteId: siteA, requests: 100 });
+
+    const one = await trafficBreakdown(
+      db,
+      { range: "1h", by: "block_reason", metric: "requests", siteId: siteA, limit: 10 },
+      now,
+    );
+    expect(one.items.map((i) => [i.id, i.name, i.parentName, i.total])).toEqual([
+      ["cc", "cc", null, 40],
+      ["crs", "crs", null, 5],
+      ["challenge", "challenge", null, 2],
+    ]);
+    expect(one.total).toBe(47);
+    const cc = one.items[0]?.series ?? [];
+    expect(cc).toHaveLength(60);
+    expect(cc[one.times.indexOf(day(8, 10).toISOString())]).toBe(30);
+    expect(cc[one.times.indexOf(day(8, 11).toISOString())]).toBe(10);
+    expect(one.totalSeries[one.times.indexOf(day(8, 11).toISOString())]).toBe(12);
+
+    const all = await trafficBreakdown(
+      db,
+      { range: "1h", by: "block_reason", metric: "requests", limit: 2 },
+      now,
+    );
+    expect(all.items.map((i) => [i.id, i.total])).toEqual([
+      ["cc", 40],
+      ["crs", 5],
+    ]);
+    // Beyond the leaders, the total still covers every reason.
+    expect(all.total).toBe(51);
+
+    // 7 days read the hourly rollups and the minutes not rolled up yet (all the rows above).
+    await db.insert(schema.nodeHourStats).values({
+      minute: day(7, 0),
+      nodeId: nodeA,
+      siteId: siteA,
+      requests: 500,
+      blockReasons: { region: 12 },
+    });
+    const week = await trafficBreakdown(
+      db,
+      { range: "7d", by: "block_reason", metric: "requests", siteId: siteA, limit: 10 },
+      now,
+    );
+    expect(week.items.map((i) => [i.id, i.total])).toEqual([
+      ["cc", 1_039],
+      ["region", 12],
+      ["crs", 5],
+      ["challenge", 2],
+    ]);
+    expect(
+      (await admin.analytics.breakdown({ range: "1h", by: "block_reason", siteId: siteA })).items,
+    ).toEqual([]);
   });
 
   it("serves the procedures for every site or one site and refuses unknown sites", async () => {

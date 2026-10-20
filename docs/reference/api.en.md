@@ -237,8 +237,8 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | --- | --- |
 | `PATCH /sites/{id}/protection` | Changes only the fields given: `underAttack`, `underAttackChallenge`, `passTtlSeconds` (300–86400), `powDifficulty` (8–24), `powHighDifficulty` (8–26, at least `powDifficulty`), `logJa4`, `cc` (any of its fields, merged into the saved policy) |
 | `cc` | `enabled`, `followTemplate`, `maxLevel`, `highPowInsteadOfCaptcha`, `windowSeconds` (5–60), `siteQps`, `urlQps`, `ipQps` (0–1000000, 0 turns the trigger off), `ipBanSeconds` (60–86400), `originErrorPercent` (0–100), `originErrorMinRequests`, `escalateAfterSeconds` (1–3600), `cooldownSeconds` (1–86400) |
-| `GET /sites/{id}/security` | Query parameter `hours` (1–168, default 24) |
-| `GET /sites/{id}/security/events` | Query parameters `kind` (`site_level` / `path_level` / `ip_banned`), `page`, `pageSize` (1–100, default 50) |
+| `GET /sites/{id}/security` | Query parameter `hours` (1–720, default 24) |
+| `GET /sites/{id}/security/events` | Query parameters `kind` (`site_level` / `path_level` / `ip_banned`), `hours` (1–720, only events of the last hours; no limit when omitted), `page`, `pageSize` (1–100, default 50) |
 | `PUT /settings/protection` | `underAttack` (global Under Attack), `underAttackChallenge`, `eventRetentionDays` (7–365, default 30) |
 | `PUT /settings/cc-template` | Every field of `cc` except `enabled` and `followTemplate` |
 
@@ -265,6 +265,24 @@ curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicati
 ```
 
 Behavior: [Challenges and CC mitigation](../guide/challenges.en.md).
+
+### Automatic mitigation
+
+| Procedure | Endpoint | Description |
+| --- | --- | --- |
+| `autoMitigation.get` | `GET /sites/{id}/auto-mitigation` | The settings (`settings` and `updatedAt` are `null` until set), `level` (the highest CC level of the site on the cluster's online, active nodes), `active { since, expiresAt, level }` (the Under Attack automatic mitigation is holding, `null` when none), `paused` (nothing starts until the level is below the trigger level after a manual end or a manual turn-off), `lastError` (error code of a failed turn-on or turn-off, empty when none) |
+| `autoMitigation.update` | `PUT /sites/{id}/auto-mitigation` | Creates or replaces the settings as a whole, effective at the next check (within 1 minute); disabling turns off a hold in progress at once, shortening `durationMinutes` shortens the end time, and `paused` is cleared. Optional `expectedUpdatedAt` (409 `UPDATED_AT_MISMATCH` when it differs). Audit `site.auto_mitigation_update` (`from`, `to`) |
+| `autoMitigation.restore` | `POST /sites/{id}/auto-mitigation/restore` | Turns off the Under Attack being held and pauses until the level is below the trigger level; audit `site.auto_mitigation_restore`. 409 `AUTO_MITIGATION_NOT_ACTIVE` when nothing is held |
+
+Settings fields (`update` adds `id`):
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `enabled` | boolean | `true` | |
+| `threshold` | `cookie302`, `js`, `pow`, `captcha` | `pow` | Trigger level |
+| `durationMinutes` | integer, 5–1440 | 30 | Minutes to hold after the level was last at the trigger level |
+
+When the level reaches `threshold` the system turns on the site's Under Attack and publishes the configuration of the site's cluster (reason `auto_mitigation_started`, audit `site.auto_mitigation_apply`); once the end time has passed with the level below `threshold`, or when disabled, it turns it off (`auto_mitigation_ended`, `site.auto_mitigation_release`). The actor is the system; metadata has `level`, `threshold`, `durationMinutes` and `revision`. A change that cannot be published (for example `NODE_CAPABILITY_REQUIRED`) is rolled back, the error code goes to `lastError` and it is retried every minute. `protection.update` changing `underAttack` counts as a manual action: turning it on takes over, turning it off ends the hold and pauses. A read-only AccessKey can only call `GET`; service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`). Behavior: [Attacks and automatic mitigation](../guide/attack-dashboard.en.md).
 
 ### Compression and OWASP CRS
 

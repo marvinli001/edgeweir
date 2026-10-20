@@ -136,7 +136,9 @@ test("G2: the site's security tab turns Under Attack off and on, edits the CC po
   await expect(ipQps).toHaveValue("80");
   await expect(page.getByTestId("cc-max-level")).toHaveText("工作量证明");
 
-  // What the nodes report and what happened during the CC run.
+  // What the nodes report and what happened during the CC run, on the attacks tab.
+  await page.getByTestId("tab-attacks").click();
+  await expect(page).toHaveURL(/tab=attacks/);
   const nodes = page.getByTestId("security-node-row");
   await expect(nodes).toHaveCount(2);
   await expect(nodes.first().getByTestId("security-node-level")).toHaveText("正常");
@@ -151,7 +153,7 @@ test("G2: the site's security tab turns Under Attack off and on, edits the CC po
       .filter({ hasText: "正常 → Cookie 跳转" }),
   ).toHaveCount(1);
   await expect(events.filter({ hasText: "自动封禁" }).first()).toContainText(state.bannedAddress);
-  await check(page, "security-tab");
+  await check(page, "attacks-tab");
   await pick(page, page.getByTestId("security-event-kind"), "自动封禁");
   await expect(events.filter({ hasText: "路径级别" })).toHaveCount(0);
   await expect(events.first()).toHaveAttribute("data-kind", "ip_banned");
@@ -161,6 +163,7 @@ test("G2: the site's security tab turns Under Attack off and on, edits the CC po
   await expect(events.first()).toHaveAttribute("data-kind", "path_level");
 
   // Back to CC off for bench.sh.
+  await page.getByTestId("tab-security").click();
   await enabled.click();
   await saved(page, save, "protection/update");
   await expect(save).toBeDisabled();

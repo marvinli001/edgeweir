@@ -22,6 +22,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { lockCcTemplate, lockProtectionSettings } from "../lib/locks";
 import { type Actor, recordAudit } from "./audit";
+import { noteOperatorUnderAttack } from "./auto-mitigation";
 import { type Executor, publishClusters, publishRevision } from "./revisions";
 import { defineSetting } from "./settings";
 import { findSite } from "./sites";
@@ -236,6 +237,9 @@ export async function updateSiteProtection(
         set: { ...next, updatedAt: new Date() },
       })
       .returning();
+    // The operator saved the switch: an automatic mitigation holding it lets go.
+    if (input.underAttack !== undefined)
+      await noteOperatorUnderAttack(tx, site.id, next.underAttack);
     await publishRevision(tx, {
       clusterId: site.clusterId,
       reason: { code: "site_protection_updated", params: { site: site.name } },

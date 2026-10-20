@@ -291,6 +291,23 @@ export function breakdownOf(input: TrafficBreakdownInput): TrafficBreakdown {
         series,
       };
     });
+  } else if (input.by === "block_reason") {
+    const burst = !input.siteId || input.siteId === SHOP;
+    const refused = traffic.points.map((p) => p.status4xx * (burst ? 0.8 : 0.1));
+    totalSeries = refused.map(Math.round);
+    items = Object.entries(BLOCKS[burst ? "burst" : "quiet"]).map(([reason, share]) => {
+      const series = refused.map((v, i) =>
+        Math.round(v * share * (0.9 + noise(i * 7 + reason.length) * 0.2)),
+      );
+      return {
+        id: reason,
+        name: reason,
+        parentId: null,
+        parentName: null,
+        total: series.reduce((a, b) => a + b, 0),
+        series,
+      };
+    });
   } else {
     const classes = input.statusClass ? [input.statusClass] : [2, 3, 4, 5];
     totalSeries = traffic.points.map((p) =>

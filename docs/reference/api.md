@@ -237,8 +237,8 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | --- | --- |
 | `PATCH /sites/{id}/protection` | 只修改给出的字段：`underAttack`、`underAttackChallenge`、`passTtlSeconds`（300–86400）、`powDifficulty`（8–24）、`powHighDifficulty`（8–26，不低于 `powDifficulty`）、`logJa4`、`cc`（部分字段，合并到已保存的策略） |
 | `cc` | `enabled`、`followTemplate`、`maxLevel`、`highPowInsteadOfCaptcha`、`windowSeconds`（5–60）、`siteQps`、`urlQps`、`ipQps`（0–1000000，0 关闭该条件）、`ipBanSeconds`（60–86400）、`originErrorPercent`（0–100）、`originErrorMinRequests`、`escalateAfterSeconds`（1–3600）、`cooldownSeconds`（1–86400） |
-| `GET /sites/{id}/security` | 查询参数 `hours`（1–168，默认 24） |
-| `GET /sites/{id}/security/events` | 查询参数 `kind`（`site_level` / `path_level` / `ip_banned`）、`page`、`pageSize`（1–100，默认 50） |
+| `GET /sites/{id}/security` | 查询参数 `hours`（1–720，默认 24） |
+| `GET /sites/{id}/security/events` | 查询参数 `kind`（`site_level` / `path_level` / `ip_banned`）、`hours`（1–720，只返回近这些小时的事件，省略时不限）、`page`、`pageSize`（1–100，默认 50） |
 | `PUT /settings/protection` | `underAttack`（全局 Under Attack）、`underAttackChallenge`、`eventRetentionDays`（7–365，默认 30） |
 | `PUT /settings/cc-template` | `cc` 中除 `enabled`、`followTemplate` 外的全部字段 |
 
@@ -265,6 +265,24 @@ curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicati
 ```
 
 行为见 [挑战与 CC 防护](../guide/challenges.md)。
+
+### 自动缓解
+
+| 过程 | 端点 | 说明 |
+| --- | --- | --- |
+| `autoMitigation.get` | `GET /sites/{id}/auto-mitigation` | 设置（未设置时 `settings` 与 `updatedAt` 为 `null`）、`level`（集群在线活动节点中该网站的最高 CC 级别）、`active { since, expiresAt, level }`（自动缓解正在保持的 Under Attack，没有时为 `null`）、`paused`（手动结束或手动关闭后到级别降到触发级别以下前不再开启）、`lastError`（开启或关闭发布失败的错误码，没有时为空） |
+| `autoMitigation.update` | `PUT /sites/{id}/auto-mitigation` | 新建或整体替换设置，下一次检查（1 分钟内）生效；禁用时立即关闭正在保持的 Under Attack，缩短 `durationMinutes` 时到期时间随之缩短，并清除 `paused`。可选 `expectedUpdatedAt`（不一致时 409 `UPDATED_AT_MISMATCH`）。审计 `site.auto_mitigation_update`（`from`、`to`） |
+| `autoMitigation.restore` | `POST /sites/{id}/auto-mitigation/restore` | 关闭正在保持的 Under Attack 并暂停，级别降到触发级别以下之前不再开启；审计 `site.auto_mitigation_restore`。没有保持时 409 `AUTO_MITIGATION_NOT_ACTIVE` |
+
+设置的字段（`update` 另加 `id`）：
+
+| 字段 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `enabled` | 布尔 | `true` | |
+| `threshold` | `cookie302`、`js`、`pow`、`captcha` | `pow` | 触发级别 |
+| `durationMinutes` | 整数，5–1440 | 30 | 级别最后一次达到触发级别后保持的分钟数 |
+
+级别达到 `threshold` 时系统开启网站的 Under Attack 并发布网站所在集群的配置版本（原因 `auto_mitigation_started`，审计 `site.auto_mitigation_apply`）；到期且级别低于 `threshold`，或被禁用时关闭（`auto_mitigation_ended`，`site.auto_mitigation_release`）。操作者为系统，元数据含 `level`、`threshold`、`durationMinutes`、`revision`。发布失败（例如 `NODE_CAPABILITY_REQUIRED`）时回滚并把错误码记入 `lastError`，每分钟重试。`protection.update` 修改 `underAttack` 时视为手动操作：开启即接管，关闭即结束保持并暂停。只读 AccessKey 只能调用 `GET`；服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）。行为见[攻击与自动缓解](../guide/attack-dashboard.md)。
 
 ### 压缩与 OWASP CRS
 

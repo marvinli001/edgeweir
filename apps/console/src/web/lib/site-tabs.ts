@@ -12,6 +12,7 @@ export const SITE_TABS = [
   "redirects",
   "access",
   "security",
+  "attacks",
   "errors",
   "logs",
 ] as const;
@@ -34,6 +35,7 @@ export function siteTabLabel(tab: SiteTab): string {
     redirects: m.site_tab_redirects,
     access: m.site_tab_access,
     security: m.site_tab_security,
+    attacks: m.site_tab_attacks,
     errors: m.site_tab_errors,
     logs: m.site_tab_logs,
   }[tab]();
