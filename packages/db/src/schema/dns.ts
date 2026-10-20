@@ -60,6 +60,8 @@ export const dnsBinding = pgTable("dns_binding", {
   lineAliases: boolean("line_aliases").notNull().default(false),
   desiredRevision: bigint("desired_revision", { mode: "number" }),
   appliedRevision: bigint("applied_revision", { mode: "number" }),
+  /** Since when reconciliation has failed without a success in between; null while it succeeds. */
+  failingSince: timestamp("failing_since", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export const dnsRevision = pgTable(

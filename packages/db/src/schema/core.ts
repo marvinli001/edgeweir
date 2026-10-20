@@ -249,6 +249,12 @@ export const node = pgTable(
     cacheUsage: jsonb("cache_usage").$type<NodeCacheUsage>(),
     /** The node channel address of the last heartbeat; null before the first since it was added. */
     channel: jsonb("channel").$type<NodeChannelData>(),
+    /**
+     * How far the node's clock is ahead of the console's (ms, negative:
+     * behind) and when the node reported it; null for nodes before v1.5.0.
+     */
+    clockOffsetMs: integer("clock_offset_ms"),
+    clockMeasuredAt: timestamp("clock_measured_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
