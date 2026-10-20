@@ -1,5 +1,6 @@
 import type {
   ActiveHealthCheck,
+  AnalyticsRange,
   FeatureAvailability,
   OriginHealth,
   OriginProtocol,
@@ -17,6 +18,7 @@ import { SafetyNote } from "@/components/safety-note";
 import { BodyLimitCard } from "@/components/site/content-cards";
 import { NumberField, SettingsGroup, SwitchField } from "@/components/site/fields";
 import { OriginHealthBadge, OriginHealthError } from "@/components/site/origin-health";
+import { OriginQualityCard } from "@/components/site/origin-quality-card";
 import { OriginTopologyCard } from "@/components/site/origin-topology-card";
 import { nextDraftKey, SaveBar, serializeDrafts, useSaveSite } from "@/components/site/save-site";
 import { Button } from "@/components/ui/button";
@@ -35,11 +37,20 @@ import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
-/** Origins tab: the origin pool and its behaviour, each saved on its own. */
-export function OriginsTab({ site }: { site: Site }) {
+/** Origins tab: the origin pool and its behaviour, each saved on its own, and how the origins answer. */
+export function OriginsTab({
+  site,
+  range,
+  onRangeChange,
+}: {
+  site: Site;
+  range: AnalyticsRange;
+  onRangeChange: (range: AnalyticsRange) => void;
+}) {
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-4">
       <OriginTopologyCard site={site} />
+      <OriginQualityCard siteId={site.id} range={range} onRangeChange={onRangeChange} />
       {/* Keyed by their own data, so saving one card keeps unsaved edits in the other. */}
       <OriginsCard key={JSON.stringify(site.origins)} site={site} />
       <PoolSettingsCard key={JSON.stringify(site.originSettings)} site={site} />

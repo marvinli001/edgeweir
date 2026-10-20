@@ -185,7 +185,19 @@ function SiteDetailPage() {
               <DomainsTab site={data} />
             </TabsContent>
             <TabsContent value="origins" className="animate-enter">
-              <OriginsTab site={data} />
+              <OriginsTab
+                site={data}
+                range={search.range ?? DEFAULT_RANGE}
+                onRangeChange={(range) =>
+                  navigate({
+                    search: (prev) => ({
+                      ...prev,
+                      range: range === DEFAULT_RANGE ? undefined : range,
+                    }),
+                    replace: true,
+                  })
+                }
+              />
             </TabsContent>
             <TabsContent value="https" className="animate-enter">
               <HttpsTab site={data} />
