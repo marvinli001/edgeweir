@@ -103,13 +103,15 @@ describe("demo account", async () => {
     expect((await demo.settings.get()).consoleUrl).toBe(origin);
     expect(await demo.settings.demo()).toEqual({ enabled: true });
     const clusterId = (await demo.clusters.list())[0]?.id ?? "";
+    // One at a time: a call started early could reject before rpcError
+    // handles it (an unhandled rejection).
     for (const call of [
-      demo.settings.setDemo({ enabled: false }),
-      demo.accessKeys.create({ name: "demo", scope: "write" }),
-      demo.clusters.createEnrollmentToken({ clusterId }),
-      demo.settings.setUsage({ retentionDays: 90, offlineThresholdMinutes: 30 }),
+      () => demo.settings.setDemo({ enabled: false }),
+      () => demo.accessKeys.create({ name: "demo", scope: "write" }),
+      () => demo.clusters.createEnrollmentToken({ clusterId }),
+      () => demo.settings.setUsage({ retentionDays: 90, offlineThresholdMinutes: 30 }),
     ])
-      expect((await rpcError(call)).code).toBe("DEMO_READ_ONLY");
+      expect((await rpcError(call())).code).toBe("DEMO_READ_ONLY");
     expect(await admin.settings.demo()).toEqual({ enabled: true });
     expect(await admin.accessKeys.list()).toEqual([]);
   });
