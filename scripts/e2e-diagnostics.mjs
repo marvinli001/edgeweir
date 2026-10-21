@@ -5,7 +5,7 @@
 //      skewed (both containers run on the VM's clock), measured recently
 //   b. `edgeweir-node diagnose` passes every check (identity, certificate,
 //      console, agent, configuration, data plane, clock); `--json` names the
-//      node and the revision the console shows as applied
+//      node and a revision the console showed as applied around it
 //   c. `edgeweir-node pprof` writes gzipped heap and 1 s CPU profiles from
 //      the agent's diagnostics socket; an unknown profile is refused
 import assert from "node:assert/strict";
@@ -84,10 +84,17 @@ const json = await inNode("edgeweir-node", "diagnose", "--json");
 assert.equal(json.code, 0, json.stderr);
 const report = JSON.parse(json.stdout);
 assert.equal(report.agent.node_id, node.id);
-assert.equal(report.agent.config.applied_revision, node.appliedRevision);
+// The earlier sections' cleanups may still be rolling out: the revision the
+// agent applied lies between the console's view before and after diagnose.
+const applied = report.agent.config.applied_revision;
+const after = (await api("/nodes")).find((n) => n.name === NODE);
+assert.ok(
+  applied >= node.appliedRevision && applied <= after.appliedRevision,
+  `applied ${applied}, console ${node.appliedRevision}..${after.appliedRevision}`,
+);
 assert.equal(report.agent.config.state, "applied");
 assert.ok(report.agent.clock && Math.abs(report.agent.clock.offset_millis) < 2000);
-pass(`b. diagnose: ${lines.length} checks ok, revision ${node.appliedRevision} applied`);
+pass(`b. diagnose: ${lines.length} checks ok, revision ${applied} applied`);
 
 // c. Profiles from the diagnostics socket.
 for (const [profile, extra] of [
