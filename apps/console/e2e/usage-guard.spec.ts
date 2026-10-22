@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, type Page } from "@playwright/test";
-import { pick, saved, signedIn, test } from "./helpers";
+import { errors, pick, saved, signedIn, test } from "./helpers";
 
 /**
  * Usage protection in the browser. A site of its own, ug-ui-<run> (created here through the UI in
@@ -54,12 +54,6 @@ async function check(page: Page, name: string) {
   }
   await page.emulateMedia({ colorScheme: "light" });
   await page.setViewportSize({ width: 1280, height: 900 });
-}
-
-function errors(page: Page) {
-  const list: string[] = [];
-  page.on("pageerror", (error) => list.push(error.message));
-  return list;
 }
 
 let siteId = "";

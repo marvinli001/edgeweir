@@ -5,10 +5,10 @@ import { resolve } from "node:path";
 import tls from "node:tls";
 import { promisify } from "node:util";
 import { signInWithAccessKey } from "./e2e-auth.mjs";
+import { base, waitFor } from "./e2e-lib.mjs";
 
 const execute = promisify(execFile);
 
-const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
 const edge = `http://localhost:${process.env.E2E_NODE_PORT ?? 18080}`;
 const tlsPort = Number(process.env.E2E_NODE_TLS_PORT ?? 18443);
 const domain = "https.m3.test";
@@ -38,15 +38,6 @@ async function api(method, path, body) {
   const result = await response.json();
   assert.ok(response.ok, `${method} ${path}: ${JSON.stringify(result)}`);
   return result;
-}
-async function waitFor(label, fn, seconds = 180) {
-  const until = Date.now() + seconds * 1000;
-  while (Date.now() < until) {
-    const value = await fn();
-    if (value) return value;
-    await new Promise((r) => setTimeout(r, 1000));
-  }
-  throw new Error(`timeout: ${label}`);
 }
 const clusters = await api("GET", "/clusters");
 const cluster = clusters.find((c) => c.name === "default") ?? clusters[0];

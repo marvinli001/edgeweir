@@ -18,30 +18,17 @@
 // State for apps/console/e2e/h2.spec.ts: .e2e/h2-state.json (the site, left
 // on HTTP/1.1). `node scripts/e2e-h2.mjs --cleanup` deletes the site.
 import assert from "node:assert/strict";
-import { execFile, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
-import { promisify } from "node:util";
 import { rpc, signInResponse } from "./e2e-auth.mjs";
+import { base, pass, stack, waitFor as waitUntil } from "./e2e-lib.mjs";
 
-const execute = promisify(execFile);
-const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
-const compose = ["compose", "-f", "compose.e2e.yml", "--profile", "upgrades"];
-const run = async (args) => (await execute("docker", args, { maxBuffer: 8 * 1024 * 1024 })).stdout;
-const pass = (message) => console.log(`PASS ${message}`);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const { run, containerId } = stack({ profiles: ["upgrades"] });
 const STATE = ".e2e/h2-state.json";
 const DOMAIN = "h2.e2e.test";
 
-async function waitFor(label, fn, seconds = 180, interval = 1500) {
-  const deadline = Date.now() + seconds * 1000;
-  let last;
-  while (Date.now() < deadline) {
-    last = await fn();
-    if (last) return last;
-    await sleep(interval);
-  }
-  throw new Error(`timeout: ${label}`);
-}
+const waitFor = (label, fn, seconds = 180, interval = 1500) =>
+  waitUntil(label, fn, seconds, interval);
 
 /** The operator with an AccessKey created over the console's RPC. */
 async function operator(email, password) {
@@ -72,11 +59,6 @@ async function operator(email, password) {
   return ok;
 }
 
-const containerId = async (service) => {
-  const id = (await run([...compose, "ps", "-q", service])).trim();
-  assert.ok(id, `${service} is not running`);
-  return id;
-};
 const containerIp = async (service) => {
   const info = JSON.parse(await run(["inspect", await containerId(service)]))[0];
   const entry = Object.entries(info.NetworkSettings.Networks).find(([name]) =>

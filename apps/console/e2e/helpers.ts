@@ -108,3 +108,38 @@ export async function saved(page: Page, save: Locator, procedure: string) {
   await save.click();
   expect((await answered).ok()).toBe(true);
 }
+
+/**
+ * Full-page screenshots of the current page in light and dark, at 1280 and 375 px wide, as
+ * `.e2e/<prefix>-<name>-<scheme>[-375].png`; fails when the page scrolls sideways at 375 px.
+ */
+export async function shots(page: Page, prefix: string, name: string) {
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.screenshot({
+      path: `../../.e2e/${prefix}-${name}-${scheme}.png`,
+      fullPage: true,
+      animations: "disabled",
+    });
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.screenshot({
+      path: `../../.e2e/${prefix}-${name}-${scheme}-375.png`,
+      fullPage: true,
+      animations: "disabled",
+    });
+    expect(
+      await page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"),
+      `${name} overflows at 375 px (${scheme})`,
+    ).toBe(true);
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.setViewportSize({ width: 1280, height: 900 });
+}
+
+/** Uncaught page errors from now on; specs expect the list to stay empty. */
+export function errors(page: Page) {
+  const list: string[] = [];
+  page.on("pageerror", (error) => list.push(error.message));
+  return list;
+}

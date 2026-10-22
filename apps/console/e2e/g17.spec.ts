@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, type Page } from "@playwright/test";
-import { signedIn, test } from "./helpers";
+import { errors, signedIn, test } from "./helpers";
 
 /**
  * G17 tags, batch operations, copying settings and cloning in the browser, on the sites
@@ -50,12 +50,6 @@ async function check(page: Page, name: string) {
   }
   await page.emulateMedia({ colorScheme: "light" });
   await page.setViewportSize({ width: 1280, height: 900 });
-}
-
-function errors(page: Page) {
-  const list: string[] = [];
-  page.on("pageerror", (error) => list.push(error.message));
-  return list;
 }
 
 const rowNames = (page: Page) => page.getByTestId("site-link").allTextContents();

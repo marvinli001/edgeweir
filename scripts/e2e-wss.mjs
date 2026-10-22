@@ -19,14 +19,12 @@ import { execFile, spawn } from "node:child_process";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { rpc, signInResponse } from "./e2e-auth.mjs";
+import { base, pass, stack, waitFor as waitUntil } from "./e2e-lib.mjs";
 
 const execute = promisify(execFile);
-const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
-const compose = ["compose", "-f", "compose.e2e.yml", "--profile", "wss"];
 const run = async (args, env) =>
   (await execute("docker", args, { env: env ?? process.env, maxBuffer: 8 * 1024 * 1024 })).stdout;
-const pass = (message) => console.log(`PASS ${message}`);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const { compose, containerId } = stack({ profiles: ["wss"], run });
 const STATE = ".e2e/wss-state.json";
 const PROXY_HOST = "wss.e2e.test";
 const URL_WSS = `wss://${PROXY_HOST}`;
@@ -34,16 +32,8 @@ const CLUSTER = "wss-e2e";
 const NODE = "edge-wss";
 const SITE = { name: "wss-site", domain: "wss-site.e2e.test", added: "www.wss-site.e2e.test" };
 
-async function waitFor(label, fn, seconds = 120, interval = 1000) {
-  const deadline = Date.now() + seconds * 1000;
-  let last;
-  while (Date.now() < deadline) {
-    last = await fn();
-    if (last) return last;
-    await sleep(interval);
-  }
-  throw new Error(`timeout: ${label}`);
-}
+const waitFor = (label, fn, seconds = 120, interval = 1000) =>
+  waitUntil(label, fn, seconds, interval);
 
 /** The operator with an AccessKey created over the console's RPC. */
 async function operator(email, password) {
@@ -74,11 +64,6 @@ async function operator(email, password) {
   return ok;
 }
 
-const containerId = async (service) => {
-  const id = (await run([...compose, "ps", "-q", service])).trim();
-  assert.ok(id, `${service} is not running`);
-  return id;
-};
 const containerIp = async (service) => {
   const info = JSON.parse(await run(["inspect", await containerId(service)]))[0];
   const entry = Object.entries(info.NetworkSettings.Networks).find(([name]) =>

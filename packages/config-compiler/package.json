@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@bufbuild/protobuf": "2.15.0",
+    "@edgeweir/contract": "workspace:*",
     "@edgeweir/proto": "workspace:*",
     "@edgeweir/rule-engine": "workspace:*"
   },

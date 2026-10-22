@@ -16,19 +16,13 @@
 // (.e2e/node-logs-state.json); `node scripts/e2e-node-logs.mjs --cleanup`
 // deletes it.
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
 import { rm, writeFile } from "node:fs/promises";
 import http from "node:http";
-import { promisify } from "node:util";
 import { rpc, signInResponse } from "./e2e-auth.mjs";
+import { base, pass, stack, waitFor as waitUntil } from "./e2e-lib.mjs";
 
-const execute = promisify(execFile);
-const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
 const nodePort = Number(process.env.E2E_NODE_PORT ?? 18080);
-const compose = ["compose", "-f", "compose.e2e.yml"];
-const run = async (args) => (await execute("docker", args, { maxBuffer: 16 * 1024 * 1024 })).stdout;
-const pass = (message) => console.log(`PASS ${message}`);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const { compose, run, psql } = stack({ maxBuffer: 16 * 1024 * 1024 });
 const STATE = ".e2e/node-logs-state.json";
 const NODE = "edge-e2e-1";
 const HOST = "logs.node-logs.e2e.test";
@@ -37,17 +31,8 @@ const ORIGIN = "no-such-origin.node-logs.e2e.test";
 const SECRET = `e2e-node-logs-${Date.now().toString(36)}`;
 const SIGNATURE = `sig${Date.now().toString(36)}`;
 
-async function waitFor(label, fn, seconds = 120, interval = 1000, detail = () => "") {
-  const deadline = Date.now() + seconds * 1000;
-  let last;
-  while (Date.now() < deadline) {
-    last = await fn();
-    if (last) return last;
-    await sleep(interval);
-  }
-  const why = detail();
-  throw new Error(`timeout: ${label}${why ? ` (last: ${why})` : ""}`);
-}
+const waitFor = (label, fn, seconds = 120, interval = 1000, detail) =>
+  waitUntil(label, fn, seconds, interval, detail);
 
 /** The operator with an AccessKey for /api/v1. */
 async function operator() {
@@ -81,25 +66,6 @@ async function operator() {
       return r.json;
     },
   };
-}
-
-async function psql(query) {
-  return (
-    await run([
-      ...compose,
-      "exec",
-      "-T",
-      "postgres",
-      "psql",
-      "-U",
-      "edgeweir",
-      "-d",
-      "edgeweir",
-      "-At",
-      "-c",
-      query,
-    ])
-  ).trim();
 }
 
 /** GET through the node's published HTTP port with a Host header. */

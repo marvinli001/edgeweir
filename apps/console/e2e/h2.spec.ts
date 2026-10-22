@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, type Page } from "@playwright/test";
-import { pick, saved, signedIn, test } from "./helpers";
+import { pick, saved, shots, signedIn, test } from "./helpers";
 
 /**
  * Written by scripts/e2e-h2.mjs on cluster A: the site h2-e2e (h2.e2e.test,
@@ -12,30 +12,7 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/h2-state.json"), "utf8
   siteId: string;
 };
 
-/** Screenshots in light and dark, desktop and 375 px, and no horizontal overflow on a phone. */
-async function check(page: Page, name: string) {
-  for (const scheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme: scheme });
-    await page.setViewportSize({ width: 1280, height: 900 });
-    await page.screenshot({
-      path: `../../.e2e/h2-${name}-${scheme}.png`,
-      fullPage: true,
-      animations: "disabled",
-    });
-    await page.setViewportSize({ width: 375, height: 812 });
-    await page.screenshot({
-      path: `../../.e2e/h2-${name}-${scheme}-375.png`,
-      fullPage: true,
-      animations: "disabled",
-    });
-    expect(
-      await page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"),
-      `${name} overflows at 375 px (${scheme})`,
-    ).toBe(true);
-  }
-  await page.emulateMedia({ colorScheme: "light" });
-  await page.setViewportSize({ width: 1280, height: 900 });
-}
+const check = (page: Page, name: string) => shots(page, "h2", name);
 
 test("HTTP/2 and gRPC: the pool settings switch the protocol towards the origins and gRPC", async ({
   page,

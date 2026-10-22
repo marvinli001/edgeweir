@@ -12,12 +12,10 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { revokeAccessKey, signInWithAccessKey } from "./e2e-auth.mjs";
+import { base, pass, sleep } from "./e2e-lib.mjs";
 
 const execute = promisify(execFile);
-const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
 const compose = ["compose", "-f", "compose.e2e.yml"];
-const pass = (message) => console.log(`PASS ${message}`);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const NODE = "edge-e2e-1";
 
 /** Runs a command in the node container: its exit code and output. */

@@ -3,9 +3,9 @@ import { execFile } from "node:child_process";
 import http from "node:http";
 import { promisify } from "node:util";
 import { revokeAccessKey, signInWithAccessKey } from "./e2e-auth.mjs";
+import { base, waitFor as waitUntil } from "./e2e-lib.mjs";
 
 const execute = promisify(execFile);
-const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
 const edgePort = Number(process.env.E2E_NODE_PORT ?? 18080);
 const domain = "rules.m4.test";
 const compose = ["compose", "-f", "compose.e2e.yml"];
@@ -29,15 +29,7 @@ async function api(method, path, body) {
   assert.ok(res.ok, `${method} ${path}: ${JSON.stringify(data)}`);
   return data;
 }
-async function waitFor(label, fn) {
-  const until = Date.now() + 120000;
-  while (Date.now() < until) {
-    const result = await fn();
-    if (result) return result;
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  throw new Error(`timeout: ${label}`);
-}
+const waitFor = (label, fn) => waitUntil(label, fn, 120, 500);
 function request(path, host = domain, headers = {}) {
   return new Promise((resolve, reject) => {
     const req = http.request(

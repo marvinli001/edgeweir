@@ -33,16 +33,13 @@
 // legacy.g3.test (.e2e/g3-state.json). `node scripts/e2e-g3.mjs --cleanup`
 // removes the legacy cluster and its node, and turns logging off again.
 import assert from "node:assert/strict";
-import { execFile, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import http from "node:http";
-import { promisify } from "node:util";
 import zlib from "node:zlib";
-import { rpc, signInResponse } from "./e2e-auth.mjs";
+import { actor, execute, pass, sleep, stack, waitFor } from "./e2e-lib.mjs";
 
-const execute = promisify(execFile);
-const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
 const edgePort = Number(process.env.E2E_NODE_PORT ?? 18080);
 const nodeImage = `edgeweir-node:${process.env.E2E_TAG ?? "e2e"}`;
 const nodeContext = process.env.EDGEWEIR_NODE_CONTEXT ?? "../edgeweir-node";
@@ -52,11 +49,10 @@ const OLD_NODE_IMAGE = process.env.E2E_OLD_NODE_IMAGE ?? "edgeweir-node:pre-g3";
 const OLD_NODE_COMMIT = process.env.E2E_OLD_NODE_COMMIT ?? "6da3403";
 const CURL_IMAGE =
   "curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777";
-const compose = ["compose", "-f", "compose.e2e.yml", "--profile", "upgrades"];
-const run = async (args, opts = {}) =>
-  (await execute("docker", args, { maxBuffer: 16 * 1024 * 1024, ...opts })).stdout;
-const pass = (message) => console.log(`PASS ${message}`);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const { run, containerId } = stack({
+  profiles: ["upgrades"],
+  maxBuffer: 16 * 1024 * 1024,
+});
 const STATE = ".e2e/g3-state.json";
 
 const HOST_COMPRESS = "compress.g3.test";
@@ -71,65 +67,6 @@ const XSS_RULES = [941100, 941110, 941160, 949110];
 const CRS_EVALUATION_FILES = [901, 949, 959, 980];
 const detectionRule = (id) => !CRS_EVALUATION_FILES.includes(Math.floor(id / 1000));
 const G3_FEATURES = ["brotli-v1", "zstd-v1", "modsecurity-v1"];
-
-async function waitFor(label, fn, seconds = 180, interval = 1000, detail = () => "") {
-  const deadline = Date.now() + seconds * 1000;
-  let last;
-  while (Date.now() < deadline) {
-    last = await fn();
-    if (last) return last;
-    await sleep(interval);
-  }
-  const why = detail();
-  throw new Error(`timeout: ${label}${why ? ` (last: ${why})` : ""}`);
-}
-
-/** Raw /api/v1 call: { status, json, text }. */
-async function call(key, method, path, body) {
-  const response = await fetch(`${base}/api/v1${path}`, {
-    method,
-    headers: { "content-type": "application/json", "x-api-key": key },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const text = await response.text();
-  return { status: response.status, text, json: text ? JSON.parse(text) : null };
-}
-
-async function createKey(cookie) {
-  return (await rpc(base, cookie, "accessKeys/create", { name: "g3-e2e" })).key;
-}
-
-/**
- * The signed-in operator with an AccessKey. An AccessKey allows 600 requests until
- * it has been idle for 60 seconds; the polling below runs longer than that,
- * so every 500 calls move to a fresh key.
- */
-async function actor(email, password) {
-  const response = await waitFor(
-    `sign in ${email}`,
-    async () => {
-      const r = await signInResponse(base, email, password);
-      return r.status === 200 ? r : null;
-    },
-    60,
-  );
-  const cookie = response.headers
-    .getSetCookie()
-    .map((v) => v.split(";")[0])
-    .join("; ");
-  const user = { cookie, key: await createKey(cookie) };
-  let calls = 0;
-  user.raw = async (method, path, body) => {
-    if (++calls % 500 === 0) user.key = await createKey(user.cookie);
-    return call(user.key, method, path, body);
-  };
-  user.ok = async (method, path, body) => {
-    const result = await user.raw(method, path, body);
-    assert.ok(result.status < 300, `${method} ${path}: ${result.status} ${result.text}`);
-    return result.json;
-  };
-  return user;
-}
 
 /** A request from the host to the edge node's HTTP port: { status, headers, body (Buffer) }. */
 function edge(host, path, { method = "GET", headers = {}, body } = {}) {
@@ -172,11 +109,6 @@ function decode(encoding, body) {
   throw new Error(`unexpected Content-Encoding ${encoding}`);
 }
 
-const containerId = async (service) => {
-  const id = (await run([...compose, "ps", "-q", service])).trim();
-  assert.ok(id, `${service} is not running`);
-  return id;
-};
 // The compose project (COMPOSE_PROJECT_NAME), as Compose labels the node.
 const project = JSON.parse(await run(["inspect", await containerId("node")]))[0].Config.Labels[
   "com.docker.compose.project"
@@ -233,7 +165,7 @@ async function removeContainers() {
 
 // ---------------------------------------------------------------- setup
 const upgrade = JSON.parse(await readFile(".e2e/m6-upgrade-state.json", "utf8"));
-const admin = await actor("admin@e2e.test", "e2e-admin-password-123");
+const admin = await actor("admin@e2e.test", "e2e-admin-password-123", "g3-e2e");
 const clusterId = upgrade.clusterId;
 const edgeId = upgrade.nodeId;
 const peerId = upgrade.peerId;

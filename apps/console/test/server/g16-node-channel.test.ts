@@ -1,11 +1,9 @@
 import "reflect-metadata";
-import { webcrypto } from "node:crypto";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { schema } from "@edgeweir/db";
 import { NodeService } from "@edgeweir/proto";
-import * as x509 from "@peculiar/x509";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type NodeChannel, startNodeChannel } from "../../src/server/node-channel/server";
@@ -14,25 +12,10 @@ import { createClusterTx } from "../../src/server/services/clusters";
 import { createEnrollmentToken } from "../../src/server/services/enrollment";
 import { statsDimensions } from "../../src/server/services/stats-dimensions";
 import { createTestContext, seedOperator } from "./helpers";
+import { nodeKeyAndCsr } from "./node-csr";
 
 const actor = { type: "user" as const, id: "user_admin" };
 const MINUTE = 60_000;
-
-async function nodeKeyAndCsr() {
-  const alg = { name: "ECDSA", namedCurve: "P-256", hash: "SHA-256" };
-  const keys = (await webcrypto.subtle.generateKey(alg, true, [
-    "sign",
-    "verify",
-  ])) as webcrypto.CryptoKeyPair;
-  const csr = await x509.Pkcs10CertificateRequestGenerator.create({
-    name: "CN=edge-host",
-    keys: keys as never,
-    signingAlgorithm: alg,
-  });
-  const pkcs8 = Buffer.from(await webcrypto.subtle.exportKey("pkcs8", keys.privateKey));
-  const keyPem = `-----BEGIN PRIVATE KEY-----\n${pkcs8.toString("base64")}\n-----END PRIVATE KEY-----\n`;
-  return { csrPem: csr.toString("pem"), keyPem };
-}
 
 describe("G16 over the node channel: statistics dimensions and log fields", async () => {
   const { ctx, client: pglite } = await createTestContext();

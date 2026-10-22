@@ -6,8 +6,8 @@ import { uuid } from "./schemas";
 /** Extra HTTP and extra HTTPS listener ports of a cluster, each. */
 const MAX_EXTRA_LISTEN_PORTS = 16;
 /** The ports every cluster listens on: HTTP 80 and HTTPS 443. */
-const DEFAULT_HTTP_PORT = 80;
-const DEFAULT_HTTPS_PORT = 443;
+export const DEFAULT_HTTP_PORT = 80;
+export const DEFAULT_HTTPS_PORT = 443;
 /** Trusted proxy CIDRs of the header mode. */
 const MAX_TRUSTED_PROXY_CIDRS = 64;
 /** Domains of a site the HTTPS redirect may leave alone. */

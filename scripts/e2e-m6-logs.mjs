@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import { signInWithAccessKey } from "./e2e-auth.mjs";
+import { base } from "./e2e-lib.mjs";
 
-const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
 const state = JSON.parse(await readFile(".e2e/m5-state.json", "utf8"));
 const session = await signInWithAccessKey(
   base,

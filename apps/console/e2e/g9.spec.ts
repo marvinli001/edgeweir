@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, type Locator, type Page } from "@playwright/test";
-import { pick, signedIn, test } from "./helpers";
+import { errors, pick, shots, signedIn, test } from "./helpers";
 
 /**
  * Written by scripts/e2e-g9.mjs: the default cluster listens on 8081, 8082 (HTTP) and 9443
@@ -19,36 +19,7 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/g9-state.json"), "utf8
 
 test.describe.configure({ mode: "serial" });
 
-/** Screenshots in light and dark, desktop and 375 px, and no horizontal overflow on a phone. */
-async function check(page: Page, name: string) {
-  for (const scheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme: scheme });
-    await page.setViewportSize({ width: 1280, height: 900 });
-    await page.screenshot({
-      path: `../../.e2e/g9-${name}-${scheme}.png`,
-      fullPage: true,
-      animations: "disabled",
-    });
-    await page.setViewportSize({ width: 375, height: 812 });
-    await page.screenshot({
-      path: `../../.e2e/g9-${name}-${scheme}-375.png`,
-      fullPage: true,
-      animations: "disabled",
-    });
-    expect(
-      await page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"),
-      `${name} overflows at 375 px (${scheme})`,
-    ).toBe(true);
-  }
-  await page.emulateMedia({ colorScheme: "light" });
-  await page.setViewportSize({ width: 1280, height: 900 });
-}
-
-function errors(page: Page) {
-  const list: string[] = [];
-  page.on("pageerror", (error) => list.push(error.message));
-  return list;
-}
+const check = (page: Page, name: string) => shots(page, "g9", name);
 
 const row = (table: Locator, id: string) => table.locator(`[data-row-id="${id}"]`);
 

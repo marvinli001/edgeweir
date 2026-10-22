@@ -1,5 +1,4 @@
 import "reflect-metadata";
-import { webcrypto } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import {
   type AddressInfo,
@@ -13,7 +12,6 @@ import { createConnectTransport } from "@connectrpc/connect-node";
 import { NODE_CHANNEL_WEBSOCKET_PATH, NODE_CHANNEL_WEBSOCKET_PROTOCOL } from "@edgeweir/contract";
 import { ApplyState, NodeService } from "@edgeweir/proto";
 import { getRequestListener } from "@hono/node-server";
-import * as x509 from "@peculiar/x509";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import WebSocket, { createWebSocketStream } from "ws";
 import { createApp } from "../../src/server/app";
@@ -27,22 +25,7 @@ import {
   type WebSocketEntryLimits,
 } from "../../src/server/node-channel/websocket";
 import { type ApiClient, createTestContext, rpcClient, setupPlatform, signIn } from "./helpers";
-
-async function nodeKeyAndCsr() {
-  const alg = { name: "ECDSA", namedCurve: "P-256", hash: "SHA-256" };
-  const keys = (await webcrypto.subtle.generateKey(alg, true, [
-    "sign",
-    "verify",
-  ])) as webcrypto.CryptoKeyPair;
-  const csr = await x509.Pkcs10CertificateRequestGenerator.create({
-    name: "CN=edge-host",
-    keys: keys as never,
-    signingAlgorithm: alg,
-  });
-  const pkcs8 = Buffer.from(await webcrypto.subtle.exportKey("pkcs8", keys.privateKey));
-  const keyPem = `-----BEGIN PRIVATE KEY-----\n${pkcs8.toString("base64")}\n-----END PRIVATE KEY-----\n`;
-  return { csrPem: csr.toString("pem"), keyPem };
-}
+import { nodeKeyAndCsr } from "./node-csr";
 
 /** Resolves with the close code once ws is closed (-1: it already was). */
 const closed = (ws: WebSocket) =>

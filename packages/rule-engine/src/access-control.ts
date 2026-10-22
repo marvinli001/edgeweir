@@ -5,7 +5,8 @@
  * node's Lua (edgeweir.access) passes the shared vectors in
  * test/access_vectors.json.
  */
-import { wildcardMatchBytes, wildcardSegments } from "./index.ts";
+import { wildcardMatchBytes } from "./bytes.ts";
+import { wildcardSegments } from "./language.ts";
 
 const LABEL = /^[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?$/;
 const IPV4 = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;

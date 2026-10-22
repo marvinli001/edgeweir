@@ -10,48 +10,15 @@
 //      stays in DNS
 //   5. every node offline: DNS records stay, an alert fires
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import http from "node:http";
-import { promisify } from "node:util";
 import { rpc, signInResponse } from "./e2e-auth.mjs";
+import { base, call, pass, stack, waitFor } from "./e2e-lib.mjs";
 
-const execute = promisify(execFile);
-const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
 const mock = `http://localhost:${process.env.E2E_MOCK_PORT ?? 19090}`;
 const edgePort = Number(process.env.E2E_NODE_PORT ?? 18080);
-const compose = ["compose", "-f", "compose.e2e.yml", "--profile", "upgrades"];
-const run = async (args, opts = {}) =>
-  (await execute("docker", args, { maxBuffer: 8 * 1024 * 1024, ...opts })).stdout;
-const pass = (message) => console.log(`PASS ${message}`);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const { compose, run, psql } = stack({ profiles: ["upgrades"] });
 
-async function waitFor(label, fn, seconds = 180, interval = 1000) {
-  const deadline = Date.now() + seconds * 1000;
-  let last;
-  while (Date.now() < deadline) {
-    last = await fn();
-    if (last) return last;
-    await sleep(interval);
-  }
-  throw new Error(`timeout: ${label}`);
-}
-
-/** Raw /api/v1 call: { status, headers, json, text }. */
-async function call(key, method, path, body, headers = {}) {
-  const response = await fetch(`${base}/api/v1${path}`, {
-    method,
-    headers: { "content-type": "application/json", "x-api-key": key, ...headers },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const text = await response.text();
-  return {
-    status: response.status,
-    headers: response.headers,
-    text,
-    json: text ? JSON.parse(text) : null,
-  };
-}
 async function ok(key, method, path, body, headers) {
   const result = await call(key, method, path, body, headers);
   assert.ok(result.status < 300, `${method} ${path}: ${result.status} ${result.text}`);
@@ -91,25 +58,6 @@ function edge(host, path = "/") {
     req.on("error", reject);
     req.setTimeout(10000, () => req.destroy(new Error("edge timeout")));
   });
-}
-
-async function psql(query) {
-  return (
-    await run([
-      ...compose,
-      "exec",
-      "-T",
-      "postgres",
-      "psql",
-      "-U",
-      "edgeweir",
-      "-d",
-      "edgeweir",
-      "-At",
-      "-c",
-      query,
-    ])
-  ).trim();
 }
 
 const containerIp = async (service) => {

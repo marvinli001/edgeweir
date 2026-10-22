@@ -196,7 +196,7 @@ const siteOrigins = z
 const MAX_TTL = 365 * 24 * 3600;
 const MAX_STALE = 30 * 24 * 3600;
 /** Longest cache rule condition (characters). */
-const CACHE_EXPRESSION_MAX_LENGTH = 16384;
+export const CACHE_EXPRESSION_MAX_LENGTH = 16384;
 
 const sameSet = (a: string[], b: string[]) =>
   [...new Set(a)].sort().join("\u0000") === [...new Set(b)].sort().join("\u0000");

@@ -5,12 +5,13 @@ import { schema } from "@edgeweir/db";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
-import { type AddressResolver, pointing } from "../../src/server/lib/dns-check";
+import { pointing } from "../../src/server/lib/dns-check";
 import {
   dueCertificates,
   issueCertificate,
   retryWhenPointing,
 } from "../../src/server/services/certificate-worker";
+import { fakeResolver } from "./fake-resolver";
 import {
   type ApiClient,
   createTestContext,
@@ -22,19 +23,6 @@ import {
 
 // HTTP-01 requests and issuances check that the nodes can answer and that
 // the names point to them, before the CA is asked (audit U-4).
-
-/** A resolver answering from a table; "timeout" fails like a lookup that timed out. */
-function fakeResolver(table: Record<string, { v4?: string[]; v6?: string[] } | "timeout">) {
-  const lookup = (family: "v4" | "v6") => async (name: string) => {
-    const entry = table[name];
-    if (entry === "timeout") throw Object.assign(new Error("timeout"), { code: "ETIMEOUT" });
-    const answer = entry?.[family];
-    if (!answer?.length)
-      throw Object.assign(new Error("no data"), { code: entry ? "ENODATA" : "ENOTFOUND" });
-    return answer;
-  };
-  return { resolve4: lookup("v4"), resolve6: lookup("v6") } satisfies AddressResolver;
-}
 
 describe("where a name points", () => {
   const nodes = ["203.0.113.10", "2001:db8::10"];

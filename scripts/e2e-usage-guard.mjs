@@ -22,19 +22,15 @@
 // (.e2e/usage-guard-state.json, D still in maintenance);
 // `node scripts/e2e-usage-guard.mjs --cleanup` removes the sites and the channel.
 import assert from "node:assert/strict";
-import { execFile, spawn } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
-import { promisify } from "node:util";
 import { rpc, signInResponse } from "./e2e-auth.mjs";
+import { base, call, pass, stack, waitFor as waitUntil } from "./e2e-lib.mjs";
 
-const execute = promisify(execFile);
-const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
 const mock = `http://localhost:${process.env.E2E_MOCK_PORT ?? 19090}`;
-const compose = ["compose", "-f", "compose.e2e.yml", "--profile", "upgrades"];
-const run = async (args, opts = {}) =>
-  (await execute("docker", args, { maxBuffer: 16 * 1024 * 1024, ...opts })).stdout;
-const pass = (message) => console.log(`PASS ${message}`);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const { nodeIn, psql } = stack({
+  profiles: ["upgrades"],
+  maxBuffer: 16 * 1024 * 1024,
+});
 const STATE = ".e2e/usage-guard-state.json";
 const PREFIX = "ug-";
 const DOMAIN = (name) => `${PREFIX}${name}.usage.test`;
@@ -43,28 +39,8 @@ const ORIGIN = [{ address: "whoami", port: 80 }];
 const CHANNEL = "E2E usage webhook";
 const DAILY = { period: "day", timeZone: "UTC" };
 
-async function waitFor(label, fn, seconds = 300, interval = 2000, detail = () => "") {
-  const deadline = Date.now() + seconds * 1000;
-  let last;
-  while (Date.now() < deadline) {
-    last = await fn();
-    if (last) return last;
-    await sleep(interval);
-  }
-  const why = detail();
-  throw new Error(`timeout: ${label}${why ? ` (last: ${why})` : ""}`);
-}
-
-/** Raw /api/v1 call: { status, json, text }. */
-async function call(key, method, path, body) {
-  const response = await fetch(`${base}/api/v1${path}`, {
-    method,
-    headers: { "content-type": "application/json", "x-api-key": key },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const text = await response.text();
-  return { status: response.status, text, json: text ? JSON.parse(text) : null };
-}
+const waitFor = (label, fn, seconds = 300, interval = 2000, detail) =>
+  waitUntil(label, fn, seconds, interval, detail);
 
 async function actor(email, password) {
   const response = await waitFor(
@@ -88,32 +64,6 @@ async function actor(email, password) {
     return result.json;
   };
   return user;
-}
-
-const containerId = async (service) => {
-  const id = (await run([...compose, "ps", "-q", service])).trim();
-  assert.ok(id, `${service} is not running`);
-  return id;
-};
-
-async function nodeIn(service, script, input) {
-  const id = await containerId(service);
-  return new Promise((resolvePromise, reject) => {
-    const child = spawn("docker", ["exec", "-i", id, "node", "-e", script], {
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    const out = [];
-    const err = [];
-    child.stdout.on("data", (d) => out.push(d));
-    child.stderr.on("data", (d) => err.push(d));
-    child.on("error", reject);
-    child.on("close", (code) =>
-      code === 0
-        ? resolvePromise(Buffer.concat(out).toString("utf8"))
-        : reject(new Error(`${service}: ${Buffer.concat(err).toString("utf8")}`)),
-    );
-    child.stdin.end(input ?? "");
-  });
 }
 
 /** Sequential GETs from client-a (no Accept-Encoding: bodies are sent as they are). */
@@ -154,25 +104,6 @@ const received = async (siteId, kind, resourceId) =>
       e.resourceId === resourceId &&
       e.status === "firing",
   );
-
-async function psql(query) {
-  return (
-    await run([
-      ...compose,
-      "exec",
-      "-T",
-      "postgres",
-      "psql",
-      "-U",
-      "edgeweir",
-      "-d",
-      "edgeweir",
-      "-At",
-      "-c",
-      query,
-    ])
-  ).trim();
-}
 
 // ---------------------------------------------------------------- setup
 const upgrade = JSON.parse(await readFile(".e2e/m6-upgrade-state.json", "utf8"));

@@ -1,11 +1,9 @@
 import "reflect-metadata";
-import { webcrypto } from "node:crypto";
 import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { siteCreateInput, siteUpdateInput } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { ApplyState, NodeService, WatchEvent } from "@edgeweir/proto";
-import * as x509 from "@peculiar/x509";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { AppContext } from "../../src/server/lib/context";
@@ -22,24 +20,9 @@ import {
 import { getRollout, setRolloutPolicy } from "../../src/server/services/rollout";
 import { createSite, updateSite } from "../../src/server/services/sites";
 import { createTestContext, seedOperator } from "./helpers";
+import { nodeKeyAndCsr } from "./node-csr";
 
 const actor = { type: "user" as const, id: "user_admin" };
-
-async function nodeKeyAndCsr() {
-  const alg = { name: "ECDSA", namedCurve: "P-256", hash: "SHA-256" };
-  const keys = (await webcrypto.subtle.generateKey(alg, true, [
-    "sign",
-    "verify",
-  ])) as webcrypto.CryptoKeyPair;
-  const csr = await x509.Pkcs10CertificateRequestGenerator.create({
-    name: "CN=edge-host",
-    keys: keys as never,
-    signingAlgorithm: alg,
-  });
-  const pkcs8 = Buffer.from(await webcrypto.subtle.exportKey("pkcs8", keys.privateKey));
-  const keyPem = `-----BEGIN PRIVATE KEY-----\n${pkcs8.toString("base64")}\n-----END PRIVATE KEY-----\n`;
-  return { csrPem: csr.toString("pem"), keyPem };
-}
 
 /**
  * Heartbeats and watch streams compare revision numbers and content hashes

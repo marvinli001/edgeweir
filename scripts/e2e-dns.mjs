@@ -18,28 +18,19 @@ import { execFile } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { rpc, signInResponse } from "./e2e-auth.mjs";
+import { base, pass, waitFor as waitUntil } from "./e2e-lib.mjs";
 
 const execute = promisify(execFile);
-const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
 const mock = `http://localhost:${process.env.E2E_MOCK_PORT ?? 19090}`;
 const compose = ["compose", "-f", "compose.e2e.yml", "--profile", "upgrades", "--profile", "dns"];
 const run = async (args, env) =>
   (await execute("docker", args, { env: env ?? process.env, maxBuffer: 8 * 1024 * 1024 })).stdout;
-const pass = (message) => console.log(`PASS ${message}`);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const WEBHOOK = { url: "http://mock-services:8080/dns-hook", secret: "e2e-webhook-secret-0123" };
 const HOOK_ZONE = "dns-hook.test";
 const CREDENTIAL = "E2E webhook zone";
 
-async function waitFor(label, fn, seconds = 180, interval = 1500) {
-  const deadline = Date.now() + seconds * 1000;
-  while (Date.now() < deadline) {
-    const result = await fn();
-    if (result) return result;
-    await sleep(interval);
-  }
-  throw new Error(`timeout: ${label}`);
-}
+const waitFor = (label, fn, seconds = 180, interval = 1500) =>
+  waitUntil(label, fn, seconds, interval);
 
 /**
  * The signed-in operator with an AccessKey from the console's RPC. A key

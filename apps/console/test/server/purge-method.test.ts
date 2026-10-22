@@ -1,12 +1,10 @@
 import "reflect-metadata";
-import { webcrypto } from "node:crypto";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError, createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { siteCreateInput, siteUpdateInput } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { ApplyState, NodeService } from "@edgeweir/proto";
-import * as x509 from "@peculiar/x509";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type NodeChannel, startNodeChannel } from "../../src/server/node-channel/server";
@@ -22,25 +20,10 @@ import { createEnrollmentToken } from "../../src/server/services/enrollment";
 import { getNode } from "../../src/server/services/nodes";
 import { createSite, updateSite } from "../../src/server/services/sites";
 import { createTestContext, seedOperator } from "./helpers";
+import { nodeKeyAndCsr } from "./node-csr";
 
 const actor = { type: "user" as const, id: "user_admin" };
 const KEY = "purge-key-0123456789abcdef";
-
-async function nodeKeyAndCsr() {
-  const alg = { name: "ECDSA", namedCurve: "P-256", hash: "SHA-256" };
-  const keys = (await webcrypto.subtle.generateKey(alg, true, [
-    "sign",
-    "verify",
-  ])) as webcrypto.CryptoKeyPair;
-  const csr = await x509.Pkcs10CertificateRequestGenerator.create({
-    name: "CN=edge-host",
-    keys: keys as never,
-    signingAlgorithm: alg,
-  });
-  const pkcs8 = Buffer.from(await webcrypto.subtle.exportKey("pkcs8", keys.privateKey));
-  const keyPem = `-----BEGIN PRIVATE KEY-----\n${pkcs8.toString("base64")}\n-----END PRIVATE KEY-----\n`;
-  return { csrPem: csr.toString("pem"), keyPem };
-}
 
 describe("PURGE method and cache usage over the node channel", async () => {
   const { ctx, client: pglite } = await createTestContext();

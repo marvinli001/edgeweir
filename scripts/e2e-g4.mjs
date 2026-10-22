@@ -42,19 +42,14 @@
 // `node scripts/e2e-g4.mjs --cleanup` deletes them, the IP list and the
 // platform templates.
 import assert from "node:assert/strict";
-import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
-import { promisify } from "node:util";
-import { rpc, signInResponse } from "./e2e-auth.mjs";
+import { actor, pass, sleep, stack, waitFor } from "./e2e-lib.mjs";
 
-const execute = promisify(execFile);
-const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
-const compose = ["compose", "-f", "compose.e2e.yml", "--profile", "upgrades"];
-const run = async (args, opts = {}) =>
-  (await execute("docker", args, { maxBuffer: 16 * 1024 * 1024, ...opts })).stdout;
-const pass = (message) => console.log(`PASS ${message}`);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const { run, containerId, nodeIn } = stack({
+  profiles: ["upgrades"],
+  maxBuffer: 16 * 1024 * 1024,
+});
 const STATE = ".e2e/g4-state.json";
 
 const HOST_TAG = "tag.g4.test";
@@ -90,65 +85,6 @@ const ERROR_STATUSES = [403, 429, 502, 503, 504];
 const template = (label, status) =>
   `<!doctype html><title>${label} ${status}</title><p id="g4">${label} ${status} status={{status}} id={{request_id}} ip={{client_ip}} host={{host}} other={{other}}</p>`;
 
-async function waitFor(label, fn, seconds = 180, interval = 1000, detail = () => "") {
-  const deadline = Date.now() + seconds * 1000;
-  let last;
-  while (Date.now() < deadline) {
-    last = await fn();
-    if (last) return last;
-    await sleep(interval);
-  }
-  const why = detail();
-  throw new Error(`timeout: ${label}${why ? ` (last: ${why})` : ""}`);
-}
-
-/** Raw /api/v1 call: { status, json, text }. */
-async function call(key, method, path, body) {
-  const response = await fetch(`${base}/api/v1${path}`, {
-    method,
-    headers: { "content-type": "application/json", "x-api-key": key },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const text = await response.text();
-  return { status: response.status, text, json: text ? JSON.parse(text) : null };
-}
-
-async function createKey(cookie) {
-  return (await rpc(base, cookie, "accessKeys/create", { name: "g4-e2e" })).key;
-}
-
-/**
- * The signed-in operator with an AccessKey. An AccessKey allows 600 requests until
- * it has been idle for 60 seconds; the polling below runs longer than that,
- * so every 500 calls move to a fresh key.
- */
-async function actor(email, password) {
-  const response = await waitFor(
-    `sign in ${email}`,
-    async () => {
-      const r = await signInResponse(base, email, password);
-      return r.status === 200 ? r : null;
-    },
-    60,
-  );
-  const cookie = response.headers
-    .getSetCookie()
-    .map((v) => v.split(";")[0])
-    .join("; ");
-  const user = { cookie, key: await createKey(cookie) };
-  let calls = 0;
-  user.raw = async (method, path, body) => {
-    if (++calls % 500 === 0) user.key = await createKey(user.cookie);
-    return call(user.key, method, path, body);
-  };
-  user.ok = async (method, path, body) => {
-    const result = await user.raw(method, path, body);
-    assert.ok(result.status < 300, `${method} ${path}: ${result.status} ${result.text}`);
-    return result.json;
-  };
-  return user;
-}
-
 /** Asserts an error response: status and code. */
 function refused(result, status, code) {
   assert.equal(result.status, status, result.text);
@@ -156,38 +92,12 @@ function refused(result, status, code) {
   return result.json;
 }
 
-const containerId = async (service) => {
-  const id = (await run([...compose, "ps", "-q", service])).trim();
-  assert.ok(id, `${service} is not running`);
-  return id;
-};
 const containerIp = async (service, network = "_default") => {
   const info = JSON.parse(await run(["inspect", await containerId(service)]))[0];
   const name = Object.keys(info.NetworkSettings.Networks).find((n) => n.endsWith(network));
   assert.ok(name, `${service} is not on ${network}`);
   return info.NetworkSettings.Networks[name].IPAddress;
 };
-
-/** Runs `node -e script` in a compose service with `input` on stdin; resolves stdout. */
-async function nodeIn(service, script, input) {
-  const id = await containerId(service);
-  return new Promise((resolvePromise, reject) => {
-    const child = spawn("docker", ["exec", "-i", id, "node", "-e", script], {
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    const out = [];
-    const err = [];
-    child.stdout.on("data", (d) => out.push(d));
-    child.stderr.on("data", (d) => err.push(d));
-    child.on("error", reject);
-    child.on("close", (code) =>
-      code === 0
-        ? resolvePromise(Buffer.concat(out).toString("utf8"))
-        : reject(new Error(`${service}: ${Buffer.concat(err).toString("utf8")}`)),
-    );
-    child.stdin.end(input ?? "");
-  });
-}
 
 /** Sequential HTTP requests from client-a: [{ target, host, path, method, headers, body }]. */
 const REQUESTS = `
@@ -252,7 +162,7 @@ const hits = async (name) => (await origin(name, "hits")).hits;
 
 // ---------------------------------------------------------------- setup
 const upgrade = JSON.parse(await readFile(".e2e/m6-upgrade-state.json", "utf8"));
-const admin = await actor("admin@e2e.test", "e2e-admin-password-123");
+const admin = await actor("admin@e2e.test", "e2e-admin-password-123", "g4-e2e");
 const clusterId = upgrade.clusterId;
 const edgeId = upgrade.nodeId;
 const peerId = upgrade.peerId;

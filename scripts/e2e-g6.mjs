@@ -33,25 +33,13 @@ import { execFile } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { rpc, signInResponse } from "./e2e-auth.mjs";
+import { base, pass, stack, waitFor as waitUntil } from "./e2e-lib.mjs";
 
 const execute = promisify(execFile);
-const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
 const mock = `http://localhost:${process.env.E2E_MOCK_PORT ?? 19090}`;
-const compose = [
-  "compose",
-  "-f",
-  "compose.e2e.yml",
-  "--profile",
-  "upgrades",
-  "--profile",
-  "dns",
-  "--profile",
-  "probes",
-];
 const run = async (args, env) =>
   (await execute("docker", args, { env: env ?? process.env, maxBuffer: 8 * 1024 * 1024 })).stdout;
-const pass = (message) => console.log(`PASS ${message}`);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const { compose, containerId } = stack({ profiles: ["upgrades", "dns", "probes"], run });
 const STATE = ".e2e/g6-state.json";
 const SETTINGS = {
   intervalSeconds: 5,
@@ -62,16 +50,8 @@ const SETTINGS = {
   ipUpSeconds: 5,
 };
 
-async function waitFor(label, fn, seconds = 180, interval = 1500, detail = () => "") {
-  const deadline = Date.now() + seconds * 1000;
-  while (Date.now() < deadline) {
-    const result = await fn();
-    if (result) return result;
-    await sleep(interval);
-  }
-  const why = await detail();
-  throw new Error(`timeout: ${label}${why ? ` (last: ${why})` : ""}`);
-}
+const waitFor = (label, fn, seconds = 180, interval = 1500, detail) =>
+  waitUntil(label, fn, seconds, interval, detail);
 
 /** The operator with an AccessKey from the console's RPC, replaced every 500 calls. */
 async function operator(email, password) {
@@ -114,11 +94,6 @@ async function operator(email, password) {
   return ok;
 }
 
-const containerId = async (service) => {
-  const id = (await run([...compose, "ps", "-q", service])).trim();
-  assert.ok(id, `${service} is not running`);
-  return id;
-};
 const containerIp = async (service, network) => {
   const info = JSON.parse(await run(["inspect", await containerId(service)]))[0];
   const entry = Object.entries(info.NetworkSettings.Networks).find(([name]) =>

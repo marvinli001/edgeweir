@@ -1,5 +1,4 @@
 import "reflect-metadata";
-import { webcrypto } from "node:crypto";
 import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { ACCESS_AUTH_FEATURE, decodeNodeConfig } from "@edgeweir/config-compiler";
@@ -7,7 +6,6 @@ import type { SiteAuthRulesInput } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { AuthKind, NodeService } from "@edgeweir/proto";
 import { checkSignedUri } from "@edgeweir/rule-engine";
-import * as x509 from "@peculiar/x509";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
@@ -30,6 +28,7 @@ import {
   setupPlatform,
   signIn,
 } from "./helpers";
+import { nodeKeyAndCsr } from "./node-csr";
 
 const service = {
   actor: { type: "service_account" as const, id: "service-account-g12", name: "integration" },
@@ -79,22 +78,6 @@ const forward = (address: string, extra = {}): Rules[number] => ({
   },
   ...extra,
 });
-
-async function nodeKeyAndCsr() {
-  const alg = { name: "ECDSA", namedCurve: "P-256", hash: "SHA-256" };
-  const keys = (await webcrypto.subtle.generateKey(alg, true, [
-    "sign",
-    "verify",
-  ])) as webcrypto.CryptoKeyPair;
-  const csr = await x509.Pkcs10CertificateRequestGenerator.create({
-    name: "CN=edge-host",
-    keys: keys as never,
-    signingAlgorithm: alg,
-  });
-  const pkcs8 = Buffer.from(await webcrypto.subtle.exportKey("pkcs8", keys.privateKey));
-  const keyPem = `-----BEGIN PRIVATE KEY-----\n${pkcs8.toString("base64")}\n-----END PRIVATE KEY-----\n`;
-  return { csrPem: csr.toString("pem"), keyPem };
-}
 
 describe("access authentication (G12)", async () => {
   const { ctx, client: pglite } = await createTestContext();

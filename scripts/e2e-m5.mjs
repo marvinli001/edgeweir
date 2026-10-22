@@ -4,6 +4,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { promisify } from "node:util";
 import { revokeAccessKey, signInWithAccessKey } from "./e2e-auth.mjs";
+import { waitFor } from "./e2e-lib.mjs";
 
 const execute = promisify(execFile);
 const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`,
@@ -22,15 +23,6 @@ async function api(key, method, path, body) {
   const result = await response.json();
   assert.ok(response.ok, `${method} ${path}: ${JSON.stringify(result)}`);
   return result;
-}
-async function waitFor(label, fn, seconds = 180) {
-  const deadline = Date.now() + seconds * 1000;
-  while (Date.now() < deadline) {
-    const result = await fn();
-    if (result) return result;
-    await new Promise((r) => setTimeout(r, 1000));
-  }
-  throw new Error(`timeout: ${label}`);
 }
 async function fixture(path, body) {
   const response = await fetch(mock + path, {

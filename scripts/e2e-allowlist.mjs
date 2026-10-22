@@ -19,17 +19,11 @@
 // `node scripts/e2e-allowlist.mjs --cleanup` clears the list, puts the demo
 // switch back and revokes the AccessKey.
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { promisify } from "node:util";
 import { rpc, signInResponse } from "./e2e-auth.mjs";
+import { base, pass, stack } from "./e2e-lib.mjs";
 
-const execute = promisify(execFile);
-const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
-const compose = ["compose", "-f", "compose.e2e.yml"];
-const run = async (args) =>
-  (await execute("docker", args, { env: process.env, maxBuffer: 8 * 1024 * 1024 })).stdout;
-const pass = (message) => console.log(`PASS ${message}`);
+const { compose, run } = stack();
 const STATE = ".e2e/allowlist-state.json";
 const ADMIN = { email: "admin@e2e.test", password: "e2e-admin-password-123" };
 const DEMO = { email: "demo@edgeweir.com", password: "demo" };

@@ -19,32 +19,19 @@
 // State for apps/console/e2e/g7.spec.ts: .e2e/g7-state.json. `node
 // scripts/e2e-g7.mjs --cleanup` deletes the apps, the list and the pools.
 import assert from "node:assert/strict";
-import { execFile, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
-import { promisify } from "node:util";
 import { rpc, signInResponse } from "./e2e-auth.mjs";
+import { base, pass, stack, waitFor as waitUntil } from "./e2e-lib.mjs";
 
-const execute = promisify(execFile);
-const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
 const mock = `http://localhost:${process.env.E2E_MOCK_PORT ?? 19090}`;
-const compose = ["compose", "-f", "compose.e2e.yml", "--profile", "upgrades"];
-const run = async (args) => (await execute("docker", args, { maxBuffer: 8 * 1024 * 1024 })).stdout;
-const pass = (message) => console.log(`PASS ${message}`);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const { run, containerId } = stack({ profiles: ["upgrades"] });
 const STATE = ".e2e/g7-state.json";
 const LIST = "g7_block";
 const PORTS = { tcp: 20001, reload: 20002, udp: 20003, v1: 20004, v2: 20005, accept: 20006 };
 
-async function waitFor(label, fn, seconds = 180, interval = 1500, detail = () => "") {
-  const deadline = Date.now() + seconds * 1000;
-  while (Date.now() < deadline) {
-    const result = await fn();
-    if (result) return result;
-    await sleep(interval);
-  }
-  const why = await detail();
-  throw new Error(`timeout: ${label}${why ? ` (last: ${why})` : ""}`);
-}
+const waitFor = (label, fn, seconds = 180, interval = 1500, detail) =>
+  waitUntil(label, fn, seconds, interval, detail);
 
 /** The operator with an AccessKey from the console's RPC, replaced every 500 calls. */
 async function operator(email, password) {
@@ -92,11 +79,6 @@ function refused(result, status, code) {
   return result.json;
 }
 
-const containerId = async (service) => {
-  const id = (await run([...compose, "ps", "-q", service])).trim();
-  assert.ok(id, `${service} is not running`);
-  return id;
-};
 const containerIp = async (service) => {
   const info = JSON.parse(await run(["inspect", await containerId(service)]))[0];
   const entry = Object.entries(info.NetworkSettings.Networks).find(([name]) =>

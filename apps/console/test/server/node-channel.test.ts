@@ -1,6 +1,5 @@
 import { updateHttps, uploadCertificate } from "../../src/server/services/certificates";
 import "reflect-metadata";
-import { webcrypto } from "node:crypto";
 import { once } from "node:events";
 import http2 from "node:http2";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
@@ -46,24 +45,9 @@ import { latestRevision } from "../../src/server/services/revisions";
 import { saveRules } from "../../src/server/services/rules";
 import { createSite } from "../../src/server/services/sites";
 import { createTestContext, seedOperator } from "./helpers";
+import { nodeKeyAndCsr } from "./node-csr";
 
 const actor = { type: "user" as const, id: "user_admin" };
-
-async function nodeKeyAndCsr() {
-  const alg = { name: "ECDSA", namedCurve: "P-256", hash: "SHA-256" };
-  const keys = (await webcrypto.subtle.generateKey(alg, true, [
-    "sign",
-    "verify",
-  ])) as webcrypto.CryptoKeyPair;
-  const csr = await x509.Pkcs10CertificateRequestGenerator.create({
-    name: "CN=edge-host",
-    keys: keys as never,
-    signingAlgorithm: alg,
-  });
-  const pkcs8 = Buffer.from(await webcrypto.subtle.exportKey("pkcs8", keys.privateKey));
-  const keyPem = `-----BEGIN PRIVATE KEY-----\n${pkcs8.toString("base64")}\n-----END PRIVATE KEY-----\n`;
-  return { csrPem: csr.toString("pem"), keyPem };
-}
 
 /** Every agent reports tls-v1, which a configuration with a site requires. */
 const AGENT_FEATURES = ["tls-v1"];

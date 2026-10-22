@@ -16,88 +16,17 @@
 //      (maxTotal) are refused
 // Every ban is lifted at the end.
 import assert from "node:assert/strict";
-import { execFile, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { createInterface } from "node:readline";
-import { promisify } from "node:util";
-import { rpc, signInResponse } from "./e2e-auth.mjs";
+import { actor, pass, stack, waitFor } from "./e2e-lib.mjs";
 
-const execute = promisify(execFile);
-const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
 const edgePort = Number(process.env.E2E_NODE_PORT ?? 18080);
-const compose = ["compose", "-f", "compose.e2e.yml", "--profile", "upgrades"];
-const run = async (args, opts = {}) =>
-  (await execute("docker", args, { maxBuffer: 8 * 1024 * 1024, ...opts })).stdout;
-const pass = (message) => console.log(`PASS ${message}`);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const { run, containerId, psql } = stack({ profiles: ["upgrades"] });
 /** Ban + unban rounds of the latency test; each round gives two samples. */
 const ROUNDS = 20;
 const P95_LIMIT_MS = 5000;
-
-async function waitFor(label, fn, seconds = 180, interval = 1000, detail = () => "") {
-  const deadline = Date.now() + seconds * 1000;
-  let last;
-  while (Date.now() < deadline) {
-    last = await fn();
-    if (last) return last;
-    await sleep(interval);
-  }
-  const why = detail();
-  throw new Error(`timeout: ${label}${why ? ` (last: ${why})` : ""}`);
-}
-
-/** Raw /api/v1 call: { status, headers, json, text }. */
-async function call(key, method, path, body, headers = {}) {
-  const response = await fetch(`${base}/api/v1${path}`, {
-    method,
-    headers: { "content-type": "application/json", "x-api-key": key, ...headers },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const text = await response.text();
-  return {
-    status: response.status,
-    headers: response.headers,
-    text,
-    json: text ? JSON.parse(text) : null,
-  };
-}
-
-async function createKey(cookie) {
-  return (await rpc(base, cookie, "accessKeys/create", { name: "g1-e2e" })).key;
-}
-
-/**
- * The signed-in operator with an AccessKey. An AccessKey allows 600 requests until
- * it has been idle for 60 seconds; the polling below runs longer than that,
- * so every 500 calls move to a fresh key.
- */
-async function actor(email, password) {
-  const response = await waitFor(
-    `sign in ${email}`,
-    async () => {
-      const r = await signInResponse(base, email, password);
-      return r.status === 200 ? r : null;
-    },
-    60,
-  );
-  const cookie = response.headers
-    .getSetCookie()
-    .map((v) => v.split(";")[0])
-    .join("; ");
-  const user = { cookie, key: await createKey(cookie) };
-  let calls = 0;
-  user.raw = async (method, path, body) => {
-    if (++calls % 500 === 0) user.key = await createKey(user.cookie);
-    return call(user.key, method, path, body);
-  };
-  user.ok = async (method, path, body) => {
-    const result = await user.raw(method, path, body);
-    assert.ok(result.status < 300, `${method} ${path}: ${result.status} ${result.text}`);
-    return result.json;
-  };
-  return user;
-}
 
 /** Asserts an error response: status, code and (optionally) its data. */
 function refused(result, status, code, data) {
@@ -122,30 +51,6 @@ function edge(host, path = "/") {
   });
 }
 
-async function psql(query) {
-  return (
-    await run([
-      ...compose,
-      "exec",
-      "-T",
-      "postgres",
-      "psql",
-      "-U",
-      "edgeweir",
-      "-d",
-      "edgeweir",
-      "-At",
-      "-c",
-      query,
-    ])
-  ).trim();
-}
-
-const containerId = async (service) => {
-  const id = (await run([...compose, "ps", "-q", service])).trim();
-  assert.ok(id, `${service} is not running`);
-  return id;
-};
 const containerIp = async (service) => {
   const info = JSON.parse(await run(["inspect", await containerId(service)]))[0];
   const network = Object.entries(info.NetworkSettings.Networks).find(([name]) =>
@@ -282,7 +187,7 @@ async function probe(service, target) {
 const p0 = JSON.parse(await readFile(".e2e/p0-state.json", "utf8"));
 const m5 = JSON.parse(await readFile(".e2e/m5-state.json", "utf8"));
 const upgrade = JSON.parse(await readFile(".e2e/m6-upgrade-state.json", "utf8"));
-const admin = await actor("admin@e2e.test", "e2e-admin-password-123");
+const admin = await actor("admin@e2e.test", "e2e-admin-password-123", "g1-e2e");
 const edgeId = upgrade.nodeId;
 const peerId = upgrade.peerId;
 const nodeById = (id) => admin.ok("GET", `/nodes/${id}`);

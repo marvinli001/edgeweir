@@ -25,20 +25,16 @@
 // ports. The full e2e runs that cleanup and then deletes the default
 // cluster's node this script needs, so bench after running it on its own.
 import assert from "node:assert/strict";
-import { execFile, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { promisify } from "node:util";
-import { rpc, signInResponse } from "./e2e-auth.mjs";
+import { actor, execute, pass, stack, waitFor } from "./e2e-lib.mjs";
 
-const execute = promisify(execFile);
-const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
-const compose = ["compose", "-f", "compose.e2e.yml", "--profile", "upgrades"];
-const run = async (args, opts = {}) =>
-  (await execute("docker", args, { maxBuffer: 16 * 1024 * 1024, ...opts })).stdout;
-const pass = (message) => console.log(`PASS ${message}`);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const { compose, run, containerId, nodeIn } = stack({
+  profiles: ["upgrades"],
+  maxBuffer: 16 * 1024 * 1024,
+});
 const STATE = ".e2e/g9-state.json";
 const NODE_IMAGE = `edgeweir-node:${process.env.E2E_TAG ?? "e2e"}`;
 
@@ -53,91 +49,12 @@ const NODES = ["node", "node-upgrade-peer"];
 const PROXY_CLUSTER = "g9-proxy";
 const L4_POOL = { protocol: "tcp", from: 25000, to: 25020 };
 
-async function waitFor(label, fn, seconds = 180, interval = 1000, detail = () => "") {
-  const deadline = Date.now() + seconds * 1000;
-  let last;
-  while (Date.now() < deadline) {
-    last = await fn();
-    if (last) return last;
-    await sleep(interval);
-  }
-  const why = detail();
-  throw new Error(`timeout: ${label}${why ? ` (last: ${why})` : ""}`);
-}
-
-async function call(key, method, path, body) {
-  const response = await fetch(`${base}/api/v1${path}`, {
-    method,
-    headers: { "content-type": "application/json", "x-api-key": key },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const text = await response.text();
-  return { status: response.status, text, json: text ? JSON.parse(text) : null };
-}
-
-async function createKey(cookie) {
-  return (await rpc(base, cookie, "accessKeys/create", { name: "g9-e2e" })).key;
-}
-
-async function actor(email, password) {
-  const response = await waitFor(
-    `sign in ${email}`,
-    async () => {
-      const r = await signInResponse(base, email, password);
-      return r.status === 200 ? r : null;
-    },
-    60,
-  );
-  const cookie = response.headers
-    .getSetCookie()
-    .map((v) => v.split(";")[0])
-    .join("; ");
-  const user = { cookie, key: await createKey(cookie) };
-  let calls = 0;
-  user.raw = async (method, path, body) => {
-    if (++calls % 500 === 0) user.key = await createKey(user.cookie);
-    return call(user.key, method, path, body);
-  };
-  user.ok = async (method, path, body) => {
-    const result = await user.raw(method, path, body);
-    assert.ok(result.status < 300, `${method} ${path}: ${result.status} ${result.text}`);
-    return result.json;
-  };
-  return user;
-}
-
-const containerId = async (service) => {
-  const id = (await run([...compose, "ps", "-q", service])).trim();
-  assert.ok(id, `${service} is not running`);
-  return id;
-};
 const project = JSON.parse(await run(["inspect", await containerId("node")]))[0].Config.Labels[
   "com.docker.compose.project"
 ];
 /** Containers started here carry this label; scripts/e2e.sh removes them on exit. */
 const LABEL = `dev.edgeweir.e2e-g9=${project}`;
 const EDGE_CONTAINER = `${project}-g9-edge`;
-
-/** Runs `node -e script` in a compose service with `input` on stdin; resolves stdout. */
-async function nodeIn(service, script, input) {
-  const id = await containerId(service);
-  return new Promise((resolvePromise, reject) => {
-    const child = spawn("docker", ["exec", "-i", id, "node", "-e", script], {
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    const out = [];
-    const err = [];
-    child.stdout.on("data", (d) => out.push(d));
-    child.stderr.on("data", (d) => err.push(d));
-    child.on("error", reject);
-    child.on("close", (code) =>
-      code === 0
-        ? resolvePromise(Buffer.concat(out).toString("utf8"))
-        : reject(new Error(`${service}: ${Buffer.concat(err).toString("utf8")}`)),
-    );
-    child.stdin.end(input ?? "");
-  });
-}
 
 /** Sequential HTTP(S) requests from a client, with the raw header lines. */
 const REQUESTS = `
@@ -231,7 +148,7 @@ async function removeContainers() {
 
 // ---------------------------------------------------------------- setup
 const upgrade = JSON.parse(await readFile(".e2e/m6-upgrade-state.json", "utf8"));
-const admin = await actor("admin@e2e.test", "e2e-admin-password-123");
+const admin = await actor("admin@e2e.test", "e2e-admin-password-123", "g9-e2e");
 const clusterId = upgrade.clusterId;
 const edgeId = upgrade.nodeId;
 const peerId = upgrade.peerId;

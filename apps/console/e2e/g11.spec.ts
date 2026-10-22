@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, type Page } from "@playwright/test";
-import { pick, saved, signedIn, test } from "./helpers";
+import { errors, pick, saved, signedIn, test } from "./helpers";
 
 /**
  * Written by scripts/e2e-g11.mjs: g11-multi (a, b and c.g11.test) with g11-wild first and g11-a,
@@ -49,12 +49,6 @@ async function check(page: Page, name: string) {
   }
   await page.emulateMedia({ colorScheme: "light" });
   await page.setViewportSize({ width: 1280, height: 900 });
-}
-
-function errors(page: Page) {
-  const list: string[] = [];
-  page.on("pageerror", (error) => list.push(error.message));
-  return list;
 }
 
 test("G11: several certificates and client certificates on the HTTPS tab", async ({ page }) => {

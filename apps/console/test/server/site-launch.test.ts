@@ -2,24 +2,11 @@ import { schema } from "@edgeweir/db";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
-import type { AddressResolver } from "../../src/server/lib/dns-check";
 import { WILDCARD_PROBE_LABEL } from "../../src/server/services/site-launch";
+import { fakeResolver } from "./fake-resolver";
 import { type ApiClient, createTestContext, rpcClient, setupPlatform, signIn } from "./helpers";
 
 // The site overview's launch check and the domains tab's DNS card (audit S-1, S-4).
-
-/** A resolver answering from a table; "timeout" fails like a lookup that timed out. */
-function fakeResolver(table: Record<string, { v4?: string[]; v6?: string[] } | "timeout">) {
-  const lookup = (family: "v4" | "v6") => async (name: string) => {
-    const entry = table[name];
-    if (entry === "timeout") throw Object.assign(new Error("timeout"), { code: "ETIMEOUT" });
-    const answer = entry?.[family];
-    if (!answer?.length)
-      throw Object.assign(new Error("no data"), { code: entry ? "ENODATA" : "ENOTFOUND" });
-    return answer;
-  };
-  return { resolve4: lookup("v4"), resolve6: lookup("v6") } satisfies AddressResolver;
-}
 
 describe("site launch check", async () => {
   const { ctx, client: pglite } = await createTestContext();

@@ -431,6 +431,9 @@ importers:
       '@bufbuild/protobuf':
         specifier: 2.15.0
         version: 2.15.0
+      '@edgeweir/contract':
+        specifier: workspace:*
+        version: link:../contract
       '@edgeweir/proto':
         specifier: workspace:*
         version: link:../proto

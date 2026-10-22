@@ -31,9 +31,9 @@ import { execFile, spawn } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { rpc, signInResponse } from "./e2e-auth.mjs";
+import { base, pass, sleep } from "./e2e-lib.mjs";
 
 const execute = promisify(execFile);
-const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
 const compose = ["compose", "-f", "compose.e2e.yml", "--profile", "upgrades"];
 const run = async (args, input) => {
   if (input === undefined)
@@ -53,8 +53,6 @@ const run = async (args, input) => {
     child.stdin.end(input);
   });
 };
-const pass = (message) => console.log(`PASS ${message}`);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const STATE = ".e2e/g19-state.json";
 const SUFFIX = ".g19.e2e.test";
 
