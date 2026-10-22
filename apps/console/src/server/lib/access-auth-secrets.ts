@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import type { MasterKey } from "./envelope";
 
 /** Envelope binding of an access authentication rule's secret: the column and the rule (AAD). */
-export const ACCESS_AUTH_SECRET_PURPOSE = "site_auth_rule.secret_envelope";
+const ACCESS_AUTH_SECRET_PURPOSE = "site_auth_rule.secret_envelope";
 export const accessAuthSecretBinding = (ruleId: string) => ({
   purpose: ACCESS_AUTH_SECRET_PURPOSE,
   recordId: ruleId,

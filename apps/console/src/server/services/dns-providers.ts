@@ -27,7 +27,7 @@ export const providerBinding = (id: string) => ({
   purpose: "platform_dns_provider.credential_envelope",
   recordId: id,
 });
-export const providerDto = (p: Provider) => ({
+const providerDto = (p: Provider) => ({
   id: p.id,
   name: p.name,
   zone: p.zone,

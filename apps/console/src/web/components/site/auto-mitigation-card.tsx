@@ -34,7 +34,7 @@ const integerIn = (text: string, min: number, max: number) => {
 };
 
 /** Refetches what an automatic mitigation changes: its own state, the site's Under Attack, its revision. */
-export function useRefreshMitigation() {
+function useRefreshMitigation() {
   const queryClient = useQueryClient();
   return () =>
     Promise.all([

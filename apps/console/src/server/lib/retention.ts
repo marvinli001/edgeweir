@@ -3,7 +3,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import type { Executor } from "../services/revisions";
 
 /** Rows a retention job deletes per statement. */
-export const RETENTION_BATCH = 5000;
+const RETENTION_BATCH = 5000;
 
 /**
  * Deletes the rows of `table` that `where` matches, at most `batch` per

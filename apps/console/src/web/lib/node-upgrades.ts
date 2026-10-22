@@ -3,7 +3,7 @@ import type { Node } from "@edgeweir/contract";
 import { m } from "../paraglide/messages.js";
 
 /** Architectures node releases are built for. */
-export const RELEASE_ARCHES = ["amd64", "arm64"];
+const RELEASE_ARCHES = ["amd64", "arm64"];
 
 /**
  * Why an active node stops an upgrade from starting, as the console checks

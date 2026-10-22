@@ -62,7 +62,7 @@ export class CertdError extends Error {
 }
 
 /** A failure of an issuance on the console's side, with the code stored on the certificate. */
-export class IssuanceError extends Error {
+class IssuanceError extends Error {
   constructor(
     readonly code: CertificateErrorCode,
     message: string,
@@ -78,7 +78,7 @@ const CODE = /^[a-z0-9_]{1,40}$/;
  * certificate_operation_failed. Never a message (which may quote
  * credentials, keys or the helper's output).
  */
-export function failureCode(error: unknown): string {
+function failureCode(error: unknown): string {
   if (error instanceof CertdError || error instanceof IssuanceError) return error.code;
   if (error instanceof ORPCError) {
     const code = String(error.code).toLowerCase();
@@ -810,7 +810,7 @@ function renewalWindow(value: unknown): RenewalWindow | undefined {
  * planned renewal after the window moves to a random time in it (now, if it
  * has passed); an earlier one stays.
  */
-export function rescheduledRenewal(renewAt: Date, window: RenewalWindow, now = Date.now()) {
+function rescheduledRenewal(renewAt: Date, window: RenewalWindow, now = Date.now()) {
   if (renewAt.getTime() <= window.end) return renewAt;
   return new Date(Math.max(now, window.start + Math.random() * (window.end - window.start)));
 }

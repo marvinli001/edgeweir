@@ -9,7 +9,7 @@ import { isoDateTime, uuid } from "./schemas";
  * pass of one level satisfies every requirement up to it.
  */
 export const CHALLENGE_TYPES = challengeTypes;
-export const challengeType = z.enum(challengeTypes);
+const challengeType = z.enum(challengeTypes);
 /** CC mitigation levels: normal, then the challenge types. */
 export const CC_LEVELS = ["normal", ...challengeTypes] as const;
 export const ccLevel = z.enum(CC_LEVELS);
@@ -89,7 +89,10 @@ export const ccThresholds = z.object({
   cooldownSeconds: z.number().int().min(1).max(86400),
 });
 
-/** The platform's CC template (system setting `cc_template`). */
+/**
+ * The platform's CC template (system setting `cc_template`).
+ * @alias ccThresholds
+ */
 export const ccTemplate = ccThresholds;
 export const CC_TEMPLATE_DEFAULTS: CcThresholds = {
   maxLevel: "captcha",
@@ -181,7 +184,7 @@ export const siteCcPolicy = ccThresholds.extend({
   followTemplate: z.boolean(),
 });
 
-export const siteProtection = z.object({
+const siteProtection = z.object({
   siteId: uuid,
   /** Challenge every GET/HEAD request without a valid pass. */
   underAttack: z.boolean(),
@@ -255,7 +258,7 @@ export const PROTECTION_SETTINGS_DEFAULTS: ProtectionSettings = {
 export const securityEventKind = z.enum(["site_level", "path_level", "ip_banned"]);
 const topCount = z.object({ value: z.string(), count: z.number() });
 
-export const securityEvent = z.object({
+const securityEvent = z.object({
   id: uuid,
   /** Null once the node is deleted. */
   node: z.object({ id: uuid, name: z.string() }).nullable(),
@@ -276,12 +279,12 @@ export const securityEvent = z.object({
   topPaths: z.array(topCount),
 });
 
-export const securityEventList = z.object({
+const securityEventList = z.object({
   items: z.array(securityEvent),
   total: z.number().int(),
 });
 
-export const securityEventListInput = z.object({
+const securityEventListInput = z.object({
   id: uuid,
   kind: securityEventKind.optional(),
   /** Only events of the last this many hours. */
@@ -291,7 +294,7 @@ export const securityEventListInput = z.object({
 });
 
 /** Current CC level of a site on each active node of its cluster. */
-export const siteSecurityState = z.object({
+const siteSecurityState = z.object({
   nodes: z.array(
     z.object({
       id: uuid,

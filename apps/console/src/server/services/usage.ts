@@ -17,7 +17,7 @@ import { findSite } from "./sites";
 const WINDOW_MS = USAGE_WINDOW_SECONDS * 1000;
 const SETTINGS_KEY = "usage_settings";
 const WATERMARK_KEY = "usage_watermark";
-export const USAGE_DEFAULTS: UsageSettings = { retentionDays: 100, offlineThresholdMinutes: 60 };
+const USAGE_DEFAULTS: UsageSettings = { retentionDays: 100, offlineThresholdMinutes: 60 };
 /** A node's watermark may run ahead of the console clock by at most this much. */
 const CLOCK_SKEW_MS = 60_000;
 
@@ -55,7 +55,7 @@ export function setUsageSettings(db: Database, input: UsageSettings, actor: Acto
 }
 
 /** The stored completeness watermark (it only moves forward), or null. */
-export async function usageCompleteUntil(db: Executor): Promise<Date | null> {
+async function usageCompleteUntil(db: Executor): Promise<Date | null> {
   const [row] = await db
     .select()
     .from(schema.systemSetting)

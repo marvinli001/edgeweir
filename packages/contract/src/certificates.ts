@@ -33,8 +33,7 @@ export const MAX_SITE_CERTIFICATES = 4;
 /** When a site asks visitors for a certificate (mutual TLS) on its HTTPS ports. */
 export const CLIENT_CERTIFICATE_MODES = ["off", "optional", "required"] as const;
 export type ClientCertificateMode = (typeof CLIENT_CERTIFICATE_MODES)[number];
-/** The client CA bundle: 1-10 CA certificates, at most 64 KiB of PEM. */
-export const CLIENT_CA_MAX_CERTIFICATES = 10;
+/** The client CA bundle: at most 64 KiB of PEM. */
 export const CLIENT_CA_MAX_BYTES = 65_536;
 export const CLIENT_CERTIFICATE_DEPTH_RANGE = { min: 1, max: 5 } as const;
 
@@ -47,7 +46,7 @@ export const CLIENT_CERTIFICATE_DEPTH_RANGE = { min: 1, max: 5 } as const;
  * X-Client-Cert-SHA256, X-Client-Cert-Subject and X-Client-Cert-Serial to
  * the origin; visitors' own headers of these names are always removed.
  */
-export const clientCertificateSettings = z.object({
+const clientCertificateSettings = z.object({
   mode: z.enum(CLIENT_CERTIFICATE_MODES).default("off"),
   caPem: z.string().max(CLIENT_CA_MAX_BYTES).default(""),
   depth: z
@@ -58,7 +57,6 @@ export const clientCertificateSettings = z.object({
     .default(2),
   forwardHeaders: z.boolean().default(false),
 });
-export type ClientCertificateSettings = z.infer<typeof clientCertificateSettings>;
 
 export const tlsSettings = z
   .object({
@@ -150,7 +148,6 @@ export const tlsSettings = z
       (s.certificateId !== null && s.clientCertificate.caPem.trim() !== ""),
     { message: "client certificates need a certificate and a CA", path: ["clientCertificate"] },
   );
-export type TlsSettingsInput = z.input<typeof tlsSettings>;
 
 /** Every certificate of a site, the first one first. */
 export const siteCertificateIds = (s: {
@@ -228,7 +225,7 @@ export function isCertificateErrorCode(code: unknown): code is CertificateErrorC
 }
 
 /** `lastError` codes of a stored certificate nodes cannot load; it cannot be bound. */
-export const unloadableCertificateErrors: readonly CertificateErrorCode[] = [
+const unloadableCertificateErrors: readonly CertificateErrorCode[] = [
   "certificate_chain_explicit_curve",
   "certificate_key_explicit_curve",
 ];
@@ -238,7 +235,7 @@ export const certificateUnloadable = (cert: { status: string; lastError: string 
   cert.status === "error" &&
   (unloadableCertificateErrors as readonly string[]).includes(cert.lastError);
 
-export const certificateDto = z.object({
+const certificateDto = z.object({
   id: uuid,
   name: z.string(),
   names: z.array(z.string()),
@@ -275,7 +272,7 @@ const names = z
   .min(1)
   .max(100)
   .refine((xs) => new Set(xs).size === xs.length);
-export const certificateUpload = z.object({
+const certificateUpload = z.object({
   name: label,
   chainPem: z.string().min(32).max(131_072),
   privateKeyPem: z.string().min(32).max(32_768),
@@ -285,13 +282,13 @@ export const certificateUpload = z.object({
  * Services (EAB required by the last two), and the custom ACME directory of
  * the system settings (settings.acmeDirectory).
  */
-export const ACME_CAS = ["letsencrypt", "zerossl", "google", "custom"] as const;
+const ACME_CAS = ["letsencrypt", "zerossl", "google", "custom"] as const;
 export type AcmeCa = (typeof ACME_CAS)[number];
-export const acmeCa = z.enum(ACME_CAS);
+const acmeCa = z.enum(ACME_CAS);
 /** Built-in CAs whose directories need external account binding. */
 export const EAB_REQUIRED_CAS: readonly AcmeCa[] = ["zerossl", "google"];
 /** Key of the certificates the console requests: ECDSA P-256 or RSA 2048. */
-export const ACME_KEY_TYPES = ["ec256", "rsa2048"] as const;
+const ACME_KEY_TYPES = ["ec256", "rsa2048"] as const;
 export type AcmeKeyType = (typeof ACME_KEY_TYPES)[number];
 
 export const certificateRequest = z
@@ -352,7 +349,7 @@ export const certificateRequest = z
  * `error` is the API error code). Both: `caa_forbidden` (CAA records of the
  * name or a parent domain do not allow the CA).
  */
-export const httpsBlocker = z.discriminatedUnion("code", [
+const httpsBlocker = z.discriminatedUnion("code", [
   z.object({ code: z.literal("nodes_offline"), cluster: z.string() }),
   z.object({ code: z.literal("nodes_lack_http01"), nodes: z.array(z.string()) }),
   z.object({
@@ -370,7 +367,7 @@ export const httpsBlocker = z.discriminatedUnion("code", [
   /** Every domain of the site is a `~pattern`: no name to issue for. */
   z.object({ code: z.literal("no_certificate_names") }),
 ]);
-export const httpsCheckInput = z.object({
+const httpsCheckInput = z.object({
   id: uuid,
   /**
    * The CA whose CAA permission is checked (the custom directory's
@@ -378,7 +375,7 @@ export const httpsCheckInput = z.object({
    */
   ca: acmeCa.optional(),
 });
-export const httpsCheck = z.object({
+const httpsCheck = z.object({
   /**
    * The request one-click HTTPS sends (certificates.request with
    * bindSiteId): the site's name and domains, HTTP-01, or DNS-01 with the
@@ -399,7 +396,7 @@ export const httpsCheck = z.object({
 });
 
 /** How the console issues ACME certificates. */
-export const certificateSettings = z.object({
+const certificateSettings = z.object({
   /**
    * The custom ACME directory in effect (system setting, else
    * EDGEWEIR_ACME_DIRECTORY), or null: `custom` cannot be chosen.
@@ -412,7 +409,7 @@ export const certificateSettings = z.object({
 });
 
 /** Where a value of the ACME directory setting comes from. */
-export const settingSource = z.enum(["setting", "environment", "default"]);
+const settingSource = z.enum(["setting", "environment", "default"]);
 
 /**
  * The custom ACME directory (system settings). Each value is the saved one,
@@ -438,7 +435,7 @@ export const acmeDirectorySetting = z.object({
 });
 
 /** An `https://` ACME directory URL without credentials or fragment. */
-export const acmeDirectoryUrl = z
+const acmeDirectoryUrl = z
   .url()
   .max(2048)
   .refine((value) => {
@@ -465,7 +462,7 @@ export const acmeDirectoryInput = z.object({
 });
 
 /** An ACME account of the console (acmeAccounts.list). */
-export const acmeAccountDto = z.object({
+const acmeAccountDto = z.object({
   id: uuid,
   directoryUrl: z.string(),
   /** The built-in CA of the directory, `custom` for the custom one, null for another. */
@@ -534,13 +531,13 @@ const credentialProviders = dnsProviderIds.filter((id) => id !== "test") as [
 const credentialFields = z
   .record(z.string().max(64), z.string().max(16384))
   .refine((c) => Object.keys(c).length > 0 && Object.keys(c).length <= 10);
-export const dnsCredentialInput = z.object({
+const dnsCredentialInput = z.object({
   name: label,
   provider: z.enum(credentialProviders),
   zone: domainName.refine((s) => !s.startsWith("*.")),
   credentials: credentialFields,
 });
-export const dnsCredentialDto = z.object({
+const dnsCredentialDto = z.object({
   id: uuid,
   name: z.string(),
   provider: z.string(),

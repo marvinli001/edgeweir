@@ -13,7 +13,7 @@ import { OutboundRefusedError, outboundAddress, withinDeadline } from "../lib/ou
 import { getNodeChannel } from "./node-channel-url";
 
 /** One handshake: the check is advisory and must not hold up a page. */
-export const NODE_CHANNEL_CHECK_TIMEOUT_MS = 3000;
+const NODE_CHANNEL_CHECK_TIMEOUT_MS = 3000;
 /** Pages and dialogs ask again; a result is reused for this long. */
 const CACHE_MS = 30_000;
 

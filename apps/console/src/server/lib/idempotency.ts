@@ -16,8 +16,8 @@ import { deleteInBatches } from "./retention";
  * which never reached the procedure) are not kept, so the caller can retry.
  */
 export const IDEMPOTENCY_HEADER = "idempotency-key";
-export const REPLAYED_HEADER = "idempotent-replayed";
-export const IDEMPOTENCY_RETENTION_MS = 24 * 3600 * 1000;
+const REPLAYED_HEADER = "idempotent-replayed";
+const IDEMPOTENCY_RETENTION_MS = 24 * 3600 * 1000;
 /** An in-progress record not finished within this time was abandoned (crash) and may be taken over. */
 const LEASE_MS = 10 * 60 * 1000;
 const METHODS = new Set(["POST", "PUT", "PATCH"]);
@@ -38,10 +38,7 @@ export function parseIdempotencyKey(raw: string): string | null {
 }
 
 /** Who the key namespace belongs to, without side effects; null for invalid credentials. */
-export async function idempotencyPrincipal(
-  db: Database,
-  apiKey: string | null,
-): Promise<string | null> {
+async function idempotencyPrincipal(db: Database, apiKey: string | null): Promise<string | null> {
   if (!apiKey || apiKey.length > 200) return null;
   if (isServiceAccountKey(apiKey)) {
     const [row] = await db

@@ -13,14 +13,12 @@ export const DOMAINS_V2_FEATURE = "domains-v2";
 export const UNKNOWN_HOST_FEATURE = "unknown-host-v1";
 
 /** page: the platform's unknown host page (404); close: no response (444); site: the default site. */
-export const unknownHostAction = z.enum(["page", "close", "site"]);
+const unknownHostAction = z.enum(["page", "close", "site"]);
 
 export const SCAN_THRESHOLD = { min: 10, max: 10_000, default: 100 } as const;
 export const SCAN_BAN_SECONDS = { min: 60, max: 86_400, default: 3_600 } as const;
-/** Scan protection counts requests per client address over this window. */
-export const SCAN_WINDOW_SECONDS = 60;
 
-export const scanProtection = z.object({
+const scanProtection = z.object({
   enabled: z.boolean().default(false),
   /** Requests to unknown hosts or by node IP within 60 seconds; one more bans. */
   threshold: z
@@ -68,9 +66,9 @@ export const unknownHostSettings = z
       });
   });
 
-export const unknownHostsInput = z.object({ clusterId: uuid, settings: unknownHostSettings });
+const unknownHostsInput = z.object({ clusterId: uuid, settings: unknownHostSettings });
 
-export const clusterUnknownHosts = z.object({
+const clusterUnknownHosts = z.object({
   clusterId: uuid,
   settings: z.object({
     unknownHost: unknownHostAction,
@@ -114,7 +112,7 @@ export const unknownHostProcedures = {
  * their id.
  */
 export const CNAME_PREFIX_RE = /^[a-z0-9](?:[a-z0-9-]{0,28}[a-z0-9])?$/;
-export const cnamePrefix = z.string().trim().toLowerCase().regex(CNAME_PREFIX_RE);
+const cnamePrefix = z.string().trim().toLowerCase().regex(CNAME_PREFIX_RE);
 /** How long a replaced prefix keeps resolving. */
 export const CNAME_RETIRE_HOURS = 24;
 
@@ -142,8 +140,6 @@ export const cnamePrefixState = z.object({
 });
 
 export type UnknownHostAction = z.infer<typeof unknownHostAction>;
-export type UnknownHostSettings = z.infer<typeof unknownHostSettings>;
 export type UnknownHostsInput = z.infer<typeof unknownHostsInput>;
 export type ClusterUnknownHosts = z.infer<typeof clusterUnknownHosts>;
-export type CnamePrefixInput = z.infer<typeof cnamePrefixInput>;
 export type CnamePrefixState = z.infer<typeof cnamePrefixState>;

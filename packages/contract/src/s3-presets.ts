@@ -44,5 +44,3 @@ export const S3_PRESETS = [
   { id: "bos", address: "s3.<region>.bcebos.com", region: "bj", bucketInHost: false },
   { id: "kodo", address: "s3.<region>.qiniucs.com", region: "cn-east-1", bucketInHost: false },
 ] as const;
-
-export type S3Preset = (typeof S3_PRESETS)[number];

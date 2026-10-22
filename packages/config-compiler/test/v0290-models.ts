@@ -19,7 +19,7 @@ const rule = (
  * writing access log lines, a rate limit ban, the CRS override, and rules
  * reading the body (form_value, json_value) and the crawler fields.
  */
-export const v0290Rules = (): RuleModel[] => [
+const v0290Rules = (): RuleModel[] => [
   rule("r-ban", "waf-custom", 'form_value("user") eq "admin"', {
     kind: "ban",
     banSeconds: 3600,

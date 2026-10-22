@@ -17,7 +17,7 @@ import type { Logger } from "./lib/logger";
  *
  * Anything else, and anything not on disk, is 404, never the SPA shell.
  */
-export const MIRRORED_PROJECTS = ["edgeweir-node", "cosign"] as const;
+const MIRRORED_PROJECTS = ["edgeweir-node", "cosign"] as const;
 
 const SEMVER =
   /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$/;

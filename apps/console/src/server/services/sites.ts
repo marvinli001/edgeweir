@@ -82,7 +82,7 @@ type CacheSettingsInput = SiteCreate["cacheSettings"];
 type ContentSettingsInput = SiteCreate["contentSettings"];
 
 /** Envelope binding of an S3 secret access key: the column and the credential row (AAD). */
-export const S3_SECRET_PURPOSE = "origin_credential.secret_envelope";
+const S3_SECRET_PURPOSE = "origin_credential.secret_envelope";
 export const s3SecretBinding = (credentialId: string) => ({
   purpose: S3_SECRET_PURPOSE,
   recordId: credentialId,
@@ -547,7 +547,7 @@ function assertGrpcOverHttp2(settings: Pick<OriginSettingsInput, "protocol" | "g
  * Pool columns of the settings; health check, affinity, protocol, gRPC,
  * tries and status retries only when given (kept otherwise).
  */
-export function poolSettingsValues(
+function poolSettingsValues(
   settings: Omit<OriginSettingsInput, KeptPoolSettings> &
     Partial<Pick<OriginSettingsInput, KeptPoolSettings>>,
 ) {

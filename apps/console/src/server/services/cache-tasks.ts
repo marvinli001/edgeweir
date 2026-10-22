@@ -54,9 +54,9 @@ type TaskRow = typeof schema.cacheTask.$inferSelect;
 type TaskNodeRow = typeof schema.cacheTaskNode.$inferSelect;
 
 /** Undelivered tasks are handed out for as long as purged objects may live on a node. */
-export const CACHE_TASK_TTL_MS = 7 * 24 * 3600 * 1000;
+const CACHE_TASK_TTL_MS = 7 * 24 * 3600 * 1000;
 /** A task handed out without a result is handed out again after this long. */
-export const CACHE_TASK_REDISPATCH_MS = 5 * 60 * 1000;
+const CACHE_TASK_REDISPATCH_MS = 5 * 60 * 1000;
 /** Tasks are kept this long, as alert events and hourly traffic (see pruneCacheTasks). */
 export const CACHE_TASK_RETENTION_MS = 90 * 24 * 3600 * 1000;
 
@@ -259,7 +259,7 @@ async function resolveHosts(db: Executor, hosts: string[], { single = false } = 
 }
 
 /** English text of a delivery skipped because its node was disabled (code node_disabled). */
-export const NODE_DISABLED_MESSAGE = "skipped: the node is disabled";
+const NODE_DISABLED_MESSAGE = "skipped: the node is disabled";
 
 function taskState(rows: Pick<TaskNodeRow, "state">[]): CacheTaskState {
   // Disabled nodes neither run the task nor hold it up.
@@ -732,7 +732,7 @@ async function recoverMissedPurges(
 }
 
 /** The task types that purge (the nodes' purge lane pulls only these). */
-export const PURGE_TASK_TYPES: readonly CacheTaskType[] = ["url", "prefix", "site", "host", "tag"];
+const PURGE_TASK_TYPES: readonly CacheTaskType[] = ["url", "prefix", "site", "host", "tag"];
 
 /**
  * Hands out the oldest deliverable tasks of a node and marks them running
@@ -887,7 +887,7 @@ export async function skipNodeTasks(tx: Executor, nodeId: string, now = new Date
 }
 
 /** English text of a delivery that expired unexecuted (code task_expired). */
-export const TASK_EXPIRED_MESSAGE = "expired: the node did not report a result";
+const TASK_EXPIRED_MESSAGE = "expired: the node did not report a result";
 
 /**
  * Fails the unfinished deliveries (of one node, or all) of tasks older than

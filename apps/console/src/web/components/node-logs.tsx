@@ -37,7 +37,7 @@ const levelLabel = (level: NodeLogLevel) =>
   ({ info: m.node_log_level_info, warn: m.node_log_level_warn, error: m.node_log_level_error })[
     level
   ]();
-export const nodeLogSourceLabel = (source: NodeLogSource) =>
+const nodeLogSourceLabel = (source: NodeLogSource) =>
   ({
     agent: m.node_log_source_agent,
     supervisor: m.node_log_source_supervisor,

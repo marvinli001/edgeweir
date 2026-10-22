@@ -7,7 +7,7 @@ function subscribeVisibility(onChange: () => void) {
 }
 
 /** Whether the tab is in front. */
-export function usePageVisible(): boolean {
+function usePageVisible(): boolean {
   return React.useSyncExternalStore(
     subscribeVisibility,
     () => document.visibilityState === "visible",
@@ -16,7 +16,7 @@ export function usePageVisible(): boolean {
 }
 
 /** Whether the element is (partly) in the viewport. */
-export function useInViewport(ref: React.RefObject<Element | null>, margin = "64px"): boolean {
+function useInViewport(ref: React.RefObject<Element | null>, margin = "64px"): boolean {
   const [visible, setVisible] = React.useState(false);
   React.useEffect(() => {
     const element = ref.current;

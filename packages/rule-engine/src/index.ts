@@ -5,12 +5,7 @@ import { validHostHeader } from "./host-header.ts";
 
 export {
   corsAllowOrigin,
-  type GeoAccessModel,
-  type GeoRecord,
   geoDecision,
-  geoMatches,
-  type HotlinkModel,
-  type HotlinkRequest,
   hostFormMatches,
   hotlinkDecision,
   normalizeHostForm,
@@ -19,30 +14,15 @@ export {
   originFormMatches,
   pathInScope,
   refererHost,
-  type UserAgentRuleModel,
   userAgentDecision,
-  validHostName,
   validUserAgentPattern,
   websocketOriginAllowed,
 } from "./access-control.ts";
 export {
   bodyFilenames,
-  bodyMediaType,
   formValue,
-  headerParams,
-  isJsonMediaType,
-  type JsonValue,
-  jsonPathValue,
   jsonValue,
-  MAX_FORM_NAME_BYTES,
-  MAX_JSON_DEPTH,
-  MAX_JSON_PATH_BYTES,
-  MAX_JSON_PATH_SEGMENTS,
-  MAX_MULTIPART_PARTS,
-  type Multipart,
   multipartBoundary,
-  parseJson,
-  parseMultipart,
   RULES_BODY_LIMIT,
   validFormName,
   validJsonPath,
@@ -52,19 +32,11 @@ export {
   checkSignedUri,
   DEFAULT_SIGN_PARAM,
   DEFAULT_TIME_PARAM,
-  type ParsedSignature,
-  parseSignedUri,
   signUri,
-  splitRequestUri,
   URL_AUTH_KEY,
   URL_AUTH_KINDS,
   URL_AUTH_PARAM,
-  URL_AUTH_RAND,
-  type UrlAuthCheck,
   type UrlAuthKind,
-  type UrlAuthNames,
-  type UrlAuthOutcome,
-  type UrlAuthSigning,
   urlAuthHash,
 } from "./url-auth.ts";
 
@@ -251,7 +223,7 @@ export const COOKIE_NAME_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,64}$/;
 /** Query parameter names as sent (not decoded): printable ASCII without `"`, `#`, `&` and `=`. */
 export const ARG_NAME_RE = /^[\x21\x24\x25\x27-\x3c\x3e-\x7e]{1,64}$/;
 /** Fields only nodes with rules-v2 provide. */
-export const rulesV2Fields: ReadonlySet<string> = new Set([
+const rulesV2Fields: ReadonlySet<string> = new Set([
   "http.request.full_uri",
   "http.request.uri.path.extension",
   "http.response.content_type.media_type",
@@ -269,7 +241,7 @@ export const rulesV3Fields: ReadonlySet<string> = new Set([
   "http.response.cache_status",
 ]);
 /** Fields only nodes with client-ip-v1 provide. */
-export const clientIpFields: ReadonlySet<string> = new Set(["ip.peer"]);
+const clientIpFields: ReadonlySet<string> = new Set(["ip.peer"]);
 /** Whether the expression reads a field only client-ip-v1 nodes provide. */
 export function needsClientIp(expression: Expression): boolean {
   return (
@@ -278,7 +250,7 @@ export function needsClientIp(expression: Expression): boolean {
   );
 }
 /** Fields only nodes with client-cert-v1 provide. */
-export const clientCertificateFields: ReadonlySet<string> = new Set([
+const clientCertificateFields: ReadonlySet<string> = new Set([
   "tls.client.verified",
   "tls.client.cert_sha256",
   "tls.client.subject",
@@ -466,9 +438,9 @@ export const respondStatus = (status: number) =>
 /** Codings of compression rules and of the config switches, node names. */
 export const compressionCodings = ["zstd", "br", "gzip"] as const;
 /** Redirect status codes (303 since rules-v3). */
-export const redirectStatuses = [301, 302, 303, 307, 308] as const;
+const redirectStatuses = [301, 302, 303, 307, 308] as const;
 /** Longest header value a value expression may compute; longer ones skip the header action. */
-export const MAX_HEADER_VALUE_BYTES = 4096;
+const MAX_HEADER_VALUE_BYTES = 4096;
 /** Query parameter names redirects and rewrites may set or remove (RFC 3986 unreserved). */
 export const QUERY_NAME_RE = /^[A-Za-z0-9._~-]{1,64}$/;
 /** Origin groups inside a site; "" is the default group. */
@@ -1084,13 +1056,13 @@ export const rulesV3Functions: ReadonlySet<string> = new Set([
   "to_string",
 ]);
 /** Bounds of substring's integer arguments: start (negative counts from the end) and length. */
-export const SUBSTRING_BOUNDS: Record<string, readonly [number, number]> = {
+const SUBSTRING_BOUNDS: Record<string, readonly [number, number]> = {
   start: [-65536, 65536],
   length: [0, 65536],
 };
 const MAX_CALL_DEPTH = 4;
 /** Longest value an expression computes on the node; longer results fail the request. */
-export const MAX_VALUE_BYTES = 8192;
+const MAX_VALUE_BYTES = 8192;
 
 const byteLength = (value: string) => new TextEncoder().encode(value).length;
 const controlCharacter = (value: string) =>
@@ -1719,7 +1691,7 @@ const asciiLower = (value: string) => value.replace(/[A-Z]/g, (c) => c.toLowerCa
 const asciiUpper = (value: string) => value.replace(/[a-z]/g, (c) => c.toUpperCase());
 
 /** url_decode over a byte string: one pass, %XX to a byte, "+" to a space. */
-export function urlDecodeBytes(value: string): string {
+function urlDecodeBytes(value: string): string {
   let out = "";
   for (let i = 0; i < value.length; i++) {
     const c = value[i];
@@ -1733,14 +1705,14 @@ export function urlDecodeBytes(value: string): string {
 }
 
 /** url_encode over a byte string: every byte but the RFC 3986 unreserved ones as %XX. */
-export function urlEncodeBytes(value: string): string {
+function urlEncodeBytes(value: string): string {
   return value.replace(
     /[^A-Za-z0-9._~-]/g,
     (c) => `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`,
   );
 }
 /** base64_encode over a byte string: the standard alphabet with padding. */
-export function base64EncodeBytes(value: string): string {
+function base64EncodeBytes(value: string): string {
   return btoa(value);
 }
 /**
@@ -1748,7 +1720,7 @@ export function base64EncodeBytes(value: string): string {
  * or without padding; unused trailing bits are ignored. Anything else (other characters,
  * whitespace, misplaced or excess padding, a length that leaves one character) decodes to "".
  */
-export function base64DecodeBytes(value: string): string {
+function base64DecodeBytes(value: string): string {
   const text = value.replace(/-/g, "+").replace(/_/g, "/");
   const body = text.replace(/={1,2}$/, "");
   if (body !== text && text.length % 4 !== 0) return "";
@@ -1759,7 +1731,7 @@ export function base64DecodeBytes(value: string): string {
  * substring over a byte string: `length` bytes (all when omitted) from byte `start`, counted
  * from the end when negative (clamped to the first byte); "" past the end.
  */
-export function substringBytes(value: string, start: number, length?: number): string {
+function substringBytes(value: string, start: number, length?: number): string {
   const from = start < 0 ? Math.max(value.length + start, 0) : start;
   if (from >= value.length) return "";
   return value.slice(from, length === undefined ? value.length : from + length);
@@ -1803,7 +1775,7 @@ function expandReplacement(replacement: string, captures: (string | undefined)[]
  * leftmost placement (the lazy reading of every `*`), ASCII case-insensitive unless
  * `caseSensitive`. Returns the source unchanged without a match.
  */
-export function wildcardReplaceBytes(
+function wildcardReplaceBytes(
   source: string,
   pattern: string,
   replacement: string,
@@ -1849,7 +1821,7 @@ export function wildcardMatchBytes(source: string, pattern: string, strict = fal
 }
 
 /** regex_replace over byte strings: replaces the first match of a validated pattern. */
-export function regexReplaceBytes(source: string, pattern: string, replacement: string): string {
+function regexReplaceBytes(source: string, pattern: string, replacement: string): string {
   const match = new RegExp(compilePattern(fromBytes(pattern))).exec(source);
   if (!match) return source;
   return (

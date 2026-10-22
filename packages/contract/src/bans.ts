@@ -24,12 +24,10 @@ export const AUTO_BAN_REASONS = ["cc_ip_rate", "unknown_host_scan", "challenge_f
  */
 export const RULE_BAN_REASONS = ["waf_rule", "rate_limit"] as const;
 
-export const banScope = z.enum(["platform", "site"]);
-export const banSource = z.enum(["manual", "auto", "rule"]);
-export const manualBanReason = z.enum(MANUAL_BAN_REASONS);
-export const autoBanReason = z.enum(AUTO_BAN_REASONS);
-export const ruleBanReason = z.enum(RULE_BAN_REASONS);
-export const banReason = z.enum([...MANUAL_BAN_REASONS, ...AUTO_BAN_REASONS, ...RULE_BAN_REASONS]);
+const banScope = z.enum(["platform", "site"]);
+const banSource = z.enum(["manual", "auto", "rule"]);
+const manualBanReason = z.enum(MANUAL_BAN_REASONS);
+const banReason = z.enum([...MANUAL_BAN_REASONS, ...AUTO_BAN_REASONS, ...RULE_BAN_REASONS]);
 
 /** A ban lasts from one minute to seven days. */
 export const BAN_MIN_SECONDS = 60;
@@ -37,7 +35,7 @@ export const BAN_MAX_SECONDS = 7 * 24 * 3600;
 /** Durations the console offers when banning. */
 export const BAN_DURATIONS = [3600, 6 * 3600, 24 * 3600, 3 * 24 * 3600, 7 * 24 * 3600] as const;
 /** Shortest prefix a ban may cover. */
-export const BAN_MIN_PREFIX = { 4: 16, 6: 48 } as const;
+const BAN_MIN_PREFIX = { 4: 16, 6: 48 } as const;
 /** Page size of GetBans: default and cap. */
 export const BAN_PAGE_DEFAULT = 2000;
 export const BAN_PAGE_MAX = 5000;
@@ -175,7 +173,7 @@ export function protectedBanRanges(extra: readonly string[]): (cidr: Cidr) => st
 
 const decimal = z.string().regex(/^(0|[1-9][0-9]*)$/);
 
-export const banTrigger = z.object({
+const banTrigger = z.object({
   /** e.g. ip_qps */
   metric: z.string(),
   observed: z.number(),
@@ -212,13 +210,13 @@ export const ban = z.object({
   unappliedNodes: z.number().int(),
 });
 
-export const banList = z.object({
+const banList = z.object({
   items: z.array(ban),
   total: z.number().int(),
 });
 
 /** Active bans only (neither expired nor lifted), newest first. */
-export const banListInput = z.object({
+const banListInput = z.object({
   scope: banScope.optional(),
   siteId: uuid.optional(),
   source: banSource.optional(),

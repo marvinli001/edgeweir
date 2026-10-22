@@ -21,7 +21,7 @@ import { defineSetting } from "./settings";
 import { findSite } from "./sites";
 
 /** system_setting key of the platform's error pages (`PlatformErrorPages`). */
-export const ERROR_PAGES_KEY = "error_pages";
+const ERROR_PAGES_KEY = "error_pages";
 
 type SiteRow = typeof schema.site.$inferSelect;
 type PageRow = typeof schema.siteErrorPage.$inferSelect;

@@ -38,9 +38,9 @@ const ACTIVE = ["held", "pending", "running"];
 const FRESH = 45_000,
   OBSERVE = 30_000;
 /** A released delivery fails when its node has not finished within this time. */
-export const UPGRADE_DEADLINE_MS = 30 * 60_000;
+const UPGRADE_DEADLINE_MS = 30 * 60_000;
 /** Share of the rollout nodes upgrading at the same time after promotion (at least one). */
-export const MAX_UNAVAILABLE = 0.25;
+const MAX_UNAVAILABLE = 0.25;
 /** Active nodes one upgrade covers at most. */
 export const MAX_UPGRADE_NODES = 1000;
 /** Node names an error lists before "+N". */

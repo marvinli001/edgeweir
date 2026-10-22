@@ -15,12 +15,12 @@ import { type Executor, latestRevision, publishRevision } from "./revisions";
  * key that signed it is dropped, and during a canary the nodes on either
  * revision hold the key the other ones sign with.
  */
-export const CHALLENGE_KEY_ROLES = ["next", "current", "previous"] as const;
-export type ChallengeKeyRole = (typeof CHALLENGE_KEY_ROLES)[number];
+const CHALLENGE_KEY_ROLES = ["next", "current", "previous"] as const;
+type ChallengeKeyRole = (typeof CHALLENGE_KEY_ROLES)[number];
 /** Keys rotate once the newest of them is this old. */
 export const CHALLENGE_KEY_ROTATION_MS = 24 * 3600 * 1000;
 /** Secrets are 32 random bytes. */
-export const CHALLENGE_KEY_BYTES = 32;
+const CHALLENGE_KEY_BYTES = 32;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Envelope binding of a challenge key's secret: the column and the key row (AAD). */

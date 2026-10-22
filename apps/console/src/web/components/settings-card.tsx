@@ -32,7 +32,7 @@ export function SettingSourceBadge({
 }
 
 /** What the fields of a settings card render from. */
-export interface SettingsFields<T, D, I> {
+interface SettingsFields<T, D, I> {
   /** The saved value. */
   value: T;
   /** The form's draft of it. */

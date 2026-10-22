@@ -43,7 +43,7 @@ export type Executor = Database | Tx;
 export const publisher = (actor: { type: string; id: string }) =>
   actor.type === "user" || actor.type === "api_key" ? actor.id : null;
 
-export const REVISION_RETENTION = 200;
+const REVISION_RETENTION = 200;
 
 type RevisionRow = typeof schema.configRevision.$inferSelect;
 
@@ -358,7 +358,7 @@ export async function notifyClusterTargets(tx: Executor, clusterId: string) {
 }
 
 /** Active canary-group nodes of a cluster that are online now. */
-export async function onlineCanaryNodes(tx: Executor, clusterId: string, now = Date.now()) {
+async function onlineCanaryNodes(tx: Executor, clusterId: string, now = Date.now()) {
   const rows = await tx
     .select({ id: schema.node.id, name: schema.node.name, lastSeenAt: schema.node.lastSeenAt })
     .from(schema.node)
@@ -489,7 +489,7 @@ function previewConfig(build: (revision: bigint) => NodeConfig): NodeConfig {
 /** Revisions published only to carry ACME HTTP-01 challenges. */
 const CHALLENGE_REASON: RevisionReasonCode = "acme_challenge_updated";
 /** How long a challenge revision that is no longer current is kept. */
-export const CHALLENGE_REVISION_TTL = 3_600_000;
+const CHALLENGE_REVISION_TTL = 3_600_000;
 
 /**
  * Deletes revisions beyond the retention window, keeping the newest `keep`.

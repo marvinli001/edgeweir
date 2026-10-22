@@ -8,7 +8,6 @@ import {
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import {
-  type Expression,
   ExpressionError,
   listReferences,
   type Phase,
@@ -318,8 +317,4 @@ export async function deleteIpList(app: AppContext, id: string, actor: Actor) {
     });
     return { ok: true as const };
   });
-}
-
-export function expressionFields(expression: Expression): string[] {
-  return [expression.field, ...expression.children.flatMap(expressionFields)];
 }

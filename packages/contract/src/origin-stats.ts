@@ -14,23 +14,6 @@ export const ORIGIN_HEADER_TIME_BOUNDS_MS = [
   10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000,
 ] as const;
 export const ORIGIN_HEADER_TIME_BUCKETS = ORIGIN_HEADER_TIME_BOUNDS_MS.length + 1;
-/**
- * Counters of an origin in the statistics' origin_stats map, keyed
- * `<origin id>:<field>`: attempts, no connection, timeouts, TLS failures,
- * answers that are no HTTP/1.x response, answers with a 5xx, the header
- * times' sum (ms) and the header time buckets h0…h10.
- */
-export const ORIGIN_STATS_FIELDS = [
-  "n",
-  "cf",
-  "to",
-  "tls",
-  "inv",
-  "e5",
-  "ms",
-  ...Array.from({ length: ORIGIN_HEADER_TIME_BUCKETS }, (_, i) => `h${i}`),
-] as const;
-
 export const originQualityInput = z.object({
   id: uuid,
   range: analyticsRange.default("24h"),
@@ -40,7 +23,7 @@ const count = z.number().int();
 /** Milliseconds; null without answered attempts. */
 const ms = z.number().nullable();
 
-export const originQualityItem = z.object({
+const originQualityItem = z.object({
   originId: uuid,
   address: z.string(),
   port: z.number().int(),
@@ -89,6 +72,5 @@ export const originQuality = z.object({
   unsupportedNodes: count,
 });
 
-export type OriginQualityInput = z.infer<typeof originQualityInput>;
 export type OriginQualityItem = z.infer<typeof originQualityItem>;
 export type OriginQuality = z.infer<typeof originQuality>;

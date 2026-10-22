@@ -82,7 +82,7 @@ export async function loadOfflineHosts(
  * (compileStoredRules); a served site with a refused one that has no
  * compiled form is left out (not enabled).
  */
-export async function loadSiteModels(
+async function loadSiteModels(
   db: Executor,
   clusterId: string,
   opts: {
@@ -391,7 +391,7 @@ export async function loadSiteModels(
  * empties the list, the rule covers every domain of the site (more requests
  * authenticated, never fewer); nodes never see a domain the site lacks.
  */
-export function authRuleModels(
+function authRuleModels(
   rows: (typeof schema.siteAuthRule.$inferSelect)[],
   siteDomains: readonly string[],
 ): AuthRuleModel[] {
@@ -714,7 +714,7 @@ export async function loadHttpChallenges(tx: Executor, clusterId: string) {
  * own, cache-zone-v1) and inactive time. The defaults (10 GiB, 7 days)
  * compile as the configurations before cluster cache settings did.
  */
-export async function loadCacheZones(db: Executor, clusterId: string): Promise<CacheZoneModel[]> {
+async function loadCacheZones(db: Executor, clusterId: string): Promise<CacheZoneModel[]> {
   const [cluster] = await db
     .select({
       maxSizeGb: schema.cluster.cacheMaxSizeGb,

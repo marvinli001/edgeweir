@@ -353,7 +353,7 @@ export async function deleteNode(db: Database, id: string, actor: Actor): Promis
 }
 
 /** Addresses kept per node. */
-export const MAX_NODE_ADDRESSES = 64;
+const MAX_NODE_ADDRESSES = 64;
 
 /**
  * Replaces the addresses a node reported before with the ones it reports

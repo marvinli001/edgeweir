@@ -30,7 +30,7 @@ import { m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 
 /** Labels of the parts one copy can take, in the console's order. */
-export const copyPartLabel = (part: SiteCopyPart): string =>
+const copyPartLabel = (part: SiteCopyPart): string =>
   ({
     cacheRules: m.copy_part_cache_rules,
     cacheKey: m.copy_part_cache_key,

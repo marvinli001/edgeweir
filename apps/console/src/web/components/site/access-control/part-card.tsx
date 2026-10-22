@@ -18,10 +18,10 @@ import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
-export type PartValue<P extends AccessControlPart> = AccessControlSettings[P];
+type PartValue<P extends AccessControlPart> = AccessControlSettings[P];
 
 /** Why a save failed, and the field of the part (and item of a list) it points at. */
-export interface PartError {
+interface PartError {
   message: string;
   field?: string;
   item?: number;
@@ -39,7 +39,7 @@ export interface PartFields<D> {
 }
 
 /** A site's access control: one query that every card of the tab shares. */
-export function useAccessControl(siteId: string) {
+function useAccessControl(siteId: string) {
   return useQuery(orpc.accessControl.get.queryOptions({ input: { id: siteId } }));
 }
 

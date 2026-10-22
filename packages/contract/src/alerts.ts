@@ -22,7 +22,7 @@ export const alertKind = z.enum([
   "node_clock_skew",
 ]);
 /** Platform alerts (clusters, DNS): platform channels only, no subscriptions. */
-export const platformAlertKind = z.enum([
+const platformAlertKind = z.enum([
   "config_rollout_failed",
   "config_rollout_no_canary",
   "config_rule_invalid",
@@ -102,7 +102,7 @@ export const smtpInput = z.object({
   ca: z.string().trim().max(65536).default(""),
 });
 /** Sites a subscription lists at most. */
-export const MAX_SUBSCRIPTION_SITES = 1000;
+const MAX_SUBSCRIPTION_SITES = 1000;
 const subscription = z.object({
   id: uuid,
   channelId: uuid,
@@ -126,7 +126,7 @@ const subscriptionFields = {
 const coversSites = (input: { allSites: boolean; siteIds: string[] }) =>
   input.allSites !== input.siteIds.length > 0;
 const coversSitesIssue = { message: "set allSites or list siteIds, not both", path: ["siteIds"] };
-export const alertSubscriptionInput = z
+const alertSubscriptionInput = z
   .object({ channelId: uuid, ...subscriptionFields })
   .refine(coversSites, coversSitesIssue);
 export const alertsContract = {
@@ -214,4 +214,3 @@ export type AlertPolicy = z.infer<typeof alertPolicy>;
 export type AlertChannelInput = z.infer<typeof alertChannelInput>;
 export type AlertChannelConfig = z.infer<typeof alertChannelConfig>;
 export type SmtpInput = z.infer<typeof smtpInput>;
-export type AlertSubscriptionInput = z.infer<typeof alertSubscriptionInput>;

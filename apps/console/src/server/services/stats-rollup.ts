@@ -5,10 +5,10 @@ import type { Executor } from "./revisions";
 import { MAX_LOGGED_RULES, MAX_WAF_RULES } from "./stats";
 import { DIMENSION_COLUMNS, dimensionRollup } from "./stats-dims";
 
-export const STATS_RETENTION = { minutes: 7, hours: 90, days: 365 } as const;
+const STATS_RETENTION = { minutes: 7, hours: 90, days: 365 } as const;
 const DAY = 86400000;
 /** How long one maintenance run rolls up before leaving the rest to the next. */
-export const ROLLUP_BUDGET_MS = 30_000;
+const ROLLUP_BUDGET_MS = 30_000;
 const GRANULARITIES = ["hour", "day"] as const;
 type Granularity = (typeof GRANULARITIES)[number];
 

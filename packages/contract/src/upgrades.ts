@@ -70,7 +70,7 @@ const delivery = z.object({
   deadlineAt: z.string().nullable(),
   finishedAt: z.string().nullable(),
 });
-export const upgradeJob = z.object({
+const upgradeJob = z.object({
   id: z.string(),
   clusterId: z.string(),
   clusterName: z.string(),

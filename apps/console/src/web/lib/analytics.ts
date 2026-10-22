@@ -32,7 +32,7 @@ export function rangeLabel(range: AnalyticsRange): string {
 }
 
 /** part / whole as 0–100, or null when there is nothing to divide. */
-export function ratio(part: number, whole: number): number | null {
+function ratio(part: number, whole: number): number | null {
   return whole > 0 ? (part / whole) * 100 : null;
 }
 

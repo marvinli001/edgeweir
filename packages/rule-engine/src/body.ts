@@ -9,20 +9,20 @@
 /** The site's limit on the body the rules read, in bytes (Content-Length). */
 export const RULES_BODY_LIMIT = { min: 1024, max: 1_048_576, default: 65_536 } as const;
 /** Parts of a multipart body that are looked at; later ones are ignored. */
-export const MAX_MULTIPART_PARTS = 1000;
+const MAX_MULTIPART_PARTS = 1000;
 /** Deepest nesting of arrays and objects a JSON body may have; deeper ones are invalid. */
-export const MAX_JSON_DEPTH = 128;
+const MAX_JSON_DEPTH = 128;
 /** form_value's name and json_value's path: bytes and, for paths, segments. */
-export const MAX_FORM_NAME_BYTES = 256;
-export const MAX_JSON_PATH_BYTES = 256;
-export const MAX_JSON_PATH_SEGMENTS = 32;
+const MAX_FORM_NAME_BYTES = 256;
+const MAX_JSON_PATH_BYTES = 256;
+const MAX_JSON_PATH_SEGMENTS = 32;
 
 const asciiLower = (value: string) => value.replace(/[A-Z]/g, (c) => c.toLowerCase());
 const controlCharacter = (value: string) =>
   [...value].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127);
 
 /** The lowercase media type of a Content-Type value, parameters removed ("" when absent). */
-export function bodyMediaType(contentType: string): string {
+function bodyMediaType(contentType: string): string {
   const match = /^[ \t]*([^; \t]+)/.exec(contentType);
   return match ? asciiLower(match[1] ?? "") : "";
 }
@@ -64,7 +64,7 @@ const isSpace = (c: string | undefined) => c === " " || c === "\t";
  * a quoted string (a backslash takes the next byte as it is; an unterminated one runs to the
  * end; what follows it up to ";" is ignored). Pairs without "=" are skipped.
  */
-export function headerParams(header: string, start: number): [string, string][] {
+function headerParams(header: string, start: number): [string, string][] {
   const out: [string, string][] = [];
   let i = start;
   const n = header.length;
@@ -114,7 +114,7 @@ export function multipartBoundary(contentType: string): string | null {
 }
 
 /** What a multipart/form-data body holds: the first value of each field and the file names. */
-export interface Multipart {
+interface Multipart {
   fields: Map<string, string>;
   filenames: string[];
 }
@@ -128,7 +128,7 @@ export interface Multipart {
  * named by `name` (the first part of a name wins). Parsing stops at the first malformed part and
  * after 1000 parts, keeping what came before.
  */
-export function parseMultipart(body: string, contentType: string): Multipart {
+function parseMultipart(body: string, contentType: string): Multipart {
   const out: Multipart = { fields: new Map(), filenames: [] };
   const boundary = multipartBoundary(contentType);
   if (boundary === null) return out;
@@ -220,7 +220,7 @@ export function bodyFilenames(body: string, contentType: string): string {
 }
 
 /** A parsed JSON value: strings as bytes, numbers as their text. */
-export type JsonValue =
+type JsonValue =
   | { t: "s"; v: string }
   | { t: "n"; v: string }
   | { t: "b"; v: boolean }
@@ -229,7 +229,7 @@ export type JsonValue =
   | { t: "a"; items: JsonValue[] };
 
 /** Whether a media type is JSON: application/json or a type ending in "+json". */
-export function isJsonMediaType(media: string): boolean {
+function isJsonMediaType(media: string): boolean {
   return media === "application/json" || media.endsWith("+json");
 }
 
@@ -271,7 +271,7 @@ const SIMPLE_ESCAPES: Record<string, string> = {
  * (\u escapes become UTF-8, surrogate pairs combined, lone surrogates U+FFFD); a key given
  * twice keeps its last value. Returns null for anything invalid.
  */
-export function parseJson(text: string): JsonValue | null {
+function parseJson(text: string): JsonValue | null {
   let i = 0;
   const n = text.length;
   const ws = () => {
@@ -415,7 +415,7 @@ export function parseJson(text: string): JsonValue | null {
  * indexes (a canonical non-negative integer); strings come out as their bytes, numbers as their
  * text, booleans as "true" or "false"; null, objects, arrays and missing values as "".
  */
-export function jsonPathValue(doc: JsonValue | null, path: string): string {
+function jsonPathValue(doc: JsonValue | null, path: string): string {
   let v: JsonValue | undefined = doc ?? undefined;
   for (const segment of path.split(".")) {
     if (v?.t === "o") v = v.m.get(segment);

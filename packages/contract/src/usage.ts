@@ -4,7 +4,7 @@ import { isoDateTime, uuid } from "./schemas";
 
 /** Usage windows are UTC and 5 minutes long. */
 export const USAGE_WINDOW_SECONDS = 300;
-export const MAX_USAGE_PAGE = 5000;
+const MAX_USAGE_PAGE = 5000;
 
 const decimal = z.string().regex(/^(0|[1-9][0-9]*)$/);
 
@@ -13,7 +13,7 @@ const decimal = z.string().regex(/^(0|[1-9][0-9]*)$/);
  * recomputation that changes a value keeps the id, increments `revision`
  * and takes a higher `seq`.
  */
-export const usageRecord = z.object({
+const usageRecord = z.object({
   id: z.string(),
   siteId: uuid,
   windowStart: isoDateTime,
@@ -27,7 +27,7 @@ export const usageRecord = z.object({
   updatedAt: isoDateTime,
 });
 
-export const usageListInput = z.object({
+const usageListInput = z.object({
   /** Inclusive; a multiple of 5 minutes (UTC). */
   from: isoDateTime,
   /** Exclusive; a multiple of 5 minutes (UTC), after `from`. */
@@ -38,7 +38,7 @@ export const usageListInput = z.object({
   limit: z.coerce.number().int().min(1).max(MAX_USAGE_PAGE).default(1000),
 });
 
-export const usageChangesInput = z.object({
+const usageChangesInput = z.object({
   /** Returns records with a higher seq; "0" starts from the beginning. */
   afterSeq: decimal.default("0"),
   limit: z.coerce.number().int().min(1).max(MAX_USAGE_PAGE).default(1000),

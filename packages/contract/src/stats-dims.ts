@@ -1,5 +1,4 @@
 import * as z from "zod";
-import { BLOCK_REASONS } from "./logs";
 
 /**
  * Statistics dimensions nodes count per site and minute (MinuteStats 14-24,
@@ -39,16 +38,6 @@ export const STATS_TLS_VERSIONS = ["1.2", "1.3", "none", "other"] as const;
 export const MAX_STATS_COUNTRIES = 250;
 /** Networks and referring hosts a minute keeps at most (heaviest first). */
 export const MAX_STATS_TOP = 50;
-/** Every dimension key list, by MinuteStats map. */
-export const STATS_DIMENSION_KEYS = {
-  browsers: BROWSERS,
-  oses: OPERATING_SYSTEMS,
-  devices: DEVICES,
-  httpVersions: STATS_HTTP_VERSIONS,
-  tlsVersions: STATS_TLS_VERSIONS,
-  blockReasons: BLOCK_REASONS,
-} as const;
-
 const count = z.number().int();
 const keyed = z.array(z.object({ key: z.string(), requests: count }));
 

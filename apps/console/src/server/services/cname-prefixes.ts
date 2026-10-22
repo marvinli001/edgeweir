@@ -16,7 +16,7 @@ const RETIRE_MS = CNAME_RETIRE_HOURS * 3600_000;
 const RESERVED_RE = /^all(?:-\d+)?$/;
 
 /** 8 random characters, a lowercase letter first, then letters and digits. */
-export function randomCnamePrefix(): string {
+function randomCnamePrefix(): string {
   let prefix = LETTERS[randomInt(LETTERS.length)] ?? "a";
   while (prefix.length < 8) prefix += ALPHANUMERIC[randomInt(ALPHANUMERIC.length)] ?? "0";
   return prefix;

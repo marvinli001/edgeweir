@@ -18,10 +18,10 @@ export const ORIGIN_CLIENT_CERTIFICATE_RENEW_DAYS = 30;
 /** Lifetime of the Origin CA; origin certificates never outlive it. */
 export const ORIGIN_CA_YEARS = 20;
 export const ORIGIN_CERTIFICATE_VALIDITY_YEARS = [1, 3, 5, 10, 15] as const;
-export const ORIGIN_CERTIFICATE_KEY_TYPES = ["ec256", "rsa2048"] as const;
+const ORIGIN_CERTIFICATE_KEY_TYPES = ["ec256", "rsa2048"] as const;
 export type OriginCertificateKeyType = (typeof ORIGIN_CERTIFICATE_KEY_TYPES)[number];
-export const MAX_ORIGIN_CERTIFICATE_HOSTNAMES = 50;
-export const ORIGIN_CSR_MAX_BYTES = 16_384;
+const MAX_ORIGIN_CERTIFICATE_HOSTNAMES = 50;
+const ORIGIN_CSR_MAX_BYTES = 16_384;
 
 const hostName = (value: string) => value !== "" && optionalHostname.safeParse(value).success;
 
@@ -40,7 +40,7 @@ export const originCertificateHostname = z
     "invalid host name",
   );
 
-export const certificateAuthorityDto = z.object({
+const certificateAuthorityDto = z.object({
   certificatePem: z.string(),
   /** SHA-256 of the DER certificate, lowercase hex. */
   fingerprint: z.string(),
@@ -48,7 +48,7 @@ export const certificateAuthorityDto = z.object({
   notAfter: z.string(),
 });
 
-export const originClientCertificateDto = z.object({
+const originClientCertificateDto = z.object({
   id: uuid,
   clusterId: uuid,
   clusterName: z.string(),
@@ -58,19 +58,19 @@ export const originClientCertificateDto = z.object({
   notAfter: z.string(),
 });
 
-export const originClientCa = z.object({
+const originClientCa = z.object({
   /** null until the operator creates it. */
   authority: certificateAuthorityDto.nullable(),
   /** The current certificate of every cluster that has one, by cluster name. */
   certificates: z.array(originClientCertificateDto),
 });
 
-export const originCa = z.object({
+const originCa = z.object({
   /** null until the operator creates it. */
   authority: certificateAuthorityDto.nullable(),
 });
 
-export const originCertificateDto = z.object({
+const originCertificateDto = z.object({
   id: uuid,
   hostnames: z.array(z.string()),
   /** ec256, ec384, rsa2048, rsa3072 or rsa4096 (the CSR's key). */
@@ -102,13 +102,12 @@ export const originCertificateIssue = z.object({
   csrPem: z.string().trim().max(ORIGIN_CSR_MAX_BYTES).optional(),
 });
 
-export const originCertificateIssued = originCertificateDto.extend({
+const originCertificateIssued = originCertificateDto.extend({
   /** PKCS#8 PEM of the generated key, shown once; "" for a CSR. */
   privateKeyPem: z.string(),
 });
 
 export type CertificateAuthorityDto = z.infer<typeof certificateAuthorityDto>;
-export type OriginClientCertificateDto = z.infer<typeof originClientCertificateDto>;
 export type OriginClientCa = z.infer<typeof originClientCa>;
 export type OriginCa = z.infer<typeof originCa>;
 export type OriginCertificateDto = z.infer<typeof originCertificateDto>;

@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import type { Executor } from "./revisions";
 
 /** alert_state key of a platform alert (no site). */
-export const platformAlertKey = (kind: PlatformAlertKind, resourceId: string) =>
+const platformAlertKey = (kind: PlatformAlertKind, resourceId: string) =>
   `${kind}/platform/${resourceId}`;
 
 /**

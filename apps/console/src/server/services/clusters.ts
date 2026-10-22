@@ -24,7 +24,7 @@ import { rollbackContent, rollbackToRevision } from "./rollback";
  * revision: the stable one, or the candidate on the canary nodes of a
  * running window (nodes never apply a lower revision, so a higher one counts).
  */
-export async function clusterDelivery(db: Executor, clusterId: string, now = Date.now()) {
+async function clusterDelivery(db: Executor, clusterId: string, now = Date.now()) {
   const rows = await db
     .select({
       id: schema.node.id,

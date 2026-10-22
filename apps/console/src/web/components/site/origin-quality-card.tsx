@@ -23,7 +23,7 @@ const WARN_RATE = 0.01;
 const LONGEST = ORIGIN_HEADER_TIME_BOUNDS_MS[ORIGIN_HEADER_TIME_BOUNDS_MS.length - 1] ?? 10_000;
 
 /** A time to the response header: "38 ms", "1.2 s", or "> 10 s" in the last bucket. */
-export function formatHeaderTime(ms: number | null): string {
+function formatHeaderTime(ms: number | null): string {
   if (ms === null) return "–";
   if (ms >= LONGEST) return m.origin_quality_over({ value: formatNumber(LONGEST / 1000) });
   if (ms < 1000) return m.origin_quality_ms({ value: formatNumber(Math.round(ms)) });

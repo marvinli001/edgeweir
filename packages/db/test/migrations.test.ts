@@ -55,15 +55,16 @@ describe("migration journal", () => {
     }
   });
 
-  it("has exactly one SQL file and one snapshot per entry", () => {
+  it("has exactly one SQL file per entry and only the latest snapshot", () => {
     const sql = readdirSync(defaultMigrationsFolder)
       .filter((f) => f.endsWith(".sql"))
       .sort();
     expect(sql).toEqual(entries.map((e) => `${e.tag}.sql`));
-    const snapshots = readdirSync(join(defaultMigrationsFolder, "meta"))
-      .filter((f) => f.endsWith("_snapshot.json"))
-      .sort();
-    expect(snapshots).toEqual(entries.map((e) => `${e.tag.slice(0, 4)}_snapshot.json`));
+    // drizzle-kit generate diffs against the newest snapshot only; older ones live in git history.
+    const snapshots = readdirSync(join(defaultMigrationsFolder, "meta")).filter((f) =>
+      f.endsWith("_snapshot.json"),
+    );
+    expect(snapshots).toEqual([`${entries.at(-1)?.tag.slice(0, 4)}_snapshot.json`]);
   });
 });
 

@@ -70,7 +70,7 @@ const HTTP_PORTS = [80, 443];
  * ports (80, 443 and its extra ports), those of its latest revision
  * included.
  */
-export async function reservedPorts(db: Executor, clusterId: string): Promise<number[]> {
+async function reservedPorts(db: Executor, clusterId: string): Promise<number[]> {
   const [cluster] = await db
     .select({ http: schema.cluster.extraHttpPorts, https: schema.cluster.extraHttpsPorts })
     .from(schema.cluster)

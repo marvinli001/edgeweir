@@ -60,5 +60,3 @@ export const router = os.router({
   settings: settingsRouter.settings,
   auditLogs: systemRouter.auditLogs,
 });
-
-export type Router = typeof router;

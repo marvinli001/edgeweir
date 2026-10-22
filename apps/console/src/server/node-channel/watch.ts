@@ -10,7 +10,7 @@ export interface WatchTarget {
 }
 
 /** What a watch stream reads; the node service binds it to the node and the database. */
-export interface WatchSource {
+interface WatchSource {
   /** The node's target revision now (a canary node's may be the candidate). */
   target(): Promise<WatchTarget | undefined>;
   /** Whether tasks wait for the node. */

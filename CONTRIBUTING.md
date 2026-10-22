@@ -78,7 +78,7 @@ pnpm --filter @edgeweir/console exec playwright install chromium
 
 | 命令 | 作用 | 运行时机 |
 | --- | --- | --- |
-| `pnpm lint` | Biome 检查与格式校验、`buf lint proto` | 每次提交前 |
+| `pnpm lint` | Biome 检查与格式校验、`buf lint proto`、knip（未使用的文件、导出与依赖） | 每次提交前 |
 | `pnpm format` | Biome 自动修复（`biome check --write .`） | `pnpm lint` 报格式问题时 |
 | `pnpm typecheck` | 生成 Paraglide 消息与路由树，全 workspace TypeScript 类型检查 | 每次提交前 |
 | `pnpm test` | Vitest 单元与集成测试；PostgreSQL 由进程内 PGlite 提供，不需要 Docker；设置 `TEST_DATABASE_URL` 时另跑并发事务测试 | 每次提交前 |
@@ -125,7 +125,7 @@ pnpm exec vitest run test/server/docs.test.ts
 | 第三方镜像按 digest、Actions 按 commit SHA 固定 | `apps/console/test/server/supply-chain-pins.test.ts` |
 | `deploy.sh` 内嵌的 compose 模板与仓库文件逐字一致 | `apps/console/test/server/deploy-script.test.ts` |
 | 文档相对链接可解析；`ARCHITECTURE.md` 数据模型列出全部迁移与表 | `apps/console/test/server/docs.test.ts` |
-| 迁移编号连续、时间戳递增、每条迁移一个 SQL 文件与一个快照 | `packages/db/test/migrations.test.ts` |
+| 迁移编号连续、时间戳递增、每条迁移一个 SQL 文件、只保留最新快照 | `packages/db/test/migrations.test.ts` |
 
 新增的 API 过程都要有 Vitest 用例。
 
@@ -298,7 +298,7 @@ feat(console)!: drop the public landing page from the open core
    pnpm db:generate
    ```
 
-3. 把 `packages/db/migrations` 中新增的 SQL 文件与 `meta/` 快照和 schema 改动放在同一个提交里。
+3. 把 `packages/db/migrations` 中新增的 SQL 文件、`meta/_journal.json`、新的 `meta/` 快照和 schema 改动放在同一个提交里。`pnpm db:generate` 会删除上一个快照，drizzle-kit 只和最新快照比较。
 4. 在 `ARCHITECTURE.md` 的数据模型一节列出新迁移文件名与新表名。
 5. 验证。
 
@@ -393,7 +393,7 @@ feat(console)!: drop the public landing page from the open core
 - [ ] `pnpm lint`、`pnpm typecheck`、`pnpm test` 通过；按[命令](#命令)表的时机运行 `pnpm build`、`pnpm e2e`。
 - [ ] 提交符合[提交规范](#提交规范)。
 - [ ] UI 文案 zh-CN 与 en 同时更新；新错误码有对应消息。
-- [ ] schema 改动附带迁移 SQL、快照与 `ARCHITECTURE.md` 数据模型更新。
+- [ ] schema 改动附带迁移 SQL、新快照与 `ARCHITECTURE.md` 数据模型更新。
 - [ ] 新环境变量写入 `env.ts`、`.env.example` 与环境变量参考页。
 - [ ] 管理操作写审计日志。
 - [ ] UI 改动附截图。

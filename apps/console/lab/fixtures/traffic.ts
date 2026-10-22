@@ -26,7 +26,7 @@ import {
   sites,
 } from "./world";
 
-export const RANGES: Record<AnalyticsRange, { seconds: number; bucketSeconds: number }> = {
+const RANGES: Record<AnalyticsRange, { seconds: number; bucketSeconds: number }> = {
   "1h": { seconds: 3_600, bucketSeconds: 60 },
   "6h": { seconds: 21_600, bucketSeconds: 300 },
   "24h": { seconds: 86_400, bucketSeconds: 600 },

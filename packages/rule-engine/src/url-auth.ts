@@ -22,7 +22,7 @@ export const DEFAULT_TIME_PARAM = "t";
 export const URL_AUTH_PARAM = /^[A-Za-z0-9_-]{1,32}$/;
 /** A signing key: printable ASCII without spaces. */
 export const URL_AUTH_KEY = /^[\x21-\x7e]{16,128}$/;
-export const URL_AUTH_RAND = /^[A-Za-z0-9]{1,64}$/;
+const URL_AUTH_RAND = /^[A-Za-z0-9]{1,64}$/;
 
 const TS = /^[0-9]{1,12}$/;
 const HASH = /^[0-9a-f]{32}$/;
@@ -31,7 +31,7 @@ const SEGMENTS = {
   url_c: /^\/([0-9a-f]{32})\/([0-9]{1,12})(\/.*)$/s,
 } as const;
 
-export interface UrlAuthNames {
+interface UrlAuthNames {
   signParam: string;
   timeParam: string;
 }
@@ -62,13 +62,13 @@ const elementValue = (element: string) => {
 const elements = (query: string) => query.split("&").filter((e) => e !== "");
 
 /** Splits a request URI into its raw path and query (null: no "?"). */
-export function splitRequestUri(uri: string): { path: string; query: string | null } {
+function splitRequestUri(uri: string): { path: string; query: string | null } {
   const q = uri.indexOf("?");
   return q < 0 ? { path: uri, query: null } : { path: uri.slice(0, q), query: uri.slice(q + 1) };
 }
 
 /** A signature found in a request URI, and the URI without it. */
-export interface ParsedSignature {
+interface ParsedSignature {
   /** The path the hash covers. */
   path: string;
   ts: string;
@@ -84,7 +84,7 @@ export interface ParsedSignature {
  * of kind, or null when it carries none in the expected form. The first
  * element of a parameter counts; all of them are removed.
  */
-export function parseSignedUri(
+function parseSignedUri(
   kind: UrlAuthKind,
   uri: string,
   names: UrlAuthNames,

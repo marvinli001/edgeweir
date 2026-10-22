@@ -32,7 +32,7 @@ async function findCluster(db: Executor, id: string, lock = false): Promise<Clus
 }
 
 /** Active nodes of a cluster that do not report `feature`, by name. */
-export async function nodesWithout(db: Executor, clusterId: string, feature: string) {
+async function nodesWithout(db: Executor, clusterId: string, feature: string) {
   const nodes = await db
     .select({ id: schema.node.id, name: schema.node.name, features: schema.node.supportedFeatures })
     .from(schema.node)
@@ -57,7 +57,7 @@ export function clientIpOf(row: Pick<ClusterRow, "clientIp">): ClusterClientIp["
 }
 
 /** The unknown host handling of a cluster row (null is the defaults). */
-export function unknownHostsOf(
+function unknownHostsOf(
   row: Pick<ClusterRow, "unknownHosts" | "defaultSiteId">,
 ): ClusterUnknownHosts["settings"] {
   const stored = row.unknownHosts;
@@ -78,7 +78,7 @@ export function unknownHostsOf(
  * The cluster's listener ports, client address setting and unknown host
  * handling as the compiler takes them.
  */
-export function edgeModelOf(
+function edgeModelOf(
   row: Pick<
     ClusterRow,
     "extraHttpPorts" | "extraHttpsPorts" | "clientIp" | "unknownHosts" | "defaultSiteId"

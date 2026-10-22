@@ -33,11 +33,11 @@ const fields = z.object({
     .default(AUTO_MITIGATION_DEFAULTS.durationMinutes),
 });
 
-export const autoMitigationSettings = fields;
-export const autoMitigationInput = fields.extend({ id: uuid, expectedUpdatedAt });
+const autoMitigationSettings = fields;
+const autoMitigationInput = fields.extend({ id: uuid, expectedUpdatedAt });
 
 /** A site's automatic mitigation: its settings, what it holds now and the level it reacts to. */
-export const autoMitigation = z.object({
+const autoMitigation = z.object({
   siteId: uuid,
   /** Null: never set up (off). */
   settings: autoMitigationSettings.nullable(),

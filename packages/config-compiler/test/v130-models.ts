@@ -7,7 +7,7 @@ export const VECTOR_ORIGIN_CA =
 export const VECTOR_ORIGIN_CRL =
   "-----BEGIN X509 CRL-----\nMIHIMG8CAQEwCgYIKoZIzj0EAwIwMDEbMBkGA1UEAwwSRWRnZXdlaXIgT3JpZ2lu\nIENBMREwDwYDVQQKDAhFZGdld2VpchcNMjYxMDE0MTEwNTQ4WhcNNDYxMDA5MTEw\nNTQ4WqAOMAwwCgYDVR0UBAMCAQEwCgYIKoZIzj0EAwIDSQAwRgIhAIOCGaXLs8M0\nLrf8h0ADnuwgH6D5HFUY+WZlkJMJS75oAiEA8kskg/qYmjLq2arbH4kTt+ersvGP\nr5WZzdFVIldV5cI=\n-----END X509 CRL-----\n";
 
-export const poolSettings: OriginPoolSettingsModel = {
+const poolSettings: OriginPoolSettingsModel = {
   tlsVerify: true,
   maxFails: 3,
   recoverySeconds: 30,

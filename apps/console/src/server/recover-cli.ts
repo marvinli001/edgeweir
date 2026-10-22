@@ -10,7 +10,7 @@ import {
   recoverAccount,
 } from "./services/recovery";
 
-export const RECOVER_USAGE = `Usage: node dist/server/recover.js [--reset-password] [--disable-two-factor]
+const RECOVER_USAGE = `Usage: node dist/server/recover.js [--reset-password] [--disable-two-factor]
                                   [--clear-login-allowlist]
 
 Recovers the console's only account when you can no longer sign in.
@@ -30,7 +30,7 @@ environment, like the console.
 `;
 
 /** Standard input: a terminal (read in raw mode, without echo) or a pipe. */
-export interface RecoverStdin {
+interface RecoverStdin {
   isTTY?: boolean;
   setRawMode?(mode: boolean): unknown;
   setEncoding(encoding: BufferEncoding): unknown;
@@ -134,7 +134,7 @@ function readLine(input: RecoverStdin) {
  * process list and the shell history): typed twice on a terminal, or the
  * first line of standard input (`docker compose exec -T … < file`).
  */
-export async function readNewPassword(
+async function readNewPassword(
   io: RecoverIo,
   check: (password: string) => Promise<void>,
 ): Promise<string> {

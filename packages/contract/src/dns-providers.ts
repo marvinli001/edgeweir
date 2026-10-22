@@ -11,8 +11,8 @@
  * examples.
  */
 
-export type DnsFieldType = "text" | "secret" | "select" | "textarea" | "url";
-export type DnsRecordKind = "A" | "AAAA" | "CNAME" | "TXT";
+type DnsFieldType = "text" | "secret" | "select" | "textarea" | "url";
+type DnsRecordKind = "A" | "AAAA" | "CNAME" | "TXT";
 
 /**
  * Canonical resolution lines (carrier / region views of one name). The

@@ -17,7 +17,7 @@ function context(): CanvasRenderingContext2D | null {
 }
 
 /** A CSS color as sRGB channels 0–255 and alpha 0–1 (transparent black when unreadable). */
-export function cssColorToRgba(color: string): [number, number, number, number] {
+function cssColorToRgba(color: string): [number, number, number, number] {
   const ctx = context();
   if (!ctx || !color) return [0, 0, 0, 0];
   ctx.clearRect(0, 0, 1, 1);
@@ -30,7 +30,7 @@ export function cssColorToRgba(color: string): [number, number, number, number] 
 }
 
 /** The computed value of a custom property on <html> (where the theme class lives). */
-export function readToken(name: `--${string}`): string {
+function readToken(name: `--${string}`): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 

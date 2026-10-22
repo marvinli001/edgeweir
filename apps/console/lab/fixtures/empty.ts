@@ -28,7 +28,7 @@ interface ZodLike {
 
 const NIL_UUID = "00000000-0000-4000-8000-000000000000";
 
-export function emptyOf(schema: ZodLike): unknown {
+function emptyOf(schema: ZodLike): unknown {
   const def = schema._zod.def;
   switch (def.type) {
     case "object": {

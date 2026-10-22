@@ -53,7 +53,7 @@ export const dnsCredentialBinding = (id: string) => ({
   recordId: id,
 });
 
-export function certificateDto(
+function certificateDto(
   row: typeof schema.certificate.$inferSelect,
   nodeFailures: CertificateDto["nodeFailures"] = [],
 ): CertificateDto {
@@ -74,7 +74,7 @@ export function certificateDto(
   };
 }
 
-export async function findCertificate(db: Executor, id: string) {
+async function findCertificate(db: Executor, id: string) {
   const [row] = await db
     .select()
     .from(schema.certificate)
@@ -261,7 +261,7 @@ export function inspectCertificate(chainPem: string, privateKeyPem: string) {
  * certificates (basicConstraints CA) with keys nodes load (servableKey,
  * named curves), and nothing else (CLIENT_CA_INVALID).
  */
-export function inspectClientCa(pem: string): string {
+function inspectClientCa(pem: string): string {
   const certificates = readPemCertificates(pem, { ca: true });
   const now = Date.now();
   if (
@@ -287,7 +287,7 @@ type CertificateRow = typeof schema.certificate.$inferSelect;
  * (Go's crypto/tls) refuse the material, and a revision that carries it is
  * applied on no node of its cluster.
  */
-export function explicitCurveError(
+function explicitCurveError(
   app: AppContext,
   cert: Pick<CertificateRow, "id" | "chainPem" | "privateKeyEnvelope">,
 ) {
@@ -538,8 +538,7 @@ export async function requestCertificate(
 }
 
 /** Certificates waiting to be bound to the site once issued (bindSiteId). */
-export const boundOnIssue = (siteId: string) =>
-  sql`${schema.certificate.acme}->>'bindSiteId' = ${siteId}`;
+const boundOnIssue = (siteId: string) => sql`${schema.certificate.acme}->>'bindSiteId' = ${siteId}`;
 
 /**
  * A request bound to a site (bindSiteId) covers every exact and wildcard
@@ -794,7 +793,7 @@ async function tlsSite(db: Executor, id: string, lock = false) {
   return row;
 }
 /** Sites that use a certificate, first or additional. */
-export const usesCertificate = (certificateId: string) =>
+const usesCertificate = (certificateId: string) =>
   or(
     eq(schema.site.certificateId, certificateId),
     inArray(
@@ -815,7 +814,7 @@ export async function additionalCertificateIds(db: Executor, siteId: string) {
 }
 
 /** A site's stored HTTPS settings with its certificates. */
-export async function siteTlsSettings(
+async function siteTlsSettings(
   db: Executor,
   site: { id: string; certificateId: string | null; tlsSettings: Record<string, unknown> },
 ): Promise<TlsSettings> {
@@ -827,7 +826,7 @@ export async function siteTlsSettings(
 }
 
 /** What tls_settings stores: the settings without the certificates (site columns and rows). */
-export function storedTlsOptions(settings: TlsSettings): Record<string, unknown> {
+function storedTlsOptions(settings: TlsSettings): Record<string, unknown> {
   const { certificateId: _first, additionalCertificateIds: _more, ...options } = settings;
   return options;
 }

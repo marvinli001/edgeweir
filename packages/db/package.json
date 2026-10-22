@@ -11,7 +11,7 @@
     "./migrate": "./src/migrate.ts"
   },
   "scripts": {
-    "generate": "drizzle-kit generate",
+    "generate": "drizzle-kit generate && ls migrations/meta/*_snapshot.json | sort | sed '$d' | xargs rm -f",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
   },

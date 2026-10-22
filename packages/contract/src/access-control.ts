@@ -16,38 +16,30 @@ import { expectedUpdatedAt, extension, isoDateTime, pathPrefix, uuid } from "./s
  * origins and idle timeout, and security response headers. Each part keeps
  * its settings while off; a site without settings reads as the defaults.
  */
-export const ACCESS_MAX_SITE_LISTS = 16;
-export const ACCESS_MAX_PREFIXES = 32;
-export const HOTLINK_MAX_SOURCES = 200;
-export const HOTLINK_MAX_EXTENSIONS = 64;
-export const HOTLINK_REDIRECT_MAX = 2048;
+const ACCESS_MAX_SITE_LISTS = 16;
+const ACCESS_MAX_PREFIXES = 32;
+const HOTLINK_MAX_SOURCES = 200;
+const HOTLINK_MAX_EXTENSIONS = 64;
+const HOTLINK_REDIRECT_MAX = 2048;
 export const USER_AGENT_MAX_RULES = 200;
-export const CORS_MAX_ORIGINS = 100;
-export const CORS_MAX_METHODS = 16;
-export const CORS_MAX_HEADERS = 64;
+const CORS_MAX_ORIGINS = 100;
+const CORS_MAX_METHODS = 16;
+const CORS_MAX_HEADERS = 64;
 export const CORS_MAX_AGE = { min: 0, max: 86_400, default: 600 } as const;
-export const GEO_MAX_ENTRIES = 256;
-export const WEBSOCKET_MAX_ORIGINS = 100;
+const GEO_MAX_ENTRIES = 256;
+const WEBSOCKET_MAX_ORIGINS = 100;
 export const WEBSOCKET_IDLE = { min: 60, max: 86_400, default: 3600 } as const;
 export const PERMISSIONS_POLICY_MAX = 1024;
 
 /** Common image, audio, video and download types. */
-export const HOTLINK_DEFAULT_EXTENSIONS = [
+const HOTLINK_DEFAULT_EXTENSIONS = [
   ...["jpg", "jpeg", "png", "gif", "webp", "avif", "svg", "ico", "bmp", "tif", "tiff"],
   ...["mp3", "m4a", "aac", "wav", "flac", "ogg", "opus"],
   ...["mp4", "m4v", "webm", "mov", "mkv", "avi", "flv", "ts", "m3u8", "mpd", "wmv", "3gp"],
   ...["zip", "rar", "7z", "gz", "tgz", "bz2", "xz", "tar", "zst", "exe", "msi", "dmg", "pkg"],
   ...["apk", "ipa", "deb", "rpm", "iso", "pdf"],
 ] as const;
-export const CORS_DEFAULT_METHODS = [
-  "GET",
-  "HEAD",
-  "POST",
-  "PUT",
-  "PATCH",
-  "DELETE",
-  "OPTIONS",
-] as const;
+const CORS_DEFAULT_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] as const;
 export const FRAME_OPTIONS = ["off", "DENY", "SAMEORIGIN"] as const;
 export const REFERRER_POLICIES = [
   "off",
@@ -80,19 +72,19 @@ const custom = (ctx: z.RefinementCtx, value: string, message: string) => {
 };
 
 /** A hotlink source: `a.com`, `*.a.com`, `.a.com` or `*`, stored lowercase. */
-export const hostForm = z
+const hostForm = z
   .string()
   .max(256)
   .transform((value, ctx) => normalizeHostForm(value) ?? custom(ctx, value, "invalid host"));
 /** A CORS origin: `https://a.com[:port]`, `https://*.a.com` or `*`. */
-export const corsOrigin = z
+const corsOrigin = z
   .string()
   .max(300)
   .transform(
     (value, ctx) => normalizeOriginForm(value, true) ?? custom(ctx, value, "invalid origin"),
   );
 /** A WebSocket origin: `https://a.com[:port]` or `https://*.a.com`. */
-export const websocketOrigin = z
+const websocketOrigin = z
   .string()
   .max(300)
   .transform((value, ctx) => normalizeOriginForm(value) ?? custom(ctx, value, "invalid origin"));
@@ -130,7 +122,7 @@ export const hotlinkSettings = z
       ctx.addIssue({ code: "custom", message: "redirect needs a target", path: ["redirectUrl"] });
   });
 
-export const userAgentRule = z.object({
+const userAgentRule = z.object({
   pattern: z
     .string()
     .refine(
@@ -246,7 +238,7 @@ export const securityHeaderSettings = z.object({
   removePoweredBy: z.boolean().default(false),
 });
 
-export const siteListSettings = z.object({
+const siteListSettings = z.object({
   /** IP lists whose addresses get 403 on this site. */
   blockListIds: z.array(uuid).max(ACCESS_MAX_SITE_LISTS).default([]).transform(unique),
   /** IP lists whose addresses skip this site's block lists, bans, geo, hotlink, user agent checks and challenges. */
@@ -263,7 +255,7 @@ export const accessControlSettings = z.object({
   securityHeaders: securityHeaderSettings.default(securityHeaderSettings.parse({})),
 });
 
-export const siteAccessControl = accessControlSettings.extend({
+const siteAccessControl = accessControlSettings.extend({
   siteId: uuid,
   /** Null until the settings were first saved. */
   updatedAt: isoDateTime.nullable(),
@@ -308,7 +300,7 @@ export const accessControlContract = {
     .output(siteAccessControl),
 };
 
-export const ipCheckInput = z.object({
+const ipCheckInput = z.object({
   /** An IPv4 or IPv6 address. */
   ip: z.string().trim().min(1).max(64),
   siteId: uuid.optional(),
@@ -320,7 +312,7 @@ export const ipCheckInput = z.object({
  * it, and (for a site) the outcome of the edge's list and ban steps. GeoIP is
  * not looked up (the console has no database).
  */
-export const ipCheckResult = z.object({
+const ipCheckResult = z.object({
   /** The address as nodes read it (IPv4-mapped IPv6 as IPv4). */
   ip: z.string(),
   site: z.object({ id: uuid, name: z.string() }).nullable(),
@@ -371,7 +363,6 @@ export const ipCheckContract = {
     .output(ipCheckResult),
 };
 
-export type HotlinkSettings = z.infer<typeof hotlinkSettings>;
 export type UserAgentSettings = z.infer<typeof userAgentSettings>;
 export type CorsSettings = z.infer<typeof corsSettings>;
 export type GeoSettings = z.infer<typeof geoSettings>;

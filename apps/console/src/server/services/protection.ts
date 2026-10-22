@@ -28,8 +28,8 @@ import { defineSetting } from "./settings";
 import { findSite } from "./sites";
 
 /** system_setting keys. */
-export const PROTECTION_SETTINGS_KEY = "protection_settings";
-export const CC_TEMPLATE_KEY = "cc_template";
+const PROTECTION_SETTINGS_KEY = "protection_settings";
+const CC_TEMPLATE_KEY = "cc_template";
 
 type ProtectionRow = typeof schema.siteProtection.$inferSelect;
 
@@ -76,7 +76,7 @@ function savedCc(row: ProtectionRow | undefined, template: CcThresholds): SiteCc
 }
 
 /** The thresholds nodes use: null while off, the template while following it. */
-export function effectiveCc(cc: SiteCcPolicy, template: CcThresholds): CcThresholds | null {
+function effectiveCc(cc: SiteCcPolicy, template: CcThresholds): CcThresholds | null {
   if (!cc.enabled) return null;
   if (cc.followTemplate) return { ...template };
   const { enabled: _enabled, followTemplate: _follow, ...thresholds } = cc;

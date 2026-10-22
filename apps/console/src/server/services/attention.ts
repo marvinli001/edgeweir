@@ -14,7 +14,7 @@ export const ATTENTION_RECENT_MS = 24 * 3_600_000;
  * Offline after connecting, failed to apply its configuration, data plane
  * down, or its certificate refused since it last got through.
  */
-export function nodeUnhealthy(node: Node): boolean {
+function nodeUnhealthy(node: Node): boolean {
   if (node.status !== "active" || !node.lastSeenAt) return false;
   return (
     !node.online ||
@@ -30,7 +30,7 @@ export function nodeUnhealthy(node: Node): boolean {
  * unable to run it until upgraded. A node without any configuration yet is
  * still starting, not lagging.
  */
-export function nodeLagging(node: Node): boolean {
+function nodeLagging(node: Node): boolean {
   if (node.status !== "active" || !node.online || nodeUnhealthy(node)) return false;
   if (node.upgradeRequired) return true;
   return (

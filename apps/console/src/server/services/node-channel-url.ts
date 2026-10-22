@@ -43,7 +43,7 @@ const nodeChannelSetting = defineSetting({
 });
 
 /** The name a node checks the certificate against: the URL's host name or IP. */
-export function certificateName(url: string): string {
+function certificateName(url: string): string {
   return new URL(url).hostname.replace(/^\[|\]$/g, "");
 }
 

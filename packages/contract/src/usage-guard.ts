@@ -74,13 +74,13 @@ function checkLimits(
     ctx.addIssue({ code: "custom", path: ["bytesLimit"], message: "set at least one limit" });
 }
 
-export const usageGuardSettings = usageGuardFields.superRefine(checkLimits);
-export const usageGuardInput = usageGuardFields
+const usageGuardSettings = usageGuardFields.superRefine(checkLimits);
+const usageGuardInput = usageGuardFields
   .extend({ id: uuid, expectedUpdatedAt })
   .superRefine(checkLimits);
 
 /** A site's usage protection, its current period and what it holds. */
-export const usageGuard = z.object({
+const usageGuard = z.object({
   siteId: uuid,
   /** Null: not set. */
   settings: usageGuardSettings.nullable(),

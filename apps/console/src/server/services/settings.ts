@@ -8,7 +8,7 @@ import type { Executor, Tx } from "./revisions";
 /** A system_setting value: one JSON object per key. */
 type SettingValue = Record<string, unknown>;
 
-export interface SettingWriteOptions<T> {
+interface SettingWriteOptions<T> {
   /** The value before, when the caller has read it already (under its lock, say). */
   before?: T;
   /**

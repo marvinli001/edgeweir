@@ -20,7 +20,7 @@ export const PROBE_ORGANIZATION = "Edgeweir Probe";
 export const SERVER_CERT_LIFETIME_DAYS = 90;
 const DAY = 24 * 3600 * 1000;
 /** Certificates are valid from this long before issue, for peers whose clocks run behind. */
-export const CLOCK_SKEW_MS = 3600 * 1000;
+const CLOCK_SKEW_MS = 3600 * 1000;
 
 export interface IssuedCertificate {
   certificatePem: string;
@@ -51,7 +51,7 @@ export function sha256Fingerprint(cert: x509.X509Certificate): string {
   return createHash("sha256").update(Buffer.from(cert.rawData)).digest("hex");
 }
 
-export function pemFromDer(label: string, der: ArrayBuffer | Uint8Array): string {
+function pemFromDer(label: string, der: ArrayBuffer | Uint8Array): string {
   const b64 = Buffer.from(der instanceof Uint8Array ? der : new Uint8Array(der)).toString("base64");
   const lines = b64.match(/.{1,64}/g) ?? [];
   return `-----BEGIN ${label}-----\n${lines.join("\n")}\n-----END ${label}-----\n`;
@@ -235,7 +235,7 @@ const RSA_ALG = {
  * The key type of a SubjectPublicKeyInfo origin certificates accept: ECDSA
  * P-256 / P-384 or RSA 2048-4096 bits; null for anything else.
  */
-export function originKeyType(spki: ArrayBuffer | Uint8Array): string | null {
+function originKeyType(spki: ArrayBuffer | Uint8Array): string | null {
   const key = createPublicKey({
     key: Buffer.from(new Uint8Array(spki)),
     format: "der",

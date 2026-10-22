@@ -7,7 +7,7 @@ import { isoDateTime, uuid } from "./schemas";
  * whitelisted events from its agent, supervisor and OpenResty, uploaded with
  * ReportNodeLogs and kept for a short time.
  */
-export const NODE_LOG_LEVELS = ["info", "warn", "error"] as const;
+const NODE_LOG_LEVELS = ["info", "warn", "error"] as const;
 export type NodeLogLevel = (typeof NODE_LOG_LEVELS)[number];
 export const NODE_LOG_SOURCES = ["agent", "supervisor", "nginx", "lua"] as const;
 export type NodeLogSource = (typeof NODE_LOG_SOURCES)[number];
@@ -24,7 +24,7 @@ export const NODE_LOG_EVENTS = [
 ] as const;
 export type NodeLogEvent = (typeof NODE_LOG_EVENTS)[number];
 /** entry: one the node uploaded; dropped: how many the node dropped before a batch. */
-export const NODE_LOG_KINDS = ["entry", "dropped"] as const;
+const NODE_LOG_KINDS = ["entry", "dropped"] as const;
 
 /** Limits of one entry (the node applies the same). */
 export const NODE_LOG_LIMITS = {
@@ -51,7 +51,7 @@ export const nodeLogQuery = z.object({
 });
 export type NodeLogQuery = z.infer<typeof nodeLogQuery>;
 
-export const nodeLogEntry = z.object({
+const nodeLogEntry = z.object({
   id: z.string(),
   /** When it happened on the node. */
   time: isoDateTime,
@@ -72,7 +72,7 @@ export const nodeLogEntry = z.object({
 });
 export type NodeLogEntry = z.infer<typeof nodeLogEntry>;
 
-export const nodeLogPage = z.object({
+const nodeLogPage = z.object({
   /** Newest first. */
   entries: z.array(nodeLogEntry),
   nextCursor: z.string().nullable(),
@@ -87,7 +87,6 @@ export const nodeLogRetention = z.object({
   days: z.number().int().min(1).max(30),
   perNode: z.number().int().min(1000).max(100000),
 });
-export type NodeLogRetention = z.infer<typeof nodeLogRetention>;
 
 export const nodeLogsContract = {
   logs: oc

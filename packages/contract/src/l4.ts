@@ -4,10 +4,10 @@ import { isoDateTime, originAddress, port, revision, uuid } from "./schemas";
 import { cnamePrefixInput, cnamePrefixState } from "./unknown-hosts";
 
 /** Ports layer-4 applications and port pools may use. */
-export const L4_PORT_MIN = 1024;
-export const L4_PORT_MAX = 65535;
+const L4_PORT_MIN = 1024;
+const L4_PORT_MAX = 65535;
 /** Port pools per cluster. */
-export const MAX_PORT_POOLS = 64;
+const MAX_PORT_POOLS = 64;
 /** Origins of one application. */
 export const MAX_L4_ORIGINS = 32;
 /** Allow or block lists of one application. */
@@ -22,7 +22,7 @@ export const MAX_L4_PORTS_PER_CLUSTER = 2048;
  */
 export const L4_V2_FEATURE = "l4-v2";
 /** Longest range l4Apps.stats covers: the retention of the minute statistics. */
-export const L4_STATS_MAX_RANGE_SECONDS = 7 * 86400;
+const L4_STATS_MAX_RANGE_SECONDS = 7 * 86400;
 
 /** Defaults of a new application; the idle timeout depends on the protocol. */
 export const L4_APP_DEFAULTS = {
@@ -33,12 +33,12 @@ export const L4_APP_DEFAULTS = {
 } as const;
 
 const l4Port = z.number().int().min(L4_PORT_MIN).max(L4_PORT_MAX);
-export const l4Protocol = z.enum(["tcp", "udp"]);
+const l4Protocol = z.enum(["tcp", "udp"]);
 /** `both` counts for TCP and UDP. */
-export const portPoolProtocol = z.enum(["tcp", "udp", "both"]);
+const portPoolProtocol = z.enum(["tcp", "udp", "both"]);
 
 /** A range of ports, inclusive. */
-export const portPool = z
+const portPool = z
   .object({ protocol: portPoolProtocol, from: l4Port, to: l4Port })
   .refine((pool) => pool.from <= pool.to, {
     message: "the first port must not be above the last",
@@ -56,7 +56,7 @@ export const portPoolsInput = z.object({
   pools: z.array(portPool).max(MAX_PORT_POOLS),
 });
 
-export const clusterPortPools = z.object({
+const clusterPortPools = z.object({
   clusterId: uuid,
   /** Sorted by first port, then protocol. */
   pools: z.array(
@@ -73,7 +73,7 @@ export const clusterPortPools = z.object({
   nodesWithoutL4V2: z.array(z.object({ id: uuid, name: z.string() })),
 });
 
-export const l4OriginInput = z.object({
+const l4OriginInput = z.object({
   /** Host name or IP literal; the origin address policy applies as for sites. */
   address: originAddress,
   /** Required unless the application's originPortMode is same (L4_ORIGIN_PORT_REQUIRED). */
@@ -84,7 +84,7 @@ export const l4OriginInput = z.object({
 });
 
 /** 1-32 origins, at least one of them not a backup. */
-export const l4Origins = z
+const l4Origins = z
   .array(l4OriginInput)
   .min(1)
   .max(MAX_L4_ORIGINS)
@@ -188,13 +188,13 @@ export const l4AppUpdateInput = z.object({
   newConnectionsPerSecond: fields.newConnectionsPerSecond.optional(),
 });
 
-export const l4AppSetEnabledInput = z.object({
+const l4AppSetEnabledInput = z.object({
   id: uuid,
   enabled: z.boolean(),
   expectedUpdatedAt: isoDateTime.optional(),
 });
 
-export const l4Origin = z.object({
+const l4Origin = z.object({
   id: uuid,
   address: z.string(),
   /** 0 with originPortMode same. */
@@ -203,7 +203,7 @@ export const l4Origin = z.object({
   backup: z.boolean(),
 });
 
-export const l4App = z.object({
+const l4App = z.object({
   id: uuid,
   clusterId: uuid,
   clusterName: z.string(),
@@ -247,7 +247,7 @@ export const l4App = z.object({
   updatedAt: isoDateTime,
 });
 
-export const l4AppMutationResult = z.object({ app: l4App, revision });
+const l4AppMutationResult = z.object({ app: l4App, revision });
 
 /** A range of at most 7 days (the minute statistics are kept that long). */
 export const l4StatsInput = z
@@ -277,7 +277,7 @@ const l4Counters = {
   bytesSent: z.number().int(),
 };
 
-export const l4Stats = z.object({
+const l4Stats = z.object({
   appId: uuid,
   from: isoDateTime,
   to: isoDateTime,
@@ -348,7 +348,6 @@ export const l4AppsContract = {
 
 export type L4Protocol = z.infer<typeof l4Protocol>;
 export type PortPoolProtocol = z.infer<typeof portPoolProtocol>;
-export type PortPool = z.infer<typeof portPool>;
 export type PortPoolsInput = z.infer<typeof portPoolsInput>;
 export type ClusterPortPools = z.infer<typeof clusterPortPools>;
 export type L4App = z.infer<typeof l4App>;

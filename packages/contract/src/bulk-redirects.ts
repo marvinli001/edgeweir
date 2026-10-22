@@ -6,8 +6,8 @@ import { uuid } from "./schemas";
 /** Entries of a site's bulk redirect table at most. */
 export const BULK_REDIRECT_LIMIT = 5000;
 /** Longest source and target (UTF-8 bytes). */
-export const BULK_REDIRECT_SOURCE_MAX_BYTES = 512;
-export const BULK_REDIRECT_TARGET_MAX_BYTES = 1024;
+const BULK_REDIRECT_SOURCE_MAX_BYTES = 512;
+const BULK_REDIRECT_TARGET_MAX_BYTES = 1024;
 
 const LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
 const LOWERCASE_HOST_RE = new RegExp(`^(?=.{1,253}$)(?:${LABEL}\\.)*${LABEL}$`);
@@ -64,7 +64,7 @@ export const bulkRedirect = z.object({
   preserveQuery: z.boolean().default(false),
 });
 
-export const bulkRedirectDto = z.object({
+const bulkRedirectDto = z.object({
   source: z.string(),
   target: z.string(),
   statusCode: bulkRedirectStatus,
@@ -98,5 +98,4 @@ export const bulkRedirectsContract = {
 };
 
 export type BulkRedirect = z.infer<typeof bulkRedirectDto>;
-export type BulkRedirectInput = z.input<typeof bulkRedirect>;
 export type BulkRedirectsInput = z.infer<typeof bulkRedirectsInput>;

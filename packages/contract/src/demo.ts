@@ -11,7 +11,7 @@ export const DEMO_USER_ID = "demo";
 export const DEMO_EMAIL = "demo@edgeweir.com";
 export const DEMO_PASSWORD = "demo";
 
-export const demoSettings = z.object({ enabled: z.boolean() });
+const demoSettings = z.object({ enabled: z.boolean() });
 export type DemoSettings = z.infer<typeof demoSettings>;
 
 /**

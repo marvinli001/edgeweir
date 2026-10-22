@@ -117,7 +117,7 @@ export class ConfigCapacityError extends Error {
 }
 
 /** Console-side model of an origin, independent of the database layer. */
-export interface OriginModel {
+interface OriginModel {
   id: string;
   address: string;
   port: number;
@@ -133,7 +133,7 @@ export interface OriginModel {
 }
 
 /** Longest cache rule condition (source characters). */
-export const CACHE_EXPRESSION_MAX_LENGTH = 16384;
+const CACHE_EXPRESSION_MAX_LENGTH = 16384;
 
 export interface CacheRuleModel {
   id: string;
@@ -196,7 +196,7 @@ export interface OriginPoolSettingsModel {
   statusRetry?: boolean;
 }
 
-export interface CacheKeyModel {
+interface CacheKeyModel {
   /** exclude: every parameter but queryParams ("prefix*" patterns allowed); site-content-v1. */
   query: "all" | "ignore" | "include" | "exclude";
   queryParams: string[];
@@ -315,7 +315,7 @@ export interface SiteErrorPagesModel {
 }
 
 /** A site's maintenance mode while on (config.proto Maintenance). */
-export interface MaintenanceModel {
+interface MaintenanceModel {
   template: string;
   retryAfterSeconds: number;
   /** CIDRs in canonical form; any order, compiled sorted without duplicates. */
@@ -324,7 +324,7 @@ export interface MaintenanceModel {
 }
 
 /** A site's charset setting while on (config.proto Charset). */
-export interface CharsetModel {
+interface CharsetModel {
   name: string;
   force: boolean;
   uppercase: boolean;
@@ -346,7 +346,7 @@ export interface OfflineHostModel {
 }
 
 /** How a domain matches besides exact and `*.` (config.proto DomainMatch, domains-v2). */
-export type DomainMatchModel = "suffix" | "regex";
+type DomainMatchModel = "suffix" | "regex";
 /** Feature of `.a.com` and `~pattern` site domains (proto v0.25.0). */
 export const DOMAINS_V2_FEATURE = "domains-v2";
 /** Feature of the cluster's unknown host handling and scan protection (proto v0.25.0). */
@@ -362,7 +362,7 @@ export const CLIENT_CERT_FEATURE = "client-cert-v1";
 export const ACCESS_AUTH_FEATURE = "access-auth-v1";
 
 /** Kinds of access authentication rules (the contract's names). */
-export type AuthRuleKind = "basic" | "forward" | "url_a" | "url_b" | "url_c" | "url_d";
+type AuthRuleKind = "basic" | "forward" | "url_a" | "url_b" | "url_c" | "url_d";
 
 /**
  * An enabled access authentication rule (config.proto AuthRule). The
@@ -490,7 +490,7 @@ export interface AccessControlModel {
 }
 
 /** A site's client certificates (config.proto ClientCertificate); off is omitted. */
-export interface ClientCertificateModel {
+interface ClientCertificateModel {
   mode: "optional" | "required";
   /** Re-encoded PEM of the CA certificates. */
   caPem: string;
@@ -663,7 +663,7 @@ export interface SitePortsModel {
 }
 
 /** The cluster's client address setting (config.proto ClientAddress); null is direct. */
-export interface ClientIpModel {
+interface ClientIpModel {
   mode: "direct" | "proxy_protocol" | "header";
   trustedCidrs: string[];
   header: string;
@@ -682,14 +682,14 @@ export interface EdgeModel {
   unknownHosts?: UnknownHostsModel | null;
 }
 
-export const DEFAULT_HTTP_PORT = 80;
-export const DEFAULT_HTTPS_PORT = 443;
-export const EDGE_PORTS_FEATURE = "edge-ports-v1";
-export const CLIENT_IP_FEATURE = "client-ip-v1";
-export const L4_V2_FEATURE = "l4-v2";
+const DEFAULT_HTTP_PORT = 80;
+const DEFAULT_HTTPS_PORT = 443;
+const EDGE_PORTS_FEATURE = "edge-ports-v1";
+const CLIENT_IP_FEATURE = "client-ip-v1";
+const L4_V2_FEATURE = "l4-v2";
 
 /** One entry of a site's bulk redirect table (config.proto BulkRedirect). */
-export interface BulkRedirectModel {
+interface BulkRedirectModel {
   source: string;
   target: string;
   statusCode: number;
@@ -826,7 +826,7 @@ export interface RuleModel {
   /** A rule compiled earlier: compileRules keeps it as it is (see ruleModelOf). */
   compiled?: EdgeRule;
 }
-export interface IpListModel {
+interface IpListModel {
   id: string;
   name: string;
   entries: string[];
@@ -962,9 +962,7 @@ export function ruleModelOf(rule: EdgeRule): RuleModel {
  * Every expression of a compiled configuration: rule conditions, redirect
  * and rewrite targets and cache rule conditions, platform rules first.
  */
-export function configExpressions(
-  config: Pick<NodeConfig, "platformRules" | "sites">,
-): RuleExpression[] {
+function configExpressions(config: Pick<NodeConfig, "platformRules" | "sites">): RuleExpression[] {
   const rules = [...config.platformRules, ...config.sites.flatMap((site) => site.rules)];
   return [
     ...rules.flatMap((rule) => [
@@ -1095,7 +1093,7 @@ export function nodeRequirements(config: NodeConfig): string[] {
 }
 
 /** An origin of a layer-4 application (config.proto L4Origin). */
-export interface L4OriginModel {
+interface L4OriginModel {
   id: string;
   address: string;
   /** Compiled 0 while the application's originPortMode is same. */
@@ -1139,7 +1137,7 @@ export interface L4AppModel {
  * TCP, origins by id and list ids as sorted sets (canonicalize sorts the
  * applications).
  */
-export function compileL4Apps(apps: readonly L4AppModel[] | undefined): L4App[] {
+function compileL4Apps(apps: readonly L4AppModel[] | undefined): L4App[] {
   return (apps ?? [])
     .filter((app) => app.enabled)
     .map((app) => {
@@ -1176,7 +1174,7 @@ export function compileL4Apps(apps: readonly L4AppModel[] | undefined): L4App[] 
     });
 }
 
-export interface ListenerModel {
+interface ListenerModel {
   port: number;
   protocol: "http" | "https";
   http2?: boolean;
@@ -1297,7 +1295,7 @@ function compileSiteProtection(model: SiteProtectionModel) {
 }
 
 /** Whether compiled rules read the request body (rules-body-v1). */
-export function rulesReadBody(rules: readonly EdgeRule[]): boolean {
+function rulesReadBody(rules: readonly EdgeRule[]): boolean {
   return rules.some((rule) =>
     [
       rule.expression,
@@ -1400,7 +1398,7 @@ export function poolAndPageFeatures(config: NodeConfig): string[] {
 const ERROR_PAGES_V1_STATUSES = new Set([403, 429, 502, 503, 504]);
 
 /** Whether a compiled site uses a setting of site-content-v1. */
-export function usesSiteContent(site: Site): boolean {
+function usesSiteContent(site: Site): boolean {
   const pool = site.originPool;
   const tls = site.tls;
   return (
@@ -1428,7 +1426,7 @@ export function usesSiteContent(site: Site): boolean {
  * site-content-v1 (a site's settings, or a platform rule's body limit) and
  * cache-zone-v1 (per-node cache zone sizes).
  */
-export function contentFeatures(config: NodeConfig): string[] {
+function contentFeatures(config: NodeConfig): string[] {
   return [
     ...(config.sites.some(usesSiteContent) ||
     config.platformRules.some((rule) => rule.action?.requestBodyLimit !== undefined)
@@ -1440,9 +1438,7 @@ export function contentFeatures(config: NodeConfig): string[] {
 
 export const DEFAULT_CACHE_ZONE = "default";
 
-export const defaultListeners: ListenerModel[] = [{ port: 80, protocol: "http" }];
-
-export const defaultCacheZones: CacheZoneModel[] = [
+const defaultCacheZones: CacheZoneModel[] = [
   {
     name: DEFAULT_CACHE_ZONE,
     maxSizeMb: 10 * 1024,
@@ -1457,10 +1453,6 @@ export function parseDomain(value: string): { name: string; wildcard: boolean } 
   return lower.startsWith("*.")
     ? { name: lower.slice(2), wildcard: true }
     : { name: lower, wildcard: false };
-}
-
-export function formatDomain(domain: { name: string; wildcard: boolean }): string {
-  return domain.wildcard ? `*.${domain.name}` : domain.name;
 }
 
 const policyMap = {
@@ -2126,7 +2118,7 @@ export function contentHash(config: NodeConfig): string {
  * bound to other ports this is 80 plus 443 once a site has a certificate,
  * as before edge-ports-v1.
  */
-export function listenersFor(
+function listenersFor(
   sites: Pick<Site, "certificateId" | "tls" | "ports">[],
   edge?: EdgeModel,
 ): ListenerModel[] {
@@ -2157,9 +2149,7 @@ export function listenersFor(
 }
 
 /** NodeConfig.client_address: unset for direct without dropping X-Forwarded-For. */
-export function compileClientAddress(
-  model: ClientIpModel | null | undefined,
-): ClientAddress | undefined {
+function compileClientAddress(model: ClientIpModel | null | undefined): ClientAddress | undefined {
   if (!model || (model.mode === "direct" && !model.dropForwardedFor)) return undefined;
   return create(ClientAddressSchema, {
     mode: model.mode,
@@ -2239,7 +2229,7 @@ export function edgeOf(config: NodeConfig): EdgeModel {
 }
 
 /** Features of the domain forms and unknown host handling a compiled configuration uses. */
-export function domainFeatures(config: NodeConfig): string[] {
+function domainFeatures(config: NodeConfig): string[] {
   return [
     ...(config.sites.some((site) =>
       site.domains.some((d) => d.match !== DomainMatch.UNSPECIFIED),
@@ -2251,7 +2241,7 @@ export function domainFeatures(config: NodeConfig): string[] {
 }
 
 /** Features of the listener ports and client address setting a compiled configuration uses. */
-export function edgeFeatures(config: NodeConfig): string[] {
+function edgeFeatures(config: NodeConfig): string[] {
   const rules = [...config.platformRules, ...config.sites.flatMap((site) => site.rules)];
   return [
     ...(config.listeners.some(
@@ -2304,7 +2294,7 @@ function compileImageConvert(m: ImageConvertModel) {
 }
 
 /** requiredFeatures of a compiled configuration, derived from its content. */
-export function derivedFeatures(config: NodeConfig): string[] {
+function derivedFeatures(config: NodeConfig): string[] {
   return [
     ...(config.sites.some((s) => s.logSampleRate) ? ["access-logs-v1"] : []),
     ...(config.sites.some((s) => s.logBlocked || s.logQuery || s.logHeaders.length || s.logPeer)
@@ -2385,7 +2375,7 @@ export function g14Features(config: NodeConfig): string[] {
  * geo access reads (countries and subdivisions: geoip-city-v1; ASNs:
  * geoip-asn-v1; subdivisions are checked by the console, see nodeRequirements).
  */
-export function accessControlFeatures(config: NodeConfig): string[] {
+function accessControlFeatures(config: NodeConfig): string[] {
   const sites = config.sites.filter((site) => site.accessControl);
   const geo = sites.map((site) => site.accessControl?.geo).filter((g) => g !== undefined);
   return [
@@ -2396,7 +2386,7 @@ export function accessControlFeatures(config: NodeConfig): string[] {
 }
 
 /** Features of sites with several certificates or client certificates (proto v0.26.0). */
-export function certificateFeatures(config: NodeConfig): string[] {
+function certificateFeatures(config: NodeConfig): string[] {
   return [
     ...(config.sites.some((site) => site.additionalCertificateIds.length)
       ? [MULTI_CERTIFICATE_FEATURE]

@@ -57,7 +57,7 @@ const fromNodes = () => inArray(schema.ipBan.source, [...NODE_SOURCES]);
 
 const SETTINGS_KEY = "ban_settings";
 /** Expired rows are deleted this long after they expire (nodes drop them at expiry). */
-export const BAN_RETENTION_MS = 3600_000;
+const BAN_RETENTION_MS = 3600_000;
 
 /** Next `n` values of ip_ban_seq, ascending. Call with the ban lock held. */
 async function nextSeqs(tx: Executor, n: number): Promise<bigint[]> {

@@ -12,13 +12,13 @@ import { findNodeGroup } from "./node-groups";
 import { getNode } from "./nodes";
 import { publisher, type Tx } from "./revisions";
 
-export const TOKEN_PREFIX = "ewt_";
+const TOKEN_PREFIX = "ewt_";
 
-export function hashToken(token: string): string {
+function hashToken(token: string): string {
   return createHash("sha256").update(token, "utf8").digest("hex");
 }
 
-export function generateToken(): string {
+function generateToken(): string {
   return `${TOKEN_PREFIX}${randomBytes(32).toString("base64url")}`;
 }
 
@@ -33,7 +33,7 @@ function sh(value: string): string {
  * sudo, read by install.sh and `edgeweir-node enroll`), never as an argument
  * that the process list would show.
  */
-export function buildInstallCommand(opts: {
+function buildInstallCommand(opts: {
   consoleUrl: string;
   serverUrl: string;
   token: string;

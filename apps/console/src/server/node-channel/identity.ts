@@ -47,7 +47,7 @@ export const issuedCertificateResponse = (
 });
 
 /** The features a node reports, as stored: distinct, well-formed, at most 64. */
-export const supportedFeatures = (features: readonly string[]) =>
+const supportedFeatures = (features: readonly string[]) =>
   [...new Set(features)].filter((f) => /^[a-z0-9-]{1,64}$/.test(f)).slice(0, 64);
 
 /** What a node reports about its host and agent (none: empty), as stored on its row. */

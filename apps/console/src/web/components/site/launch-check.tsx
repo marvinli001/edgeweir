@@ -65,7 +65,7 @@ const POINTING_TONE: Record<DnsPointing, StatusTone> = {
   unchecked: "idle",
 };
 
-export const pointingLabel = (pointing: DnsPointing) =>
+const pointingLabel = (pointing: DnsPointing) =>
   ({
     ok: m.dns_pointing_ok,
     elsewhere: m.dns_pointing_elsewhere,

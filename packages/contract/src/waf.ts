@@ -15,7 +15,7 @@ export const WAF_ANOMALY_THRESHOLD_RANGE = { min: 1, max: 1000 } as const;
 /** Request body bytes inspected (128 MiB at most); 0 inspects no body. */
 export const WAF_BODY_LIMIT_RANGE = { min: 0, max: 134_217_728 } as const;
 /** CRS rule ids (the CRS reserves 900000 to 999999). */
-export const WAF_RULE_ID_RANGE = { min: 900_000, max: 999_999 } as const;
+const WAF_RULE_ID_RANGE = { min: 900_000, max: 999_999 } as const;
 /** Rule ids of one exclusion entry. */
 export const WAF_MAX_EXCLUSIONS = 200;
 /** Exclusion entries of a site (waf-v2: by path or target). */
@@ -23,7 +23,7 @@ export const WAF_MAX_EXCLUSION_ENTRIES = 100;
 /** Targets of one exclusion entry. */
 export const WAF_MAX_EXCLUSION_TARGETS = 16;
 
-export const wafRuleId = z.number().int().min(WAF_RULE_ID_RANGE.min).max(WAF_RULE_ID_RANGE.max);
+const wafRuleId = z.number().int().min(WAF_RULE_ID_RANGE.min).max(WAF_RULE_ID_RANGE.max);
 
 /**
  * CRS rule files whose rules set up or evaluate the detection rules instead
@@ -110,7 +110,7 @@ export const WAF_PRESETS: Record<PresetLevel, WafPreset> = {
   strict: { paranoiaLevel: 2, anomalyThreshold: 5, requestBodyLimit: 1_048_576 },
 };
 
-export const siteWaf = z.object({
+const siteWaf = z.object({
   siteId: uuid,
   /** off, detect (log matches only) or block (answer 403 above the threshold). */
   mode: wafMode,
@@ -161,7 +161,7 @@ export const wafTopRulesInput = z.object({
   range: analyticsRange.default("24h"),
   limit: z.coerce.number().int().min(1).max(50).default(10),
 });
-export const wafTopRules = z.object({
+const wafTopRules = z.object({
   approximate: z.literal(true),
   items: z.array(z.object({ ruleId: z.number().int(), requests: z.number() })),
 });
@@ -171,7 +171,7 @@ export const wafTopRules = z.object({
  * node of the site's cluster lacks it (it may still be required through the
  * API, which holds the cluster until its nodes are upgraded).
  */
-export const featureAvailability = z.object({
+const featureAvailability = z.object({
   available: z.boolean(),
   reason: z.enum(["nodes"]).nullable(),
 });

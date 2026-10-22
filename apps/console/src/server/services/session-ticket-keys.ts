@@ -16,10 +16,10 @@ import { type Executor, latestRevision, publishRevision } from "./revisions";
  * roles shift every 12 hours; nodes accept a ticket for at most an hour
  * (ssl_session_timeout), long before the key that encrypted it is dropped.
  */
-export const SESSION_TICKET_KEY_ROLES = ["next", "current", "previous"] as const;
-export type SessionTicketKeyRole = (typeof SESSION_TICKET_KEY_ROLES)[number];
+const SESSION_TICKET_KEY_ROLES = ["next", "current", "previous"] as const;
+type SessionTicketKeyRole = (typeof SESSION_TICKET_KEY_ROLES)[number];
 /** Keys rotate once the newest of them is this old. */
-export const SESSION_TICKET_KEY_ROTATION_MS = 12 * 3600 * 1000;
+const SESSION_TICKET_KEY_ROTATION_MS = 12 * 3600 * 1000;
 /**
  * Secrets are 80 random bytes, the file format of nginx's
  * ssl_session_ticket_key: a 16-byte key name, a 32-byte AES-256 key and a

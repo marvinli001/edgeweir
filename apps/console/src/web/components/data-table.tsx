@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
-export const features = tableFeatures({
+const features = tableFeatures({
   rowSortingFeature,
   sortedRowModel: createSortedRowModel(),
 });

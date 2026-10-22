@@ -106,8 +106,8 @@ import {
 import { watchStream } from "./watch";
 import { bridgedClientAddress } from "./websocket";
 
-export const HEARTBEAT_SECONDS = 15;
-export const KEEPALIVE_MS = 15_000;
+const HEARTBEAT_SECONDS = 15;
+const KEEPALIVE_MS = 15_000;
 
 /**
  * WatchConfig streams one node may hold at once: a new one ends the oldest.
@@ -118,9 +118,9 @@ export const MAX_WATCH_STREAMS = 2;
 /** Ask nodes to renew once less than a third of the lifetime remains. */
 const RENEW_BEFORE_MS = (NODE_CERT_LIFETIME_DAYS * 24 * 3600 * 1000) / 3;
 /** Tasks handed out per PullTasks call unless the node asks for fewer. */
-export const MAX_TASKS_PER_PULL = 20;
+const MAX_TASKS_PER_PULL = 20;
 /** Nodes with this feature receive dynamic bans (GetBans, WATCH_EVENT_BANS). */
-export const BANS_FEATURE = "bans-v1";
+const BANS_FEATURE = "bans-v1";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const UINT32_MAX = 4294967295;
 /** A proto map of counters (uint64 values) as numbers. */
@@ -145,13 +145,13 @@ function toNodeBanStatus(status: BanStatus, now: Date): schema.NodeBanStatus {
 }
 
 /** ReportStatusRequest.clock_offset_millis as stored (an integer column: ±24 days at most). */
-export function clockOffset(millis: bigint): number {
+function clockOffset(millis: bigint): number {
   const limit = 2n ** 31n - 1n;
   return Number(millis > limit ? limit : millis < -limit ? -limit : millis);
 }
 
 /** ReportStatusRequest.metrics as stored on the node row: finite, non-negative, CPU 0-100. */
-export function toNodeMetrics(m: NodeMetrics, now: Date): schema.NodeMetricsData {
+function toNodeMetrics(m: NodeMetrics, now: Date): schema.NodeMetricsData {
   const real = (value: number, max = Number.MAX_SAFE_INTEGER) =>
     Number.isFinite(value) ? Math.min(Math.max(value, 0), max) : 0;
   const count = (value: bigint) =>
@@ -170,7 +170,7 @@ export function toNodeMetrics(m: NodeMetrics, now: Date): schema.NodeMetricsData
 }
 
 /** ReportStatusRequest.cache_usage as stored on the node row (bounded, at most 8 zones). */
-export function toNodeCacheUsage(zones: CacheZoneUsage[], now: Date): schema.NodeCacheUsage {
+function toNodeCacheUsage(zones: CacheZoneUsage[], now: Date): schema.NodeCacheUsage {
   const bytes = (value: bigint) =>
     Number(value < 0n ? 0n : value > 9007199254740991n ? 9007199254740991n : value);
   return {
@@ -224,7 +224,7 @@ function itemVariants(item: CacheTaskItem, deviceType: ReadonlySet<string>): Dev
  * whose cache key separates mobile and desktop user agents now: only they
  * get mobile prefetch targets.
  */
-export function toNodeTask(
+function toNodeTask(
   task: { id: string; type: string; createdAt: Date; items: CacheTaskItem[] },
   deviceType: ReadonlySet<string>,
 ) {

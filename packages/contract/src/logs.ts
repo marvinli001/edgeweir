@@ -24,7 +24,7 @@ export const BLOCK_REASONS = [
   "client_cert",
   "maintenance",
 ] as const;
-export const blockReason = z.enum(BLOCK_REASONS);
+const blockReason = z.enum(BLOCK_REASONS);
 export type BlockReason = z.infer<typeof blockReason>;
 
 /** Cache statuses nodes report (nginx $upstream_cache_status). */
@@ -54,7 +54,7 @@ const logHeaderName = z
   .refine((name) => !(FORBIDDEN_LOG_HEADERS as readonly string[]).includes(name), {
     message: "header not allowed",
   });
-export const logHeaders = z
+const logHeaders = z
   .array(logHeaderName)
   .max(MAX_LOG_HEADERS)
   .transform((names) => [...new Set(names)]);
@@ -169,7 +169,7 @@ export const logEntry = z.object({
 export type LogEntry = z.infer<typeof logEntry>;
 
 /** A site's access log settings; the options need node feature access-logs-v2. */
-export const logSettings = z.object({
+const logSettings = z.object({
   sampleRate: z.number(),
   storage: z.enum(["lite", "clickhouse"]),
   /** Days the current storage keeps logs (system setting). */
@@ -184,7 +184,7 @@ export const logSettings = z.object({
   logPeer: z.boolean(),
 });
 export type LogSettings = z.infer<typeof logSettings>;
-export const logSettingsInput = z.object({
+const logSettingsInput = z.object({
   siteId: z.uuid(),
   /** Basis points; omitted keeps the current rate. */
   sampleRate: z.number().int().min(0).max(10000).optional(),

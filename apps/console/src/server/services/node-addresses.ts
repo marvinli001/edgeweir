@@ -14,7 +14,7 @@ export interface SchedulingAddress {
 }
 
 /** Highest scheduling level (backup 2). */
-export const MAX_ADDRESS_LEVEL = 2;
+const MAX_ADDRESS_LEVEL = 2;
 /** Configured scheduling addresses per node. */
 export const MAX_CONFIGURED_ADDRESSES = 8;
 

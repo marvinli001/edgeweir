@@ -106,7 +106,7 @@ export async function loadAuthSecret(
 }
 
 /** Stored instead of the secret: HMAC-SHA256 keyed with it over a fixed label. */
-export function authSecretCheck(secret: string): string {
+function authSecretCheck(secret: string): string {
   return createHmac("sha256", secret).update("edgeweir/auth-secret-check/v1").digest("base64url");
 }
 

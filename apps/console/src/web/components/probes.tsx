@@ -60,7 +60,7 @@ const PROBE_ERRORS: Record<string, () => string> = {
   unreachable: () => m.probe_error_unreachable(),
 };
 /** A probe failure code in words; unknown codes as they are. */
-export const probeErrorLabel = (code: string) => (code ? (PROBE_ERRORS[code]?.() ?? code) : "");
+const probeErrorLabel = (code: string) => (code ? (PROBE_ERRORS[code]?.() ?? code) : "");
 
 function ProbeStatus({ probe }: { probe: Probe }) {
   if (!probe.enabled)
@@ -950,7 +950,7 @@ const SETTINGS_FIELDS: {
 ];
 
 /** Interval, timeout and attempts of the probes, and when an address counts as down or up. */
-export function ProbeSettingsCard() {
+function ProbeSettingsCard() {
   return (
     <SettingsCard
       title={m.probes_settings_title()}

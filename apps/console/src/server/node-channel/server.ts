@@ -24,9 +24,9 @@ const ROTATION_CHECK_MS = 3600 * 1000;
  * largest messages nodes send, 1000 access logs with paths of up to 2 KiB,
  * stay below a quarter of it.
  */
-export const READ_MAX_BYTES = 16 << 20;
+const READ_MAX_BYTES = 16 << 20;
 /** Enroll and EnrollProbe, the RPCs without a client certificate, carry a token, a CSR and host facts. */
-export const ENROLL_READ_MAX_BYTES = 64 << 10;
+const ENROLL_READ_MAX_BYTES = 64 << 10;
 /** Sessions without traffic are closed; watch streams send a keepalive every 15 s. */
 const IDLE_TIMEOUT_MS = 120_000;
 /** How long requests in flight get to finish when the channel closes. */

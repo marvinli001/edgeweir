@@ -32,7 +32,7 @@ import { type Executor, getRevision, latestRevision, publishClusters, type Tx } 
 import { publishedRevisions } from "./rollout";
 
 /** pki_authority rows of the two origin authorities. */
-export const ORIGIN_CLIENT_CA_ID = "origin-client";
+const ORIGIN_CLIENT_CA_ID = "origin-client";
 export const ORIGIN_CA_ID = "origin-ca";
 const AUTHORITY_NAMES = {
   [ORIGIN_CLIENT_CA_ID]: { commonName: "Edgeweir Origin Client CA", years: ORIGIN_CLIENT_CA_YEARS },
@@ -41,7 +41,7 @@ const AUTHORITY_NAMES = {
 type AuthorityId = keyof typeof AUTHORITY_NAMES;
 
 /** Subject organization of the clusters' origin client certificates (CN is the cluster id). */
-export const ORIGIN_CLIENT_ORGANIZATION = "Edgeweir Origin Client";
+const ORIGIN_CLIENT_ORGANIZATION = "Edgeweir Origin Client";
 /** Envelope binding of an origin client certificate's private key: the column and the row (AAD). */
 export const originClientKeyBinding = (id: string) => ({
   purpose: "origin_client_certificate.private_key_envelope",
@@ -159,7 +159,7 @@ async function currentClientCertificates(db: Executor) {
 }
 
 /** The cluster's newest origin client certificate, if any. */
-export async function currentClientCertificate(db: Executor, clusterId: string) {
+async function currentClientCertificate(db: Executor, clusterId: string) {
   const [row] = await db
     .select()
     .from(schema.originClientCertificate)

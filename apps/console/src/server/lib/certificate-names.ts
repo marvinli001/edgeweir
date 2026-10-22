@@ -78,9 +78,3 @@ export function failUncovered(domains: readonly Domain[]): never {
   const list = domains.slice(0, 5).map(certificateName).join(", ");
   fail("CERTIFICATE_DOMAIN_MISMATCH", `certificate does not cover ${list}`, { domains: list });
 }
-
-/** Every writer of a site's domains/TLS binding uses the same check: the chain covers every domain. */
-export function assertCertificateNames(chainPem: string, domains: readonly Domain[]) {
-  const uncovered = uncoveredDomains(chainPem, domains);
-  if (uncovered.length) failUncovered(uncovered);
-}

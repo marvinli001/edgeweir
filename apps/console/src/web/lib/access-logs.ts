@@ -239,7 +239,7 @@ export function initialLogFilters(jump: LogJump | undefined, now = Date.now()) {
 }
 
 /** Filters behind "more filters", in the form's order. */
-export const MORE_FILTERS = [
+const MORE_FILTERS = [
   "host",
   "method",
   "statusClass",

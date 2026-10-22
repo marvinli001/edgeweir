@@ -441,13 +441,6 @@ export const nodes: Node[] = nodeSeeds.map((seed, index) => {
   };
 });
 
-export const nodeCity: Record<string, string> = {
-  "ap-tokyo": "Tokyo",
-  "ap-singapore": "Singapore",
-  "eu-frankfurt": "Frankfurt",
-  "us-virginia": "Virginia",
-};
-
 // ---------------------------------------------------------------------------------------------
 // Revisions
 
@@ -1001,7 +994,7 @@ export const sites: Site[] = siteSeeds.map((seed, index) => {
   };
 });
 
-export const siteSeedOf = (siteId: string) =>
+const siteSeedOf = (siteId: string) =>
   siteSeeds[sites.findIndex((s) => s.id === siteId)] as SiteSeed | undefined;
 
 export const siteShare = (siteId: string) => siteSeedOf(siteId)?.share ?? 0;

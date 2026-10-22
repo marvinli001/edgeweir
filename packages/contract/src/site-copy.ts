@@ -46,7 +46,7 @@ export const SITE_COPY_PARTS = [
   "logs",
   "imageConvert",
 ] as const;
-export const siteCopyPart = z.enum(SITE_COPY_PARTS);
+const siteCopyPart = z.enum(SITE_COPY_PARTS);
 export type SiteCopyPart = z.infer<typeof siteCopyPart>;
 
 /** Parts that are lists: their change is told as the number of items before and after. */
@@ -75,12 +75,10 @@ const notSelf = <T extends { id: string; targetIds: string[] }>(input: T) =>
 const selfIssue = { message: "a site cannot copy to itself", path: ["targetIds"] };
 
 /** Copies the parts of site `id` to every target, one transaction each. */
-export const siteCopyInput = z
-  .object({ id: uuid, targetIds: targets, parts })
-  .refine(notSelf, selfIssue);
+const siteCopyInput = z.object({ id: uuid, targetIds: targets, parts }).refine(notSelf, selfIssue);
 
 /** The same in a query string: `targetIds[]=…&parts[]=…`. */
-export const siteCopyPreviewInput = z
+const siteCopyPreviewInput = z
   .object({
     id: uuid,
     targetIds: queryList(uuid).pipe(targets),
@@ -89,14 +87,14 @@ export const siteCopyPreviewInput = z
   .refine(notSelf, selfIssue);
 
 /** Why a target failed: an API error code with its parameters (and the English message). */
-export const siteCopyError = z.object({
+const siteCopyError = z.object({
   code: z.string(),
   message: z.string(),
   data: z.record(z.string(), z.union([z.string(), z.number()])),
 });
 
 /** What copying a part would change on a target. */
-export const siteCopyChange = z.object({
+const siteCopyChange = z.object({
   part: siteCopyPart,
   changed: z.boolean(),
   /** List parts: the items the target has now and would have. */
@@ -106,7 +104,7 @@ export const siteCopyChange = z.object({
   fields: z.number().int().nullable(),
 });
 
-export const siteCopyPreview = z.object({
+const siteCopyPreview = z.object({
   source: z.object({ id: uuid, name: z.string() }),
   targets: z.array(
     z.object({
@@ -119,7 +117,7 @@ export const siteCopyPreview = z.object({
   ),
 });
 
-export const siteCopyResult = z.object({
+const siteCopyResult = z.object({
   targets: z.array(
     z.object({
       id: uuid,
@@ -135,7 +133,7 @@ export const siteCopyResult = z.object({
 });
 
 /** A new site with the source's settings and origins: its own name and domains. */
-export const siteCloneInput = z.object({
+const siteCloneInput = z.object({
   id: uuid,
   name: z.string().trim().min(1).max(100).optional(),
   domains: siteDomains,

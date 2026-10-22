@@ -10,7 +10,7 @@ const FINGERPRINT = /^[0-9a-f]{64}$/;
 const REASONS = new Set(["invalid_material", "fingerprint_mismatch", "unavailable"]);
 
 /** Failed certificates a node's status keeps at most. */
-export const MAX_CERTIFICATE_FAILURES = 100;
+const MAX_CERTIFICATE_FAILURES = 100;
 
 /**
  * ReportStatusRequest.certificate_failures as stored (certificate-isolation-v1):

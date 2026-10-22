@@ -11,7 +11,7 @@ import {
 import { domainName, isoDateTime, uuid } from "./schemas";
 
 const zoneName = domainName.refine((name) => !name.startsWith("*."));
-export const dnsProviderKind = z.enum(dnsProviderIds);
+const dnsProviderKind = z.enum(dnsProviderIds);
 const ipAddress = z
   .string()
   .max(64)
@@ -24,7 +24,7 @@ const ipAddress = z
     return formatIp(ip);
   });
 /** A canonical resolution line (DNS_LINES); "default" answers resolvers no other line matches. */
-export const resolutionLine = z.enum(DNS_LINES);
+const resolutionLine = z.enum(DNS_LINES);
 /** Name of a binding line (`<line>.<domain>`), unique in the binding. */
 export const dnsLineName = z
   .string()
@@ -57,7 +57,7 @@ export const dnsLine = z
       ctx.addIssue({ code: "custom", message: "duplicate backup node group" });
   });
 /** off: the console does not manage DNS; manual: records to create by hand; auto: written through the provider. */
-export const dnsBindingMode = z.enum(["off", "manual", "auto"]);
+const dnsBindingMode = z.enum(["off", "manual", "auto"]);
 /** A cluster's DNS binding as the operator edits it. */
 export const dnsBindingInput = z
   .object({
@@ -102,7 +102,7 @@ export function withLineDefaults(line: {
     minHealthyIps: line.minHealthyIps ?? 1,
   };
 }
-export const dnsBinding = z.object({
+const dnsBinding = z.object({
   clusterId: uuid,
   mode: dnsBindingMode,
   providerId: uuid.nullable(),
@@ -179,7 +179,7 @@ const credentialSource = z.union([
   z.object({ id: uuid }),
   z.object({ provider: dnsProviderKind, credentials }),
 ]);
-export const dnsFieldDto = z.object({
+const dnsFieldDto = z.object({
   key: z.string(),
   type: z.enum(["text", "secret", "select", "textarea", "url"]),
   secret: z.boolean(),
@@ -190,7 +190,7 @@ export const dnsFieldDto = z.object({
   options: z.array(z.string()).optional(),
   default: z.string().optional(),
 });
-export const dnsProviderDto = z.object({
+const dnsProviderDto = z.object({
   id: dnsProviderKind,
   name: z.string(),
   fields: z.array(dnsFieldDto),

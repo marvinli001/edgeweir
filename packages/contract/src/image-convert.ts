@@ -73,14 +73,14 @@ function checkSettings(
 }
 
 export const imageConvertSettings = imageConvertFields.superRefine(checkSettings);
-export const imageConvertInput = imageConvertFields.extend({ id: uuid }).superRefine(checkSettings);
+const imageConvertInput = imageConvertFields.extend({ id: uuid }).superRefine(checkSettings);
 
 /** Bytes WebP / AVIF responses saved over a range. */
-export const imageSavingsInput = z.object({
+const imageSavingsInput = z.object({
   id: uuid,
   range: analyticsRange.default("24h"),
 });
-export const imageSavings = z.object({
+const imageSavings = z.object({
   /** For each complete 200 response to a GET served as a variant (cache hits included): the original's length minus the variant's. */
   bytesSaved: z.number(),
   /** Active nodes of the site's cluster that do not convert (no image-convert-v1). */

@@ -22,7 +22,6 @@ import {
   latestRevision,
   loadRollout,
   notifyClusterTargets,
-  onlineCanaryNodes,
   prebuilt,
   publisher,
   type Tx,
@@ -529,5 +528,3 @@ export async function publishedRevisions(db: Executor, clusterId: string) {
   }
   return [...ids];
 }
-
-export { onlineCanaryNodes };

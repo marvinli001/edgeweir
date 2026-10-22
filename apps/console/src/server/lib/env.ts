@@ -205,14 +205,14 @@ export function parseOutboundAllowCidrs(text: string): string[] {
 }
 
 /** Invalid configuration: one "<VARIABLE>: <problem>" entry per problem. */
-export class ConfigError extends Error {
+class ConfigError extends Error {
   constructor(readonly problems: string[]) {
     super(`invalid configuration:\n${problems.map((p) => `  ${p}`).join("\n")}`);
   }
 }
 
 /** Rolling image version `<YYYYMMDD>-<commit>` baked in by the Dockerfile; `dev` from source. */
-export const VERSION = process.env.EDGEWEIR_VERSION ?? "dev";
+const VERSION = process.env.EDGEWEIR_VERSION ?? "dev";
 
 /**
  * The environment with each FILE_VARIABLES entry read from its `<name>_FILE`
@@ -253,7 +253,7 @@ function withSecretFiles(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
  * port on the console's host, or with EDGEWEIR_NODE_API_WEBSOCKET the
  * WebSocket entry at the console's own address (wss:// behind https://).
  */
-export function defaultNodeApiUrl(
+function defaultNodeApiUrl(
   env: Pick<Env, "EDGEWEIR_PUBLIC_URL" | "EDGEWEIR_NODE_API_WEBSOCKET" | "NODE_API_PORT">,
 ): string {
   const publicUrl = new URL(env.EDGEWEIR_PUBLIC_URL);

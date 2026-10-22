@@ -61,9 +61,9 @@ const retentionSetting = defineSetting({
   defaults: { ...LOG_RETENTION_DEFAULTS },
   auditAction: "system.log_retention_update",
 });
-export const getLogRetention = retentionSetting.read;
+const getLogRetention = retentionSetting.read;
 /** Days the given storage keeps logs. */
-export async function retentionDays(db: Executor, storage: Env["EDGEWEIR_ANALYTICS"]) {
+async function retentionDays(db: Executor, storage: Env["EDGEWEIR_ANALYTICS"]) {
   const r = await getLogRetention(db);
   return storage === "clickhouse" ? r.clickhouseDays : r.postgresDays;
 }

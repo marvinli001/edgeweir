@@ -103,7 +103,7 @@ const HOST_RE =
   /^(?=.{1,253}$)(?:[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?\.)*[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?$/;
 const isCount = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) > 0;
 /** Names nodes report for a network: control characters dropped, at most 128 characters. */
-export const cleanAsName = (name: string) =>
+const cleanAsName = (name: string) =>
   name
     .replace(/\p{Cc}/gu, "")
     .trim()

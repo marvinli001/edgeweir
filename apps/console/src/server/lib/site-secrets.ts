@@ -5,7 +5,7 @@ import type { Executor } from "../services/revisions";
 import type { MasterKey } from "./envelope";
 
 /** Envelope binding of a site secret: the column and the row (AAD). */
-export const SITE_SECRET_PURPOSE = "site_secret.secret_envelope";
+const SITE_SECRET_PURPOSE = "site_secret.secret_envelope";
 export const siteSecretBinding = (secretId: string) => ({
   purpose: SITE_SECRET_PURPOSE,
   recordId: secretId,

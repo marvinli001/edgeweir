@@ -6,7 +6,7 @@ import { CertificateAuthority, generateCa, sha256Fingerprint } from "./ca";
 
 export const NODE_CA_ID = "node-channel";
 /** Envelope binding of a CA private key: the column and the authority row (AAD). */
-export const CA_KEY_PURPOSE = "pki_authority.private_key_envelope";
+const CA_KEY_PURPOSE = "pki_authority.private_key_envelope";
 export const caKeyBinding = (id: string) => ({ purpose: CA_KEY_PURPOSE, recordId: id });
 /** The purpose version 1 envelopes were sealed with. */
 export const legacyCaKeyPurpose = (id: string) => `pki_authority.private_key:${id}`;

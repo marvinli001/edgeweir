@@ -47,8 +47,8 @@ export const SITE_CARDS = [
   "protocols",
 ] as const;
 
-export const overviewCard = z.enum(OVERVIEW_CARDS);
-export const siteCard = z.enum(SITE_CARDS);
+const overviewCard = z.enum(OVERVIEW_CARDS);
+const siteCard = z.enum(SITE_CARDS);
 
 /** Cards as written: repeats dropped. */
 const cardList = <T extends z.ZodEnum>(card: T) =>
@@ -61,13 +61,13 @@ const cardList = <T extends z.ZodEnum>(card: T) =>
  * The cards the user hid on the console home and on every site's statistics. Every other card
  * shows, also a card a later version adds.
  */
-export const hiddenCards = z.object({
+const hiddenCards = z.object({
   overview: z.array(overviewCard),
   site: z.array(siteCard),
 });
 
 /** Replaces the hidden cards of the pages it names. */
-export const hiddenCardsInput = z
+const hiddenCardsInput = z
   .object({ overview: cardList(overviewCard).optional(), site: cardList(siteCard).optional() })
   .refine((input) => input.overview !== undefined || input.site !== undefined, {
     message: "nothing to change",

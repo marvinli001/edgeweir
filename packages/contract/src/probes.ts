@@ -40,9 +40,9 @@ export const PROBE_SETTINGS_DEFAULTS: ProbeSettings = {
   ipUpSeconds: 60,
 };
 
-export const probeMethod = z.enum(["tcp", "http", "https"]);
+const probeMethod = z.enum(["tcp", "http", "https"]);
 
-export const probe = z.object({
+const probe = z.object({
   id: uuid,
   name: z.string(),
   regionId: uuid,
@@ -77,7 +77,7 @@ export const probe = z.object({
   createdAt: isoDateTime,
 });
 
-export const probeTokenInput = z.object({
+const probeTokenInput = z.object({
   name: z.string().trim().min(1).max(64),
   regionId: uuid,
   ttlMinutes: z
@@ -88,7 +88,7 @@ export const probeTokenInput = z.object({
     .default(60),
 });
 
-export const probeTokenResult = z.object({
+const probeTokenResult = z.object({
   tokenId: uuid,
   /** `ewp_…`, shown once; the console keeps its SHA-256 only. */
   token: z.string(),
@@ -101,7 +101,7 @@ export const probeTokenResult = z.object({
   command: z.string(),
 });
 
-export const probeResult = z.object({
+const probeResult = z.object({
   /** probe: an enrolled probe; node: a node that also probes. */
   proberKind: z.enum(["probe", "node"]),
   proberId: uuid,
@@ -182,7 +182,7 @@ export const nodeAddressesInput = z
   });
 export const nodeProbeInput = z.object({ id: uuid, enabled: z.boolean() });
 
-export const schedulingMetric = z.enum([
+const schedulingMetric = z.enum([
   "cpu_percent",
   "load1",
   "memory_percent",
@@ -245,7 +245,7 @@ export const schedulingRuleInput = z.object({
   holdSeconds: ruleFields.holdSeconds.default(300),
   recoverSeconds: ruleFields.recoverSeconds.default(300),
 });
-export const schedulingRuleUpdateInput = z.object({
+const schedulingRuleUpdateInput = z.object({
   id: uuid,
   lineName: ruleFields.lineName.optional(),
   name: ruleFields.name.optional(),
@@ -257,8 +257,8 @@ export const schedulingRuleUpdateInput = z.object({
   recoverSeconds: ruleFields.recoverSeconds.optional(),
 });
 /** idle: conditions clear; pending: met but not yet for their durations; recovering: clear, waiting. */
-export const schedulingState = z.enum(["idle", "pending", "active", "recovering"]);
-export const schedulingRule = z.object({
+const schedulingState = z.enum(["idle", "pending", "active", "recovering"]);
+const schedulingRule = z.object({
   id: uuid,
   clusterId: uuid,
   lineName: z.string().nullable(),
@@ -290,7 +290,7 @@ const previewCondition = z.object({
   /** It has held for at least durationSeconds. */
   satisfied: z.boolean(),
 });
-export const schedulingPreview = z.object({
+const schedulingPreview = z.object({
   clusterId: uuid,
   evaluatedAt: isoDateTime,
   rules: z.array(

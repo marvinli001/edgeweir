@@ -28,29 +28,30 @@ import {
 export const AUTH_KINDS = ["basic", "forward", ...URL_AUTH_KINDS] as const;
 export type AuthKind = (typeof AUTH_KINDS)[number];
 export const AUTH_MAX_RULES = 16;
-export const AUTH_MAX_PREFIXES = 32;
-export const AUTH_MAX_EXTENSIONS = 64;
+const AUTH_MAX_PREFIXES = 32;
+const AUTH_MAX_EXTENSIONS = 64;
 export const BASIC_MAX_USERS = 100;
-export const BASIC_PASSWORD_MIN = 8;
-export const BASIC_PASSWORD_MAX = 128;
-export const FORWARD_MAX_REQUEST_HEADERS = 16;
-export const FORWARD_MAX_RESPONSE_HEADERS = 8;
-export const FORWARD_URL_MAX = 2048;
-export const FORWARD_TIMEOUT_MS = { min: 100, max: 10_000, default: 5000 } as const;
-export const FORWARD_CACHE_SECONDS_MAX = 300;
+const BASIC_PASSWORD_MIN = 8;
+const BASIC_PASSWORD_MAX = 128;
+const FORWARD_MAX_REQUEST_HEADERS = 16;
+const FORWARD_MAX_RESPONSE_HEADERS = 8;
+const FORWARD_URL_MAX = 2048;
+const FORWARD_TIMEOUT_MS = { min: 100, max: 10_000, default: 5000 } as const;
+const FORWARD_CACHE_SECONDS_MAX = 300;
 export const URL_AUTH_VALIDITY = { min: 1, max: 31_536_000, default: 1800 } as const;
 export const URL_AUTH_SKEW = { min: 0, max: 600, default: 300 } as const;
 /** Request headers forward authentication sends by default. */
 export const FORWARD_DEFAULT_REQUEST_HEADERS = ["authorization", "cookie"] as const;
 /** Headers nodes add to every forward authentication request (not forwardable). */
-export const FORWARD_NODE_HEADERS = [
+const FORWARD_NODE_HEADERS = [
   "x-original-uri",
   "x-original-method",
   "x-original-host",
   "x-real-ip",
   "x-forwarded-for",
 ] as const;
-export { DEFAULT_SIGN_PARAM, DEFAULT_TIME_PARAM, URL_AUTH_KEY, URL_AUTH_KINDS, URL_AUTH_PARAM };
+
+export { URL_AUTH_KINDS };
 
 export const isUrlAuthKind = (kind: AuthKind): kind is (typeof URL_AUTH_KINDS)[number] =>
   (URL_AUTH_KINDS as readonly string[]).includes(kind);
@@ -78,11 +79,11 @@ export const authScope = z.object({
 });
 
 /** 1-64 printable ASCII characters without ":". */
-export const basicUserName = z
+const basicUserName = z
   .string()
   .regex(/^[\x21-\x39\x3b-\x7e]{1,64}$/, "1-64 printable ASCII characters without ':'");
 /** 8-128 characters (UTF-8 towards nodes), no control characters. */
-export const basicPassword = z
+const basicPassword = z
   .string()
   .refine(
     (value) =>
@@ -92,7 +93,7 @@ export const basicPassword = z
     `${BASIC_PASSWORD_MIN}-${BASIC_PASSWORD_MAX} characters`,
   );
 /** Sent in WWW-Authenticate: 1-64 characters without control characters, `"` or `\`. */
-export const basicRealm = z
+const basicRealm = z
   .string()
   .trim()
   .refine(
@@ -122,7 +123,7 @@ export function defaultRealm(siteName: string): string {
 const FORWARD_URL =
   /^https?:\/\/(?:(?:[A-Za-z0-9-]+\.)*[A-Za-z0-9-]+|\[[0-9A-Fa-f:.]+\])(?::([0-9]{1,5}))?(?:[/?][\x21-\x22\x24-\x5b\x5d-\x7e]*)?$/;
 
-export function validForwardUrl(value: string): boolean {
+function validForwardUrl(value: string): boolean {
   const m = FORWARD_URL.exec(value);
   if (!m) return false;
   if (m[1] !== undefined) {
@@ -202,9 +203,9 @@ const urlAuthBase = {
   signParam: z.string().regex(URL_AUTH_PARAM).default(DEFAULT_SIGN_PARAM),
   timeParam: z.string().regex(URL_AUTH_PARAM).default(DEFAULT_TIME_PARAM),
 };
-export const urlAuthKey = z.string().regex(URL_AUTH_KEY, "16-128 printable ASCII characters");
+const urlAuthKey = z.string().regex(URL_AUTH_KEY, "16-128 printable ASCII characters");
 
-export const authRuleInput = z
+const authRuleInput = z
   .object({
     /** An existing rule: its stored passwords and keys are kept where the input leaves them out. */
     id: uuid.optional(),
@@ -262,7 +263,7 @@ export const authRuleInput = z
       });
   });
 
-export const authRule = z.object({
+const authRule = z.object({
   id: uuid,
   kind: z.enum(AUTH_KINDS),
   enabled: z.boolean(),
@@ -305,7 +306,7 @@ export const authRule = z.object({
     .nullable(),
 });
 
-export const siteAuthRules = z.object({
+const siteAuthRules = z.object({
   siteId: uuid,
   rules: z.array(authRule),
   /** Null until the rules were first saved. */
@@ -325,14 +326,14 @@ export const siteAuthRulesInput = z.object({
 });
 
 /** Former identity headers nodes are to let through again (from formerIdentityHeaders). */
-export const forgetIdentityHeadersInput = z.object({
+const forgetIdentityHeadersInput = z.object({
   id: uuid,
   names: z.array(ruleHeaderName).min(1).max(64),
   expectedUpdatedAt,
 });
 
 /** Signs a URL with a URL rule's primary key, valid for validitySeconds (at most the rule's validity). */
-export const signUrlInput = z.object({
+const signUrlInput = z.object({
   id: uuid,
   ruleId: uuid,
   /** A path ("/...") or an http(s) URL of one of the site's domains. */
@@ -344,17 +345,17 @@ export const signUrlInput = z.object({
     .max(URL_AUTH_VALIDITY.max)
     .optional(),
 });
-export const signedUrl = z.object({
+const signedUrl = z.object({
   url: z.string(),
   expiresAt: isoDateTime,
 });
 
 /** Requests access authentication refused over a range. */
-export const authFailuresInput = z.object({
+const authFailuresInput = z.object({
   id: uuid,
   range: analyticsRange.default("24h"),
 });
-export const authFailures = z.object({
+const authFailures = z.object({
   requests: z.number(),
   /** Active nodes of the site's cluster that do not count them (no access-auth-v1). */
   unsupportedNodes: z.number().int(),
@@ -396,12 +397,10 @@ export const authRulesContract = {
     .output(authFailures),
 };
 
-export type AuthScope = z.infer<typeof authScope>;
 export type AuthRuleInput = z.infer<typeof authRuleInput>;
 export type AuthRule = z.infer<typeof authRule>;
 export type SiteAuthRules = z.infer<typeof siteAuthRules>;
 export type SiteAuthRulesInput = z.infer<typeof siteAuthRulesInput>;
-export type ForwardAuthSettings = z.infer<typeof forwardAuthSettings>;
 export type SignUrlInput = z.infer<typeof signUrlInput>;
 export type ForgetIdentityHeadersInput = z.infer<typeof forgetIdentityHeadersInput>;
 export type SignedUrl = z.infer<typeof signedUrl>;

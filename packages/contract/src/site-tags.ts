@@ -7,12 +7,12 @@ const uuid = z.uuid();
 /** Tags a site carries at most. */
 export const MAX_SITE_TAGS = 10;
 /** Characters (code points) of a tag name at most. */
-export const TAG_NAME_MAX = 32;
+const TAG_NAME_MAX = 32;
 /** Sites one batch operation changes at most (also a whole-site purge task's). */
 export const MAX_BATCH_SITES = 100;
 
 /** A tag name as stored: NFC-normalized, without leading and trailing white space. */
-export const normalizeTagName = (raw: string) => raw.normalize("NFC").trim();
+const normalizeTagName = (raw: string) => raw.normalize("NFC").trim();
 /** What makes two tag names the same tag: the normalized name in lower case. */
 export const tagKey = (raw: string) => normalizeTagName(raw).toLowerCase();
 
@@ -46,7 +46,7 @@ export const siteTagNames = z.array(tagName).max(MAX_SITE_TAGS).transform(unique
 export const siteTagRef = z.object({ id: uuid, name: z.string() });
 
 /** A tag with the number of sites that carry it. */
-export const siteTag = siteTagRef.extend({ sites: z.number().int() });
+const siteTag = siteTagRef.extend({ sites: z.number().int() });
 
 /**
  * A list in a query string: `name[]=a&name[]=b` (bracket notation), or one

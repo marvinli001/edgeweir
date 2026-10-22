@@ -170,7 +170,7 @@ const DIRECTORY_LIMIT = 1024 * 1024;
  * `meta.caaIdentities` (RFC 8555 7.1.1, lowercase names); throws when it is
  * unreachable or not a directory.
  */
-export async function readAcmeDirectory(url: string, caPem: string): Promise<string[]> {
+async function readAcmeDirectory(url: string, caPem: string): Promise<string[]> {
   const ca = caPem ? [...rootCertificates, caPem] : undefined;
   const body = await new Promise<string>((resolve, reject) => {
     const request = https.get(

@@ -52,7 +52,7 @@ const scopes = z
   .max(serviceAccountScope.options.length)
   .transform((values) => [...new Set(values)].sort());
 
-export const serviceAccountKey = z.object({
+const serviceAccountKey = z.object({
   id: uuid,
   name: z.string(),
   /** First characters of the key. */
@@ -62,7 +62,7 @@ export const serviceAccountKey = z.object({
   revokedAt: isoDateTime.nullable(),
 });
 
-export const serviceAccount = z.object({
+const serviceAccount = z.object({
   id: uuid,
   name: z.string(),
   scopes: z.array(serviceAccountScope),

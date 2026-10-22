@@ -19,7 +19,7 @@ import { findSite } from "./sites";
 /** Events a node reports per ReportSecurityEvents call. */
 export const MAX_REPORTED_SECURITY_EVENTS = 500;
 /** A cc_mitigation alert fires at most once per site in this window. */
-export const CC_ALERT_THROTTLE_MS = 15 * 60 * 1000;
+const CC_ALERT_THROTTLE_MS = 15 * 60 * 1000;
 /** Addresses and paths kept per event. */
 const MAX_TOP = 10;
 
@@ -70,7 +70,7 @@ function tops(values: { value: string; count: number }[], ip: boolean) {
 }
 
 /** alert_state key of a site's cc_mitigation alert. */
-export const ccAlertKey = (siteId: string) => `cc_mitigation/${siteId}/${siteId}`;
+const ccAlertKey = (siteId: string) => `cc_mitigation/${siteId}/${siteId}`;
 
 /**
  * Fires cc_mitigation for a site that left the normal level, unless it is

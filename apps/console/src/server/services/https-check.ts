@@ -21,7 +21,7 @@ import type { Executor } from "./revisions";
  * The contact email of a new ACME request: the last ACME account's, else
  * the last request's, else the operator's.
  */
-export async function defaultAcmeEmail(db: Executor): Promise<string> {
+async function defaultAcmeEmail(db: Executor): Promise<string> {
   const [account] = await db
     .select({ email: schema.acmeAccount.email })
     .from(schema.acmeAccount)

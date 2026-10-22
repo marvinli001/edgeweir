@@ -4,12 +4,12 @@ import { normalizeCidr } from "./addresses";
 import { uuid } from "./schemas";
 
 /** Extra HTTP and extra HTTPS listener ports of a cluster, each. */
-export const MAX_EXTRA_LISTEN_PORTS = 16;
+const MAX_EXTRA_LISTEN_PORTS = 16;
 /** The ports every cluster listens on: HTTP 80 and HTTPS 443. */
-export const DEFAULT_HTTP_PORT = 80;
-export const DEFAULT_HTTPS_PORT = 443;
+const DEFAULT_HTTP_PORT = 80;
+const DEFAULT_HTTPS_PORT = 443;
 /** Trusted proxy CIDRs of the header mode. */
-export const MAX_TRUSTED_PROXY_CIDRS = 64;
+const MAX_TRUSTED_PROXY_CIDRS = 64;
 /** Domains of a site the HTTPS redirect may leave alone. */
 export const MAX_REDIRECT_EXCLUDED_DOMAINS = 50;
 /** Status codes of the HTTPS redirect. */
@@ -53,7 +53,7 @@ export const listenPortsInput = z.object({
   httpsPorts: extraPorts,
 });
 
-export const clusterListenPorts = z.object({
+const clusterListenPorts = z.object({
   clusterId: uuid,
   /** Sorted; 80 and 443 are not listed (always there). */
   httpPorts: z.array(z.number().int()),
@@ -88,7 +88,7 @@ const REFUSED_CLIENT_HEADERS = [
   "x-request-id",
 ];
 
-export const clientIpHeader = z
+const clientIpHeader = z
   .string()
   .trim()
   .toLowerCase()
@@ -102,7 +102,7 @@ export const clientIpHeader = z
  * bare address one host). IPv4-mapped IPv6 ranges are refused: write them as
  * IPv4.
  */
-export const trustedProxyCidr = z
+const trustedProxyCidr = z
   .string()
   .trim()
   .transform((text, ctx) => {
@@ -160,9 +160,9 @@ export const clientIpSettings = z
       });
   });
 
-export const clientIpInput = z.object({ clusterId: uuid, settings: clientIpSettings });
+const clientIpInput = z.object({ clusterId: uuid, settings: clientIpSettings });
 
-export const clusterClientIp = z.object({
+const clusterClientIp = z.object({
   clusterId: uuid,
   settings: z.object({
     mode: clientIpMode,

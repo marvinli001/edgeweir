@@ -15,7 +15,7 @@ export const caLabel = (ca: string) =>
         : m.cert_ca_letsencrypt();
 
 /** The CAs a request can choose: the built-in ones, and the custom directory once configured. */
-export function caOptions(settings: CertificateSettings | undefined) {
+function caOptions(settings: CertificateSettings | undefined) {
   const cas: AcmeCa[] = ["letsencrypt", "zerossl", "google"];
   if (settings?.acmeDirectory) cas.push("custom");
   return cas.map((value) => ({ value, label: caLabel(value) }));

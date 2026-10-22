@@ -22,8 +22,8 @@ import { normalizeSerial } from "./nodes";
 import { type Executor, latestRevision, publisher, type Tx } from "./revisions";
 import { defineSetting } from "./settings";
 
-export const PROBE_TOKEN_PREFIX = "ewp_";
-export const PROBE_SETTINGS_KEY = "probes";
+const PROBE_TOKEN_PREFIX = "ewp_";
+const PROBE_SETTINGS_KEY = "probes";
 /** Results per ReportProbeResults call. */
 export const MAX_PROBE_RESULTS = 10_000;
 /** Largest round-trip time accepted (the longest attempt timeout). */
@@ -34,7 +34,7 @@ const RESULT_RETENTION_MS = 3600 * 1000;
 /** The value an upsert would have inserted. */
 const sqlExcluded = (column: string) => sql.raw(`excluded."${column}"`);
 
-export type ProbeMethodName = "tcp" | "http" | "https";
+type ProbeMethodName = "tcp" | "http" | "https";
 export interface ProbeTarget {
   nodeId: string;
   address: string;
@@ -81,7 +81,7 @@ function sh(value: string): string {
  * shell and passed by name, never on the command line) and its identity in
  * a volume of its own.
  */
-export function buildProbeCommand(opts: { serverUrl: string; caSha256: string; token: string }) {
+function buildProbeCommand(opts: { serverUrl: string; caSha256: string; token: string }) {
   return [
     `export EDGEWEIR_TOKEN='${opts.token.replace(/'/g, `'"'"'`)}'`,
     [

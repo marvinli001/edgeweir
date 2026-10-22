@@ -51,7 +51,7 @@ function hex(seed: number, length: number): string {
 // ---------------------------------------------------------------------------------------------
 // Certificates and DNS credentials (kinds 20, 24)
 
-export const dnsCredentials = [
+const dnsCredentials = [
   { id: id(24, 1), name: "dns-webhook", provider: "webhook", zone: "example.com" },
   { id: id(24, 2), name: "powerdns-eu", provider: "powerdns", zone: "example.org" },
   { id: id(24, 3), name: "tsig-example-net", provider: "rfc2136", zone: "example.net" },
@@ -312,7 +312,7 @@ function task(seed: TaskSeed): CacheTask {
 
 const RECOVERED_AT = 7.9 * DAY;
 
-export const cacheTasks: CacheTask[] = [
+const cacheTasks: CacheTask[] = [
   task({
     n: 26,
     at: 12 * SECOND,

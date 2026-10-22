@@ -93,13 +93,13 @@ const staticRewritePath = (s: string) =>
   s.startsWith("/") && !s.startsWith("//") && !/[?\\#]/.test(s);
 
 /** Redirect statuses; 303 needs rules-v3. */
-export const redirectStatusCode = z
+const redirectStatusCode = z
   .union([z.literal(301), z.literal(302), z.literal(303), z.literal(307), z.literal(308)])
   .default(301);
 /** A value expression's source (rules-v3 for header values and query parameters); "" for none. */
 const valueExpression = z.string().max(4096).default("");
 /** A query parameter a redirect or rewrite sets (the node percent-encodes the value). */
-export const queryParam = z
+const queryParam = z
   .object({
     name: z.string().regex(QUERY_NAME_RE),
     /** Printable ASCII, at most 256 characters; empty when `expression` computes it. */
@@ -167,7 +167,7 @@ function checkHeaderValue(
 }
 
 /** Config action fields that only the config phase accepts (rules-v2). */
-export const configPhaseFields = [
+const configPhaseFields = [
   "brotli",
   "zstd",
   "websocket",
@@ -183,7 +183,7 @@ export const configPhaseFields = [
 ] as const;
 
 /** A ban's scope: the request's site, or every site (platform rules only). */
-export const ruleBanScope = z.enum(["site", "platform"]);
+const ruleBanScope = z.enum(["site", "platform"]);
 export const ruleAction = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("block"),
@@ -482,12 +482,12 @@ export const ruleInput = z
   });
 export const ruleDto = ruleInput.safeExtend({ id: uuid });
 /** Most-matched log rules of a site over a range (approximate, bounded per minute). */
-export const loggedRulesInput = z.object({
+const loggedRulesInput = z.object({
   id: uuid,
   range: analyticsRange.default("24h"),
   limit: z.coerce.number().int().min(1).max(50).default(10),
 });
-export const loggedRules = z.object({
+const loggedRules = z.object({
   approximate: z.literal(true),
   items: z.array(
     z.object({
@@ -576,7 +576,7 @@ export const ipListInput = z.object({
   entries,
   kind: z.enum(["collection", "allow", "block"]).default("collection"),
 });
-export const ipListDto = z.object({
+const ipListDto = z.object({
   id: uuid,
   name: z.string(),
   entries: z.array(z.string()),

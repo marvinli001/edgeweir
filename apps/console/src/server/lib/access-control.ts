@@ -52,11 +52,6 @@ export function readAccessControl(
   };
 }
 
-/** Whether a site uses any part of access control (and so needs access-control-v1). */
-export function accessControlUsed(settings: AccessControlSettings): boolean {
-  return accessControlModel(settings, null) !== null;
-}
-
 /**
  * The compiled model of a site's access control: only the parts in use;
  * null when none is, so the site compiles exactly as before. `lists` are

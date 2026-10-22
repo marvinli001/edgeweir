@@ -26,16 +26,14 @@ const ERROR_TEXT: Record<string, () => string> = {
 };
 
 /** Why an address failed its check: the localized code, else the agent's own text. */
-export function channelErrorText(error: NonNullable<NodeChannelStatus["error"]>): string {
+function channelErrorText(error: NonNullable<NodeChannelStatus["error"]>): string {
   return isChannelErrorCode(error.code)
     ? (ERROR_TEXT[error.code]?.() ?? error.message)
     : error.message;
 }
 
 /** The state of a node or probe against the address the console gives out (undefined: loading). */
-export function useNodeChannelState(
-  status: NodeChannelStatus | null,
-): NodeChannelState | undefined {
+function useNodeChannelState(status: NodeChannelStatus | null): NodeChannelState | undefined {
   const channel = useQuery({ ...orpc.settings.nodeChannel.queryOptions(), staleTime: 30_000 });
   if (!channel.data) return undefined;
   return nodeChannelStateOf(status, {

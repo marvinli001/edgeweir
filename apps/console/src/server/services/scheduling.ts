@@ -23,7 +23,7 @@ import type { Executor, Tx } from "./revisions";
 /** The worker evaluates every cluster this often (and after each probe report). */
 export const SCHEDULING_INTERVAL_MS = 10_000;
 /** Node metrics older than this (four missed heartbeats) count as missing. */
-export const METRICS_FRESH_MS = 60_000;
+const METRICS_FRESH_MS = 60_000;
 /** A probe report evaluates its clusters at most this often per console process. */
 const TRIGGER_DEBOUNCE_MS = 2000;
 
@@ -545,7 +545,7 @@ export async function evaluateScheduling(
 }
 
 /** Writes the clusters' DNS now (each binding under its own lease), logging failures. */
-export async function writeClusterDns(app: AppContext, clusterIds: readonly string[]) {
+async function writeClusterDns(app: AppContext, clusterIds: readonly string[]) {
   for (const clusterId of clusterIds)
     await reconcileBinding(app, clusterId).catch((error: unknown) =>
       app.log.warn("scheduled DNS write failed", { clusterId, error }),

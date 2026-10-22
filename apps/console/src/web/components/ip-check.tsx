@@ -96,7 +96,7 @@ function Section({
  * the IP lists that contain it (with the entries), the active bans that cover it and how each
  * cluster's client address setting sees it. GeoIP is not looked up.
  */
-export function IpCheckResultView({ result }: { result: IpCheckResult }) {
+function IpCheckResultView({ result }: { result: IpCheckResult }) {
   const verdict = result.verdict;
   const outcome = verdict ? OUTCOMES[verdict.outcome] : null;
   return (
@@ -194,7 +194,7 @@ export function IpCheckResultView({ result }: { result: IpCheckResult }) {
  * An address (and a site, fixed by `siteId` or picked when `pickSite`) to check, then the result.
  * The result is a query, so it follows changes of the lists and the site's settings.
  */
-export function IpCheckPanel({ siteId, pickSite }: { siteId?: string; pickSite?: boolean }) {
+function IpCheckPanel({ siteId, pickSite }: { siteId?: string; pickSite?: boolean }) {
   const [ip, setIp] = React.useState("");
   const [site, setSite] = React.useState<SiteChoice | null>(null);
   const [checked, setChecked] = React.useState<{ ip: string; siteId?: string } | null>(null);

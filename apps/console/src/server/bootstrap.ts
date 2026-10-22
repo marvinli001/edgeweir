@@ -105,7 +105,7 @@ export function warnConsoleUrls(
 }
 
 /** The whole shutdown, after which the process exits with 1. */
-export const SHUTDOWN_TIMEOUT_MS = 8000;
+const SHUTDOWN_TIMEOUT_MS = 8000;
 
 /**
  * Stops the HTTP listener and closes idle connections at once; requests in

@@ -78,7 +78,7 @@ pnpm --filter @edgeweir/console exec playwright install chromium
 
 | Command | Effect | When to run |
 | --- | --- | --- |
-| `pnpm lint` | Biome check and format verification, `buf lint proto` | Before every commit |
+| `pnpm lint` | Biome check and format verification, `buf lint proto`, knip (unused files, exports and dependencies) | Before every commit |
 | `pnpm format` | Biome auto-fix (`biome check --write .`) | When `pnpm lint` reports formatting |
 | `pnpm typecheck` | Generates Paraglide messages and the route tree, then type-checks the whole workspace | Before every commit |
 | `pnpm test` | Vitest unit and integration tests; PostgreSQL is in-process PGlite, no Docker; with `TEST_DATABASE_URL` set, also the concurrent transaction tests | Before every commit |
@@ -125,7 +125,7 @@ Tests enforce these conventions:
 | Third-party images pinned by digest, Actions by commit SHA | `apps/console/test/server/supply-chain-pins.test.ts` |
 | The compose templates embedded in `deploy.sh` match the repository files byte for byte | `apps/console/test/server/deploy-script.test.ts` |
 | Relative doc links resolve; the `ARCHITECTURE.md` data model lists every migration and table | `apps/console/test/server/docs.test.ts` |
-| Migrations have contiguous numbers, increasing timestamps, and one SQL file plus one snapshot each | `packages/db/test/migrations.test.ts` |
+| Migrations have contiguous numbers, increasing timestamps, one SQL file each, and only the newest snapshot | `packages/db/test/migrations.test.ts` |
 
 Every new API procedure has a Vitest case.
 
@@ -298,7 +298,7 @@ feat(console)!: drop the public landing page from the open core
    pnpm db:generate
    ```
 
-3. Commit the new SQL file and `meta/` snapshot in `packages/db/migrations` together with the schema change.
+3. Commit the new SQL file, `meta/_journal.json` and the new `meta/` snapshot in `packages/db/migrations` together with the schema change. `pnpm db:generate` deletes the previous snapshot; drizzle-kit only diffs against the newest one.
 4. List the new migration file name and any new table names in the data model section of `ARCHITECTURE.md`.
 5. Verify.
 
@@ -393,7 +393,7 @@ Version pinning, upgrades, and rollback: [Versions, upgrades, and rollback](docs
 - [ ] `pnpm lint`, `pnpm typecheck`, and `pnpm test` pass; `pnpm build` and `pnpm e2e` run as listed in [Commands](#commands).
 - [ ] Commits follow the [commit conventions](#commit-conventions).
 - [ ] UI copy is updated in both zh-CN and en; new error codes have messages.
-- [ ] Schema changes include the migration SQL, the snapshot, and the `ARCHITECTURE.md` data model update.
+- [ ] Schema changes include the migration SQL, the new snapshot, and the `ARCHITECTURE.md` data model update.
 - [ ] New environment variables are in `env.ts`, `.env.example`, and the environment variables reference.
 - [ ] Management actions write the audit log.
 - [ ] UI changes include screenshots.

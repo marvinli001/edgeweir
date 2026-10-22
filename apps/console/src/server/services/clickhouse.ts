@@ -64,7 +64,7 @@ export async function clickhouse(
   return Buffer.concat(chunks).toString("utf8");
 }
 const ready = new WeakMap<Env, Promise<void>>();
-export async function ensureClickHouse(env: Env) {
+async function ensureClickHouse(env: Env) {
   if (env.EDGEWEIR_ANALYTICS !== "clickhouse") return;
   let job = ready.get(env);
   if (!job) {

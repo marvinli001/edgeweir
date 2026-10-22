@@ -89,7 +89,7 @@ export const extension = z
   .pipe(z.string().regex(/^[a-z0-9]{1,16}$/, "invalid file extension"));
 
 /** An exact URI path, e.g. "/index.html". */
-export const exactPath = pathPrefix;
+const exactPath = pathPrefix;
 
 /** Host name used as TLS SNI or Host override; empty means derived. */
 export const optionalHostname = z
@@ -108,7 +108,7 @@ export const hostName = domainName.refine(
 /** RFC 7230 token, used for header and cookie names in cache keys. */
 const TOKEN_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,64}$/;
 
-export const headerName = z
+const headerName = z
   .string()
   .trim()
   .toLowerCase()
@@ -118,25 +118,25 @@ export const headerName = z
     "use the cookie and host options instead",
   );
 
-export const cookieName = z.string().trim().regex(TOKEN_RE, "invalid cookie name");
+const cookieName = z.string().trim().regex(TOKEN_RE, "invalid cookie name");
 
-export const queryParamName = z
+const queryParamName = z
   .string()
   .trim()
   .min(1)
   .max(128)
   .refine((value) => !/[\s&=#]/.test(value), "invalid query parameter name");
 
-export const originScheme = z.enum(["http", "https"]);
+const originScheme = z.enum(["http", "https"]);
 /** HTTP version of a site's requests to its origins. */
-export const originProtocol = z.enum(["http1", "http2"]);
-export const loadBalancePolicy = z.enum(["weighted_random", "round_robin", "consistent_hash"]);
-export const cacheAction = z.enum(["cache", "bypass"]);
-export const originCacheControl = z.enum(["override", "respect"]);
-export const applyState = z.enum(["applying", "applied", "failed"]);
+const originProtocol = z.enum(["http1", "http2"]);
+const loadBalancePolicy = z.enum(["weighted_random", "round_robin", "consistent_hash"]);
+const cacheAction = z.enum(["cache", "bypass"]);
+const originCacheControl = z.enum(["override", "respect"]);
+const applyState = z.enum(["applying", "applied", "failed"]);
 
 /** S3-compatible object storage: requests are signed with AWS Signature V4. */
-export const s3Input = z.object({
+const s3Input = z.object({
   region: z
     .string()
     .trim()
@@ -185,7 +185,7 @@ export const originInput = originFields.transform((origin) => ({
 }));
 
 /** A site's origins: 1 to 32, at least one of them in the default group. */
-export const siteOrigins = z
+const siteOrigins = z
   .array(originInput)
   .min(1)
   .max(32)
@@ -196,7 +196,7 @@ export const siteOrigins = z
 const MAX_TTL = 365 * 24 * 3600;
 const MAX_STALE = 30 * 24 * 3600;
 /** Longest cache rule condition (characters). */
-export const CACHE_EXPRESSION_MAX_LENGTH = 16384;
+const CACHE_EXPRESSION_MAX_LENGTH = 16384;
 
 const sameSet = (a: string[], b: string[]) =>
   [...new Set(a)].sort().join("\u0000") === [...new Set(b)].sort().join("\u0000");
@@ -288,7 +288,7 @@ export const cacheRuleInput = z
   });
 
 /** Absolute path with an optional query: 1-1024 printable ASCII bytes without spaces. */
-export const HEALTH_CHECK_PATH_RE = /^\/[\x21-\x7e]{0,1023}$/;
+const HEALTH_CHECK_PATH_RE = /^\/[\x21-\x7e]{0,1023}$/;
 
 /**
  * Active health checks of an origin pool, run by the agent of every node
@@ -385,7 +385,7 @@ export const originSettings = z.object({
 });
 
 /** exclude: every parameter but queryParams (site-content-v1). */
-export const cacheKeyQuery = z.enum(["all", "ignore", "include", "exclude"]);
+const cacheKeyQuery = z.enum(["all", "ignore", "include", "exclude"]);
 
 /** How the cache key of every request of a site is composed. */
 export const cacheKeyPolicy = z
@@ -506,7 +506,7 @@ export const contentSettings = z.object({
  * and its cluster's extra HTTP ports, 443 and its extra HTTPS ports. HTTPS
  * ports serve only with a certificate. Default: 80 and 443.
  */
-export const sitePorts = z.object({
+const sitePorts = z.object({
   http: z
     .array(port)
     .max(17)
@@ -540,13 +540,13 @@ export const siteCreateInput = z.object({
   tags: siteTagNames.default([]),
 });
 
-export const origin = originFields.omit({ s3: true }).extend({
+const origin = originFields.omit({ s3: true }).extend({
   id: uuid,
   port,
   /** Secrets are never returned. */
   s3: z.object({ region: z.string(), bucket: z.string(), accessKeyId: z.string() }).nullable(),
 });
-export const cacheRule = z.object({
+const cacheRule = z.object({
   id: uuid,
   priority: z.number().int(),
   /** The request condition; "true" matches every request. */
@@ -569,7 +569,7 @@ export const cacheRule = z.object({
 });
 
 /** Whether the site's configuration runs on its cluster's online nodes. */
-export const siteDelivery = z.object({
+const siteDelivery = z.object({
   /**
    * disabled; pending: no online node runs the site yet; partial: some online
    * nodes run an older version of it or have an unhealthy data plane; live:
@@ -594,7 +594,7 @@ export const siteDelivery = z.object({
 });
 
 /** Where a name points compared with the addresses of its cluster's nodes (lib/dns-check). */
-export const dnsPointing = z.enum(["ok", "elsewhere", "unresolved", "unknown", "unchecked"]);
+const dnsPointing = z.enum(["ok", "elsewhere", "unresolved", "unknown", "unchecked"]);
 
 /**
  * What a site needs to serve its domains: DNS pointing to the cluster's
@@ -696,7 +696,7 @@ export const revision = z.object({
 const changedSite = z.object({ id: uuid, name: z.string() });
 
 /** The sites one configuration adds, changes and removes against another (by name). */
-export const siteChanges = z.object({
+const siteChanges = z.object({
   added: z.array(changedSite),
   changed: z.array(changedSite),
   removed: z.array(changedSite),
@@ -766,11 +766,7 @@ export const clusterUpdateInput = z.object({
 
 /** Cache zone sizes: 1 GiB to 64 TiB. */
 export const CACHE_SIZE_GB_RANGE = { min: 1, max: 65_536 } as const;
-export const cacheSizeGb = z
-  .number()
-  .int()
-  .min(CACHE_SIZE_GB_RANGE.min)
-  .max(CACHE_SIZE_GB_RANGE.max);
+const cacheSizeGb = z.number().int().min(CACHE_SIZE_GB_RANGE.min).max(CACHE_SIZE_GB_RANGE.max);
 
 /**
  * The cluster's cache zone: its size on every node and how long unrequested
@@ -838,7 +834,7 @@ export const nodeGroupUpdateInput = z.object({
 });
 
 /** Configuration canary policy of a cluster. */
-export const rolloutPolicy = z.object({
+const rolloutPolicy = z.object({
   enabled: z.boolean(),
   /** Observation window. */
   windowSeconds: z.number().int().min(60).max(3600),
@@ -851,7 +847,7 @@ export const rolloutPolicy = z.object({
   minRequests: z.number().int().min(1).max(1_000_000),
 });
 
-export const rolloutState = z.enum([
+const rolloutState = z.enum([
   "idle",
   "canary",
   "awaiting_promotion",
@@ -860,7 +856,7 @@ export const rolloutState = z.enum([
   "direct",
 ]);
 
-export const rolloutOutcome = z.enum([
+const rolloutOutcome = z.enum([
   "",
   "auto_promote",
   "manual_promote",
@@ -924,7 +920,7 @@ export const clusterRollout = z.object({
 export const rolloutPolicyInput = rolloutPolicy.extend({ id: uuid, expectedUpdatedAt });
 
 /** How a node holds the dynamic bans, from its last heartbeat (nodes with bans-v1). */
-export const nodeBanStatus = z.object({
+const nodeBanStatus = z.object({
   /** Highest ban sequence applied to the data plane (decimal). */
   appliedSequence: z.string(),
   entries: z.number().int(),
@@ -940,7 +936,7 @@ export const nodeBanStatus = z.object({
 });
 
 /** Host metrics of a node's last heartbeat (nodes with metrics-v1). */
-export const nodeMetrics = z.object({
+const nodeMetrics = z.object({
   /** CPU used by the whole host, 0-100. */
   cpuPercent: z.number(),
   load1: z.number(),
@@ -959,7 +955,7 @@ export const nodeMetrics = z.object({
  * a level) or, without configured ones, a public address the node reports
  * (level 0). `reachable` is false while the probes count it as down.
  */
-export const nodeSchedulingAddress = z.object({
+const nodeSchedulingAddress = z.object({
   address: z.string(),
   level: z.number().int(),
   source: z.enum(["reported", "configured"]),
@@ -973,7 +969,7 @@ export const certificateFailureReason = z.enum([
   "unavailable",
 ]);
 
-export const nodeCertificateFailure = z.object({
+const nodeCertificateFailure = z.object({
   certificateId: uuid,
   /** "" when the certificate no longer exists. */
   certificateName: z.string(),
@@ -1022,14 +1018,7 @@ export const nodeChannelStatus = z.object({
  * (an agent without channel-follow-v1 on another address), unknown (no
  * connection seen yet).
  */
-export const nodeChannelState = z.enum([
-  "current",
-  "pending",
-  "failed",
-  "fallback",
-  "upgrade",
-  "unknown",
-]);
+const nodeChannelState = z.enum(["current", "pending", "failed", "fallback", "upgrade", "unknown"]);
 
 export const node = z.object({
   id: uuid,
@@ -1141,7 +1130,7 @@ export const enrollmentTokenInput = z.object({
 });
 
 /** Why nodes on other networks may not reach the console URL or the node channel URL. */
-export const consoleUrlWarning = z.enum(CONSOLE_URL_WARNINGS);
+const consoleUrlWarning = z.enum(CONSOLE_URL_WARNINGS);
 
 export const enrollmentTokenResult = z.object({
   tokenId: uuid,
@@ -1184,7 +1173,7 @@ export const ATTENTION_KINDS = [
  * failed to apply, data plane down, refused certificate), lagging behind
  * their target revision, or without an address DNS can use.
  */
-export const attentionItem = z.object({
+const attentionItem = z.object({
   kind: z.enum(ATTENTION_KINDS),
   clusterId: uuid,
   clusterName: z.string(),
@@ -1221,9 +1210,9 @@ const trafficCounters = {
   status5xx: z.number().int(),
 };
 
-export const trafficPoint = z.object({ time: isoDateTime, ...trafficCounters });
+const trafficPoint = z.object({ time: isoDateTime, ...trafficCounters });
 
-export const trafficTotals = z.object({
+const trafficTotals = z.object({
   ...trafficCounters,
   /** Egress of the busiest bucket, in bytes per second. */
   peakBytesPerSecond: z.number(),
@@ -1280,7 +1269,7 @@ export const trafficBreakdownInput = z.object({
 });
 
 /** One site, node, status code or block reason with its share of the metric. */
-export const trafficBreakdownItem = z.object({
+const trafficBreakdownItem = z.object({
   /** Site or node id, the status code ("404") or the block reason ("cc"). */
   id: z.string(),
   name: z.string(),
@@ -1367,7 +1356,7 @@ export const nodeChannelCheck = z.object({
 });
 
 /** A node channel URL: `https://`, `wss://` or `ws://host[:port]` without a path (nodeChannelOrigin). */
-export const nodeChannelUrl = z
+const nodeChannelUrl = z
   .string()
   .max(2048)
   .refine((value) => nodeChannelOrigin(value) !== undefined);
@@ -1450,7 +1439,7 @@ export const releaseSourceInput = z.object({
   url: z.union([z.literal(""), releaseBaseUrl]),
 });
 
-export const auditLogEntry = z.object({
+const auditLogEntry = z.object({
   id: z.number().int(),
   occurredAt: isoDateTime,
   actorType: z.string(),
@@ -1536,7 +1525,7 @@ export const siteUpdateInput = z.object({
 const errorParams = z.record(z.string(), z.string());
 
 /** Which check reported an origin's state: real traffic (passive) or the agent's probes (active). */
-export const originHealthSource = z.enum(["passive", "active"]);
+const originHealthSource = z.enum(["passive", "active"]);
 
 /** Health of one origin as reported by the nodes (passive and active checks). */
 export const originHealth = z.object({
@@ -1575,18 +1564,10 @@ export const originHealth = z.object({
  * load URLs into the cache. host and tag need nodes with purge-tag-v1;
  * sitemap, and prefetching the mobile variant, need prefetch-v2.
  */
-export const cacheTaskType = z.enum([
-  "url",
-  "prefix",
-  "site",
-  "prefetch",
-  "host",
-  "tag",
-  "sitemap",
-]);
-export const cacheTaskState = z.enum(["pending", "running", "succeeded", "failed"]);
+const cacheTaskType = z.enum(["url", "prefix", "site", "prefetch", "host", "tag", "sitemap"]);
+const cacheTaskState = z.enum(["pending", "running", "succeeded", "failed"]);
 /** A node's delivery: also "skipped" when the node was disabled before it ran the task. */
-export const cacheTaskNodeState = z.enum(["pending", "running", "succeeded", "failed", "skipped"]);
+const cacheTaskNodeState = z.enum(["pending", "running", "succeeded", "failed", "skipped"]);
 /** Device class of a prefetch request; mobile only differs for cache keys with deviceType. */
 export const prefetchVariant = z.enum(["desktop", "mobile"]);
 
@@ -1594,11 +1575,9 @@ export const MAX_CACHE_TASK_URLS = 500;
 export const MAX_CACHE_TASK_HOSTS = 500;
 export const MAX_CACHE_TASK_TAGS = 500;
 /** Sites one task purges entirely (site) or by tag (tag). */
-export const MAX_CACHE_TASK_SITES = 100;
+const MAX_CACHE_TASK_SITES = 100;
 /** URLs a sitemap task prefetches at most (each in every variant). */
 export const SITEMAP_MAX_URLS = { min: 1, max: 10_000, default: 1000 } as const;
-/** A Cache-Tag value: 1-128 bytes of printable ASCII without commas. */
-export const CACHE_TAG_MAX_BYTES = 128;
 
 /**
  * A Cache-Tag value as nodes compare it: trimmed and lowercased (ASCII
@@ -1657,7 +1636,7 @@ export const cacheTaskCreateInput = z
     }
   });
 
-export const cacheTaskNode = z.object({
+const cacheTaskNode = z.object({
   nodeId: uuid,
   nodeName: z.string(),
   state: cacheTaskNodeState,
@@ -1674,7 +1653,7 @@ export const cacheTaskNode = z.object({
 });
 
 /** purge_method: a PURGE request a node accepted (createdByName is the node). */
-export const cacheTaskSource = z.enum(["user", "recovery", "purge_method"]);
+const cacheTaskSource = z.enum(["user", "recovery", "purge_method"]);
 
 export const cacheTask = z.object({
   id: uuid,
@@ -1757,19 +1736,16 @@ export type DnsPointing = z.infer<typeof dnsPointing>;
 export type Cluster = z.infer<typeof cluster>;
 export type Node = z.infer<typeof node>;
 export type Revision = z.infer<typeof revision>;
-export type Overview = z.infer<typeof overview>;
 export type AnalyticsRange = z.infer<typeof analyticsRange>;
 export type TrafficPoint = z.infer<typeof trafficPoint>;
 export type TrafficTotals = z.infer<typeof trafficTotals>;
 export type Traffic = z.infer<typeof traffic>;
 export type TrafficTopItem = z.infer<typeof trafficTopItem>;
 export type TrafficBreakdownInput = z.infer<typeof trafficBreakdownInput>;
-export type TrafficBreakdownItem = z.infer<typeof trafficBreakdownItem>;
 export type TrafficBreakdown = z.infer<typeof trafficBreakdown>;
 export type StarredSite = z.infer<typeof starredSite>;
 export type EnrollmentTokenResult = z.infer<typeof enrollmentTokenResult>;
 export type EnrollmentTokenStatus = z.infer<typeof enrollmentTokenStatus>;
-export type Settings = z.infer<typeof settings>;
 export type ReleaseSource = z.infer<typeof releaseSource>;
 export type ReleaseSourceInput = z.infer<typeof releaseSourceInput>;
 export type NodeChannel = z.infer<typeof nodeChannel>;
@@ -1791,10 +1767,7 @@ export type Region = z.infer<typeof region>;
 export type Me = z.infer<typeof me>;
 export type SiteUpdateInput = z.input<typeof siteUpdateInput>;
 export type SitePorts = z.infer<typeof sitePorts>;
-export type Origin = z.infer<typeof origin>;
 export type CacheRule = z.infer<typeof cacheRule>;
-export type OriginInput = z.input<typeof originInput>;
-export type CacheRuleInput = z.input<typeof cacheRuleInput>;
 export type OriginSettings = z.infer<typeof site>["originSettings"];
 export type OriginProtocol = z.infer<typeof originProtocol>;
 export type ActiveHealthCheck = OriginSettings["activeHealthCheck"];

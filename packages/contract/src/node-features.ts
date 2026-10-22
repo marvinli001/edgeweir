@@ -80,7 +80,7 @@ export const CERTIFICATE_ISOLATION_FEATURE = "certificate-isolation-v1";
  * rules, body limits without Content-Length, certificate isolation): an
  * online node without one of them is recommended for an upgrade.
  */
-export const RECOMMENDED_NODE_FEATURES = [
+const RECOMMENDED_NODE_FEATURES = [
   AUTH_IDENTITY_HEADERS_FEATURE,
   CERTIFICATE_ISOLATION_FEATURE,
 ] as const;

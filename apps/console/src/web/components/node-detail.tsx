@@ -54,7 +54,7 @@ const LEVELS = [0, 1, 2] as const;
 /** Nodes renew a third of the way before expiry (10 of 30 days): less means renewal is failing. */
 const CERT_WARN_MS = 10 * 24 * 3600 * 1000;
 
-export const levelLabel = (level: number) =>
+const levelLabel = (level: number) =>
   level === 0
     ? m.node_address_level_0()
     : level === 1
@@ -100,7 +100,7 @@ export function CertificateFailuresBadge({ node }: { node: Node }) {
 }
 
 /** Used share of a node's memory, 0-100; null without a total. */
-export const memoryPercent = (metrics: NonNullable<Node["metrics"]>) =>
+const memoryPercent = (metrics: NonNullable<Node["metrics"]>) =>
   metrics.memoryTotalBytes > 0 ? (metrics.memoryUsedBytes / metrics.memoryTotalBytes) * 100 : null;
 
 /** CPU or memory use from which a node's load is a warning, and from which an error. */

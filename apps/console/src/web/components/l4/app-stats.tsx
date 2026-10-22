@@ -34,7 +34,7 @@ function trend(points: L4Stats["points"], key: Counter, max = 60): number[] {
   return out;
 }
 
-export const isL4StatsRange = (value: string): value is L4StatsRange =>
+const isL4StatsRange = (value: string): value is L4StatsRange =>
   (L4_STATS_RANGES as readonly string[]).includes(value);
 
 type Counter = "connections" | "refused" | "peakConcurrent" | "bytesReceived" | "bytesSent";

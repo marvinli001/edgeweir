@@ -11,7 +11,7 @@ const LABEL = /^[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?$/;
 const IPV4 = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 
 /** A lowercase host name (labels of [a-z0-9_-], at most 253 bytes) or an IPv4 address. */
-export function validHostName(host: string): boolean {
+function validHostName(host: string): boolean {
   if (host.length === 0 || host.length > 253) return false;
   if (IPV4.test(host)) return true;
   return host.split(".").every((label) => LABEL.test(label));
@@ -275,7 +275,7 @@ export interface GeoRecord {
 }
 
 /** Whether a client's GeoIP record matches any of the lists. */
-export function geoMatches(cfg: GeoAccessModel, geo: GeoRecord): boolean {
+function geoMatches(cfg: GeoAccessModel, geo: GeoRecord): boolean {
   if (geo.country !== "" && cfg.countries.includes(geo.country)) return true;
   if (geo.country !== "" && geo.subdivision !== "") {
     const key = asciiLower(`${geo.country}-${geo.subdivision}`);

@@ -19,7 +19,7 @@ const DEC_OCTET = /^(?:0|[1-9][0-9]{0,2})$/;
 const HEXTET = /^[0-9a-f]{1,4}$/i;
 
 /** Strict dotted-quad IPv4 ("10.0.0.1"): four decimal octets, no leading zeros. */
-export function parseIPv4(text: string): Uint8Array | null {
+function parseIPv4(text: string): Uint8Array | null {
   const parts = text.split(".");
   if (parts.length !== 4) return null;
   const bytes = new Uint8Array(4);
@@ -36,7 +36,7 @@ export function parseIPv4(text: string): Uint8Array | null {
  * IPv6 text form (RFC 4291 section 2.2): hex groups, one "::", and an
  * optional dotted IPv4 in the last 32 bits. Zone ids are not accepted.
  */
-export function parseIPv6(text: string): Uint8Array | null {
+function parseIPv6(text: string): Uint8Array | null {
   if (text.length < 2 || text.length > 45 || !/^[0-9a-f:.]+$/i.test(text)) return null;
   const halves = text.split("::");
   if (halves.length > 2) return null;
@@ -201,7 +201,7 @@ const parsedRanges = [...SPECIAL_PURPOSE_IPV4, ...SPECIAL_PURPOSE_IPV6].map((tex
 const EMBEDDING_PREFIXES = [parseCidr("::ffff:0:0/96"), parseCidr("64:ff9b::/96")];
 
 /** The IPv4 address inside an IPv4-mapped or NAT64 IPv6 address, or null. */
-export function embeddedIPv4(ip: IpAddress): IpAddress | null {
+function embeddedIPv4(ip: IpAddress): IpAddress | null {
   if (ip.version !== 6) return null;
   if (!EMBEDDING_PREFIXES.some((p) => p && cidrContains(p, ip))) return null;
   return { version: 4, bytes: ip.bytes.slice(12) };
@@ -233,7 +233,7 @@ export function unicastAddress(text: string): string | null {
 }
 
 /** Host names that always mean the node itself (RFC 6761 section 6.3). */
-export function isLocalhostName(host: string): boolean {
+function isLocalhostName(host: string): boolean {
   const name = host.toLowerCase().replace(/\.$/, "");
   return name === "localhost" || name.endsWith(".localhost");
 }

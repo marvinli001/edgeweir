@@ -10,7 +10,7 @@ import { cidr } from "./schemas";
  */
 export const MAX_LOGIN_ALLOWED_CIDRS = 64;
 
-export const loginAllowList = z.object({
+const loginAllowList = z.object({
   /** Sorted, without duplicates; empty when the list is off. */
   cidrs: z.array(z.string()),
   /** The caller's address as the console resolves it (EDGEWEIR_TRUSTED_PROXIES). */

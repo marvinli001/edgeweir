@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
-export const urlWarningText = (warning: ConsoleUrlWarning) =>
+const urlWarningText = (warning: ConsoleUrlWarning) =>
   ({
     console_url_local: m.url_warning_console_url_local,
     console_url_private: m.url_warning_console_url_private,

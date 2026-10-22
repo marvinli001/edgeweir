@@ -94,7 +94,7 @@ const recordKey = (r: { name: string; type: string; data: string; ttl: number; l
   `${nameKey(r)}|${r.data}|${r.ttl}${lineOf(r) ? `|${lineOf(r)}` : ""}`;
 const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 /** A name relative to the zone ("@" for the apex); DNS_ZONE_MISMATCH outside it. */
-export function relative(name: string, zone: string) {
+function relative(name: string, zone: string) {
   if (name === zone) return "@";
   if (!name.endsWith(`.${zone}`)) fail("DNS_ZONE_MISMATCH", "DNS name is outside the zone");
   return name.slice(0, -zone.length - 1);
@@ -360,7 +360,7 @@ async function assertLabelsFree(tx: Tx, policy: BindingPolicy) {
 }
 
 /** How long a node may lag a new target (applying it, or not told yet) and keep its records. */
-export const DNS_APPLY_GRACE_MS = 2 * 60_000;
+const DNS_APPLY_GRACE_MS = 2 * 60_000;
 type Receipt = typeof schema.nodeConfigStatus.$inferSelect;
 type TargetRevision = { revision: number; contentHash: string; createdAt: Date };
 /**
@@ -395,7 +395,7 @@ function servesTarget(
  * cluster's plan: nodes removed from a line ("*": every line), nodes forced
  * to their next address level, lines switched to their backup groups.
  */
-export async function schedulingEffects(db: Executor, clusterId: string) {
+async function schedulingEffects(db: Executor, clusterId: string) {
   const rows = await db
     .select({
       nodeId: schema.schedulingState.nodeId,
@@ -1096,7 +1096,7 @@ export async function saveBinding(
   });
 }
 /** DNS revisions kept per binding (as many as its history lists). */
-export const DNS_REVISION_RETENTION = 200;
+const DNS_REVISION_RETENTION = 200;
 /**
  * Deletes DNS revisions beyond the newest `keep` of each binding. The
  * desired and applied revisions and a held-back one stay.
@@ -1571,7 +1571,7 @@ async function settleReconcileFailure(tx: Executor, clusterId: string) {
 }
 
 /** How long reconciling one cluster on request waits for a run already in progress. */
-export const DNS_RECONCILE_WAIT_MS = 30_000;
+const DNS_RECONCILE_WAIT_MS = 30_000;
 
 /**
  * Reconciles every binding that is automatic or still owns records, four at

@@ -10,13 +10,13 @@ import * as z from "zod";
  * Precedence: exact > wildcard > suffix (longer first) > regex (site creation
  * time, then the site's domain order).
  */
-export const DOMAIN_KINDS = ["exact", "wildcard", "suffix", "regex"] as const;
+const DOMAIN_KINDS = ["exact", "wildcard", "suffix", "regex"] as const;
 export type DomainKind = (typeof DOMAIN_KINDS)[number];
 
 export const MAX_SITE_DOMAINS = 50;
 /** Regex domains per site; they count towards MAX_SITE_DOMAINS. */
 export const MAX_REGEX_DOMAINS = 10;
-export const MAX_DOMAIN_PATTERN_LENGTH = 256;
+const MAX_DOMAIN_PATTERN_LENGTH = 256;
 
 export interface SiteDomainParts {
   kind: DomainKind;
@@ -50,7 +50,7 @@ export type ToAscii = (host: string) => string | null;
  * (UTS #46, nontransitional) and only refused when it holds characters no
  * host name has.
  */
-export const previewAscii: ToAscii = (host) => {
+const previewAscii: ToAscii = (host) => {
   // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are refused
   if (!host || /[\u0000-\u001f\u007f]/.test(host)) return null;
   if (/^[\x20-\x7e]*$/.test(host) && !/(?:^|\.)xn--/i.test(host)) {
@@ -275,7 +275,7 @@ export function domainPatternError(pattern: string): string | null {
 }
 
 /** Repeating quantifiers (*, +, {n,} and {n,m} with m > 1) a domain pattern may hold. */
-export const MAX_PATTERN_REPEATS = 2;
+const MAX_PATTERN_REPEATS = 2;
 /** The product of a pattern's alternatives and optional parts (patternBranches) may reach this. */
 export const MAX_PATTERN_BRANCHES = 16;
 
@@ -492,7 +492,7 @@ export function inPatternOrder<
 }
 
 /** The longest host name patterns are tried on (a DNS name). */
-export const MAX_PATTERN_HOST = 253;
+const MAX_PATTERN_HOST = 253;
 
 export interface HostMatcher<T> {
   exact: Map<string, T>;

@@ -40,13 +40,7 @@ export function PanelHeader({
 }
 
 /** "↗ 50.3%" against the previous period, green or red by whether that direction is good. */
-export function ChangeIndicator({
-  change,
-  better,
-}: {
-  change: number | null;
-  better: "up" | "down";
-}) {
+function ChangeIndicator({ change, better }: { change: number | null; better: "up" | "down" }) {
   if (change === null || !Number.isFinite(change)) return null;
   const text = formatPercent(Math.abs(change) * 100);
   if (text === formatPercent(0)) {

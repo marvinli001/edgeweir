@@ -91,7 +91,7 @@ function isNetworkError(error: unknown): boolean {
 }
 
 /** Which status page an error that reached a route's error boundary gets. */
-export function statusKindOf(error: unknown): StatusKind {
+function statusKindOf(error: unknown): StatusKind {
   const status = httpStatus(error);
   if (status === 403) return "forbidden";
   if (status === 404) return "not-found";
@@ -170,7 +170,7 @@ function Marks({ shape }: { shape: Shape }) {
 }
 
 /** One fact under the instrument: a label over a monospace value. */
-export interface StatusFact {
+interface StatusFact {
   label: string;
   value: string;
   copy?: boolean;
@@ -180,7 +180,7 @@ export interface StatusFact {
  * The instrument itself. `surface` sets where it sits: the whole window (`screen`, with its own
  * theme toggle), the sidebar inset below a bare header (`shell`), or a page's content (`inline`).
  */
-export function StatusPage({
+function StatusPage({
   kind,
   code,
   facts,

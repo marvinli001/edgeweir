@@ -12,7 +12,7 @@ import {
  * characters, but the builder's expression of long structured lists (and so
  * the migrated rules) can be longer; they stay valid.
  */
-export const STORED_CACHE_EXPRESSION_MAX = 131_072;
+const STORED_CACHE_EXPRESSION_MAX = 131_072;
 
 /** Parses a stored (or contract-validated) cache rule condition; throws ExpressionError. */
 export function parseCacheCondition(source: string): Expression {

@@ -17,9 +17,7 @@ export const ERROR_PAGES_V1_STATUSES = [403, 429, 502, 503, 504] as const;
 /** Pages for every 4xx or 5xx status without a page of its own. */
 export const ERROR_PAGE_CLASSES = ["4xx", "5xx"] as const;
 /** Longest redirect URL of an error page. */
-export const ERROR_PAGE_REDIRECT_MAX = 2048;
-/** Placeholders of an error page's redirect URL, replaced with percent-encoded values. */
-export const ERROR_PAGE_REDIRECT_PLACEHOLDERS = ["{{status}}", "{{request_id}}"] as const;
+const ERROR_PAGE_REDIRECT_MAX = 2048;
 /** Templates are at most 64 KiB of UTF-8. */
 export const ERROR_PAGE_MAX_BYTES = 65_536;
 /** Placeholders nodes replace with HTML-escaped values; any other text is sent as it is. */
@@ -42,10 +40,7 @@ export function utf8Bytes(text: string): number {
   return new TextEncoder().encode(text).length;
 }
 
-export const errorPageStatus = z.union([
-  z.literal(ERROR_PAGE_STATUSES),
-  z.enum(ERROR_PAGE_CLASSES),
-]);
+const errorPageStatus = z.union([z.literal(ERROR_PAGE_STATUSES), z.enum(ERROR_PAGE_CLASSES)]);
 
 /**
  * An absolute redirect URL as nodes and the console both take it: http(s),
@@ -91,7 +86,7 @@ export function validErrorRedirect(url: string): boolean {
   }
 }
 
-export const errorPage = z.object({
+const errorPage = z.object({
   status: errorPageStatus,
   /** HTML template; empty for a redirect page. */
   template: z.string(),
@@ -101,7 +96,7 @@ export const errorPage = z.object({
   responseStatus: z.number().int(),
 });
 
-export const siteErrorPages = z.object({
+const siteErrorPages = z.object({
   siteId: uuid,
   /** At most one page per status, sorted by status. */
   pages: z.array(errorPage),
@@ -185,7 +180,7 @@ const idParam = z.object({ id: uuid });
  * HTTP-01 requests for the origin; nothing is served from the cache. The
  * settings are kept while off.
  */
-export const siteMaintenance = z.object({
+const siteMaintenance = z.object({
   siteId: uuid,
   enabled: z.boolean(),
   template: z.string(),
@@ -196,8 +191,8 @@ export const siteMaintenance = z.object({
   updatedAt: isoDateTime.nullable(),
 });
 
-export const MAINTENANCE_MAX_CIDRS = 64;
-export const MAINTENANCE_MAX_PREFIXES = 32;
+const MAINTENANCE_MAX_CIDRS = 64;
+const MAINTENANCE_MAX_PREFIXES = 32;
 
 const MAPPED_V4 = parseCidr("::ffff:0:0/96") as Cidr;
 
@@ -208,7 +203,7 @@ const MAPPED_V4 = parseCidr("::ffff:0:0/96") as Cidr;
  * as ambiguous, as in IP lists. IPv4-compatible addresses (::a.b.c.d) stay
  * IPv6. Null when invalid.
  */
-export function maintenanceCidr(text: string): string | null {
+function maintenanceCidr(text: string): string | null {
   const cidr = parseCidr(text);
   if (!cidr) return null;
   const slash = text.indexOf("/");
