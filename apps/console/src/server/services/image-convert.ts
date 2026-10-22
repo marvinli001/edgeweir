@@ -9,8 +9,8 @@ import { type Database, schema } from "@edgeweir/db";
 import { and, eq, sql } from "drizzle-orm";
 import { readImageConvert } from "../lib/image-convert";
 import { rangeWindow, sourceFor } from "./analytics";
-import { type Actor, recordAudit } from "./audit";
-import { publishRevision } from "./revisions";
+import type { Actor } from "./audit";
+import { publishSiteChange } from "./site-change";
 import { findSite } from "./sites";
 
 export async function getImageConvert(db: Database, id: string): Promise<ImageConvertSettings> {
@@ -38,16 +38,9 @@ export async function updateImageConvert(
       .update(schema.site)
       .set({ imageConvert: settings, updatedAt: new Date() })
       .where(eq(schema.site.id, site.id));
-    await publishRevision(tx, {
-      clusterId: site.clusterId,
-      reason: { code: "site_updated", params: { site: site.name } },
-      actor: ctx.actor,
-    });
-    await recordAudit(tx, ctx.actor, {
+    await publishSiteChange(tx, ctx.actor, site, {
+      reason: "site_updated",
       action: "site.image_convert_update",
-      targetType: "site",
-      targetId: site.id,
-      targetName: site.name,
       metadata: { changed, enabled: settings.enabled },
     });
     return settings;

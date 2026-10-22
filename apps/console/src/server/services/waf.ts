@@ -47,8 +47,9 @@ import { type Database, schema } from "@edgeweir/db";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { rangeWindow, sourceFor } from "./analytics";
-import { type Actor, recordAudit } from "./audit";
-import { type Executor, publishRevision } from "./revisions";
+import type { Actor } from "./audit";
+import type { Executor } from "./revisions";
+import { publishSiteChange } from "./site-change";
 import { findSite } from "./sites";
 
 type WafRow = typeof schema.siteWaf.$inferSelect;
@@ -122,6 +123,23 @@ async function wafRow(db: Executor, siteId: string, lock = false) {
   return row;
 }
 
+/** Creates or replaces a site's WAF settings. */
+export async function storeSiteWaf(
+  tx: Executor,
+  siteId: string,
+  values: Omit<typeof schema.siteWaf.$inferInsert, "siteId" | "updatedAt">,
+) {
+  const [saved] = await tx
+    .insert(schema.siteWaf)
+    .values({ siteId, ...values })
+    .onConflictDoUpdate({
+      target: schema.siteWaf.siteId,
+      set: { ...values, updatedAt: new Date() },
+    })
+    .returning();
+  return saved;
+}
+
 export async function getSiteWaf(db: Database, siteId: string): Promise<SiteWaf> {
   await findSite(db, siteId);
   return toDto(siteId, await wafRow(db, siteId));
@@ -155,26 +173,12 @@ export async function updateSiteWaf(
       exclusions: (input.exclusions ?? before.exclusions).map(normalizeExclusion),
       requestBodyLimit: input.requestBodyLimit ?? before.requestBodyLimit,
     };
-    const [saved] = await tx
-      .insert(schema.siteWaf)
-      .values({ siteId: site.id, ...next })
-      .onConflictDoUpdate({
-        target: schema.siteWaf.siteId,
-        set: { ...next, updatedAt: new Date() },
-      })
-      .returning();
-    await publishRevision(tx, {
-      clusterId: site.clusterId,
-      reason: { code: "site_waf_updated", params: { site: site.name } },
-      actor: ctx.actor,
-    });
+    const saved = await storeSiteWaf(tx, site.id, next);
     const after = toDto(site.id, saved);
     const strip = ({ siteId: _s, updatedAt: _u, ...rest }: SiteWaf) => rest;
-    await recordAudit(tx, ctx.actor, {
+    await publishSiteChange(tx, ctx.actor, site, {
+      reason: "site_waf_updated",
       action: "site.waf_update",
-      targetType: "site",
-      targetId: site.id,
-      targetName: site.name,
       metadata: { from: strip(before), to: strip(after) },
     });
     return after;

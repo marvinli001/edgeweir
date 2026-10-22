@@ -22,7 +22,7 @@ import { and, asc, count, eq, gte, inArray, lt, ne, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { lockClusterL4 } from "../lib/locks";
-import { assertUpdatedAt } from "../lib/updated-at";
+import { assertUpdatedAt, nextUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
 import { assertLoadable } from "./certificates";
 import { newCnamePrefix, retiredPrefixesOf } from "./cname-prefixes";
@@ -552,9 +552,6 @@ const UPDATABLE = [
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
-/** A strictly later updated_at, so that optimistic concurrency always sees a change. */
-const nextUpdatedAt = (row: AppRow) => new Date(Math.max(Date.now(), row.updatedAt.getTime() + 1));
-
 /**
  * Changes the fields given (origins replace the list), validates the result
  * like createL4App, publishes the cluster and audits the changed fields.
@@ -615,7 +612,7 @@ export async function updateL4App(
     } else if (origins) await writeOrigins(tx, row.id, origins, mode);
     const [updated] = await tx
       .update(schema.l4App)
-      .set({ ...values, updatedAt: nextUpdatedAt(row) })
+      .set({ ...values, updatedAt: nextUpdatedAt(row.updatedAt) })
       .where(eq(schema.l4App.id, row.id))
       .returning();
     if (!updated) throw new Error("L4 application update failed");
@@ -657,7 +654,7 @@ export async function setL4AppEnabled(
     assertUpdatedAt(row.updatedAt, input.expectedUpdatedAt);
     const [updated] = await tx
       .update(schema.l4App)
-      .set({ enabled: input.enabled, updatedAt: nextUpdatedAt(row) })
+      .set({ enabled: input.enabled, updatedAt: nextUpdatedAt(row.updatedAt) })
       .where(eq(schema.l4App.id, row.id))
       .returning();
     if (!updated) throw new Error("L4 application update failed");

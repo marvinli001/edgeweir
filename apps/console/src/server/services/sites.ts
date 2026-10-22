@@ -1,8 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type {
-  AuditAction,
   Revision,
-  RevisionReasonCode,
   Site,
   StarredSite,
   siteCreateInput,
@@ -52,21 +50,16 @@ import {
 } from "../lib/site-domains";
 import { PURGE_KEY, siteSecret, storeSiteSecret } from "../lib/site-secrets";
 import { assertUpdatedAt } from "../lib/updated-at";
-import { type Actor, recordAudit } from "./audit";
+import type { Actor } from "./audit";
 import { coverSiteDomains } from "./certificates";
 import { defaultClusterId } from "./clusters";
 import { newCnamePrefix } from "./cname-prefixes";
 import { listBindings } from "./config-input";
 import { assertOriginsAllowed } from "./origin-allow-list";
 import { ensureOriginClientCertificate, ORIGIN_CA_ID, originAuthorityExists } from "./origin-pki";
-import {
-  type Executor,
-  latestRevision,
-  publishRevision,
-  type Tx,
-  toRevisionDto,
-} from "./revisions";
+import { type Executor, latestRevision, type Tx, toRevisionDto } from "./revisions";
 import { actionOriginGroup, availableLists, failUnknownLists } from "./rules";
+import { publishSiteChange } from "./site-change";
 import { siteDeliveries } from "./site-delivery";
 import { assertSitePorts, portsOf } from "./site-ports";
 import { sitesWithTags, siteTagRefs, writeSiteTags } from "./site-tags";
@@ -770,33 +763,6 @@ export async function sitePool(tx: Tx, siteId: string) {
   return pool;
 }
 
-/**
- * Publishes the site's cluster after a change to the site and audits the
- * change with the new revision number. The site's stored rules must compile
- * (RULE_INVALID; a deleted site has none).
- */
-async function publishSiteChange(
-  tx: Tx,
-  actor: Actor,
-  site: Pick<SiteRow, "id" | "name" | "clusterId">,
-  change: { reason: RevisionReasonCode; action: AuditAction; metadata?: Record<string, unknown> },
-): Promise<Revision> {
-  const { row } = await publishRevision(tx, {
-    clusterId: site.clusterId,
-    reason: { code: change.reason, params: { site: site.name } },
-    actor,
-    site: site.id,
-  });
-  await recordAudit(tx, actor, {
-    action: change.action,
-    targetType: "site",
-    targetId: site.id,
-    targetName: site.name,
-    metadata: { ...change.metadata, revision: row.revision },
-  });
-  return toRevisionDto(row);
-}
-
 /** The tags of a site created in this transaction (its creation's audit entry names them). */
 export async function setNewSiteTags(tx: Tx, actor: Actor, siteId: string, tags: string[]) {
   await writeSiteTags(tx, actor, {
@@ -872,6 +838,7 @@ export async function createSite(
     const revision = await publishSiteChange(tx, ctx.actor, siteRow, {
       reason: "site_created",
       action: "site.create",
+      strict: true,
       metadata: {
         name,
         domains: domains.map(formatDomain),
@@ -1018,6 +985,7 @@ export async function updateSite(
     const revision = await publishSiteChange(tx, ctx.actor, updated, {
       reason: "site_updated",
       action: "site.update",
+      strict: true,
       metadata: {
         changed,
         ...(input.name !== undefined ? { name: input.name } : {}),
@@ -1072,6 +1040,7 @@ export async function deleteSite(
     const revision = await publishSiteChange(tx, ctx.actor, row, {
       reason: "site_deleted",
       action: "site.delete",
+      strict: true,
       metadata: { name: row.name },
     });
     return { revision };
@@ -1106,6 +1075,7 @@ export async function setSiteEnabled(
     const revision = await publishSiteChange(tx, ctx.actor, updated, {
       reason: input.enabled ? "site_enabled" : "site_disabled",
       action: input.enabled ? "site.enable" : "site.disable",
+      strict: true,
     });
     return { site: await toSiteDto(tx, updated), revision };
   });

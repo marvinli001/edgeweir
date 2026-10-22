@@ -18,12 +18,13 @@ import { asc, eq } from "drizzle-orm";
 import { readAccessControl } from "../lib/access-control";
 import { fail } from "../lib/errors";
 import { lockIpLists } from "../lib/locks";
-import { assertUpdatedAt } from "../lib/updated-at";
-import { type Actor, recordAudit } from "./audit";
+import { assertUpdatedAt, nextUpdatedAt } from "../lib/updated-at";
+import type { Actor } from "./audit";
 import { listBans } from "./bans";
 import { clientIpOf } from "./edge";
 import { clusterEdgeAddresses } from "./node-addresses";
-import { type Executor, publishRevision } from "./revisions";
+import type { Executor } from "./revisions";
+import { publishSiteChange } from "./site-change";
 import { findSite } from "./sites";
 
 type SiteRow = typeof schema.site.$inferSelect;
@@ -109,13 +110,11 @@ export async function updateAccessControl(
     // Before the site row, like IP list writers (deleting a list reads its users).
     await lockIpLists(tx);
     const site = await findSite(tx, input.id, true);
-    if (input.expectedUpdatedAt !== undefined) {
-      if (!site.accessControlUpdatedAt)
-        fail("UPDATED_AT_MISMATCH", "the access control changed since it was read", {
-          updatedAt: "",
-        });
-      assertUpdatedAt(site.accessControlUpdatedAt, input.expectedUpdatedAt);
-    }
+    assertUpdatedAt(
+      site.accessControlUpdatedAt,
+      input.expectedUpdatedAt,
+      "the access control changed since it was read",
+    );
     const before = readAccessControl(site);
     const after: AccessControlSettings = { ...before };
     const changed: AccessControlPart[] = [];
@@ -126,40 +125,39 @@ export async function updateAccessControl(
       if (JSON.stringify(value) !== JSON.stringify(before[part])) changed.push(part);
     }
     if (input.siteLists) await checkSiteLists(tx, input.siteLists);
-    const updatedAt = new Date(
-      Math.max(Date.now(), (site.accessControlUpdatedAt?.getTime() ?? 0) + 1),
-    );
-    const { siteLists, ...stored } = after;
-    const [updated] = await tx
-      .update(schema.site)
-      .set({
-        accessControl: stored,
-        blockListIds: siteLists.blockListIds,
-        allowListIds: siteLists.allowListIds,
-        accessControlUpdatedAt: updatedAt,
-      })
-      .where(eq(schema.site.id, site.id))
-      .returning();
-    if (!updated) throw new Error("site update failed");
-    const { row: revision } = await publishRevision(tx, {
-      clusterId: site.clusterId,
-      reason: { code: "site_access_control_updated", params: { site: site.name } },
-      actor: ctx.actor,
-    });
-    await recordAudit(tx, ctx.actor, {
+    const updated = await storeAccessControl(tx, site, after);
+    await publishSiteChange(tx, ctx.actor, site, {
+      reason: "site_access_control_updated",
       action: "site.access_control_update",
-      targetType: "site",
-      targetId: site.id,
-      targetName: site.name,
       metadata: {
         parts: changed,
         from: Object.fromEntries(changed.map((p) => [p, summary(p, before)])),
         to: Object.fromEntries(changed.map((p) => [p, summary(p, after)])),
-        revision: revision.revision,
       },
     });
     return toDto(updated);
   });
+}
+
+/** Stores a site's access control, bumping access_control_updated_at. Returns the updated row. */
+export async function storeAccessControl(
+  tx: Executor,
+  site: { id: string; accessControlUpdatedAt: Date | null },
+  settings: AccessControlSettings,
+) {
+  const { siteLists, ...stored } = settings;
+  const [updated] = await tx
+    .update(schema.site)
+    .set({
+      accessControl: stored,
+      blockListIds: siteLists.blockListIds,
+      allowListIds: siteLists.allowListIds,
+      accessControlUpdatedAt: nextUpdatedAt(site.accessControlUpdatedAt),
+    })
+    .where(eq(schema.site.id, site.id))
+    .returning();
+  if (!updated) throw new Error("site update failed");
+  return updated;
 }
 
 export async function checkSiteLists(tx: Executor, lists: AccessControlSettings["siteLists"]) {

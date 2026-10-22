@@ -32,12 +32,13 @@ import {
 import { type AuthRuleRow, toAuthRuleDto } from "../lib/auth-rule-dto";
 import type { MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
-import { assertUpdatedAt } from "../lib/updated-at";
+import { assertUpdatedAt, nextUpdatedAt } from "../lib/updated-at";
 import { rangeWindow, sourceFor } from "./analytics";
 import { type Actor, recordAudit } from "./audit";
 import { formerIdentityHeaders, retainIdentityHeaders } from "./auth-identity";
 import { loadOriginAllowList } from "./origin-allow-list";
-import { type Executor, publishRevision } from "./revisions";
+import type { Executor } from "./revisions";
+import { publishSiteChange } from "./site-change";
 import { findSite } from "./sites";
 
 type RuleRow = AuthRuleRow;
@@ -64,7 +65,7 @@ async function loadRules(db: Executor, siteId: string): Promise<RuleRow[]> {
 }
 
 /** The site's domains in their written form (`a.com`, `*.a.com`, `.a.com`, `~p`). */
-export async function formattedSiteDomains(db: Executor, siteId: string): Promise<string[]> {
+async function formattedSiteDomains(db: Executor, siteId: string): Promise<string[]> {
   const rows = await db
     .select({ name: schema.siteDomain.name, kind: schema.siteDomain.kind })
     .from(schema.siteDomain)
@@ -161,6 +162,54 @@ function settingsOf(input: AuthRuleInput, secret: AuthSecret | null): Record<str
 }
 
 /**
+ * Fails unless every rule's domains are domains of the site
+ * (AUTH_DOMAIN_UNKNOWN) and every forward authentication service is outside
+ * the special-purpose ranges the platform refuses (ORIGIN_ADDRESS_FORBIDDEN).
+ */
+export async function assertAuthRuleTargets(
+  tx: Executor,
+  siteId: string,
+  rules: readonly { domains: readonly string[]; forwardUrl?: string }[],
+) {
+  const domains = new Set(await formattedSiteDomains(tx, siteId));
+  const allowed = await loadOriginAllowList(tx);
+  for (const rule of rules) {
+    for (const domain of rule.domains)
+      if (!domains.has(domain))
+        fail("AUTH_DOMAIN_UNKNOWN", `${domain} is not a domain of the site`, { domain });
+    if (rule.forwardUrl === undefined) continue;
+    const host = forwardUrlHost(rule.forwardUrl);
+    const range = forbiddenOriginRange(host, allowed);
+    if (range)
+      fail(
+        "ORIGIN_ADDRESS_FORBIDDEN",
+        `authentication service address ${host} is in the special-purpose range ${range}, which the platform does not allow`,
+        { address: host, range },
+      );
+  }
+}
+
+/**
+ * Writes a site's rules anew (positions are unique per site) and bumps
+ * auth_updated_at. Nodes go on removing the identity headers of the rules
+ * `replaced` that are disabled or gone. Returns the identity header history
+ * and the new updated_at.
+ */
+export async function replaceAuthRules(
+  tx: Executor,
+  site: { id: string; authIdentityHeaders: string[]; authUpdatedAt: Date | null },
+  replaced: readonly { kind: string; settings?: unknown }[],
+  rows: (typeof schema.siteAuthRule.$inferInsert)[],
+) {
+  await tx.delete(schema.siteAuthRule).where(eq(schema.siteAuthRule.siteId, site.id));
+  if (rows.length) await tx.insert(schema.siteAuthRule).values(rows);
+  const history = await retainIdentityHeaders(tx, site, replaced, rows);
+  const updatedAt = nextUpdatedAt(site.authUpdatedAt);
+  await tx.update(schema.site).set({ authUpdatedAt: updatedAt }).where(eq(schema.site.id, site.id));
+  return { history, updatedAt };
+}
+
+/**
  * Replaces a site's access authentication rules, keeping the passwords and
  * keys the input leaves out (by rule id), publishes its cluster (a hot
  * update; access-auth-v1 while a rule is enabled) and audits the change
@@ -175,38 +224,22 @@ export async function updateAuthRules(
 ): Promise<SiteAuthRules> {
   return db.transaction(async (tx) => {
     const site = await findSite(tx, input.id, true);
-    if (input.expectedUpdatedAt !== undefined) {
-      if (!site.authUpdatedAt)
-        fail(
-          "UPDATED_AT_MISMATCH",
-          "the access authentication rules changed since they were read",
-          {
-            updatedAt: "",
-          },
-        );
-      assertUpdatedAt(site.authUpdatedAt, input.expectedUpdatedAt);
-    }
-    const domains = new Set(await formattedSiteDomains(tx, site.id));
-    const allowed = await loadOriginAllowList(tx);
+    assertUpdatedAt(
+      site.authUpdatedAt,
+      input.expectedUpdatedAt,
+      "the access authentication rules changed since they were read",
+    );
+    await assertAuthRuleTargets(
+      tx,
+      site.id,
+      input.rules.map((rule) => ({ domains: rule.scope.domains, forwardUrl: rule.forward?.url })),
+    );
     const existing = await loadRules(tx, site.id);
     const byId = new Map(existing.map((row) => [row.id, row]));
     const seen = new Set<string>();
     const next: (typeof schema.siteAuthRule.$inferInsert)[] = [];
     const audit: Record<string, unknown>[] = [];
     for (const [position, rule] of input.rules.entries()) {
-      for (const domain of rule.scope.domains)
-        if (!domains.has(domain))
-          fail("AUTH_DOMAIN_UNKNOWN", `${domain} is not a domain of the site`, { domain });
-      if (rule.forward) {
-        const host = forwardUrlHost(rule.forward.url);
-        const range = forbiddenOriginRange(host, allowed);
-        if (range)
-          fail(
-            "ORIGIN_ADDRESS_FORBIDDEN",
-            `authentication service address ${host} is in the special-purpose range ${range}, which the platform does not allow`,
-            { address: host, range },
-          );
-      }
       const old = rule.id ? byId.get(rule.id) : undefined;
       if (rule.id && (!old || seen.has(rule.id)))
         fail("AUTH_RULE_NOT_FOUND", "access authentication rule not found");
@@ -254,32 +287,13 @@ export async function updateAuthRules(
         ...(secret ? { secretChanged: !unchanged } : {}),
       });
     }
-    // Positions are unique per site: the rules are written anew.
-    await tx.delete(schema.siteAuthRule).where(eq(schema.siteAuthRule.siteId, site.id));
-    if (next.length) await tx.insert(schema.siteAuthRule).values(next);
-    // Nodes go on removing the identity headers of rules disabled or deleted here.
-    const history = await retainIdentityHeaders(tx, site, existing, next);
-    const updatedAt = new Date(Math.max(Date.now(), (site.authUpdatedAt?.getTime() ?? 0) + 1));
-    const [updated] = await tx
-      .update(schema.site)
-      .set({ authUpdatedAt: updatedAt })
-      .where(eq(schema.site.id, site.id))
-      .returning();
-    if (!updated) throw new Error("site update failed");
-    const { row: revision } = await publishRevision(tx, {
-      clusterId: site.clusterId,
-      reason: { code: "site_auth_updated", params: { site: site.name } },
-      actor: ctx.actor,
-    });
-    await recordAudit(tx, ctx.actor, {
+    const { history, updatedAt } = await replaceAuthRules(tx, site, existing, next);
+    await publishSiteChange(tx, ctx.actor, site, {
+      reason: "site_auth_updated",
       action: "site.auth_update",
-      targetType: "site",
-      targetId: site.id,
-      targetName: site.name,
       metadata: {
         from: existing.map((row) => ({ id: row.id, kind: row.kind, enabled: row.enabled })),
         to: audit,
-        revision: revision.revision,
       },
     });
     return {
@@ -304,17 +318,11 @@ export async function forgetIdentityHeaders(
 ): Promise<SiteAuthRules> {
   return db.transaction(async (tx) => {
     const site = await findSite(tx, input.id, true);
-    if (input.expectedUpdatedAt !== undefined) {
-      if (!site.authUpdatedAt)
-        fail(
-          "UPDATED_AT_MISMATCH",
-          "the access authentication rules changed since they were read",
-          {
-            updatedAt: "",
-          },
-        );
-      assertUpdatedAt(site.authUpdatedAt, input.expectedUpdatedAt);
-    }
+    assertUpdatedAt(
+      site.authUpdatedAt,
+      input.expectedUpdatedAt,
+      "the access authentication rules changed since they were read",
+    );
     const rows = await loadRules(tx, site.id);
     const former = new Set(formerIdentityHeaders(site.authIdentityHeaders, rows));
     const forget = new Set(input.names.filter((name) => former.has(name)));
@@ -326,22 +334,15 @@ export async function forgetIdentityHeaders(
     });
     if (!forget.size) return result(site.authIdentityHeaders, site.authUpdatedAt);
     const history = site.authIdentityHeaders.filter((name) => !forget.has(name));
-    const updatedAt = new Date(Math.max(Date.now(), (site.authUpdatedAt?.getTime() ?? 0) + 1));
+    const updatedAt = nextUpdatedAt(site.authUpdatedAt);
     await tx
       .update(schema.site)
       .set({ authIdentityHeaders: history, authUpdatedAt: updatedAt })
       .where(eq(schema.site.id, site.id));
-    const { row: revision } = await publishRevision(tx, {
-      clusterId: site.clusterId,
-      reason: { code: "site_auth_updated", params: { site: site.name } },
-      actor: ctx.actor,
-    });
-    await recordAudit(tx, ctx.actor, {
+    await publishSiteChange(tx, ctx.actor, site, {
+      reason: "site_auth_updated",
       action: "site.auth_identity_forget",
-      targetType: "site",
-      targetId: site.id,
-      targetName: site.name,
-      metadata: { names: [...forget], revision: revision.revision },
+      metadata: { names: [...forget] },
     });
     return result(history, updatedAt);
   });

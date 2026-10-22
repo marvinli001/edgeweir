@@ -1,9 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
-  bulkRedirectSourceParts,
   type ErrorPage,
-  forbiddenOriginRange,
-  forwardUrlHost,
   type ImageConvertSettings,
   type Revision,
   SITE_COPY_LIST_PARTS,
@@ -31,15 +28,14 @@ import { readImageConvert } from "../lib/image-convert";
 import { readActiveHealthCheck, readSessionAffinity } from "../lib/pool-settings";
 import { formatDomain, normalizeDomains } from "../lib/site-domains";
 import { PURGE_KEY, siteSecretBinding, storeSiteSecret } from "../lib/site-secrets";
-import { checkSiteLists } from "./access-control";
+import { checkSiteLists, storeAccessControl } from "./access-control";
 import { type Actor, recordAudit } from "./audit";
-import { retainIdentityHeaders } from "./auth-identity";
-import { formattedSiteDomains } from "./auth-rules";
+import { assertAuthRuleTargets, replaceAuthRules } from "./auth-rules";
 import { noteOperatorUnderAttack } from "./auto-mitigation";
-import { servesHost } from "./bulk-redirects";
+import { assertRedirectHosts, storeBulkRedirects } from "./bulk-redirects";
 import { newCnamePrefix } from "./cname-prefixes";
-import { loadSiteErrorPages, storedStatus } from "./error-pages";
-import { assertOriginsAllowed, loadOriginAllowList } from "./origin-allow-list";
+import { loadSiteErrorPages, storeSiteErrorPages } from "./error-pages";
+import { assertOriginsAllowed } from "./origin-allow-list";
 import { type Executor, publishRevision, type Tx, toRevisionDto } from "./revisions";
 import { actionOriginGroup, siteOriginGroups } from "./rules";
 import { assertSitePorts, portsOf } from "./site-ports";
@@ -55,6 +51,7 @@ import {
   sitePool,
   toSiteDto,
 } from "./sites";
+import { storeSiteWaf } from "./waf";
 
 type SiteRow = typeof schema.site.$inferSelect;
 interface CopyContext {
@@ -93,10 +90,6 @@ export function stableJson(value: unknown): string {
 
 /** Child rows inserted in one statement share now(): increasing timestamps keep their order. */
 const ordered = (index: number, base: number) => new Date(base + index);
-
-/** A newer `*_updated_at` than the stored one, so that editors holding the old one get a 409. */
-const bumped = (previous: Date | null) =>
-  new Date(Math.max(Date.now(), (previous?.getTime() ?? 0) + 1));
 
 /** Share-locks the IP lists the settings use until the transaction ends; all must exist. */
 async function shareLists(tx: Tx, ids: readonly string[]) {
@@ -453,32 +446,11 @@ export const COPY_PARTS: Record<SiteCopyPart, Part<unknown>> = {
       return rows.map((row) => pick(row, ["source", "target", "statusCode", "preserveQuery"]));
     },
     async plan(tx, target, redirects) {
-      const domains = await tx
-        .select({ name: schema.siteDomain.name, kind: schema.siteDomain.kind })
-        .from(schema.siteDomain)
-        .where(eq(schema.siteDomain.siteId, target.id));
-      const unknown = [
-        ...new Set(
-          redirects
-            .map((redirect) => bulkRedirectSourceParts(redirect.source)?.host ?? "")
-            .filter((host) => host !== "" && !servesHost(domains, host)),
-        ),
-      ];
-      if (unknown.length) {
-        const hosts = unknown.slice(0, 5).join(", ");
-        fail("BULK_REDIRECT_HOST_UNKNOWN", `the site does not serve ${hosts}`, { hosts });
-      }
+      await assertRedirectHosts(tx, target.id, redirects);
       return redirects;
     },
     async write(tx, target, redirects) {
-      await tx.delete(schema.bulkRedirect).where(eq(schema.bulkRedirect.siteId, target.id));
-      const rows = redirects.map((redirect, position) => ({
-        ...redirect,
-        siteId: target.id,
-        position,
-      }));
-      for (let i = 0; i < rows.length; i += 1000)
-        await tx.insert(schema.bulkRedirect).values(rows.slice(i, i + 1000));
+      await storeBulkRedirects(tx, target.id, redirects);
     },
     count: (redirects) => redirects.length,
   }),
@@ -490,21 +462,7 @@ export const COPY_PARTS: Record<SiteCopyPart, Part<unknown>> = {
       };
     },
     async write(tx, target, value) {
-      const updatedAt = bumped(target.errorPagesUpdatedAt);
-      await tx.delete(schema.siteErrorPage).where(eq(schema.siteErrorPage.siteId, target.id));
-      if (value.pages.length)
-        await tx.insert(schema.siteErrorPage).values(
-          value.pages.map((page) => ({
-            ...page,
-            siteId: target.id,
-            status: storedStatus(page.status),
-            updatedAt,
-          })),
-        );
-      await tx
-        .update(schema.site)
-        .set({ interceptOriginErrors: value.interceptOriginErrors, errorPagesUpdatedAt: updatedAt })
-        .where(eq(schema.site.id, target.id));
+      await storeSiteErrorPages(tx, target, value.pages, value.interceptOriginErrors);
     },
     count: (value) => value.pages.length,
   }),
@@ -517,14 +475,7 @@ export const COPY_PARTS: Record<SiteCopyPart, Part<unknown>> = {
       return columnsOf(WAF_COLUMNS, row);
     },
     async write(tx, target, value) {
-      const values = value as Omit<typeof schema.siteWaf.$inferInsert, "siteId">;
-      await tx
-        .insert(schema.siteWaf)
-        .values({ siteId: target.id, ...values })
-        .onConflictDoUpdate({
-          target: schema.siteWaf.siteId,
-          set: { ...values, updatedAt: new Date() },
-        });
+      await storeSiteWaf(tx, target.id, value as Parameters<typeof storeSiteWaf>[2]);
     },
   }),
   protection: part<ProtectionValue>({
@@ -564,16 +515,7 @@ export const COPY_PARTS: Record<SiteCopyPart, Part<unknown>> = {
       return value;
     },
     async write(tx, target, value) {
-      const { siteLists, ...stored } = value;
-      await tx
-        .update(schema.site)
-        .set({
-          accessControl: stored,
-          blockListIds: siteLists.blockListIds,
-          allowListIds: siteLists.allowListIds,
-          accessControlUpdatedAt: bumped(target.accessControlUpdatedAt),
-        })
-        .where(eq(schema.site.id, target.id));
+      await storeAccessControl(tx, target, value);
     },
   }),
   authRules: part<AuthRuleValue[]>({
@@ -592,25 +534,17 @@ export const COPY_PARTS: Record<SiteCopyPart, Part<unknown>> = {
       }));
     },
     async plan(tx, target, rules) {
-      const domains = new Set(await formattedSiteDomains(tx, target.id));
-      const allowed = await loadOriginAllowList(tx);
-      for (const rule of rules) {
-        const scoped = Array.isArray(rule.scope.domains) ? (rule.scope.domains as string[]) : [];
-        for (const domain of scoped)
-          if (!domains.has(domain))
-            fail("AUTH_DOMAIN_UNKNOWN", `${domain} is not a domain of the site`, { domain });
-        const url = rule.kind === "forward" ? rule.settings.url : undefined;
-        if (typeof url === "string") {
-          const host = forwardUrlHost(url);
-          const range = forbiddenOriginRange(host, allowed);
-          if (range)
-            fail(
-              "ORIGIN_ADDRESS_FORBIDDEN",
-              `authentication service address ${host} is in the special-purpose range ${range}, which the platform does not allow`,
-              { address: host, range },
-            );
-        }
-      }
+      await assertAuthRuleTargets(
+        tx,
+        target.id,
+        rules.map((rule) => {
+          const url = rule.kind === "forward" ? rule.settings.url : undefined;
+          return {
+            domains: Array.isArray(rule.scope.domains) ? (rule.scope.domains as string[]) : [],
+            forwardUrl: typeof url === "string" ? url : undefined,
+          };
+        }),
+      );
       return rules;
     },
     async write(tx, target, rules, ctx) {
@@ -618,7 +552,6 @@ export const COPY_PARTS: Record<SiteCopyPart, Part<unknown>> = {
         .select({ kind: schema.siteAuthRule.kind, settings: schema.siteAuthRule.settings })
         .from(schema.siteAuthRule)
         .where(eq(schema.siteAuthRule.siteId, target.id));
-      await tx.delete(schema.siteAuthRule).where(eq(schema.siteAuthRule.siteId, target.id));
       // Secrets are sealed anew: the envelope is bound to the (new) rule id.
       const rows = rules.map((rule, position) => {
         const id = randomUUID();
@@ -634,13 +567,7 @@ export const COPY_PARTS: Record<SiteCopyPart, Part<unknown>> = {
           secretVersion: rule.secret ? 1 : 0,
         };
       });
-      if (rows.length) await tx.insert(schema.siteAuthRule).values(rows);
-      // The target's nodes go on removing the identity headers of the rules replaced.
-      await retainIdentityHeaders(tx, target, replaced, rows);
-      await tx
-        .update(schema.site)
-        .set({ authUpdatedAt: bumped(target.authUpdatedAt) })
-        .where(eq(schema.site.id, target.id));
+      await replaceAuthRules(tx, target, replaced, rows);
     },
     count: (rules) => rules.length,
   }),

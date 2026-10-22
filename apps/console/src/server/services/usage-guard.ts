@@ -16,7 +16,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { readMaintenance } from "../lib/site-content";
-import { assertUpdatedAt } from "../lib/updated-at";
+import { assertUpdatedAt, nextUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import { type Executor, publishRevision, type Tx } from "./revisions";
 
@@ -561,13 +561,11 @@ export async function updateUsageGuard(
   return db.transaction(async (tx) => {
     const site = await findSite(tx, input.id, true);
     const before = await lockGuard(tx, site.id);
-    if (input.expectedUpdatedAt !== undefined) {
-      if (!before)
-        fail("UPDATED_AT_MISMATCH", "the usage protection changed since it was read", {
-          updatedAt: "",
-        });
-      assertUpdatedAt(before.updatedAt, input.expectedUpdatedAt);
-    }
+    assertUpdatedAt(
+      before?.updatedAt,
+      input.expectedUpdatedAt,
+      "the usage protection changed since it was read",
+    );
     const settings = {
       period: input.period,
       timeZone: input.timeZone,
@@ -579,7 +577,7 @@ export async function updateUsageGuard(
       recovery: input.recovery,
       bandwidthHoldMinutes: input.bandwidthHoldMinutes,
     };
-    const updatedAt = new Date(Math.max(Date.now(), (before?.updatedAt.getTime() ?? 0) + 1));
+    const updatedAt = nextUpdatedAt(before?.updatedAt);
     const [row] = await tx
       .insert(schema.siteUsageGuard)
       .values({ siteId: site.id, ...settings, updatedAt })

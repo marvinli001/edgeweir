@@ -14,10 +14,11 @@ import { type Database, schema } from "@edgeweir/db";
 import { asc, eq, inArray } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { lockPlatformErrorPages } from "../lib/locks";
-import { assertUpdatedAt } from "../lib/updated-at";
-import { type Actor, recordAudit } from "./audit";
-import { type Executor, publishClusters, publishRevision } from "./revisions";
+import { assertUpdatedAt, nextUpdatedAt } from "../lib/updated-at";
+import type { Actor } from "./audit";
+import { type Executor, publishClusters } from "./revisions";
 import { defineSetting } from "./settings";
+import { publishSiteChange } from "./site-change";
 import { findSite } from "./sites";
 
 /** system_setting key of the platform's error pages (`PlatformErrorPages`). */
@@ -38,7 +39,7 @@ export function assertTemplateSize(status: number | string, template: string) {
 }
 
 /** Stored status of a page: the status, or 4 / 5 for the 4xx / 5xx classes (as nodes take it). */
-export const storedStatus = (status: ErrorPageStatus): number =>
+const storedStatus = (status: ErrorPageStatus): number =>
   status === "4xx" ? 4 : status === "5xx" ? 5 : status;
 const pageStatus = (stored: number): ErrorPageStatus =>
   (stored === 4 ? "4xx" : stored === 5 ? "5xx" : stored) as ErrorPageStatus;
@@ -100,6 +101,38 @@ export async function getSiteErrorPages(db: Database, siteId: string): Promise<S
 }
 
 /**
+ * Replaces a site's error pages (sorted by status) and its intercept switch,
+ * bumping error_pages_updated_at. Returns the updated site row.
+ */
+export async function storeSiteErrorPages(
+  tx: Executor,
+  site: { id: string; errorPagesUpdatedAt: Date | null },
+  pages: readonly ErrorPage[],
+  interceptOriginErrors: boolean,
+) {
+  const updatedAt = nextUpdatedAt(site.errorPagesUpdatedAt);
+  await tx.delete(schema.siteErrorPage).where(eq(schema.siteErrorPage.siteId, site.id));
+  if (pages.length)
+    await tx.insert(schema.siteErrorPage).values(
+      [...pages]
+        .sort((a, b) => storedStatus(a.status) - storedStatus(b.status))
+        .map((page) => ({
+          siteId: site.id,
+          ...page,
+          status: storedStatus(page.status),
+          updatedAt,
+        })),
+    );
+  const [updated] = await tx
+    .update(schema.site)
+    .set({ interceptOriginErrors, errorPagesUpdatedAt: updatedAt })
+    .where(eq(schema.site.id, site.id))
+    .returning();
+  if (!updated) throw new Error("site update failed");
+  return updated;
+}
+
+/**
  * Replaces a site's error pages, publishes its cluster and audits the
  * change. Pages on a cluster whose active nodes lack error-pages-v1 fail
  * with NODE_CAPABILITY_REQUIRED unless the operator saves them
@@ -114,41 +147,16 @@ export async function updateSiteErrorPages(
   for (const page of input.pages) assertTemplateSize(page.status, page.template);
   return db.transaction(async (tx) => {
     const site = await findSite(tx, input.id, true);
-    if (input.expectedUpdatedAt !== undefined) {
-      if (!site.errorPagesUpdatedAt)
-        fail("UPDATED_AT_MISMATCH", "the error pages changed since they were read", {
-          updatedAt: "",
-        });
-      assertUpdatedAt(site.errorPagesUpdatedAt, input.expectedUpdatedAt);
-    }
+    assertUpdatedAt(
+      site.errorPagesUpdatedAt,
+      input.expectedUpdatedAt,
+      "the error pages changed since they were read",
+    );
     const before = (await loadSiteErrorPages(tx, [site.id])).get(site.id) ?? [];
     const pages: ErrorPage[] = [...input.pages].sort(
       (a, b) => storedStatus(a.status) - storedStatus(b.status),
     );
-    const updatedAt = new Date(
-      Math.max(Date.now(), (site.errorPagesUpdatedAt?.getTime() ?? 0) + 1),
-    );
-    await tx.delete(schema.siteErrorPage).where(eq(schema.siteErrorPage.siteId, site.id));
-    if (pages.length)
-      await tx.insert(schema.siteErrorPage).values(
-        pages.map((page) => ({
-          siteId: site.id,
-          ...page,
-          status: storedStatus(page.status),
-          updatedAt,
-        })),
-      );
-    const [updated] = await tx
-      .update(schema.site)
-      .set({ interceptOriginErrors: input.interceptOriginErrors, errorPagesUpdatedAt: updatedAt })
-      .where(eq(schema.site.id, site.id))
-      .returning();
-    if (!updated) throw new Error("site update failed");
-    const { row: revision } = await publishRevision(tx, {
-      clusterId: site.clusterId,
-      reason: { code: "site_error_pages_updated", params: { site: site.name } },
-      actor: ctx.actor,
-    });
+    const updated = await storeSiteErrorPages(tx, site, pages, input.interceptOriginErrors);
     const content = (list: ErrorPage[], status: ErrorPageStatus) => {
       const page = list.find((p) => p.status === status);
       return page && `${page.responseStatus}|${page.redirectUrl}|${page.template}`;
@@ -156,11 +164,9 @@ export async function updateSiteErrorPages(
     const statuses = [...new Set([...before, ...pages].map((page) => page.status))].sort(
       (a, b) => storedStatus(a) - storedStatus(b),
     );
-    await recordAudit(tx, ctx.actor, {
+    await publishSiteChange(tx, ctx.actor, site, {
+      reason: "site_error_pages_updated",
       action: "site.error_pages_update",
-      targetType: "site",
-      targetId: site.id,
-      targetName: site.name,
       // Template sizes rather than the templates (up to 320 KiB).
       metadata: {
         from: {
@@ -174,7 +180,6 @@ export async function updateSiteErrorPages(
         changed: statuses.filter((status) => content(before, status) !== content(pages, status)),
         bytes: Object.fromEntries(pages.map((page) => [page.status, utf8Bytes(page.template)])),
         redirects: pages.filter((page) => page.redirectUrl).map((page) => page.status),
-        revision: revision.revision,
       },
     });
     return toDto(updated, pages);

@@ -6,8 +6,9 @@ import {
 import { type Database, schema } from "@edgeweir/db";
 import { asc, eq } from "drizzle-orm";
 import { fail } from "../lib/errors";
-import { type Actor, recordAudit } from "./audit";
-import { type Executor, publishRevision } from "./revisions";
+import type { Actor } from "./audit";
+import type { Executor } from "./revisions";
+import { publishSiteChange } from "./site-change";
 import { findSite } from "./sites";
 
 type RedirectRow = typeof schema.bulkRedirect.$inferSelect;
@@ -39,7 +40,7 @@ export async function getBulkRedirects(db: Database, siteId: string): Promise<Bu
  * a wildcard domain. Hosts only a `.` suffix or a pattern matches are not
  * accepted as sources.
  */
-export function servesHost(domains: { name: string; kind: string }[], host: string): boolean {
+function servesHost(domains: { name: string; kind: string }[], host: string): boolean {
   const dot = host.indexOf(".");
   return domains.some((domain) =>
     domain.kind === "wildcard"
@@ -49,6 +50,51 @@ export function servesHost(domains: { name: string; kind: string }[], host: stri
 }
 
 const INSERT_CHUNK = 1000;
+
+/**
+ * Fails with BULK_REDIRECT_HOST_UNKNOWN unless the host of every "host/path"
+ * source is one of the site's domains.
+ */
+export async function assertRedirectHosts(
+  tx: Executor,
+  siteId: string,
+  redirects: readonly { source: string }[],
+) {
+  const domains = await tx
+    .select({ name: schema.siteDomain.name, kind: schema.siteDomain.kind })
+    .from(schema.siteDomain)
+    .where(eq(schema.siteDomain.siteId, siteId));
+  const unknown = [
+    ...new Set(
+      redirects
+        .map((redirect) => bulkRedirectSourceParts(redirect.source)?.host ?? "")
+        .filter((host) => host !== "" && !servesHost(domains, host)),
+    ),
+  ];
+  if (unknown.length) {
+    const hosts = unknown.slice(0, 5).join(", ");
+    fail("BULK_REDIRECT_HOST_UNKNOWN", `the site does not serve ${hosts}`, { hosts });
+  }
+}
+
+/** Replaces the site's bulk redirects, keeping their order. */
+export async function storeBulkRedirects(
+  tx: Executor,
+  siteId: string,
+  redirects: readonly Pick<RedirectRow, "source" | "target" | "statusCode" | "preserveQuery">[],
+) {
+  await tx.delete(schema.bulkRedirect).where(eq(schema.bulkRedirect.siteId, siteId));
+  const rows = redirects.map((redirect, position) => ({
+    siteId,
+    source: redirect.source,
+    target: redirect.target,
+    statusCode: redirect.statusCode,
+    preserveQuery: redirect.preserveQuery,
+    position,
+  }));
+  for (let i = 0; i < rows.length; i += INSERT_CHUNK)
+    await tx.insert(schema.bulkRedirect).values(rows.slice(i, i + INSERT_CHUNK));
+}
 
 /**
  * Replaces a site's bulk redirects, publishes its cluster and audits the
@@ -65,43 +111,13 @@ export async function saveBulkRedirects(
 ): Promise<BulkRedirect[]> {
   return db.transaction(async (tx) => {
     const site = await findSite(tx, input.id, true);
-    const domains = await tx
-      .select({ name: schema.siteDomain.name, kind: schema.siteDomain.kind })
-      .from(schema.siteDomain)
-      .where(eq(schema.siteDomain.siteId, site.id));
-    const unknown = [
-      ...new Set(
-        input.redirects
-          .map((redirect) => bulkRedirectSourceParts(redirect.source)?.host ?? "")
-          .filter((host) => host !== "" && !servesHost(domains, host)),
-      ),
-    ];
-    if (unknown.length) {
-      const hosts = unknown.slice(0, 5).join(", ");
-      fail("BULK_REDIRECT_HOST_UNKNOWN", `the site does not serve ${hosts}`, { hosts });
-    }
-    await tx.delete(schema.bulkRedirect).where(eq(schema.bulkRedirect.siteId, site.id));
-    const rows = input.redirects.map((redirect, position) => ({
-      siteId: site.id,
-      source: redirect.source,
-      target: redirect.target,
-      statusCode: redirect.statusCode,
-      preserveQuery: redirect.preserveQuery,
-      position,
-    }));
-    for (let i = 0; i < rows.length; i += INSERT_CHUNK)
-      await tx.insert(schema.bulkRedirect).values(rows.slice(i, i + INSERT_CHUNK));
-    await publishRevision(tx, {
-      clusterId: site.clusterId,
-      reason: { code: "rules_updated", params: {} },
-      actor: ctx.actor,
-    });
-    await recordAudit(tx, ctx.actor, {
+    await assertRedirectHosts(tx, site.id, input.redirects);
+    await storeBulkRedirects(tx, site.id, input.redirects);
+    await publishSiteChange(tx, ctx.actor, site, {
+      reason: "rules_updated",
+      params: {},
       action: "site.bulk_redirects_update",
-      targetType: "site",
-      targetId: site.id,
-      targetName: site.name,
-      metadata: { count: rows.length },
+      metadata: { count: input.redirects.length },
     });
     return siteRedirects(tx, site.id);
   });

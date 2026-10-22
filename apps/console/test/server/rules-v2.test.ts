@@ -552,7 +552,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
       targetId: siteId,
       targetName: "shop",
     });
-    expect(audit?.metadata).toEqual({ count: 4 });
+    expect(audit?.metadata).toEqual({ count: 4, revision: expect.any(Number) });
     // The other site's table stays empty.
     expect(await admin.bulkRedirects.get({ id: otherSiteId })).toEqual([]);
     expect((await siteOf(otherSiteId))?.bulkRedirects).toEqual([]);
@@ -590,6 +590,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
     expect((await siteOf())?.bulkRedirects).toHaveLength(5000);
     expect((await audits("site.bulk_redirects_update")).at(-1)?.metadata).toEqual({
       count: 5000,
+      revision: expect.any(Number),
     });
   });
 

@@ -1,12 +1,11 @@
 import type { SiteMaintenance, SiteMaintenanceInput } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { eq } from "drizzle-orm";
-import { fail } from "../lib/errors";
 import { readMaintenance } from "../lib/site-content";
-import { assertUpdatedAt } from "../lib/updated-at";
-import { type Actor, recordAudit } from "./audit";
+import { assertUpdatedAt, nextUpdatedAt } from "../lib/updated-at";
+import type { Actor } from "./audit";
 import { assertTemplateSize } from "./error-pages";
-import { publishRevision } from "./revisions";
+import { publishSiteChange } from "./site-change";
 import { findSite } from "./sites";
 import { noteOperatorRestore } from "./usage-guard";
 
@@ -38,13 +37,11 @@ export async function updateSiteMaintenance(
   assertTemplateSize(503, input.template);
   return db.transaction(async (tx) => {
     const site = await findSite(tx, input.id, true);
-    if (input.expectedUpdatedAt !== undefined) {
-      if (!site.maintenanceUpdatedAt)
-        fail("UPDATED_AT_MISMATCH", "the maintenance settings changed since they were read", {
-          updatedAt: "",
-        });
-      assertUpdatedAt(site.maintenanceUpdatedAt, input.expectedUpdatedAt);
-    }
+    assertUpdatedAt(
+      site.maintenanceUpdatedAt,
+      input.expectedUpdatedAt,
+      "the maintenance settings changed since they were read",
+    );
     const before = readMaintenance(site.maintenance);
     const after = {
       enabled: input.enabled,
@@ -53,9 +50,7 @@ export async function updateSiteMaintenance(
       allowedCidrs: [...new Set(input.allowedCidrs)],
       allowedPathPrefixes: [...new Set(input.allowedPathPrefixes)],
     };
-    const updatedAt = new Date(
-      Math.max(Date.now(), (site.maintenanceUpdatedAt?.getTime() ?? 0) + 1),
-    );
+    const updatedAt = nextUpdatedAt(site.maintenanceUpdatedAt);
     const [updated] = await tx
       .update(schema.site)
       .set({ maintenance: after, maintenanceUpdatedAt: updatedAt })
@@ -63,11 +58,6 @@ export async function updateSiteMaintenance(
       .returning();
     if (!updated) throw new Error("site update failed");
     if (!after.enabled) await noteOperatorRestore(tx, updated);
-    const { row: revision } = await publishRevision(tx, {
-      clusterId: site.clusterId,
-      reason: { code: "site_maintenance_updated", params: { site: site.name } },
-      actor: ctx.actor,
-    });
     const summary = (m: typeof after) => ({
       enabled: m.enabled,
       retryAfterSeconds: m.retryAfterSeconds,
@@ -75,12 +65,10 @@ export async function updateSiteMaintenance(
       allowedPathPrefixes: m.allowedPathPrefixes,
       templateBytes: Buffer.byteLength(m.template),
     });
-    await recordAudit(tx, ctx.actor, {
+    await publishSiteChange(tx, ctx.actor, site, {
+      reason: "site_maintenance_updated",
       action: "site.maintenance_update",
-      targetType: "site",
-      targetId: site.id,
-      targetName: site.name,
-      metadata: { from: summary(before), to: summary(after), revision: revision.revision },
+      metadata: { from: summary(before), to: summary(after) },
     });
     return toDto(updated);
   });

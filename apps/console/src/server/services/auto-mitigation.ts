@@ -349,13 +349,11 @@ export async function updateAutoMitigation(
     const site = await findSite(tx, input.id, true);
     const underAttack = await underAttackOf(tx, site.id);
     const before = await lockRow(tx, site.id);
-    if (input.expectedUpdatedAt !== undefined) {
-      if (!before)
-        fail("UPDATED_AT_MISMATCH", "the automatic mitigation changed since it was read", {
-          updatedAt: "",
-        });
-      assertUpdatedAt(before.updatedAt, input.expectedUpdatedAt);
-    }
+    assertUpdatedAt(
+      before?.updatedAt,
+      input.expectedUpdatedAt,
+      "the automatic mitigation changed since it was read",
+    );
     const settings = {
       enabled: input.enabled,
       threshold: input.threshold,
