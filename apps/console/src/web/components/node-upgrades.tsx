@@ -7,7 +7,7 @@ import {
 } from "@edgeweir/contract";
 import { Add01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
@@ -65,8 +65,10 @@ function defaultUpgradeGroup(groups: NodeGroup[], count: (group: NodeGroup) => n
   );
 }
 
+// Jobs, nodes and the cluster all change with an upgrade.
+const UPGRADE_META = { invalidates: "all" } as const;
+
 export function NodeUpgrades({ clusterId }: { clusterId: string }) {
-  const cache = useQueryClient();
   const jobs = useQuery({
     ...orpc.upgrades.list.queryOptions({ input: { clusterId } }),
     refetchInterval: 3000,
@@ -78,12 +80,9 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
     refetchInterval: 5000,
     meta: { background: true },
   });
-  const promote = useMutation(orpc.upgrades.promote.mutationOptions());
-  const cancel = useMutation(orpc.upgrades.cancel.mutationOptions());
+  const promote = useMutation({ ...orpc.upgrades.promote.mutationOptions(), meta: UPGRADE_META });
+  const cancel = useMutation({ ...orpc.upgrades.cancel.mutationOptions(), meta: UPGRADE_META });
   const dialog = useDialogState();
-  const refreshed = async () => {
-    await cache.invalidateQueries();
-  };
   return (
     <section className="min-w-0 space-y-3" data-testid="node-upgrades">
       <div className="flex flex-wrap items-center gap-3">
@@ -136,7 +135,6 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
                       }
                       onConfirm={async () => {
                         await promote.mutateAsync({ id: job.id });
-                        await refreshed();
                       }}
                     />
                   </div>
@@ -158,7 +156,6 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
                     }
                     onConfirm={async () => {
                       await cancel.mutateAsync({ id: job.id });
-                      await refreshed();
                     }}
                   />
                 ) : null}
@@ -174,7 +171,6 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
         groups={groups.data ?? []}
         nodes={nodes.data ?? []}
         jobs={jobs.data ?? []}
-        onCreated={refreshed}
       />
     </section>
   );
@@ -185,14 +181,12 @@ function UpgradeDialog({
   groups,
   nodes,
   jobs,
-  onCreated,
 }: {
   groups: NodeGroup[];
   nodes: Node[];
   jobs: UpgradeJob[];
-  onCreated: () => Promise<void>;
 } & DialogProps) {
-  const create = useMutation(orpc.upgrades.create.mutationOptions());
+  const create = useMutation({ ...orpc.upgrades.create.mutationOptions(), meta: UPGRADE_META });
   const latest = useQuery({
     ...orpc.upgrades.latestVersion.queryOptions(),
     enabled: open,
@@ -234,7 +228,6 @@ function UpgradeDialog({
       onSubmit={async () => {
         await create.mutateAsync({ nodeGroupId: groupId, version: parsed.data ?? version });
         onOpenChange(false);
-        await onCreated();
       }}
     >
       <Field>

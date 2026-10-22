@@ -1,9 +1,8 @@
 import type { Probe, ProbeResultDto, ProbeSettings, ProbeTokenResult } from "@edgeweir/contract";
 import { Add01Icon, MoreHorizontalIcon, Radar01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { Countdown } from "@/components/appica/countdown";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
@@ -99,16 +98,11 @@ function ProbeActions({
   probe: Probe;
   onAction: (action: ProbeAction) => void;
 }) {
-  const queryClient = useQueryClient();
-  const update = useMutation(orpc.probes.update.mutationOptions());
-  const toggle = async () => {
-    try {
-      await update.mutateAsync({ id: probe.id, enabled: !probe.enabled });
-      await queryClient.invalidateQueries({ queryKey: orpc.probes.key() });
-    } catch (error) {
-      toast.error(errorMessage(error));
-    }
-  };
+  const update = useMutation({
+    ...orpc.probes.update.mutationOptions(),
+    meta: { invalidates: [orpc.probes.key()], toastError: true },
+  });
+  const toggle = () => update.mutate({ id: probe.id, enabled: !probe.enabled });
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -493,8 +487,10 @@ function ProbeActionDialog({ action, ...dialog }: { action: ProbeAction } & Dial
 }
 
 function RenameProbeDialog({ probe, open, onOpenChange }: { probe: Probe } & DialogProps) {
-  const queryClient = useQueryClient();
-  const update = useMutation(orpc.probes.update.mutationOptions());
+  const update = useMutation({
+    ...orpc.probes.update.mutationOptions(),
+    meta: { invalidates: [orpc.probes.key()], success: m.common_saved },
+  });
   return (
     <FormDialog
       open={open}
@@ -507,8 +503,6 @@ function RenameProbeDialog({ probe, open, onOpenChange }: { probe: Probe } & Dia
           id: probe.id,
           name: String(data.get("probeNewName") ?? "").trim(),
         });
-        await queryClient.invalidateQueries({ queryKey: orpc.probes.key() });
-        toast.success(m.common_saved());
         onOpenChange(false);
       }}
     >
@@ -527,8 +521,11 @@ function RenameProbeDialog({ probe, open, onOpenChange }: { probe: Probe } & Dia
 }
 
 function DeleteProbeDialog({ probe, open, onOpenChange }: { probe: Probe } & DialogProps) {
-  const queryClient = useQueryClient();
-  const remove = useMutation(orpc.probes.delete.mutationOptions());
+  // Scheduling uses the probe's measurements.
+  const remove = useMutation({
+    ...orpc.probes.delete.mutationOptions(),
+    meta: { invalidates: "all", success: m.common_deleted },
+  });
   return (
     <ControlledConfirmDialog
       open={open}
@@ -536,8 +533,6 @@ function DeleteProbeDialog({ probe, open, onOpenChange }: { probe: Probe } & Dia
       title={m.probes_delete_confirm({ name: probe.name })}
       onConfirm={async () => {
         await remove.mutateAsync({ id: probe.id });
-        await queryClient.invalidateQueries();
-        toast.success(m.common_deleted());
       }}
     />
   );

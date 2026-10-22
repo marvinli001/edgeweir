@@ -4,7 +4,7 @@
  * Keep the providers and router options in step with it; the one difference is that failed
  * queries are not retried in the lab's error state, so ErrorState shows at once.
  */
-import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import {
   createHashHistory,
   createMemoryHistory,
@@ -21,6 +21,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getLocale } from "@/lib/i18n";
 import { isNotFound, isUnauthorized } from "@/lib/orpc";
+import { createQueryClient } from "@/lib/query-client";
 import { readRecents, recordRecent } from "@/lib/recents";
 import { routeTree } from "@/routeTree.gen";
 import { sites } from "./fixtures/world";
@@ -32,16 +33,10 @@ function onUnauthorized(error: unknown) {
   void router.navigate({ to: "/login", replace: true });
 }
 
-const queryClient = new QueryClient({
-  queryCache: new QueryCache({ onError: onUnauthorized }),
-  mutationCache: new MutationCache({ onError: onUnauthorized }),
-  defaultOptions: {
-    queries: {
-      staleTime: 5_000,
-      retry: (count, error) =>
-        labState() !== "error" && !isUnauthorized(error) && !isNotFound(error) && count < 2,
-    },
-  },
+const queryClient = createQueryClient({
+  onError: onUnauthorized,
+  retry: (count, error) =>
+    labState() !== "error" && !isUnauthorized(error) && !isNotFound(error) && count < 2,
 });
 
 const router = createRouter({

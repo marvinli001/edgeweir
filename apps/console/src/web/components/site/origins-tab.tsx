@@ -8,7 +8,7 @@ import type {
   Site,
 } from "@edgeweir/contract";
 import { S3_PRESETS } from "@edgeweir/contract";
-import { MAX_HOST_HEADER_LENGTH, validHostHeader } from "@edgeweir/rule-engine";
+import { MAX_HOST_HEADER_LENGTH } from "@edgeweir/rule-engine";
 import { Add01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import { fillOrigin, replacesField } from "@/lib/address-input";
 import { m } from "@/lib/i18n";
+import { invalidHostHeader } from "@/lib/lists";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
@@ -111,12 +112,6 @@ const presetLabel: Record<(typeof S3_PRESETS)[number]["id"], () => string> = {
   cos: m.s3_preset_cos,
   bos: m.s3_preset_bos,
   kodo: m.s3_preset_kodo,
-};
-
-/** A Host header nodes refuse: they skip the origin. Empty follows the request. */
-const invalidHostHeader = (value: string) => {
-  const host = value.trim();
-  return host !== "" && !validHostHeader(host);
 };
 
 /** A row with an origin in its fields: a URL's protocol and port go into theirs. */

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { caLabel } from "@/components/acme-ca";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { enterDelay } from "@/components/page";
@@ -15,9 +15,11 @@ import { orpc } from "@/lib/orpc";
  * certificate uses can be deleted.
  */
 export function AcmeAccountsCard() {
-  const client = useQueryClient();
   const accounts = useQuery(orpc.acmeAccounts.list.queryOptions());
-  const remove = useMutation(orpc.acmeAccounts.delete.mutationOptions());
+  const remove = useMutation({
+    ...orpc.acmeAccounts.delete.mutationOptions(),
+    meta: { invalidates: [orpc.acmeAccounts.key()] },
+  });
   return (
     <Card data-testid="acme-accounts">
       <CardHeader>
@@ -68,7 +70,6 @@ export function AcmeAccountsCard() {
                   }
                   onConfirm={async () => {
                     await remove.mutateAsync({ id: account.id });
-                    await client.invalidateQueries();
                   }}
                 />
               </div>

@@ -1,5 +1,4 @@
 import { logRetention } from "@edgeweir/contract";
-import { useQueryClient } from "@tanstack/react-query";
 import { SettingsCard } from "@/components/settings-card";
 import { NumberField } from "@/components/site/fields";
 import { m } from "@/lib/i18n";
@@ -14,7 +13,6 @@ const range = (storage: "lite" | "clickhouse") =>
  * other one's days are saved as they are.
  */
 export function LogRetentionCard() {
-  const queryClient = useQueryClient();
   return (
     <SettingsCard
       title={m.system_log_retention_title()}
@@ -22,10 +20,11 @@ export function LogRetentionCard() {
       style={{ animationDelay: "150ms" }}
       testId="log-retention-card"
       query={orpc.settings.logRetention.queryOptions()}
-      mutation={orpc.settings.setLogRetention.mutationOptions({
+      mutation={{
+        ...orpc.settings.setLogRetention.mutationOptions(),
         // Sites' log tabs show the days.
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: orpc.logs.key() }),
-      })}
+        meta: { invalidates: [orpc.settings.logRetention.key(), orpc.logs.key()] },
+      }}
       toDraft={(s) => ({
         days: String(s.storage === "clickhouse" ? s.clickhouseDays : s.postgresDays),
       })}

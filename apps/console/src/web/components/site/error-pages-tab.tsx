@@ -8,9 +8,8 @@ import {
   usesRulesV3Placeholders,
   validErrorRedirect,
 } from "@edgeweir/contract";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import {
   TemplateBytes,
   TemplateInput,
@@ -27,8 +26,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useSettingsForm } from "@/hooks/use-settings-form";
 import { m } from "@/lib/i18n";
-import { errorMessage, orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/orpc";
 
 /** Every page the form edits: the statuses, then the 4xx and 5xx classes. */
 const STATUSES: readonly ErrorPageStatus[] = [...ERROR_PAGE_STATUSES, ...ERROR_PAGE_CLASSES];
@@ -145,11 +145,35 @@ function ErrorPagesForm({
   availabilityContent: FeatureAvailability;
 }) {
   const queryClient = useQueryClient();
-  const mutation = useMutation(orpc.errorPages.update.mutationOptions());
   const saved = React.useMemo(() => toDrafts(initial.pages), [initial.pages]);
-  const [drafts, setDrafts] = React.useState(saved);
-  const [intercept, setIntercept] = React.useState(initial.interceptOriginErrors);
-  const [error, setError] = React.useState<string | null>(null);
+  const form = useSettingsForm({
+    value: initial,
+    toDraft: (value) => ({ pages: toDrafts(value.pages), intercept: value.interceptOriginErrors }),
+    toInput: ({ pages, intercept }, value) => ({
+      id: siteId,
+      // A blank page means the built-in page.
+      pages: STATUSES.flatMap((status) => {
+        const d = pages[status];
+        if (!isPage(d)) return [];
+        return d.mode === "redirect"
+          ? [{ status, template: "", redirectUrl: d.redirectUrl.trim(), responseStatus: 0 }]
+          : [
+              {
+                status,
+                template: d.template,
+                redirectUrl: "",
+                responseStatus: d.responseStatus.trim() ? Number(d.responseStatus) : 0,
+              },
+            ];
+      }),
+      interceptOriginErrors: intercept,
+      ...(value.updatedAt ? { expectedUpdatedAt: value.updatedAt } : {}),
+    }),
+    mutation: orpc.errorPages.update.mutationOptions(),
+    onSaved: (result) =>
+      queryClient.setQueryData(orpc.errorPages.get.queryKey({ input: { id: siteId } }), result),
+  });
+  const { pages: drafts, intercept } = form.draft;
   // Pages wait until the cluster's nodes run them.
   const editable = availability.available;
   const tooLarge = STATUSES.some(
@@ -161,48 +185,14 @@ function ErrorPagesForm({
       ? d.redirectUrl.trim() !== "" && !validErrorRedirect(d.redirectUrl.trim())
       : !statusValid(d.responseStatus);
   });
-  const dirty =
-    intercept !== initial.interceptOriginErrors || JSON.stringify(drafts) !== JSON.stringify(saved);
   const set = (status: ErrorPageStatus, change: Partial<PageDraft>) =>
-    setDrafts({ ...drafts, [status]: { ...drafts[status], ...change } });
+    form.set({ pages: { ...drafts, [status]: { ...drafts[status], ...change } } });
   // A page that is new with site-content-v1 waits like the others (one already saved stays).
   const locked = (status: ErrorPageStatus) =>
     !editable || (!availabilityContent.available && !V1.includes(status) && !isPage(saved[status]));
 
   return (
-    <form
-      className="flex flex-col gap-(--card-spacing)"
-      onSubmit={async (event) => {
-        event.preventDefault();
-        setError(null);
-        try {
-          const result = await mutation.mutateAsync({
-            id: siteId,
-            // A blank page means the built-in page.
-            pages: STATUSES.flatMap((status) => {
-              const d = drafts[status];
-              if (!isPage(d)) return [];
-              return d.mode === "redirect"
-                ? [{ status, template: "", redirectUrl: d.redirectUrl.trim(), responseStatus: 0 }]
-                : [
-                    {
-                      status,
-                      template: d.template,
-                      redirectUrl: "",
-                      responseStatus: d.responseStatus.trim() ? Number(d.responseStatus) : 0,
-                    },
-                  ];
-            }),
-            interceptOriginErrors: intercept,
-            ...(initial.updatedAt ? { expectedUpdatedAt: initial.updatedAt } : {}),
-          });
-          queryClient.setQueryData(orpc.errorPages.get.queryKey({ input: { id: siteId } }), result);
-          toast.success(m.common_saved());
-        } catch (err) {
-          setError(errorMessage(err));
-        }
-      }}
-    >
+    <form className="flex flex-col gap-(--card-spacing)" onSubmit={form.submit}>
       <CardContent className="flex flex-col gap-5">
         {availability.available ? null : (
           <SafetyNote className="animate-in fade-in" data-testid="error-pages-unavailable">
@@ -250,16 +240,16 @@ function ErrorPagesForm({
           label={m.error_pages_intercept()}
           checked={intercept}
           disabled={!editable}
-          onCheckedChange={setIntercept}
+          onCheckedChange={(checked) => form.set({ intercept: checked })}
           className="self-start"
           testId="error-pages-intercept"
         />
         <TemplateVariables hideRulesV3={!availabilityV3.available} />
       </CardContent>
       <SaveBar
-        dirty={dirty && editable && !tooLarge && !invalid}
-        pending={mutation.isPending}
-        error={error}
+        dirty={form.dirty && editable && !tooLarge && !invalid}
+        pending={form.pending}
+        error={form.error}
         testId="error-pages-save"
       />
     </form>

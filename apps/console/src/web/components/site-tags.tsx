@@ -8,7 +8,7 @@ import {
 } from "@edgeweir/contract";
 import { Cancel01Icon, Delete02Icon, Edit02Icon, Tag01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { enterDelay } from "@/components/page";
@@ -337,18 +337,13 @@ export function TagManagerDialog({
 }
 
 function TagRow({ tag, index }: { tag: SiteTag; index: number }) {
-  const queryClient = useQueryClient();
   const [editing, setEditing] = React.useState(false);
   const [name, setName] = React.useState(tag.name);
   const [error, setError] = React.useState<string | null>(null);
   const [confirming, setConfirming] = React.useState(false);
-  const rename = useMutation(orpc.siteTags.rename.mutationOptions());
-  const remove = useMutation(orpc.siteTags.delete.mutationOptions());
-  const refresh = () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: orpc.siteTags.key() }),
-      queryClient.invalidateQueries({ queryKey: orpc.sites.key() }),
-    ]);
+  const meta = { invalidates: [orpc.siteTags.key(), orpc.sites.key()] };
+  const rename = useMutation({ ...orpc.siteTags.rename.mutationOptions(), meta });
+  const remove = useMutation({ ...orpc.siteTags.delete.mutationOptions(), meta });
   return (
     <li
       className="flex flex-col gap-2 px-3 py-2.5 animate-enter"
@@ -368,7 +363,6 @@ function TagRow({ tag, index }: { tag: SiteTag; index: number }) {
             }
             try {
               await rename.mutateAsync({ id: tag.id, name: parsed.data });
-              await refresh();
               setEditing(false);
               setError(null);
             } catch (err) {
@@ -443,7 +437,6 @@ function TagRow({ tag, index }: { tag: SiteTag; index: number }) {
         confirmLabel={m.common_delete()}
         onConfirm={async () => {
           await remove.mutateAsync({ id: tag.id });
-          await refresh();
         }}
       />
     </li>

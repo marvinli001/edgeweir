@@ -1,21 +1,5 @@
-import {
-  closestCenter,
-  DndContext,
-  type DragEndEvent,
-  KeyboardSensor,
-  type Modifier,
-  PointerSensor,
-  type UniqueIdentifier,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import type { Modifier, UniqueIdentifier } from "@dnd-kit/core";
+import { arrayMove, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
   type CacheRule,
@@ -49,13 +33,8 @@ import { CharsetCard, PurgeMethodCard, XCacheCard } from "@/components/site/cont
 import { ExpressionEditor, expressionFailure } from "@/components/site/expression-editor";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { ImageConvertCard, ImageSavingsCard } from "@/components/site/image-convert-card";
-import {
-  nextDraftKey,
-  SaveBar,
-  serializeDrafts,
-  splitList,
-  useSaveSite,
-} from "@/components/site/save-site";
+import { nextDraftKey, SaveBar, serializeDrafts, useSaveSite } from "@/components/site/save-site";
+import { SortableList, useSortableRow } from "@/components/sortable-list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,9 +42,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { localizeError } from "@/lib/errors";
 import { m } from "@/lib/i18n";
+import { splitList } from "@/lib/lists";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
@@ -285,22 +264,11 @@ function CacheRulesCard({ site }: { site: Site }) {
   const [invalid, setInvalid] = React.useState<string | null>(null);
   const patch = (key: number, change: Partial<RuleDraft>) =>
     setRows(rows.map((r) => (r.key === key ? { ...r, ...change } : r)));
-
-  const reducedMotion = useReducedMotion();
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-      // Keyboard moves scroll the page along; smoothly unless motion is reduced.
-      scrollBehavior: reducedMotion ? "auto" : "smooth",
-    }),
-  );
   const position = (id: UniqueIdentifier) => rows.findIndex((r) => r.key === id) + 1;
-  const onDragEnd = ({ active, over }: DragEndEvent) => {
-    if (!over || active.id === over.id) return;
+  const onMove = (active: UniqueIdentifier, over: UniqueIdentifier) => {
     setRows((current) => {
-      const from = current.findIndex((r) => r.key === active.id);
-      const to = current.findIndex((r) => r.key === over.id);
+      const from = current.findIndex((r) => r.key === active);
+      const to = current.findIndex((r) => r.key === over);
       return from < 0 || to < 0 ? current : arrayMove(current, from, to);
     });
   };
@@ -347,34 +315,7 @@ function CacheRulesCard({ site }: { site: Site }) {
           {rows.length === 0 ? (
             <p className="text-sm text-muted-foreground">{m.sites_no_cache_rules()}</p>
           ) : null}
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            modifiers={[restrictToVerticalAxis]}
-            onDragEnd={onDragEnd}
-            accessibility={{
-              screenReaderInstructions: { draggable: m.site_rule_drag_instructions() },
-              announcements: {
-                onDragStart: ({ active }) => m.site_rule_drag_start({ index: position(active.id) }),
-                onDragOver: ({ active, over }) =>
-                  over
-                    ? m.site_rule_drag_over({
-                        index: position(active.id),
-                        position: position(over.id),
-                      })
-                    : undefined,
-                onDragEnd: ({ active, over }) =>
-                  over
-                    ? m.site_rule_drag_end({
-                        index: position(active.id),
-                        position: position(over.id),
-                      })
-                    : m.site_rule_drag_cancel({ index: position(active.id) }),
-                onDragCancel: ({ active }) =>
-                  m.site_rule_drag_cancel({ index: position(active.id) }),
-              },
-            }}
-          >
+          <SortableList position={position} onMove={onMove} modifiers={[restrictToVerticalAxis]}>
             <SortableContext items={rows.map((r) => r.key)} strategy={verticalListSortingStrategy}>
               {/* Flat rows split by hairlines, edge to edge in the card. */}
               <ol
@@ -394,7 +335,7 @@ function CacheRulesCard({ site }: { site: Site }) {
                 ))}
               </ol>
             </SortableContext>
-          </DndContext>
+          </SortableList>
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
@@ -470,7 +411,6 @@ function SortableRule({
   onChange: (change: Partial<RuleDraft>) => void;
   onRemove: () => void;
 }) {
-  const reducedMotion = useReducedMotion();
   const {
     attributes,
     listeners,
@@ -479,11 +419,7 @@ function SortableRule({
     transform,
     transition,
     isDragging,
-  } = useSortable({
-    id: row.key,
-    attributes: { roleDescription: m.site_rule_role() },
-    transition: reducedMotion ? null : undefined,
-  });
+  } = useSortableRow(row.key);
   const [open, setOpen] = React.useState(() => moreCount(row) > 0);
   const hidden = moreCount(row);
   const bypass = row.action === "bypass";

@@ -1,30 +1,26 @@
 import { StarIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { m } from "@/lib/i18n";
-import { errorMessage, orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
 /** The caller's starred sites and a toggle that keeps every list in step. */
 export function useSiteStars() {
-  const queryClient = useQueryClient();
   const starred = useQuery(orpc.sites.starred.queryOptions());
-  const setStarred = useMutation(orpc.sites.setStarred.mutationOptions());
+  const setStarred = useMutation({
+    ...orpc.sites.setStarred.mutationOptions(),
+    meta: { invalidates: [orpc.sites.starred.key()], toastError: true },
+  });
   const ids = React.useMemo(() => new Set(starred.data?.map((s) => s.id)), [starred.data]);
   const { mutateAsync } = setStarred;
   const toggle = React.useCallback(
     async (id: string) => {
-      try {
-        await mutateAsync({ id, starred: !ids.has(id) });
-        await queryClient.invalidateQueries({ queryKey: orpc.sites.starred.key() });
-      } catch (error) {
-        toast.error(errorMessage(error));
-      }
+      await mutateAsync({ id, starred: !ids.has(id) }).catch(() => undefined);
     },
-    [ids, mutateAsync, queryClient],
+    [ids, mutateAsync],
   );
   return {
     starred,

@@ -1,4 +1,4 @@
-import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -10,6 +10,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getLocale } from "@/lib/i18n";
 import { isLoginIpRefused, isNotFound, isUnauthorized } from "@/lib/orpc";
+import { createQueryClient } from "@/lib/query-client";
 import { routeTree } from "./routeTree.gen";
 
 /**
@@ -24,17 +25,11 @@ function onUnauthorized(error: unknown) {
   void router.navigate({ to: "/login", search: { redirect: href }, replace: true });
 }
 
-const queryClient = new QueryClient({
-  queryCache: new QueryCache({ onError: onUnauthorized }),
-  mutationCache: new MutationCache({ onError: onUnauthorized }),
-  defaultOptions: {
-    queries: {
-      staleTime: 5_000,
-      // Asking again cannot sign in or bring back a deleted record.
-      retry: (count, error) =>
-        !isUnauthorized(error) && !isLoginIpRefused(error) && !isNotFound(error) && count < 2,
-    },
-  },
+const queryClient = createQueryClient({
+  onError: onUnauthorized,
+  // Asking again cannot sign in or bring back a deleted record.
+  retry: (count, error) =>
+    !isUnauthorized(error) && !isLoginIpRefused(error) && !isNotFound(error) && count < 2,
 });
 
 const router = createRouter({

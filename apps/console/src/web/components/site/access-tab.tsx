@@ -27,7 +27,6 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CopyButton } from "@/components/copy-button";
 import { FormDialog } from "@/components/form-dialog";
@@ -52,10 +51,12 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { useSettingsForm } from "@/hooks/use-settings-form";
 import { authKindLabel } from "@/lib/access-logs";
 import { localizeError } from "@/lib/errors";
 import { formatDateTime, m } from "@/lib/i18n";
-import { errorMessage, orpc } from "@/lib/orpc";
+import { splitList } from "@/lib/lists";
+import { orpc } from "@/lib/orpc";
 import { randomUuid } from "@/lib/uuid";
 
 /** A rule as the form edits it: numbers and lists as text, write-only secrets empty. */
@@ -99,7 +100,6 @@ const lines = (value: string) =>
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
-const words = (value: string) => value.split(/[\s,]+/).filter(Boolean);
 
 function newDraft(kind: AuthKind, siteName: string): Draft {
   return {
@@ -188,7 +188,7 @@ function toInput(d: Draft): AuthRuleInput {
     scope: {
       domains: d.domains,
       pathPrefixes: lines(d.pathPrefixes),
-      extensions: words(d.extensions),
+      extensions: splitList(d.extensions),
       excludePathPrefixes: lines(d.excludePathPrefixes),
     },
   };
@@ -212,8 +212,8 @@ function toInput(d: Draft): AuthRuleInput {
         url: d.url.trim(),
         method: d.method,
         timeoutMs: Math.round(Number(d.timeoutSeconds) * 1000),
-        requestHeaders: words(d.requestHeaders),
-        responseHeaders: words(d.responseHeaders),
+        requestHeaders: splitList(d.requestHeaders),
+        responseHeaders: splitList(d.responseHeaders),
         cacheSeconds: Number(d.cacheSeconds),
         passRedirects: d.passRedirects,
         allowUnavailable: d.allowUnavailable,
@@ -244,7 +244,7 @@ function scopeSummary(d: Draft): string {
   const parts = [
     ...d.domains.map(displaySiteDomain),
     ...lines(d.pathPrefixes),
-    ...words(d.extensions).map((e) => `.${e}`),
+    ...splitList(d.extensions).map((e) => `.${e}`),
   ];
   const excluded = lines(d.excludePathPrefixes);
   const scope = parts.length ? parts.join(" · ") : m.auth_scope_all();
@@ -295,18 +295,27 @@ function AuthRulesForm({
   availability: FeatureAvailability;
 }) {
   const queryClient = useQueryClient();
-  const mutation = useMutation(orpc.authRules.update.mutationOptions());
-  const saved = React.useMemo(
-    () => initial.rules.map((rule) => toDraft(rule, site.name)),
-    [initial.rules, site.name],
-  );
-  const [rows, setRows] = React.useState(saved);
-  const [error, setError] = React.useState<string | null>(null);
+  const form = useSettingsForm({
+    value: initial,
+    toDraft: (value) => value.rules.map((rule) => toDraft(rule, site.name)),
+    toInput: (rows, value) => ({
+      id: site.id,
+      rules: rows.map(toInput),
+      ...(value.updatedAt ? { expectedUpdatedAt: value.updatedAt } : {}),
+    }),
+    check: (input) => {
+      const parsed = siteAuthRulesInput.safeParse(input);
+      return parsed.success ? null : localizeError(parsed.error);
+    },
+    mutation: orpc.authRules.update.mutationOptions(),
+    onSaved: (result) =>
+      queryClient.setQueryData(orpc.authRules.get.queryKey({ input: { id: site.id } }), result),
+  });
+  const { draft: rows, setDraft: setRows, dirty } = form;
   const [editing, setEditing] = React.useState<{ index: number; draft: Draft } | null>(null);
   const [signing, setSigning] = React.useState<Draft | null>(null);
   // Rules wait until the cluster's nodes check them; saved ones can still be removed.
   const blocked = !availability.available && initial.rules.length === 0;
-  const dirty = JSON.stringify(rows) !== JSON.stringify(saved);
   const move = (index: number, by: number) => {
     const next = [...rows];
     const [row] = next.splice(index, 1);
@@ -318,32 +327,7 @@ function AuthRulesForm({
   // portal into it.
   return (
     <>
-      <form
-        className="flex flex-col gap-(--card-spacing)"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          setError(null);
-          const parsed = siteAuthRulesInput.safeParse({
-            id: site.id,
-            rules: rows.map(toInput),
-            ...(initial.updatedAt ? { expectedUpdatedAt: initial.updatedAt } : {}),
-          });
-          if (!parsed.success) {
-            setError(localizeError(parsed.error));
-            return;
-          }
-          try {
-            const result = await mutation.mutateAsync(parsed.data);
-            queryClient.setQueryData(
-              orpc.authRules.get.queryKey({ input: { id: site.id } }),
-              result,
-            );
-            toast.success(m.common_saved());
-          } catch (err) {
-            setError(errorMessage(err));
-          }
-        }}
-      >
+      <form className="flex flex-col gap-(--card-spacing)" onSubmit={form.submit}>
         <CardHeader className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle>{m.auth_title()}</CardTitle>
           <Button
@@ -465,8 +449,8 @@ function AuthRulesForm({
         </CardContent>
         <SaveBar
           dirty={dirty && !blocked}
-          pending={mutation.isPending}
-          error={error}
+          pending={form.pending}
+          error={form.error}
           testId="auth-save"
         />
       </form>
@@ -505,7 +489,10 @@ function FormerIdentityHeaders({
   disabled: boolean;
 }) {
   const queryClient = useQueryClient();
-  const forget = useMutation(orpc.authRules.forgetIdentityHeaders.mutationOptions());
+  const forget = useMutation({
+    ...orpc.authRules.forgetIdentityHeaders.mutationOptions(),
+    meta: { success: m.common_saved },
+  });
   const names = saved.formerIdentityHeaders;
   if (!names.length) return null;
   return (
@@ -543,7 +530,6 @@ function FormerIdentityHeaders({
             ...(saved.updatedAt ? { expectedUpdatedAt: saved.updatedAt } : {}),
           });
           queryClient.setQueryData(orpc.authRules.get.queryKey({ input: { id: siteId } }), result);
-          toast.success(m.common_saved());
         }}
       />
     </CardContent>

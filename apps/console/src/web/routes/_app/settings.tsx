@@ -1,6 +1,6 @@
 import { Add01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -77,16 +77,15 @@ function SettingsPage() {
 }
 
 function ApiKeysCard() {
-  const queryClient = useQueryClient();
   const [scope, setScope] = React.useState<"read" | "write">("write");
   const keys = useQuery(orpc.accessKeys.list.queryOptions());
   const create = useMutation({
     ...orpc.accessKeys.create.mutationOptions(),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: orpc.accessKeys.key() }),
+    meta: { invalidates: [orpc.accessKeys.key()] },
   });
   const revoke = useMutation({
     ...orpc.accessKeys.revoke.mutationOptions(),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: orpc.accessKeys.key() }),
+    meta: { invalidates: [orpc.accessKeys.key()] },
   });
 
   return (

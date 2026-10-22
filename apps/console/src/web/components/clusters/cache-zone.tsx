@@ -1,13 +1,11 @@
 import { CACHE_SIZE_GB_RANGE, type Cluster } from "@edgeweir/contract";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import * as React from "react";
-import { toast } from "sonner";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useSettingsForm } from "@/hooks/use-settings-form";
 import { formatNumber, m } from "@/lib/i18n";
-import { errorMessage, orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/orpc";
 
 const whole = (value: string, min: number, max: number) => {
   const n = Number(value);
@@ -16,37 +14,30 @@ const whole = (value: string, min: number, max: number) => {
 
 /** The cluster's cache zone: its size on every node and how long unrequested objects stay. */
 export function ClusterCacheCard({ cluster }: { cluster: Cluster }) {
-  const queryClient = useQueryClient();
-  const mutation = useMutation(orpc.clusters.setCache.mutationOptions());
-  const saved = {
-    size: String(cluster.cache.maxSizeGb),
-    days: String(cluster.cache.inactiveDays),
-  };
-  const [draft, setDraft] = React.useState(saved);
-  const [error, setError] = React.useState<string | null>(null);
+  const form = useSettingsForm({
+    value: cluster.cache,
+    toDraft: (cache) => ({ size: String(cache.maxSizeGb), days: String(cache.inactiveDays) }),
+    toInput: (draft) => ({
+      id: cluster.id,
+      maxSizeGb: Number(draft.size),
+      inactiveDays: Number(draft.days),
+    }),
+    mutation: {
+      ...orpc.clusters.setCache.mutationOptions(),
+      meta: { invalidates: [orpc.clusters.key()] },
+    },
+  });
+  const { draft, set } = form;
   const sizeValid = whole(draft.size, CACHE_SIZE_GB_RANGE.min, CACHE_SIZE_GB_RANGE.max);
   const daysValid = whole(draft.days, 1, 90);
   const valid = sizeValid && daysValid;
-  const dirty = draft.size !== saved.size || draft.days !== saved.days;
   return (
     <Card className="animate-enter" data-testid="cluster-cache">
       <form
         className="flex flex-col gap-(--card-spacing)"
-        onSubmit={async (event) => {
+        onSubmit={(event) => {
           event.preventDefault();
-          if (!valid) return;
-          setError(null);
-          try {
-            await mutation.mutateAsync({
-              id: cluster.id,
-              maxSizeGb: Number(draft.size),
-              inactiveDays: Number(draft.days),
-            });
-            await queryClient.invalidateQueries({ queryKey: orpc.clusters.key() });
-            toast.success(m.common_saved());
-          } catch (err) {
-            setError(errorMessage(err));
-          }
+          if (valid) void form.submit();
         }}
       >
         <CardHeader>
@@ -70,7 +61,7 @@ export function ClusterCacheCard({ cluster }: { cluster: Cluster }) {
                       max: formatNumber(CACHE_SIZE_GB_RANGE.max),
                     })
               }
-              onChange={(size) => setDraft({ ...draft, size })}
+              onChange={(size) => set({ size })}
               testId="cluster-cache-size"
             />
             <NumberField
@@ -82,16 +73,16 @@ export function ClusterCacheCard({ cluster }: { cluster: Cluster }) {
               step={1}
               required
               error={daysValid ? undefined : m.common_whole_number_range({ min: "1", max: "90" })}
-              onChange={(days) => setDraft({ ...draft, days })}
+              onChange={(days) => set({ days })}
               testId="cluster-cache-days"
             />
           </div>
           <SafetyNote>{m.cluster_cache_note()}</SafetyNote>
         </CardContent>
         <SaveBar
-          dirty={dirty && valid}
-          pending={mutation.isPending}
-          error={error}
+          dirty={form.dirty && valid}
+          pending={form.pending}
+          error={form.error}
           testId="cluster-cache-save"
         />
       </form>

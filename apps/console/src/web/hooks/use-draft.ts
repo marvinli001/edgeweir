@@ -5,8 +5,8 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 /**
  * A form's draft of a server value. While the form is unchanged it follows the server; with unsaved
  * changes it keeps them, and `version` stays the one they started from, so a save is checked
- * against what the user saw. The server coming back with the draft's value (the form's own save)
- * makes the form clean again. `version` defaults to the value itself.
+ * against what the user saw. The server coming back with the draft's value, or `markSaved` after
+ * the form's own save, makes the form clean again. `version` defaults to the value itself.
  */
 export function useDraft<T>(server: T, version: string = JSON.stringify(server)) {
   const [state, setState] = React.useState({ base: server, version, draft: server });
@@ -16,9 +16,12 @@ export function useDraft<T>(server: T, version: string = JSON.stringify(server))
     setState(current);
   }
   const setDraft = React.useCallback((draft: T) => setState((s) => ({ ...s, draft })), []);
+  // The saved draft is the new base: the next server version replaces it.
+  const markSaved = React.useCallback(() => setState((s) => ({ ...s, base: s.draft })), []);
   return {
     draft: current.draft,
     setDraft,
+    markSaved,
     version: current.version,
     dirty: !same(current.draft, current.base),
   };

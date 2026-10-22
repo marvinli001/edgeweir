@@ -1,9 +1,8 @@
 import { type Cluster, type Node, nodeUpgradeRecommended } from "@edgeweir/contract";
 import { Add01Icon, MoreHorizontalIcon, ServerStack01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type * as React from "react";
-import { toast } from "sonner";
 import { type NodeAction, NodeActionDialog } from "@/components/clusters/node-dialogs";
 import { NodeChannelBadge } from "@/components/node-channel-state";
 import {
@@ -27,7 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
-import { errorMessage, orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/orpc";
 
 function RevisionBadge({ node, latest }: { node: Node; latest: number }) {
   if (node.upgradeRequired) {
@@ -79,18 +78,11 @@ function NodeActions({
   onAction: (action: NodeAction) => void;
   onDetail: (id: string) => void;
 }) {
-  const queryClient = useQueryClient();
-  const disable = useMutation(orpc.nodes.disable.mutationOptions());
-  const enable = useMutation(orpc.nodes.enable.mutationOptions());
-  const toggle = async () => {
-    try {
-      if (node.status === "disabled") await enable.mutateAsync({ id: node.id });
-      else await disable.mutateAsync({ id: node.id });
-      await queryClient.invalidateQueries();
-    } catch (error) {
-      toast.error(errorMessage(error));
-    }
-  };
+  const meta = { invalidates: "all", toastError: true } as const;
+  const disable = useMutation({ ...orpc.nodes.disable.mutationOptions(), meta });
+  const enable = useMutation({ ...orpc.nodes.enable.mutationOptions(), meta });
+  const toggle = () =>
+    node.status === "disabled" ? enable.mutate({ id: node.id }) : disable.mutate({ id: node.id });
   return (
     <DropdownMenu>
       <DropdownMenuTrigger

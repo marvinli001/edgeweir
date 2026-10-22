@@ -6,7 +6,7 @@ import {
   PencilEdit01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
@@ -28,8 +28,10 @@ import { orpc } from "@/lib/orpc";
  * column templates are plain functions (DataTable) and hold no hooks.
  */
 export function L4EnabledSwitch({ app }: { app: L4App }) {
-  const queryClient = useQueryClient();
-  const setEnabled = useMutation(orpc.l4Apps.setEnabled.mutationOptions());
+  const setEnabled = useMutation({
+    ...orpc.l4Apps.setEnabled.mutationOptions(),
+    meta: { invalidates: [orpc.l4Apps.key(), orpc.clusters.key()] },
+  });
   const [open, setOpen] = React.useState(false);
   const enable = !app.enabled;
   return (
@@ -58,9 +60,6 @@ export function L4EnabledSwitch({ app }: { app: L4App }) {
             enabled: enable,
             expectedUpdatedAt: app.updatedAt,
           });
-          queryClient.setQueryData(orpc.l4Apps.get.queryKey({ input: { id: app.id } }), result.app);
-          await queryClient.invalidateQueries({ queryKey: orpc.l4Apps.key() });
-          await queryClient.invalidateQueries({ queryKey: orpc.clusters.key() });
           toast.success(
             result.app.enabled
               ? m.l4_enabled_toast({ revision: result.revision.revision })
@@ -84,8 +83,11 @@ export function DeleteL4AppDialog({
   onOpenChange: (open: boolean) => void;
   onDeleted?: () => void;
 }) {
-  const queryClient = useQueryClient();
-  const remove = useMutation(orpc.l4Apps.delete.mutationOptions());
+  // Not the deleted application's own query: it would answer 404.
+  const remove = useMutation({
+    ...orpc.l4Apps.delete.mutationOptions(),
+    meta: { invalidates: [orpc.l4Apps.list.key(), orpc.clusters.key()] },
+  });
   return (
     <ControlledConfirmDialog
       open={open}
@@ -96,8 +98,6 @@ export function DeleteL4AppDialog({
         const result = await remove.mutateAsync({ id: app.id });
         toast.success(m.sites_deleted({ revision: result.revision.revision }));
         onDeleted?.();
-        await queryClient.invalidateQueries({ queryKey: orpc.l4Apps.list.key() });
-        await queryClient.invalidateQueries({ queryKey: orpc.clusters.key() });
       }}
     />
   );

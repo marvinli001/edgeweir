@@ -4,9 +4,8 @@ import type {
   RolloutPolicy,
   RolloutState,
 } from "@edgeweir/contract";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { Countdown } from "@/components/appica/countdown";
 import { SiteChangeList } from "@/components/config-changes";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -79,14 +78,19 @@ export function ClusterRolloutCard({ clusterId }: { clusterId: string }) {
 }
 
 function RolloutStatus({ rollout }: { rollout: ClusterRollout }) {
-  const queryClient = useQueryClient();
-  const promote = useMutation(orpc.clusters.promoteRollout.mutationOptions());
-  const abort = useMutation(orpc.clusters.abortRollout.mutationOptions());
+  const meta = (success: () => string) => ({ invalidates: [orpc.clusters.key()], success });
+  const promote = useMutation({
+    ...orpc.clusters.promoteRollout.mutationOptions(),
+    meta: meta(m.rollout_promoted_toast),
+  });
+  const abort = useMutation({
+    ...orpc.clusters.abortRollout.mutationOptions(),
+    meta: meta(m.rollout_aborted_toast),
+  });
   const state = STATES[rollout.state];
   const running = rollout.state === "canary" || rollout.state === "awaiting_promotion";
   // The server drops repeated reasons; two codes may still read the same.
   const reasons = [...new Set((rollout.candidateChanges?.reasons ?? []).map(revisionReason))];
-  const refresh = () => queryClient.invalidateQueries({ queryKey: orpc.clusters.key() });
   return (
     <CardContent className="flex flex-col gap-3">
       <dl className="divide-y">
@@ -214,8 +218,6 @@ function RolloutStatus({ rollout }: { rollout: ClusterRollout }) {
             confirmLabel={m.rollout_promote()}
             onConfirm={async () => {
               await promote.mutateAsync({ id: rollout.clusterId });
-              await refresh();
-              toast.success(m.rollout_promoted_toast());
             }}
           />
           <ConfirmDialog
@@ -229,8 +231,6 @@ function RolloutStatus({ rollout }: { rollout: ClusterRollout }) {
             confirmLabel={m.rollout_abort()}
             onConfirm={async () => {
               await abort.mutateAsync({ id: rollout.clusterId });
-              await refresh();
-              toast.success(m.rollout_aborted_toast());
             }}
           />
         </div>
@@ -256,8 +256,10 @@ function toDraft(policy: RolloutPolicy): Draft {
 }
 
 function PolicyForm({ rollout }: { rollout: ClusterRollout }) {
-  const queryClient = useQueryClient();
-  const save = useMutation(orpc.clusters.setRolloutPolicy.mutationOptions());
+  const save = useMutation({
+    ...orpc.clusters.setRolloutPolicy.mutationOptions(),
+    meta: { invalidates: [orpc.clusters.key()], success: m.common_saved },
+  });
   // The card polls and every publication moves the rollout; the policy has its own version.
   const { draft, setDraft, version, dirty } = useDraft(
     toDraft(rollout.policy),
@@ -282,8 +284,6 @@ function PolicyForm({ rollout }: { rollout: ClusterRollout }) {
             minRequests: Number(draft.minRequests),
             expectedUpdatedAt: version,
           });
-          await queryClient.invalidateQueries({ queryKey: orpc.clusters.key() });
-          toast.success(m.common_saved());
         } catch (err) {
           setError(errorMessage(err));
         }

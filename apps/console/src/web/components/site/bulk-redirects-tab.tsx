@@ -104,7 +104,10 @@ function BulkRedirectsForm({
   availability: FeatureAvailability;
 }) {
   const queryClient = useQueryClient();
-  const mutation = useMutation(orpc.bulkRedirects.save.mutationOptions());
+  const mutation = useMutation({
+    ...orpc.bulkRedirects.save.mutationOptions(),
+    meta: { success: m.common_saved },
+  });
   const saved = React.useMemo(() => initial.map(toDraft), [initial]);
   const savedJson = React.useMemo(() => serializeDrafts(saved), [saved]);
   const [rows, setRows] = React.useState(saved);
@@ -183,7 +186,6 @@ function BulkRedirectsForm({
               orpc.bulkRedirects.get.queryKey({ input: { id: siteId } }),
               result,
             );
-            toast.success(m.common_saved());
           } catch (err) {
             setError(errorMessage(err));
           }

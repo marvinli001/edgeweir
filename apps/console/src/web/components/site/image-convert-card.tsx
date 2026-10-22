@@ -8,9 +8,8 @@ import {
   MAX_IMAGE_SIZE,
   type Site,
 } from "@edgeweir/contract";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { FormSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
@@ -18,20 +17,20 @@ import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, QueryView } from "@/components/states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FieldLegend, FieldSet } from "@/components/ui/field";
+import { useSettingsForm } from "@/hooks/use-settings-form";
 import { ANALYTICS_RANGES, rangeLabel } from "@/lib/analytics";
 import { formatBytes, m } from "@/lib/i18n";
-import { errorMessage, orpc } from "@/lib/orpc";
+import { checkFieldText } from "@/lib/lists";
+import { orpc } from "@/lib/orpc";
 
 /** Labels of the numeric fields, for the message of a value out of range. */
-const fieldLabel = (field: PropertyKey | undefined): string | null =>
-  (
-    ({
-      webpQuality: () => `${m.image_convert_webp()} · ${m.image_convert_quality()}`,
-      avifQuality: () => `${m.image_convert_avif()} · ${m.image_convert_quality()}`,
-      maxSize: m.image_convert_max_size,
-      maxPixels: m.image_convert_max_pixels,
-    }) as Record<PropertyKey, () => string>
-  )[field as string]?.() ?? null;
+const FIELD_LABELS: Record<string, () => string> = {
+  webpQuality: () => `${m.image_convert_webp()} · ${m.image_convert_quality()}`,
+  avifQuality: () => `${m.image_convert_avif()} · ${m.image_convert_quality()}`,
+  minSize: m.image_convert_min_size,
+  maxSize: m.image_convert_max_size,
+  maxPixels: m.image_convert_max_pixels,
+};
 
 /** What to fix when the settings fail the contract, by the first issue. */
 function settingsError(issue: { path: PropertyKey[]; code: string } | undefined): string {
@@ -41,9 +40,7 @@ function settingsError(issue: { path: PropertyKey[]; code: string } | undefined)
     if (field === "jpeg") return m.image_convert_no_source();
     if (field === "minSize") return m.image_convert_size_order();
   }
-  if (field === "minSize") return m.common_check_field({ field: m.image_convert_min_size() });
-  const label = fieldLabel(field);
-  return label ? m.common_check_field({ field: label }) : m.error_bad_request();
+  return checkFieldText(field, FIELD_LABELS);
 }
 
 /** WebP / AVIF conversion of the site's cached JPEG and PNG responses. */
@@ -53,13 +50,7 @@ export function ImageConvertCard({ site }: { site: Site }) {
   return (
     <QueryView query={combineQueries(settings, features)}>
       {([saved, { imageConvert }]) => (
-        <ImageConvertEditor
-          // Keyed by what was saved: a save elsewhere keeps unsaved edits here.
-          key={JSON.stringify(saved)}
-          siteId={site.id}
-          server={saved}
-          availability={imageConvert}
-        />
+        <ImageConvertEditor siteId={site.id} server={saved} availability={imageConvert} />
       )}
     </QueryView>
   );
@@ -74,15 +65,21 @@ function ImageConvertEditor({
   server: ImageConvertSettings;
   availability: FeatureAvailability;
 }) {
-  const [draft, setDraft] = React.useState(server);
-  const [error, setError] = React.useState<string | null>(null);
-  const [pending, setPending] = React.useState(false);
-  const mutation = useMutation(orpc.imageConvert.update.mutationOptions());
-  const client = useQueryClient();
-  const dirty = JSON.stringify(draft) !== JSON.stringify(server);
+  const { draft, set, dirty, error, pending, submit } = useSettingsForm({
+    value: server,
+    toDraft: (value) => value,
+    toInput: (value) => ({ id: siteId, ...value }),
+    check: ({ id: _id, ...value }) => {
+      const parsed = imageConvertSettings.safeParse(value);
+      return parsed.success ? null : settingsError(parsed.error.issues[0]);
+    },
+    mutation: {
+      ...orpc.imageConvert.update.mutationOptions(),
+      meta: { invalidates: [orpc.imageConvert.key(), orpc.sites.key()] },
+    },
+  });
   // Nodes that lack the feature: it cannot be turned on (it can be turned off).
   const blocked = !availability.available && !server.enabled;
-  const set = (patch: Partial<ImageConvertSettings>) => setDraft({ ...draft, ...patch });
   const number = (value: string) => (value.trim() ? Number(value) : Number.NaN);
   return (
     <Card
@@ -90,28 +87,7 @@ function ImageConvertEditor({
       style={{ animationDelay: "160ms" }}
       data-testid="image-convert-card"
     >
-      <form
-        className="flex flex-col gap-(--card-spacing)"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          const parsed = imageConvertSettings.safeParse(draft);
-          if (!parsed.success) {
-            setError(settingsError(parsed.error.issues[0]));
-            return;
-          }
-          setPending(true);
-          setError(null);
-          try {
-            await mutation.mutateAsync({ id: siteId, ...parsed.data });
-            await client.invalidateQueries();
-            toast.success(m.common_saved());
-          } catch (e) {
-            setError(errorMessage(e));
-          } finally {
-            setPending(false);
-          }
-        }}
-      >
+      <form className="flex flex-col gap-(--card-spacing)" onSubmit={submit}>
         <CardHeader>
           <CardTitle>{m.image_convert_title()}</CardTitle>
         </CardHeader>

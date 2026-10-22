@@ -14,17 +14,17 @@ import { errorMessage, orpc } from "@/lib/orpc";
 /** Saves part of a site; the toast follows the change onto the nodes (followSiteDelivery). */
 export function useSaveSite(siteId: string) {
   const queryClient = useQueryClient();
-  const update = useMutation(orpc.sites.update.mutationOptions());
+  const update = useMutation({
+    ...orpc.sites.update.mutationOptions(),
+    meta: { invalidates: [orpc.sites.key()] },
+  });
   const [error, setError] = React.useState<string | null>(null);
-  const [pending, setPending] = React.useState(false);
   /** Resolves true once saved; a failure is shown in `error`. */
   const save = async (patch: Omit<SiteUpdateInput, "id">): Promise<boolean> => {
-    setPending(true);
     setError(null);
     try {
       const result = await update.mutateAsync({ id: siteId, ...patch });
       queryClient.setQueryData(orpc.sites.get.queryKey({ input: { id: siteId } }), result.site);
-      await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
       followSiteDelivery(queryClient, siteId, m.common_saved(), result.site.delivery);
       // New domains the site's ACME certificate is reissued for.
       if (result.certificateReissue)
@@ -35,11 +35,9 @@ export function useSaveSite(siteId: string) {
     } catch (err) {
       setError(errorMessage(err));
       return false;
-    } finally {
-      setPending(false);
     }
   };
-  return { save, error, pending };
+  return { save, error, pending: update.isPending };
 }
 
 export function SaveBar({
@@ -70,13 +68,6 @@ export function SaveBar({
     </CardFooter>
   );
 }
-
-/** "a, b c" → ["a", "b", "c"]. */
-export const splitList = (value: string) =>
-  value
-    .split(/[\s,]+/)
-    .map((v) => v.trim())
-    .filter(Boolean);
 
 let draftKeys = 0;
 

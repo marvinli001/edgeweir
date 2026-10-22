@@ -56,6 +56,7 @@ import { Switch } from "@/components/ui/switch";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { useDraft } from "@/hooks/use-draft";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { useSettingsForm } from "@/hooks/use-settings-form";
 import { formatDateMinutes, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { challengeLabel, levelLabel, wafModeLabel } from "@/lib/protection";
@@ -673,15 +674,28 @@ function WafForm({
   wafV2: FeatureAvailability;
 }) {
   const queryClient = useQueryClient();
-  const mutation = useMutation(orpc.waf.update.mutationOptions());
-  const initial = {
-    mode: waf.mode,
-    paranoiaLevel: String(waf.paranoiaLevel),
-    anomalyThreshold: String(waf.anomalyThreshold),
-    requestBodyLimit: String(waf.requestBodyLimit),
-    exclusions: waf.exclusions,
-  };
-  const [draft, setDraft] = React.useState(initial);
+  const form = useSettingsForm({
+    value: waf,
+    toDraft: (value) => ({
+      mode: value.mode,
+      paranoiaLevel: String(value.paranoiaLevel),
+      anomalyThreshold: String(value.anomalyThreshold),
+      requestBodyLimit: String(value.requestBodyLimit),
+      exclusions: value.exclusions,
+    }),
+    toInput: (draft) => ({
+      id: siteId,
+      mode: draft.mode,
+      paranoiaLevel: Number(draft.paranoiaLevel),
+      anomalyThreshold: Number(draft.anomalyThreshold),
+      requestBodyLimit: Number(draft.requestBodyLimit),
+      exclusions: draft.exclusions,
+    }),
+    mutation: orpc.waf.update.mutationOptions(),
+    onSaved: (saved) =>
+      queryClient.setQueryData(orpc.waf.get.queryKey({ input: { id: siteId } }), saved),
+  });
+  const { draft, setDraft } = form;
   const preset = usePreset(
     WAF_PRESETS,
     {
@@ -699,7 +713,6 @@ function WafForm({
   );
   const [ruleInput, setRuleInput] = React.useState("");
   const [ruleError, setRuleError] = React.useState<string | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
   // Turning CRS on needs the feature; a site that runs it can still be turned off.
   const locked = !availability.available && waf.mode === "off";
   // The rules every path skips: the site-wide entry, edited as chips.
@@ -722,27 +735,7 @@ function WafForm({
     setDraft({ ...draft, exclusions: withSiteWideRuleIds(draft.exclusions, next) });
   };
   return (
-    <form
-      className="flex flex-col gap-(--card-spacing)"
-      onSubmit={async (event) => {
-        event.preventDefault();
-        setError(null);
-        try {
-          const saved = await mutation.mutateAsync({
-            id: siteId,
-            mode: draft.mode,
-            paranoiaLevel: Number(draft.paranoiaLevel),
-            anomalyThreshold: Number(draft.anomalyThreshold),
-            requestBodyLimit: Number(draft.requestBodyLimit),
-            exclusions: draft.exclusions,
-          });
-          queryClient.setQueryData(orpc.waf.get.queryKey({ input: { id: siteId } }), saved);
-          toast.success(m.common_saved());
-        } catch (err) {
-          setError(errorMessage(err));
-        }
-      }}
-    >
+    <form className="flex flex-col gap-(--card-spacing)" onSubmit={form.submit}>
       <CardContent className="flex flex-col gap-4">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <FormSelect
@@ -872,12 +865,7 @@ function WafForm({
           </SafetyNote>
         )}
       </CardContent>
-      <SaveBar
-        dirty={JSON.stringify(draft) !== JSON.stringify(initial)}
-        pending={mutation.isPending}
-        error={error}
-        testId="waf-save"
-      />
+      <SaveBar dirty={form.dirty} pending={form.pending} error={form.error} testId="waf-save" />
     </form>
   );
 }

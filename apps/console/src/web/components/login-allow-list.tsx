@@ -5,13 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import { m } from "@/lib/i18n";
+import { splitList } from "@/lib/lists";
 import { orpc } from "@/lib/orpc";
-
-const lines = (text: string) =>
-  text
-    .split(/[\s,]+/)
-    .map((line) => line.trim())
-    .filter(Boolean);
 
 /**
  * System page card: the networks the operator may sign in from (empty: anyone), with the
@@ -27,7 +22,7 @@ export function LoginAllowListCard() {
       query={orpc.settings.loginAllowList.queryOptions()}
       mutation={orpc.settings.setLoginAllowList.mutationOptions()}
       toDraft={(list) => ({ text: list.cidrs.join("\n") })}
-      toInput={(d) => ({ cidrs: lines(d.text) })}
+      toInput={(d) => ({ cidrs: splitList(d.text) })}
       check={({ cidrs }) => {
         const invalid = cidrs.find((entry) => normalizeCidr(entry) === null);
         if (invalid !== undefined) return m.system_login_allow_list_invalid({ value: invalid });
@@ -41,7 +36,7 @@ export function LoginAllowListCard() {
       errorTestId="login-allow-list-error"
     >
       {({ value, draft, set, error }) => {
-        const listed = loginAllowListContains(lines(draft.text), value.currentIp);
+        const listed = loginAllowListContains(splitList(draft.text), value.currentIp);
         return (
           <>
             <Field data-invalid={error ? true : undefined}>
@@ -76,7 +71,9 @@ export function LoginAllowListCard() {
                   size="sm"
                   className="ml-auto"
                   disabled={listed}
-                  onClick={() => set({ text: [...lines(draft.text), value.currentIp].join("\n") })}
+                  onClick={() =>
+                    set({ text: [...splitList(draft.text), value.currentIp].join("\n") })
+                  }
                   data-testid="login-allow-list-add-current"
                 >
                   {m.system_login_allow_list_add_current()}

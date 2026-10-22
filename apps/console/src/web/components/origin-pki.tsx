@@ -6,9 +6,8 @@ import {
 } from "@edgeweir/contract";
 import { Add01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { FormDialog } from "@/components/form-dialog";
@@ -26,7 +25,8 @@ import { useAction } from "@/hooks/use-action";
 import type { DialogProps } from "@/hooks/use-dialog-state";
 import { downloadText } from "@/lib/browser";
 import { formatDateTime, m } from "@/lib/i18n";
-import { errorMessage, orpc } from "@/lib/orpc";
+import { splitList } from "@/lib/lists";
+import { orpc } from "@/lib/orpc";
 
 const KEY_TYPES = [
   { label: "ECDSA P-256", value: "ec256" },
@@ -79,7 +79,10 @@ function AuthorityCard({
   );
 }
 
-/** Creates an authority: the empty state's action. */
+// A new authority issues certificates the clusters' nodes use.
+const CREATE_META = { invalidates: "all", toastError: true } as const;
+
+/** Creates an authority: the empty state's action (the mutation's meta refreshes and toasts errors). */
 function CreateAuthority({
   title,
   label,
@@ -91,21 +94,13 @@ function CreateAuthority({
   create: () => Promise<unknown>;
   testId: string;
 }) {
-  const client = useQueryClient();
   const action = useAction();
   return (
     <EmptyState title={title}>
       <Button
         disabled={action.pending}
         data-testid={testId}
-        onClick={async () => {
-          try {
-            await action.run(create);
-            await client.invalidateQueries();
-          } catch (error) {
-            toast.error(errorMessage(error));
-          }
-        }}
+        onClick={() => void action.run(create).catch(() => undefined)}
       >
         {action.pending ? <Spinner /> : <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />}
         {label}
@@ -120,7 +115,7 @@ function CreateAuthority({
  */
 export function OriginCaPanel({ issue }: { issue: DialogProps & { key: number } }) {
   const ca = useQuery(orpc.originCa.get.queryOptions());
-  const create = useMutation(orpc.originCa.create.mutationOptions());
+  const create = useMutation({ ...orpc.originCa.create.mutationOptions(), meta: CREATE_META });
   return (
     <div className="flex flex-col gap-6">
       <QueryView query={ca}>
@@ -153,9 +148,11 @@ export function OriginCaPanel({ issue }: { issue: DialogProps & { key: number } 
 }
 
 function OriginCertificates({ onIssue }: { onIssue: () => void }) {
-  const client = useQueryClient();
   const certificates = useQuery(orpc.originCertificates.list.queryOptions());
-  const revoke = useMutation(orpc.originCertificates.revoke.mutationOptions());
+  const revoke = useMutation({
+    ...orpc.originCertificates.revoke.mutationOptions(),
+    meta: { invalidates: "all" },
+  });
   return (
     <QueryView
       query={certificates}
@@ -219,7 +216,6 @@ function OriginCertificates({ onIssue }: { onIssue: () => void }) {
                     }
                     onConfirm={async () => {
                       await revoke.mutateAsync({ id: cert.id });
-                      await client.invalidateQueries();
                     }}
                   />
                 )}
@@ -237,8 +233,10 @@ const fileStem = (name = "origin") =>
   name.replace(/^\*\./, "wildcard.").replace(/[^a-z0-9.-]/gi, "_");
 
 function IssueDialog({ open, onOpenChange }: DialogProps) {
-  const client = useQueryClient();
-  const issue = useMutation(orpc.originCertificates.issue.mutationOptions());
+  const issue = useMutation({
+    ...orpc.originCertificates.issue.mutationOptions(),
+    meta: { invalidates: "all" },
+  });
   const [hostnames, setHostnames] = React.useState("");
   const [csr, setCsr] = React.useState("");
   const [validity, setValidity] = React.useState("15");
@@ -304,16 +302,12 @@ function IssueDialog({ open, onOpenChange }: DialogProps) {
       submitTestId="origin-cert-issue-submit"
       onSubmit={async () => {
         const result = await issue.mutateAsync({
-          hostnames: hostnames
-            .split(/[\s,]+/)
-            .map((name) => name.trim())
-            .filter(Boolean),
+          hostnames: splitList(hostnames),
           validityYears: Number(validity) as (typeof ORIGIN_CERTIFICATE_VALIDITY_YEARS)[number],
           keyType,
           ...(csr.trim() ? { csrPem: csr.trim() } : {}),
         });
         setIssued(result);
-        await client.invalidateQueries();
       }}
     >
       <Field>
@@ -371,7 +365,10 @@ function IssueDialog({ open, onOpenChange }: DialogProps) {
  */
 export function OriginClientPanel() {
   const ca = useQuery(orpc.originClientCa.get.queryOptions());
-  const create = useMutation(orpc.originClientCa.create.mutationOptions());
+  const create = useMutation({
+    ...orpc.originClientCa.create.mutationOptions(),
+    meta: CREATE_META,
+  });
   return (
     <QueryView query={ca}>
       {({ authority, certificates }) =>

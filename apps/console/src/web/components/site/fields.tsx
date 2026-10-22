@@ -1,8 +1,8 @@
 import * as React from "react";
-import { splitList } from "@/components/site/save-site";
 import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { splitList } from "@/lib/lists";
 import { cn } from "@/lib/utils";
 
 /** A switch with its label on the right, aligned with the inputs of the same grid row. */
@@ -164,6 +164,58 @@ export function ListInput({
       }}
       className="font-mono"
       data-testid={testId}
+    />
+  );
+}
+
+/**
+ * A whole number kept as text while it is edited (empty reads as 0), so a field can be cleared
+ * and typed into without jumping; `invalid` marks values the contract refuses.
+ */
+export function IntegerField({
+  id,
+  label,
+  value,
+  min,
+  max,
+  invalid,
+  disabled,
+  onChange,
+  testId,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  invalid?: (value: number) => boolean;
+  disabled?: boolean;
+  onChange: (value: number) => void;
+  testId?: string;
+}) {
+  const parse = (text: string) => (text.trim() === "" ? 0 : Number(text));
+  const [text, setText] = React.useState(() => String(value));
+  const shown = parse(text) === value ? text : String(value);
+  return (
+    <NumberField
+      id={id}
+      label={label}
+      value={shown}
+      min={min}
+      max={max}
+      step={1}
+      disabled={disabled}
+      invalid={
+        Number.isNaN(parse(shown)) ||
+        parse(shown) < min ||
+        parse(shown) > max ||
+        (invalid?.(parse(shown)) ?? false)
+      }
+      onChange={(next) => {
+        setText(next);
+        onChange(parse(next));
+      }}
+      testId={testId}
     />
   );
 }

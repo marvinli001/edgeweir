@@ -3,9 +3,7 @@ import {
   type SiteMaintenance,
   siteMaintenanceInput,
 } from "@edgeweir/contract";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import * as React from "react";
-import { toast } from "sonner";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { TemplateField, templateTooLarge } from "@/components/error-page-template";
 import { SafetyNote } from "@/components/safety-note";
 import { ListInput, NumberField, SwitchField } from "@/components/site/fields";
@@ -13,9 +11,10 @@ import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, QueryView } from "@/components/states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
+import { useSettingsForm } from "@/hooks/use-settings-form";
 import { localizeError } from "@/lib/errors";
 import { m } from "@/lib/i18n";
-import { errorMessage, orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/orpc";
 
 /**
  * Maintenance mode: 503 with the page (empty: the nodes' built-in one) for everyone but
@@ -53,54 +52,36 @@ function MaintenanceForm({
   availability: FeatureAvailability;
 }) {
   const queryClient = useQueryClient();
-  const mutation = useMutation(orpc.maintenance.update.mutationOptions());
-  const saved = React.useMemo(
-    () => ({
-      enabled: initial.enabled,
-      template: initial.template,
-      retryAfter: initial.retryAfterSeconds ? String(initial.retryAfterSeconds) : "",
-      allowedCidrs: initial.allowedCidrs,
-      allowedPathPrefixes: initial.allowedPathPrefixes,
+  const { draft, set, dirty, error, pending, submit } = useSettingsForm({
+    value: initial,
+    toDraft: (saved) => ({
+      enabled: saved.enabled,
+      template: saved.template,
+      retryAfter: saved.retryAfterSeconds ? String(saved.retryAfterSeconds) : "",
+      allowedCidrs: saved.allowedCidrs,
+      allowedPathPrefixes: saved.allowedPathPrefixes,
     }),
-    [initial],
-  );
-  const [draft, setDraft] = React.useState(saved);
-  const [error, setError] = React.useState<string | null>(null);
-  const set = (change: Partial<typeof draft>) => setDraft({ ...draft, ...change });
-  const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
+    toInput: (draft, saved) => ({
+      id: siteId,
+      enabled: draft.enabled,
+      template: draft.template,
+      retryAfterSeconds: draft.retryAfter.trim() ? Number(draft.retryAfter) : 0,
+      allowedCidrs: draft.allowedCidrs,
+      allowedPathPrefixes: draft.allowedPathPrefixes,
+      ...(saved.updatedAt ? { expectedUpdatedAt: saved.updatedAt } : {}),
+    }),
+    check: (input) => {
+      const parsed = siteMaintenanceInput.safeParse(input);
+      return parsed.success ? null : localizeError(parsed.error);
+    },
+    mutation: orpc.maintenance.update.mutationOptions(),
+    onSaved: (result) =>
+      queryClient.setQueryData(orpc.maintenance.get.queryKey({ input: { id: siteId } }), result),
+  });
   // Turning it on waits for the cluster's nodes; turning it off never does.
   const blocked = !availability.available && !initial.enabled;
   return (
-    <form
-      className="flex flex-col gap-(--card-spacing)"
-      onSubmit={async (event) => {
-        event.preventDefault();
-        setError(null);
-        const input = siteMaintenanceInput.safeParse({
-          id: siteId,
-          enabled: draft.enabled,
-          template: draft.template,
-          retryAfterSeconds: draft.retryAfter.trim() ? Number(draft.retryAfter) : 0,
-          allowedCidrs: draft.allowedCidrs,
-          allowedPathPrefixes: draft.allowedPathPrefixes,
-          ...(initial.updatedAt ? { expectedUpdatedAt: initial.updatedAt } : {}),
-        });
-        if (!input.success) {
-          setError(localizeError(input.error));
-          return;
-        }
-        try {
-          const result = await mutation.mutateAsync(input.data);
-          queryClient.setQueryData(
-            orpc.maintenance.get.queryKey({ input: { id: siteId } }),
-            result,
-          );
-          toast.success(m.common_saved());
-        } catch (err) {
-          setError(errorMessage(err));
-        }
-      }}
-    >
+    <form className="flex flex-col gap-(--card-spacing)" onSubmit={submit}>
       <CardContent className="flex flex-col gap-5">
         {blocked ? (
           <SafetyNote className="animate-in fade-in" data-testid="maintenance-unavailable">
@@ -164,7 +145,7 @@ function MaintenanceForm({
       </CardContent>
       <SaveBar
         dirty={dirty && !templateTooLarge(draft.template)}
-        pending={mutation.isPending}
+        pending={pending}
         error={error}
         testId="maintenance-save"
       />

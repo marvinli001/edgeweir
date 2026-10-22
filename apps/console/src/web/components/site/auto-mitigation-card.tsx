@@ -9,9 +9,8 @@ import {
 } from "@edgeweir/contract";
 import { Edit02Icon, Shield01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect, type Option } from "@/components/form-select";
@@ -23,7 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDateMinutes, m } from "@/lib/i18n";
-import { client, orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/orpc";
 import { levelLabel } from "@/lib/protection";
 
 const { min: MIN_MINUTES, max: MAX_MINUTES } = AUTO_MITIGATION_DURATION_RANGE;
@@ -33,16 +32,8 @@ const integerIn = (text: string, min: number, max: number) => {
   return Number.isInteger(value) && value >= min && value <= max ? value : undefined;
 };
 
-/** Refetches what an automatic mitigation changes: its own state, the site's Under Attack, its revision. */
-function useRefreshMitigation() {
-  const queryClient = useQueryClient();
-  return () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: orpc.autoMitigation.key() }),
-      queryClient.invalidateQueries({ queryKey: orpc.protection.key() }),
-      queryClient.invalidateQueries({ queryKey: orpc.sites.key() }),
-    ]);
-}
+/** What an automatic mitigation changes: its own state, the site's Under Attack, its revision. */
+const MITIGATION_VIEWS = [orpc.autoMitigation.key(), orpc.protection.key(), orpc.sites.key()];
 
 /**
  * A site's automatic mitigation (autoMitigation.get, polled every 15 seconds): what it holds and
@@ -119,7 +110,10 @@ function MitigationBody({
   mitigation: AutoMitigation;
   protection: SiteProtection | undefined;
 }) {
-  const refresh = useRefreshMitigation();
+  const end = useMutation({
+    ...orpc.autoMitigation.restore.mutationOptions(),
+    meta: { invalidates: MITIGATION_VIEWS, success: m.attacks_mitigation_ended },
+  });
   const { settings, active, paused, level, lastError } = mitigation;
   if (!settings) return null;
   const cc = protection?.effectiveCc;
@@ -149,11 +143,7 @@ function MitigationBody({
               title={m.attacks_mitigation_end_confirm({ name: siteName })}
               note={m.attacks_mitigation_end_note({ level: levelLabel(settings.threshold) })}
               confirmLabel={m.attacks_mitigation_end()}
-              onConfirm={async () => {
-                await client.autoMitigation.restore({ id: siteId });
-                toast.success(m.attacks_mitigation_ended());
-                await refresh();
-              }}
+              onConfirm={() => end.mutateAsync({ id: siteId })}
             />
           </AlertAction>
         </Alert>
@@ -238,7 +228,10 @@ function MitigationDialog({
   siteId: string;
   mitigation: AutoMitigation;
 }) {
-  const refresh = useRefreshMitigation();
+  const save = useMutation({
+    ...orpc.autoMitigation.update.mutationOptions(),
+    meta: { invalidates: MITIGATION_VIEWS, success: m.common_saved },
+  });
   const [draft, setDraft] = React.useState(() => toDraft(mitigation.settings));
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
@@ -257,16 +250,14 @@ function MitigationDialog({
       submitDisabled={minutes === undefined}
       onSubmit={async () => {
         if (minutes === undefined) return;
-        await client.autoMitigation.update({
+        await save.mutateAsync({
           id: siteId,
           enabled: draft.enabled,
           threshold: draft.threshold,
           durationMinutes: minutes,
           ...(mitigation.updatedAt ? { expectedUpdatedAt: mitigation.updatedAt } : {}),
         });
-        toast.success(m.common_saved());
         onOpenChange(false);
-        await refresh();
       }}
     >
       <SwitchField

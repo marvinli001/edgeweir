@@ -6,9 +6,8 @@ import {
   PencilEdit01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
@@ -48,9 +47,10 @@ function RegionDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const queryClient = useQueryClient();
-  const create = useMutation(orpc.regions.create.mutationOptions());
-  const update = useMutation(orpc.regions.update.mutationOptions());
+  // Node groups, probes and scheduling show regions.
+  const meta = { invalidates: "all", success: m.common_saved } as const;
+  const create = useMutation({ ...orpc.regions.create.mutationOptions(), meta });
+  const update = useMutation({ ...orpc.regions.update.mutationOptions(), meta });
   return (
     <FormDialog
       open={open}
@@ -65,8 +65,6 @@ function RegionDialog({
         };
         if (region) await update.mutateAsync({ id: region.id, ...input });
         else await create.mutateAsync(input);
-        await queryClient.invalidateQueries();
-        toast.success(m.common_saved());
         onOpenChange(false);
       }}
     >
@@ -103,8 +101,10 @@ function RegionDialog({
  * functions (DataTable) and hold no hooks.
  */
 function DeleteRegionAction({ region }: { region: Region }) {
-  const queryClient = useQueryClient();
-  const remove = useMutation(orpc.regions.delete.mutationOptions());
+  const remove = useMutation({
+    ...orpc.regions.delete.mutationOptions(),
+    meta: { invalidates: "all" },
+  });
   return (
     <ConfirmDialog
       trigger={
@@ -117,7 +117,6 @@ function DeleteRegionAction({ region }: { region: Region }) {
       confirmLabel={m.common_delete()}
       onConfirm={async () => {
         await remove.mutateAsync({ id: region.id });
-        await queryClient.invalidateQueries();
       }}
     />
   );

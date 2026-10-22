@@ -4,13 +4,8 @@ import { SettingsCard } from "@/components/settings-card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import { m } from "@/lib/i18n";
+import { splitList } from "@/lib/lists";
 import { orpc } from "@/lib/orpc";
-
-const lines = (text: string) =>
-  text
-    .split(/[\s,]+/)
-    .map((line) => line.trim())
-    .filter(Boolean);
 
 /**
  * System page card: special-purpose addresses (private, loopback, link-local...) that
@@ -26,7 +21,7 @@ export function OriginAllowListCard() {
       query={orpc.settings.originAllowList.queryOptions()}
       mutation={orpc.settings.setOriginAllowList.mutationOptions()}
       toDraft={(list) => ({ text: list.cidrs.join("\n") })}
-      toInput={(d) => ({ cidrs: lines(d.text) })}
+      toInput={(d) => ({ cidrs: splitList(d.text) })}
       check={({ cidrs }) => {
         const invalid = cidrs.find((entry) => normalizeCidr(entry) === null);
         if (invalid !== undefined) return m.system_origin_allow_list_invalid({ value: invalid });

@@ -1,9 +1,9 @@
 import type { DnsRevision } from "@edgeweir/contract";
 import { Add01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import * as React from "react";
+import type * as React from "react";
 import { toast } from "sonner";
 import { CardTable } from "@/components/clusters/card-table";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/table";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
-import { client, errorMessage, orpc } from "@/lib/orpc";
+import { client, orpc } from "@/lib/orpc";
 
 export const Route = createFileRoute("/_app/dns")({ component: DnsPage });
 
@@ -257,26 +257,20 @@ function BindingState({
 }
 
 function TestButton({ id }: { id: string }) {
-  const [pending, setPending] = React.useState(false);
+  const test = useMutation({
+    ...orpc.dns.testProvider.mutationOptions(),
+    meta: { toastError: true },
+    onSuccess: (result) => toast.success(m.dns_test_ok({ records: result.records })),
+  });
   return (
     <Button
       size="sm"
       variant="outline"
-      disabled={pending}
+      disabled={test.isPending}
       data-testid="dns-account-test"
-      onClick={async () => {
-        setPending(true);
-        try {
-          const result = await client.dns.testProvider({ id });
-          toast.success(m.dns_test_ok({ records: result.records }));
-        } catch (e) {
-          toast.error(errorMessage(e));
-        } finally {
-          setPending(false);
-        }
-      }}
+      onClick={() => test.mutate({ id })}
     >
-      {pending ? <Spinner /> : null}
+      {test.isPending ? <Spinner /> : null}
       {m.dns_test_connection()}
     </Button>
   );

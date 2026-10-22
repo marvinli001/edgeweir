@@ -11,9 +11,8 @@ import {
 } from "@edgeweir/contract";
 import { Delete02Icon, Edit02Icon, Shield01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { Meter } from "@/components/appica/meter";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
@@ -32,7 +31,7 @@ import {
   formatPercent,
   m,
 } from "@/lib/i18n";
-import { client, orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/orpc";
 
 const GB = 1e9;
 const MBPS = 1e6;
@@ -198,9 +197,15 @@ const actionLabel = (action: UsageGuardAction) =>
     disable: m.usage_guard_action_disable,
   })[action]();
 
+/** What restoring or deleting a guard changes: the guard, the site's state and maintenance. */
+const GUARD_VIEWS = [orpc.usageGuard.key(), orpc.sites.key(), orpc.maintenance.key()];
+
 /** What the guard holds, and the restore that lifts it and pauses the guard until the period ends. */
 function HeldAlert({ site, guard }: { site: Site; guard: UsageGuard }) {
-  const queryClient = useQueryClient();
+  const restore = useMutation({
+    ...orpc.usageGuard.restore.mutationOptions(),
+    meta: { invalidates: GUARD_VIEWS, success: m.usage_guard_restored },
+  });
   const held = guard.held;
   if (!held) return null;
   const title = (
@@ -223,15 +228,7 @@ function HeldAlert({ site, guard }: { site: Site; guard: UsageGuard }) {
               : undefined
           }
           confirmLabel={m.usage_guard_restore()}
-          onConfirm={async () => {
-            await client.usageGuard.restore({ id: site.id });
-            toast.success(m.usage_guard_restored());
-            await Promise.all([
-              queryClient.invalidateQueries({ queryKey: orpc.usageGuard.key() }),
-              queryClient.invalidateQueries({ queryKey: orpc.sites.key() }),
-              queryClient.invalidateQueries({ queryKey: orpc.maintenance.key() }),
-            ]);
-          }}
+          onConfirm={() => restore.mutateAsync({ id: site.id })}
         />
       </AlertAction>
     </Alert>
@@ -239,7 +236,10 @@ function HeldAlert({ site, guard }: { site: Site; guard: UsageGuard }) {
 }
 
 function DeleteButton({ guard }: { guard: UsageGuard }) {
-  const queryClient = useQueryClient();
+  const remove = useMutation({
+    ...orpc.usageGuard.delete.mutationOptions(),
+    meta: { invalidates: GUARD_VIEWS, success: m.usage_guard_deleted },
+  });
   return (
     <ConfirmDialog
       trigger={
@@ -256,15 +256,7 @@ function DeleteButton({ guard }: { guard: UsageGuard }) {
       title={m.usage_guard_delete_confirm()}
       note={guard.held ? m.usage_guard_delete_note() : undefined}
       confirmLabel={m.common_delete()}
-      onConfirm={async () => {
-        await client.usageGuard.delete({ id: guard.siteId });
-        toast.success(m.usage_guard_deleted());
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: orpc.usageGuard.key() }),
-          queryClient.invalidateQueries({ queryKey: orpc.sites.key() }),
-          queryClient.invalidateQueries({ queryKey: orpc.maintenance.key() }),
-        ]);
-      }}
+      onConfirm={() => remove.mutateAsync({ id: guard.siteId })}
     />
   );
 }
@@ -352,7 +344,10 @@ function UsageGuardDialog({
   siteId: string;
   guard: UsageGuard;
 }) {
-  const queryClient = useQueryClient();
+  const save = useMutation({
+    ...orpc.usageGuard.update.mutationOptions(),
+    meta: { invalidates: [orpc.usageGuard.key()], success: m.usage_guard_saved },
+  });
   const [draft, setDraft] = React.useState(() => toDraft(guard.settings));
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
@@ -392,7 +387,7 @@ function UsageGuardDialog({
       submitDisabled={noLimit || invalid}
       onSubmit={async () => {
         if (invalid || noLimit) return;
-        await client.usageGuard.update({
+        await save.mutateAsync({
           id: siteId,
           period: draft.period,
           timeZone: draft.timeZone,
@@ -405,9 +400,7 @@ function UsageGuardDialog({
           bandwidthHoldMinutes: holdMinutes,
           ...(guard.updatedAt ? { expectedUpdatedAt: guard.updatedAt } : {}),
         });
-        toast.success(m.usage_guard_saved());
         onOpenChange(false);
-        await queryClient.invalidateQueries({ queryKey: orpc.usageGuard.key() });
       }}
     >
       <div className="grid gap-3 sm:grid-cols-2">

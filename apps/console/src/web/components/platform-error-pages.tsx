@@ -3,9 +3,7 @@ import {
   type PlatformErrorPages,
   usesRulesV3Placeholders,
 } from "@edgeweir/contract";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import * as React from "react";
-import { toast } from "sonner";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   TemplateField,
   TemplateVariables,
@@ -15,8 +13,9 @@ import { SafetyNote } from "@/components/safety-note";
 import { SaveBar } from "@/components/site/save-site";
 import { QueryView } from "@/components/states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useSettingsForm } from "@/hooks/use-settings-form";
 import { m } from "@/lib/i18n";
-import { errorMessage, orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/orpc";
 
 type PageKey = keyof PlatformErrorPages;
 
@@ -42,7 +41,7 @@ export function PlatformErrorPagesCard() {
         <CardTitle>{m.platform_pages_title()}</CardTitle>
       </CardHeader>
       <QueryView query={query} frame={CardContent}>
-        {(pages) => <PlatformErrorPagesForm key={JSON.stringify(pages)} initial={pages} />}
+        {(pages) => <PlatformErrorPagesForm initial={pages} />}
       </QueryView>
     </Card>
   );
@@ -50,30 +49,21 @@ export function PlatformErrorPagesCard() {
 
 function PlatformErrorPagesForm({ initial }: { initial: PlatformErrorPages }) {
   const queryClient = useQueryClient();
-  const save = useMutation(orpc.settings.setErrorPages.mutationOptions());
-  const [pages, setPages] = React.useState(initial);
-  const [error, setError] = React.useState<string | null>(null);
-  const dirty = PAGES.some(({ key }) => pages[key] !== initial[key]);
+  const form = useSettingsForm({
+    value: initial,
+    toDraft: (pages) => pages,
+    // A blank template means the built-in page.
+    toInput: (pages) => ({
+      unknownHost: pages.unknownHost.trim() ? pages.unknownHost : "",
+      siteDisabled: pages.siteDisabled.trim() ? pages.siteDisabled : "",
+    }),
+    mutation: orpc.settings.setErrorPages.mutationOptions(),
+    onSaved: (saved) => queryClient.setQueryData(orpc.settings.errorPages.queryKey(), saved),
+  });
+  const pages = form.draft;
   const tooLarge = PAGES.some(({ key }) => templateTooLarge(pages[key]));
   return (
-    <form
-      className="flex flex-col gap-(--card-spacing)"
-      onSubmit={async (event) => {
-        event.preventDefault();
-        setError(null);
-        try {
-          // A blank template means the built-in page.
-          const saved = await save.mutateAsync({
-            unknownHost: pages.unknownHost.trim() ? pages.unknownHost : "",
-            siteDisabled: pages.siteDisabled.trim() ? pages.siteDisabled : "",
-          });
-          queryClient.setQueryData(orpc.settings.errorPages.queryKey(), saved);
-          toast.success(m.common_saved());
-        } catch (err) {
-          setError(errorMessage(err));
-        }
-      }}
-    >
+    <form className="flex flex-col gap-(--card-spacing)" onSubmit={form.submit}>
       <CardContent className="flex flex-col gap-5">
         {PAGES.map(({ key, id, name }) => (
           <TemplateField
@@ -82,7 +72,7 @@ function PlatformErrorPagesForm({ initial }: { initial: PlatformErrorPages }) {
             status={PLATFORM_ERROR_PAGE_STATUSES[key]}
             name={name()}
             value={pages[key]}
-            onChange={(template) => setPages({ ...pages, [key]: template })}
+            onChange={(template) => form.set({ [key]: template })}
             testId={id}
           />
         ))}
@@ -94,9 +84,9 @@ function PlatformErrorPagesForm({ initial }: { initial: PlatformErrorPages }) {
         ) : null}
       </CardContent>
       <SaveBar
-        dirty={dirty && !tooLarge}
-        pending={save.isPending}
-        error={error}
+        dirty={form.dirty && !tooLarge}
+        pending={form.pending}
+        error={form.error}
         testId="platform-pages-save"
       />
     </form>

@@ -19,7 +19,6 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { OptionSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { ListInput, SwitchField } from "@/components/site/fields";
@@ -32,9 +31,11 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { useSettingsForm } from "@/hooks/use-settings-form";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { defaultSiteChoices, loadedSites, nextSitePage, SITE_PAGE_SIZE } from "@/lib/default-site";
 import { m } from "@/lib/i18n";
+import { splitList } from "@/lib/lists";
 import { errorMessage, orpc } from "@/lib/orpc";
 
 /**
@@ -82,19 +83,30 @@ export function ClusterNetwork({ clusterId }: { clusterId: string }) {
 
 const toNumbers = (list: string[]) => list.map((value) => Number(value));
 
+const portsDraft = (data: ClusterListenPorts) => ({
+  http: data.httpPorts.map(String),
+  https: data.httpsPorts.map(String),
+});
+
 function ListenPortsForm({ data }: { data: ClusterListenPorts }) {
-  const client = useQueryClient();
-  const initial = { http: data.httpPorts.map(String), https: data.httpsPorts.map(String) };
-  const [draft, setDraft] = React.useState(initial);
-  const [error, setError] = React.useState<string | null>(null);
-  const save = useMutation(orpc.clusters.setListenPorts.mutationOptions());
-  const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
-  useUnsavedChanges(dirty);
-  const parsed = listenPortsInput.safeParse({
+  const toInput = (draft: ReturnType<typeof portsDraft>) => ({
     clusterId: data.clusterId,
     httpPorts: toNumbers(draft.http),
     httpsPorts: toNumbers(draft.https),
   });
+  const form = useSettingsForm({
+    value: data,
+    toDraft: portsDraft,
+    toInput: (draft) => listenPortsInput.parse(toInput(draft)),
+    mutation: {
+      ...orpc.clusters.setListenPorts.mutationOptions(),
+      meta: { invalidates: [orpc.clusters.listenPorts.key(), orpc.clusters.portPools.key()] },
+    },
+  });
+  const { draft, set, dirty } = form;
+  const initial = portsDraft(data);
+  useUnsavedChanges(dirty);
+  const parsed = listenPortsInput.safeParse(toInput(draft));
   // New ports wait for nodes that know them; removing ports always works.
   const locked = data.nodesWithout.length > 0;
   const grows =
@@ -103,21 +115,9 @@ function ListenPortsForm({ data }: { data: ClusterListenPorts }) {
   return (
     <form
       className="flex flex-col gap-(--card-spacing)"
-      onSubmit={async (event) => {
+      onSubmit={(event) => {
         event.preventDefault();
-        if (!parsed.success) return;
-        setError(null);
-        try {
-          const result = await save.mutateAsync(parsed.data);
-          client.setQueryData(
-            orpc.clusters.listenPorts.queryKey({ input: { clusterId: data.clusterId } }),
-            result,
-          );
-          await client.invalidateQueries({ queryKey: orpc.clusters.portPools.key() });
-          toast.success(m.common_saved());
-        } catch (e) {
-          setError(errorMessage(e));
-        }
+        if (parsed.success) void form.submit();
       }}
     >
       <CardContent className="flex flex-col gap-4">
@@ -141,7 +141,7 @@ function ListenPortsForm({ data }: { data: ClusterListenPorts }) {
               value={draft.http}
               placeholder="8080, 8081"
               invalid={!parsed.success}
-              onChange={(http) => setDraft({ ...draft, http })}
+              onChange={(http) => set({ http })}
               testId="listen-ports-http"
             />
           </Field>
@@ -152,7 +152,7 @@ function ListenPortsForm({ data }: { data: ClusterListenPorts }) {
               value={draft.https}
               placeholder="8443, 9443"
               invalid={!parsed.success}
-              onChange={(https) => setDraft({ ...draft, https })}
+              onChange={(https) => set({ https })}
               testId="listen-ports-https"
             />
           </Field>
@@ -171,8 +171,8 @@ function ListenPortsForm({ data }: { data: ClusterListenPorts }) {
       {/* The save row of settings cards; the guard for unsaved changes stays on `dirty` above. */}
       <SaveBar
         dirty={dirty && parsed.success && !(locked && grows)}
-        pending={save.isPending}
-        error={error}
+        pending={form.pending}
+        error={form.error}
         testId="listen-ports-save"
         errorTestId="listen-ports-error"
       />
@@ -200,10 +200,13 @@ function ClientIpForm({ data }: { data: ClusterClientIp }) {
   const [custom, setCustom] = React.useState(preset ? "" : saved.header);
   const [drop, setDrop] = React.useState(saved.dropForwardedFor);
   const [error, setError] = React.useState<string | null>(null);
-  const save = useMutation(orpc.clusters.setClientIp.mutationOptions());
+  const save = useMutation({
+    ...orpc.clusters.setClientIp.mutationOptions(),
+    meta: { invalidates: [orpc.clusters.list.key()], success: m.common_saved },
+  });
   const settings = {
     mode,
-    trustedCidrs: mode === "header" ? cidrs.split(/[\s,]+/).filter(Boolean) : [],
+    trustedCidrs: mode === "header" ? splitList(cidrs) : [],
     header: mode === "header" ? (header === CUSTOM ? custom : header) : "",
     dropForwardedFor: mode === "direct" && drop,
   };
@@ -231,8 +234,6 @@ function ClientIpForm({ data }: { data: ClusterClientIp }) {
             orpc.clusters.clientIp.queryKey({ input: { clusterId: data.clusterId } }),
             result,
           );
-          await client.invalidateQueries({ queryKey: orpc.clusters.list.key() });
-          toast.success(m.common_saved());
         } catch (e) {
           setError(errorMessage(e));
         }
@@ -369,7 +370,10 @@ function UnknownHostsForm({ data }: { data: ClusterUnknownHosts }) {
   const [threshold, setThreshold] = React.useState(String(saved.scan.threshold));
   const [banSeconds, setBanSeconds] = React.useState(String(saved.scan.banSeconds));
   const [error, setError] = React.useState<string | null>(null);
-  const save = useMutation(orpc.clusters.setUnknownHosts.mutationOptions());
+  const save = useMutation({
+    ...orpc.clusters.setUnknownHosts.mutationOptions(),
+    meta: { success: m.common_saved },
+  });
   const handsOver = unknownHost === "site" || ipAccess === "site";
   // Enabled sites of the cluster may take requests, found by name or domain
   // (a cluster holds more sites than one page); the chosen one stays listed.
@@ -447,7 +451,6 @@ function UnknownHostsForm({ data }: { data: ClusterUnknownHosts }) {
             orpc.clusters.unknownHosts.queryKey({ input: { clusterId: data.clusterId } }),
             result,
           );
-          toast.success(m.common_saved());
         } catch (e) {
           setError(errorMessage(e));
         }

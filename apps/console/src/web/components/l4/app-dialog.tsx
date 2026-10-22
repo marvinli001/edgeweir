@@ -237,8 +237,9 @@ function AppForm({
   // A new application's idle timeout follows the protocol until it is edited.
   const [idleEdited, setIdleEdited] = React.useState(Boolean(app));
   const [refusal, setRefusal] = React.useState<{ field: ErrorField; message: string } | null>(null);
-  const create = useMutation(orpc.l4Apps.create.mutationOptions());
-  const update = useMutation(orpc.l4Apps.update.mutationOptions());
+  const meta = { invalidates: [orpc.l4Apps.key(), orpc.clusters.key()] };
+  const create = useMutation({ ...orpc.l4Apps.create.mutationOptions(), meta });
+  const update = useMutation({ ...orpc.l4Apps.update.mutationOptions(), meta });
   const pending = create.isPending || update.isPending;
   const pools = useQuery({
     ...orpc.clusters.portPools.queryOptions({ input: { clusterId } }),
@@ -325,8 +326,6 @@ function AppForm({
         orpc.l4Apps.get.queryKey({ input: { id: result.app.id } }),
         result.app,
       );
-      await queryClient.invalidateQueries({ queryKey: orpc.l4Apps.key() });
-      await queryClient.invalidateQueries({ queryKey: orpc.clusters.key() });
       toast.success(
         app
           ? m.site_saved({ revision: result.revision.revision })

@@ -4,7 +4,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
-import { toast } from "sonner";
 import * as z from "zod";
 import { AcmeAccountsCard } from "@/components/acme-accounts";
 import { AcmeCaFields, type Eab, eabMissing, eabParams } from "@/components/acme-ca";
@@ -35,7 +34,8 @@ import {
   certificateState,
 } from "@/lib/certificate-status";
 import { formatDateTime, formatList, m } from "@/lib/i18n";
-import { errorMessage, orpc } from "@/lib/orpc";
+import { splitList } from "@/lib/lists";
+import { orpc } from "@/lib/orpc";
 
 export const Route = createFileRoute("/_app/certificates")({
   validateSearch: z.object({ tab: z.enum(["origin-ca", "origin-client"]).optional() }),
@@ -147,9 +147,19 @@ function CertificatesPanel({
   });
   const credentials = useQuery(orpc.dnsCredentials.list.queryOptions());
   const settings = useQuery(orpc.certificates.settings.queryOptions());
-  const remove = useMutation(orpc.certificates.delete.mutationOptions());
-  const renew = useMutation(orpc.certificates.renew.mutationOptions());
-  const removeDns = useMutation(orpc.dnsCredentials.delete.mutationOptions());
+  // Certificates show on sites and in revisions: every change refreshes everything.
+  const remove = useMutation({
+    ...orpc.certificates.delete.mutationOptions(),
+    meta: { invalidates: "all" },
+  });
+  const renew = useMutation({
+    ...orpc.certificates.renew.mutationOptions(),
+    meta: { invalidates: "all", toastError: true },
+  });
+  const removeDns = useMutation({
+    ...orpc.dnsCredentials.delete.mutationOptions(),
+    meta: { invalidates: "all" },
+  });
   const refresh = () => client.invalidateQueries();
   return (
     <>
@@ -220,14 +230,7 @@ function CertificatesPanel({
                         variant="outline"
                         size="sm"
                         disabled={renew.isPending || ["pending", "issuing"].includes(cert.status)}
-                        onClick={async () => {
-                          try {
-                            await renew.mutateAsync({ id: cert.id });
-                            await refresh();
-                          } catch (e) {
-                            toast.error(errorMessage(e));
-                          }
-                        }}
+                        onClick={() => renew.mutate({ id: cert.id })}
                       >
                         {m.cert_renew()}
                       </Button>
@@ -240,10 +243,7 @@ function CertificatesPanel({
                           {m.common_delete()}
                         </Button>
                       }
-                      onConfirm={async () => {
-                        await remove.mutateAsync({ id: cert.id });
-                        await refresh();
-                      }}
+                      onConfirm={() => remove.mutateAsync({ id: cert.id })}
                     />
                   </div>
                 </li>
@@ -280,10 +280,7 @@ function CertificatesPanel({
                         {m.common_delete()}
                       </Button>
                     }
-                    onConfirm={async () => {
-                      await removeDns.mutateAsync({ id: credential.id });
-                      await refresh();
-                    }}
+                    onConfirm={() => removeDns.mutateAsync({ id: credential.id })}
                   />
                 </div>
               ))
@@ -309,9 +306,7 @@ function CertificatesPanel({
           initial={dialog.value === "dns" ? undefined : dialog.value}
           open={dialog.open}
           onOpenChange={dialog.onOpenChange}
-          onSaved={async () => {
-            await refresh();
-          }}
+          onSaved={refresh}
         />
       ) : null}
     </>
@@ -383,8 +378,10 @@ function TextField({ id, label, type = "text" }: { id: string; label: string; ty
   );
 }
 function UploadDialog({ open, onOpenChange }: DialogProps) {
-  const client = useQueryClient();
-  const upload = useMutation(orpc.certificates.upload.mutationOptions());
+  const upload = useMutation({
+    ...orpc.certificates.upload.mutationOptions(),
+    meta: { invalidates: "all" },
+  });
   const [chain, setChain] = React.useState("");
   const [key, setKey] = React.useState("");
   return (
@@ -401,7 +398,6 @@ function UploadDialog({ open, onOpenChange }: DialogProps) {
           privateKeyPem: key,
         });
         setKey("");
-        await client.invalidateQueries();
         onOpenChange(false);
       }}
     >
@@ -459,8 +455,10 @@ function RequestDialog({
   /** The custom ACME directory, and the CA a request without one uses. */
   settings: CertificateSettings | undefined;
 } & DialogProps) {
-  const client = useQueryClient();
-  const request = useMutation(orpc.certificates.request.mutationOptions());
+  const request = useMutation({
+    ...orpc.certificates.request.mutationOptions(),
+    meta: { invalidates: "all" },
+  });
   const [ca, setCa] = React.useState<AcmeCa>(settings?.defaultCa ?? "letsencrypt");
   const [eab, setEab] = React.useState<Eab>({ kid: "", key: "" });
   const [keyType, setKeyType] = React.useState<AcmeKeyType>("ec256");
@@ -468,7 +466,7 @@ function RequestDialog({
   const [credential, setCredential] = React.useState(credentials[0]?.id ?? "");
   const [skipDnsCheck, setSkipDnsCheck] = React.useState(false);
   const [names, setNames] = React.useState("");
-  const parsedNames = names.split(/[\s,]+/).filter(Boolean);
+  const parsedNames = splitList(names);
   // HTTP-01 cannot validate wildcards (the API refuses them too).
   const wildcard = challenge === "http01" && parsedNames.some((n) => n.startsWith("*."));
   return (
@@ -490,7 +488,6 @@ function RequestDialog({
           ...(challenge === "dns01" ? { dnsCredentialId: credential } : { skipDnsCheck }),
           ...eabParams(ca, eab),
         });
-        await client.invalidateQueries();
         onOpenChange(false);
       }}
     >

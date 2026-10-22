@@ -7,9 +7,8 @@ import {
 } from "@edgeweir/contract";
 import { Add01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { Meter } from "@/components/appica/meter";
 import { markOverflow } from "@/components/data-table";
 import { OptionSelect } from "@/components/form-select";
@@ -406,8 +405,10 @@ function NodeFacts({ node }: { node: Node }) {
 }
 
 function NodeProbeSwitch({ node }: { node: Node }) {
-  const queryClient = useQueryClient();
-  const setProbe = useMutation(orpc.nodes.setProbe.mutationOptions());
+  const setProbe = useMutation({
+    ...orpc.nodes.setProbe.mutationOptions(),
+    meta: { invalidates: [orpc.nodes.key()], toastError: true },
+  });
   const hasRegion = !!node.regionName;
   return (
     <section className="flex flex-col gap-2">
@@ -416,14 +417,7 @@ function NodeProbeSwitch({ node }: { node: Node }) {
         label={m.node_probe_switch()}
         checked={node.probeEnabled}
         disabled={setProbe.isPending || (!hasRegion && !node.probeEnabled)}
-        onCheckedChange={async (enabled) => {
-          try {
-            await setProbe.mutateAsync({ id: node.id, enabled });
-            await queryClient.invalidateQueries({ queryKey: orpc.nodes.key() });
-          } catch (error) {
-            toast.error(errorMessage(error));
-          }
-        }}
+        onCheckedChange={(enabled) => setProbe.mutate({ id: node.id, enabled })}
         className="self-start"
         testId="node-probe-switch"
       />
@@ -439,10 +433,12 @@ function NodeProbeSwitch({ node }: { node: Node }) {
  * (empty follows the cluster's; needs cache-zone-v1 on every active node).
  */
 function NodeCache({ node }: { node: Node }) {
-  const queryClient = useQueryClient();
   const cluster = useQuery(orpc.clusters.get.queryOptions({ input: { id: node.clusterId } }));
   const nodes = useQuery(orpc.nodes.list.queryOptions({ input: { clusterId: node.clusterId } }));
-  const setCache = useMutation(orpc.nodes.setCache.mutationOptions());
+  const setCache = useMutation({
+    ...orpc.nodes.setCache.mutationOptions(),
+    meta: { invalidates: [orpc.nodes.key()], success: m.common_saved, toastError: true },
+  });
   const saved = node.cache.maxSizeGb === null ? "" : String(node.cache.maxSizeGb);
   const [size, setSize] = React.useState(saved);
   const available = (nodes.data ?? [])
@@ -496,19 +492,10 @@ function NodeCache({ node }: { node: Node }) {
       </div>
       <form
         className="flex flex-wrap items-end gap-2"
-        onSubmit={async (event) => {
+        onSubmit={(event) => {
           event.preventDefault();
-          if (!valid) return;
-          try {
-            await setCache.mutateAsync({
-              id: node.id,
-              maxSizeGb: size.trim() === "" ? null : Number(size),
-            });
-            await queryClient.invalidateQueries({ queryKey: orpc.nodes.key() });
-            toast.success(m.common_saved());
-          } catch (error) {
-            toast.error(errorMessage(error));
-          }
+          if (valid)
+            setCache.mutate({ id: node.id, maxSizeGb: size.trim() === "" ? null : Number(size) });
         }}
       >
         <div className="w-44">
@@ -667,8 +654,10 @@ function AddressEditor({
   configured: boolean;
   onDone: () => void;
 }) {
-  const queryClient = useQueryClient();
-  const save = useMutation(orpc.nodes.setAddresses.mutationOptions());
+  const save = useMutation({
+    ...orpc.nodes.setAddresses.mutationOptions(),
+    meta: { invalidates: [orpc.nodes.key()], success: m.common_saved },
+  });
   const [rows, setRows] = React.useState<AddressDraft[]>(() =>
     node.schedulingAddresses
       .filter((a) => !configured || a.source === "configured")
@@ -704,8 +693,6 @@ function AddressEditor({
     setPending(kind);
     try {
       await save.mutateAsync({ id: node.id, addresses });
-      await queryClient.invalidateQueries({ queryKey: orpc.nodes.key() });
-      toast.success(m.common_saved());
       onDone();
     } catch (err) {
       setError(errorMessage(err));

@@ -1,6 +1,5 @@
 import type { Cluster } from "@edgeweir/contract";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { useMutation } from "@tanstack/react-query";
 import { FormDialog } from "@/components/form-dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -19,9 +18,9 @@ export function ClusterDialog({
   onOpenChange: (open: boolean) => void;
   onSaved?: (cluster: Cluster) => void;
 }) {
-  const queryClient = useQueryClient();
-  const create = useMutation(orpc.clusters.create.mutationOptions());
-  const update = useMutation(orpc.clusters.update.mutationOptions());
+  const meta = { invalidates: "all", success: m.common_saved } as const;
+  const create = useMutation({ ...orpc.clusters.create.mutationOptions(), meta });
+  const update = useMutation({ ...orpc.clusters.update.mutationOptions(), meta });
   return (
     <FormDialog
       open={open}
@@ -37,8 +36,6 @@ export function ClusterDialog({
         const saved = cluster
           ? await update.mutateAsync({ id: cluster.id, ...input })
           : await create.mutateAsync(input);
-        await queryClient.invalidateQueries();
-        toast.success(m.common_saved());
         onSaved?.(saved);
         onOpenChange(false);
       }}

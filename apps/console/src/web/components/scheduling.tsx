@@ -42,7 +42,7 @@ import {
 } from "@/components/ui/table";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
-import { errorMessage, orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/orpc";
 import {
   actionLabel,
   aggregateLabel,
@@ -248,29 +248,26 @@ function ConditionSummary({ rule }: { rule: SchedulingRule }) {
 
 /** A component of its own: column templates are plain functions (DataTable) and hold no hooks. */
 function RuleEnabledSwitch({ rule }: { rule: SchedulingRule }) {
-  const queryClient = useQueryClient();
-  const update = useMutation(orpc.scheduling.update.mutationOptions());
+  const update = useMutation({
+    ...orpc.scheduling.update.mutationOptions(),
+    meta: { invalidates: [orpc.scheduling.key()], toastError: true },
+  });
   return (
     <Switch
       checked={rule.enabled}
       disabled={update.isPending}
       aria-label={m.scheduling_enabled()}
       data-testid="scheduling-rule-enabled"
-      onCheckedChange={async (enabled) => {
-        try {
-          await update.mutateAsync({ id: rule.id, enabled });
-          await queryClient.invalidateQueries({ queryKey: orpc.scheduling.key() });
-        } catch (error) {
-          toast.error(errorMessage(error));
-        }
-      }}
+      onCheckedChange={(enabled) => update.mutate({ id: rule.id, enabled })}
     />
   );
 }
 
 function DeleteRuleAction({ rule }: { rule: SchedulingRule }) {
-  const queryClient = useQueryClient();
-  const remove = useMutation(orpc.scheduling.delete.mutationOptions());
+  const remove = useMutation({
+    ...orpc.scheduling.delete.mutationOptions(),
+    meta: { invalidates: [orpc.scheduling.key()], success: m.common_deleted },
+  });
   return (
     <ConfirmDialog
       trigger={
@@ -288,8 +285,6 @@ function DeleteRuleAction({ rule }: { rule: SchedulingRule }) {
       confirmLabel={m.common_delete()}
       onConfirm={async () => {
         await remove.mutateAsync({ id: rule.id });
-        await queryClient.invalidateQueries({ queryKey: orpc.scheduling.key() });
-        toast.success(m.common_deleted());
       }}
     />
   );

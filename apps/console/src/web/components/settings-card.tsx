@@ -1,14 +1,12 @@
 import type { MutationOptions, QueryOptionsBase } from "@orpc/tanstack-query";
-import { type QueryKey, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import * as React from "react";
-import { toast } from "sonner";
+import { type QueryKey, useQuery } from "@tanstack/react-query";
+import type * as React from "react";
 import { SaveBar } from "@/components/site/save-site";
 import { QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useDraft } from "@/hooks/use-draft";
+import { type SettingsFormOptions, useSettingsForm } from "@/hooks/use-settings-form";
 import { m } from "@/lib/i18n";
-import { errorMessage } from "@/lib/orpc";
 
 const SOURCE_LABEL = {
   setting: m.system_source_setting,
@@ -44,18 +42,13 @@ interface SettingsFields<T, D, I> {
   /** A save is running. */
   pending: boolean;
   /** Saves `input` right away, outside the form (a confirmed switch); throws on failure. */
-  apply: (input: I) => Promise<void>;
+  apply: (input: I) => Promise<unknown>;
 }
 
-interface SettingsFormProps<T, D, I, O, E, C> {
+interface SettingsFormProps<T, D, I, O, E, C>
+  extends Omit<SettingsFormOptions<T, D, I, O, E, C>, "value" | "mutation"> {
   /** The save, e.g. `orpc.settings.setUsage.mutationOptions()`. */
   mutation: MutationOptions<I, O, E, C>;
-  /** The form state of a saved value (numbers stay text while editing). */
-  toDraft: (value: T) => D;
-  /** What saving the draft sends. */
-  toInput: (draft: D, value: T) => I;
-  /** A message when the input cannot be saved as it is. */
-  check?: (input: I) => string | null | undefined;
   /** Queries refreshed after a save: the card's own by default. */
   refresh?: QueryKey;
   /** Leaves the checks to `check` instead of the browser's. */
@@ -67,9 +60,7 @@ interface SettingsFormProps<T, D, I, O, E, C> {
 }
 
 /**
- * A card that loads a setting, edits a draft of it and saves it. Background refreshes follow the
- * server while the form is unchanged and leave unsaved changes alone (useDraft); a save starts the
- * form over from the saved value.
+ * A card that loads a setting, edits a draft of it and saves it (useSettingsForm).
  */
 export function SettingsCard<T, D, I, O, E, C, QE>({
   title,
@@ -87,8 +78,6 @@ export function SettingsCard<T, D, I, O, E, C, QE>({
   testId?: string;
 }) {
   const result = useQuery(query);
-  // Bumped by every save, so the form starts over from what was saved.
-  const [saves, setSaves] = React.useState(0);
   return (
     <Card className={className} style={style} data-testid={testId}>
       <CardHeader>
@@ -96,13 +85,7 @@ export function SettingsCard<T, D, I, O, E, C, QE>({
       </CardHeader>
       <QueryView query={result} frame={CardContent}>
         {(value) => (
-          <SettingsForm
-            key={saves}
-            {...form}
-            value={value}
-            refresh={form.refresh ?? query.queryKey}
-            onSaved={() => setSaves((n) => n + 1)}
-          />
+          <SettingsForm {...form} value={value} refresh={form.refresh ?? query.queryKey} />
         )}
       </QueryView>
     </Card>
@@ -112,61 +95,39 @@ export function SettingsCard<T, D, I, O, E, C, QE>({
 function SettingsForm<T, D, I, O, E, C>({
   value,
   mutation,
-  toDraft,
-  toInput,
-  check,
   refresh,
   noValidate,
   contentClassName,
   saveTestId,
   errorTestId,
-  onSaved,
   children,
-}: SettingsFormProps<T, D, I, O, E, C> & { value: T; refresh: QueryKey; onSaved: () => void }) {
-  const queryClient = useQueryClient();
-  const save = useMutation(mutation);
-  const { draft, setDraft, dirty } = useDraft(toDraft(value), JSON.stringify(value));
-  const [error, setError] = React.useState<string | null>(null);
-  const apply = async (input: I) => {
-    await save.mutateAsync(input);
-    await queryClient.invalidateQueries({ queryKey: refresh });
-    toast.success(m.common_saved());
-  };
+  ...options
+}: SettingsFormProps<T, D, I, O, E, C> & { value: T; refresh: QueryKey }) {
+  const form = useSettingsForm({
+    ...options,
+    value,
+    mutation: { ...mutation, meta: { invalidates: [refresh], ...mutation.meta } },
+  });
   return (
     <form
       className="flex flex-col gap-(--card-spacing)"
       noValidate={noValidate}
-      onSubmit={async (event) => {
-        event.preventDefault();
-        const input = toInput(draft, value);
-        const refused = check?.(input);
-        setError(refused || null);
-        if (refused) return;
-        try {
-          await apply(input);
-          onSaved();
-        } catch (err) {
-          setError(errorMessage(err));
-        }
-      }}
+      onSubmit={form.submit}
     >
       <CardContent className={contentClassName}>
         {children({
           value,
-          draft,
-          set: (change) => {
-            setDraft({ ...draft, ...change });
-            setError(null);
-          },
-          error,
-          pending: save.isPending,
-          apply,
+          draft: form.draft,
+          set: form.set,
+          error: form.error,
+          pending: form.pending,
+          apply: form.apply,
         })}
       </CardContent>
       <SaveBar
-        dirty={dirty}
-        pending={save.isPending}
-        error={error}
+        dirty={form.dirty}
+        pending={form.pending}
+        error={form.error}
         testId={saveTestId}
         errorTestId={errorTestId}
       />

@@ -1,4 +1,3 @@
-import { arrayMove } from "@dnd-kit/sortable";
 import type {
   DnsBindingInput,
   DnsLine,
@@ -43,6 +42,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDateTime, m } from "@/lib/i18n";
+import { splitList } from "@/lib/lists";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 import {
   dnsRevisionReason,
@@ -113,8 +113,10 @@ function BindingEditor({
 }) {
   const [draft, setDraft] = React.useState(initial),
     [error, setError] = React.useState<string | null>(null);
-  const queries = useQueryClient();
-  const save = useMutation(orpc.dns.saveBinding.mutationOptions());
+  const save = useMutation({
+    ...orpc.dns.saveBinding.mutationOptions(),
+    meta: { invalidates: [orpc.dns.key()] },
+  });
   const account = providers.find((p) => p.id === draft.providerId);
   // Without an account (manual records) every line can be created by hand.
   const supported: readonly DnsResolutionLine[] = account
@@ -140,7 +142,6 @@ function BindingEditor({
           }
           try {
             const result = await save.mutateAsync({ clusterId, binding: parsed.data });
-            await queries.invalidateQueries({ queryKey: orpc.dns.key() });
             toast.success(result ? m.dns_saved({ revision: result.revision }) : m.common_saved());
           } catch (e) {
             setError(errorMessage(e));
@@ -389,6 +390,13 @@ function BindingEditor({
 
 const MAX_BACKUP_GROUPS = 4;
 
+/** `list` with the item at `from` moved to `to`. */
+function arrayMove<T>(list: readonly T[], from: number, to: number): T[] {
+  const next = [...list];
+  next.splice(to, 0, ...next.splice(from, 1));
+  return next;
+}
+
 /** A line's backup node groups in the order they take over. */
 function BackupGroups({
   groups,
@@ -490,7 +498,7 @@ function AddressInput({
       value={raw}
       onChange={(e) => {
         setRaw(e.target.value);
-        onChange(e.target.value.split(/[,\s]+/).filter(Boolean));
+        onChange(splitList(e.target.value));
       }}
     />
   );

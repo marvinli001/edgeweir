@@ -8,17 +8,16 @@ import {
   tlsSettings,
   ZSTD_LEVEL_RANGE,
 } from "@edgeweir/contract";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import * as React from "react";
-import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
 import { SafetyNote } from "@/components/safety-note";
 import { ListInput, NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, QueryView } from "@/components/states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
+import { useSettingsForm } from "@/hooks/use-settings-form";
 import { m } from "@/lib/i18n";
-import { errorMessage, orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/orpc";
 
 type Algorithm = "gzip" | "brotli" | "zstd";
 
@@ -84,8 +83,6 @@ export function CompressionCard({ site }: { site: Site }) {
     <QueryView query={combineQueries(policy, features)}>
       {([saved, { brotli, zstd, siteContent }]) => (
         <CompressionEditor
-          // Keyed by its own fields: saving HTTPS settings keeps unsaved edits here.
-          key={JSON.stringify(compressionOf(saved))}
           siteId={site.id}
           server={saved}
           availability={{ gzip: { available: true, reason: null }, brotli, zstd }}
@@ -108,41 +105,27 @@ function CompressionEditor({
   /** gzip's level and the largest compressed response (site-content-v1). */
   content: FeatureAvailability;
 }) {
-  const [settings, setSettings] = React.useState(server);
-  const [error, setError] = React.useState<string | null>(null);
-  const [pending, setPending] = React.useState(false);
-  const mutation = useMutation(orpc.https.update.mutationOptions());
-  const client = useQueryClient();
-  const dirty = JSON.stringify(compressionOf(settings)) !== JSON.stringify(compressionOf(server));
+  // The draft holds the compression fields only: saving HTTPS settings keeps unsaved edits here.
+  const { draft, set, dirty, error, pending, submit } = useSettingsForm({
+    value: server,
+    toDraft: compressionOf,
+    // The HTTPS fields as saved: the HTTPS tab owns them.
+    toInput: (fields, saved) => ({ id: siteId, settings: { ...saved, ...fields } }),
+    check: (input) => {
+      const parsed = tlsSettings.safeParse(input.settings);
+      return parsed.success ? null : compressionError(parsed.error.issues[0]?.path[0]);
+    },
+    mutation: { ...orpc.https.update.mutationOptions(), meta: { invalidates: "all" } },
+  });
+  const settings = { ...server, ...draft } as TlsSettings;
+  const setSettings = (next: TlsSettings) => set(compressionOf(next));
   return (
     <Card
       className="animate-enter"
       style={{ animationDelay: "120ms" }}
       data-testid="compression-card"
     >
-      <form
-        className="flex flex-col gap-(--card-spacing)"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          // The HTTPS fields as saved: the HTTPS tab owns them.
-          const parsed = tlsSettings.safeParse({ ...server, ...compressionOf(settings) });
-          if (!parsed.success) {
-            setError(compressionError(parsed.error.issues[0]?.path[0]));
-            return;
-          }
-          setPending(true);
-          setError(null);
-          try {
-            await mutation.mutateAsync({ id: siteId, settings: parsed.data });
-            await client.invalidateQueries();
-            toast.success(m.common_saved());
-          } catch (e) {
-            setError(errorMessage(e));
-          } finally {
-            setPending(false);
-          }
-        }}
-      >
+      <form className="flex flex-col gap-(--card-spacing)" onSubmit={submit}>
         <CardHeader>
           <CardTitle>{m.compression_title()}</CardTitle>
         </CardHeader>

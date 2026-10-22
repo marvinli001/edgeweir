@@ -9,7 +9,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import * as React from "react";
-import { toast } from "sonner";
 import { OptionSelect } from "@/components/form-select";
 import { L4NodesWarning } from "@/components/l4/common";
 import { nextDraftKey, serializeDrafts } from "@/components/site/save-site";
@@ -96,7 +95,10 @@ function PortPoolsCard({ data }: { data: ClusterPortPools }) {
   const [rows, setRows] = React.useState(initial);
   // The last refusal and the rows it named; any edit clears it.
   const [refusal, setRefusal] = React.useState<{ message: string; keys: Set<number> } | null>(null);
-  const save = useMutation(orpc.clusters.setPortPools.mutationOptions());
+  const save = useMutation({
+    ...orpc.clusters.setPortPools.mutationOptions(),
+    meta: { success: m.common_saved },
+  });
   const dirty = serializeDrafts(rows) !== serializeDrafts(initial);
   useUnsavedChanges(dirty);
   const reversed = rows.filter((r) => r.from && r.to && Number(r.from) > Number(r.to));
@@ -128,7 +130,6 @@ function PortPoolsCard({ data }: { data: ClusterPortPools }) {
               orpc.clusters.portPools.queryKey({ input: { clusterId: data.clusterId } }),
               result,
             );
-            toast.success(m.common_saved());
           } catch (error) {
             setRefusal({ message: errorMessage(error), keys: refusedPools(error, rows) });
           }

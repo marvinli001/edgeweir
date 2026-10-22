@@ -265,10 +265,7 @@ function ClusterView({
             {nodes}
             <NodeGroupsSection cluster={selected} />
             <ClusterRolloutCard key={`rollout-${selected.id}`} clusterId={selected.id} />
-            <ClusterCacheCard
-              key={`cache-${selected.id}-${JSON.stringify(selected.cache)}`}
-              cluster={selected}
-            />
+            <ClusterCacheCard key={`cache-${selected.id}`} cluster={selected} />
             <NodeUpgrades key={selected.id} clusterId={selected.id} />
             <RevisionsSection cluster={selected} />
           </TabsContent>

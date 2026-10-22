@@ -10,7 +10,7 @@ import {
 } from "@edgeweir/contract";
 import { ArrowDown01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import * as React from "react";
 import { toast } from "sonner";
@@ -123,16 +123,17 @@ function LogSettingsForm({
   settings: LogSettings;
   availability: FeatureAvailability;
 }) {
-  const cache = useQueryClient();
-  const rate = useMutation(
-    orpc.logs.configure.mutationOptions({
-      onSuccess: async () => {
-        await cache.invalidateQueries();
-        toast.success(m.common_saved());
-      },
-    }),
-  );
-  const options = useMutation(orpc.logs.configure.mutationOptions());
+  const rate = useMutation({
+    ...orpc.logs.configure.mutationOptions(),
+    meta: { invalidates: "all", success: m.common_saved },
+  });
+  const options = useMutation({
+    ...orpc.logs.configure.mutationOptions(),
+    meta: {
+      invalidates: [orpc.logs.settings.queryKey({ input: { siteId } })],
+      success: m.common_saved,
+    },
+  });
   const saved: Options = {
     logBlocked: settings.logBlocked,
     logQuery: settings.logQuery,
@@ -166,10 +167,6 @@ function LogSettingsForm({
           await options.mutateAsync(input);
           // The saved names come back normalized: the form takes them now, so it is clean then.
           setDraft({ ...draft, logHeaders: headers });
-          await cache.invalidateQueries({
-            queryKey: orpc.logs.settings.queryKey({ input: { siteId } }),
-          });
-          toast.success(m.common_saved());
         } catch (err) {
           setError(errorMessage(err));
         }

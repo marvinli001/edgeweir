@@ -1,6 +1,5 @@
 import { type NodeChannel, nodeChannelInput } from "@edgeweir/contract";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { NodeChannelCheckStatus, UrlScopeBadge } from "@/components/node-enrollment";
 import { SafetyNote } from "@/components/safety-note";
 import { SettingSourceBadge, SettingsCard } from "@/components/settings-card";
@@ -9,7 +8,7 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { m } from "@/lib/i18n";
-import { errorMessage, orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/orpc";
 
 /** Who may still connect with a name or through the entry, or that nobody does. */
 function Usage({ nodes, probes }: { nodes: number; probes: number }) {
@@ -27,7 +26,6 @@ function Usage({ nodes, probes }: { nodes: number; probes: number }) {
  * the certificate and the WebSocket entry, removable once no node or probe uses them.
  */
 function NodeChannelMigration({ value: saved }: { value: NodeChannel }) {
-  const queryClient = useQueryClient();
   // Nodes and probes move on their own: keep the counts current.
   const live = useQuery({
     ...orpc.settings.nodeChannel.queryOptions(),
@@ -35,20 +33,18 @@ function NodeChannelMigration({ value: saved }: { value: NodeChannel }) {
     meta: { background: true },
   });
   const value = live.data ?? saved;
-  const done = (message: string) => () => {
-    toast.success(message);
-    void queryClient.invalidateQueries({ queryKey: orpc.settings.key() });
-  };
-  const failed = (error: unknown) => toast.error(errorMessage(error));
+  const meta = (success: () => string) => ({
+    invalidates: [orpc.settings.key()],
+    success,
+    toastError: true,
+  });
   const remove = useMutation({
     ...orpc.settings.removeNodeChannelName.mutationOptions(),
-    onSuccess: done(m.system_node_channel_removed()),
-    onError: failed,
+    meta: meta(m.system_node_channel_removed),
   });
   const close = useMutation({
     ...orpc.settings.closeNodeChannelWebSocket.mutationOptions(),
-    onSuccess: done(m.system_node_channel_websocket_closed()),
-    onError: failed,
+    meta: meta(m.system_node_channel_websocket_closed),
   });
   const { adoption, previousNames, webSocket } = value;
   if (!adoption.nodes && !adoption.probes && !previousNames.length && !webSocket.closable)

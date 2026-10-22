@@ -1,9 +1,8 @@
 import type { Cluster, NodeGroup } from "@edgeweir/contract";
 import { Add01Icon, Delete02Icon, PencilEdit01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
@@ -31,10 +30,10 @@ function NodeGroupDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const queryClient = useQueryClient();
   const regions = useQuery({ ...orpc.regions.list.queryOptions(), enabled: open });
-  const create = useMutation(orpc.nodeGroups.create.mutationOptions());
-  const update = useMutation(orpc.nodeGroups.update.mutationOptions());
+  const meta = { invalidates: "all", success: m.common_saved } as const;
+  const create = useMutation({ ...orpc.nodeGroups.create.mutationOptions(), meta });
+  const update = useMutation({ ...orpc.nodeGroups.update.mutationOptions(), meta });
   const [regionId, setRegionId] = React.useState<string | null>(group?.regionId ?? null);
   const [isCanary, setIsCanary] = React.useState(group?.isCanary ?? false);
   return (
@@ -48,8 +47,6 @@ function NodeGroupDialog({
         const name = String(data.get("groupName") ?? "").trim();
         if (group) await update.mutateAsync({ id: group.id, name, regionId, isCanary });
         else await create.mutateAsync({ clusterId: cluster.id, name, regionId, isCanary });
-        await queryClient.invalidateQueries();
-        toast.success(m.common_saved());
         onOpenChange(false);
       }}
     >
@@ -94,8 +91,10 @@ function NodeGroupDialog({
  * column templates are plain functions (DataTable) and hold no hooks.
  */
 function DeleteNodeGroupAction({ group }: { group: NodeGroup }) {
-  const queryClient = useQueryClient();
-  const remove = useMutation(orpc.nodeGroups.delete.mutationOptions());
+  const remove = useMutation({
+    ...orpc.nodeGroups.delete.mutationOptions(),
+    meta: { invalidates: "all" },
+  });
   return (
     <ConfirmDialog
       trigger={
@@ -108,7 +107,6 @@ function DeleteNodeGroupAction({ group }: { group: NodeGroup }) {
       confirmLabel={m.common_delete()}
       onConfirm={async () => {
         await remove.mutateAsync({ id: group.id });
-        await queryClient.invalidateQueries();
       }}
     />
   );

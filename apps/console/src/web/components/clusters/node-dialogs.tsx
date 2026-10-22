@@ -1,7 +1,6 @@
 import type { Node } from "@edgeweir/contract";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { OptionSelect } from "@/components/form-select";
@@ -27,8 +26,10 @@ export function NodeActionDialog({ action, ...dialog }: { action: NodeAction } &
 }
 
 function RenameNodeDialog({ node, open, onOpenChange }: { node: Node } & DialogProps) {
-  const queryClient = useQueryClient();
-  const update = useMutation(orpc.nodes.update.mutationOptions());
+  const update = useMutation({
+    ...orpc.nodes.update.mutationOptions(),
+    meta: { invalidates: "all" },
+  });
   return (
     <FormDialog
       open={open}
@@ -40,7 +41,6 @@ function RenameNodeDialog({ node, open, onOpenChange }: { node: Node } & DialogP
           id: node.id,
           name: String(data.get("nodeNewName") ?? "").trim(),
         });
-        await queryClient.invalidateQueries();
         onOpenChange(false);
       }}
     >
@@ -59,11 +59,13 @@ function RenameNodeDialog({ node, open, onOpenChange }: { node: Node } & DialogP
 }
 
 function MoveNodeDialog({ node, open, onOpenChange }: { node: Node } & DialogProps) {
-  const queryClient = useQueryClient();
   const groups = useQuery(
     orpc.nodeGroups.list.queryOptions({ input: { clusterId: node.clusterId } }),
   );
-  const update = useMutation(orpc.nodes.update.mutationOptions());
+  const update = useMutation({
+    ...orpc.nodes.update.mutationOptions(),
+    meta: { invalidates: "all", success: () => m.nodes_moved({ name: node.name }) },
+  });
   const [groupId, setGroupId] = React.useState(node.nodeGroupId ?? "");
   return (
     <FormDialog
@@ -74,8 +76,6 @@ function MoveNodeDialog({ node, open, onOpenChange }: { node: Node } & DialogPro
       submitTestId="move-submit"
       onSubmit={async () => {
         await update.mutateAsync({ id: node.id, nodeGroupId: groupId });
-        await queryClient.invalidateQueries();
-        toast.success(m.nodes_moved({ name: node.name }));
         onOpenChange(false);
       }}
     >
@@ -96,8 +96,10 @@ function MoveNodeDialog({ node, open, onOpenChange }: { node: Node } & DialogPro
 }
 
 function DeleteNodeDialog({ node, open, onOpenChange }: { node: Node } & DialogProps) {
-  const queryClient = useQueryClient();
-  const remove = useMutation(orpc.nodes.delete.mutationOptions());
+  const remove = useMutation({
+    ...orpc.nodes.delete.mutationOptions(),
+    meta: { invalidates: "all", success: m.common_deleted },
+  });
   return (
     <ControlledConfirmDialog
       open={open}
@@ -105,8 +107,6 @@ function DeleteNodeDialog({ node, open, onOpenChange }: { node: Node } & DialogP
       title={m.nodes_delete_confirm({ name: node.name })}
       onConfirm={async () => {
         await remove.mutateAsync({ id: node.id });
-        await queryClient.invalidateQueries();
-        toast.success(m.common_deleted());
       }}
     />
   );

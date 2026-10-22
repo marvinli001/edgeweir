@@ -279,13 +279,19 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
 }
 
 function OverviewTab({ site }: { site: Site }) {
-  const setEnabled = useMutation(orpc.sites.setEnabled.mutationOptions());
+  const setEnabled = useMutation({
+    ...orpc.sites.setEnabled.mutationOptions(),
+    meta: { invalidates: [orpc.sites.key()] },
+  });
   const navigate = Route.useNavigate();
   const queryClient = useQueryClient();
   // A draft: enabling the site or a refetch keeps a name being edited.
   const { draft: name, setDraft: setName } = useDraft(site.name);
   const { save, error, pending } = useSaveSite(site.id);
-  const purge = useMutation(orpc.sites.purgeAll.mutationOptions());
+  const purge = useMutation({
+    ...orpc.sites.purgeAll.mutationOptions(),
+    meta: { invalidates: [orpc.cacheTasks.key()] },
+  });
   const remove = useMutation(orpc.sites.delete.mutationOptions());
   const [copying, setCopying] = React.useState(false);
   const [cloning, setCloning] = React.useState(false);
@@ -349,7 +355,6 @@ function OverviewTab({ site }: { site: Site }) {
                         result.site.enabled ? m.site_enabled_toast() : m.site_disabled_toast(),
                         result.site.delivery,
                       );
-                      await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
                     }}
                   />
                 </InfoRow>
@@ -402,7 +407,6 @@ function OverviewTab({ site }: { site: Site }) {
                     onClick: () => void navigate({ to: "/purge", search: { site: site.id } }),
                   },
                 });
-                await queryClient.invalidateQueries({ queryKey: orpc.cacheTasks.key() });
               }}
             />
             <ConfirmDialog

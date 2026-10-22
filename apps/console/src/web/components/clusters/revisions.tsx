@@ -1,5 +1,5 @@
 import type { Cluster, Revision } from "@edgeweir/contract";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
 import { SiteChangeList } from "@/components/config-changes";
@@ -17,8 +17,10 @@ import { revisionReason } from "@/lib/revisions";
  * against the latest revision, or why it cannot be done, before confirming.
  */
 function RollbackAction({ clusterId, revision }: { clusterId: string; revision: number }) {
-  const queryClient = useQueryClient();
-  const rollback = useMutation(orpc.clusters.rollback.mutationOptions());
+  const rollback = useMutation({
+    ...orpc.clusters.rollback.mutationOptions(),
+    meta: { invalidates: "all" },
+  });
   const [open, setOpen] = React.useState(false);
   const preview = useQuery({
     ...orpc.clusters.rollbackPreview.queryOptions({ input: { id: clusterId, revision } }),
@@ -42,7 +44,6 @@ function RollbackAction({ clusterId, revision }: { clusterId: string; revision: 
       onConfirm={async () => {
         const result = await rollback.mutateAsync({ id: clusterId, revision });
         toast.success(m.revisions_rolled_back({ revision: result.revision }));
-        await queryClient.invalidateQueries();
       }}
     >
       <QueryView

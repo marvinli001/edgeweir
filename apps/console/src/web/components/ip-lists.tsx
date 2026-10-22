@@ -2,9 +2,8 @@ import { type IpListDto, ipListInput } from "@edgeweir/contract";
 import { canonicalCidr } from "@edgeweir/rule-engine";
 import { Add01Icon, ListViewIcon, Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { AccessTabs } from "@/components/access-tabs";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
@@ -20,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatNumber, m } from "@/lib/i18n";
+import { splitList } from "@/lib/lists";
 import { client, orpc } from "@/lib/orpc";
 
 /** Entries a list card shows in its well; a longer list ends with the count of the rest. */
@@ -38,14 +38,19 @@ function validEntry(entry: string) {
 export function IpListsPage() {
   const query = useQuery(orpc.ipLists.list.queryOptions());
   const api = client.ipLists;
-  const queries = useQueryClient();
   const edit = useDialogState<IpListDto | "new">();
   const editing = edit.value;
+  // Rules and sites of every cluster may use a list.
   const remove = useMutation({
-    mutationFn: async (id: string) => {
-      await api.delete({ id });
-      await queries.invalidateQueries();
-    },
+    mutationFn: (id: string) => api.delete({ id }),
+    meta: { invalidates: "all" },
+  });
+  const save = useMutation({
+    mutationFn: (input: ReturnType<typeof ipListInput.parse>) =>
+      editing === "new" || !editing
+        ? api.create(input)
+        : api.update({ id: editing.id, entries: input.entries, kind: input.kind }),
+    meta: { invalidates: "all", success: m.common_saved },
   });
   const check = useDialogState();
   const actions = (
@@ -95,10 +100,7 @@ export function IpListsPage() {
           open={edit.open}
           onOpenChange={edit.onOpenChange}
           onSave={async (input) => {
-            if (editing === "new") await api.create(input);
-            else await api.update({ id: editing.id, entries: input.entries, kind: input.kind });
-            await queries.invalidateQueries();
-            toast.success(m.common_saved());
+            await save.mutateAsync(input);
             edit.onOpenChange(false);
           }}
         />
@@ -190,9 +192,7 @@ function IpListDialog({
       submitLabel={m.common_save()}
       submitTestId="ip-list-submit"
       onSubmit={async (data) => {
-        const entries = String(data.get("entries") ?? "")
-          .split(/[\s,]+/)
-          .filter(Boolean);
+        const entries = splitList(String(data.get("entries") ?? ""));
         const invalid = entries.find((entry) => !validEntry(entry));
         if (invalid !== undefined) throw new Error(m.ip_lists_invalid_entry({ entry: invalid }));
         const parsed = ipListInput.safeParse({

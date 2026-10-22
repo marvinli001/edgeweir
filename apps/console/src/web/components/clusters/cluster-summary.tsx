@@ -1,9 +1,8 @@
 import type { Cluster } from "@edgeweir/contract";
 import { Delete02Icon, MoreHorizontalIcon, PencilEdit01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { Meter } from "@/components/appica/meter";
 import { ClusterDialog } from "@/components/clusters/cluster-dialog";
 import { ClusterLinks } from "@/components/clusters/cluster-links";
@@ -54,10 +53,12 @@ export function ClusterSummary({
   selected: Cluster;
   onSelect: (id: string) => void;
 }) {
-  const queryClient = useQueryClient();
   const [editOpen, setEditOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
-  const remove = useMutation(orpc.clusters.delete.mutationOptions());
+  const remove = useMutation({
+    ...orpc.clusters.delete.mutationOptions(),
+    meta: { invalidates: "all", success: m.common_deleted },
+  });
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center gap-3">
@@ -196,8 +197,6 @@ export function ClusterSummary({
         title={m.clusters_delete_confirm({ name: selected.name })}
         onConfirm={async () => {
           await remove.mutateAsync({ id: selected.id });
-          toast.success(m.common_deleted());
-          await queryClient.invalidateQueries();
           const next = clusters.find((c) => c.id !== selected.id);
           if (next) onSelect(next.id);
         }}

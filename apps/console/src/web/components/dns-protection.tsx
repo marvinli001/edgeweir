@@ -1,16 +1,11 @@
-import type { DnsProtection } from "@edgeweir/contract";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import * as React from "react";
-import { toast } from "sonner";
+import { useMutation } from "@tanstack/react-query";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { SettingsCard } from "@/components/settings-card";
 import { NumberField } from "@/components/site/fields";
-import { SaveBar } from "@/components/site/save-site";
-import { QueryView } from "@/components/states";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatNumber, m } from "@/lib/i18n";
-import { errorMessage, orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/orpc";
 
 /** The plan the mass removal protection held back for a cluster, with a confirmed force publish. */
 export function DnsHeldBack({
@@ -20,8 +15,10 @@ export function DnsHeldBack({
   clusterId: string;
   blocked: { revision: number; removedRecords: number; previousRecords: number };
 }) {
-  const queryClient = useQueryClient();
-  const force = useMutation(orpc.dns.forcePublishBinding.mutationOptions());
+  const force = useMutation({
+    ...orpc.dns.forcePublishBinding.mutationOptions(),
+    meta: { invalidates: [orpc.dns.key()], success: m.common_saved },
+  });
   return (
     <Alert variant="destructive" className="animate-enter" data-testid="dns-held-back">
       <AlertTitle className="flex flex-wrap items-center gap-3">
@@ -46,8 +43,6 @@ export function DnsHeldBack({
           confirmLabel={m.dns_force_publish()}
           onConfirm={async () => {
             await force.mutateAsync({ clusterId, revision: blocked.revision });
-            await queryClient.invalidateQueries({ queryKey: orpc.dns.key() });
-            toast.success(m.common_saved());
           }}
         />
       </AlertTitle>
@@ -57,59 +52,29 @@ export function DnsHeldBack({
 
 /** DNS page card: the largest share of address records one publication may remove. */
 export function DnsProtectionCard() {
-  const query = useQuery(orpc.dns.protection.queryOptions());
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{m.dns_protection_title()}</CardTitle>
-      </CardHeader>
-      <QueryView query={query} frame={CardContent}>
-        {(protection) => <ProtectionForm key={JSON.stringify(protection)} initial={protection} />}
-      </QueryView>
-    </Card>
-  );
-}
-
-function ProtectionForm({ initial }: { initial: DnsProtection }) {
-  const queryClient = useQueryClient();
-  const save = useMutation(orpc.dns.setProtection.mutationOptions());
-  const initialPercent = String(Math.round(initial.massRemovalRatio * 100));
-  const [percent, setPercent] = React.useState(initialPercent);
-  const [error, setError] = React.useState<string | null>(null);
-  return (
-    <form
-      className="flex flex-col gap-(--card-spacing)"
-      onSubmit={async (event) => {
-        event.preventDefault();
-        setError(null);
-        try {
-          await save.mutateAsync({ massRemovalRatio: Number(percent) / 100 });
-          await queryClient.invalidateQueries({ queryKey: orpc.dns.protection.key() });
-          toast.success(m.common_saved());
-        } catch (err) {
-          setError(errorMessage(err));
-        }
-      }}
+    <SettingsCard
+      title={m.dns_protection_title()}
+      query={orpc.dns.protection.queryOptions()}
+      mutation={orpc.dns.setProtection.mutationOptions()}
+      toDraft={(protection) => ({ percent: String(Math.round(protection.massRemovalRatio * 100)) })}
+      toInput={(draft) => ({ massRemovalRatio: Number(draft.percent) / 100 })}
+      contentClassName="max-w-sm"
+      saveTestId="dns-protection-save"
     >
-      <CardContent className="max-w-sm">
+      {({ draft, set }) => (
         <NumberField
           id="dns-mass-removal"
           label={m.dns_protection_ratio()}
-          value={percent}
-          onChange={setPercent}
+          value={draft.percent}
+          onChange={(percent) => set({ percent })}
           min={5}
           max={100}
           step={1}
           required
           testId="dns-mass-removal-ratio"
         />
-      </CardContent>
-      <SaveBar
-        dirty={percent !== initialPercent}
-        pending={save.isPending}
-        error={error}
-        testId="dns-protection-save"
-      />
-    </form>
+      )}
+    </SettingsCard>
   );
 }

@@ -5,9 +5,8 @@ import {
 } from "@edgeweir/contract";
 import { Add01Icon, Delete02Icon, Key01Icon, PencilEdit01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { type Columns, DataTable } from "@/components/data-table";
@@ -33,7 +32,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { useOpenKey } from "@/hooks/use-open-key";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
-import { errorMessage, orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/orpc";
 
 const SCOPES = serviceAccountScope.options;
 
@@ -46,9 +45,9 @@ function AccountDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const queryClient = useQueryClient();
-  const create = useMutation(orpc.serviceAccounts.create.mutationOptions());
-  const update = useMutation(orpc.serviceAccounts.update.mutationOptions());
+  const meta = { invalidates: [orpc.serviceAccounts.key()], success: m.service_accounts_saved };
+  const create = useMutation({ ...orpc.serviceAccounts.create.mutationOptions(), meta });
+  const update = useMutation({ ...orpc.serviceAccounts.update.mutationOptions(), meta });
   const [scopes, setScopes] = React.useState<ServiceAccountScope[]>(account?.scopes ?? []);
   const [enabled, setEnabled] = React.useState(account?.enabled ?? true);
   return (
@@ -62,8 +61,6 @@ function AccountDialog({
         const name = String(data.get("accountName") ?? "").trim();
         if (account) await update.mutateAsync({ id: account.id, name, scopes, enabled });
         else await create.mutateAsync({ name, scopes, enabled });
-        await queryClient.invalidateQueries({ queryKey: orpc.serviceAccounts.key() });
-        toast.success(m.service_accounts_saved());
         onOpenChange(false);
       }}
     >
@@ -112,11 +109,19 @@ function AccountDialog({
 }
 
 function KeysDialog({ account, open, onOpenChange }: { account: ServiceAccount } & DialogProps) {
-  const queryClient = useQueryClient();
-  const create = useMutation(orpc.serviceAccounts.createKey.mutationOptions());
-  const revoke = useMutation(orpc.serviceAccounts.revokeKey.mutationOptions());
+  const create = useMutation({
+    ...orpc.serviceAccounts.createKey.mutationOptions(),
+    meta: {
+      invalidates: [orpc.serviceAccounts.key()],
+      success: m.service_accounts_key_created,
+      toastError: true,
+    },
+  });
+  const revoke = useMutation({
+    ...orpc.serviceAccounts.revokeKey.mutationOptions(),
+    meta: { invalidates: [orpc.serviceAccounts.key()] },
+  });
   const [name, setName] = React.useState("");
-  const refresh = () => queryClient.invalidateQueries({ queryKey: orpc.serviceAccounts.key() });
   // Closing forgets the new key's secret: it is shown once.
   const setOpen = (next: boolean) => {
     if (!next) create.reset();
@@ -134,14 +139,7 @@ function KeysDialog({ account, open, onOpenChange }: { account: ServiceAccount }
           className="flex flex-wrap items-end gap-2"
           onSubmit={async (event) => {
             event.preventDefault();
-            try {
-              await create.mutateAsync({ id: account.id, name: name.trim() });
-              setName("");
-              await refresh();
-              toast.success(m.service_accounts_key_created());
-            } catch (err) {
-              toast.error(errorMessage(err));
-            }
+            create.mutate({ id: account.id, name: name.trim() }, { onSuccess: () => setName("") });
           }}
         >
           <Field className="w-full sm:w-56">
@@ -216,7 +214,6 @@ function KeysDialog({ account, open, onOpenChange }: { account: ServiceAccount }
                     confirmLabel={m.service_accounts_key_revoke()}
                     onConfirm={async () => {
                       await revoke.mutateAsync({ id: account.id, keyId: k.id });
-                      await refresh();
                     }}
                   />
                 )}
@@ -239,8 +236,10 @@ function KeysDialog({ account, open, onOpenChange }: { account: ServiceAccount }
  * functions (DataTable) and hold no hooks.
  */
 function DeleteAccountAction({ account }: { account: ServiceAccount }) {
-  const queryClient = useQueryClient();
-  const remove = useMutation(orpc.serviceAccounts.delete.mutationOptions());
+  const remove = useMutation({
+    ...orpc.serviceAccounts.delete.mutationOptions(),
+    meta: { invalidates: [orpc.serviceAccounts.key()], success: m.service_accounts_deleted },
+  });
   return (
     <ConfirmDialog
       trigger={
@@ -254,8 +253,6 @@ function DeleteAccountAction({ account }: { account: ServiceAccount }) {
       confirmLabel={m.common_delete()}
       onConfirm={async () => {
         await remove.mutateAsync({ id: account.id });
-        await queryClient.invalidateQueries({ queryKey: orpc.serviceAccounts.key() });
-        toast.success(m.service_accounts_deleted());
       }}
     />
   );

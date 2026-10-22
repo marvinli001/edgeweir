@@ -41,6 +41,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { formatNumber, m } from "@/lib/i18n";
+import { splitList } from "@/lib/lists";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
@@ -168,13 +169,6 @@ const lines = (text: string) =>
     .map((line) => line.trim())
     .filter(Boolean);
 
-/** Host names: one per line, or separated by spaces or commas. */
-const hostEntries = (text: string) =>
-  text
-    .split(/[\s,]+/)
-    .map((host) => host.trim())
-    .filter(Boolean);
-
 /** Cache tags: one per line or comma separated (as in a Cache-Tag header); tags never hold commas. */
 const tagEntries = (text: string) =>
   text
@@ -239,7 +233,8 @@ function PurgeForm({
     setDraft((prev) => ({ ...prev, sites: new Map([[site.id, site.name]]), tagSite: site }));
   }, [site]);
   const urls = lines(draft.urls);
-  const hosts = hostEntries(draft.hosts);
+  // Host names: one per line, or separated by spaces or commas.
+  const hosts = splitList(draft.hosts);
   const tags = tagEntries(draft.tags);
   // Tag purges need the chosen site's nodes to index Cache-Tag (purge-tag-v1).
   const tagFeatures = useQuery({

@@ -1,9 +1,8 @@
 import type { Ban, BanScope, BanSource } from "@edgeweir/contract";
 import { Add01Icon, BlockedIcon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { AccessTabs } from "@/components/access-tabs";
 import { BAN_REASON_LABELS, BAN_SCOPE_LABELS, BanDialog } from "@/components/ban-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -113,8 +112,10 @@ function BanExpiry({ expiresAt }: { expiresAt: string }) {
  * functions (DataTable) and hold no hooks.
  */
 function UnbanAction({ ban }: { ban: Ban }) {
-  const queryClient = useQueryClient();
-  const unban = useMutation({ mutationFn: (id: string) => client.bans.delete({ id }) });
+  const unban = useMutation({
+    mutationFn: (id: string) => client.bans.delete({ id }),
+    meta: { invalidates: [orpc.bans.key()], success: m.bans_unbanned },
+  });
   return (
     <ConfirmDialog
       trigger={
@@ -127,8 +128,6 @@ function UnbanAction({ ban }: { ban: Ban }) {
       confirmLabel={m.bans_unban()}
       onConfirm={async () => {
         await unban.mutateAsync(ban.id);
-        await queryClient.invalidateQueries({ queryKey: orpc.bans.key() });
-        toast.success(m.bans_unbanned());
       }}
     />
   );

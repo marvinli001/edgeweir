@@ -300,10 +300,7 @@ function PasskeysCard() {
         });
       }
     },
-    onSuccess: () => {
-      toast.success(m.security_passkey_added());
-      return queryClient.invalidateQueries({ queryKey: ["passkeys"] });
-    },
+    meta: { invalidates: [["passkeys"]], success: m.security_passkey_added },
   });
   const supported = typeof window !== "undefined" && "PublicKeyCredential" in window;
 

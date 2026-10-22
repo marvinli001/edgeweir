@@ -1,5 +1,5 @@
 import type { SiteLaunch } from "@edgeweir/contract";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type * as React from "react";
 import { CopyButton } from "@/components/copy-button";
 import { CnamePrefixActions } from "@/components/site/cname-prefix";
@@ -55,8 +55,10 @@ function DnsSetup({
   recheck: React.ReactNode;
 }) {
   const cname = target.target;
-  const client = useQueryClient();
-  const setPrefix = useMutation(orpc.sites.setCnamePrefix.mutationOptions());
+  const setPrefix = useMutation({
+    ...orpc.sites.setCnamePrefix.mutationOptions(),
+    meta: { invalidates: [orpc.dns.siteTarget.key(), orpc.sites.key()] },
+  });
   return (
     <Card data-testid={cname ? "cname-target" : "edge-addresses"}>
       <CardHeader className="flex flex-row items-center gap-3">
@@ -93,14 +95,7 @@ function DnsSetup({
             <CnamePrefixActions
               prefix={cname.split(".")[0] ?? ""}
               retired={target.retired}
-              change={async (prefix) => {
-                const state = await setPrefix.mutateAsync({ id: siteId, prefix });
-                await Promise.all([
-                  client.invalidateQueries({ queryKey: orpc.dns.siteTarget.key() }),
-                  client.invalidateQueries({ queryKey: orpc.sites.key() }),
-                ]);
-                return state;
-              }}
+              change={(prefix) => setPrefix.mutateAsync({ id: siteId, prefix })}
             />
           </>
         ) : null}

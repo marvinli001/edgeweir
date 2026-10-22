@@ -23,8 +23,8 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { enterDelay, Page } from "@/components/page";
+import { SettingsCard } from "@/components/settings-card";
 import { NumberField, SwitchField } from "@/components/site/fields";
-import { SaveBar } from "@/components/site/save-site";
 import { SiteMultiSelect } from "@/components/site-multi-select";
 import { SmtpSettings } from "@/components/smtp-settings";
 import { EmptyState, type QueryResult, QueryView } from "@/components/states";
@@ -36,6 +36,7 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, m } from "@/lib/i18n";
+import { splitList } from "@/lib/lists";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 
 type EditableChannel = {
@@ -99,7 +100,6 @@ function AlertsPage() {
 }
 
 function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
-  const queries = useQueryClient();
   const dialog = useDialogState<EditableChannel | "new">();
   const mutation = useMutation({
     mutationFn: async (input: {
@@ -110,13 +110,11 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
       if (input.action === "test") await client.alerts.testChannel({ id: input.id });
       else if (input.action === "delete") await client.alerts.deleteChannel({ id: input.id });
       else await client.alerts.updateChannel({ id: input.id, enabled: input.enabled });
-      await queries.invalidateQueries();
     },
+    meta: { invalidates: [orpc.alerts.key()], success: m.common_saved },
   });
-  const run = async (action: "toggle" | "test" | "delete", id: string, enabled?: boolean) => {
-    await mutation.mutateAsync({ action, id, enabled });
-    toast.success(m.common_saved());
-  };
+  const run = (action: "toggle" | "test" | "delete", id: string, enabled?: boolean) =>
+    mutation.mutateAsync({ action, id, enabled });
   const act = (action: "toggle" | "test", id: string, enabled?: boolean) =>
     run(action, id, enabled).catch((e: unknown) => toast.error(errorMessage(e)));
   return (
@@ -331,7 +329,7 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
                       }
                       onConfirm={async () => {
                         await client.alerts.unsubscribe({ id: sub.id });
-                        await queries.invalidateQueries();
+                        await queries.invalidateQueries({ queryKey: orpc.alerts.key() });
                       }}
                     />
                   </div>
@@ -420,80 +418,51 @@ function EventsCard() {
 
 /** The thresholds; the card frames the loading and error states too. */
 function PolicyCard() {
-  const policy = useQuery(orpc.alerts.policy.queryOptions());
   return (
-    <Card className="animate-enter" style={{ animationDelay: "240ms" }}>
-      <CardHeader>
-        <CardTitle>{m.alert_policy_title()}</CardTitle>
-      </CardHeader>
-      <QueryView query={policy} frame={CardContent}>
-        {(saved) => <PolicyEditor key={JSON.stringify(saved)} initial={saved} />}
-      </QueryView>
-    </Card>
-  );
-}
-
-function PolicyEditor({ initial }: { initial: AlertPolicy }) {
-  const [form, setForm] = React.useState(initial),
-    [error, setError] = React.useState<string | null>(null);
-  const queries = useQueryClient(),
-    mutation = useMutation(orpc.alerts.setPolicy.mutationOptions());
-  return (
-    <form
-      className="flex flex-col gap-(--card-spacing)"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        setError(null);
-        try {
-          const parsed = alertPolicy.safeParse(form);
-          if (!parsed.success) {
-            setError(m.alert_check_fields());
-            return;
-          }
-          await mutation.mutateAsync(parsed.data);
-          await queries.invalidateQueries();
-          toast.success(m.common_saved());
-        } catch (e) {
-          setError(errorMessage(e));
-        }
-      }}
+    <SettingsCard
+      title={m.alert_policy_title()}
+      query={orpc.alerts.policy.queryOptions()}
+      className="animate-enter"
+      style={{ animationDelay: "240ms" }}
+      mutation={orpc.alerts.setPolicy.mutationOptions()}
+      toDraft={(saved: AlertPolicy) => saved}
+      toInput={(draft) => draft}
+      check={(input) => (alertPolicy.safeParse(input).success ? null : m.alert_check_fields())}
+      contentClassName="grid gap-4 sm:grid-cols-2"
+      saveTestId="alert-policy-save"
     >
-      <CardContent className="grid gap-4 sm:grid-cols-2">
-        {(
-          [
-            ["nodeOfflineSeconds", m.alert_offline_seconds(), 45, 3600],
-            ["certificateHours", m.alert_certificate_hours(), 1, 720],
-            ["minimumRequests", m.alert_minimum_requests(), 1, 1000000],
-            ["windowMinutes", m.alert_window_minutes(), 1, 60],
-            ["clockSkewSeconds", m.alert_clock_skew_seconds(), 5, 3600],
-          ] as const
-        ).map(([key, label, min, max]) => (
+      {({ draft, set }) => (
+        <>
+          {(
+            [
+              ["nodeOfflineSeconds", m.alert_offline_seconds(), 45, 3600],
+              ["certificateHours", m.alert_certificate_hours(), 1, 720],
+              ["minimumRequests", m.alert_minimum_requests(), 1, 1000000],
+              ["windowMinutes", m.alert_window_minutes(), 1, 60],
+              ["clockSkewSeconds", m.alert_clock_skew_seconds(), 5, 3600],
+            ] as const
+          ).map(([key, label, min, max]) => (
+            <NumberField
+              key={key}
+              id={`alert-${key}`}
+              label={label}
+              value={String(draft[key])}
+              min={min}
+              max={max}
+              onChange={(value) => set({ [key]: Number(value) })}
+            />
+          ))}
           <NumberField
-            key={key}
-            id={`alert-${key}`}
-            label={label}
-            value={String(form[key])}
-            min={min}
-            max={max}
-            onChange={(value) => setForm({ ...form, [key]: Number(value) })}
+            id="alert-ratio"
+            label={m.alert_error_ratio()}
+            value={String(Math.round(draft.errorRatio * 100))}
+            min={1}
+            max={100}
+            onChange={(value) => set({ errorRatio: Number(value) / 100 })}
           />
-        ))}
-        <NumberField
-          id="alert-ratio"
-          label={m.alert_error_ratio()}
-          value={String(Math.round(form.errorRatio * 100))}
-          min={1}
-          max={100}
-          onChange={(value) => setForm({ ...form, errorRatio: Number(value) / 100 })}
-        />
-      </CardContent>
-      <SaveBar
-        dirty={JSON.stringify(form) !== JSON.stringify(initial)}
-        pending={mutation.isPending}
-        error={error}
-        testId="alert-policy-save"
-      />
-    </form>
+        </>
+      )}
+    </SettingsCard>
   );
 }
 
@@ -508,9 +477,9 @@ function ChannelDialog({
     [platform, setPlatform] = React.useState(initial?.platform ?? false),
     [locale, setLocale] = React.useState<string>(initial?.locale ?? "zh-CN");
   const [replaceConfig, setReplaceConfig] = React.useState(!initial);
-  const update = useMutation(orpc.alerts.updateChannel.mutationOptions());
-  const queries = useQueryClient(),
-    mutation = useMutation(orpc.alerts.createChannel.mutationOptions());
+  const meta = { invalidates: [orpc.alerts.key()] };
+  const update = useMutation({ ...orpc.alerts.updateChannel.mutationOptions(), meta });
+  const mutation = useMutation({ ...orpc.alerts.createChannel.mutationOptions(), meta });
   const fields =
     kind === "email"
       ? ["to"]
@@ -542,7 +511,7 @@ function ChannelDialog({
           const values: Record<string, unknown> = { kind };
           for (const field of fields) {
             const value = String(data.get(field) ?? "");
-            if (field === "to") values[field] = value.split(/[,\s]+/).filter(Boolean);
+            if (field === "to") values[field] = splitList(value);
             else if (value) values[field] = value;
           }
           const parsed = alertChannelConfig.safeParse(values);
@@ -556,7 +525,6 @@ function ChannelDialog({
         };
         if (initial) await update.mutateAsync({ id: initial.id, ...common, config });
         else if (config) await mutation.mutateAsync({ ...common, config });
-        await queries.invalidateQueries();
         onOpenChange(false);
       }}
     >
@@ -637,9 +605,9 @@ function SubscriptionDialog({
     ),
     [kinds, setKinds] = React.useState<AlertKind[]>(initial?.kinds ?? [...alertKind.options]),
     [enabled, setEnabled] = React.useState(initial?.enabled ?? true);
-  const queries = useQueryClient(),
-    subscribe = useMutation(orpc.alerts.subscribe.mutationOptions()),
-    update = useMutation(orpc.alerts.updateSubscription.mutationOptions());
+  const meta = { invalidates: [orpc.alerts.key()] };
+  const subscribe = useMutation({ ...orpc.alerts.subscribe.mutationOptions(), meta }),
+    update = useMutation({ ...orpc.alerts.updateSubscription.mutationOptions(), meta });
   const channelOptions = initial
     ? [{ value: initial.channelId, label: initial.channelName }]
     : channels.map((c) => ({ value: c.id, label: c.name }));
@@ -656,7 +624,6 @@ function SubscriptionDialog({
         const fields = { kinds, allSites, siteIds: allSites ? [] : [...sites.keys()], enabled };
         if (initial) await update.mutateAsync({ id: initial.id, ...fields });
         else await subscribe.mutateAsync({ channelId, ...fields });
-        await queries.invalidateQueries();
         onOpenChange(false);
       }}
     >

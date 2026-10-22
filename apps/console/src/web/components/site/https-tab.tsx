@@ -18,7 +18,6 @@ import { Add01Icon, Alert02Icon, ArrowDown01Icon, Cancel01Icon } from "@hugeicon
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { AcmeCaFields, caLabel, type Eab, eabMissing, eabParams } from "@/components/acme-ca";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DnsCredentialDialog } from "@/components/dns/credential-dialog";
@@ -40,6 +39,7 @@ import { useDialogState } from "@/hooks/use-dialog-state";
 import { certificateErrorText } from "@/lib/certificate-errors";
 import { httpsBlockerText } from "@/lib/https-blockers";
 import { m } from "@/lib/i18n";
+import { checkFieldText } from "@/lib/lists";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
@@ -119,8 +119,10 @@ export function HttpsTab({ site }: { site: Site }) {
 
 /** The status of a certificate being issued or that failed, with a retry. */
 function CertificateState({ cert, actions }: { cert: CertificateDto; actions?: React.ReactNode }) {
-  const client = useQueryClient();
-  const renew = useMutation(orpc.certificates.renew.mutationOptions());
+  const renew = useMutation({
+    ...orpc.certificates.renew.mutationOptions(),
+    meta: { invalidates: "all", toastError: true },
+  });
   const failed = cert.status === "error";
   // Only an ACME certificate is issued again; an upload is replaced.
   const retry = cert.source === "acme";
@@ -153,14 +155,7 @@ function CertificateState({ cert, actions }: { cert: CertificateDto; actions?: R
               size="sm"
               variant="outline"
               disabled={renew.isPending}
-              onClick={async () => {
-                try {
-                  await renew.mutateAsync({ id: cert.id });
-                  await client.invalidateQueries();
-                } catch (e) {
-                  toast.error(errorMessage(e));
-                }
-              }}
+              onClick={() => renew.mutate({ id: cert.id })}
             >
               {renew.isPending ? <Spinner /> : null}
               {m.common_retry()}
@@ -174,8 +169,10 @@ function CertificateState({ cert, actions }: { cert: CertificateDto; actions?: R
 
 /** The certificate requested for the site: issuing, or why it failed (retry or cancel). */
 function RequestedCertificate({ cert }: { cert: CertificateDto }) {
-  const client = useQueryClient();
-  const remove = useMutation(orpc.certificates.delete.mutationOptions());
+  const remove = useMutation({
+    ...orpc.certificates.delete.mutationOptions(),
+    meta: { invalidates: "all" },
+  });
   const failed = cert.status === "error";
   return (
     <Card className="animate-enter" data-testid="https-requested">
@@ -195,10 +192,7 @@ function RequestedCertificate({ cert }: { cert: CertificateDto }) {
                   {m.common_cancel()}
                 </Button>
               }
-              onConfirm={async () => {
-                await remove.mutateAsync({ id: cert.id });
-                await client.invalidateQueries();
-              }}
+              onConfirm={() => remove.mutateAsync({ id: cert.id })}
             />
           }
         />
@@ -424,14 +418,12 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
   );
 }
 
-/** What to check when the settings fail the contract, by the first issue's field. */
-function settingsError(field: PropertyKey | undefined): string {
-  if (field === "hstsMaxAge") return m.common_check_field({ field: m.cert_hsts_age() });
-  if (field === "clientCertificate") return m.common_check_field({ field: m.https_client_ca() });
-  if (field === "additionalCertificateIds")
-    return m.common_check_field({ field: m.https_certificates() });
-  return m.error_bad_request();
-}
+/** Labels of the fields a failed contract check names, by the first issue's field. */
+const SETTINGS_LABELS = {
+  hstsMaxAge: m.cert_hsts_age,
+  clientCertificate: m.https_client_ca,
+  additionalCertificateIds: m.https_certificates,
+};
 
 /** The HTTPS fields of `settings` (the compression card owns the rest). */
 const httpsOf = (settings: TlsSettings) =>
@@ -452,9 +444,10 @@ function HttpsEditor({
 }) {
   const [settings, setSettings] = React.useState(initial);
   const [error, setError] = React.useState<string | null>(null);
-  const [pending, setPending] = React.useState(false);
-  const mutation = useMutation(orpc.https.update.mutationOptions());
-  const client = useQueryClient();
+  const mutation = useMutation({
+    ...orpc.https.update.mutationOptions(),
+    meta: { invalidates: "all", success: m.common_saved },
+  });
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
   const redirectAvailable = features.data?.edgePorts.available ?? true;
   const multiAvailable = features.data?.multiCertificate.available ?? true;
@@ -500,19 +493,14 @@ function HttpsEditor({
           // Compression as saved: the cache tab owns it.
           const parsed = tlsSettings.safeParse({ ...settings, ...compressionOf(initial) });
           if (!parsed.success) {
-            setError(settingsError(parsed.error.issues[0]?.path[0]));
+            setError(checkFieldText(parsed.error.issues[0]?.path[0], SETTINGS_LABELS));
             return;
           }
-          setPending(true);
           setError(null);
           try {
             await mutation.mutateAsync({ id: site.id, settings: parsed.data });
-            await client.invalidateQueries();
-            toast.success(m.common_saved());
           } catch (e) {
             setError(errorMessage(e));
-          } finally {
-            setPending(false);
           }
         }}
       >
@@ -786,7 +774,7 @@ function HttpsEditor({
         </CardContent>
         <SaveBar
           dirty={JSON.stringify(httpsOf(settings)) !== JSON.stringify(httpsOf(initial))}
-          pending={pending}
+          pending={mutation.isPending}
           error={error}
           testId="https-save"
         />
