@@ -1,5 +1,4 @@
 export {
-  type AuthScope,
   authRuleIndex,
   corsAllowOrigin,
   geoDecision,
@@ -55,15 +54,9 @@ export {
   structuredCacheMatch,
 } from "./cache-conditions.ts";
 export {
-  anyView,
   classifyRawPath,
   ENCODED_PATH_MAX_EXEMPTIONS,
-  ENCODED_PATH_PREFIX_MAX,
-  type EncodedPathExemption,
-  everyView,
-  type RawPathClass,
   rawPathAmbiguous,
-  rawPathNoExemption,
   validEncodedPathPrefix,
 } from "./encoded-path.ts";
 export { evaluate, evaluateHeaderValue, evaluateValue } from "./evaluate.ts";

@@ -46,7 +46,7 @@ export interface RawPathClass {
 /** Most exemptions a site has. */
 export const ENCODED_PATH_MAX_EXEMPTIONS = 32;
 /** Longest exemption prefix in bytes. */
-export const ENCODED_PATH_PREFIX_MAX = 256;
+const ENCODED_PATH_PREFIX_MAX = 256;
 
 /** Escapes origins decode into separators, dots or parameters (lowercase). */
 const MARKERS = ["%2f", "%5c", "%2e", "%25", "%3b", "%u"];
@@ -57,11 +57,6 @@ export function rawPathAmbiguous(raw: string): boolean {
   if (/[\\;#]/.test(raw) || raw.startsWith("//")) return true;
   const p = asciiLower(raw);
   return MARKERS.some((m) => p.includes(m)) || DOT_SEGMENT.test(p);
-}
-
-/** Whether exemptions never apply to a raw path: "//" anywhere, or ambiguous. */
-export function rawPathNoExemption(raw: string): boolean {
-  return raw.includes("//") || rawPathAmbiguous(raw);
 }
 
 /**
