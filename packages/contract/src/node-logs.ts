@@ -95,9 +95,9 @@ export const nodeLogRetention = z.object({
  * entries once. Pulls are kept with their entries until the node log
  * retention ends, at most `kept` per node.
  */
-export const NODE_DEBUG_LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
+const NODE_DEBUG_LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
 export type NodeDebugLogLevel = (typeof NODE_DEBUG_LOG_LEVELS)[number];
-export const NODE_DEBUG_LOG_STATES = ["pending", "running", "succeeded", "failed"] as const;
+const NODE_DEBUG_LOG_STATES = ["pending", "running", "succeeded", "failed"] as const;
 export type NodeDebugLogState = (typeof NODE_DEBUG_LOG_STATES)[number];
 export const NODE_DEBUG_LOG_LIMITS = {
   /** Entries and bytes of one upload (the node keeps the newest within them). */
@@ -164,7 +164,7 @@ const nodeDebugLog = nodeDebugLogSummary.extend({
 });
 export type NodeDebugLog = z.infer<typeof nodeDebugLog>;
 
-export const nodeDebugLogPullInput = z
+const nodeDebugLogPullInput = z
   .object({
     id: uuid,
     from: isoDateTime.optional(),
