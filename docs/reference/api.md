@@ -981,13 +981,20 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 
 | 过程 | 端点 | 说明 |
 | --- | --- | --- |
-| `originClientCa.get` | `GET /origin-client-ca` | `{ authority, certificates }`：`authority` 为 `{ certificatePem, fingerprint, notBefore, notAfter }`，未创建时为 `null`；`certificates` 为每个集群当前的回源客户端证书 `{ id, clusterId, clusterName, serial, fingerprint, notBefore, notAfter }`（不含私钥） |
+| `originClientCa.get` | `GET /origin-client-ca` | `{ authority, next, previous, trustBundlePem, certificates, pendingClusters }`：`authority` 为在用（签发）的 CA `{ certificatePem, fingerprint, notBefore, notAfter }`，未创建时为 `null`；`next` 为轮换中尚未启用的新 CA，`previous` 为轮换替换下来、尚未退役的旧 CA，平时都是 `null`；`trustBundlePem` 为源站此时应信任的全部 CA 证书（在用的在前）；`certificates` 为每个集群当前的回源客户端证书 `{ id, clusterId, clusterName, serial, fingerprint, notBefore, notAfter, authority }`（不含私钥，`authority` 为 `active`、`previous` 或 `retired`）；`pendingClusters` 为有旧 CA 时仍出示旧 CA 证书的集群 `{ clusterId, clusterName }` |
 | `originClientCa.create` | `POST /origin-client-ca` | 创建回源客户端 CA（ECDSA P-256，10 年）；已存在时原样返回。审计 `origin_client_ca.create` |
-| `originCa.get` | `GET /origin-ca` | `{ authority }`，同上 |
+| `originClientCa.rotate` | `POST /origin-client-ca/rotation` | 生成新 CA（`next`，名称带代数如 `G2`），还不签发；已在轮换时 409 `CA_ROTATION_IN_PROGRESS`。审计 `origin_client_ca.rotation_start` |
+| `originClientCa.activate` | `POST /origin-client-ca/rotation/activate` | 新 CA 改为在用、原来的成为 `previous`，并为每个有网站出示客户端证书的集群签发新证书、发布配置（原因 `origin_client_certificate_rotated`）；失败的集群由每小时的更换任务重试。审计 `origin_client_ca.activate` |
+| `originClientCa.retire` | `POST /origin-client-ca/rotation/retire` | 删除旧 CA；还有集群出示旧 CA 的证书时 409 `CA_ROTATION_INCOMPLETE`（`clusters`）。审计 `origin_client_ca.retire` |
+| `originClientCa.cancel` | `DELETE /origin-client-ca/rotation` | 启用前删除新 CA。审计 `origin_client_ca.rotation_cancel` |
+| `originCa.get` | `GET /origin-ca` | `{ authority, previous, previousCertificates }`：在用的 CA、轮换中仍受信任的旧 CA（平时 `null`）与旧 CA 签发、未吊销未过期的证书数 |
 | `originCa.create` | `POST /origin-ca` | 创建 Origin CA（ECDSA P-256，20 年）；已存在时原样返回。审计 `origin_ca.create` |
-| `originCertificates.list` | `GET /origin-certificates` | Origin CA 签发的证书，新的在前：`{ id, hostnames, keyType, source, serial, fingerprint, certificatePem, notBefore, notAfter, revokedAt, createdAt }`；`keyType` 为 `ec256`、`ec384`、`rsa2048`、`rsa3072`、`rsa4096`，`source` 为 `generated` 或 `csr` |
+| `originCa.rotate` | `POST /origin-ca/rotation` | 生成新 CA 并立即用它签发，原来的成为 `previous`；有网站信任 Origin CA 的集群发布配置（原因 `origin_ca_rotation_started`），节点同时信任两者。这些集群的活动节点缺少 `origin-ca-rotation-v1` 时 409 `NODE_CAPABILITY_REQUIRED`；已在轮换时 409 `CA_ROTATION_IN_PROGRESS`。审计 `origin_ca.rotation_start` |
+| `originCa.retire` | `POST /origin-ca/rotation/retire` | 删除旧 CA，集群发布配置（原因 `origin_ca_retired`），节点不再信任旧 CA 的证书。审计 `origin_ca.retire`（`validCertificates`） |
+| `originCa.cancel` | `DELETE /origin-ca/rotation` | 删除新 CA、旧 CA 恢复在用（原因 `origin_ca_rotation_cancelled`）；新 CA 签发的证书仍有效时 409 `CA_ROTATION_IN_USE`（`count`）。审计 `origin_ca.rotation_cancel` |
+| `originCertificates.list` | `GET /origin-certificates` | Origin CA 签发的证书，新的在前：`{ id, hostnames, keyType, source, serial, fingerprint, certificatePem, notBefore, notAfter, revokedAt, createdAt, authority }`；`keyType` 为 `ec256`、`ec384`、`rsa2048`、`rsa3072`、`rsa4096`，`source` 为 `generated` 或 `csr`，`authority` 为签发它的 CA：`active`、`previous`（轮换中的旧 CA）或 `retired`（已退役或取消） |
 | `originCertificates.issue` | `POST /origin-certificates` | 见下表；响应同列表项，另有 `privateKeyPem`（控制台生成的 PKCS#8 私钥，只返回这一次；提交 CSR 时为空字符串）。审计 `origin_certificate.issue`（不含私钥） |
-| `originCertificates.revoke` | `POST /origin-certificates/{id}/revoke` | 吊销并重新签发 CRL，为有网站信任 Origin CA 的集群发布配置版本（原因 `origin_certificate_revoked`）；已吊销 409 `ORIGIN_CERTIFICATE_REVOKED`，不存在 404 `ORIGIN_CERTIFICATE_NOT_FOUND`。审计 `origin_certificate.revoke` |
+| `originCertificates.revoke` | `POST /origin-certificates/{id}/revoke` | 吊销并由签发它的 CA 重新签发 CRL，为有网站信任 Origin CA 的集群发布配置版本（原因 `origin_certificate_revoked`；已退役 CA 的证书只做标记，不发布）；已吊销 409 `ORIGIN_CERTIFICATE_REVOKED`，不存在 404 `ORIGIN_CERTIFICATE_NOT_FOUND`。审计 `origin_certificate.revoke` |
 
 服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
 
@@ -997,7 +1004,7 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | `POST /sites`、`PATCH /sites/{id}` | `originSettings` 新增 `tlsTrust`（`system` / `originCa`，默认 `system`）与 `clientCertificate`（默认 `false`）；`PATCH` 省略时保留原值。`originCa` 需要 `tlsVerify`（400 `ORIGIN_TLS_TRUST_REQUIRES_VERIFY`）、池中没有 S3 源站（400 `ORIGIN_CA_S3`）且 Origin CA 已创建（409 `ORIGIN_CA_NOT_FOUND`）；`clientCertificate` 需要回源客户端 CA（409 `ORIGIN_CLIENT_CA_NOT_FOUND`），集群没有当前证书时随保存签发。复制设置与克隆同样检查 |
 | `POST /certificates/upload` | Origin CA 签发的证书 400 `CERTIFICATE_ORIGIN_CA` |
 
-`GET /sites/{id}/features` 新增 `originMtls`、`originCa`。配置版本的原因新增 `origin_certificate_revoked`、`origin_client_certificate_rotated`，审计新增 `origin_client_certificate.rotate`（操作者 system）。节点能力新增 `origin-mtls-v1`、`origin-ca-v1`；节点通道的 `GetCertificates` 也返回本集群已发布配置引用的回源客户端证书。
+`GET /sites/{id}/features` 新增 `originMtls`、`originCa`。配置版本的原因新增 `origin_certificate_revoked`、`origin_client_certificate_rotated`，审计新增 `origin_client_certificate.rotate`（每小时的更换为 system，启用新 CA 时为操作者）。轮换另加原因 `origin_ca_rotation_started`、`origin_ca_rotation_cancelled`、`origin_ca_retired`，错误 `CA_ROTATION_IN_PROGRESS`、`CA_ROTATION_STEP_UNAVAILABLE`（当前阶段不能执行这一步）、`CA_ROTATION_INCOMPLETE`、`CA_ROTATION_IN_USE`；Origin CA 轮换期间 `originCa` 还要求 `origin-ca-rotation-v1`。节点能力新增 `origin-mtls-v1`、`origin-ca-v1`、`origin-ca-rotation-v1`；节点通道的 `GetCertificates` 也返回本集群已发布配置引用的回源客户端证书。
 
 ### 示例
 

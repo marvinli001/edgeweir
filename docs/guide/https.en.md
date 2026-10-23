@@ -421,11 +421,35 @@ Then turn on **Present client certificate** in the site's **Origin pool settings
 
 Origins can further restrict on the certificate's CN (the cluster id), for example with nginx's `$ssl_client_s_dn`.
 
+### Rotating the CAs
+
+Both CAs can be replaced; while that happens the old and the new one are used side by side, so connections and certificates keep working. A new CA's name carries its generation (for example `Edgeweir Origin CA G2`), and its private key is envelope-encrypted as well; every step is written to the audit log.
+
+The Origin CA (**Origin certificates** tab):
+
+1. **Rotate CA**: the new CA issues origin certificates from now on; the clusters trusting the Origin CA publish a configuration (reason "Origin CA rotation started") in which nodes trust both CAs, each checked against its own CRL. Every active node of those clusters must support `origin-ca-rotation-v1`, otherwise the step is refused ("Some nodes don't support Origin CA rotation yet: …").
+2. Issue the origins new certificates from the new CA and deploy them. The previous CA's card shows how many of its certificates are still valid; in the list they are marked **Previous CA**. They can still be revoked during the overlap.
+3. **Retire previous CA**: the previous CA and its key are deleted, the clusters publish a configuration (reason "Previous Origin CA retired") and nodes stop trusting its certificates (marked **CA retired**). The confirmation shows how many valid certificates stop working.
+
+**Cancel rotation** deletes the new CA and makes the previous one issue again, as long as the new CA has issued no certificate that is still valid. Rolling a configuration back during the overlap uses the two current CAs; after retiring, a rollback never trusts the previous CA again.
+
+The origin client CA (**Origin client** tab):
+
+1. **Rotate CA**: a new CA is generated but does not sign anything yet. **Download trust bundle** (both CA certificates) and replace the origins' `ssl_client_certificate` with it.
+2. **Activate new CA**: every cluster switches to a certificate of the new CA and publishes a configuration (reason "origin client certificate replaced"); the old certificates stay valid until they expire. Clusters that could not switch yet are listed on the previous CA's card and retried hourly.
+3. **Retire previous CA**: possible once every cluster presents a certificate of the new CA; origins then only need the new CA (download the trust bundle again).
+
+The rotation can be cancelled before activation.
+
+
 | Error | Cause |
 | --- | --- |
 | Create the Origin CA first | A site trusts the Origin CA, or a certificate is issued, before the Origin CA exists |
 | Create the origin client CA first | A site presents a client certificate before the origin client CA exists |
 | Trusting the Origin CA requires verifying origin certificates | Trust cannot be chosen with verification off |
+| A rotation is already under way | The previous rotation was neither retired nor cancelled |
+| These clusters still present certificates of the previous CA | Retiring the previous origin client CA before every cluster switched |
+| The new CA has issued valid certificates; the rotation cannot be cancelled | Cancelling an Origin CA rotation while certificates of the new CA are valid; revoke them or finish the rotation |
 
 ## Certificates on nodes
 
@@ -442,7 +466,7 @@ Origins can further restrict on the certificate's CN (the cluster id), for examp
 
 ## Key handling
 
-ACME account keys, certificate private keys, EAB HMAC keys (of certificates and of the custom directory in system settings), DNS credentials, TLS session ticket keys, the keys of the Origin CA and the origin client CA, and the keys of the clusters' origin client certificates are each envelope-encrypted with the master key, bound to their record ID. The certificate helper `edgeweir-certd` is started by background jobs and receives credentials only over stdin/stdout, never on the command line, in logs, or in the node configuration.
+ACME account keys, certificate private keys, EAB HMAC keys (of certificates and of the custom directory in system settings), DNS credentials, TLS session ticket keys, the keys of the Origin CA and the origin client CA (including the new ones of a rotation), and the keys of the clusters' origin client certificates are each envelope-encrypted with the master key, bound to their record ID. The certificate helper `edgeweir-certd` is started by background jobs and receives credentials only over stdin/stdout, never on the command line, in logs, or in the node configuration.
 
 ## Node capabilities
 
@@ -459,6 +483,7 @@ ACME account keys, certificate private keys, EAB HMAC keys (of certificates and 
 | `client-cert-v1` | A site has client certificates on, or a rule reads a `tls.client.*` field |
 | `origin-mtls-v1` | A site presents a client certificate to its origins |
 | `origin-ca-v1` | A site trusts the Origin CA |
+| `origin-ca-rotation-v1` | A site trusts the Origin CA while it is being rotated |
 
 A change saved in the console or with an AccessKey is published even when it needs a capability some active nodes of the cluster lack; those nodes keep their last-known-good configuration and **Clusters & nodes** shows **Upgrade required**, see [Node upgrades](node-upgrades.en.md). A configuration published by a service account or a background job that introduces a capability an active node lacks is refused (`NODE_CAPABILITY_REQUIRED`) and the configuration stays unchanged.
 
