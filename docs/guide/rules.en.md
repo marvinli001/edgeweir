@@ -35,6 +35,19 @@ Global rules are edited on the **Global rules** page with the same editor (**Ori
 
 Disabled rules are not sent to nodes.
 
+## Version history and restore
+
+Each time a save (including the API, settings copy and restores) creates, changes or deletes a rule, the console records a version of that rule: its full content, the actor, the time and the source (console, API, settings copy, restored from version N; rules that existed before the upgrade get an "Initial" version). Moving rules or saving them unchanged records nothing.
+
+- View and compare: the "Version history" button beside a saved rule's name lists its versions, newest first; open one to see the fields that differ from the saved rule (the current value struck through, expression and action lines marked removed or added).
+- Restore: click "Restore" beside a version and confirm. A restore is a new save: the rule takes that version's content (keeping its position), gets a new version with the source "Restored from version N", a new configuration revision is published and the audit log records "Site rule version restored" / "Global rule version restored". Unsaved edits in the editor are lost. A version equal to the saved rule cannot be restored.
+- Deleted rules: when a site has deleted rules, "Deleted rules (N)" appears above the rules. It lists each rule as it was before deletion; "Restore" adds it back at the end of its phase with its old rule ID and history.
+- Restores pass today's rule checks: a version whose action is no longer valid, that references an IP list or origin group that no longer exists, or a deleted rule that would exceed 64 rules (32 global rules) is refused and nothing changes.
+- Retention: the last 50 versions of each rule; per site and for global rules, the 100 most recently deleted rules (older deleted rules lose their history). Deleting a site deletes its rule versions.
+- The read-only demo account and read-only AccessKeys can view versions but not restore.
+
+API: `GET /api/v1/sites/{id}/rules/{ruleId}/versions`, `GET /api/v1/sites/{id}/rules/deleted`, `POST /api/v1/sites/{id}/rules/{ruleId}/restore`; global rules under `/api/v1/platform-rules/...`, see [API](../reference/api.en.md).
+
 ## Phases and actions
 
 Phases run in the order of this table.
@@ -545,6 +558,7 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 | Protected headers | See [Action fields](#action-fields); rules cannot change them |
 | Compression | Override settings and compression rules choose only among the algorithms the site has on |
 | Origin groups | The cache key does not include the origin group |
+| Rule versions | The last 50 versions of each rule; the 100 most recently deleted rules per site and for global rules; order is not versioned |
 | GeoIP data | The bundled IPinfo Lite database is a snapshot from the image build day; subdivisions need an operator-provided City MMDB; accuracy depends on the chosen database |
 
 ## Troubleshooting
@@ -559,6 +573,8 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 | "N invalid" | The bulk redirect table has invalid entries or repeated sources | Fix the marked entries |
 | "Some nodes of the site's cluster do not support the rule extensions yet" | An active node of the cluster lacks `rules-v2` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
 | "No such IP list: …" | The referenced lists (named) do not exist | Create the list in **IP lists** first, or fix the name |
+| Restoring shows "Rule limit of N reached" | Restoring the deleted rule would exceed 64 site rules or 32 global rules | Delete or merge other rules first |
+| Restoring shows "Rule version not found" | Retention removed the version, or it belongs to another site | Reopen the version history and choose a kept version |
 | "IP list name already exists" | A list with that name exists | Use another name |
 | "The IP list is used by …" | Deleting a list the listed rules, sites' cache rule conditions or L4 apps still reference, or sites chose as a site list | Remove the reference from those rules, L4 apps and site lists first |
 | "IP list limit reached (128 lists, 50,000 entries)" | Over quota | Merge or delete lists |

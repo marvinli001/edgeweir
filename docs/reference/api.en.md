@@ -424,6 +424,9 @@ Configurations that use the new fields need the node capability `site-content-v1
 | `platformRules.get`, `platformRules.save` (global rules) | `GET`, `PUT /platform-rules` |
 | `rules.validate` | `POST /rules/validate` |
 | `rules.topLogged` (log rule matches) | `GET /sites/{id}/rules/logged` |
+| `rules.versions`, `platformRules.versions` (rule versions) | `GET /sites/{id}/rules/{ruleId}/versions`, `GET /platform-rules/{ruleId}/versions` |
+| `rules.deleted`, `platformRules.deleted` (deleted rules) | `GET /sites/{id}/rules/deleted`, `GET /platform-rules/deleted` |
+| `rules.restore`, `platformRules.restore` (restore a version) | `POST /sites/{id}/rules/{ruleId}/restore`, `POST /platform-rules/{ruleId}/restore` |
 | `bulkRedirects.get` | `GET /sites/{id}/bulk-redirects` |
 | `bulkRedirects.save` | `PUT /sites/{id}/bulk-redirects` |
 
@@ -441,6 +444,7 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | `POST /sites`, `PATCH /sites/{id}` | `cacheRules[]` adds `expression` (a condition of the `cache` phase, up to 16384 characters; when empty, `pathPrefixes`, `paths`, and `extensions` build it; when set, those are empty or equal its builder form) and `browserTtlSeconds` (0–31536000, 0 keeps the origin's `Cache-Control`); `origins[]` adds `group` (`[a-z0-9_-]{0,32}`, empty for the default group, at least one origin in the default group) |
 | `PUT /sites/{id}/bulk-redirects` | `redirects`: replaces everything, up to 5000, unique `source`; each with `source` (`/path` or `host/path`, 2–512 bytes without whitespace, `?`, or control characters, lowercase host), `target` (static redirect target, up to 1024 bytes), `statusCode` (default 301), `preserveQuery` (default `false`) |
 | `POST /rules/validate` | `expression` (up to 16384 characters), `phase`, `kind`: `condition` (default, a rule condition), `value` (a value expression of `phase`: a redirect target, rewrite path, header value, or query parameter value), `cacheRule` (a cache rule condition; `phase` is ignored) |
+| `POST /sites/{id}/rules/{ruleId}/restore`, `POST /platform-rules/{ruleId}/restore` | `version`: a kept version of the rule. An existing rule takes its content in place; a deleted one is added at the end of its phase with its old `id`. The save's checks apply: 400 `RULE_INVALID`, `IP_LIST_REFERENCE_UNKNOWN`, `RULE_LIMIT_REACHED` (`limit`); 404 `RULE_VERSION_NOT_FOUND` when the version is not kept (pruned, or another site's) |
 | `GET /sites/{id}/rules/logged` | `range` (`1h`, `6h`, `24h` (default), `7d`, `30d`), `limit` (1–50, default 10) |
 
 Responses:
@@ -448,13 +452,16 @@ Responses:
 | Procedure | Content |
 | --- | --- |
 | `rules.get`, `rules.save`, `platformRules.*` | The rules in saved order, with `id` |
+| `rules.versions`, `platformRules.versions` | `[{ ruleId, version, change, source, restoredFrom, rule, actor, createdAt }]`, highest version first: `change` is `created`, `updated` or `deleted` (`rule` is then the content before deletion); `source` is `ui`, `api`, `restore`, `copy` or `initial`; `restoredFrom` is the version a restore brought back; `rule` is `{ name, phase, expression, enabled, action }`; `actor` is `{ type, id, name }`. The last 50 versions of each rule are kept; another site's rule gives an empty array |
+| `rules.deleted`, `platformRules.deleted` | The last version of each deleted rule (as above), most recently deleted first; the 100 most recently deleted per site and for the platform are kept |
+| `rules.restore`, `platformRules.restore` | The rules after the restore (as `rules.save`) |
 | `rules.topLogged` | `{ approximate: true, items: [{ ruleId, name, platform, requests }], unsupportedNodes }`: requests that matched the site's **Log** rules and global **Log** rules, most first; `name` is the rule's current name, `null` once it is deleted; `platform` marks global rules; `unsupportedNodes` counts the active nodes of the site's cluster that do not report matches (no node capability `rule-log-v1`) |
 | `bulkRedirects.*` | `[{ source, target, statusCode, preserveQuery }]` in saved order |
 | `sites.get`; `site` of `sites.create` and `sites.update` | `cacheRules[]` always carry `expression` (`"true"` matches every request); `pathPrefixes`, `paths`, and `extensions` hold its structured form when the condition has the builder's shape and are empty otherwise; `browserTtlSeconds` is added. `origins[]` carry `group` |
 | `rules.validate` | `{ valid, position, message, code?, params? }`; when invalid, `position` is the character where it fails (from 0), `message` the reason in English, `code` a stable reason code (such as `unknown_field`, `ordered_comparison`, `expected_token`) and `params` the values the reason names (such as `token` of `expected_token`) |
 | `sites.features` | Adds `rulesV2` and `rulesV3`; `reason` `nodes` means an active node of the cluster lacks `rules-v2` or `rules-v3` |
 
-- `rules.save` publishes the site's cluster (reason `rules_updated`) and is audited as `site.rules_update`; `platformRules.save` publishes every cluster and is audited as `platform.rules_update`; `bulkRedirects.save` publishes the site's cluster (`rules_updated`) and is audited as `site.bulk_redirects_update` (with the entry count).
+- `rules.save` publishes the site's cluster (reason `rules_updated`) and is audited as `site.rules_update`; `platformRules.save` publishes every cluster and is audited as `platform.rules_update`; `rules.restore` and `platformRules.restore` publish the same way and are audited as `site.rule_restore` and `platform.rule_restore` (rule `id` and name, version); `bulkRedirects.save` publishes the site's cluster (`rules_updated`) and is audited as `site.bulk_redirects_update` (with the entry count).
 - Configurations that use functions, the new fields, value expressions, query parameter edits, `origin` or `compression` actions, the new `config` phase fields, `gzip: true`, cache rule conditions not in the builder's shape, `browserTtlSeconds`, bulk redirects, or origin groups other than the default need the node capability `rules-v2`.
 - Configurations that use the `rules-v3` fields (`http.request.cookies[…]`, `http.request.uri.args[…]`, `http.referer`, `http.user_agent`, `http.request.version`, `http.request.scheme`, `http.request.id`, `http.request.timestamp.sec`, `edge.server_port`, `ip.geoip.as_name`, `http.response.cache_status`), functions (`url_encode`, `base64_encode`, `base64_decode`, `md5`, `sha1`, `sha256`, `substring`, `to_string`), `wildcard` / `strict wildcard`, an `expression` of a header or query parameter, `append`, `statusCode: 303`, or error page templates with `{{time}}` or `{{path}}` need the node capability `rules-v3`. Bulk redirects keep the statuses 301, 302, 307, and 308.
 - The `code` of `rules.validate` adds `cookie_name`, `argument_name`, and `integer_argument` (`params` `min` and `max`).
