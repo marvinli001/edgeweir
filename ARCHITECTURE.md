@@ -523,7 +523,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `tag` | 网站标签：名称（1–32 字符）与 `key`（NFC 后小写，唯一，不区分大小写去重）；只在控制台使用，不下发节点 |
 | `site_tag` | 网站与标签（每个网站最多 10 个） |
 | `origin_pool` | 源站池：超时、keepalive、失败阈值、回源 TLS 校验、回源 HTTP 版本与 gRPC、主动健康检查与会话保持（关闭时保留设置） |
-| `origin` | 源站与所属的源站组（空为默认组） |
+| `origin` | 源站、所属的源站组（空为默认组）与回源 PROXY protocol 版本 |
 | `origin_credential` | S3 源站密钥，信封加密 |
 | `site_secret` | 网站的其他密钥（PURGE 方法的密钥），信封加密，只经节点通道下发 |
 | `site_auth_rule` | 网站的访问鉴权规则（最多 16 条，有序）；Basic 用户哈希与 URL 鉴权密钥信封加密在同一行，只经节点通道下发 |
@@ -683,7 +683,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0076_rule_versions` | `edge_rule_version`（规则版本历史），并为已有规则写入初始版本 |
 | `0077_node_debug_log` | `node_debug_log`（节点 debug 日志的拉取） |
 | `0078_greylist_connection_limits` | `ip_ban.action`、`challenge`、`rate_limit_requests`、`rate_limit_window_seconds`（灰名单条目，唯一索引按封禁 / 灰名单分开）；`cluster.connection_limits`（内核连接数限制） |
-| `0079_origin_proxy_protocol` | `origin.proxy_protocol_version`（向源站发送 PROXY protocol：0 关闭、1、2） |
+| `0079_origin_proxy_protocol` | `origin.proxy_protocol_version`（回源连接发送的 PROXY protocol 版本，0 为不发送） |
 | `0080_origin_ca_rotation` | `pki_authority.kind`、`status`、`generation`（CA 轮换：同类 CA 新旧并存）；`origin_certificate.authority_id`、`origin_client_certificate.authority_id`（签发它的 CA） |
 
 ## 构建产物

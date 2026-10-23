@@ -32,6 +32,8 @@ const G4_FEATURES = [
 
 const healthCheck = {
   enabled: true,
+  type: "http" as const,
+  grpcService: "",
   path: "/healthz?deep=1",
   method: "HEAD" as const,
   expectedStatusMin: 200,
@@ -114,6 +116,8 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
     const site = await admin.sites.get({ id: siteId });
     expect(site.originSettings.activeHealthCheck).toEqual({
       enabled: false,
+      type: "http",
+      grpcService: "",
       path: "/",
       method: "GET",
       expectedStatusMin: 200,
