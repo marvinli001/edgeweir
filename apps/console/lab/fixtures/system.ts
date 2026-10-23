@@ -109,6 +109,15 @@ const channels = [
     locale: "zh-CN" as const,
     lastError: "",
   },
+  {
+    id: id(40, 6),
+    name: "On-call phones",
+    kind: "aliyun_sms",
+    enabled: true,
+    platform: true,
+    locale: "zh-CN" as const,
+    lastError: "alert_sms_rejected:isv.SMS_TEMPLATE_ILLEGAL",
+  },
 ];
 
 const ALL_KINDS: AlertKind[] = [

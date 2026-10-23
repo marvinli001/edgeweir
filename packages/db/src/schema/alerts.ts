@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   bigserial,
   boolean,
@@ -22,6 +23,11 @@ export const alertChannel = pgTable("alert_channel", {
   locale: text("locale").notNull().default("zh-CN"),
   configEnvelope: text("config_envelope").notNull(),
   lastError: text("last_error").notNull().default(""),
+  /** Sends of the last day, for the per-channel limits of SMS channels. */
+  sendTimes: timestamp("send_times", { withTimezone: true })
+    .array()
+    .notNull()
+    .default(sql`'{}'::timestamptz[]`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 /** One per account and channel: the alert kinds it sends for a set of sites, or all sites. */

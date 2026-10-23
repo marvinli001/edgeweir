@@ -49,6 +49,21 @@ const endpoint = z
     const u = parseUrl(s);
     return !!u && ["http:", "https:"].includes(u.protocol) && !u.username && !u.password && !u.hash;
   });
+const smsCredential = z.string().regex(/^[A-Za-z0-9]{1,128}$/);
+const smsSecret = z.string().min(1).max(256);
+const smsSignName = z.string().trim().min(1).max(64);
+/**
+ * SMS channels: recipients (E.164, or mainland numbers without +86) and the
+ * sends a channel makes at most per sliding hour and day (tests included).
+ */
+const smsFields = {
+  phoneNumbers: z
+    .array(z.string().regex(/^\+?\d{5,15}$/))
+    .min(1)
+    .max(20),
+  hourlyLimit: z.number().int().min(1).max(100).default(10),
+  dailyLimit: z.number().int().min(1).max(1000).default(50),
+};
 export const alertChannelConfig = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("webhook"), url: endpoint, bearer: z.string().max(4096).optional() }),
   z.object({ kind: z.literal("email"), to: z.array(z.email()).min(1).max(20) }),
@@ -65,6 +80,27 @@ export const alertChannelConfig = z.discriminatedUnion("kind", [
     kind: z.literal("telegram"),
     token: z.string().regex(/^\d+:[A-Za-z0-9_-]{20,200}$/),
     chatId: z.string().regex(/^-?\d{1,24}$|^@[A-Za-z][A-Za-z0-9_]{4,31}$/),
+  }),
+  z.object({
+    kind: z.literal("aliyun_sms"),
+    accessKeyId: smsCredential,
+    accessKeySecret: smsSecret,
+    signName: smsSignName,
+    templateCode: z.string().regex(/^[A-Za-z0-9_]{1,64}$/),
+    ...smsFields,
+    maxParamLength: z.number().int().min(1).max(100).default(35),
+  }),
+  z.object({
+    kind: z.literal("tencent_sms"),
+    secretId: smsCredential,
+    secretKey: smsSecret,
+    sdkAppId: z.string().regex(/^\d{1,20}$/),
+    region: z.enum(["ap-guangzhou", "ap-beijing", "ap-nanjing"]).default("ap-guangzhou"),
+    signName: smsSignName,
+    templateId: z.string().regex(/^\d{1,20}$/),
+    ...smsFields,
+    // Accounts opened since 2024-01-25 accept 6 characters per variable by default.
+    maxParamLength: z.number().int().min(1).max(100).default(6),
   }),
 ]);
 export const alertChannelInput = z.object({

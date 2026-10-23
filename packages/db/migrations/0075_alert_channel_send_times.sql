@@ -1,0 +1,1 @@
+ALTER TABLE "alert_channel" ADD COLUMN "send_times" timestamp with time zone[] DEFAULT '{}'::timestamptz[] NOT NULL;

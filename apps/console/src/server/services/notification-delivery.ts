@@ -9,6 +9,7 @@ import { m } from "../../web/paraglide/messages.js";
 import type { AppContext } from "../lib/context";
 import { outboundAddress, postNotification, withinDeadline } from "../lib/outbound";
 import { defineSetting } from "./settings";
+import { reserveSmsSend, sendSms } from "./sms";
 
 export const SMTP_KEY = "notification_smtp";
 export const smtpBinding = { purpose: "system_setting.notification_smtp", recordId: SMTP_KEY };
@@ -96,6 +97,18 @@ export async function deliverNotification(
       : metric
         ? m.alert_usage_event({ kind, metric }, { locale })
         : kind;
+  if (config.kind === "aliyun_sms" || config.kind === "tencent_sms") {
+    await reserveSmsSend(app, channel.id, config);
+    await sendSms(app, config, {
+      site: event.siteName,
+      alert: metric ? m.alert_usage_event({ kind, metric }, { locale }) : kind,
+      status:
+        event.status === "resolved"
+          ? m.alert_recovered({}, { locale })
+          : m.alert_firing({}, { locale }),
+    });
+    return;
+  }
   const site = event.siteName.replace(/[\r\n\0]/g, " ").slice(0, 100);
   const url = new URL(
     event.siteId

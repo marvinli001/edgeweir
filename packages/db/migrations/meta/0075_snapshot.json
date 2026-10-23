@@ -1,6 +1,6 @@
 {
-  "id": "9892de0c-3a8a-45e8-ac34-6dbe3620942d",
-  "prevId": "8b7fa44f-fea3-47d3-bc35-06437552220d",
+  "id": "9a663ccf-c1c8-48b8-a498-26af3b3f62fd",
+  "prevId": "9892de0c-3a8a-45e8-ac34-6dbe3620942d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -60,6 +60,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "''"
+        },
+        "send_times": {
+          "name": "send_times",
+          "type": "timestamp with time zone[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::timestamptz[]"
         },
         "created_at": {
           "name": "created_at",

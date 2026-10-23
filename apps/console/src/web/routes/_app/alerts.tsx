@@ -11,6 +11,7 @@ import {
   Add01Icon,
   Mail01Icon,
   Message01Icon,
+  SmartPhone01Icon,
   TelegramIcon,
   WebhookIcon,
 } from "@hugeicons/core-free-icons";
@@ -74,6 +75,8 @@ const kindLabel = (kind: AlertChannelConfig["kind"]) =>
     dingtalk: m.alert_channel_dingtalk,
     wecom: m.alert_channel_wecom,
     telegram: m.alert_channel_telegram,
+    aliyun_sms: m.alert_channel_aliyun_sms,
+    tencent_sms: m.alert_channel_tencent_sms,
   })[kind]();
 const KIND_ICON: Record<AlertChannelConfig["kind"], typeof WebhookIcon> = {
   webhook: WebhookIcon,
@@ -81,7 +84,69 @@ const KIND_ICON: Record<AlertChannelConfig["kind"], typeof WebhookIcon> = {
   dingtalk: Message01Icon,
   wecom: Message01Icon,
   telegram: TelegramIcon,
+  aliyun_sms: SmartPhone01Icon,
+  tencent_sms: SmartPhone01Icon,
 };
+type ConfigField = {
+  name: string;
+  label: () => string;
+  /** secret: a password input; list: split on spaces and commas; number: the default shown. */
+  type?: "secret" | "list" | "number";
+  optional?: boolean;
+  initial?: number;
+};
+const smsFields = (maxParamLength: number): ConfigField[] => [
+  { name: "phoneNumbers", label: m.alert_phone_numbers, type: "list" },
+  {
+    name: "maxParamLength",
+    label: m.alert_sms_param_length,
+    type: "number",
+    initial: maxParamLength,
+  },
+  { name: "hourlyLimit", label: m.alert_sms_hourly_limit, type: "number", initial: 10 },
+  { name: "dailyLimit", label: m.alert_sms_daily_limit, type: "number", initial: 50 },
+];
+const endpointField: ConfigField = { name: "url", label: m.alert_endpoint };
+const CONFIG_FIELDS: Record<AlertChannelConfig["kind"], ConfigField[]> = {
+  webhook: [
+    endpointField,
+    { name: "bearer", label: m.alert_bearer, type: "secret", optional: true },
+  ],
+  email: [{ name: "to", label: m.alert_recipients, type: "list" }],
+  dingtalk: [
+    endpointField,
+    { name: "secret", label: m.alert_signing_secret, type: "secret", optional: true },
+  ],
+  wecom: [endpointField],
+  telegram: [
+    { name: "token", label: m.alert_bot_token, type: "secret" },
+    { name: "chatId", label: m.alert_chat_id },
+  ],
+  aliyun_sms: [
+    { name: "accessKeyId", label: m.alert_access_key_id },
+    { name: "accessKeySecret", label: m.alert_access_key_secret, type: "secret" },
+    { name: "signName", label: m.alert_sms_sign_name },
+    { name: "templateCode", label: m.alert_sms_template_code },
+    ...smsFields(35),
+  ],
+  tencent_sms: [
+    { name: "secretId", label: m.alert_secret_id },
+    { name: "secretKey", label: m.alert_secret_key, type: "secret" },
+    { name: "sdkAppId", label: m.alert_sdk_app_id },
+    { name: "signName", label: m.alert_sms_sign_name },
+    { name: "templateId", label: m.alert_sms_template_id },
+    ...smsFields(6),
+  ],
+};
+const CHANNEL_KINDS = Object.keys(CONFIG_FIELDS) as AlertChannelConfig["kind"][];
+/** The channel's last delivery error: a lower-case code, an SMS refusal with the provider's code. */
+function channelError(code: string) {
+  if (code === "alert_smtp_not_configured") return m.error_alert_smtp_not_configured();
+  if (code === "alert_rate_limited") return m.error_alert_rate_limited();
+  if (code.startsWith("alert_sms_rejected:"))
+    return m.error_alert_sms_rejected({ code: code.slice("alert_sms_rejected:".length) });
+  return m.error_alert_send_failed();
+}
 
 /** Channels and their mail server, the sites subscribed to them, recent alerts and the thresholds, on one page. */
 function AlertsPage() {
@@ -168,10 +233,11 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
                         <Badge variant="secondary">{m.alert_platform_scope()}</Badge>
                       ) : null}
                       {channel.lastError ? (
-                        <Badge variant="destructive">
-                          {channel.lastError === "alert_smtp_not_configured"
-                            ? m.error_alert_smtp_not_configured()
-                            : m.error_alert_send_failed()}
+                        <Badge
+                          variant="destructive"
+                          className="h-auto min-h-5 shrink whitespace-normal [overflow-wrap:anywhere]"
+                        >
+                          {channelError(channel.lastError)}
                         </Badge>
                       ) : null}
                     </div>
@@ -480,24 +546,8 @@ function ChannelDialog({
   const meta = { invalidates: [orpc.alerts.key()] };
   const update = useMutation({ ...orpc.alerts.updateChannel.mutationOptions(), meta });
   const mutation = useMutation({ ...orpc.alerts.createChannel.mutationOptions(), meta });
-  const fields =
-    kind === "email"
-      ? ["to"]
-      : kind === "telegram"
-        ? ["token", "chatId"]
-        : kind === "webhook"
-          ? ["url", "bearer"]
-          : kind === "dingtalk"
-            ? ["url", "secret"]
-            : ["url"];
-  const labels: Record<string, () => string> = {
-    to: m.alert_recipients,
-    token: m.alert_bot_token,
-    chatId: m.alert_chat_id,
-    url: m.alert_endpoint,
-    bearer: m.alert_bearer,
-    secret: m.alert_signing_secret,
-  };
+  const [region, setRegion] = React.useState("ap-guangzhou");
+  const fields = CONFIG_FIELDS[kind];
   return (
     <FormDialog
       open={open}
@@ -509,10 +559,13 @@ function ChannelDialog({
         let config: AlertChannelConfig | undefined;
         if (replaceConfig) {
           const values: Record<string, unknown> = { kind };
+          if (kind === "tencent_sms") values.region = region;
           for (const field of fields) {
-            const value = String(data.get(field) ?? "");
-            if (field === "to") values[field] = splitList(value);
-            else if (value) values[field] = value;
+            const value = String(data.get(field.name) ?? "").trim();
+            if (field.type === "list") values[field.name] = splitList(value);
+            else if (field.type === "number")
+              values[field.name] = value ? Number(value) : undefined;
+            else if (value) values[field.name] = value;
           }
           const parsed = alertChannelConfig.safeParse(values);
           if (!parsed.success) throw new Error(m.alert_check_fields());
@@ -552,20 +605,34 @@ function ChannelDialog({
         label={m.alert_channel_kind()}
         value={kind}
         onChange={(value) => setKind(value as typeof kind)}
-        options={(["webhook", "email", "dingtalk", "wecom", "telegram"] as const).map((kind) => ({
-          value: kind,
-          label: kindLabel(kind),
-        }))}
+        options={CHANNEL_KINDS.map((kind) => ({ value: kind, label: kindLabel(kind) }))}
       />
+      {replaceConfig && kind === "tencent_sms" ? (
+        <FormSelect
+          id="channel-region"
+          label={m.alert_sms_region()}
+          value={region}
+          onChange={setRegion}
+          options={[
+            { value: "ap-guangzhou", label: m.alert_sms_region_guangzhou() },
+            { value: "ap-beijing", label: m.alert_sms_region_beijing() },
+            { value: "ap-nanjing", label: m.alert_sms_region_nanjing() },
+          ]}
+        />
+      ) : null}
       {replaceConfig &&
         fields.map((field) => (
-          <Field key={`${kind}-${field}`}>
-            <FieldLabel htmlFor={`channel-${field}`}>{labels[field]?.()}</FieldLabel>
+          <Field key={`${kind}-${field.name}`}>
+            <FieldLabel htmlFor={`channel-${field.name}`}>{field.label()}</FieldLabel>
             <Input
-              id={`channel-${field}`}
-              name={field}
-              required={!["bearer", "secret"].includes(field)}
-              type={["token", "bearer", "secret"].includes(field) ? "password" : "text"}
+              id={`channel-${field.name}`}
+              name={field.name}
+              required={!field.optional}
+              type={
+                field.type === "secret" ? "password" : field.type === "number" ? "number" : "text"
+              }
+              defaultValue={field.initial}
+              min={field.type === "number" ? 1 : undefined}
               autoComplete="off"
             />
           </Field>
