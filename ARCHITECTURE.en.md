@@ -682,7 +682,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0077_node_debug_log` | `node_debug_log` (pulls of a node's debug logs) |
 | `0078_greylist_connection_limits` | `ip_ban.action`, `challenge`, `rate_limit_requests`, `rate_limit_window_seconds` (greylist entries; unique indexes split between bans and greylist entries); `cluster.connection_limits` (kernel connection limits) |
 | `0079_origin_proxy_protocol` | `origin.proxy_protocol_version` (PROXY protocol to the origin: 0 off, 1, 2) |
-| `0080_origin_ca_rotation` | `pki_authority.kind`, `status`, `generation` (CA rotation: a current and a previous CA of a kind); `origin_certificate.authority_id`, `origin_client_certificate.authority_id` (the CA that issued it) |
+| `0080_origin_ca_rotation` | `pki_authority.kind`, `status`, `generation` (CA rotation; `(kind, status)` unique, existing rows take their id as kind); `origin_certificate.authority_id`, `origin_client_certificate.authority_id` (the issuing CA) |
 
 ## Build output
 

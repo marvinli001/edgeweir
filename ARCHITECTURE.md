@@ -684,7 +684,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0077_node_debug_log` | `node_debug_log`（节点 debug 日志的拉取） |
 | `0078_greylist_connection_limits` | `ip_ban.action`、`challenge`、`rate_limit_requests`、`rate_limit_window_seconds`（灰名单条目，唯一索引按封禁 / 灰名单分开）；`cluster.connection_limits`（内核连接数限制） |
 | `0079_origin_proxy_protocol` | `origin.proxy_protocol_version`（回源连接发送的 PROXY protocol 版本，0 为不发送） |
-| `0080_origin_ca_rotation` | `pki_authority.kind`、`status`、`generation`（CA 轮换：同类 CA 新旧并存）；`origin_certificate.authority_id`、`origin_client_certificate.authority_id`（签发它的 CA） |
+| `0080_origin_ca_rotation` | `pki_authority.kind`、`status`、`generation`（CA 轮换；`(kind, status)` 唯一，已有行的 kind 取 ID）；`origin_certificate.authority_id`、`origin_client_certificate.authority_id`（签发它的 CA） |
 
 ## 构建产物
 

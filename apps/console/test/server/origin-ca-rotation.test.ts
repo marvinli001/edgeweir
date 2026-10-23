@@ -309,7 +309,10 @@ describe("rotating the origin authorities", async () => {
         .select()
         .from(schema.originClientCertificate)
         .where(eq(schema.originClientCertificate.clusterId, clusterId))
-        .orderBy(desc(schema.originClientCertificate.notAfter));
+        .orderBy(
+          desc(schema.originClientCertificate.notAfter),
+          desc(schema.originClientCertificate.createdAt),
+        );
 
     it("refuses the later steps without a rotation", async () => {
       for (const step of [
@@ -371,6 +374,16 @@ describe("rotating the origin authorities", async () => {
       expect(await audits("origin_client_ca.activate")).toHaveLength(1);
       const [rotated] = await audits("origin_client_certificate.rotate");
       expect(rotated).toMatchObject({ actorType: "user", targetId: current?.id });
+      // Certificate times have whole seconds: issued within the same second
+      // as the previous one, the new certificate is still the current one.
+      await ctx.db
+        .update(schema.originClientCertificate)
+        .set({ notAfter: current?.notAfter ?? new Date() })
+        .where(eq(schema.originClientCertificate.id, old?.id ?? ""));
+      const tied = await admin.originClientCa.get();
+      expect(tied.certificates).toMatchObject([{ id: current?.id, authority: "active" }]);
+      expect(tied.pendingClusters).toEqual([]);
+      expect(await rotateOriginClientCertificates(ctx)).toEqual([]);
     });
 
     it("retires only once no cluster presents the previous authority's certificates", async () => {
