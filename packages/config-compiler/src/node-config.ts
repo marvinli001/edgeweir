@@ -21,7 +21,13 @@ import {
   SiteSchema,
 } from "@edgeweir/proto";
 import { canonicalize, contentHash, matchMap, offlineHostKey } from "./canonical";
-import { compileClientAddress, compileListener, compileUnknownHosts, listenersFor } from "./edge";
+import {
+  compileClientAddress,
+  compileConnectionLimits,
+  compileListener,
+  compileUnknownHosts,
+  listenersFor,
+} from "./edge";
 import {
   clientCertificateIds,
   derivedFeatures,
@@ -163,6 +169,11 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
     clientAddress: compileClientAddress(input.edge?.clientIp),
     unknownHosts: compileUnknownHosts(input.edge?.unknownHosts, sites),
   });
+  compiled.connectionLimits = compileConnectionLimits(
+    input.edge?.connectionLimits,
+    compiled.listeners,
+    compiled.l4Apps,
+  );
   compiled.requiredFeatures = derivedFeatures(compiled);
   const config = canonicalize(compiled);
   config.contentHash = contentHash(config);
@@ -212,6 +223,7 @@ export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfig
     sessionTicketKeys: target.sessionTicketKeys,
     originClientCertificates: target.originClientCertificates,
     originCa: target.originCa,
+    connectionLimits: target.connectionLimits,
     upsertedSites: target.sites.filter((s) => baseSites.get(s.id) !== siteBytes(s)),
     removedSiteIds: base.sites
       .filter((s) => !targetIds.has(s.id))
@@ -252,6 +264,7 @@ export function applyNodeConfigDiff(base: NodeConfig, diff: NodeConfigDiff): Nod
       sessionTicketKeys: diff.sessionTicketKeys,
       originClientCertificates: diff.originClientCertificates,
       originCa: diff.originCa,
+      connectionLimits: diff.connectionLimits,
       sites,
     }),
   );

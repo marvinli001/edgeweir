@@ -475,6 +475,20 @@ export interface EdgeModel {
   clientIp: ClientIpModel | null;
   /** Omitted or null: the platform's page for both, no scan protection. */
   unknownHosts?: UnknownHostsModel | null;
+  /** Omitted or null: no connection limits. */
+  connectionLimits?: ConnectionLimitsModel | null;
+}
+
+/**
+ * Per-client TCP connection limits (config.proto ConnectionLimits): perIp
+ * and newPerSecond 0 when off (not both), burst 0 is newPerSecond; ports
+ * null: the listener and TCP layer-4 application ports.
+ */
+export interface ConnectionLimitsModel {
+  perIp: number;
+  newPerSecond: number;
+  burst: number;
+  ports: { start: number; end: number }[] | null;
 }
 
 /** One entry of a site's bulk redirect table (config.proto BulkRedirect). */
@@ -720,6 +734,11 @@ export interface CompileInput {
   l4Apps?: L4AppModel[];
   /** Listener ports besides 80 and 443 and the client address setting; omitted: none, direct. */
   edge?: EdgeModel;
+  /**
+   * The cluster has active greylist entries that challenge (platform ones
+   * or of its sites): the configuration carries challenge keys.
+   */
+  greylistChallenges?: boolean;
 }
 
 export const DEFAULT_CACHE_ZONE = "default";
