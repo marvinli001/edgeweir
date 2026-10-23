@@ -318,6 +318,8 @@ const core: Fixtures = {
         activeHealthCheck: on,
         sessionAffinity: on,
         originHttp2: on,
+        originProxyProtocol: older,
+        activeHealthGrpc: older,
         originMtls: on,
         originCa: older,
         errorPages: on,

@@ -9,6 +9,7 @@ import {
 import {
   AccessControlSchema,
   ActiveHealthCheckSchema,
+  ActiveHealthCheckType,
   AuthKind,
   AuthRuleSchema,
   BasicAuthSchema,
@@ -307,6 +308,7 @@ export function compileSite(
           hostHeader: o.hostHeader,
           sni: o.sni,
           group: o.group ?? "",
+          proxyProtocolVersion: o.proxyProtocolVersion ?? 0,
           s3: o.s3
             ? create(S3AuthSchema, {
                 region: o.s3.region,
@@ -362,6 +364,13 @@ export function compileSite(
             timeoutSeconds: health.timeoutSeconds,
             healthyThreshold: health.healthyThreshold,
             unhealthyThreshold: health.unhealthyThreshold,
+            // HTTP checks stay unset: configurations encode as before.
+            ...(health.type === "grpc"
+              ? {
+                  type: ActiveHealthCheckType.GRPC,
+                  grpcService: health.grpcService ?? "",
+                }
+              : {}),
           })
         : undefined,
       sessionAffinity: affinity

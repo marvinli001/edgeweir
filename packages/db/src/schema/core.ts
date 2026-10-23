@@ -682,6 +682,8 @@ export const origin = pgTable(
     s3Bucket: text("s3_bucket").notNull().default(""),
     /** Origin group inside the site (contract `group`); empty is the default group. */
     groupName: text("group_name").notNull().default(""),
+    /** PROXY protocol version sent at the start of every connection (0 none, 1 or 2). */
+    proxyProtocolVersion: integer("proxy_protocol_version").notNull().default(0),
     createdAt: createdAt(),
   },
   (t) => [index("origin_pool_idx").on(t.poolId)],

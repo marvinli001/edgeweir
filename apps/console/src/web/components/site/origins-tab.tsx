@@ -74,6 +74,8 @@ interface OriginDraft {
   sni: string;
   /** Origin group; empty is the default group. */
   group: string;
+  /** PROXY protocol version sent to the origin: "0" none, "1" or "2". */
+  proxyProtocol: ProxyProtocol;
   s3: boolean;
   region: string;
   bucket: string;
@@ -93,6 +95,7 @@ const newOrigin = (): OriginDraft => ({
   hostHeader: "",
   sni: "",
   group: "",
+  proxyProtocol: "0",
   s3: false,
   region: "",
   bucket: "",
@@ -123,6 +126,8 @@ const SCHEMES = [
   { label: "HTTPS", value: "https" },
 ] as const;
 
+type ProxyProtocol = "0" | "1" | "2";
+
 function OriginsCard({ site }: { site: Site }) {
   const initial = React.useMemo(
     () =>
@@ -137,6 +142,7 @@ function OriginsCard({ site }: { site: Site }) {
         hostHeader: o.hostHeader,
         sni: o.sni,
         group: o.group,
+        proxyProtocol: String(o.proxyProtocolVersion) as ProxyProtocol,
         s3: o.s3 !== null,
         region: o.s3?.region ?? "",
         bucket: o.s3?.bucket ?? "",
@@ -156,6 +162,7 @@ function OriginsCard({ site }: { site: Site }) {
   const groupsAvailability = features.data?.rulesV2;
   // Groups other than the default wait until the nodes run rules-v2.
   const groupsLocked = groupsAvailability?.available === false;
+  const proxyAvailability = features.data?.originProxyProtocol;
   // Requests without an origin rule go to the default group.
   const noDefaultGroup = !rows.some((r) => r.group.trim() === "");
   const badHost = rows.some((r) => invalidHostHeader(r.hostHeader));
@@ -191,6 +198,8 @@ function OriginsCard({ site }: { site: Site }) {
               hostHeader: r.hostHeader.trim(),
               sni: r.sni.trim(),
               group: r.group.trim(),
+              // S3 services do not read PROXY protocol.
+              proxyProtocolVersion: r.s3 ? 0 : Number(r.proxyProtocol),
               s3: r.s3
                 ? {
                     region: r.region.trim(),
@@ -208,6 +217,9 @@ function OriginsCard({ site }: { site: Site }) {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <Unavailable availability={groupsAvailability} testId="origins-groups-unavailable" />
+          {rows.some((r) => !r.s3 && r.proxyProtocol === "0") ? (
+            <Unavailable availability={proxyAvailability} testId="origins-proxy-unavailable" />
+          ) : null}
           <div className="flex flex-col">
             {rows.map((row, index) => {
               const rowHealth = healthOf(row.originId);
@@ -220,6 +232,7 @@ function OriginsCard({ site }: { site: Site }) {
                   secretStored={storedKeys.has(row.accessKeyId.trim())}
                   removable={rows.length > 1}
                   groupLocked={groupsLocked && row.group === ""}
+                  proxyLocked={lockedFor(proxyAvailability, row.proxyProtocol !== "0")}
                   onChange={(change) => patch(row.key, change)}
                   onRemove={() => setRows(rows.filter((r) => r.key !== row.key))}
                 />
@@ -279,6 +292,7 @@ function OriginRow({
   secretStored,
   removable,
   groupLocked,
+  proxyLocked,
   onChange,
   onRemove,
 }: {
@@ -291,6 +305,8 @@ function OriginRow({
   removable: boolean;
   /** The origin is in the default group and may not leave it yet. */
   groupLocked: boolean;
+  /** PROXY protocol is off and the cluster's nodes cannot send it yet. */
+  proxyLocked: boolean;
   onChange: (change: Partial<OriginDraft>) => void;
   onRemove: () => void;
 }) {
@@ -298,6 +314,11 @@ function OriginRow({
   const https = row.scheme === "https";
   // The form only: the preset fills the address and region once.
   const [preset, setPreset] = React.useState<string>(CUSTOM_PRESET);
+  const proxyOptions: { label: string; value: ProxyProtocol }[] = [
+    { label: m.site_origin_proxy_protocol_off(), value: "0" },
+    { label: "v1", value: "1" },
+    { label: "v2", value: "2" },
+  ];
   const presetOptions = [
     { value: CUSTOM_PRESET, label: m.site_origin_s3_preset_custom() },
     ...S3_PRESETS.map((p) => ({ value: p.id, label: presetLabel[p.id]() })),
@@ -393,7 +414,9 @@ function OriginRow({
       <div
         className={cn(
           "grid grid-cols-2 gap-3",
-          https ? "lg:grid-cols-[1fr_1fr_9rem_auto_auto]" : "lg:grid-cols-[1fr_9rem_auto_auto]",
+          https
+            ? "lg:grid-cols-[1fr_1fr_9rem_8rem_auto_auto]"
+            : "lg:grid-cols-[1fr_9rem_8rem_auto_auto]",
         )}
       >
         <Field
@@ -442,6 +465,16 @@ function OriginRow({
             data-testid="origin-group"
           />
         </Field>
+        <FormSelect
+          id={id("proxy-protocol")}
+          label={m.site_origin_proxy_protocol()}
+          value={row.s3 ? "0" : row.proxyProtocol}
+          options={proxyOptions}
+          // S3 services do not read it.
+          disabled={row.s3 || proxyLocked}
+          onChange={(proxyProtocol) => onChange({ proxyProtocol })}
+          testId="origin-proxy-protocol"
+        />
         <SwitchField
           id={id("backup")}
           label={m.site_origin_backup()}
@@ -456,6 +489,11 @@ function OriginRow({
           testId="origin-s3"
         />
       </div>
+      {!row.s3 && row.proxyProtocol !== "0" ? (
+        <SafetyNote className="animate-in fade-in" data-testid="origin-proxy-protocol-note">
+          {m.site_origin_proxy_protocol_note()}
+        </SafetyNote>
+      ) : null}
       {row.s3 ? (
         <div
           className="grid gap-3 border-l-2 border-border pl-3 animate-enter sm:grid-cols-2 lg:grid-cols-4"
@@ -540,6 +578,7 @@ function OriginRow({
 
 type PolicyValue = OriginSettings["policy"];
 type HealthMethod = ActiveHealthCheck["method"];
+type HealthType = ActiveHealthCheck["type"];
 
 interface PoolDraft {
   policy: PolicyValue;
@@ -562,6 +601,9 @@ interface PoolDraft {
   grpc: boolean;
   /** Active health check; its values are kept (and editable) while it is off. */
   healthEnabled: boolean;
+  /** http: the request below; grpc: grpc.health.v1 with the service below. */
+  healthType: HealthType;
+  healthGrpcService: string;
   healthPath: string;
   healthMethod: HealthMethod;
   healthStatusMin: string;
@@ -588,6 +630,11 @@ const toInt = (value: string, fallback: number) => {
   const n = Number(value);
   return value.trim() && Number.isFinite(n) ? Math.round(n) : fallback;
 };
+
+const HEALTH_TYPES = [
+  { label: "HTTP", value: "http" },
+  { label: "gRPC", value: "grpc" },
+] satisfies { label: string; value: HealthType }[];
 
 const HEALTH_METHODS = [
   { label: "GET", value: "GET" },
@@ -627,6 +674,8 @@ function PoolSettingsCard({ site }: { site: Site }) {
       protocol: s.protocol,
       grpc: s.grpc,
       healthEnabled: s.activeHealthCheck.enabled,
+      healthType: s.activeHealthCheck.type,
+      healthGrpcService: s.activeHealthCheck.grpcService,
       healthPath: s.activeHealthCheck.path,
       healthMethod: s.activeHealthCheck.method,
       healthStatusMin: String(s.activeHealthCheck.expectedStatusMin),
@@ -653,6 +702,8 @@ function PoolSettingsCard({ site }: { site: Site }) {
     { label: m.site_pool_policy_consistent_hash(), value: "consistent_hash" },
   ];
   const healthAvailability = features.data?.activeHealthCheck;
+  const grpcHealthAvailability = features.data?.activeHealthGrpc;
+  const grpcHealth = draft.healthType === "grpc";
   const affinityAvailability = features.data?.sessionAffinity;
   const http2Availability = features.data?.originHttp2;
   const mtlsAvailability = features.data?.originMtls;
@@ -691,6 +742,8 @@ function PoolSettingsCard({ site }: { site: Site }) {
               grpc: draft.protocol === "http2" && draft.grpc,
               activeHealthCheck: {
                 enabled: draft.healthEnabled,
+                type: draft.healthType,
+                grpcService: draft.healthGrpcService.trim(),
                 path: draft.healthPath.trim(),
                 method: draft.healthMethod,
                 expectedStatusMin: toInt(draft.healthStatusMin, health.expectedStatusMin),
@@ -899,49 +952,84 @@ function PoolSettingsCard({ site }: { site: Site }) {
                 onCheckedChange={(healthEnabled) => set({ healthEnabled })}
                 testId="origins-active-health"
               />
-              <Field>
-                <FieldLabel htmlFor="origins-health-method">
-                  {m.site_pool_health_method()}
-                </FieldLabel>
-                <Select
-                  value={draft.healthMethod}
-                  onValueChange={(v) => v && set({ healthMethod: v as HealthMethod })}
-                  items={HEALTH_METHODS}
-                >
-                  <SelectTrigger
-                    id="origins-health-method"
-                    className="w-full"
-                    data-testid="origins-health-method"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {HEALTH_METHODS.map((method) => (
-                      <SelectItem key={method.value} value={method.value}>
-                        {method.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field className="col-span-2">
-                <FieldLabel htmlFor="origins-health-path">{m.site_pool_health_path()}</FieldLabel>
-                <Input
-                  id="origins-health-path"
-                  value={draft.healthPath}
-                  required
-                  maxLength={1024}
-                  // An absolute path with an optional query: printable ASCII without spaces.
-                  pattern="/[!-~]*"
-                  spellCheck={false}
-                  autoCapitalize="off"
-                  autoCorrect="off"
-                  onChange={(event) => set({ healthPath: event.target.value })}
-                  placeholder="/healthz"
-                  className="font-mono"
-                  data-testid="origins-health-path"
-                />
-              </Field>
+              <FormSelect
+                id="origins-health-type"
+                label={m.site_pool_health_type()}
+                value={draft.healthType}
+                options={HEALTH_TYPES}
+                disabled={lockedFor(grpcHealthAvailability, health.type === "grpc")}
+                onChange={(healthType) => set({ healthType })}
+                testId="origins-health-type"
+              />
+              {grpcHealth ? (
+                <Field className="col-span-2">
+                  <FieldLabel htmlFor="origins-health-grpc-service">
+                    {m.site_pool_health_grpc_service()}
+                  </FieldLabel>
+                  <Input
+                    id="origins-health-grpc-service"
+                    value={draft.healthGrpcService}
+                    maxLength={255}
+                    pattern="[!-~]*"
+                    spellCheck={false}
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    onChange={(event) => set({ healthGrpcService: event.target.value })}
+                    placeholder={m.site_pool_health_grpc_service_placeholder()}
+                    className="font-mono"
+                    data-testid="origins-health-grpc-service"
+                  />
+                </Field>
+              ) : null}
+              {grpcHealth ? null : (
+                <>
+                  <Field>
+                    <FieldLabel htmlFor="origins-health-method">
+                      {m.site_pool_health_method()}
+                    </FieldLabel>
+                    <Select
+                      value={draft.healthMethod}
+                      onValueChange={(v) => v && set({ healthMethod: v as HealthMethod })}
+                      items={HEALTH_METHODS}
+                    >
+                      <SelectTrigger
+                        id="origins-health-method"
+                        className="w-full"
+                        data-testid="origins-health-method"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {HEALTH_METHODS.map((method) => (
+                          <SelectItem key={method.value} value={method.value}>
+                            {method.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field className="col-span-2">
+                    <FieldLabel htmlFor="origins-health-path">
+                      {m.site_pool_health_path()}
+                    </FieldLabel>
+                    <Input
+                      id="origins-health-path"
+                      value={draft.healthPath}
+                      required
+                      maxLength={1024}
+                      // An absolute path with an optional query: printable ASCII without spaces.
+                      pattern="/[!-~]*"
+                      spellCheck={false}
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      onChange={(event) => set({ healthPath: event.target.value })}
+                      placeholder="/healthz"
+                      className="font-mono"
+                      data-testid="origins-health-path"
+                    />
+                  </Field>
+                </>
+              )}
               <Field className="col-span-2">
                 <FieldLabel htmlFor="origins-health-host">{m.site_pool_health_host()}</FieldLabel>
                 <Input
@@ -956,28 +1044,32 @@ function PoolSettingsCard({ site }: { site: Site }) {
                   data-testid="origins-health-host"
                 />
               </Field>
-              <NumberField
-                id="origins-health-status-min"
-                label={m.site_pool_health_status_min()}
-                value={draft.healthStatusMin}
-                min={100}
-                max={599}
-                step={1}
-                required
-                onChange={(healthStatusMin) => set({ healthStatusMin })}
-                testId="origins-health-status-min"
-              />
-              <NumberField
-                id="origins-health-status-max"
-                label={m.site_pool_health_status_max()}
-                value={draft.healthStatusMax}
-                min={toInt(draft.healthStatusMin, 100)}
-                max={599}
-                step={1}
-                required
-                onChange={(healthStatusMax) => set({ healthStatusMax })}
-                testId="origins-health-status-max"
-              />
+              {grpcHealth ? null : (
+                <>
+                  <NumberField
+                    id="origins-health-status-min"
+                    label={m.site_pool_health_status_min()}
+                    value={draft.healthStatusMin}
+                    min={100}
+                    max={599}
+                    step={1}
+                    required
+                    onChange={(healthStatusMin) => set({ healthStatusMin })}
+                    testId="origins-health-status-min"
+                  />
+                  <NumberField
+                    id="origins-health-status-max"
+                    label={m.site_pool_health_status_max()}
+                    value={draft.healthStatusMax}
+                    min={toInt(draft.healthStatusMin, 100)}
+                    max={599}
+                    step={1}
+                    required
+                    onChange={(healthStatusMax) => set({ healthStatusMax })}
+                    testId="origins-health-status-max"
+                  />
+                </>
+              )}
               <NumberField
                 id="origins-health-interval"
                 label={m.site_pool_health_interval()}

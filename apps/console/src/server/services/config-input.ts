@@ -286,6 +286,7 @@ async function loadSiteModels(
                 hostHeader: o.hostHeader,
                 sni: o.sni,
                 group: o.groupName,
+                proxyProtocolVersion: o.proxyProtocolVersion,
                 s3: credential
                   ? {
                       region: o.s3Region,

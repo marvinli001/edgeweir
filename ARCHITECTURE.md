@@ -682,6 +682,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0076_rule_versions` | `edge_rule_version`（规则版本历史），并为已有规则写入初始版本 |
 | `0077_node_debug_log` | `node_debug_log`（节点 debug 日志的拉取） |
 | `0078_greylist_connection_limits` | `ip_ban.action`、`challenge`、`rate_limit_requests`、`rate_limit_window_seconds`（灰名单条目，唯一索引按封禁 / 灰名单分开）；`cluster.connection_limits`（内核连接数限制） |
+| `0079_origin_proxy_protocol` | `origin.proxy_protocol_version`（向源站发送 PROXY protocol：0 关闭、1、2） |
 
 ## 构建产物
 

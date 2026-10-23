@@ -177,6 +177,12 @@ const originFields = z.object({
     .string()
     .regex(/^[a-z0-9_-]{0,32}$/, "invalid origin group")
     .default(""),
+  /**
+   * PROXY protocol version sent at the start of every connection to the
+   * origin (feature origin-proxy-protocol-v1), before TLS; 0 sends none. Not
+   * for S3 origins (ORIGIN_PROXY_PROTOCOL_S3).
+   */
+  proxyProtocolVersion: z.number().int().min(0).max(2).default(0),
 });
 
 export const originInput = originFields.transform((origin) => ({
@@ -289,6 +295,8 @@ export const cacheRuleInput = z
 
 /** Absolute path with an optional query: 1-1024 printable ASCII bytes without spaces. */
 const HEALTH_CHECK_PATH_RE = /^\/[\x21-\x7e]{0,1023}$/;
+/** A grpc.health.v1 service name: 0-255 printable ASCII bytes without spaces. */
+const GRPC_HEALTH_SERVICE_RE = /^[\x21-\x7e]{0,255}$/;
 
 /**
  * Active health checks of an origin pool, run by the agent of every node
@@ -300,6 +308,15 @@ const HEALTH_CHECK_PATH_RE = /^\/[\x21-\x7e]{0,1023}$/;
 export const activeHealthCheck = z
   .object({
     enabled: z.boolean().default(false),
+    /**
+     * http: the request below in the pool's protocol. grpc (feature
+     * active-health-grpc-v1): grpc.health.v1.Health/Check over HTTP/2 (TLS
+     * with ALPN h2 to HTTPS origins, h2c to HTTP ones), healthy when the
+     * answer is SERVING; path, method and the status range are not used.
+     */
+    type: z.enum(["http", "grpc"]).default("http"),
+    /** grpc: the service asked about; empty asks for the server's overall health. */
+    grpcService: z.string().regex(GRPC_HEALTH_SERVICE_RE, "invalid gRPC service name").default(""),
     path: z.string().regex(HEALTH_CHECK_PATH_RE, "invalid health check path").default("/"),
     method: z.enum(["GET", "HEAD"]).default("GET"),
     /** Expected response status range, inclusive. */

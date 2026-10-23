@@ -680,6 +680,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0076_rule_versions` | `edge_rule_version` (rule version history), with an initial version for each existing rule |
 | `0077_node_debug_log` | `node_debug_log` (pulls of a node's debug logs) |
 | `0078_greylist_connection_limits` | `ip_ban.action`, `challenge`, `rate_limit_requests`, `rate_limit_window_seconds` (greylist entries; unique indexes split between bans and greylist entries); `cluster.connection_limits` (kernel connection limits) |
+| `0079_origin_proxy_protocol` | `origin.proxy_protocol_version` (PROXY protocol to the origin: 0 off, 1, 2) |
 
 ## Build output
 

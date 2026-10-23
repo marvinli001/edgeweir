@@ -15,6 +15,10 @@ export const nodeErrorDefs = {
   /** The origin (or what it resolves to) is a special-purpose address outside the allow list. */
   address_forbidden: { params: ["address"] },
   tls_failed: { params: [] },
+  /** A gRPC health check (active-health-grpc-v1) ended with a grpc-status other than 0. */
+  grpc_status: { params: ["status"] },
+  /** A gRPC health check answered a status other than SERVING (NOT_SERVING, SERVICE_UNKNOWN, ...). */
+  grpc_not_serving: { params: ["status"] },
 } as const satisfies Record<string, { params: readonly string[] }>;
 
 /**

@@ -211,6 +211,8 @@ export const errorDefs = {
   ORIGIN_TLS_TRUST_REQUIRES_VERIFY: { status: 400, params: [] },
   /** originSettings.tlsTrust originCa on a site with S3 origins, which use public certificates. */
   ORIGIN_CA_S3: { status: 400, params: [] },
+  /** origins[].proxyProtocolVersion on an S3 origin: object storage does not read PROXY protocol. */
+  ORIGIN_PROXY_PROTOCOL_S3: { status: 400, params: [] },
   /** The Origin CA has not been created. */
   ORIGIN_CA_NOT_FOUND: { status: 409, params: [] },
   /** The origin client CA has not been created. */

@@ -554,6 +554,13 @@
       "when": 1792719187697,
       "tag": "0078_greylist_connection_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1792719234554,
+      "tag": "0079_origin_proxy_protocol",
+      "breakpoints": true
     }
   ]
 }

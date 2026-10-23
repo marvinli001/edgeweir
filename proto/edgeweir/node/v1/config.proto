@@ -1491,6 +1491,29 @@ message ActiveHealthCheck {
   // Consecutive results that change the state, 1-10 each.
   uint32 healthy_threshold = 8;
   uint32 unhealthy_threshold = 9;
+  // What a probe asks. Unspecified is ACTIVE_HEALTH_CHECK_TYPE_HTTP. Added
+  // in v1.6.0 (feature active-health-grpc-v1 for
+  // ACTIVE_HEALTH_CHECK_TYPE_GRPC).
+  ActiveHealthCheckType type = 10;
+  // ACTIVE_HEALTH_CHECK_TYPE_GRPC: HealthCheckRequest.service, 0-255 bytes
+  // of printable ASCII without spaces; empty asks for the server's overall
+  // health. Added in v1.6.0.
+  string grpc_service = 11;
+}
+
+// ActiveHealthCheckType is what the probes of an active health check ask.
+// Added in v1.6.0.
+enum ActiveHealthCheckType {
+  ACTIVE_HEALTH_CHECK_TYPE_UNSPECIFIED = 0;
+  // An HTTP request (method, path, expected status range) in the pool's
+  // protocol.
+  ACTIVE_HEALTH_CHECK_TYPE_HTTP = 1;
+  // grpc.health.v1.Health/Check over HTTP/2, whatever the pool's protocol:
+  // TLS with ALPN h2 to HTTPS origins, prior knowledge (h2c) to HTTP ones;
+  // :authority is the check's host as for HTTP probes. Healthy: HTTP 200,
+  // grpc-status 0 and the status SERVING. path, method and the expected
+  // status range are not used.
+  ACTIVE_HEALTH_CHECK_TYPE_GRPC = 2;
 }
 
 // SessionAffinity pins a client to the origin that served it with the cookie
@@ -1558,6 +1581,15 @@ message Origin {
   // group. Only origin rules (RuleAction.origin_group) send traffic to the
   // other groups. Added in v0.13.0 (feature rules-v2).
   string group = 10;
+  // Send a PROXY protocol header of this version (0 none, 1 or 2) at the
+  // start of every connection to the origin, before TLS: the client's
+  // address and port and the address and port it connected to (after
+  // NodeConfig.client_address), "PROXY UNKNOWN" (v1) or the LOCAL command
+  // (v2) when they are not IP addresses. Connections are reused only by
+  // requests of the same client connection. Active health checks send
+  // "PROXY UNKNOWN" or the LOCAL command. Not for S3 origins. Added in
+  // v1.6.0 (feature origin-proxy-protocol-v1).
+  uint32 proxy_protocol_version = 11;
 }
 
 // S3Auth references the credential used to sign requests to an S3-compatible

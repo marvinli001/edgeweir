@@ -25,6 +25,8 @@ interface OriginModel {
   s3?: { region: string; bucket: string; credentialId: string; credentialVersion: number } | null;
   /** Origin group inside the site; omitted or "" is the default group (rules-v2 otherwise). */
   group?: string;
+  /** PROXY protocol version sent to the origin; omitted or 0: none (origin-proxy-protocol-v1 otherwise). */
+  proxyProtocolVersion?: number;
 }
 
 export interface CacheRuleModel {
@@ -128,6 +130,10 @@ export interface ActiveHealthCheckModel {
   timeoutSeconds: number;
   healthyThreshold: number;
   unhealthyThreshold: number;
+  /** Omitted or http: the HTTP request above; grpc: grpc.health.v1 (active-health-grpc-v1). */
+  type?: "http" | "grpc";
+  /** grpc: the service asked about; omitted or "": the server's overall health. */
+  grpcService?: string;
 }
 
 /** An origin pool's session affinity while it is on (config.proto SessionAffinity). */

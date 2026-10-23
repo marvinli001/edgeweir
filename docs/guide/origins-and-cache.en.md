@@ -44,6 +44,7 @@ The **Traffic path** card at the top of the **Origins** tab draws where requests
 | Origin group | 1–32 lowercase letters, digits, `_`, or `-` | Empty (default group) | See [Origin groups](#origin-groups) |
 | Backup | On / off | Off | Makes the origin a backup |
 | S3 signing | On / off | Off | Signs origin requests with AWS Signature V4, see [S3-compatible object storage](#s3-compatible-object-storage) |
+| PROXY protocol | Off / v1 / v2 | Off | Every origin connection first sends the addresses of the visitor's connection, see [PROXY protocol](#proxy-protocol); not for S3 origins |
 
 Each site has 1–32 origins, at least one of them in the default group.
 
@@ -111,22 +112,26 @@ No probe requests are sent; health is judged from real traffic only. With the ac
 | `dns_failed` | Cannot resolve {host} |
 | `address_forbidden` | {address} is a special-purpose address outside the origin allow list |
 | `tls_failed` | TLS handshake or certificate verification failed |
+| `grpc_status` | The gRPC health check ended with gRPC status {status} (active gRPC check; `5` means the origin has no such service) |
+| `grpc_not_serving` | The gRPC health check answered {status} (active gRPC check; `NOT_SERVING`, `UNKNOWN`, and so on) |
 
 Error codes need node proto v0.2.1 or later; other errors and older nodes show the node's own text.
 
 ### Active health check
 
 1. On the **Origins** tab, in the **Pool settings** card, turn on **Enabled** under **Active health check**.
-2. Enter the **Path**, choose the **Method**, and change other fields as needed.
+2. Choose the **Probe**: for HTTP enter the **Path** and choose the **Method**; for gRPC fill in the **gRPC service** as needed. Change other fields as needed.
 3. Click **Save** at the bottom of the card.
-4. Verify: make one origin's check path answer a status outside the expected range; after about interval × unhealthy threshold seconds the origin shows "Down on {down} of {total} nodes", the node results say **Active**, and requests stop going to it.
+4. Verify: make one origin's check path answer a status outside the expected range (gRPC: make the service report `NOT_SERVING`); after about interval × unhealthy threshold seconds the origin shows "Down on {down} of {total} nodes", the node results say **Active**, and requests stop going to it.
 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
 | Enabled | On / off | Off | Values stay saved while off |
-| Path | Starts with `/`, may carry a query, 1–1024 printable ASCII characters without spaces | `/` | Path of the probe |
-| Method | GET / HEAD | GET | Method of the probe |
-| Lowest / Highest status | 100–599, lowest not above highest | 200 / 399 | A status in the range is a success |
+| Probe | HTTP / gRPC | HTTP | gRPC calls the origin's `grpc.health.v1.Health/Check`, see [gRPC probes](#grpc-probes) |
+| gRPC service | 0–255 printable ASCII characters without spaces | Empty (whole server) | gRPC only: the service name in the Check request |
+| Path | Starts with `/`, may carry a query, 1–1024 printable ASCII characters without spaces | `/` | HTTP only: path of the probe |
+| Method | GET / HEAD | GET | HTTP only: method of the probe |
+| Lowest / Highest status | 100–599, lowest not above highest | 200 / 399 | HTTP only: a status in the range is a success |
 | Host | Host name | Empty (same as origin Host) | `Host` of the probe; empty uses the origin's **Origin Host**, then its address |
 | Interval (seconds) | 5–300 | 30 | Time between two probes of an origin |
 | Timeout (seconds) | 1–60, not above the interval | 5 | Time limit of one probe; a timeout is a failure |
@@ -139,11 +144,23 @@ Error codes need node proto v0.2.1 or later; other errors and older nodes show t
 | Address policy | As for origin requests: special-purpose addresses outside the allow list are dropped from DNS answers and only checked addresses are dialed; without a usable address the probe fails (`dns_failed`, `address_forbidden`) |
 | Request | Scheme and port of the origin; HTTPS sends SNI (the origin's SNI, Origin Host or address) and verifies the certificate while **Verify origin certificates** is on; HTTP/2 when **Origin HTTP version** is HTTP/2; redirects are not followed; at most 64 KiB of the body is read |
 | Failure | Connection failure, timeout, TLS failure, status outside the range; same error codes as the passive check |
+| PROXY protocol | When the origin expects PROXY protocol, probe connections first send `PROXY UNKNOWN` (v1) or the LOCAL command (v2), without a visitor address |
 | Initial state | Healthy; the first probe after a node start or a configuration change starts at a random point within one interval |
 | Not probed | S3-compatible origins (an unsigned probe says nothing about signed requests) and origins whose address literal is forbidden |
 | Node stops probing | The data plane's "actively down" marks expire after 3 × the longest interval (at least 90 seconds), back to the passive check only |
 | Reporting | Origins that are unhealthy or have consecutive failures are reported with the heartbeat, source **Active**; the "Origin unavailable" alert uses both sources |
 | Node requirement | Node feature `active-health-v1`; while an active node of the cluster lacks it, it cannot be turned on ("Some nodes of the site's cluster do not support it yet") |
+
+#### gRPC probes
+
+| Item | Behavior |
+| --- | --- |
+| Request | `POST /grpc.health.v1.Health/Check` with a `HealthCheckRequest` body (an empty **gRPC service** asks about the whole server); `Host`, HTTPS SNI, and certificate verification as for HTTP probes |
+| Protocol | Always HTTP/2, whatever the **Origin HTTP version**: h2c (prior knowledge) to HTTP origins, ALPN `h2` to HTTPS origins; an origin that does not negotiate `h2` fails the probe |
+| Success | HTTP 200, `grpc-status` 0, and the answer `SERVING` |
+| Failure | Connection failure, timeout, TLS failure; an HTTP status other than 200 (`upstream_status`); a non-zero `grpc-status` (`grpc_status`, 5 when the origin has no such service); an answer other than `SERVING` (`grpc_not_serving`) |
+| Thresholds and reporting | Interval, timeout, thresholds, merge rules, and reporting as for HTTP probes; **Path**, **Method**, and the status range stay saved but are not used |
+| Node requirement | Node feature `active-health-grpc-v1` (besides `active-health-v1`); while an active node of the cluster lacks it, gRPC cannot be chosen |
 
 #### Merge rule
 
@@ -224,7 +241,7 @@ An upgraded connection closes after 3600 seconds idle (the [idle timeout](access
 | Cache and rules | As with HTTP/1.1: edge caching, origin rules, timeouts and retries apply |
 | WebSocket | Upgrades still go to the origin over HTTP/1.1; an origin that speaks HTTP/2 only cannot serve WebSocket |
 | Connection pools | HTTP/1.1, HTTP/2 and gRPC connections to origins are reused separately, never mixed |
-| Active health check | Probes over HTTP/2; an HTTPS origin that does not negotiate `h2` fails the probe. gRPC services often answer plain requests with 415: probe an HTTP path of the origin instead, or include 415 in the expected status range |
+| Active health check | HTTP probes go over HTTP/2; an HTTPS origin that does not negotiate `h2` fails the probe. gRPC services often answer plain requests with 415: set the **Probe** to gRPC, see [gRPC probes](#grpc-probes) |
 | Node requirement | Node feature `origin-http2-v1`; while an active node of the cluster lacks it, it cannot be turned on ("Some nodes of the site's cluster do not support it yet") |
 
 With **gRPC** on, requests with `Content-Type: application/grpc` (also with a suffix such as `+proto` or `+json`, or parameters) go over HTTP/2 end to end:
@@ -239,6 +256,28 @@ With **gRPC** on, requests with `Content-Type: application/grpc` (also with a su
 | Rules and protection | Bans, rules and rate limits apply; gRPC clients cannot solve challenges, so exempt gRPC paths with an **Allow** rule where needed |
 | Timeouts | The **Read** timeout bounds the time between two receipts of data; streams that stay quiet longer need a longer **Read** timeout (up to 3600 seconds) or a config rule for their paths |
 | gRPC-Web | `application/grpc-web` is not a gRPC request; it is proxied like any HTTP request |
+
+### PROXY protocol
+
+When an origin needs the visitor's address but does not read `X-Real-IP` or `X-Forwarded-For` (HAProxy, nginx with `proxy_protocol`, mail or other services that log addresses per connection), the nodes can send a PROXY protocol header at the start of every origin connection.
+
+1. In the **Origins** card, set the origin's **PROXY protocol** to v1 or v2, the version the origin accepts.
+2. Click **Save** at the bottom of the card.
+3. Verify: after the nodes apply the revision, request the site through a node; the origin logs the visitor's address as the client and the node address and port the visitor connected to as the destination.
+
+| Item | Behavior |
+| --- | --- |
+| Addresses | Source address and port of the visitor's connection (per the cluster's [Client IP](../deploy/nodes.en.md#client-ip), the same as `X-Real-IP`); destination is the node address and port the visitor connected to (with PROXY protocol in front of the node, the destination in that header). Without IP addresses `PROXY UNKNOWN` (v1) or the LOCAL command (v2) is sent |
+| When | Once per new origin connection, before the TLS handshake and the request; HTTP/1.1, HTTP/2, gRPC, and WebSocket all send it |
+| Connection reuse | An origin connection is reused only by requests on the same visitor connection; more visitor connections mean more origin connections |
+| Write failure | Counted as a connection failure (`connect_failed`) and retried on another origin per the retry rules; origin quality counts as usual |
+| Active health check | Probe connections send `PROXY UNKNOWN` (v1) or the LOCAL command (v2) |
+| Per origin | Each origin has its own setting; origins of one group may differ |
+| S3 origins | Not available ("S3 origins do not read PROXY protocol") |
+| Origin does not expect it | The origin reads the header as part of the request and usually answers 400 or closes the connection |
+| Node requirement | Node feature `origin-proxy-protocol-v1` (`edgeweir-openresty` 1.31.1.1-3 or later); while an active node of the cluster lacks it, it cannot be turned on ("Some nodes of the site's cluster do not support it yet") |
+
+For L4 apps' PROXY protocol see [L4](l4.en.md#proxy-protocol).
 
 ### Origin groups
 
@@ -608,7 +647,8 @@ On the site's **Overview** tab, click **Purge cache** and confirm (or search the
 | Authorization switch | Needs node proto v0.2.1 or later; older nodes ignore **Cache requests with Authorization** |
 | WebSocket | Only `Upgrade: websocket` is recognized |
 | HTTP/2 to origins | No fallback to HTTP/1.1; `:authority` is not sent |
-| gRPC | Active health checks do not speak the gRPC health checking protocol (`grpc.health.v1`), only HTTP |
+| gRPC health checks | Only `Check`, no `Watch`; no gRPC reflection or custom methods |
+| PROXY protocol | TCP only: HTTP/3 visitors are reported as TCP too; when the visitor's address comes from a request header ([trusted proxy header](../deploy/nodes.en.md#client-ip)) the source port is 0; not for S3 origins |
 
 ## Troubleshooting
 
