@@ -18,7 +18,7 @@ import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { rpc, signInResponse } from "./e2e-auth.mjs";
-import { base, call, pass, stack, waitFor } from "./e2e-lib.mjs";
+import { base, call, pass, sleep, stack, waitFor } from "./e2e-lib.mjs";
 
 const mock = `http://localhost:${process.env.E2E_MOCK_PORT ?? 19090}`;
 const edgePort = Number(process.env.E2E_NODE_PORT ?? 18080);
@@ -388,6 +388,11 @@ assert.equal(await edge("p0.e2e.test", "/"), 200);
 pass(
   `candidate #${bad} (origin fails, 5xx) rolled back automatically to #${restored} (content of #${good}); the non-canary node never had it and stayed in DNS; config_rollout_failed alert`,
 );
+// A canary window counts whole minutes of the nodes' statistics, from the minute it
+// starts in: the next candidate (here and in p0.spec.ts) waits for a minute without
+// the 5xx above, or they roll it back too.
+const lastBad = Date.now();
+await sleep(Math.ceil(lastBad / 60_000) * 60_000 - lastBad + 1000);
 // Restore the origin (a canary again), promote it by hand, then turn the canary off.
 await a("PATCH", `/sites/${site.id}`, { origins: [{ address: "whoami" }] });
 await waitFor("canary runs the fix", async () => {
