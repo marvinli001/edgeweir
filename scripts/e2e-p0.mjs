@@ -9,6 +9,11 @@
 //      change that makes the origin fail; non-canary node never gets it and
 //      stays in DNS
 //   5. every node offline: DNS records stay, an alert fires
+// The usage traffic of 3 goes out right after the core section
+// (`node scripts/e2e-p0.mjs --usage-traffic`, E2E_SITE_ID and E2E_API_KEY from
+// scripts/e2e.sh, to demo.test), so its 5-minute window is complete when
+// this script runs; without .e2e/p0-usage.json for this console it is sent
+// here, to the M5 site.
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import http from "node:http";
@@ -69,6 +74,28 @@ const containerIp = async (service) => {
   assert.ok(network, `${service} has no default network`);
   return network[1].IPAddress;
 };
+
+const USAGE_STATE = ".e2e/p0-usage.json";
+/** 20 requests to `domain` through the edge node, the window they fall in and completeUntil before. */
+async function usageTraffic(key, siteId, domain) {
+  const startedAt = Date.now();
+  for (let i = 0; i < 20; i++) assert.equal(await edge(domain, `/p0-usage-${i}`), 200);
+  const window = Math.floor(startedAt / 300_000) * 300_000;
+  const before = await ok(
+    key,
+    "GET",
+    `/usage?from=${new Date(window - 300_000).toISOString()}&to=${new Date(window + 300_000).toISOString()}`,
+  );
+  return { console: base, siteId, domain, window, completeUntil: before.completeUntil };
+}
+if (process.argv.includes("--usage-traffic")) {
+  const usage = await usageTraffic(process.env.E2E_API_KEY, process.env.E2E_SITE_ID, "demo.test");
+  await writeFile(USAGE_STATE, `${JSON.stringify(usage, null, 2)}\n`);
+  pass(
+    `usage traffic sent to demo.test for the window starting ${new Date(usage.window).toISOString()}`,
+  );
+  process.exit(0);
+}
 
 // ---------------------------------------------------------------- setup
 const admin = await session("admin@e2e.test", "e2e-admin-password-123");
@@ -154,15 +181,21 @@ const planAddresses = async () =>
     .map((r) => r.data)
     .sort();
 
-// Usage traffic first: its 5-minute window completes while the other flows run.
-const usageStartedAt = Date.now();
-for (let i = 0; i < 20; i++) assert.equal(await edge(m5.domain, `/p0-usage-${i}`), 200);
-const usageWindow = Math.floor(usageStartedAt / 300_000) * 300_000;
-const usageBefore = await a(
-  "GET",
-  `/usage?from=${new Date(usageWindow - 300_000).toISOString()}&to=${new Date(usageWindow + 300_000).toISOString()}`,
-);
-pass(`usage traffic sent for the window starting ${new Date(usageWindow).toISOString()}`);
+// Usage traffic first (unless the core section sent it): its 5-minute window
+// completes while the other flows run.
+let usage = JSON.parse(await readFile(USAGE_STATE, "utf8").catch(() => "null"));
+if (
+  usage?.console !== base ||
+  (await call(admin.key, "GET", `/sites/${usage.siteId}`)).status !== 200
+) {
+  usage = await usageTraffic(admin.key, m5.siteId, m5.domain);
+  pass(`usage traffic sent for the window starting ${new Date(usage.window).toISOString()}`);
+} else {
+  pass(
+    `usage traffic sent to ${usage.domain} after the core section, window ${new Date(usage.window).toISOString()}`,
+  );
+}
+const usageWindow = usage.window;
 
 // ---------------------------------------------------------------- 1. Idempotency-Key, service accounts
 const siteBody = { name: "p0-site", domains: ["p0.e2e.test"], origins: [{ address: "whoami" }] };
@@ -282,7 +315,7 @@ pass(
 await a("PATCH", `/node-groups/${canaryGroupId}`, { isCanary: true });
 const canaryPolicy = {
   enabled: true,
-  windowSeconds: 120,
+  windowSeconds: 60,
   autoPromote: true,
   errorRatioMultiplier: 2,
   errorRatioFloor: 0.05,
@@ -378,7 +411,7 @@ const usageAfter = await waitFor(
     const page = await ok(
       sa,
       "GET",
-      `/usage?siteId=${m5.siteId}&from=${new Date(usageWindow).toISOString()}&to=${windowEnd}`,
+      `/usage?siteId=${usage.siteId}&from=${new Date(usageWindow).toISOString()}&to=${windowEnd}`,
     );
     return page.completeUntil && page.completeUntil >= windowEnd && page.items.length ? page : null;
   },
@@ -388,13 +421,13 @@ const usageAfter = await waitFor(
 const [record] = usageAfter.items;
 const reported = (
   await psql(
-    `select sum(requests)::text || ' ' || sum(bytes_sent)::text || ' ' || sum(bytes_received)::text from node_minute_stats where site_id = '${m5.siteId}' and minute >= '${new Date(usageWindow).toISOString()}' and minute < '${windowEnd}'`,
+    `select sum(requests)::text || ' ' || sum(bytes_sent)::text || ' ' || sum(bytes_received)::text from node_minute_stats where site_id = '${usage.siteId}' and minute >= '${new Date(usageWindow).toISOString()}' and minute < '${windowEnd}'`,
   )
 ).split(" ");
 assert.deepEqual([record.requests, record.bytesSent, record.bytesReceived], reported);
 assert.ok(Number(record.requests) >= 20);
 assert.ok(
-  !usageBefore.completeUntil || usageAfter.completeUntil > usageBefore.completeUntil,
+  !usage.completeUntil || usageAfter.completeUntil > usage.completeUntil,
   "completeUntil did not advance",
 );
 // Replay the node's last accepted statistics batch with its own mTLS identity.
@@ -430,7 +463,7 @@ const replay = JSON.parse(
     "-e",
     `MINUTE=${new Date(usageWindow + 60_000).toISOString()}`,
     "-e",
-    `SITE=${m5.siteId}`,
+    `SITE=${usage.siteId}`,
     mockContainer,
     "node",
     "-e",
@@ -454,13 +487,13 @@ const recomputed = await waitFor(
 const afterReplay = await ok(
   sa,
   "GET",
-  `/usage?siteId=${m5.siteId}&from=${new Date(usageWindow).toISOString()}&to=${windowEnd}`,
+  `/usage?siteId=${usage.siteId}&from=${new Date(usageWindow).toISOString()}&to=${windowEnd}`,
 );
 assert.deepEqual(afterReplay.items[0], record);
 const changes = await ok(sa, "GET", "/usage/changes?afterSeq=0&limit=5000");
 assert.ok(changes.items.some((i) => i.id === record.id));
 pass(
-  `usage ${record.id}: requests ${record.requests}, bytes ${record.bytesSent}/${record.bytesReceived} equal the node's minute statistics; replayed batch #${replay.sequence} accepted 0 and changed nothing after the recomputation at ${recomputed}; completeUntil ${usageBefore.completeUntil} -> ${afterReplay.completeUntil}`,
+  `usage ${record.id}: requests ${record.requests}, bytes ${record.bytesSent}/${record.bytesReceived} equal the node's minute statistics; replayed batch #${replay.sequence} accepted 0 and changed nothing after the recomputation at ${recomputed}; completeUntil ${usage.completeUntil} -> ${afterReplay.completeUntil}`,
 );
 
 // ---------------------------------------------------------------- 5. every node offline
