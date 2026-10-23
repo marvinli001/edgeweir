@@ -675,6 +675,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0072_site_auto_mitigation` | `site_auto_mitigation` |
 | `0073_origin_stats` | 分钟、小时、天统计与视图 `traffic_hour_stats` 的 `origin_stats`（按源站的回源计数） |
 | `0074_node_clock_dns_failures` | `node.clock_offset_ms`、`node.clock_measured_at`（节点时钟偏差）；`dns_binding.failing_since`（对账连续失败的起始时间） |
+| `0075_origin_ca_rotation` | `pki_authority.kind`、`status`、`generation`（CA 轮换；`(kind, status)` 唯一，已有行的 kind 取 ID）；`origin_certificate.authority_id`、`origin_client_certificate.authority_id`（签发它的 CA） |
 
 ## 构建产物
 

@@ -673,6 +673,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0072_site_auto_mitigation` | `site_auto_mitigation` |
 | `0073_origin_stats` | `origin_stats` (fetches per origin) in minute, hour and day statistics and the view `traffic_hour_stats` |
 | `0074_node_clock_dns_failures` | `node.clock_offset_ms`, `node.clock_measured_at` (node clock offset); `dns_binding.failing_since` (since when DNS reconciliation has kept failing) |
+| `0075_origin_ca_rotation` | `pki_authority.kind`, `status`, `generation` (CA rotation; `(kind, status)` unique, existing rows take their id as kind); `origin_certificate.authority_id`, `origin_client_certificate.authority_id` (the issuing CA) |
 
 ## Build output
 
