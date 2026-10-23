@@ -108,6 +108,7 @@ When `EDGEWEIR_YES` is non-empty, or `/dev/tty` cannot be opened, the script rea
 | `EDGEWEIR_VERSION` | Tag | `stable` | Image version to pin |
 | `EDGEWEIR_DIR` | Absolute path | See [Prompts](#prompts) | Install directory; other commands look here first |
 | `EDGEWEIR_NO_PULL` | Any non-empty value | Empty | `install` and `update` pull no images and use local ones only |
+| `EDGEWEIR_POSTGRES_IMAGE` | Image reference | `postgres:18.6-alpine` (pinned by digest) | PostgreSQL image for the host-mode database check and backups and for the bundled database; written to `.env` when it differs from the pinned one, so later commands keep it |
 | `EDGEWEIR_BACKUP_KEEP` | Non-negative integer | `5` | Backups `backup` and `update` keep; `0` keeps all |
 | `EDGEWEIR_SCRIPT_URL` | URL | `https://raw.githubusercontent.com/marvinli001/edgeweir/master/deploy.sh` | Fallback source of `self-update` |
 
@@ -128,11 +129,11 @@ EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com \
 bash deploy.sh install
 ```
 
-`EDGEWEIR_NO_PULL=1` needs the target tag (or `stable`, `latest`) of the console image and `postgres:18.6-alpine` (host mode checks and backups, the bundled database) on the host. The PostgreSQL image is referenced by digest: with Docker's classic image store (the default up to Docker 28; `docker info -f '{{.DriverStatus}}'` lacks `io.containerd.snapshotter.v1`), an image imported with `docker load` has no digest and the offline install fails; switch to the containerd image store, or let the host pull that image.
+`EDGEWEIR_NO_PULL=1` needs the target tag (or `stable`, `latest`) of the console image and `postgres:18.6-alpine` (host mode checks and backups, the bundled database) on the host. The PostgreSQL image is referenced by digest, but with Docker's classic image store (the default up to Docker 28; `docker info -f '{{.DriverStatus}}'` lacks `io.containerd.snapshotter.v1`) an image imported with `docker load` has no digest. The script then uses the local `postgres:18.6-alpine` after checking that its image ID is the pinned version's for this architecture (amd64, arm64), and aborts if not; the image it used is written to `EDGEWEIR_POSTGRES_IMAGE` in `.env`. For other architectures, or an image of your own (private registry, another tag), set `EDGEWEIR_POSTGRES_IMAGE`; it must already be on the host.
 
 ## Database check
 
-In host mode the database is checked before any file is written. The check runs `psql` from `postgres:18.6-alpine` (pinned by digest, as in `compose.baota.yml`) on the host network; the password travels in the environment; the connect timeout is 8 seconds.
+In host mode the database is checked before any file is written. The check runs `psql` from `postgres:18.6-alpine` (pinned by digest, as in `compose.baota.yml`; replaceable with `EDGEWEIR_POSTGRES_IMAGE`) on the host network; the password travels in the environment; the connect timeout is 8 seconds.
 
 | Check | On failure |
 | --- | --- |

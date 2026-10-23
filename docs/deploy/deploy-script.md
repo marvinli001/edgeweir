@@ -108,6 +108,7 @@ sudo bash deploy.sh install
 | `EDGEWEIR_VERSION` | tag | `stable` | 要固定的镜像版本 |
 | `EDGEWEIR_DIR` | 绝对路径 | 见 [提示](#提示) | 安装目录；其他命令优先在此查找部署 |
 | `EDGEWEIR_NO_PULL` | 任意非空值 | 空 | `install` 与 `update` 不拉取镜像，只用本机已有镜像 |
+| `EDGEWEIR_POSTGRES_IMAGE` | 镜像引用 | `postgres:18.6-alpine`（按 digest 固定） | host 模式的数据库检查与备份、bundled 模式的数据库所用的 PostgreSQL 镜像；与固定版本不同时写入 `.env`，之后的命令沿用 |
 | `EDGEWEIR_BACKUP_KEEP` | 非负整数 | `5` | `backup` 与 `update` 保留的备份份数；`0` 为全部保留 |
 | `EDGEWEIR_SCRIPT_URL` | URL | `https://raw.githubusercontent.com/marvinli001/edgeweir/master/deploy.sh` | `self-update` 的回退来源 |
 
@@ -128,11 +129,11 @@ EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com \
 bash deploy.sh install
 ```
 
-`EDGEWEIR_NO_PULL=1` 需要本机已有控制台镜像的目标 tag（或 `stable`、`latest`）与 `postgres:18.6-alpine`（host 模式的检查与备份、bundled 模式的数据库）。PostgreSQL 镜像按 digest 引用：Docker 使用经典镜像存储时（Docker 28 及更早版本的默认，`docker info -f '{{.DriverStatus}}'` 不含 `io.containerd.snapshotter.v1`），`docker load` 导入的镜像没有 digest，离线安装失败；改用 containerd 镜像存储，或让主机能拉取该镜像。
+`EDGEWEIR_NO_PULL=1` 需要本机已有控制台镜像的目标 tag（或 `stable`、`latest`）与 `postgres:18.6-alpine`（host 模式的检查与备份、bundled 模式的数据库）。PostgreSQL 镜像按 digest 引用，而 Docker 使用经典镜像存储时（Docker 28 及更早版本的默认，`docker info -f '{{.DriverStatus}}'` 不含 `io.containerd.snapshotter.v1`），`docker load` 导入的镜像没有 digest。此时脚本改用本机的 `postgres:18.6-alpine`，并核对它的镜像 ID 与当前架构（amd64、arm64）的固定版本一致，不一致则中止；所用镜像写入 `.env` 的 `EDGEWEIR_POSTGRES_IMAGE`。其他架构，或要用自己的镜像（私有仓库、其他 tag），设置 `EDGEWEIR_POSTGRES_IMAGE`，它必须已在本机。
 
 ## 数据库检查
 
-host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-alpine`（按 digest 固定，与 `compose.baota.yml` 相同）在 host 网络上运行 `psql`，密码经环境变量传入，连接超时 8 秒。
+host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-alpine`（按 digest 固定，与 `compose.baota.yml` 相同；可用 `EDGEWEIR_POSTGRES_IMAGE` 替换）在 host 网络上运行 `psql`，密码经环境变量传入，连接超时 8 秒。
 
 | 检查 | 未通过时 |
 | --- | --- |
