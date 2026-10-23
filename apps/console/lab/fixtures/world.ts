@@ -290,6 +290,8 @@ const FEATURES = [
   "challenge-v1",
   "ja4-v1",
   "origin-http2-v1",
+  "origin-proxy-protocol-v1",
+  "active-health-grpc-v1",
   "brotli-v1",
   "zstd-v1",
   "modsecurity-v1",
@@ -651,6 +653,8 @@ const DEFAULT_ORIGIN_SETTINGS: Site["originSettings"] = {
   grpc: false,
   activeHealthCheck: {
     enabled: false,
+    type: "http",
+    grpcService: "",
     path: "/",
     method: "GET",
     expectedStatusMin: 200,
@@ -678,6 +682,7 @@ function origins(siteIndex: number, list: OriginSeed[]): Site["origins"] {
     hostHeader: "",
     sni: "",
     group: "",
+    proxyProtocolVersion: 0,
     s3: null,
     ...o,
   }));
