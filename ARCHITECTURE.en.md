@@ -165,6 +165,7 @@ IP bans (`ip_ban`) create no revision and skip the configuration canary; they ha
 2. Nodes with `bans-v1` receive `WATCH_EVENT_BANS` (`ban_sequence` is the sequence's current value) when their `WatchConfig` stream opens and after every notification.
 3. The node calls `GetBans(after_sequence)`: from 0, or from a sequence above the current value (after a database restore), it returns a snapshot (`reset`); otherwise the active bans and lifted ids changed afterwards. Expired bans are left out; nodes drop them at expiry. Reads take the same lock in shared mode first, so the current value never passes an uncommitted write. Pages hold 2000 entries by default and at most 5000; `sequence` is the page's highest sequence, or the current value on the last page.
 4. Nodes upload their own automatic bans with `ReportBans` (at most 1000 per call), merged per node, site and address, and report the applied sequence, capacity and unapplied bans in `ReportStatus.bans`, kept in `node.ban_status`.
+5. Greylist entries are `ip_ban` rows whose `action` is `challenge` or `rate_limit`; they share the sequence, lock, notifications and pruning, and go only to nodes that send `greylist = true` in `GetBans` (`greylist-v1`). `Ban.action` and its fields describe the action; nodes never write them to the kernel. A cluster's kernel connection limits (`cluster.connection_limits`) travel in revisions instead (`NodeConfig.connection_limits`); nodes report whether they enforce them in `BanStatus.connection_limits_active` / `_error`.
 
 | Limit | Value |
 | --- | --- |
@@ -678,6 +679,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0075_alert_channel_send_times` | `alert_channel.send_times` (per-channel send limits) |
 | `0076_rule_versions` | `edge_rule_version` (rule version history), with an initial version for each existing rule |
 | `0077_node_debug_log` | `node_debug_log` (pulls of a node's debug logs) |
+| `0078_greylist_connection_limits` | `ip_ban.action`, `challenge`, `rate_limit_requests`, `rate_limit_window_seconds` (greylist entries; unique indexes split between bans and greylist entries); `cluster.connection_limits` (kernel connection limits) |
 
 ## Build output
 

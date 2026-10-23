@@ -2,14 +2,16 @@ import { useNavigate } from "@tanstack/react-router";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { m } from "@/lib/i18n";
 
-/** IP lists and bans are two lists of one sidebar entry; this switch leads from one to the other. */
-export function AccessTabs({ value }: { value: "ip-lists" | "bans" }) {
+type Tab = "ip-lists" | "bans" | "greylist";
+
+/** IP lists, bans and the greylist are lists of one sidebar entry; this switch leads between them. */
+export function AccessTabs({ value }: { value: Tab }) {
   const navigate = useNavigate();
   return (
     <Tabs
       value={value}
       onValueChange={(next) => {
-        if (next !== value) void navigate({ to: next === "bans" ? "/bans" : "/ip-lists" });
+        if (next !== value) void navigate({ to: `/${next as Tab}` });
       }}
     >
       <TabsList>
@@ -18,6 +20,9 @@ export function AccessTabs({ value }: { value: "ip-lists" | "bans" }) {
         </TabsTrigger>
         <TabsTrigger value="bans" data-testid="access-tab-bans">
           {m.bans_title()}
+        </TabsTrigger>
+        <TabsTrigger value="greylist" data-testid="access-tab-greylist">
+          {m.greylist_title()}
         </TabsTrigger>
       </TabsList>
     </Tabs>

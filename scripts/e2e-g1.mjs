@@ -14,6 +14,14 @@
 //      kernelEntries >= 1; the unban lets client-a back in
 //   e. short prefixes, protected addresses and bans over the platform limit
 //      (maxTotal) are refused
+//   g. a site greylist entry rate-limits client-a on X (429 ip-greylisted on
+//      both nodes, client-b served); a ban of the same address wins while it
+//      lasts; a platform challenge entry challenges client-a on Y; removing
+//      the entries lets it back in
+//   h. kernel connection limits of the cluster: both nodes enforce them; a
+//      third concurrent connection of client-a is dropped while client-b
+//      connects; new connections over the rate are dropped; off again, every
+//      connection opens
 // Every ban is lifted at the end.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -64,6 +72,8 @@ const containerIp = async (service) => {
 // per command. Every HTTP request opens its own connection (agent: false).
 //   {op:"get", host, target?, timeoutMs}      -> {status, error} | {failure}
 //   {op:"connect", target?, timeoutMs}        -> {connect: "connected" | "timeout" | "refused" | code}
+//   {op:"hold", count, target?, timeoutMs, holdMs}
+//                                             -> {held: [result of each connect, opened one after another and kept open]}
 //   {op:"until", host, status, error?, timeoutMs, intervalMs, requestTimeoutMs}
 //                                             -> {ok, attempts, last}
 const PROBE = String.raw`
@@ -85,7 +95,13 @@ function get(target, host, timeoutMs) {
       { host: target, port: 80, path: "/g1-probe", headers: { host }, agent: false },
       (res) => {
         res.resume();
-        res.on("end", () => finish({ status: res.statusCode, error: res.headers["x-edgeweir-error"] || null }));
+        res.on("end", () =>
+          finish({
+            status: res.statusCode,
+            error: res.headers["x-edgeweir-error"] || null,
+            challenge: res.headers["x-edgeweir-challenge"] || null,
+          }),
+        );
         res.on("error", (e) => finish({ failure: e.code || e.message }));
       },
     );
@@ -114,6 +130,28 @@ function connect(target, timeoutMs) {
     });
   });
 }
+function open(target, timeoutMs) {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: target, port: 80 });
+    socket.on("error", () => {});
+    const timer = setTimeout(() => resolve({ socket, result: "timeout" }), timeoutMs);
+    socket.once("connect", () => {
+      clearTimeout(timer);
+      resolve({ socket, result: "connected" });
+    });
+    socket.once("error", (e) => {
+      clearTimeout(timer);
+      resolve({ socket, result: e.code === "ECONNREFUSED" ? "refused" : e.code || e.message });
+    });
+  });
+}
+async function hold(c) {
+  const opened = [];
+  for (let i = 0; i < c.count; i++) opened.push(await open(c.target, c.timeoutMs));
+  await sleep(c.holdMs);
+  for (const o of opened) o.socket.destroy();
+  return opened.map((o) => o.result);
+}
 async function until(c) {
   const deadline = Date.now() + c.timeoutMs;
   let attempts = 0;
@@ -121,7 +159,11 @@ async function until(c) {
     const started = Date.now();
     attempts++;
     const last = await get(c.target, c.host, c.requestTimeoutMs);
-    if (last.status === c.status && (c.error === undefined || last.error === c.error))
+    if (
+      last.status === c.status &&
+      (c.error === undefined || last.error === c.error) &&
+      (c.challenge === undefined || last.challenge === c.challenge)
+    )
       return { ok: true, attempts, last };
     if (Date.now() >= deadline) return { ok: false, attempts, last };
     await sleep(Math.max(0, c.intervalMs - (Date.now() - started)));
@@ -136,7 +178,9 @@ lines.on("line", async (line) => {
       ? await get(c.target, c.host, c.timeoutMs)
       : c.op === "connect"
         ? { connect: await connect(c.target, c.timeoutMs) }
-        : await until(c);
+        : c.op === "hold"
+          ? { held: await hold(c) }
+          : await until(c);
   process.stdout.write(JSON.stringify({ id: c.id, ...result }) + "\n");
 });
 lines.on("close", () => process.exit(0));
@@ -176,6 +220,9 @@ async function probe(service, target) {
       send({ op: "get", host, target: to, timeoutMs }),
     connect: ({ timeoutMs = 3000, target: to } = {}) =>
       send({ op: "connect", target: to, timeoutMs }),
+    /** Opens `count` connections one after another and keeps them open for holdMs. */
+    hold: (count, { timeoutMs = 2000, holdMs = 500, target: to } = {}) =>
+      send({ op: "hold", count, target: to, timeoutMs, holdMs }),
     /** Polls every 100 ms (1 s per request) until the status (and X-Edgeweir-Error) matches. */
     until: (host, want, timeoutMs = 60_000) =>
       send({ op: "until", host, ...want, timeoutMs, intervalMs: 100, requestTimeoutMs: 1000 }),
@@ -226,6 +273,20 @@ await everyNode(
     n.appliedRevision >= (n.targetRevision ?? 0),
   180,
 );
+
+/** Removes every active greylist entry. */
+async function clearGreylist() {
+  for (let round = 0; round < 20; round++) {
+    const page = await admin.ok("GET", "/greylist?pageSize=100");
+    if (page.items.length === 0) return;
+    for (const entry of page.items) {
+      const result = await admin.raw("DELETE", `/greylist/${entry.id}`);
+      assert.ok(result.status === 200 || result.status === 404, result.text);
+    }
+  }
+  throw new Error("greylist entries keep appearing");
+}
+await clearGreylist();
 
 /** Lifts every active ban. */
 async function clearBans() {
@@ -469,6 +530,129 @@ try {
     `platform ban ${platformBan.cidr}: TCP connect from client-a times out on both nodes (${ms(droppedAfter)} after the API answered; ${attempts.length} attempt(s)), client-b gets 200 from X and Y; kernel entries ${kernel.map((n) => n.banStatus.kernelEntries).join("/")}; unban: client-a gets 200 again after ${ms(backAfter)}`,
   );
 
+  // -------------------------------------------------------------- g. greylist
+  await everyNode("both nodes report greylist-v1", (n) =>
+    n.supportedFeatures.includes("greylist-v1"),
+  );
+  const limited = await admin.ok("POST", "/greylist", {
+    scope: "site",
+    siteId: siteX.id,
+    cidr: clientA,
+    reason: "abuse",
+    durationSeconds: 3600,
+    action: { kind: "rate_limit", requests: 3, windowSeconds: 60 },
+  });
+  assert.deepEqual(limited.action, { kind: "rate_limit", requests: 3, windowSeconds: 60 });
+  const over = { status: 429, error: "ip-greylisted" };
+  for (const target of [edgeIp, peerIp]) {
+    const result = await a.until(hostX, { ...over, target });
+    assert.ok(result.ok, `client-a -> ${hostX} via ${target}: ${JSON.stringify(result)}`);
+    await served(a, hostY, target);
+    await served(b, hostX, target);
+  }
+  // A ban of the same address wins while both last.
+  const over429 = await admin.ok("POST", "/bans", {
+    scope: "site",
+    siteId: siteX.id,
+    cidr: clientA,
+    reason: "abuse",
+    durationSeconds: 3600,
+  });
+  await bannedSoon(a, hostX);
+  await admin.ok("DELETE", `/bans/${over429.id}`);
+  assert.ok((await a.until(hostX, over)).ok, "client-a is rate-limited again after the unban");
+  // A platform challenge entry challenges every site; removing it lets client-a in.
+  const challenged = await admin.ok("POST", "/greylist", {
+    scope: "platform",
+    cidr: clientA,
+    reason: "scanner",
+    durationSeconds: 3600,
+    action: { kind: "challenge", challenge: "js" },
+  });
+  const challenge = await a.until(hostY, { status: 403, challenge: "js" }, 120_000);
+  assert.ok(challenge.ok, `client-a -> ${hostY}: ${JSON.stringify(challenge)}`);
+  await served(b, hostY);
+  await admin.ok("DELETE", `/greylist/${challenged.id}`);
+  await admin.ok("DELETE", `/greylist/${limited.id}`);
+  for (const host of [hostX, hostY]) {
+    await servedSoon(a, host);
+    await servedSoon(a, host, peerIp);
+  }
+  assert.equal((await admin.ok("GET", "/greylist")).total, 0);
+  await everyNode("nftables holds no greylist entry", (n) => n.banStatus?.kernelEntries === 0);
+  pass(
+    `greylist: rate limit 3/60 s on ${hostX} answers 429 ip-greylisted to client-a on both nodes (client-b and ${hostY} served); a ban of the address wins while it lasts; a platform js challenge entry challenges client-a on ${hostY}; removing both lets client-a back in`,
+  );
+
+  // -------------------------------------------------------------- h. kernel connection limits
+  const clusterId = siteX.clusterId;
+  const limitsPath = `/clusters/${clusterId}/connection-limits`;
+  const limitsBefore = (await admin.ok("GET", limitsPath)).settings;
+  /** Saves the settings and waits until both nodes applied the revision. */
+  const applyLimits = async (settings) => {
+    const value = await admin.ok("PUT", limitsPath, { settings });
+    await everyNode(
+      "nodes apply the connection limits revision",
+      (n) => n.applyState === "applied" && n.appliedRevision >= (n.targetRevision ?? 0),
+    );
+    return value;
+  };
+  const enforced = async (settings) => {
+    const value = await applyLimits(settings);
+    await waitFor(
+      "both nodes enforce the connection limits",
+      async () => {
+        const state = await admin.ok("GET", limitsPath);
+        return state.nodes.enforcing === state.nodes.total && state.nodes.total >= 2;
+      },
+      60,
+      1000,
+    );
+    return value;
+  };
+  try {
+    const concurrent = await enforced({
+      enabled: true,
+      perIp: 2,
+      newPerSecond: 0,
+      burst: 0,
+      ports: null,
+    });
+    assert.ok(
+      concurrent.effectivePorts.some((r) => r.start <= 80 && r.end >= 80),
+      JSON.stringify(concurrent.effectivePorts),
+    );
+    const held = await waitFor(
+      "a third concurrent connection of client-a is dropped",
+      async () => {
+        const result = (await a.hold(3)).held;
+        return result.join() === "connected,connected,timeout" ? result : null;
+      },
+      30,
+      1000,
+    );
+    assert.deepEqual((await b.hold(2)).held, ["connected", "connected"]);
+    await served(b, hostX);
+    await enforced({ enabled: true, perIp: 0, newPerSecond: 5, burst: 5, ports: null });
+    const burst = (await a.hold(15, { timeoutMs: 1000, holdMs: 0 })).held;
+    assert.ok(
+      burst.filter((r) => r === "connected").length >= 5 && burst.includes("timeout"),
+      burst.join(),
+    );
+    await applyLimits({ enabled: false, perIp: 0, newPerSecond: 5, burst: 5, ports: null });
+    await waitFor(
+      "client-a opens every connection again",
+      async () => (await a.hold(4)).held.every((r) => r === "connected"),
+      60,
+      1000,
+    );
+    pass(
+      `connection limits: per IP 2 drops client-a's third connection (${held.join(", ")}) while client-b connects; 5/s burst 5 drops new connections over the rate (${burst.filter((r) => r === "timeout").length} of 15 dropped); off, every connection opens`,
+    );
+  } finally {
+    await admin.ok("PUT", limitsPath, { settings: limitsBefore });
+  }
+
   // -------------------------------------------------------------- e. refusals
   refused(
     await admin.raw("POST", "/bans", {
@@ -598,7 +782,10 @@ try {
 } finally {
   a.close();
   b.close();
-  if (!finished) await clearBans().catch((error) => console.error(`cleanup: ${error.message}`));
+  if (!finished) {
+    await clearBans().catch((error) => console.error(`cleanup: ${error.message}`));
+    await clearGreylist().catch((error) => console.error(`cleanup: ${error.message}`));
+  }
 }
 
 await writeFile(

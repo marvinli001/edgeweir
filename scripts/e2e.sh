@@ -58,7 +58,10 @@
 #   platform ban drops the client in nftables (TCP connect times out) while
 #   the control client is served, and the unban lets it back; short
 #   prefixes, protected addresses and bans over the platform limit are
-#   refused; Playwright e2e/g1.spec.ts.
+#   refused; a greylist entry rate-limits (429 ip-greylisted) or challenges
+#   the client, a ban of the address wins; the cluster's kernel connection
+#   limits drop a third concurrent connection and new connections over the
+#   rate; Playwright e2e/g1.spec.ts.
 #   Core gaps G2 (scripts/e2e-g2.mjs): headless Chromium passes the js and
 #   pow challenges of an Under Attack site; its pass works on the other node
 #   from the same /24 and User-Agent only (client-c on the isolated network

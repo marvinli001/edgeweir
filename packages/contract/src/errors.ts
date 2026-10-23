@@ -366,6 +366,8 @@ export const revisionReasonDefs = {
   listen_ports_updated: { params: [], en: "listener ports updated" },
   client_ip_updated: { params: [], en: "client address setting updated" },
   unknown_hosts_updated: { params: [], en: "unknown host settings updated" },
+  connection_limits_updated: { params: [], en: "connection limits updated" },
+  greylist_challenge: { params: [], en: "challenge keys for the greylist" },
   sites_enabled: { params: ["count"], en: "{count} sites enabled" },
   sites_disabled: { params: ["count"], en: "{count} sites disabled" },
   sites_deleted: { params: ["count"], en: "{count} sites deleted" },

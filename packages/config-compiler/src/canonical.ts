@@ -56,6 +56,8 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
   }
   for (const list of out.ipLists) list.entries = sortedSet(list.entries);
   if (out.clientAddress) out.clientAddress.trustedCidrs = sortedSet(out.clientAddress.trustedCidrs);
+  // v1.6.0: connection limit ports by start.
+  out.connectionLimits?.ports.sort((a, b) => a.start - b.start);
   for (const rule of out.platformRules) canonicalizeAction(rule.action);
   for (const site of out.sites) {
     if (site.tls) {

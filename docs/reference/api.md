@@ -220,6 +220,29 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 
 行为见 [封禁](../guide/bans.md)。
 
+### 灰名单与连接数限制
+
+| 过程 | 端点 |
+| --- | --- |
+| `greylist.list` | `GET /greylist` |
+| `greylist.create` | `POST /greylist` |
+| `greylist.delete` | `DELETE /greylist/{id}` |
+| `clusters.connectionLimits`、`clusters.setConnectionLimits` | `GET`、`PUT /clusters/{clusterId}/connection-limits` |
+
+权限与封禁相同：服务账号不能调用，只读 AccessKey 只能调用 `GET`。
+
+| 请求 | 字段 |
+| --- | --- |
+| `POST /greylist` | 同 `POST /bans`，另加 `action`：`{ kind: "challenge", challenge }`（`cookie302`、`js`、`pow`、`captcha`）或 `{ kind: "rate_limit", requests, windowSeconds }`（1–100000、1–3600） |
+| `GET /greylist` | 查询参数 `scope`、`siteId`、`address`、`page`、`pageSize` |
+| `PUT /clusters/{clusterId}/connection-limits` | `settings`：`enabled`、`perIp`（0–100000）、`newPerSecond`（0–100000）、`burst`（0–1000000，0 或不小于 `newPerSecond`）、`ports`（`[{ start, end }]`，1–64 段，不重叠；`null` 为集群的监听与 TCP L4 端口） |
+
+- 灰名单列表响应 `{ items, total, unsupportedNodes }`；条目字段 `id`、`scope`、`cidr`、`reason`、`siteId`、`siteName`、`action`、`createdBy`、`createdAt`、`expiresAt`、`unappliedNodes`。同一范围、网站与地址再次 `create` 返回同一 `id`，审计 `greylist.update`；错误代码与封禁相同（`BAN_*`）。
+- 连接数限制响应 `{ clusterId, settings, effectivePorts, nodes: { total, enforcing, unsupported, failing } }`；`setConnectionLimits` 发布配置版本（原因 `connection_limits_updated`），审计 `cluster.connection_limits_update`。
+- 节点状态：`banStatus.connectionLimitsActive`、`connectionLimitsError`；能力 `greylist-v1`、`conn-limit-v1`。
+
+行为见 [灰名单](../guide/bans.md#灰名单)、[连接数限制](../guide/bans.md#连接数限制)。
+
 ### 挑战与 CC 防护
 
 | 过程 | 端点 |

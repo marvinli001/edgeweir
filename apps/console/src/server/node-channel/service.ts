@@ -28,6 +28,7 @@ import {
 import { schema } from "@edgeweir/db";
 import {
   ApplyState,
+  BanAction,
   BanSchema,
   BanScope,
   BanSource,
@@ -147,6 +148,9 @@ function toNodeBanStatus(status: BanStatus, now: Date): schema.NodeBanStatus {
     kernelEntries: count(status.kernelEntries),
     autoEvicted: status.autoEvicted.toString(),
     reportedAt: now.toISOString(),
+    connectionLimitsActive: status.connectionLimitsActive,
+    // The node's message, shown as it is: printable and short.
+    connectionLimitsError: status.connectionLimitsError.replace(/[^\x20-\x7e]/g, " ").slice(0, 300),
   };
 }
 
@@ -1186,7 +1190,14 @@ export function createNodeService(
 
     async getBans(req, ctx) {
       const node = await requireNode(ctx);
-      const page = await banChanges(app.db, node, req.afterSequence, req.limit);
+      const page = await banChanges(
+        app.db,
+        node,
+        req.afterSequence,
+        req.limit,
+        new Date(),
+        req.greylist,
+      );
       const toBan = (ban: (typeof page.bans)[number]) =>
         create(BanSchema, {
           id: ban.id,
@@ -1198,6 +1209,16 @@ export function createNodeService(
           source: ban.source === "manual" ? BanSource.MANUAL : BanSource.AUTO,
           reason: ban.reason,
           createdAt: timestampFromDate(ban.createdAt),
+          // Greylist entries (only for nodes that asked for them).
+          ...(ban.action === "challenge"
+            ? { action: BanAction.CHALLENGE, challenge: ban.challenge ?? "js" }
+            : ban.action === "rate_limit"
+              ? {
+                  action: BanAction.RATE_LIMIT,
+                  rateLimitRequests: ban.rateLimitRequests ?? 0,
+                  rateLimitWindowSeconds: ban.rateLimitWindowSeconds ?? 0,
+                }
+              : {}),
         });
       return {
         reset: page.reset,

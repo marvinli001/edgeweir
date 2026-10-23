@@ -36,6 +36,7 @@ import {
 import { canonicalize, contentHash } from "./canonical";
 import {
   compileClientAddress,
+  compileConnectionLimits,
   compileListener,
   compileUnknownHosts,
   edgeOf,
@@ -266,12 +267,13 @@ export function usesChallenges(input: CompileInput): boolean {
 
 /**
  * Whether the cluster's configuration carries challenge keys: it uses
- * challenges, or a served site's pool has session affinity (the keys sign
- * its cookies). Keys bring challenge-v1 with them (protectionFeatures).
+ * challenges, greylist entries challenge (they travel outside revisions),
+ * or a served site's pool has session affinity (the keys sign its cookies). Keys bring challenge-v1 with them (protectionFeatures).
  */
 export function usesChallengeKeys(input: CompileInput): boolean {
   return (
     usesChallenges(input) ||
+    !!input.greylistChallenges ||
     input.sites.some((site) => site.enabled && !!site.originPool.sessionAffinity)
   );
 }
@@ -537,7 +539,8 @@ export const usesSessionTickets = (sites: readonly Site[]) =>
  * Recomputes what a compiled configuration derives from its sites after
  * they were changed in place (a rollback, or changes that skip the
  * configuration canary): the listeners (of `edge`, else the ports and
- * client address setting the configuration has), the certificate references
+ * client address setting the configuration has; the connection limits'
+ * ports with `edge`), the certificate references
  * the sites and layer-4 applications still use and requiredFeatures.
  * Canonical, with a new content hash.
  */
@@ -547,6 +550,13 @@ export function refreshDerived(config: NodeConfig, edge?: EdgeModel): NodeConfig
   out.listeners = listenersFor(out.sites, current).map(compileListener);
   out.clientAddress = compileClientAddress(current.clientIp);
   out.unknownHosts = compileUnknownHosts(current.unknownHosts, out.sites);
+  // The cluster's ports may have changed; without `edge` the limits stay as compiled.
+  if (edge)
+    out.connectionLimits = compileConnectionLimits(
+      edge.connectionLimits,
+      out.listeners,
+      out.l4Apps,
+    );
   const used = new Set(
     [
       ...out.sites.flatMap((s) => [s.certificateId, ...s.additionalCertificateIds]),

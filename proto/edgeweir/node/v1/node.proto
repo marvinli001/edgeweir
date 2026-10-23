@@ -362,6 +362,13 @@ message BanStatus {
   uint32 kernel_entries = 6;
   // Automatic bans dropped to make room, since the agent started.
   uint64 auto_evicted = 7;
+  // NodeConfig.connection_limits of the applied configuration are enforced
+  // in the kernel. False without limits or without nftables. Added in
+  // v1.6.0.
+  bool connection_limits_active = 8;
+  // Why the applied connection limits are not enforced (nftables refused
+  // them, or kernel bans are not active); empty otherwise. Added in v1.6.0.
+  string connection_limits_error = 9;
 }
 
 // OriginHealth is the passive health state of one origin on one node.
@@ -867,6 +874,21 @@ enum BanSource {
   BAN_SOURCE_AUTO = 2;
 }
 
+// BanAction is what a ban does to the requests of the addresses it holds.
+// Anything but unspecified makes the entry a greylist entry: the edge layer
+// challenges or rate-limits instead of refusing, the kernel never drops it.
+enum BanAction {
+  // Refuse (HTTP 403, and the kernel drops platform bans): every ban
+  // before v1.6.0.
+  BAN_ACTION_UNSPECIFIED = 0;
+  // Challenge requests without a pass of Ban.challenge's level.
+  BAN_ACTION_CHALLENGE = 1;
+  // At most Ban.rate_limit_requests requests per
+  // Ban.rate_limit_window_seconds per client (IPv4 address, IPv6 /64), 429
+  // above that.
+  BAN_ACTION_RATE_LIMIT = 2;
+}
+
 // Ban blocks a client address or prefix until it expires.
 message Ban {
   string id = 1;
@@ -884,6 +906,14 @@ message Ban {
   // rate_limit (made by a rule, BAN_SOURCE_AUTO; since v0.29.0).
   string reason = 7;
   google.protobuf.Timestamp created_at = 8;
+  // Greylist entries (BAN_SOURCE_MANUAL only) are sent only to nodes that
+  // ask for them (GetBansRequest.greylist). Added in v1.6.0.
+  BanAction action = 9;
+  // BAN_ACTION_CHALLENGE: cookie302, js, pow or captcha.
+  string challenge = 10;
+  // BAN_ACTION_RATE_LIMIT: 1-100000 requests per 1-3600 seconds.
+  uint32 rate_limit_requests = 11;
+  uint32 rate_limit_window_seconds = 12;
 }
 
 // GetBansRequest continues from the sequence the node has applied.
@@ -892,6 +922,10 @@ message GetBansRequest {
   uint64 after_sequence = 1;
   // Page size; 0 means the console's default. The console caps it.
   uint32 limit = 2;
+  // The node handles greylist entries (Ban.action). Without it the console
+  // leaves them out; a node that starts asking for them asks for a full
+  // snapshot (after_sequence 0) once. Added in v1.6.0.
+  bool greylist = 3;
 }
 
 // GetBansResponse is one page of ban changes in sequence order.

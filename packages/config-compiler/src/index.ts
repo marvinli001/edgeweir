@@ -7,7 +7,7 @@ export {
   UNKNOWN_HOST_FEATURE,
 } from "@edgeweir/contract";
 export { canonicalize, contentHash } from "./canonical";
-export { compileUnknownHosts, edgeOf } from "./edge";
+export { clusterTcpPorts, compileUnknownHosts, edgeOf, mergePortRanges } from "./edge";
 export {
   ACCESS_AUTH_FEATURE,
   ACCESS_CONTROL_FEATURE,

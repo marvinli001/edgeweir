@@ -85,8 +85,8 @@ export function navGroups(): NavGroup[] {
           icon: icon(ListViewIcon),
           animated: ListIcon,
           testId: "nav-ip-lists",
-          // Bans are a tab of the same section.
-          also: ["/bans"],
+          // Bans and the greylist are tabs of the same section.
+          also: ["/bans", "/greylist"],
         },
         {
           title: m.protection_page_title(),

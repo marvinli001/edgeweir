@@ -92,6 +92,32 @@ A rule's **Ban** action and a rate limit's **Ban when exceeded** are written and
 | Checks | The rule must exist: global bans come from global rules, site bans from the site's rules or global rules; a rule deleted before the report drops its bans (the node's own ban expires as usual) |
 | Sharing and unban | As for automatic bans; they count toward the 10000 automatic bans per cluster, not toward the manual ban limit; not audited |
 
+## Greylist
+
+Greylisted addresses are not refused: they are challenged or rate-limited until the entry expires. Manage them on the **Greylist** tab of **Bans**. Entries travel with the bans over the node channel, apply within seconds and make no configuration revision (except the first **Challenge** entry, see "Challenge keys" below).
+
+1. Open **Bans → Greylist** and click **Add to greylist**.
+2. Choose the scope ("Site" or "Global") and the site, enter the IP or CIDR, and choose the reason and duration.
+3. Choose the action:
+   - **Challenge**: pick the challenge (Cookie redirect, JavaScript, Proof of work, Image captcha). Requests without a pass of that level get the challenge first.
+   - **Rate limit**: enter **Requests** and **Window (seconds)**. Each client (an IPv4 address, the IPv6 `/64`) may send that many requests per window on each node; above it the node answers 429 with `X-Edgeweir-Error: ip-greylisted`.
+4. Click **Add**.
+
+To lift an entry, click **Remove** in its row and confirm. The link `/greylist?ip=<address>` lists only the entries that overlap the address.
+
+| Item | Behavior |
+| --- | --- |
+| Address, expiry, reason | As for manual bans: prefixes from IPv4 `/16` and IPv6 `/48`, 1 minute to 7 days, the manual ban reasons |
+| Rate limit bounds | 1–100000 requests per 1–3600 seconds |
+| Adding again | One active entry per scope, site and address; adding it again sets the new action, reason and expiry |
+| Bans | An address can have a ban and a greylist entry at once; while both last the ban wins. Removing the greylist entry leaves the ban |
+| Priority | Allow lists > bans > rules > greylist. Addresses on the platform allow lists or among the cluster's trusted proxies are exempt from every entry; a site's own allow list exempts it from that site's site-scope entries only. A rule's **Allow** and its skip of rate limits or challenges exempt the matching action too. A greylist challenge merges with UA, CC and rule challenges at the highest level; verified crawlers skip UA and CC challenges but not greylist challenges |
+| Kernel | Greylist entries are never written to nftables |
+| Challenge keys | Challenges need the cluster's challenge keys: when a cluster's configuration has none yet, the first **Challenge** entry publishes a revision for the clusters it applies to (every cluster for a global entry), reason "Challenge keys for the greylist"; until it is applied the nodes answer those requests with 503 |
+| Limit | Counts toward **Protection settings → Bans → Limit of manual bans** |
+| Nodes | Needs `greylist-v1`; older nodes ignore the greylist, and the list says how many nodes are on an older version |
+| Audit | `greylist.create`, `greylist.update` (added again), `greylist.delete` |
+
 ## Nodes
 
 | Item | Behavior |
@@ -169,6 +195,27 @@ With the last two, the **Bans** page shows "Clusters {clusters} take client addr
 
 [L4 apps](l4.en.md) accept the PROXY protocol on their own listeners, independently of the client IP setting of the HTTP and HTTPS listeners.
 
+## Connection limits
+
+Limits TCP connections per client in the kernel, against connection floods and slow connections from a single address. Set them per cluster in **Protection settings → Connection limits**; they travel in configuration revisions (rollback applies, and a restarted node restores them from its latest configuration).
+
+| Setting | Behavior |
+| --- | --- |
+| Concurrent connections per IP | Connections one client holds at once; new connections above it are dropped; 0 is no limit |
+| New connections per IP per second | Connections one client opens per second; those above it are dropped; 0 is no limit. Not both 0 |
+| Burst | Connections a client may open at once before the rate applies, not below the rate; 0 is the rate |
+| Ports | **Cluster listener ports**: the cluster's HTTP / HTTPS listeners and TCP [L4 app](l4.en.md) ports, following their changes; **Custom ports**: ports or ranges separated by commas (`80, 443, 10000-10999`), at most 64 ranges. **Limited ports** shows what the nodes limit |
+
+| Item | Behavior |
+| --- | --- |
+| Client | An IPv4 address, or the IPv6 `/64` |
+| Order | After the allow and ban sets of the `inet edgeweir` table: allow lists, the console's and the nodes' own addresses and loopback are never limited |
+| Protocol | TCP only; UDP is not limited |
+| Requirements | As for [kernel bans](#kernel-bans) (`CAP_NET_ADMIN` and nftables), node capability `conn-limit-v1`. Without them the node still applies the configuration and the card shows "{node} does not enforce it: {reason}"; if nftables refuses the limit rules, bans are written as usual |
+| State | The card shows "N / M nodes enforce it" and the nodes on an older version; `banStatus.connectionLimitsActive` and `connectionLimitsError` of `GET /api/v1/nodes/{id}` |
+| Load balancers | Only the TCP peer is matched: put a load balancer in front of the nodes on an allow list, or every visitor shares its quota |
+| Audit | `cluster.connection_limits_update`; revision reason "Connection limits updated" |
+
 ## API
 
 Paths are under `/api/v1`.
@@ -178,6 +225,11 @@ Paths are under `/api/v1`.
 | `bans.list` | `GET /bans` | Active bans; query parameters `scope` (`site` / `platform`), `siteId`, `source` (`manual` / `auto`), `address` (an IP or CIDR: the bans that cover it or lie inside it), `page`, `pageSize` |
 | `bans.create` | `POST /bans` | `siteId` is required when `scope` is `site` and not allowed when it is `platform`; also `cidr`, `reason`, `durationSeconds` |
 | `bans.delete` | `DELETE /bans/{id}` | Lifts a manual or automatic ban |
+| `greylist.list` | `GET /greylist` | Active greylist entries; query parameters `scope`, `siteId`, `address`, `page`, `pageSize` |
+| `greylist.create` | `POST /greylist` | As `bans.create`, plus `action`: `{"kind":"challenge","challenge":"js"}` or `{"kind":"rate_limit","requests":60,"windowSeconds":60}` |
+| `greylist.delete` | `DELETE /greylist/{id}` | Removes an entry |
+| `clusters.connectionLimits` | `GET /clusters/{clusterId}/connection-limits` | The cluster's connection limits, limited ports and node states |
+| `clusters.setConnectionLimits` | `PUT /clusters/{clusterId}/connection-limits` | `settings`: `enabled`, `perIp`, `newPerSecond`, `burst`, `ports` (`null`: the cluster's listener ports) |
 
 Read-only AccessKeys can call only `bans.list`; service accounts cannot call the ban procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`). Fields and examples: [API and endpoints](../reference/api.en.md#bans).
 
@@ -195,3 +247,6 @@ Read-only AccessKeys can call only `bans.list`; service accounts cannot call the
 | The list shows "Not applied on N nodes" | Node ban capacity or memory exhausted | Raise the node's `--ban-capacity` and `--ban-dict-mb`, or ban less |
 | A banned client still gets through | The node lacks `bans-v1`; the address is on an allow list; a site ban's address is on that site's allow lists | Upgrade the node; check the allow lists and the site lists |
 | Global bans do not apply in the kernel | The node lacks `kernel-ban-v1` | Grant `CAP_NET_ADMIN` and install nftables as in [Kernel bans](#kernel-bans) |
+| A greylisted address is neither challenged nor limited | The node lacks `greylist-v1`; the address is on an allow list; the address is also banned (the ban wins); a rule allows it or skips the action | Upgrade the node; check the allow lists and rules |
+| Greylist challenges answer 503 | The revision of the first challenge entry is not applied yet | Wait for it; check the cluster's revision state |
+| Connection limits "do not enforce it" | The node lacks `CAP_NET_ADMIN` or nftables, or the kernel refused the rules (reason in the note) | Enable as in [Kernel bans](#kernel-bans); check the node logs |

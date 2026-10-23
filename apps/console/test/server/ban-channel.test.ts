@@ -4,7 +4,14 @@ import { Code, createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { siteCreateInput } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
-import { ApplyState, BanScope, BanSource, NodeService, WatchEvent } from "@edgeweir/proto";
+import {
+  ApplyState,
+  BanAction,
+  BanScope,
+  BanSource,
+  NodeService,
+  WatchEvent,
+} from "@edgeweir/proto";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type NodeChannel, startNodeChannel } from "../../src/server/node-channel/server";
@@ -17,6 +24,7 @@ import {
 } from "../../src/server/services/bans";
 import { createClusterTx } from "../../src/server/services/clusters";
 import { createEnrollmentToken } from "../../src/server/services/enrollment";
+import { createGreylistEntry, deleteGreylistEntry } from "../../src/server/services/greylist";
 import { createSite } from "../../src/server/services/sites";
 import { createTestContext, seedOperator } from "./helpers";
 import { nodeKeyAndCsr } from "./node-csr";
@@ -546,5 +554,72 @@ describe("dynamic ban channel", async () => {
     const [cleared] = await ctx.db.select().from(schema.node).where(eq(schema.node.id, nodeId));
     expect(cleared?.banStatus).toBeNull();
     await liftAll();
+  });
+  it("sends greylist entries only to nodes that ask, with their action", async () => {
+    const { mtls } = await enroll(clusterId, "edge-grey", ["bans-v1", "greylist-v1"]);
+    const ban = await siteBan("198.51.100.90");
+    const entry = await createGreylistEntry(
+      ctx.db,
+      {
+        scope: "site",
+        siteId,
+        cidr: "198.51.100.90",
+        reason: "abuse",
+        durationSeconds: HOUR,
+        action: { kind: "rate_limit", requests: 20, windowSeconds: 10 },
+      },
+      { actor },
+    );
+    const challenge = await createGreylistEntry(
+      ctx.db,
+      {
+        scope: "platform",
+        cidr: "192.0.2.0/24",
+        reason: "scanner",
+        durationSeconds: HOUR,
+        action: { kind: "challenge", challenge: "pow" },
+      },
+      { actor },
+    );
+    const plain = await mtls.getBans({ afterSequence: 0n });
+    expect(plain.bans.map((b) => b.id)).toEqual([ban.id]);
+    const grey = await mtls.getBans({ afterSequence: 0n, greylist: true });
+    expect(grey.bans.map((b) => b.id).sort()).toEqual([ban.id, entry.id, challenge.id].sort());
+    expect(grey.bans.find((b) => b.id === ban.id)?.action).toBe(BanAction.UNSPECIFIED);
+    expect(grey.bans.find((b) => b.id === entry.id)).toMatchObject({
+      action: BanAction.RATE_LIMIT,
+      rateLimitRequests: 20,
+      rateLimitWindowSeconds: 10,
+      scope: BanScope.SITE,
+    });
+    expect(grey.bans.find((b) => b.id === challenge.id)).toMatchObject({
+      action: BanAction.CHALLENGE,
+      challenge: "pow",
+      scope: BanScope.PLATFORM,
+    });
+    // Lifting an entry reaches the node as a removal.
+    await deleteGreylistEntry(ctx.db, entry.id, { actor });
+    const next = await mtls.getBans({ afterSequence: grey.sequence, greylist: true });
+    expect(next.removedIds).toEqual([entry.id]);
+    await liftAll();
+  });
+
+  it("stores whether the node enforces connection limits", async () => {
+    const { nodeId, mtls } = await enroll(clusterId, "edge-limits", ["bans-v1", "conn-limit-v1"]);
+    await mtls.reportStatus({
+      appliedRevision: 0n,
+      state: ApplyState.APPLIED,
+      dataPlaneHealthy: true,
+      bans: {
+        appliedSequence: 1n,
+        connectionLimitsActive: false,
+        connectionLimitsError: "nft: refused\u0007 the limits",
+      },
+    });
+    const [row] = await ctx.db.select().from(schema.node).where(eq(schema.node.id, nodeId));
+    expect(row?.banStatus).toMatchObject({
+      connectionLimitsActive: false,
+      connectionLimitsError: "nft: refused  the limits",
+    });
   });
 });

@@ -3,15 +3,26 @@ import { DEFAULT_HTTP_PORT, DEFAULT_HTTPS_PORT } from "@edgeweir/contract";
 import {
   type ClientAddress,
   ClientAddressSchema,
+  type ConnectionLimits,
+  ConnectionLimitsSchema,
+  type L4App,
+  L4Protocol,
   type Listener,
   ListenerProtocol,
   ListenerSchema,
   type NodeConfig,
+  PortRangeSchema,
   type Site,
   type UnknownHosts,
   UnknownHostsSchema,
 } from "@edgeweir/proto";
-import type { ClientIpModel, EdgeModel, ListenerModel, UnknownHostsModel } from "./models";
+import type {
+  ClientIpModel,
+  ConnectionLimitsModel,
+  EdgeModel,
+  ListenerModel,
+  UnknownHostsModel,
+} from "./models";
 import { sortedSet } from "./sort";
 
 /**
@@ -143,3 +154,68 @@ export const compileListener = (l: ListenerModel): Listener =>
     http3: l.http3 ?? false,
     proxyProtocol: l.proxyProtocol ?? false,
   });
+
+/** Port ranges nodes accept in ConnectionLimits.ports. */
+const NODE_PORT_RANGES = 256;
+
+/**
+ * Sorted ranges, overlapping and adjacent ones merged. Beyond `max` ranges
+ * the two separated by the smallest gap are merged (the gap's ports are
+ * limited too) until they fit.
+ */
+export function mergePortRanges(
+  ranges: readonly { start: number; end: number }[],
+  max = NODE_PORT_RANGES,
+): { start: number; end: number }[] {
+  const out: { start: number; end: number }[] = [];
+  for (const r of [...ranges].sort((a, b) => a.start - b.start || a.end - b.end)) {
+    const last = out.at(-1);
+    if (last && r.start <= last.end + 1) last.end = Math.max(last.end, r.end);
+    else out.push({ start: r.start, end: r.end });
+  }
+  while (out.length > max) {
+    let at = 1;
+    for (let i = 2; i < out.length; i++) {
+      const gap = (out[i]?.start ?? 0) - (out[i - 1]?.end ?? 0);
+      if (gap < (out[at]?.start ?? 0) - (out[at - 1]?.end ?? 0)) at = i;
+    }
+    const [next] = out.splice(at, 1);
+    const prev = out[at - 1];
+    if (prev && next) prev.end = next.end;
+  }
+  return out;
+}
+
+/** The TCP ports the cluster's nodes listen on: listeners and TCP layer-4 applications. */
+export function clusterTcpPorts(
+  listeners: readonly Pick<Listener, "port">[],
+  l4Apps: readonly Pick<L4App, "protocol" | "port" | "portEnd">[],
+): { start: number; end: number }[] {
+  return mergePortRanges([
+    ...listeners.map((l) => ({ start: l.port, end: l.port })),
+    ...l4Apps
+      .filter((app) => app.protocol === L4Protocol.TCP)
+      .map((app) => ({ start: app.port, end: Math.max(app.port, app.portEnd) })),
+  ]);
+}
+
+/**
+ * NodeConfig.connection_limits: unset without limits; the ports are the
+ * operator's ranges or the cluster's TCP ports, merged and sorted (unset
+ * when there are none).
+ */
+export function compileConnectionLimits(
+  model: ConnectionLimitsModel | null | undefined,
+  listeners: readonly Pick<Listener, "port">[],
+  l4Apps: readonly Pick<L4App, "protocol" | "port" | "portEnd">[],
+): ConnectionLimits | undefined {
+  if (!model || (model.perIp === 0 && model.newPerSecond === 0)) return undefined;
+  const ports = model.ports ? mergePortRanges(model.ports) : clusterTcpPorts(listeners, l4Apps);
+  if (ports.length === 0) return undefined;
+  return create(ConnectionLimitsSchema, {
+    perIpConnections: model.perIp,
+    newPerSecond: model.newPerSecond,
+    burst: model.newPerSecond > 0 ? Math.max(model.burst, model.newPerSecond) : 0,
+    ports: ports.map((r) => create(PortRangeSchema, r)),
+  });
+}

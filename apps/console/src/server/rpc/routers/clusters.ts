@@ -12,9 +12,11 @@ import {
 } from "../../services/clusters";
 import {
   getClientIp,
+  getConnectionLimits,
   getListenPorts,
   getUnknownHosts,
   setClientIp,
+  setConnectionLimits,
   setListenPorts,
   setUnknownHosts,
 } from "../../services/edge";
@@ -188,6 +190,12 @@ export const clustersRouter = {
     ),
     setUnknownHosts: authed.clusters.setUnknownHosts.handler(({ input, context }) =>
       setUnknownHosts(context.app.db, input, context.actor),
+    ),
+    connectionLimits: authed.clusters.connectionLimits.handler(({ input, context }) =>
+      getConnectionLimits(context.app.db, input.clusterId),
+    ),
+    setConnectionLimits: authed.clusters.setConnectionLimits.handler(({ input, context }) =>
+      setConnectionLimits(context.app.db, input, context.actor),
     ),
     setCache: authed.clusters.setCache.handler(({ input, context }) =>
       setClusterCache(context.app.db, input, context.actor),

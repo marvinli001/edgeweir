@@ -174,3 +174,75 @@ test("G1: the operator edits the ban settings", async ({ page }) => {
   await logout(page);
   expect(pageErrors).toEqual([]);
 });
+
+test("G1: the operator greylists an address and removes it", async ({ page }) => {
+  const pageErrors = errors(page);
+  await signedIn(page);
+  await page.getByTestId("nav-ip-lists").click();
+  await page.getByTestId("access-tab-greylist").click();
+  await expect(page).toHaveURL(/\/greylist$/);
+  await expect(page.getByTestId("page-title")).toHaveText("灰名单");
+  await expect(page.getByText("暂无灰名单", { exact: true })).toBeVisible();
+
+  await page.getByTestId("greylist-create").first().click();
+  const dialog = page.getByRole("dialog");
+  await dialog.locator("#greylist-site-search").fill(state.siteName);
+  await pick(page, dialog.locator("#greylist-site"), state.siteName);
+  await dialog.getByTestId("greylist-cidr").fill("203.0.113.0/24");
+  await pick(page, dialog.getByTestId("greylist-action"), "限速");
+  await dialog.getByTestId("greylist-requests").fill("30");
+  await check(page, "greylist-dialog");
+  await dialog.getByTestId("greylist-submit").click();
+  await expect(dialog).toBeHidden();
+
+  const row = page
+    .getByTestId("greylist-table")
+    .getByRole("row")
+    .filter({ has: page.getByTestId("greylist-cidr-cell").getByText("203.0.113.0/24") });
+  await expect(row).toContainText(state.siteName);
+  await expect(row.getByTestId("greylist-action-cell")).toContainText("30 次 / 60 秒");
+  await check(page, "greylist");
+
+  await row.getByTestId("greylist-remove").click();
+  await expect(page.getByRole("dialog")).toContainText("将 203.0.113.0/24 移出灰名单？");
+  await page.getByTestId("confirm-action").click();
+  await expect(page.getByText("暂无灰名单", { exact: true })).toBeVisible();
+  await page.goto("/audit?action=greylist.delete");
+  await expect(page.getByTestId("audit-action").first()).toHaveText("greylist.delete");
+  await logout(page);
+  expect(pageErrors).toEqual([]);
+});
+
+test("G1: the operator sets a cluster's connection limits", async ({ page }) => {
+  const pageErrors = errors(page);
+  await signedIn(page);
+  await page.goto("/protection");
+  const card = page.getByTestId("connection-limits-card");
+  const enabled = card.getByTestId("connection-limits-enabled");
+  const perIp = card.getByTestId("connection-limits-per-ip");
+  const save = card.getByTestId("connection-limits-save");
+  await expect(enabled).toHaveAttribute("aria-checked", "false");
+  await expect(card.getByTestId("connection-limits-effective")).toContainText("80");
+
+  await enabled.click();
+  await perIp.fill("128");
+  await saved(page, save, "clusters/setConnectionLimits");
+  await expect(save).toBeDisabled();
+  await page.reload();
+  await expect(enabled).toHaveAttribute("aria-checked", "true");
+  await expect(perIp).toHaveValue("128");
+  await expect(card.getByTestId("connection-limits-nodes")).toBeVisible();
+  await check(page, "connection-limits");
+
+  await enabled.click();
+  await perIp.fill("256");
+  await saved(page, save, "clusters/setConnectionLimits");
+  await page.reload();
+  await expect(enabled).toHaveAttribute("aria-checked", "false");
+  await page.goto("/audit?action=cluster.connection_limits_update");
+  await expect(page.getByTestId("audit-action").first()).toHaveText(
+    "cluster.connection_limits_update",
+  );
+  await logout(page);
+  expect(pageErrors).toEqual([]);
+});

@@ -60,6 +60,21 @@ export interface ClusterUnknownHosts {
   scan: { enabled: boolean; threshold: number; banSeconds: number };
 }
 
+/**
+ * Per-client TCP connection limits the cluster's nodes enforce in the kernel
+ * (null: never set). perIp concurrent connections and newPerSecond new
+ * connections per second (with burst), each 0 when off; ports null: the
+ * cluster's listener and TCP layer-4 application ports, else the ranges.
+ */
+export interface ClusterConnectionLimits {
+  /** Off keeps the values for switching back. */
+  enabled: boolean;
+  perIp: number;
+  newPerSecond: number;
+  burst: number;
+  ports: { start: number; end: number }[] | null;
+}
+
 export const cluster = pgTable("cluster", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull().unique(),
@@ -71,6 +86,8 @@ export const cluster = pgTable("cluster", {
   clientIp: jsonb("client_ip").$type<ClusterClientIp>(),
   /** Handling of unknown hosts and node IP access; null: the defaults. */
   unknownHosts: jsonb("unknown_hosts").$type<ClusterUnknownHosts>(),
+  /** Kernel connection limits per client; null: none. */
+  connectionLimits: jsonb("connection_limits").$type<ClusterConnectionLimits>(),
   /**
    * The site unknown hosts or node IP access may be handed to (an enabled
    * site of this cluster); cleared when the site is deleted.
@@ -123,6 +140,9 @@ export interface NodeBanStatus {
   kernelEntries: number;
   autoEvicted: string;
   reportedAt: string;
+  /** Connection limits enforced in the kernel (conn-limit-v1), and why not. */
+  connectionLimitsActive?: boolean;
+  connectionLimitsError?: string;
 }
 
 /**

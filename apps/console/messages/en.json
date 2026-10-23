@@ -3237,5 +3237,63 @@
   "attacks_mitigation_no_cc": "CC is off for this site: the level never rises",
   "attacks_mitigation_unreachable": "CC stops at {max}: the level never reaches the trigger",
   "attacks_mitigation_hold_note": "Under Attack turns off once the level has been below the trigger for this long",
-  "protection_under_attack_auto": "Automatic until {time}"
+  "protection_under_attack_auto": "Automatic until {time}",
+  "greylist_title": "Greylist",
+  "greylist_create": "Add to greylist",
+  "greylist_submit": "Add",
+  "greylist_empty": "No greylisted addresses",
+  "greylist_no_match": "No entries match",
+  "greylist_action": "Action",
+  "greylist_action_challenge": "Challenge",
+  "greylist_action_rate_limit": "Rate limit",
+  "greylist_challenge": "Challenge",
+  "greylist_requests": "Requests",
+  "greylist_window": "Window (seconds)",
+  "greylist_rate_text": "{requests} per {seconds} s",
+  "greylist_remove": "Remove",
+  "greylist_remove_confirm": "Remove {address} from the greylist?",
+  "greylist_removed": "Removed from the greylist",
+  "greylist_unsupported_nodes": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} node runs an older version and ignores the greylist",
+        "countPlural=other": "{count} nodes run an older version and ignore the greylist"
+      }
+    }
+  ],
+  "connection_limits_title": "Connection limits",
+  "connection_limits_cluster": "Cluster",
+  "connection_limits_enabled": "Enabled",
+  "connection_limits_per_ip": "Concurrent connections per IP",
+  "connection_limits_rate": "New connections per IP per second",
+  "connection_limits_burst": "Burst",
+  "connection_limits_ports": "Ports",
+  "connection_limits_ports_cluster": "Cluster listener ports",
+  "connection_limits_ports_custom": "Custom ports",
+  "connection_limits_port_list": "Port list",
+  "connection_limits_ports_effective": "Limited ports",
+  "connection_limits_ports_invalid": "Enter 1–{max} ports or port ranges",
+  "connection_limits_none": "Set at least one limit",
+  "connection_limits_burst_low": "Burst cannot be below the new connection rate",
+  "connection_limits_enforcing": [
+    {
+      "declarations": ["input count", "input total", "local totalPlural = total: plural"],
+      "selectors": ["totalPlural"],
+      "match": {
+        "totalPlural=one": "{count} of {total} node enforces it",
+        "totalPlural=other": "{count} of {total} nodes enforce it"
+      }
+    }
+  ],
+  "connection_limits_node_failing": "{node} does not enforce it: {error}",
+  "connection_limits_unsupported": "Nodes on an older version: {nodes}",
+  "revision_reason_connection_limits_updated": "Connection limits updated",
+  "revision_reason_greylist_challenge": "Challenge keys for the greylist",
+  "audit_action_cluster_connection_limits_update": "Update connection limits",
+  "audit_action_greylist_create": "Add to greylist",
+  "audit_action_greylist_update": "Update greylist entry",
+  "audit_action_greylist_delete": "Remove from greylist",
+  "audit_target_greylist": "Greylist entry"
 }
