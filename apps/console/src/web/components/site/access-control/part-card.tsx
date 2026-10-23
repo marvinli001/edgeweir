@@ -3,6 +3,7 @@ import {
   type AccessControlSettings,
   type FeatureAvailability,
   type SiteAccessControl,
+  type SiteFeatures,
   siteAccessControlUpdate,
 } from "@edgeweir/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -132,8 +133,10 @@ interface PartCardProps<P extends AccessControlPart, D> {
   toDraft: (value: PartValue<P>) => D;
   /** What saving the draft sends as the part (validated by the contract first). */
   toPart: (draft: D) => unknown;
-  /** Whether the part does anything (the nodes need access-control-v1 for it). */
+  /** Whether the part does anything (the nodes need the feature for it). */
   inUse: (value: PartValue<P>) => boolean;
+  /** The node feature the part needs; accessControl (access-control-v1) by default. */
+  feature?: keyof SiteFeatures;
   /** Labels of the part's fields, by their name in the contract, for errors that point at one. */
   labels: Record<string, () => string>;
   /** A check the API makes that the contract's schema does not, on the parsed part. */
@@ -153,6 +156,7 @@ export function AccessPartCard<P extends AccessControlPart, D>({
   title,
   testId,
   index,
+  feature = "accessControl",
   ...form
 }: PartCardProps<P, D>) {
   const settings = useAccessControl(siteId);
@@ -172,7 +176,7 @@ export function AccessPartCard<P extends AccessControlPart, D>({
             siteId={siteId}
             testId={testId}
             data={data}
-            availability={available.accessControl}
+            availability={available[feature]}
             onSaved={() => setSaves((n) => n + 1)}
           />
         )}
@@ -195,7 +199,7 @@ function PartForm<P extends AccessControlPart, D>({
   contentClassName,
   children,
   onSaved,
-}: Omit<PartCardProps<P, D>, "title" | "index"> & {
+}: Omit<PartCardProps<P, D>, "title" | "index" | "feature"> & {
   data: SiteAccessControl;
   availability: FeatureAvailability;
   onSaved: () => void;

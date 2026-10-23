@@ -10,6 +10,7 @@ import {
   accessControlSettings,
   cidrContains,
   corsSettings,
+  encodedPathSettings,
   formatIp,
   geoSettings,
   hotlinkSettings,
@@ -96,6 +97,12 @@ function seed(site: Site): SiteAccessControl {
       hideServer: true,
       removePoweredBy: true,
     },
+    encodedPaths: encodedPathSettings.parse({
+      exemptions: [
+        { prefix: "/assets/", encodedSlash: true },
+        { prefix: "/api/v2/", semicolon: true },
+      ],
+    }),
     updatedAt: ago(2 * DAY),
   };
 }

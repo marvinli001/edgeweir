@@ -34,6 +34,7 @@ import { FormSelect } from "@/components/form-select";
 import { IpCheckCard } from "@/components/ip-check";
 import { SafetyNote } from "@/components/safety-note";
 import { CorsCard } from "@/components/site/access-control/cors-card";
+import { EncodedPathsCard } from "@/components/site/access-control/encoded-paths-card";
 import { GeoCard } from "@/components/site/access-control/geo-card";
 import { HotlinkCard } from "@/components/site/access-control/hotlink-card";
 import { SecurityHeadersCard } from "@/components/site/access-control/security-headers-card";
@@ -280,7 +281,8 @@ export function AccessTab({ site }: { site: Site }) {
       <CorsCard siteId={site.id} index={5} />
       <WebsocketCard siteId={site.id} index={6} />
       <SecurityHeadersCard siteId={site.id} index={7} />
-      <IpCheckCard siteId={site.id} index={8} />
+      <EncodedPathsCard siteId={site.id} index={8} />
+      <IpCheckCard siteId={site.id} index={9} />
     </div>
   );
 }
