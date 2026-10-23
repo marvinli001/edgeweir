@@ -1,5 +1,6 @@
 import { ipCheck } from "../../services/access-control";
 import { createBan, deleteBan, listBans } from "../../services/bans";
+import { createGreylistEntry, deleteGreylistEntry, listGreylist } from "../../services/greylist";
 import { getSiteProtection, updateSiteProtection } from "../../services/protection";
 import { topLoggedRules } from "../../services/rule-logs";
 import {
@@ -15,7 +16,7 @@ import { listSecurityEvents, siteSecurityState } from "../../services/security";
 import { getSiteWaf, topWafRules, updateSiteWaf } from "../../services/waf";
 import { authed } from "../base";
 
-/** Rules, IP lists, bans, CC protection, WAF and security events. */
+/** Rules, IP lists, bans, the greylist, CC protection, WAF and security events. */
 export const accessControlRouter = {
   rules: {
     get: authed.rules.get.handler(({ input, context }) => getRules(context.app, input.id)),
@@ -57,6 +58,15 @@ export const accessControlRouter = {
     ),
     delete: authed.bans.delete.handler(({ input, context }) =>
       deleteBan(context.app.db, input.id, { actor: context.actor }),
+    ),
+  },
+  greylist: {
+    list: authed.greylist.list.handler(({ input, context }) => listGreylist(context.app.db, input)),
+    create: authed.greylist.create.handler(({ input, context }) =>
+      createGreylistEntry(context.app.db, input, { actor: context.actor }),
+    ),
+    delete: authed.greylist.delete.handler(({ input, context }) =>
+      deleteGreylistEntry(context.app.db, input.id, { actor: context.actor }),
     ),
   },
   protection: {

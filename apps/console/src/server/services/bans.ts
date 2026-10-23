@@ -68,7 +68,7 @@ async function nextSeqs(tx: Executor, n: number): Promise<bigint[]> {
   return result.rows.map((row) => BigInt(row.seq)).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
-async function nextSeq(tx: Executor): Promise<bigint> {
+export async function nextSeq(tx: Executor): Promise<bigint> {
   const [seq] = await nextSeqs(tx, 1);
   if (seq === undefined) throw new Error("ip_ban_seq returned nothing");
   return seq;
@@ -89,7 +89,7 @@ export async function currentBanSequence(db: Executor): Promise<bigint> {
 }
 
 /** Wakes the watch streams of the affected clusters once the transaction commits. */
-async function notifyBans(tx: Executor, clusterIds: string[] | null) {
+export async function notifyBans(tx: Executor, clusterIds: string[] | null) {
   await tx.execute(sql`select pg_notify(${BANS_CHANNEL}, ${JSON.stringify({ clusterIds })})`);
 }
 
@@ -112,7 +112,10 @@ export function setBanSettings(db: Database, input: BanSettings, actor: Actor) {
  * platform ban by those of every node. A node reports single addresses; rows
  * stored before that was checked are skipped unless they are one.
  */
-async function protectedAddresses(tx: Executor, clusterId: string | null): Promise<string[]> {
+export async function protectedAddresses(
+  tx: Executor,
+  clusterId: string | null,
+): Promise<string[]> {
   const ips = await tx
     .selectDistinct({ address: schema.nodeIp.address })
     .from(schema.nodeIp)
@@ -134,11 +137,14 @@ async function trustedProxies(tx: Executor): Promise<string[]> {
   return rows.flatMap((row) => row.clientIp?.trustedCidrs ?? []);
 }
 
-const active = (now: Date) =>
+export const active = (now: Date) =>
   and(isNull(schema.ipBan.removedAt), gt(schema.ipBan.expiresAt, now)) as ReturnType<typeof and>;
 
+/** Bans only: greylist entries (services/greylist.ts) live in the same table. */
+const isBan = () => eq(schema.ipBan.action, "block");
+
 /** Online nodes that report each of these bans as not applied. */
-async function unappliedCounts(db: Executor, ids: string[]): Promise<Map<string, number>> {
+export async function unappliedCounts(db: Executor, ids: string[]): Promise<Map<string, number>> {
   if (ids.length === 0) return new Map();
   const since = new Date(Date.now() - ONLINE_WINDOW_SECONDS * 1000);
   const result = await db.execute<{ id: string; nodes: number }>(sql`
@@ -228,7 +234,7 @@ export async function listBans(
   input: BanListInput,
   now = new Date(),
 ): Promise<BanList> {
-  const filters = [active(now)];
+  const filters = [active(now), isBan()];
   if (input.siteId) filters.push(eq(schema.ipBan.siteId, input.siteId));
   if (input.source) filters.push(eq(schema.ipBan.source, input.source));
   if (input.scope) filters.push(eq(schema.ipBan.scope, input.scope));
@@ -247,12 +253,12 @@ export async function listBans(
   };
 }
 
-function checkDuration(seconds: number) {
+export function checkDuration(seconds: number) {
   if (!Number.isInteger(seconds) || seconds < BAN_MIN_SECONDS || seconds > BAN_MAX_SECONDS)
     fail("BAN_EXPIRY_OUT_OF_RANGE", "a ban lasts from 1 minute to 7 days");
 }
 
-function banTarget(text: string) {
+export function banTarget(text: string) {
   const parsed = parseBanCidr(text);
   if (!parsed.ok) {
     if (parsed.code === "BAN_PREFIX_TOO_SHORT")
@@ -265,7 +271,7 @@ function banTarget(text: string) {
 /**
  * Creates a manual ban, or bans the same (scope, site, CIDR) again: that sets
  * the new reason and expiry and takes a new sequence number. Every manual
- * ban counts against the platform total. An expired entry, and the
+ * ban (and greylist entry) counts against the platform total. An expired entry, and the
  * automatic entry of a platform address (scan protection), start over as a
  * new manual ban: checked against the limit, audited as created and sent to
  * the nodes like one; an active one never shared is lifted and the manual
@@ -299,6 +305,7 @@ export async function createBan(
         and(
           eq(schema.ipBan.cidr, target.text),
           isNull(schema.ipBan.removedAt),
+          isBan(),
           site
             ? and(
                 eq(schema.ipBan.scope, "site"),
@@ -416,7 +423,7 @@ export async function deleteBan(db: Database, id: string, ctx: { actor: Actor })
     const [row] = await tx
       .select()
       .from(schema.ipBan)
-      .where(and(eq(schema.ipBan.id, id), active(now)))
+      .where(and(eq(schema.ipBan.id, id), active(now), isBan()))
       .for("update");
     if (!row) fail("BAN_NOT_FOUND", "ban not found");
     const seq = await nextSeq(tx);
@@ -476,6 +483,8 @@ export interface BanPage {
  * active bans and the lifted ones changed after `afterSequence`; expired
  * bans are left out (nodes drop them at expiry). `sequence` is the highest
  * sequence of the page, or the current sequence value on the last page.
+ * Greylist entries only go to nodes that ask for them (`greylist`,
+ * GetBansRequest.greylist).
  */
 export async function banChanges(
   db: Database,
@@ -483,6 +492,7 @@ export async function banChanges(
   afterSequence: bigint,
   limit: number,
   now = new Date(),
+  greylist = false,
 ): Promise<BanPage> {
   const size = Math.min(limit > 0 ? limit : BAN_PAGE_DEFAULT, BAN_PAGE_MAX);
   return db.transaction(async (tx) => {
@@ -493,6 +503,7 @@ export async function banChanges(
     const distributed = and(
       or(isNull(schema.ipBan.clusterId), eq(schema.ipBan.clusterId, node.clusterId)),
       eq(schema.ipBan.distributed, true),
+      greylist ? undefined : isBan(),
     );
     const ownLifted = and(
       fromNodes(),
@@ -920,6 +931,7 @@ async function storePlatformAutoBans(
           and(
             eq(schema.ipBan.scope, "platform"),
             isNull(schema.ipBan.removedAt),
+            isBan(),
             inArray(
               schema.ipBan.cidr,
               items.map((item) => item.cidr.text),

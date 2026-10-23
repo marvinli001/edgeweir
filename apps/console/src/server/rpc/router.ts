@@ -21,6 +21,7 @@ export const router = os.router({
   ipLists: accessControlRouter.ipLists,
   ipCheck: accessControlRouter.ipCheck,
   bans: accessControlRouter.bans,
+  greylist: accessControlRouter.greylist,
   protection: accessControlRouter.protection,
   waf: accessControlRouter.waf,
   errorPages: sitesRouter.errorPages,

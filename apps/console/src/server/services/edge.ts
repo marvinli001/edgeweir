@@ -1,11 +1,20 @@
 import { isDeepStrictEqual } from "node:util";
-import type { EdgeModel } from "@edgeweir/config-compiler";
+import {
+  clusterTcpPorts,
+  decodeNodeConfig,
+  type EdgeModel,
+  mergePortRanges,
+} from "@edgeweir/config-compiler";
 import {
   CLIENT_IP_FEATURE,
   type ClientIpInput,
   type ClusterClientIp,
+  type ClusterConnectionLimits,
   type ClusterListenPorts,
   type ClusterUnknownHosts,
+  CONN_LIMIT_FEATURE,
+  CONNECTION_LIMIT_DEFAULTS,
+  type ConnectionLimitsInput,
   EDGE_PORTS_FEATURE,
   type ListenPortsInput,
   nodeSupportsFeature,
@@ -20,7 +29,7 @@ import { fail } from "../lib/errors";
 import { lockClusterL4 } from "../lib/locks";
 import { type Actor, recordAudit } from "./audit";
 import { loadPortPools } from "./l4-config";
-import { type Executor, publishRevision } from "./revisions";
+import { type Executor, latestRevision, publishRevision } from "./revisions";
 
 type ClusterRow = typeof schema.cluster.$inferSelect;
 
@@ -81,11 +90,25 @@ function unknownHostsOf(
 function edgeModelOf(
   row: Pick<
     ClusterRow,
-    "extraHttpPorts" | "extraHttpsPorts" | "clientIp" | "unknownHosts" | "defaultSiteId"
+    | "extraHttpPorts"
+    | "extraHttpsPorts"
+    | "clientIp"
+    | "unknownHosts"
+    | "defaultSiteId"
+    | "connectionLimits"
   >,
 ): EdgeModel {
   const unknown = unknownHostsOf(row);
+  const limits = row.connectionLimits;
   return {
+    connectionLimits: limits?.enabled
+      ? {
+          perIp: limits.perIp,
+          newPerSecond: limits.newPerSecond,
+          burst: limits.burst,
+          ports: limits.ports ? limits.ports.map((r) => ({ ...r })) : null,
+        }
+      : null,
     httpPorts: [...row.extraHttpPorts],
     httpsPorts: [...row.extraHttpsPorts],
     clientIp: row.clientIp ? clientIpOf(row) : null,
@@ -367,4 +390,117 @@ export async function setUnknownHosts(
     });
   });
   return getUnknownHosts(db, input.clusterId);
+}
+
+/** The connection limits of a cluster row (null: never set, off with the defaults). */
+function connectionLimitsOf(
+  row: Pick<ClusterRow, "connectionLimits">,
+): ClusterConnectionLimits["settings"] {
+  const stored = row.connectionLimits;
+  return stored
+    ? {
+        enabled: stored.enabled,
+        perIp: stored.perIp,
+        newPerSecond: stored.newPerSecond,
+        burst: stored.burst,
+        ports: stored.ports ? stored.ports.map((r) => ({ ...r })) : null,
+      }
+    : { enabled: false, ...CONNECTION_LIMIT_DEFAULTS, ports: null };
+}
+
+export async function getConnectionLimits(
+  db: Executor,
+  clusterId: string,
+): Promise<ClusterConnectionLimits> {
+  const row = await findCluster(db, clusterId);
+  const settings = connectionLimitsOf(row);
+  // The ports the latest revision limits, else those the cluster listens on now.
+  const latest = await latestRevision(db, clusterId);
+  const config = latest ? decodeNodeConfig(latest.ir) : undefined;
+  const effectivePorts = settings.ports
+    ? mergePortRanges(settings.ports)
+    : config
+      ? clusterTcpPorts(config.listeners, config.l4Apps)
+      : mergePortRanges(
+          [80, ...row.extraHttpPorts, ...row.extraHttpsPorts].map((p) => ({ start: p, end: p })),
+        );
+  const nodes = await db
+    .select({
+      id: schema.node.id,
+      name: schema.node.name,
+      features: schema.node.supportedFeatures,
+      banStatus: schema.node.banStatus,
+    })
+    .from(schema.node)
+    .where(and(eq(schema.node.clusterId, clusterId), eq(schema.node.status, "active")))
+    .orderBy(asc(schema.node.name));
+  const unsupported = nodes.filter((n) => !nodeSupportsFeature(n.features, CONN_LIMIT_FEATURE));
+  const capable = nodes.filter((n) => nodeSupportsFeature(n.features, CONN_LIMIT_FEATURE));
+  return {
+    clusterId,
+    settings,
+    effectivePorts,
+    nodes: {
+      total: nodes.length,
+      enforcing: capable.filter((n) => n.banStatus?.connectionLimitsActive).length,
+      unsupported: unsupported.map((n) => ({ id: n.id, name: n.name })),
+      failing: settings.enabled
+        ? capable
+            .filter((n) => !n.banStatus?.connectionLimitsActive)
+            .map((n) => ({
+              id: n.id,
+              name: n.name,
+              error: n.banStatus?.connectionLimitsError ?? "",
+            }))
+        : [],
+    },
+  };
+}
+
+/**
+ * Replaces a cluster's connection limits, audits and publishes them. Off
+ * keeps the values; the defaults while off are stored as null.
+ */
+export async function setConnectionLimits(
+  db: Database,
+  input: ConnectionLimitsInput,
+  actor: Actor,
+): Promise<ClusterConnectionLimits> {
+  await db.transaction(async (tx) => {
+    const cluster = await findCluster(tx, input.clusterId, true);
+    const s = input.settings;
+    const ports = s.ports ? mergePortRanges(s.ports) : null;
+    const defaults =
+      !s.enabled &&
+      s.perIp === CONNECTION_LIMIT_DEFAULTS.perIp &&
+      s.newPerSecond === CONNECTION_LIMIT_DEFAULTS.newPerSecond &&
+      s.burst === CONNECTION_LIMIT_DEFAULTS.burst &&
+      ports === null;
+    const stored = defaults
+      ? null
+      : { enabled: s.enabled, perIp: s.perIp, newPerSecond: s.newPerSecond, burst: s.burst, ports };
+    if (isDeepStrictEqual(stored, cluster.connectionLimits ?? null)) return;
+    const before = connectionLimitsOf(cluster);
+    await tx
+      .update(schema.cluster)
+      .set({ connectionLimits: stored, updatedAt: new Date() })
+      .where(eq(schema.cluster.id, cluster.id));
+    const { row: revision } = await publishRevision(tx, {
+      clusterId: cluster.id,
+      reason: { code: "connection_limits_updated", params: {} },
+      actor,
+    });
+    await recordAudit(tx, actor, {
+      action: "cluster.connection_limits_update",
+      targetType: "cluster",
+      targetId: cluster.id,
+      targetName: cluster.name,
+      metadata: {
+        from: before,
+        to: connectionLimitsOf({ connectionLimits: stored }),
+        revision: revision.revision,
+      },
+    });
+  });
+  return getConnectionLimits(db, input.clusterId);
 }
