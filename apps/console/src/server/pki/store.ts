@@ -36,6 +36,7 @@ export async function loadOrCreateNodeCa(
     const ca = await CertificateAuthority.load(material);
     await tx.insert(schema.pkiAuthority).values({
       id: NODE_CA_ID,
+      kind: NODE_CA_ID,
       certificatePem: material.certificatePem,
       fingerprintSha256: sha256Fingerprint(ca.certificate),
       privateKeyEnvelope: JSON.stringify(

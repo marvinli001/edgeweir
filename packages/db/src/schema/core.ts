@@ -828,17 +828,32 @@ export const nodeMinuteStats = pgTable(
 );
 
 /** Internal certificate authorities: node-channel, origin-client and origin-ca. Keys are envelope-encrypted. */
-export const pkiAuthority = pgTable("pki_authority", {
-  id: text("id").primaryKey(),
-  certificatePem: text("certificate_pem").notNull(),
-  fingerprintSha256: text("fingerprint_sha256").notNull(),
-  /** JSON envelope produced by the server's master-key crypto. Never plaintext. */
-  privateKeyEnvelope: text("private_key_envelope").notNull(),
-  notAfter: timestamp("not_after", { withTimezone: true }).notNull(),
-  /** The Origin CA's current CRL (PEM), rebuilt on every revocation; "" for the others. */
-  crlPem: text("crl_pem").notNull().default(""),
-  createdAt: createdAt(),
-});
+export const pkiAuthority = pgTable(
+  "pki_authority",
+  {
+    /** The kind for the first generation, `<kind>-g<generation>` for later ones. */
+    id: text("id").primaryKey(),
+    /** node-channel | origin-client | origin-ca */
+    kind: text("kind").notNull().default(""),
+    /**
+     * active: signs new certificates; next: an origin client CA origins are
+     * told to trust before it becomes active; previous: the CA a rotation
+     * replaced, still trusted until the operator retires it (then deleted).
+     */
+    status: text("status").notNull().default("active"),
+    /** 1 for the first CA of its kind, one more for each rotation. */
+    generation: integer("generation").notNull().default(1),
+    certificatePem: text("certificate_pem").notNull(),
+    fingerprintSha256: text("fingerprint_sha256").notNull(),
+    /** JSON envelope produced by the server's master-key crypto. Never plaintext. */
+    privateKeyEnvelope: text("private_key_envelope").notNull(),
+    notAfter: timestamp("not_after", { withTimezone: true }).notNull(),
+    /** An Origin CA's current CRL (PEM), rebuilt on every revocation; "" for the others. */
+    crlPem: text("crl_pem").notNull().default(""),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("pki_authority_kind_status_idx").on(t.kind, t.status)],
+);
 
 export const auditLog = pgTable(
   "audit_log",
