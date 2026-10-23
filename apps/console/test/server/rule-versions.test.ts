@@ -4,6 +4,7 @@ import {
   DEMO_PASSWORD,
   RULE_VERSION_LIMIT,
   type RuleInput,
+  ruleInput,
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { eq, sql } from "drizzle-orm";
@@ -20,14 +21,15 @@ import {
   signIn,
 } from "./helpers";
 
-const rule = (name: string, extra: Partial<RuleInput> = {}): RuleInput => ({
-  name,
-  phase: "waf-custom",
-  expression: `http.host eq "${name}.test"`,
-  enabled: true,
-  action: { kind: "block" },
-  ...extra,
-});
+const rule = (name: string, extra: Record<string, unknown> = {}): RuleInput =>
+  ruleInput.parse({
+    name,
+    phase: "waf-custom",
+    expression: `http.host eq "${name}.test"`,
+    enabled: true,
+    action: { kind: "block" },
+    ...extra,
+  });
 const service = {
   actor: { type: "service_account" as const, id: "service-account-versions", name: "versions" },
 };

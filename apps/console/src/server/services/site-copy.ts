@@ -57,8 +57,6 @@ import { storeSiteWaf } from "./waf";
 type SiteRow = typeof schema.site.$inferSelect;
 interface CopyContext {
   masterKey: MasterKey;
-  /** Who copies: rule versions name them (ADR-0054). */
-  actor: Actor;
   /** Planning for a new site (cloneSite): settings that need a certificate are turned off. */
   clone?: boolean;
 }
@@ -76,10 +74,12 @@ interface Part<V> {
    * the target decides (no certificate). Absent: the value itself.
    */
   plan?(tx: Tx, target: SiteRow, value: V, ctx: CopyContext): Promise<V>;
-  write(tx: Tx, target: SiteRow, value: V, ctx: CopyContext): Promise<void>;
+  write(tx: Tx, target: SiteRow, value: V, ctx: WriteContext): Promise<void>;
   /** List parts: the number of items. */
   count?(value: V): number;
 }
+/** Who copies: rule versions name them (ADR-0054). */
+type WriteContext = CopyContext & { actor: Actor };
 const part = <V>(definition: Part<V>) => definition as Part<unknown>;
 
 /** JSON with sorted object keys: equal settings give equal text. */
@@ -717,7 +717,7 @@ async function applyParts(
   tx: Tx,
   siteId: string,
   values: Map<SiteCopyPart, unknown>,
-  ctx: CopyContext,
+  ctx: WriteContext,
 ): Promise<SiteCopyChange[]> {
   const changes: SiteCopyChange[] = [];
   for (const [name, value] of values) {
@@ -767,7 +767,7 @@ async function copyToTarget(
   source: Pick<SiteRow, "id" | "name">,
   targetId: string,
   values: Map<SiteCopyPart, unknown>,
-  ctx: CopyContext & { dryRun: boolean },
+  ctx: WriteContext & { dryRun: boolean },
 ): Promise<TargetOutcome> {
   let name = "";
   try {
