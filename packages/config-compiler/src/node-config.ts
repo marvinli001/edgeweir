@@ -103,6 +103,11 @@ function compileOriginCa(sites: Site[], input: CompileInput) {
   return create(OriginCaSchema, input.originCa);
 }
 
+function compileOriginCaPrevious(sites: Site[], input: CompileInput) {
+  if (!usesOriginCa(sites) || !input.originCaPrevious) return undefined;
+  return create(OriginCaSchema, input.originCaPrevious);
+}
+
 /** Compiles console models into a canonical, hashed NodeConfig for `revision`. */
 export function compileNodeConfig(input: CompileInput, revision: bigint): NodeConfig {
   if (input.sites.filter((site) => site.enabled).length > MAX_SITES_PER_CLUSTER)
@@ -157,6 +162,7 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
       : [],
     originClientCertificates: compileOriginClientCertificates(sites, input),
     originCa: compileOriginCa(sites, input),
+    originCaPrevious: compileOriginCaPrevious(sites, input),
     platformErrorPages: compilePlatformErrorPages(input.platformErrorPages),
     offlineHosts: compileOfflineHosts(input.offlineHosts),
     l4Apps: compileL4Apps(input.l4Apps),
@@ -184,7 +190,7 @@ export const siteBytes = (site: Site) => Buffer.from(toBinary(SiteSchema, site))
  * Computes the diff that turns `base` into `target`: sites are upserted or
  * removed by id, everything else (listeners, cache zones, certificates, the
  * origin allow list, platform error pages, offline hosts, layer-4
- * applications, origin client certificates and the Origin CA) is sent in full.
+ * applications, origin client certificates and the Origin CAs) is sent in full.
  */
 export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfigDiff {
   const baseSites = new Map(base.sites.map((s) => [s.id, siteBytes(s)]));
@@ -212,6 +218,7 @@ export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfig
     sessionTicketKeys: target.sessionTicketKeys,
     originClientCertificates: target.originClientCertificates,
     originCa: target.originCa,
+    originCaPrevious: target.originCaPrevious,
     upsertedSites: target.sites.filter((s) => baseSites.get(s.id) !== siteBytes(s)),
     removedSiteIds: base.sites
       .filter((s) => !targetIds.has(s.id))
@@ -252,6 +259,7 @@ export function applyNodeConfigDiff(base: NodeConfig, diff: NodeConfigDiff): Nod
       sessionTicketKeys: diff.sessionTicketKeys,
       originClientCertificates: diff.originClientCertificates,
       originCa: diff.originCa,
+      originCaPrevious: diff.originCaPrevious,
       sites,
     }),
   );

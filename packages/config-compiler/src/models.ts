@@ -697,6 +697,11 @@ export interface CompileInput {
   originClientCertificates?: CertificateRef[];
   /** The Origin CA and its CRL; compiled only when a served site trusts it. */
   originCa?: { certificatePem: string; crlPem: string };
+  /**
+   * The previous Origin CA and its CRL while the Origin CA is rotated:
+   * compiled along with originCa, which pools trusting it then trust too.
+   */
+  originCaPrevious?: { certificatePem: string; crlPem: string };
   httpChallenges?: HttpChallenge[];
   ipLists?: IpListModel[];
   platformRules?: RuleModel[];
