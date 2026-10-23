@@ -243,6 +243,8 @@ const deliverable = (now: Date) =>
 
 /** The node's open pull as a DebugLogsTask (leased), or null. */
 export async function pullDebugLogTask(app: AppContext, node: { id: string }) {
+  // Most pulls find none: only those that do open a transaction.
+  if (!(await hasDebugLogTasks(app.db, node.id))) return null;
   return app.db.transaction(async (tx) => {
     await expirePulls(tx, node.id);
     const now = new Date();
@@ -311,8 +313,10 @@ export async function uploadDebugLogs(
       truncated: e.truncated,
       event: FIELD_KEY.test(e.event) ? e.event : "",
     };
-    bytes += row.message.length + JSON.stringify(row.fields).length + 64;
-    if (bytes > NODE_DEBUG_LOG_LIMITS.bytes)
+    // The node keeps its own estimate under the limit; this one counts differently
+    // (JSON escaping), so it allows twice as much.
+    bytes += row.message.length + row.component.length + JSON.stringify(row.fields).length + 64;
+    if (bytes > 2 * NODE_DEBUG_LOG_LIMITS.bytes)
       throw new ConnectError("debug log upload too large", Code.InvalidArgument);
     entries.push(row);
   }
