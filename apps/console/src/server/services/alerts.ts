@@ -27,6 +27,7 @@ import {
 import type { Executor } from "./revisions";
 import { elevatedSites, raiseCcAlert } from "./security";
 import { findSite, shareSites } from "./sites";
+import { SmsRateLimitedError, SmsRejectedError } from "./sms";
 
 /** Notifications a sweep sends at most, and for how long it keeps starting new ones. */
 const DELIVERY_BATCH = 200;
@@ -170,6 +171,12 @@ export async function testAlertChannel(app: AppContext, id: string, actor: Actor
   } catch (error) {
     if (error instanceof SmtpNotConfiguredError)
       fail("ALERT_SMTP_NOT_CONFIGURED", "email channels need the SMTP settings");
+    if (error instanceof SmsRateLimitedError)
+      fail("ALERT_RATE_LIMITED", "the channel's send limit is reached", {
+        retryAt: error.retryAt.toISOString(),
+      });
+    if (error instanceof SmsRejectedError)
+      fail("ALERT_SMS_REJECTED", "the SMS provider refused the message", { code: error.code });
     fail("ALERT_SEND_FAILED", "notification test failed");
   }
   await recordAudit(app.db, actor, {
@@ -770,18 +777,39 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
           .set({ lastError: "" })
           .where(eq(schema.alertChannel.id, c.id));
       } catch (error) {
+        if (error instanceof SmsRateLimitedError) {
+          // Not an attempt: it waits for the channel's window. An alert that
+          // resolves meanwhile is cancelled above and never sent.
+          await app.db
+            .update(schema.alertDelivery)
+            .set({ nextAttemptAt: error.retryAt, lastError: "alert_rate_limited" })
+            .where(eq(schema.alertDelivery.id, delivery.id));
+          await app.db
+            .update(schema.alertChannel)
+            .set({ lastError: "alert_rate_limited" })
+            .where(eq(schema.alertChannel.id, c.id));
+          continue;
+        }
         const attempts = delivery.attempts + 1;
-        // Lower-case error codes the alerts page shows on the channel.
+        // Lower-case error codes the alerts page shows on the channel; an SMS
+        // refusal carries the provider's code.
         const lastError =
           error instanceof SmtpNotConfiguredError
             ? "alert_smtp_not_configured"
-            : "alert_send_failed";
+            : error instanceof SmsRejectedError
+              ? `alert_sms_rejected:${error.code}`
+              : "alert_send_failed";
+        // Provider frequency controls count by the hour or day.
+        const backoff =
+          error instanceof SmsRejectedError && error.reason === "limited"
+            ? 3600000
+            : Math.min(3600000, 60000 * 2 ** attempts);
         await app.db
           .update(schema.alertDelivery)
           .set({
             status: attempts >= 5 ? "failed" : "pending",
             attempts,
-            nextAttemptAt: new Date(now + Math.min(3600000, 60000 * 2 ** attempts)),
+            nextAttemptAt: new Date(now + backoff),
             lastError,
           })
           .where(eq(schema.alertDelivery.id, delivery.id));

@@ -43,6 +43,10 @@ export const errorDefs = {
   ALERT_CHANNEL_LIMIT: { status: 409, params: [] },
   ALERT_SEND_FAILED: { status: 502, params: [] },
   ALERT_SMTP_NOT_CONFIGURED: { status: 412, params: [] },
+  /** An SMS channel used up its sends of the hour or day; retryAt is when the next fits. */
+  ALERT_RATE_LIMITED: { status: 429, params: [] },
+  /** The SMS provider refused the message; code is the provider's error code. */
+  ALERT_SMS_REJECTED: { status: 502, params: ["code"] },
   ALERT_SUBSCRIPTION_NOT_FOUND: { status: 404, params: [] },
   SMTP_PASSWORD_REQUIRED: { status: 400, params: [] },
   SMTP_CA_INVALID: { status: 400, params: [] },
