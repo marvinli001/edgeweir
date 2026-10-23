@@ -659,8 +659,8 @@ export const retireOriginCa = (app: AppContext, ctx: { actor: Actor }) =>
 
 /**
  * Cancels a rotation while the new authority has issued no certificate
- * that is still valid (CA_ROTATION_IN_USE): it is deleted and the previous
- * one is active again.
+ * that is still valid (CA_ROTATION_IN_USE): it is deleted with the
+ * certificates it issued and the previous one is active again.
  */
 export const cancelOriginCaRotation = (app: AppContext, ctx: { actor: Actor }) =>
   originCaStep(app, ctx, "origin_ca_rotation_cancelled", async (tx, found) => {
@@ -669,6 +669,11 @@ export const cancelOriginCaRotation = (app: AppContext, ctx: { actor: Actor }) =
     const valid = await validCertificateCount(tx, found.active.id);
     if (valid)
       fail("CA_ROTATION_IN_USE", "the new Origin CA issued certificates", { count: valid });
+    // Its certificates are all revoked or expired, and the next rotation
+    // reuses its generation and id: they go with it.
+    await tx
+      .delete(schema.originCertificate)
+      .where(eq(schema.originCertificate.authorityId, found.active.id));
     await deleteAuthority(tx, found.active);
     await setStatus(tx, previous, "active");
     return authorityAudit(found.active, "origin_ca.rotation_cancel");

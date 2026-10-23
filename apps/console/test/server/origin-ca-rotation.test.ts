@@ -274,7 +274,13 @@ describe("rotating the origin authorities", async () => {
       expect(new X509Certificate(started.authority?.certificatePem ?? "").subject).toContain(
         "CN=Edgeweir Origin CA G3",
       );
+      // Revoked: no longer in use, so the rotation can still be cancelled.
+      const mistake = await admin.originCertificates.issue({ hostnames: ["g3.example.com"] });
+      expect(await code(admin.originCa.cancel())).toBe("CA_ROTATION_IN_USE");
+      await admin.originCertificates.revoke({ id: mistake.id });
       const ca = await admin.originCa.cancel();
+      // It goes with its authority: the next rotation's G3 starts without it.
+      expect((await admin.originCertificates.list()).map((c) => c.id)).not.toContain(mistake.id);
       expect(ca.authority?.fingerprint).toBe(active?.fingerprint);
       expect(ca.previous).toBeNull();
       expect((await latestRevision(ctx.db, clusterId))?.reasonCode).toBe(
