@@ -41,22 +41,29 @@ const KEY_TYPE_LABELS: Record<string, string> = {
   rsa4096: "RSA 4096",
 };
 
-/** An authority's certificate: fingerprint, validity and a download. */
+/** An authority's certificate: fingerprint, validity and a download, with the rotation's actions. */
 function AuthorityCard({
   title,
   authority,
   file,
   testId,
+  index = 0,
+  actions,
+  children,
 }: {
   title: string;
   authority: CertificateAuthorityDto;
   file: string;
   testId: string;
+  index?: number;
+  actions?: React.ReactNode;
+  children?: React.ReactNode;
 }) {
   return (
-    <Card className="animate-enter" data-testid={testId}>
+    <Card className="animate-enter" style={enterDelay(index)} data-testid={testId}>
       <CardHeader className="flex flex-row flex-wrap items-center gap-3">
         <CardTitle className="flex-1">{title}</CardTitle>
+        {actions}
         <Button
           size="sm"
           variant="outline"
@@ -74,8 +81,51 @@ function AuthorityCard({
         <p className="text-sm text-muted-foreground">
           {m.origin_ca_valid_until({ date: formatDateTime(authority.notAfter) })}
         </p>
+        {children}
       </CardContent>
     </Card>
+  );
+}
+
+// A rotation step publishes the clusters or changes what they present.
+const STEP_META = { invalidates: "all" } as const;
+
+/** A rotation step behind a confirmation, whose failure stays in the dialog. */
+function StepButton({
+  label,
+  title,
+  note,
+  destructive = false,
+  disabled = false,
+  run,
+  testId,
+}: {
+  label: string;
+  title: string;
+  note?: string;
+  destructive?: boolean;
+  disabled?: boolean;
+  run: () => Promise<unknown>;
+  testId: string;
+}) {
+  return (
+    <ConfirmDialog
+      title={title}
+      {...(note ? { note } : {})}
+      destructive={destructive}
+      confirmLabel={label}
+      trigger={
+        <Button
+          size="sm"
+          variant={destructive ? "destructive" : "outline"}
+          disabled={disabled}
+          data-testid={testId}
+        >
+          {label}
+        </Button>
+      }
+      onConfirm={run}
+    />
   );
 }
 
@@ -116,10 +166,13 @@ function CreateAuthority({
 export function OriginCaPanel({ issue }: { issue: DialogProps & { key: number } }) {
   const ca = useQuery(orpc.originCa.get.queryOptions());
   const create = useMutation({ ...orpc.originCa.create.mutationOptions(), meta: CREATE_META });
+  const rotate = useMutation({ ...orpc.originCa.rotate.mutationOptions(), meta: STEP_META });
+  const retire = useMutation({ ...orpc.originCa.retire.mutationOptions(), meta: STEP_META });
+  const cancel = useMutation({ ...orpc.originCa.cancel.mutationOptions(), meta: STEP_META });
   return (
     <div className="flex flex-col gap-6">
       <QueryView query={ca}>
-        {({ authority }) =>
+        {({ authority, previous, previousCertificates }) =>
           authority ? (
             <>
               <AuthorityCard
@@ -127,7 +180,54 @@ export function OriginCaPanel({ issue }: { issue: DialogProps & { key: number } 
                 authority={authority}
                 file="origin-ca.pem"
                 testId="origin-ca"
+                actions={
+                  previous ? null : (
+                    <StepButton
+                      label={m.origin_ca_rotate()}
+                      title={m.origin_ca_rotate_confirm()}
+                      note={m.origin_ca_rotate_note()}
+                      run={() => rotate.mutateAsync(undefined)}
+                      testId="origin-ca-rotate"
+                    />
+                  )
+                }
               />
+              {previous ? (
+                <AuthorityCard
+                  title={m.origin_ca_previous_title()}
+                  authority={previous}
+                  file="origin-ca-previous.pem"
+                  testId="origin-ca-previous"
+                  index={1}
+                  actions={
+                    <>
+                      <StepButton
+                        label={m.origin_ca_rotation_cancel()}
+                        title={m.origin_ca_rotation_cancel_confirm()}
+                        run={() => cancel.mutateAsync(undefined)}
+                        testId="origin-ca-rotation-cancel"
+                      />
+                      <StepButton
+                        label={m.origin_ca_retire()}
+                        title={m.origin_ca_retire_confirm()}
+                        {...(previousCertificates
+                          ? { note: m.origin_ca_retire_note({ count: previousCertificates }) }
+                          : {})}
+                        destructive
+                        run={() => retire.mutateAsync(undefined)}
+                        testId="origin-ca-retire"
+                      />
+                    </>
+                  }
+                >
+                  <p
+                    className="text-sm text-muted-foreground"
+                    data-testid="origin-ca-previous-certificates"
+                  >
+                    {m.origin_ca_previous_certificates({ count: previousCertificates })}
+                  </p>
+                </AuthorityCard>
+              ) : null}
               <OriginCertificates onIssue={() => issue.onOpenChange(true)} />
             </>
           ) : (
@@ -181,6 +281,7 @@ function OriginCertificates({ onIssue }: { onIssue: () => void }) {
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="secondary">{KEY_TYPE_LABELS[cert.keyType] ?? cert.keyType}</Badge>
                   {cert.source === "csr" ? <Badge variant="outline">CSR</Badge> : null}
+                  <AuthorityBadge authority={cert.authority} />
                   {cert.revokedAt ? (
                     <Badge variant="destructive" data-testid="origin-cert-revoked">
                       {m.origin_cert_revoked()}
@@ -225,6 +326,16 @@ function OriginCertificates({ onIssue }: { onIssue: () => void }) {
         </ul>
       )}
     </QueryView>
+  );
+}
+
+/** Marks a certificate a rotation's previous authority, or a retired one, issued. */
+function AuthorityBadge({ authority }: { authority: "active" | "previous" | "retired" }) {
+  if (authority === "active") return null;
+  return (
+    <Badge variant="outline" data-testid={`cert-authority-${authority}`}>
+      {authority === "previous" ? m.origin_cert_previous_ca() : m.origin_cert_retired_ca()}
+    </Badge>
   );
 }
 
@@ -361,7 +472,7 @@ function IssueDialog({ open, onOpenChange }: DialogProps) {
 
 /**
  * The origin client CA, which origins verifying clients trust, and the certificate each cluster's
- * nodes present to them.
+ * nodes present to them; during a rotation the next or previous authority beside it.
  */
 export function OriginClientPanel() {
   const ca = useQuery(orpc.originClientCa.get.queryOptions());
@@ -369,9 +480,16 @@ export function OriginClientPanel() {
     ...orpc.originClientCa.create.mutationOptions(),
     meta: CREATE_META,
   });
+  const rotate = useMutation({ ...orpc.originClientCa.rotate.mutationOptions(), meta: STEP_META });
+  const activate = useMutation({
+    ...orpc.originClientCa.activate.mutationOptions(),
+    meta: STEP_META,
+  });
+  const retire = useMutation({ ...orpc.originClientCa.retire.mutationOptions(), meta: STEP_META });
+  const cancel = useMutation({ ...orpc.originClientCa.cancel.mutationOptions(), meta: STEP_META });
   return (
     <QueryView query={ca}>
-      {({ authority, certificates }) =>
+      {({ authority, next, previous, trustBundlePem, certificates, pendingClusters }) =>
         authority ? (
           <div className="flex flex-col gap-6">
             <AuthorityCard
@@ -379,8 +497,84 @@ export function OriginClientPanel() {
               authority={authority}
               file="origin-client-ca.pem"
               testId="origin-client-ca"
+              actions={
+                next || previous ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => downloadText("origin-client-ca-bundle.pem", trustBundlePem)}
+                    data-testid="origin-client-ca-bundle"
+                  >
+                    {m.origin_ca_trust_bundle()}
+                  </Button>
+                ) : (
+                  <StepButton
+                    label={m.origin_ca_rotate()}
+                    title={m.origin_client_ca_rotate_confirm()}
+                    note={m.origin_client_ca_rotate_note()}
+                    run={() => rotate.mutateAsync(undefined)}
+                    testId="origin-client-ca-rotate"
+                  />
+                )
+              }
             />
-            <Card className="animate-enter" style={enterDelay(1)}>
+            {next ? (
+              <AuthorityCard
+                title={m.origin_client_ca_next_title()}
+                authority={next}
+                file="origin-client-ca-next.pem"
+                testId="origin-client-ca-next"
+                index={1}
+                actions={
+                  <>
+                    <StepButton
+                      label={m.origin_ca_rotation_cancel()}
+                      title={m.origin_ca_rotation_cancel_confirm()}
+                      run={() => cancel.mutateAsync(undefined)}
+                      testId="origin-client-ca-rotation-cancel"
+                    />
+                    <StepButton
+                      label={m.origin_client_ca_activate()}
+                      title={m.origin_client_ca_activate_confirm()}
+                      note={m.origin_client_ca_activate_note()}
+                      run={() => activate.mutateAsync(undefined)}
+                      testId="origin-client-ca-activate"
+                    />
+                  </>
+                }
+              />
+            ) : null}
+            {previous ? (
+              <AuthorityCard
+                title={m.origin_client_ca_previous_title()}
+                authority={previous}
+                file="origin-client-ca-previous.pem"
+                testId="origin-client-ca-previous"
+                index={1}
+                actions={
+                  <StepButton
+                    label={m.origin_ca_retire()}
+                    title={m.origin_client_ca_retire_confirm()}
+                    destructive
+                    disabled={pendingClusters.length > 0}
+                    run={() => retire.mutateAsync(undefined)}
+                    testId="origin-client-ca-retire"
+                  />
+                }
+              >
+                {pendingClusters.length ? (
+                  <p
+                    className="text-sm text-muted-foreground"
+                    data-testid="origin-client-ca-pending"
+                  >
+                    {m.origin_client_ca_pending({
+                      clusters: pendingClusters.map((c) => c.clusterName).join(", "),
+                    })}
+                  </p>
+                ) : null}
+              </AuthorityCard>
+            ) : null}
+            <Card className="animate-enter" style={enterDelay(next || previous ? 2 : 1)}>
               <CardHeader>
                 <CardTitle>{m.origin_client_certificates_title()}</CardTitle>
               </CardHeader>
@@ -396,6 +590,7 @@ export function OriginClientPanel() {
                         style={enterDelay(index)}
                       >
                         <span className="min-w-40 flex-1 font-medium">{cert.clusterName}</span>
+                        <AuthorityBadge authority={cert.authority} />
                         <span className="text-sm text-muted-foreground">
                           {m.origin_ca_valid_until({ date: formatDateTime(cert.notAfter) })}
                         </span>
