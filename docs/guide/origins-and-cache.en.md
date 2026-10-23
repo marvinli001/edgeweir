@@ -269,7 +269,7 @@ When an origin needs the visitor's address but does not read `X-Real-IP` or `X-F
 | --- | --- |
 | Addresses | Source address and port of the visitor's connection (per the cluster's [Client IP](../deploy/nodes.en.md#client-ip), the same as `X-Real-IP`); destination is the node address and port the visitor connected to (with PROXY protocol in front of the node, the destination in that header). Without IP addresses `PROXY UNKNOWN` (v1) or the LOCAL command (v2) is sent |
 | When | Once per new origin connection, before the TLS handshake and the request; HTTP/1.1, HTTP/2, gRPC, and WebSocket all send it |
-| Connection reuse | An origin connection is reused only by requests on the same visitor connection; more visitor connections mean more origin connections |
+| Connection reuse | An origin connection is reused only by requests on the same visitor connection, and each nginx worker has its own pool: requests of one visitor connection may be handled by different workers, each opening at most one origin connection for it. More visitor connections mean more origin connections |
 | Write failure | Counted as a connection failure (`connect_failed`) and retried on another origin per the retry rules; origin quality counts as usual |
 | Active health check | Probe connections send `PROXY UNKNOWN` (v1) or the LOCAL command (v2) |
 | Per origin | Each origin has its own setting; origins of one group may differ |

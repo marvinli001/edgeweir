@@ -8,9 +8,13 @@
 // port 80.
 //   a. both nodes report origin-proxy-protocol-v1 and active-health-grpc-v1
 //   b. PROXY protocol v2, then v1, through both nodes: the origin sees the
-//      client's address and port and the node's address and port 80; two
-//      requests of one client connection share an origin connection, a
-//      second client connection gets its own
+//      client's address and port and the node's address and port 80.
+//      Origin connections are pooled per client connection in each nginx
+//      worker (the edge reaches the origin layer over a new unix socket
+//      connection per request, so any worker may take it): 2 x workers + 2
+//      sequential requests of one client connection use at most one origin
+//      connection per worker, and a second client connection never gets
+//      one of them
 //   c. without PROXY protocol the origin refuses the connection: 502
 //   d. HTTP/2 and gRPC over PROXY protocol v2 (8083): the patched upstream
 //      writes the header before the h2c preface
@@ -97,7 +101,7 @@ async function nodeIn(service, script, args) {
 // [{ status, body, local }] with the client's address and port.
 const HTTP = `
 const http = require("node:http");
-const [address, host] = process.argv.slice(1);
+const [address, host, n] = process.argv.slice(1);
 function get(agent) {
   return new Promise((resolve) => {
     const req = http.get({ host: address, port: 80, path: "/", headers: { host }, agent }, (res) => {
@@ -112,12 +116,30 @@ function get(agent) {
 (async () => {
   const one = new http.Agent({ keepAlive: true, maxSockets: 1 });
   const two = new http.Agent({ keepAlive: true, maxSockets: 1 });
-  const out = [await get(one), await get(one), await get(two)];
+  const first = [];
+  for (let i = 0; i < Number(n); i++) first.push(await get(one));
+  const second = await get(two);
   one.destroy();
   two.destroy();
-  process.stdout.write(JSON.stringify(out));
+  process.stdout.write(JSON.stringify({ first, second }));
 })();`;
-const requests = async (address) => JSON.parse(await nodeIn("client-a", HTTP, [address, DOMAIN]));
+/** n requests on one client connection, then one on a second: { first, second }. */
+const requests = async (address, n = 1) =>
+  JSON.parse(await nodeIn("client-a", HTTP, [address, DOMAIN, String(n)]));
+
+/** The number of a node's nginx workers ("nginx: worker process", not shutting down). */
+const workers = async (service) =>
+  Number(
+    (
+      await run([
+        "exec",
+        await containerId(service),
+        "sh",
+        "-c",
+        'n=0; for f in /proc/[0-9]*/cmdline; do [ "$(tr -d "\\0" < "$f" 2>/dev/null)" = "nginx: worker process" ] && n=$((n+1)); done; echo $n',
+      ])
+    ).trim(),
+  );
 
 // GET /proto over HTTP/1.1: "<status> <body>".
 const PROTO = `
@@ -220,14 +242,22 @@ const client = await containerIp("client-a");
 async function seen(v) {
   const lines = [];
   for (const [service, address] of Object.entries(addresses)) {
-    const r = await waitFor(
+    const n = await workers(service);
+    assert.ok(n > 0, `${service}: no nginx workers`);
+    const total = 2 * n + 2;
+    const out = await waitFor(
       `${service} serves ${DOMAIN} with PROXY protocol v${v}`,
       async () => {
-        const out = await requests(address);
-        return out.every((x) => x.status === 200 && x.body.startsWith(`pp=${v} `)) ? out : null;
+        const o = await requests(address, total);
+        return [...o.first, o.second].every(
+          (x) => x.status === 200 && x.body.startsWith(`pp=${v} `),
+        )
+          ? o
+          : null;
       },
       60,
     );
+    const r = [...out.first, out.second];
     const parsed = r.map((x) => Object.fromEntries(x.body.split(" ").map((kv) => kv.split("="))));
     for (const [i, p] of parsed.entries()) {
       assert.equal(
@@ -238,27 +268,34 @@ async function seen(v) {
       assert.ok(p.src.startsWith(`${client}:`), `${service}: ${p.src} is not client-a`);
       assert.equal(p.dst, `${address}:80`, `${service}: destination ${p.dst}`);
     }
-    assert.equal(
-      parsed[0].conn,
-      parsed[1].conn,
-      `${service}: one client connection, two origin connections: ${JSON.stringify(parsed)}`,
+    const first = parsed.slice(0, total);
+    const last = parsed[total];
+    const conns = new Set(first.map((p) => p.conn));
+    assert.ok(
+      conns.size <= n,
+      `${service}: ${total} requests of one client connection used ${conns.size} origin connections, more than the ${n} workers: ${JSON.stringify(first)}`,
     );
-    assert.deepEqual(
-      [parsed[0].req, parsed[1].req],
-      ["1", "2"],
-      `${service}: ${JSON.stringify(parsed)}`,
+    // Each origin connection served its requests in order: reused, not reopened.
+    for (const conn of conns) {
+      const reqs = first.filter((p) => p.conn === conn).map((p) => Number(p.req));
+      assert.deepEqual(
+        reqs,
+        reqs.map((_, i) => i + 1),
+        `${service}: origin connection ${conn}: ${JSON.stringify(first)}`,
+      );
+    }
+    assert.ok(
+      !conns.has(last.conn) && last.req === "1",
+      `${service}: a second client connection got origin connection ${last.conn} (req ${last.req}) of the first: ${JSON.stringify(parsed)}`,
     );
-    assert.notEqual(
-      parsed[2].conn,
-      parsed[0].conn,
-      `${service}: a second client connection shared the origin connection`,
+    lines.push(
+      `${service}: ${r[0].body}; ${total} requests on ${conns.size} origin connections (${n} workers)`,
     );
-    lines.push(`${service}: ${r[0].body}`);
   }
   return lines;
 }
 pass(
-  `PROXY protocol v2 through both nodes, one origin connection per client connection (${(await seen(2)).join("; ")})`,
+  `PROXY protocol v2 through both nodes, origin connections pooled per client connection and worker (${(await seen(2)).join("; ")})`,
 );
 
 await a("PATCH", `/sites/${site.id}`, { origins: pp(1) });
@@ -269,7 +306,9 @@ pass(`PROXY protocol v1 through both nodes (${(await seen(1)).join("; ")})`);
 await a("PATCH", `/sites/${site.id}`, { origins: pp(0) });
 await synced("both nodes apply the origin without PROXY protocol");
 for (const [service, address] of Object.entries(addresses)) {
-  const [r] = await requests(address);
+  const {
+    first: [r],
+  } = await requests(address);
   assert.equal(r.status, 502, `${service} without PROXY protocol: ${JSON.stringify(r)}`);
 }
 pass("without PROXY protocol the origin closes the connection: 502 on both nodes");
