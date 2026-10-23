@@ -32,6 +32,12 @@
 //      Permissions-Policy; no Server and no X-Powered-By
 //   i. IP check: client-a's address on g13-lists (allowed by the site allow
 //      list), client-b's (geo applies, nothing decides earlier)
+//   j. encoded path exemptions on g13-enc (user agents deny curl under
+//      /files/private/): without one /files/a%2Fb is in every scope (curl
+//      403) and never cached; with /files/ allowing %2F it is out of the
+//      scope, reaches the origin as sent and is cached apart from /files/a/b,
+//      while /files/private%2Fkey (one reading in the scope), ..%2F, ";" and
+//      paths outside the prefix still get 403
 // `node scripts/e2e-g13.mjs --cleanup` removes its sites and IP list, and
 // those apps/console/e2e/g13.spec.ts leaves (g13-ui-*, g13_ui_*).
 import assert from "node:assert/strict";
@@ -51,6 +57,7 @@ const HOST = {
   cors: "cors.g13.test",
   ws: "ws.g13.test",
   sec: "sec.g13.test",
+  enc: "enc.g13.test",
 };
 const SITES = Object.fromEntries(Object.keys(HOST).map((k) => [k, `g13-${k}`]));
 const LIST = "g13_clients";
@@ -524,6 +531,58 @@ try {
   assert.deepEqual(checkB.lists, []);
   pass(
     `i. IP check: ${addressA} allowed by g13-lists' site allow list; ${addressB} not decided by lists or bans`,
+  );
+
+  // ---------------------------------------------------------------- j
+  await everyNode("nodes report encoded-path-exemptions-v1", (n) =>
+    n.supportedFeatures.includes("encoded-path-exemptions-v1"),
+  );
+  await access(sites.enc.id, {
+    userAgents: {
+      rules: [{ pattern: "*curl*", action: "deny" }],
+      pathPrefixes: ["/files/private/"],
+    },
+  });
+  await synced("g13-enc denying curl under /files/private/");
+  const curl = (path) => ({ host: HOST.enc, path, headers: { "user-agent": "curl/8.9" } });
+  await expectBoth(curl("/files/a%2Fb"), 403, "ua-denied");
+  for (const target of NODES) {
+    const [, again] = await requests([
+      { target, host: HOST.enc, path: "/files/n%2Fo" },
+      { target, host: HOST.enc, path: "/files/n%2Fo" },
+    ]);
+    assert.notEqual(
+      again.headers["x-cache"],
+      "HIT",
+      `${target} ambiguous: ${again.headers["x-cache"]}`,
+    );
+  }
+  await access(sites.enc.id, {
+    encodedPaths: { exemptions: [{ prefix: "/files/", encodedSlash: true, semicolon: false }] },
+  });
+  await synced("g13-enc letting %2F through under /files/");
+  await expectBoth(curl("/files/a%2Fb"), 200);
+  await expectBoth(curl("/files/private%2Fkey"), 403, "ua-denied");
+  await expectBoth(curl("/files/x/..%2Fprivate/key"), 403, "ua-denied");
+  await expectBoth(curl("/files/a;b"), 403, "ua-denied");
+  await expectBoth(curl("/other/a%2Fb"), 403, "ua-denied");
+  await expectBoth(curl("/FILES/a%2Fb"), 403, "ua-denied");
+  for (const target of NODES) {
+    const [first, second, plain] = await requests([
+      { target, host: HOST.enc, path: "/files/k%2Fv.txt" },
+      { target, host: HOST.enc, path: "/files/k%2Fv.txt" },
+      { target, host: HOST.enc, path: "/files/k/v.txt" },
+    ]);
+    assert.ok(first.body.includes("GET /files/k%2Fv.txt "), `${target} origin saw: ${first.body}`);
+    assert.deepEqual(
+      [first.headers["x-cache"], second.headers["x-cache"], plain.headers["x-cache"]],
+      ["MISS", "HIT", "MISS"],
+      `${target} cache`,
+    );
+    assert.ok(plain.body.includes("GET /files/k/v.txt "), `${target} origin saw: ${plain.body}`);
+  }
+  pass(
+    "j. g13-enc: without an exemption /files/a%2Fb is in the curl scope of /files/private/ (403) and never cached; with /files/ allowing %2F it gets 200, reaches the origin as sent and is cached apart from /files/a/b, while /files/private%2Fkey, ..%2F, ; and paths outside the prefix still get 403 on both nodes",
   );
 
   finished = true;
