@@ -8,6 +8,11 @@
 //      Lua warning is in the API (source lua, level warn) with the request
 //      context and the query string removed; the secrets are nowhere in the
 //      API's answers or in node_log_entry
+//   d. debug logs (debug-logs-v1): a pull of the node's debug log buffer
+//      succeeds within 60 s with the agent's debug records (status reported)
+//      and the Lua warning of b without its query string; a pull filtered to
+//      a component no record has succeeds empty; the secrets are nowhere in
+//      the API's answers or in node_debug_log; the pull is audited
 //   c. retention 1 day and 1,000 entries per node: backdated rows and rows
 //      over the limit, inserted into the database, are deleted by the prune
 //      the console runs at its start (the console restarts); the newest stay;
@@ -190,6 +195,67 @@ pass("no secret in the API or the database; the filters find the warning");
 await writeFile(
   STATE,
   JSON.stringify({ nodeId: node.id, clusterId: node.clusterId, siteId: site.id, secret: SECRET }),
+);
+
+// ------------------------------------------------------------- d. debug logs
+assert.ok(
+  (await admin.ok("GET", `/nodes/${node.id}`)).supportedFeatures.includes("debug-logs-v1"),
+  "the node reports debug-logs-v1",
+);
+const pullAndWait = async (body) => {
+  const pull = await admin.ok("POST", `/nodes/${node.id}/debug-logs`, body);
+  assert.equal(pull.state, "pending");
+  return waitFor(
+    "the debug log pull",
+    async () => {
+      const got = await admin.ok("GET", `/nodes/${node.id}/debug-logs/${pull.id}`);
+      return got.state === "succeeded" || got.state === "failed" ? got : null;
+    },
+    60,
+  );
+};
+const pulledAt = Date.now();
+const debug = await pullAndWait({ from: new Date(started - 60_000).toISOString() });
+assert.equal(
+  debug.state,
+  "succeeded",
+  `pull: ${debug.errorCode} ${JSON.stringify(debug.errorParams)}`,
+);
+assert.equal(debug.entryCount, debug.entries.length);
+assert.equal(debug.supervisorMissing, false);
+assert.ok(
+  debug.entries.some(
+    (e) => e.level === "debug" && e.source === "agent" && e.message === "status reported",
+  ),
+  "the agent's debug records",
+);
+const debugWarning = debug.entries.find(
+  (e) => e.source === "lua" && e.message.includes(`of site ${site.id} marked down`),
+);
+assert.ok(debugWarning, "the Lua warning in the debug logs");
+assert.match(debugWarning.fields.request ?? "", /^GET \/probe\/\d\?\[redacted\] HTTP\/1\.1$/);
+const debugText =
+  JSON.stringify(await admin.ok("GET", `/nodes/${node.id}/debug-logs`)) + JSON.stringify(debug);
+assert.ok(
+  !debugText.includes(SECRET) && !debugText.includes(SIGNATURE),
+  "secret in the debug logs",
+);
+assert.equal(
+  await psql(
+    `select count(*) from node_debug_log where entries::text like '%${SECRET}%' or entries::text like '%${SIGNATURE}%'`,
+  ),
+  "0",
+  "secrets stored in node_debug_log",
+);
+const empty = await pullAndWait({ components: ["no-such-component"] });
+assert.equal(empty.state, "succeeded");
+assert.equal(empty.entryCount, 0);
+assert.ok(
+  Number(await psql(`select count(*) from audit_log where action = 'node.debug_logs_pull'`)) >= 2,
+  "debug log pulls audited",
+);
+pass(
+  `debug logs pulled in ${((Date.now() - pulledAt) / 1000).toFixed(1)} s: ${debug.entryCount} entries, no secrets`,
 );
 
 // ---------------------------------------------------------------- c. retention
