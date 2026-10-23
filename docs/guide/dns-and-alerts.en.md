@@ -13,7 +13,7 @@ DNS steering records (third-party DNS providers bound per cluster), and alert ch
 | Resolution line | A provider line that answers differently by carrier or region: default, China Telecom, China Unicom, China Mobile, education network, overseas. |
 | Backup node group | A node group that answers, in order, while a line's own node group has too few healthy addresses. |
 | DNS revision | A snapshot of a cluster's DNS binding and its records, separate from node configuration revisions. |
-| Alert channel | A notification target: email, webhook, DingTalk, WeCom, or Telegram. |
+| Alert channel | A notification target: email, webhook, DingTalk, WeCom, Telegram, Alibaba Cloud SMS, or Tencent Cloud SMS. |
 | Alert subscription | Sends some alert kinds of a set of sites (or all sites) to one channel; one per channel. |
 
 ## Configure DNS steering
@@ -340,6 +340,8 @@ Email channels use the server in the **SMTP** card, see [SMTP](#smtp).
 | DingTalk | Webhook URL, Signing secret (optional) | Host must be `oapi.dingtalk.com`; with a signing secret, timestamp and HMAC-SHA256 signature are added |
 | WeCom | Webhook URL | Host must be `qyapi.weixin.qq.com` |
 | Telegram | Bot token, Chat ID | Calls the Bot API `sendMessage` with link previews disabled |
+| Alibaba Cloud SMS | AccessKey ID, AccessKey Secret, Signature name, Template code, Phone numbers, Variable length limit (default 35), Sends per hour / day (default 10 / 50) | Calls `SendSms` on `dysmsapi.aliyuncs.com` (2017-05-25, signature V3 ACS3-HMAC-SHA256) |
+| Tencent Cloud SMS | Region (Guangzhou, Beijing, Nanjing), SecretId, SecretKey, SDK AppID, Signature name, Template ID, Phone numbers, Variable length limit (default 6), Sends per hour / day (default 10 / 50) | Calls `SendSms` on `sms.tencentcloudapi.com` (2021-01-11, TC3-HMAC-SHA256 signature) |
 
 | Switch | Default | Effect |
 | --- | --- | --- |
@@ -348,6 +350,30 @@ Email channels use the server in the **SMTP** card, see [SMTP](#smtp).
 Channels without this switch receive only the site alerts subscribed to them, see [Subscribe to alerts](#subscribe-to-alerts).
 
 At most 32 channels. When editing a channel, turn on **Replace channel credentials** to re-enter the type and fields; otherwise the stored credentials are kept. A disabled channel sends no notifications and cannot be chosen for new subscriptions.
+
+### SMS channels
+
+An SMS carries three template variables and no link or time. Apply for a signature and a notification template in the provider's console first; the template uses the variables below:
+
+| Variable | Alibaba Cloud | Tencent Cloud | Content |
+| --- | --- | --- | --- |
+| Object | `${site}` | `{1}` | The site name; the cluster name for cluster alerts, the node name for node alerts, `Edgeweir` for tests |
+| Alert | `${alert}` | `{2}` | The alert kind, such as **Node offline**; usage alerts add the metric |
+| Status | `${status}` | `{3}` | **Active** or **Recovered** |
+
+Template examples: Alibaba Cloud `Edgeweir alert: ${site} ${alert}, ${status}`; Tencent Cloud `Edgeweir alert: {1} {2}, {3}`. A Tencent Cloud template must have exactly these three variables.
+
+| Item | Behavior |
+| --- | --- |
+| Phone numbers | 1–20, separated by commas or spaces; E.164 (`+8613800000000`), mainland China numbers may leave out `+86`; Tencent Cloud wants the numbers of one channel all domestic or all international |
+| Variable length | Each variable is cut to **Variable length limit** characters; link prefixes, brackets, control characters and emoji are removed. Alibaba Cloud notification template variables take at most 35 characters; Tencent Cloud depends on the account (6 by default for accounts opened after 2024-01-25), see the provider's console |
+| Names that look like links | When the provider refuses a variable as a link (Alibaba Cloud `isv.PARAM_NOT_SUPPORT_URL`, Tencent Cloud `InvalidParameterValue.ProhibitedUseUrlInTemplateParameter`), the object is sent once more with its `.` replaced by spaces |
+| Send rate | Each channel counts sends over a sliding hour and 24 hours, **Send test** included. At the limit, **Send test** reports **Send limit reached**; alerts wait until the window has room, without using one of the 5 attempts, and an alert that recovers meanwhile is not sent |
+| Provider rate limits | Alibaba Cloud `isv.BUSINESS_LIMIT_CONTROL` and similar, Tencent Cloud `LimitExceeded.*`, use an attempt and retry after an hour |
+| Partial success | On Tencent Cloud, any number answered `Ok` counts as sent; nothing is sent again |
+| Failures | The channel row and **Send test** show **SMS provider refused** with the provider's error code, such as `isv.SMS_TEMPLATE_ILLEGAL` or `AuthFailure.SignatureFailure` |
+
+AccessKey Secret and SecretKey are encrypted like other channel credentials and never returned. Use a RAM / CAM sub-account key that can only send SMS.
 
 ### Webhook payload
 
@@ -439,10 +465,10 @@ Deleting a cluster resolves its cluster alerts that are still firing.
 | Batches | Checked every minute; at most 200 notifications per check, and deliveries that would start after 40 seconds wait for the next minute |
 | Duplicates | A lost receipt can cause duplicate notifications; webhook receivers deduplicate by event ID |
 | Checks before delivery | Every delivery rechecks that the channel is enabled, that the event is still the condition's current state and less than 24 hours old, and that the subscription is enabled and still covers the site and the alert kind (except for channels with **Receive every alert**) |
-| Outbound policy | Resolves and pins the target IP; refuses special-purpose addresses; webhook-style targets do not follow redirects; internal webhooks or SMTP need their network in `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
+| Outbound policy | Resolves and pins the target IP; refuses special-purpose addresses; webhook-style targets and SMS APIs do not follow redirects; internal webhooks or SMTP need their network in `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
 | Timeouts and sizes | 10 seconds per delivery; request body up to 32 KiB, response body up to 64 KiB |
 | Retention | Alert events are kept for 90 days |
-| Sensitive fields | Channel APIs and failure records never return passwords, bot tokens, webhook secrets, or raw provider errors |
+| Sensitive fields | Channel APIs and failure records never return passwords, bot tokens, webhook secrets, SMS keys, or raw provider errors; SMS channels record only the provider's error code |
 
 ## Limits
 
