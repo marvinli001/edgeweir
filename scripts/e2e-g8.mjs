@@ -29,12 +29,14 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
+import { ensureNodeImage } from "./e2e-cache.mjs";
 import { actor, execute, pass, stack, waitFor } from "./e2e-lib.mjs";
 
 const nodeContext = process.env.EDGEWEIR_NODE_CONTEXT ?? "../edgeweir-node";
 /** An edge node from before G8: rules-v2 but no rules-v3. */
 const OLD_NODE_IMAGE = process.env.E2E_PRE_G8_IMAGE ?? "edgeweir-node:pre-g8";
-/** Last edgeweir-node commit before G8 (proto v0.21.0); builds OLD_NODE_IMAGE when it is missing. */
+/** Last edgeweir-node commit before G8 (proto v0.21.0); builds OLD_NODE_IMAGE when it is missing
+ * (or loads it from the per-commit cache of scripts/e2e-cache.mjs). */
 const OLD_NODE_COMMIT = process.env.E2E_PRE_G8_COMMIT ?? "7e1338f";
 const { run, containerId, nodeIn } = stack({
   profiles: ["upgrades"],
@@ -389,23 +391,9 @@ try {
   pass(`${HOST_BENCH} (header value expressions, cached) for BENCH_SCENARIO=headers`);
 
   // -------------------------------------------------------------- e. a node without rules-v3
-  try {
-    await run(["image", "inspect", OLD_NODE_IMAGE]);
-  } catch {
-    console.log(`building ${OLD_NODE_IMAGE} from edgeweir-node ${OLD_NODE_COMMIT}`);
-    await execute(
-      "sh",
-      [
-        "-c",
-        'git -C "$1" archive "$2" | docker build -q -t "$3" -',
-        "sh",
-        nodeContext,
-        OLD_NODE_COMMIT,
-        OLD_NODE_IMAGE,
-      ],
-      { maxBuffer: 16 * 1024 * 1024 },
-    );
-  }
+  console.log(
+    `${OLD_NODE_IMAGE}: ${await ensureNodeImage(OLD_NODE_IMAGE, OLD_NODE_COMMIT, nodeContext)}`,
+  );
   const network = Object.keys(
     JSON.parse(await run(["inspect", await containerId("node")]))[0].NetworkSettings.Networks,
   ).find((name) => name.endsWith("_default"));

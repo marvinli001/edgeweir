@@ -38,6 +38,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import http from "node:http";
 import zlib from "node:zlib";
+import { ensureNodeImage } from "./e2e-cache.mjs";
 import { actor, execute, pass, sleep, stack, waitFor } from "./e2e-lib.mjs";
 
 const edgePort = Number(process.env.E2E_NODE_PORT ?? 18080);
@@ -45,7 +46,8 @@ const nodeImage = `edgeweir-node:${process.env.E2E_TAG ?? "e2e"}`;
 const nodeContext = process.env.EDGEWEIR_NODE_CONTEXT ?? "../edgeweir-node";
 /** An edge node from before G3: no brotli-v1, zstd-v1 or modsecurity-v1. */
 const OLD_NODE_IMAGE = process.env.E2E_OLD_NODE_IMAGE ?? "edgeweir-node:pre-g3";
-/** Last edgeweir-node commit before G3 (proto v0.10.1); builds OLD_NODE_IMAGE when it is missing. */
+/** Last edgeweir-node commit before G3 (proto v0.10.1); builds OLD_NODE_IMAGE when it is missing
+ * (or loads it from the per-commit cache of scripts/e2e-cache.mjs). */
 const OLD_NODE_COMMIT = process.env.E2E_OLD_NODE_COMMIT ?? "6da3403";
 const CURL_IMAGE =
   "curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777";
@@ -743,23 +745,9 @@ try {
   const volumes = (await run(["volume", "ls", "--format", "{{.Name}}"])).split("\n");
   for (const volume of ["origin-ca", "geoip-test-data"])
     assert.ok(volumes.includes(`${project}_${volume}`), `volume ${project}_${volume} is missing`);
-  try {
-    await run(["image", "inspect", OLD_NODE_IMAGE]);
-  } catch {
-    console.log(`building ${OLD_NODE_IMAGE} from edgeweir-node ${OLD_NODE_COMMIT}`);
-    await execute(
-      "sh",
-      [
-        "-c",
-        'git -C "$1" archive "$2" | docker build -q -t "$3" -',
-        "sh",
-        nodeContext,
-        OLD_NODE_COMMIT,
-        OLD_NODE_IMAGE,
-      ],
-      { maxBuffer: 16 * 1024 * 1024 },
-    );
-  }
+  console.log(
+    `${OLD_NODE_IMAGE}: ${await ensureNodeImage(OLD_NODE_IMAGE, OLD_NODE_COMMIT, nodeContext)}`,
+  );
   /** Starts a node container on the e2e network and enrolls it into a cluster. */
   async function startNode(name, nodeName, image, cluster, env = {}) {
     await run([

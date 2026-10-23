@@ -1080,20 +1080,28 @@ need syft
   { cat "$STATE_DIR/goreleaser-check.log" >&2; fail "goreleaser check failed in $NODE_CONTEXT"; }
 pass "goreleaser check: $(tr -d '\033' <"$STATE_DIR/goreleaser-check.log" | sed -E 's/\[[0-9;]*m//g' | grep -iE 'valid|checked' | tail -n1 | sed -E 's/^[[:space:]•]*//')"
 # The snapshot copies the edgeweir-openresty packages of `make
-# openresty-packages` (out/openresty) into dist/; build them for the
-# architecture of the install container when they are missing.
+# openresty-packages` (out/openresty) into dist/; when they are missing for
+# the architecture of the install container they come from the cache of
+# scripts/e2e-cache.mjs (by the git tree of packaging/openresty), or are
+# built and cached.
 DOCKER_ARCH="$(docker version --format '{{.Server.Arch}}')"
 OPENRESTY_VERSION="$(awk '$1 == "openresty" { print $2 }' "$NODE_CONTEXT/packaging/openresty/sources.lock")"
 OPENRESTY_RELEASE="$(awk '$1 == "release:" { print $2 }' "$NODE_CONTEXT/packaging/openresty/nfpm/edgeweir-openresty.yaml")"
 OPENRESTY_PKG="$OPENRESTY_VERSION-$OPENRESTY_RELEASE"
 OPENRESTY_FILES=("edgeweir-openresty_${OPENRESTY_PKG}_$DOCKER_ARCH.deb" "edgeweir-openresty-modsecurity_${OPENRESTY_PKG}_$DOCKER_ARCH.deb"
   "edgeweir-openresty_${OPENRESTY_PKG}_$DOCKER_ARCH.sbom.json")
+RPM_ARCH="$([[ "$DOCKER_ARCH" == arm64 ]] && echo aarch64 || echo x86_64)"
+OPENRESTY_CACHED=("${OPENRESTY_FILES[@]}" "edgeweir-openresty-$OPENRESTY_PKG.$RPM_ARCH.rpm"
+  "edgeweir-openresty-modsecurity-$OPENRESTY_PKG.$RPM_ARCH.rpm")
 openresty_packages_built() { for f in "${OPENRESTY_FILES[@]}"; do [[ -f "$NODE_CONTEXT/out/openresty/$f" ]] || return 1; done; }
-if ! openresty_packages_built; then
+if ! openresty_packages_built &&
+  ! node scripts/e2e-cache.mjs openresty restore "$NODE_CONTEXT" "$DOCKER_ARCH" "${OPENRESTY_CACHED[@]}"; then
   echo "make openresty-packages ARCH=$DOCKER_ARCH (in $NODE_CONTEXT, log in $STATE_DIR/openresty-packages.log)"
   part openresty-packages make -C "$NODE_CONTEXT" openresty-packages ARCH="$DOCKER_ARCH" >"$STATE_DIR/openresty-packages.log" 2>&1 ||
     { tail -n 40 "$STATE_DIR/openresty-packages.log" >&2; fail "building the edgeweir-openresty packages failed"; }
   openresty_packages_built || fail "make openresty-packages did not produce ${OPENRESTY_FILES[*]}"
+  node scripts/e2e-cache.mjs openresty save "$NODE_CONTEXT" "$DOCKER_ARCH" "${OPENRESTY_CACHED[@]}" ||
+    echo "not cached: packaging/openresty has uncommitted changes in $NODE_CONTEXT"
 fi
 pass "edgeweir-openresty $OPENRESTY_PKG packages for $DOCKER_ARCH in $NODE_CONTEXT/out/openresty"
 echo "goreleaser release --snapshot --clean (in $NODE_CONTEXT, log in $STATE_DIR/goreleaser.log)"
