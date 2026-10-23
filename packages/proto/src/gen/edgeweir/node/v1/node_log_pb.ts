@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file edgeweir/node/v1/node_log.proto.
  */
 export const file_edgeweir_node_v1_node_log: GenFile = /*@__PURE__*/
-  fileDesc("Ch9lZGdld2Vpci9ub2RlL3YxL25vZGVfbG9nLnByb3RvEhBlZGdld2Vpci5ub2RlLnYxItsCCgxOb2RlTG9nRW50cnkSKAoEdGltZRgBIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLQoFbGV2ZWwYAiABKA4yHi5lZGdld2Vpci5ub2RlLnYxLk5vZGVMb2dMZXZlbBIvCgZzb3VyY2UYAyABKA4yHy5lZGdld2Vpci5ub2RlLnYxLk5vZGVMb2dTb3VyY2USEQoJY29tcG9uZW50GAQgASgJEg8KB21lc3NhZ2UYBSABKAkSOgoGZmllbGRzGAYgAygLMiouZWRnZXdlaXIubm9kZS52MS5Ob2RlTG9nRW50cnkuRmllbGRzRW50cnkSEAoIcmVwZWF0ZWQYByABKA0SEQoJdHJ1bmNhdGVkGAggASgIEg0KBWV2ZW50GAkgASgJGi0KC0ZpZWxkc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEimAEKFVJlcG9ydE5vZGVMb2dzUmVxdWVzdBIWCg5iYXRjaF9zZXF1ZW5jZRgBIAEoBBIvCgdlbnRyaWVzGAIgAygLMh4uZWRnZXdlaXIubm9kZS52MS5Ob2RlTG9nRW50cnkSHAoUZHJvcHBlZF9yYXRlX2xpbWl0ZWQYAyABKA0SGAoQZHJvcHBlZF9vdmVyZmxvdxgEIAEoDSJCChZSZXBvcnROb2RlTG9nc1Jlc3BvbnNlEhYKDmJhdGNoX3NlcXVlbmNlGAEgASgEEhAKCGFjY2VwdGVkGAIgASgNKnoKDE5vZGVMb2dMZXZlbBIeChpOT0RFX0xPR19MRVZFTF9VTlNQRUNJRklFRBAAEhcKE05PREVfTE9HX0xFVkVMX0lORk8QARIXChNOT0RFX0xPR19MRVZFTF9XQVJOEAISGAoUTk9ERV9MT0dfTEVWRUxfRVJST1IQAyqfAQoNTm9kZUxvZ1NvdXJjZRIfChtOT0RFX0xPR19TT1VSQ0VfVU5TUEVDSUZJRUQQABIZChVOT0RFX0xPR19TT1VSQ0VfQUdFTlQQARIeChpOT0RFX0xPR19TT1VSQ0VfU1VQRVJWSVNPUhACEhkKFU5PREVfTE9HX1NPVVJDRV9OR0lOWBADEhcKE05PREVfTE9HX1NPVVJDRV9MVUEQBGIGcHJvdG8z", [file_google_protobuf_timestamp]);
+  fileDesc("Ch9lZGdld2Vpci9ub2RlL3YxL25vZGVfbG9nLnByb3RvEhBlZGdld2Vpci5ub2RlLnYxItsCCgxOb2RlTG9nRW50cnkSKAoEdGltZRgBIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLQoFbGV2ZWwYAiABKA4yHi5lZGdld2Vpci5ub2RlLnYxLk5vZGVMb2dMZXZlbBIvCgZzb3VyY2UYAyABKA4yHy5lZGdld2Vpci5ub2RlLnYxLk5vZGVMb2dTb3VyY2USEQoJY29tcG9uZW50GAQgASgJEg8KB21lc3NhZ2UYBSABKAkSOgoGZmllbGRzGAYgAygLMiouZWRnZXdlaXIubm9kZS52MS5Ob2RlTG9nRW50cnkuRmllbGRzRW50cnkSEAoIcmVwZWF0ZWQYByABKA0SEQoJdHJ1bmNhdGVkGAggASgIEg0KBWV2ZW50GAkgASgJGi0KC0ZpZWxkc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEimAEKFVJlcG9ydE5vZGVMb2dzUmVxdWVzdBIWCg5iYXRjaF9zZXF1ZW5jZRgBIAEoBBIvCgdlbnRyaWVzGAIgAygLMh4uZWRnZXdlaXIubm9kZS52MS5Ob2RlTG9nRW50cnkSHAoUZHJvcHBlZF9yYXRlX2xpbWl0ZWQYAyABKA0SGAoQZHJvcHBlZF9vdmVyZmxvdxgEIAEoDSJCChZSZXBvcnROb2RlTG9nc1Jlc3BvbnNlEhYKDmJhdGNoX3NlcXVlbmNlGAEgASgEEhAKCGFjY2VwdGVkGAIgASgNIqsBCg1EZWJ1Z0xvZ3NUYXNrEikKBXNpbmNlGAEgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIpCgV1bnRpbBgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEgoKY29tcG9uZW50cxgDIAMoCRIwCgdzb3VyY2VzGAQgAygOMh8uZWRnZXdlaXIubm9kZS52MS5Ob2RlTG9nU291cmNlItABChZVcGxvYWREZWJ1Z0xvZ3NSZXF1ZXN0Eg8KB3Rhc2tfaWQYASABKAkSLwoHZW50cmllcxgCIAMoCzIeLmVkZ2V3ZWlyLm5vZGUudjEuTm9kZUxvZ0VudHJ5EhEKCXRydW5jYXRlZBgDIAEoCBIwCgxidWZmZXJfc2luY2UYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhMKC292ZXJ3cml0dGVuGAUgASgEEhoKEnN1cGVydmlzb3JfbWlzc2luZxgGIAEoCCIZChdVcGxvYWREZWJ1Z0xvZ3NSZXNwb25zZSqUAQoMTm9kZUxvZ0xldmVsEh4KGk5PREVfTE9HX0xFVkVMX1VOU1BFQ0lGSUVEEAASFwoTTk9ERV9MT0dfTEVWRUxfSU5GTxABEhcKE05PREVfTE9HX0xFVkVMX1dBUk4QAhIYChROT0RFX0xPR19MRVZFTF9FUlJPUhADEhgKFE5PREVfTE9HX0xFVkVMX0RFQlVHEAQqnwEKDU5vZGVMb2dTb3VyY2USHwobTk9ERV9MT0dfU09VUkNFX1VOU1BFQ0lGSUVEEAASGQoVTk9ERV9MT0dfU09VUkNFX0FHRU5UEAESHgoaTk9ERV9MT0dfU09VUkNFX1NVUEVSVklTT1IQAhIZChVOT0RFX0xPR19TT1VSQ0VfTkdJTlgQAxIXChNOT0RFX0xPR19TT1VSQ0VfTFVBEARiBnByb3RvMw", [file_google_protobuf_timestamp]);
 
 /**
  * NodeLogEntry is one warning, error or event of a node. The node removes
@@ -159,6 +159,124 @@ export const ReportNodeLogsResponseSchema: GenMessage<ReportNodeLogsResponse> = 
   messageDesc(file_edgeweir_node_v1_node_log, 2);
 
 /**
+ * DebugLogsTask asks for the node's debug log buffer: what the agent, the
+ * supervisor and OpenResty logged recently at every level. The buffer is
+ * kept in memory, bounded, and leaves the node only for this task. The
+ * node answers with UploadDebugLogs, then ReportTaskResult. Added in
+ * v1.6.0 (feature debug-logs-v1).
+ *
+ * @generated from message edgeweir.node.v1.DebugLogsTask
+ */
+export type DebugLogsTask = Message<"edgeweir.node.v1.DebugLogsTask"> & {
+  /**
+   * Only entries at or after since and before until; unset: no bound.
+   *
+   * @generated from field: google.protobuf.Timestamp since = 1;
+   */
+  since?: Timestamp | undefined;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp until = 2;
+   */
+  until?: Timestamp | undefined;
+
+  /**
+   * Only entries of these components (NodeLogEntry.component); empty: all.
+   *
+   * @generated from field: repeated string components = 3;
+   */
+  components: string[];
+
+  /**
+   * Only entries of these sources; empty: all.
+   *
+   * @generated from field: repeated edgeweir.node.v1.NodeLogSource sources = 4;
+   */
+  sources: NodeLogSource[];
+};
+
+/**
+ * Describes the message edgeweir.node.v1.DebugLogsTask.
+ * Use `create(DebugLogsTaskSchema)` to create a new message.
+ */
+export const DebugLogsTaskSchema: GenMessage<DebugLogsTask> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node_log, 3);
+
+/**
+ * UploadDebugLogsRequest carries the answer to a DebugLogsTask.
+ *
+ * @generated from message edgeweir.node.v1.UploadDebugLogsRequest
+ */
+export type UploadDebugLogsRequest = Message<"edgeweir.node.v1.UploadDebugLogsRequest"> & {
+  /**
+   * @generated from field: string task_id = 1;
+   */
+  taskId: string;
+
+  /**
+   * Oldest first, at most 10000 entries and 4 MiB. Secrets are removed and
+   * sizes capped as for ReportNodeLogs; entries are neither folded nor
+   * rate limited, info entries need no event, and the level may be
+   * NODE_LOG_LEVEL_DEBUG.
+   *
+   * @generated from field: repeated edgeweir.node.v1.NodeLogEntry entries = 2;
+   */
+  entries: NodeLogEntry[];
+
+  /**
+   * Older matching entries were left out for the limits.
+   *
+   * @generated from field: bool truncated = 3;
+   */
+  truncated: boolean;
+
+  /**
+   * Time of the oldest entry the buffers held: older entries are gone.
+   * Unset when they held none.
+   *
+   * @generated from field: google.protobuf.Timestamp buffer_since = 4;
+   */
+  bufferSince?: Timestamp | undefined;
+
+  /**
+   * Entries the buffers dropped for their capacity since they started.
+   *
+   * @generated from field: uint64 overwritten = 5;
+   */
+  overwritten: bigint;
+
+  /**
+   * The supervisor's buffer could not be read: its own and OpenResty's
+   * entries are missing.
+   *
+   * @generated from field: bool supervisor_missing = 6;
+   */
+  supervisorMissing: boolean;
+};
+
+/**
+ * Describes the message edgeweir.node.v1.UploadDebugLogsRequest.
+ * Use `create(UploadDebugLogsRequestSchema)` to create a new message.
+ */
+export const UploadDebugLogsRequestSchema: GenMessage<UploadDebugLogsRequest> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node_log, 4);
+
+/**
+ * UploadDebugLogsResponse acknowledges an upload.
+ *
+ * @generated from message edgeweir.node.v1.UploadDebugLogsResponse
+ */
+export type UploadDebugLogsResponse = Message<"edgeweir.node.v1.UploadDebugLogsResponse"> & {
+};
+
+/**
+ * Describes the message edgeweir.node.v1.UploadDebugLogsResponse.
+ * Use `create(UploadDebugLogsResponseSchema)` to create a new message.
+ */
+export const UploadDebugLogsResponseSchema: GenMessage<UploadDebugLogsResponse> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node_log, 5);
+
+/**
  * NodeLogLevel is the level of a node log entry.
  *
  * @generated from enum edgeweir.node.v1.NodeLogLevel
@@ -187,6 +305,14 @@ export enum NodeLogLevel {
    * @generated from enum value: NODE_LOG_LEVEL_ERROR = 3;
    */
   ERROR = 3,
+
+  /**
+   * Only in UploadDebugLogsRequest: below info. Added in v1.6.0. The values
+   * are not ordered by severity.
+   *
+   * @generated from enum value: NODE_LOG_LEVEL_DEBUG = 4;
+   */
+  DEBUG = 4,
 }
 
 /**

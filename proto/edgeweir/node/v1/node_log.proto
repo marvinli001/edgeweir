@@ -12,6 +12,9 @@ enum NodeLogLevel {
   NODE_LOG_LEVEL_WARN = 2;
   // Also nginx's crit, alert and emerg (fields["severity"] keeps which).
   NODE_LOG_LEVEL_ERROR = 3;
+  // Only in UploadDebugLogsRequest: below info. Added in v1.6.0. The values
+  // are not ordered by severity.
+  NODE_LOG_LEVEL_DEBUG = 4;
 }
 
 // NodeLogSource is the process an entry comes from.
@@ -73,3 +76,41 @@ message ReportNodeLogsResponse {
   uint64 batch_sequence = 1;
   uint32 accepted = 2;
 }
+
+// DebugLogsTask asks for the node's debug log buffer: what the agent, the
+// supervisor and OpenResty logged recently at every level. The buffer is
+// kept in memory, bounded, and leaves the node only for this task. The
+// node answers with UploadDebugLogs, then ReportTaskResult. Added in
+// v1.6.0 (feature debug-logs-v1).
+message DebugLogsTask {
+  // Only entries at or after since and before until; unset: no bound.
+  google.protobuf.Timestamp since = 1;
+  google.protobuf.Timestamp until = 2;
+  // Only entries of these components (NodeLogEntry.component); empty: all.
+  repeated string components = 3;
+  // Only entries of these sources; empty: all.
+  repeated NodeLogSource sources = 4;
+}
+
+// UploadDebugLogsRequest carries the answer to a DebugLogsTask.
+message UploadDebugLogsRequest {
+  string task_id = 1;
+  // Oldest first, at most 10000 entries and 4 MiB. Secrets are removed and
+  // sizes capped as for ReportNodeLogs; entries are neither folded nor
+  // rate limited, info entries need no event, and the level may be
+  // NODE_LOG_LEVEL_DEBUG.
+  repeated NodeLogEntry entries = 2;
+  // Older matching entries were left out for the limits.
+  bool truncated = 3;
+  // Time of the oldest entry the buffers held: older entries are gone.
+  // Unset when they held none.
+  google.protobuf.Timestamp buffer_since = 4;
+  // Entries the buffers dropped for their capacity since they started.
+  uint64 overwritten = 5;
+  // The supervisor's buffer could not be read: its own and OpenResty's
+  // entries are missing.
+  bool supervisor_missing = 6;
+}
+
+// UploadDebugLogsResponse acknowledges an upload.
+message UploadDebugLogsResponse {}
