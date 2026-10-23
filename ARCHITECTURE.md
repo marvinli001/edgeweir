@@ -526,6 +526,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `site_auth_rule` | 网站的访问鉴权规则（最多 16 条，有序）；Basic 用户哈希与 URL 鉴权密钥信封加密在同一行，只经节点通道下发 |
 | `cache_rule` | 缓存规则：条件表达式与名单引用、状态码与大小条件、动作、边缘与浏览器 TTL |
 | `edge_rule` | 网站规则或全局规则：阶段、表达式、动作、名单引用 |
+| `edge_rule_version` | 规则的版本：每次保存新增、修改或删除一条规则时的完整快照、操作者与来源（界面、API、恢复、复制设置、初始），每条规则保留最近 50 版、每个网站与全局各保留最近删除的 100 条规则 |
 | `bulk_redirect` | 网站的批量重定向：来源（路径或域名加路径，网站内唯一）、目标、状态码、是否保留查询串、顺序 |
 | `cluster_port_pool` | 集群的四层端口池：协议（TCP、UDP、两者）与端口区间（1024–65535，同协议不重叠） |
 | `l4_app` | 四层应用：所属集群、名称、协议、端口（集群、协议、端口唯一）、启用、PROXY protocol（接受、发往源站的版本）、被动健康检查、连接与空闲超时、放行与拦截名单引用、并发与新建速率上限 |
@@ -674,6 +675,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0072_site_auto_mitigation` | `site_auto_mitigation` |
 | `0073_origin_stats` | 分钟、小时、天统计与视图 `traffic_hour_stats` 的 `origin_stats`（按源站的回源计数） |
 | `0074_node_clock_dns_failures` | `node.clock_offset_ms`、`node.clock_measured_at`（节点时钟偏差）；`dns_binding.failing_since`（对账连续失败的起始时间） |
+| `0075_rule_versions` | `edge_rule_version`（规则版本历史），并为已有规则写入初始版本 |
 
 ## 构建产物
 

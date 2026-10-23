@@ -524,6 +524,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `site_auth_rule` | A site's access authentication rules (at most 16, ordered); Basic user hashes and signing keys envelope-encrypted in the same row, delivered over the node channel only |
 | `cache_rule` | Cache rules: condition expression and list references, status and size conditions, action, edge and browser TTLs |
 | `edge_rule` | Site or global rules: phase, expression, action, list references |
+| `edge_rule_version` | Rule versions: a full snapshot, actor and source (UI, API, restore, settings copy, initial) each time a save creates, changes or deletes a rule; the last 50 per rule and the 100 most recently deleted rules per site and for the platform are kept |
 | `bulk_redirect` | A site's bulk redirects: source (path or domain plus path, unique per site), target, status code, whether the query string is kept, order |
 | `cluster_port_pool` | A cluster's layer-4 port pools: protocol (TCP, UDP, both) and port range (1024-65535, no overlap per protocol) |
 | `l4_app` | Layer-4 applications: cluster, name, protocol, port (unique per cluster, protocol and port), enabled, PROXY protocol (accepted, version sent to origins), passive health check, connect and idle timeouts, allow and block list references, concurrency and new-connection limits |
@@ -672,6 +673,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0072_site_auto_mitigation` | `site_auto_mitigation` |
 | `0073_origin_stats` | `origin_stats` (fetches per origin) in minute, hour and day statistics and the view `traffic_hour_stats` |
 | `0074_node_clock_dns_failures` | `node.clock_offset_ms`, `node.clock_measured_at` (node clock offset); `dns_binding.failing_since` (since when DNS reconciliation has kept failing) |
+| `0075_rule_versions` | `edge_rule_version` (rule version history), with an initial version for each existing rule |
 
 ## Build output
 
