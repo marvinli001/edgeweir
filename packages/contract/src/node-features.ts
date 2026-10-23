@@ -75,6 +75,13 @@ export const AUTH_IDENTITY_HEADERS_FEATURE = "auth-identity-headers-v1";
  */
 export const CERTIFICATE_ISOLATION_FEATURE = "certificate-isolation-v1";
 /**
+ * encoded-path-exemptions-v1: Site.encoded_path_exemptions, raw paths with
+ * "%2F" or ";" path parameters under a listed prefix compared as an origin
+ * may read them and cached (proto v1.6.0). Never required: older nodes keep
+ * treating such paths as ambiguous (every scope, no exemption, no cache).
+ */
+export const ENCODED_PATHS_FEATURE = "encoded-path-exemptions-v1";
+/**
  * Features of the node release with security fixes no configuration
  * requires (path scopes ignoring ASCII case, identity headers of former
  * rules, body limits without Content-Length, certificate isolation): an

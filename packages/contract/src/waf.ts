@@ -231,6 +231,8 @@ export const siteFeatures = z.object({
   accessAuth: featureAvailability,
   /** Access control (access-control-v1). */
   accessControl: featureAvailability,
+  /** Encoded path exemptions (encoded-path-exemptions-v1). */
+  encodedPaths: featureAvailability,
   /**
    * The custom WAF actions ban, respond, close and skip, access log lines from log rules, rate
    * limit bans, the config rules' CRS override and CRS exclusions by path or target (waf-v2).

@@ -21,7 +21,7 @@ import { MAX_BATCH_SITES, queryList, siteTagNames } from "./site-tags";
  * - waf: the OWASP CRS settings and exclusions;
  * - protection: Under Attack, the CC policy and the challenge settings;
  * - accessControl: site lists, hotlink, user agents, CORS, regions,
- *   WebSocket origins and security headers;
+ *   WebSocket origins, security headers and encoded path exemptions;
  * - authRules: the access authentication rules, their secrets sealed anew
  *   for the target;
  * - originSettings: the origin pool settings without the origins;

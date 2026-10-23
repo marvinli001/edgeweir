@@ -89,6 +89,12 @@ function summary(part: AccessControlPart, s: AccessControlSettings) {
         ...s.securityHeaders,
         permissionsPolicy: s.securityHeaders.permissionsPolicy !== "",
       };
+    case "encodedPaths":
+      return {
+        exemptions: s.encodedPaths.exemptions.length,
+        encodedSlash: s.encodedPaths.exemptions.filter((e) => e.encodedSlash).length,
+        semicolon: s.encodedPaths.exemptions.filter((e) => e.semicolon).length,
+      };
   }
 }
 
