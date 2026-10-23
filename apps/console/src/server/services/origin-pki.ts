@@ -362,7 +362,11 @@ async function currentClientCertificates(db: Executor, found: Authorities) {
     .select({ cert: schema.originClientCertificate, clusterName: schema.cluster.name })
     .from(schema.originClientCertificate)
     .innerJoin(schema.cluster, eq(schema.cluster.id, schema.originClientCertificate.clusterId))
-    .orderBy(asc(schema.cluster.name), desc(schema.originClientCertificate.notAfter));
+    .orderBy(
+      asc(schema.cluster.name),
+      desc(schema.originClientCertificate.notAfter),
+      desc(schema.originClientCertificate.createdAt),
+    );
   const seen = new Set<string>();
   return rows
     .filter(({ cert }) => !seen.has(cert.clusterId) && seen.add(cert.clusterId))
@@ -378,13 +382,20 @@ async function currentClientCertificates(db: Executor, found: Authorities) {
     }));
 }
 
-/** The cluster's newest origin client certificate, if any. */
+/**
+ * The cluster's newest origin client certificate, if any. Certificate times
+ * have whole seconds: of two issued within the same second (a renewal and
+ * then a CA switch), the one created last is current.
+ */
 async function currentClientCertificate(db: Executor, clusterId: string) {
   const [row] = await db
     .select()
     .from(schema.originClientCertificate)
     .where(eq(schema.originClientCertificate.clusterId, clusterId))
-    .orderBy(desc(schema.originClientCertificate.notAfter))
+    .orderBy(
+      desc(schema.originClientCertificate.notAfter),
+      desc(schema.originClientCertificate.createdAt),
+    )
     .limit(1);
   return row;
 }
