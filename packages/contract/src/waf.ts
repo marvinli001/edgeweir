@@ -186,6 +186,10 @@ export const siteFeatures = z.object({
   sessionAffinity: featureAvailability,
   /** originSettings.protocol http2 and grpc (origin-http2-v1). */
   originHttp2: featureAvailability,
+  /** origins[].proxyProtocolVersion 1 or 2 (origin-proxy-protocol-v1). */
+  originProxyProtocol: featureAvailability,
+  /** originSettings.activeHealthCheck.type grpc (active-health-grpc-v1). */
+  activeHealthGrpc: featureAvailability,
   /** originSettings.clientCertificate (origin-mtls-v1). */
   originMtls: featureAvailability,
   /** originSettings.tlsTrust originCa (origin-ca-v1). */
