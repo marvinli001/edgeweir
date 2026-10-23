@@ -1,0 +1,144 @@
+{
+  "description": "proto v1.6.0: site a sends PROXY protocol v2 to origin o-a1 and v1 to o-a2 (Origin.proxy_protocol_version) and checks them with grpc.health.v1 for the service e2e.Echo (ActiveHealthCheck.type ACTIVE_HEALTH_CHECK_TYPE_GRPC, grpc_service), site b checks the server's overall gRPC health, site c keeps an HTTP check (type unset). Sites, their origins and the required features are reversed.",
+  "config": {
+    "revision": "16",
+    "contentHash": "13c6798066499ccb138d9dd3d7e3dd3ab0dd0520442a3e06b9159c2064fe9765",
+    "clusterId": "c1",
+    "listeners": [
+      {
+        "port": 80,
+        "protocol": "LISTENER_PROTOCOL_HTTP"
+      }
+    ],
+    "cacheZones": [
+      {
+        "name": "default",
+        "maxSizeMb": "10240",
+        "keysZoneMb": 64,
+        "inactiveSeconds": 604800
+      }
+    ],
+    "sites": [
+      {
+        "id": "c",
+        "name": "c",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "c.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-c",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-c1",
+              "address": "o-c1.origin.test",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ],
+          "activeHealthCheck": {
+            "path": "/",
+            "method": "GET",
+            "expectedStatusMin": 200,
+            "expectedStatusMax": 399,
+            "intervalSeconds": 10,
+            "timeoutSeconds": 2,
+            "healthyThreshold": 2,
+            "unhealthyThreshold": 3
+          }
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1"
+      },
+      {
+        "id": "b",
+        "name": "b",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "b.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-b",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-b1",
+              "address": "o-b1.origin.test",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ],
+          "activeHealthCheck": {
+            "path": "/",
+            "method": "GET",
+            "expectedStatusMin": 200,
+            "expectedStatusMax": 399,
+            "intervalSeconds": 10,
+            "timeoutSeconds": 2,
+            "healthyThreshold": 2,
+            "unhealthyThreshold": 3,
+            "type": "ACTIVE_HEALTH_CHECK_TYPE_GRPC"
+          }
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1"
+      },
+      {
+        "id": "a",
+        "name": "a",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "a.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-a",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-a2",
+              "address": "o-a2.origin.test",
+              "port": 443,
+              "scheme": "ORIGIN_SCHEME_HTTPS",
+              "weight": 1,
+              "proxyProtocolVersion": 1
+            },
+            {
+              "id": "o-a1",
+              "address": "o-a1.origin.test",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1,
+              "proxyProtocolVersion": 2
+            }
+          ],
+          "activeHealthCheck": {
+            "path": "/",
+            "method": "GET",
+            "expectedStatusMin": 200,
+            "expectedStatusMax": 399,
+            "intervalSeconds": 10,
+            "timeoutSeconds": 2,
+            "healthyThreshold": 2,
+            "unhealthyThreshold": 3,
+            "type": "ACTIVE_HEALTH_CHECK_TYPE_GRPC",
+            "grpcService": "e2e.Echo"
+          }
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1"
+      }
+    ],
+    "requiredFeatures": ["origin-proxy-protocol-v1", "active-health-v1", "active-health-grpc-v1"]
+  },
+  "canonical_hex": "1a0263312204085010012a120a0764656661756c7410805018402080f524328f010a0161120161180122080a06612e746573742a700a03702d6110011a200a046f2d613112106f2d61312e6f726967696e2e7465737418502001280158021a210a046f2d613212106f2d61322e6f726967696e2e7465737418bb032002280158013a220a012f120347455418c801208f03300a38024002480350025a086532652e4563686f3a0764656661756c74400132600a0162120162180122080a06622e746573742a410a03702d6210011a1e0a046f2d623112106f2d62312e6f726967696e2e746573741850200128013a180a012f120347455418c801208f03300a38024002480350023a0764656661756c744001325e0a0163120163180122080a06632e746573742a3f0a03702d6310011a1e0a046f2d633112106f2d63312e6f726967696e2e746573741850200128013a160a012f120347455418c801208f03300a3802400248033a0764656661756c7440014a156163746976652d6865616c74682d677270632d76314a106163746976652d6865616c74682d76314a186f726967696e2d70726f78792d70726f746f636f6c2d7631",
+  "content_hash": "13c6798066499ccb138d9dd3d7e3dd3ab0dd0520442a3e06b9159c2064fe9765"
+}

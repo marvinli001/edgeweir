@@ -12,6 +12,7 @@ import {
   UNKNOWN_HOST_FEATURE,
 } from "@edgeweir/contract";
 import {
+  ActiveHealthCheckType,
   CacheKeyQuery,
   DomainMatch,
   type EdgeRule,
@@ -68,6 +69,13 @@ export const ORIGIN_HTTP2_FEATURE = "origin-http2-v1";
  */
 export const ORIGIN_MTLS_FEATURE = "origin-mtls-v1";
 export const ORIGIN_CA_FEATURE = "origin-ca-v1";
+/**
+ * Features of proto v1.6.0: PROXY protocol towards origins
+ * (Origin.proxy_protocol_version) and grpc.health.v1 active health checks
+ * (ActiveHealthCheck.type GRPC).
+ */
+export const ORIGIN_PROXY_PROTOCOL_FEATURE = "origin-proxy-protocol-v1";
+export const ACTIVE_HEALTH_GRPC_FEATURE = "active-health-grpc-v1";
 
 /**
  * Feature of the rule engine extensions (proto v0.13.0): functions and the
@@ -316,15 +324,26 @@ export function moduleFeatures(config: NodeConfig): string[] {
 }
 
 /**
- * Features of the active health checks, session affinity, HTTP/2 towards
- * the origins, origin protection and error pages that the sites of a
- * compiled configuration use: active-health-v1, session-affinity-v1,
- * origin-http2-v1, origin-mtls-v1, origin-ca-v1 and error-pages-v1.
+ * Features of the active health checks, session affinity, HTTP/2 and PROXY
+ * protocol towards the origins, origin protection and error pages that the
+ * sites of a compiled configuration use: active-health-v1,
+ * active-health-grpc-v1, session-affinity-v1, origin-http2-v1,
+ * origin-proxy-protocol-v1, origin-mtls-v1, origin-ca-v1 and error-pages-v1.
  */
 export function poolAndPageFeatures(config: NodeConfig): string[] {
   return [
     ...(config.sites.some((site) => site.originPool?.activeHealthCheck)
       ? [ACTIVE_HEALTH_FEATURE]
+      : []),
+    ...(config.sites.some(
+      (site) => site.originPool?.activeHealthCheck?.type === ActiveHealthCheckType.GRPC,
+    )
+      ? [ACTIVE_HEALTH_GRPC_FEATURE]
+      : []),
+    ...(config.sites.some((site) =>
+      site.originPool?.origins.some((origin) => origin.proxyProtocolVersion !== 0),
+    )
+      ? [ORIGIN_PROXY_PROTOCOL_FEATURE]
       : []),
     ...(config.sites.some((site) => site.originPool?.sessionAffinity)
       ? [SESSION_AFFINITY_FEATURE]
