@@ -868,6 +868,8 @@
   "node_error_dns_failed": "无法解析 {host}",
   "node_error_address_forbidden": "{address} 是特殊用途地址，不在源站地址允许清单内",
   "node_error_tls_failed": "TLS 握手或证书校验失败",
+  "node_error_grpc_status": "gRPC 健康检查返回 gRPC 状态码 {status}",
+  "node_error_grpc_not_serving": "gRPC 健康检查结果为 {status}",
   "task_error_prefetch_failed": "{failed}/{total} 个 URL 预热失败，第一个是 {url}（{reason}）",
   "task_error_reason_status": "HTTP {status}",
   "task_error_reason_connect_failed": "连接失败",
