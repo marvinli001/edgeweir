@@ -737,7 +737,7 @@ Signing errors: a rule that is not a signed URL rule answers 400 `AUTH_RULE_NOT_
 
 | Procedure | Endpoint | Notes |
 | --- | --- | --- |
-| `accessControl.get` | `GET /sites/{id}/access-control` | `{ siteId, siteLists, hotlink, userAgents, cors, geo, websocket, securityHeaders, updatedAt }`; a site never saved returns the defaults with `updatedAt` `null` |
+| `accessControl.get` | `GET /sites/{id}/access-control` | `{ siteId, siteLists, hotlink, userAgents, cors, geo, websocket, securityHeaders, encodedPaths, updatedAt }`; a site never saved returns the defaults with `updatedAt` `null` |
 | `accessControl.update` | `PATCH /sites/{id}/access-control` | Replaces the parts in the request only; accepts `expectedUpdatedAt` (409 `UPDATED_AT_MISMATCH` when it differs). Publishes a revision (reason `site_access_control_updated`), audit `site.access_control_update` |
 | `ipCheck.check` | `GET /ip-check?ip=&siteId=` | `{ ip, site, lists, bans, clusters, verdict }`, see below |
 
@@ -752,6 +752,7 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | `geo` | `enabled`, `mode` (`deny` / `allow`), `countries` (two-letter codes), `subdivisions` (`CC-subdivision`), `asns` (at most 256 each; at least one entry while on), `pathPrefixes`, `exceptPathPrefixes` |
 | `websocket` | `allowAllOrigins` (default `true`), `origins` (at most 100; at least one when not every origin is allowed; no `*` alone), `idleTimeoutSeconds` (60–86400, default 3600) |
 | `securityHeaders` | `nosniff`, `frameOptions` (`off` / `DENY` / `SAMEORIGIN`), `referrerPolicy` (`off` or one of 8 standard values), `permissionsPolicy` (at most 1024 printable ASCII characters, empty: not set), `hideServer`, `removePoweredBy` |
+| `encodedPaths` | `exemptions` (at most 32): `{ prefix, encodedSlash, semicolon }`; `prefix` is a raw path prefix (starts with `/`, at most 256 bytes of printable ASCII without `%`, `;`, `\`, `#`, `?`, spaces, `//` or dot segments, unique), at least one of `encodedSlash` and `semicolon` `true` |
 
 The `ip` of `ipCheck.check` is an IPv4 or IPv6 address (not a CIDR: 400 `IP_ADDRESS_INVALID`); an IPv4-mapped address comes back as IPv4. `lists`: the lists holding it, `{ id, name, kind, entries, siteRole }` (`entries` the matching entries, `siteRole` `block` / `allow` / `null`); `bans`: active bans covering it (the elements of `GET /bans`; with `siteId` global bans and that site's only); `clusters`: `{ id, name, clientIp, trustedProxy, nodeAddress }`; `verdict`: with `siteId` `{ outcome, platformAllowed, siteAllowed }`, `outcome` one of `platform_banned`, `site_banned`, `platform_blocked`, `site_blocked`, `allowed`, `none`; else `null`.
 

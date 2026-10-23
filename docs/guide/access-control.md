@@ -391,7 +391,7 @@ IPv4 映射的 IPv6 地址（`::ffff:a.b.c.d`）按 IPv4 地址检查，与节�
 | POST | `/sites/{id}/auth-rules/{ruleId}/sign` | 生成签名 URL |
 | GET | `/sites/{id}/auth-rules/failures` | 被拒绝的请求数 |
 | GET | `/sites/{id}/access-control` | 访问控制的全部设置 |
-| PATCH | `/sites/{id}/access-control` | 只修改请求中出现的项（`siteLists`、`hotlink`、`userAgents`、`cors`、`geo`、`websocket`、`securityHeaders`），见 [API](../reference/api.md) |
+| PATCH | `/sites/{id}/access-control` | 只修改请求中出现的项（`siteLists`、`hotlink`、`userAgents`、`cors`、`geo`、`websocket`、`securityHeaders`、`encodedPaths`），见 [API](../reference/api.md) |
 | GET | `/ip-check?ip=…&siteId=…` | IP 检查 |
 
 只读 AccessKey 只能调用 `GET`；服务账号不能调用这些接口（`SERVICE_ACCOUNT_FORBIDDEN`）。

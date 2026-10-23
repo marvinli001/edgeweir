@@ -737,7 +737,7 @@ DNS 绑定与记录的新增字段：
 
 | 过程 | 端点 | 说明 |
 | --- | --- | --- |
-| `accessControl.get` | `GET /sites/{id}/access-control` | `{ siteId, siteLists, hotlink, userAgents, cors, geo, websocket, securityHeaders, updatedAt }`；从未保存过的网站返回各项默认值，`updatedAt` 为 `null` |
+| `accessControl.get` | `GET /sites/{id}/access-control` | `{ siteId, siteLists, hotlink, userAgents, cors, geo, websocket, securityHeaders, encodedPaths, updatedAt }`；从未保存过的网站返回各项默认值，`updatedAt` 为 `null` |
 | `accessControl.update` | `PATCH /sites/{id}/access-control` | 只替换请求中出现的项，其余不变；可带 `expectedUpdatedAt`（不一致 409 `UPDATED_AT_MISMATCH`）。发布配置版本（原因 `site_access_control_updated`），审计 `site.access_control_update` |
 | `ipCheck.check` | `GET /ip-check?ip=&siteId=` | `{ ip, site, lists, bans, clusters, verdict }`，见下 |
 
@@ -752,6 +752,7 @@ DNS 绑定与记录的新增字段：
 | `geo` | `enabled`、`mode`（`deny` / `allow`）、`countries`（二位代码）、`subdivisions`（`CC-行政区`）、`asns`（各 ≤ 256；开启时至少一项）、`pathPrefixes`、`exceptPathPrefixes` |
 | `websocket` | `allowAllOrigins`（默认 `true`）、`origins`（≤ 100，不允许时至少一个，不能用单独的 `*`）、`idleTimeoutSeconds`（60–86400，默认 3600） |
 | `securityHeaders` | `nosniff`、`frameOptions`（`off` / `DENY` / `SAMEORIGIN`）、`referrerPolicy`（`off` 或 8 个标准值）、`permissionsPolicy`（≤ 1024 个可打印 ASCII 字符，空为不设置）、`hideServer`、`removePoweredBy` |
+| `encodedPaths` | `exemptions`（≤ 32）：`{ prefix, encodedSlash, semicolon }`，`prefix` 为原始路径前缀（以 `/` 开头，≤ 256 字节可打印 ASCII，不含 `%`、`;`、`\`、`#`、`?`、空格、`//` 与点路径段，不能重复），`encodedSlash` 与 `semicolon` 至少一个为 `true` |
 
 `ipCheck.check` 的 `ip` 为 IPv4 或 IPv6 地址（不是 CIDR，否则 400 `IP_ADDRESS_INVALID`），IPv4 映射地址按 IPv4 返回。`lists`：含有该地址的名单 `{ id, name, kind, entries, siteRole }`（`entries` 为命中的条目，`siteRole` 为 `block` / `allow` / `null`）；`bans`：覆盖该地址的有效封禁（与 `GET /bans` 的元素相同；带 `siteId` 时只有全局与该网站的）；`clusters`：`{ id, name, clientIp, trustedProxy, nodeAddress }`；`verdict`：带 `siteId` 时为 `{ outcome, platformAllowed, siteAllowed }`，`outcome` 为 `platform_banned`、`site_banned`、`platform_blocked`、`site_blocked`、`allowed` 或 `none`，否则为 `null`。
 

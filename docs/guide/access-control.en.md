@@ -391,7 +391,7 @@ Access control refusals do not count as authentication failures:
 | POST | `/sites/{id}/auth-rules/{ruleId}/sign` | Signs a URL |
 | GET | `/sites/{id}/auth-rules/failures` | Refused requests |
 | GET | `/sites/{id}/access-control` | Every access control setting |
-| PATCH | `/sites/{id}/access-control` | Changes the parts in the request only (`siteLists`, `hotlink`, `userAgents`, `cors`, `geo`, `websocket`, `securityHeaders`), see [API](../reference/api.en.md) |
+| PATCH | `/sites/{id}/access-control` | Changes the parts in the request only (`siteLists`, `hotlink`, `userAgents`, `cors`, `geo`, `websocket`, `securityHeaders`, `encodedPaths`), see [API](../reference/api.en.md) |
 | GET | `/ip-check?ip=…&siteId=…` | The IP check |
 
 Read-only AccessKeys can call the `GET` ones only; service accounts none of them (`SERVICE_ACCOUNT_FORBIDDEN`).
