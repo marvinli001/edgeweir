@@ -511,7 +511,7 @@ export const siteRuleInput = ruleInput.refine(
 export const RULE_VERSION_LIMIT = 50;
 /** Deleted rules kept per site and for the platform; the longest deleted go first. */
 export const DELETED_RULE_LIMIT = 100;
-export const ruleVersionChanges = ["created", "updated", "deleted"] as const;
+const ruleVersionChanges = ["created", "updated", "deleted"] as const;
 export const ruleVersionSources = ["ui", "api", "restore", "copy", "initial"] as const;
 /**
  * A saved state of a rule. `rule` is the rule as it was saved, checked
