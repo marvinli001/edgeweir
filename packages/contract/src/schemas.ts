@@ -933,6 +933,10 @@ const nodeBanStatus = z.object({
   /** Automatic bans dropped to make room since the agent started (decimal). */
   autoEvicted: z.string(),
   reportedAt: isoDateTime,
+  /** The cluster's connection limits are enforced in the kernel (conn-limit-v1). */
+  connectionLimitsActive: z.boolean().optional(),
+  /** Why they are not (the node's message); absent or empty otherwise. */
+  connectionLimitsError: z.string().optional(),
 });
 
 /** Host metrics of a node's last heartbeat (nodes with metrics-v1). */

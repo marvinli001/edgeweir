@@ -28,10 +28,12 @@ import {
   dnsCredentialsContract,
   httpsContract,
 } from "./certificates";
+import { connectionLimitProcedures } from "./connection-limits";
 import { demoProcedures } from "./demo";
 import { dnsContract } from "./dns";
 import { edgeProcedures } from "./edge";
 import { errorPagesContract, maintenanceContract, platformErrorPages } from "./error-pages";
+import { greylistContract } from "./greylist";
 import { hiddenCardsContract } from "./hidden-cards";
 import { imageConvertContract } from "./image-convert";
 import { l4AppsContract, portPoolProcedures } from "./l4";
@@ -70,10 +72,12 @@ export * from "./auth-rules";
 export * from "./bans";
 export * from "./bulk-redirects";
 export * from "./certificates";
+export * from "./connection-limits";
 export * from "./domains";
 export * from "./error-pages";
 export * from "./errors";
 export * from "./expressions";
+export * from "./greylist";
 export * from "./hidden-cards";
 export * from "./image-convert";
 export * from "./node-channel";
@@ -126,6 +130,8 @@ export const contract = {
   ipLists: ipListsContract,
   /** Dynamic IP bans of a site or of every site. */
   bans: bansContract,
+  /** IP greylist: addresses challenged or rate-limited until they expire. */
+  greylist: greylistContract,
   /** Under Attack, CC policy, pass lifetime, proof of work and JA4 logging of a site. */
   protection: protectionContract,
   /** CC mitigation levels and events of a site, as the nodes report them. */
@@ -310,6 +316,10 @@ export const contract = {
     unknownHosts: unknownHostProcedures.unknownHosts,
     /** Replaces the unknown host settings and publishes a revision. */
     setUnknownHosts: unknownHostProcedures.setUnknownHosts,
+    /** Per-client TCP connection limits the cluster's nodes enforce in the kernel. */
+    connectionLimits: connectionLimitProcedures.connectionLimits,
+    /** Replaces the connection limits and publishes a revision. */
+    setConnectionLimits: connectionLimitProcedures.setConnectionLimits,
   },
   nodeGroups: {
     list: oc
