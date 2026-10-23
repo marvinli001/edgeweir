@@ -31,7 +31,7 @@ Development environment, checks, code conventions, and change procedures.
 | Go | 1.27.2 | `helpers/certd`, `pnpm e2e` |
 | buf | 1.73.0 | Installed with the dev dependencies (`@bufbuild/buf`); called by `pnpm lint` and `pnpm proto:*` |
 
-End-to-end tests also need curl, jq, goreleaser v2, syft, cosign v3.1.3, a checkout of [edgeweir-node](https://github.com/marvinli001/edgeweir-node) next to this repository (or `EDGEWEIR_NODE_CONTEXT`) whose `out/openresty` holds the edgeweir-openresty packages for the Docker architecture (`make openresty-packages`; `scripts/e2e.sh` builds them first when missing, which needs Docker Buildx), a node image from before G3, `edgeweir-node:pre-g3` (`scripts/e2e-g3.mjs` builds it from edgeweir-node commit `6da3403` when missing), and network access to deb.debian.org and openresty.org (building the node image or the edgeweir-openresty packages for the first time also needs github.com, download.gnome.org and vault.almalinux.org). The Playwright steps need Chromium:
+End-to-end tests also need curl, jq, goreleaser v2, syft, cosign v3.1.3, a checkout of [edgeweir-node](https://github.com/marvinli001/edgeweir-node) next to this repository (or `EDGEWEIR_NODE_CONTEXT`) whose `out/openresty` holds the edgeweir-openresty packages for the Docker architecture (`make openresty-packages`; `scripts/e2e.sh` builds them first when missing, which needs Docker Buildx), node images from before G3 and G8, `edgeweir-node:pre-g3` and `edgeweir-node:pre-g8` (`scripts/e2e-g3.mjs` and `e2e-g8.mjs` build them from edgeweir-node commits `6da3403` and `7e1338f`, or load them from `~/.cache/edgeweir-e2e`, when missing), and network access to deb.debian.org and openresty.org (building the node image or the edgeweir-openresty packages for the first time also needs github.com, download.gnome.org and vault.almalinux.org). The Playwright steps need Chromium:
 
 ```bash
 pnpm --filter @edgeweir/console exec playwright install chromium
@@ -144,6 +144,8 @@ Every new API procedure has a Vitest case.
    ```
 
 3. Verify: the output ends with `E2E OK`, after the time of every section and of its parts (checks, ui, cleanup, ...), slowest first (also in `.e2e/timings.tsv`).
+
+A few sections run in a parallel lane beside a stretch of the chain (`LANES` in `scripts/e2e.sh`, which also says why the others cannot): a lane's output is printed when it ends, and it has a Playwright session of its own; `--serial` runs every section in turn.
 
 Running some sections: `--list` prints the sections and what each needs; `--only g12,g15` runs just these, `--from g12` that section and all after it; `--plan` only shows which sections would run. A fresh stack runs core and the needed sections first; on a stack that got past core the run continues (`.e2e/run.env`, `.e2e/run.done`) without repeating needed sections that passed, e.g. `--from <failed section>` after a fix. A partial run ends with `SECTIONS OK`.
 
