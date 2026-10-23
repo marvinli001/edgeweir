@@ -51,8 +51,8 @@ describe("configuration canary and current state", async () => {
   };
   const config = async (node: TestNode) =>
     decodeNodeConfig((await target(node))?.ir ?? new Uint8Array());
-  /** Heartbeat: the node reports `revision` applied at `at`. */
-  const report = async (node: TestNode, revision: number, at = new Date()) => {
+  /** Heartbeat at `at`: the node reports `revision`, applied at `appliedAt`. */
+  const report = async (node: TestNode, revision: number, at = new Date(), appliedAt = at) => {
     const [row] = await ctx.db
       .select()
       .from(schema.configRevision)
@@ -68,6 +68,7 @@ describe("configuration canary and current state", async () => {
       appliedContentHash: row?.contentHash ?? "",
       state: "applied",
       dataPlaneHealthy: true,
+      appliedAt,
       reportedAt: at,
     };
     await ctx.db
@@ -316,8 +317,13 @@ describe("configuration canary and current state", async () => {
     const latest = await change();
     expect(await rollout()).toMatchObject({ candidateRevision: latest, windowStartedAt });
     const end = new Date(new Date(windowStartedAt).getTime() + 301_000);
-    await report(canary, latest, end);
+    await report(canary, latest, end, new Date());
     await report(stable, (await rollout()).stableRevision ?? 0, end);
+    // The canary node's statistics cover the window.
+    await ctx.db.insert(schema.nodeStatsCursor).values({
+      nodeId: canary.id,
+      completeUntil: new Date(Math.ceil(end.getTime() / 60_000) * 60_000),
+    });
     expect(await evaluateRollout(ctx, clusterId, end)).toBe("promoted");
     expect((await target(stable))?.revision).toBe(latest);
   });

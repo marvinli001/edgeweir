@@ -231,10 +231,17 @@ describe("site delivery during a configuration canary", async () => {
     // An unchanged site runs the same version on both revisions.
     expect(await delivery(otherId)).toMatchObject({ state: "live", canary: null });
     await report(canaryNode);
-    expect(await delivery()).toMatchObject({ state: "partial", currentNodes: 1, canary });
+    // Once the canary node runs the candidate the window ends with whole minutes of statistics.
+    const applied = {
+      ...canary,
+      endsAt: (await admin.clusters.rollout({ id: clusterId })).windowEndsAt,
+    };
+    expect(new Date(applied.endsAt ?? 0).getTime() % 60_000).toBe(0);
+    expect(new Date(applied.endsAt ?? 0) >= new Date(canary.endsAt ?? 0)).toBe(true);
+    expect(await delivery()).toMatchObject({ state: "partial", currentNodes: 1, canary: applied });
     // Without automatic promotion the operator ends the canary.
     await admin.clusters.setRolloutPolicy({ id: clusterId, ...policy, autoPromote: false });
-    expect((await delivery()).canary).toEqual({ ...canary, autoPromote: false });
+    expect((await delivery()).canary).toEqual({ ...applied, autoPromote: false });
   });
 
   it("drops the canary once the candidate goes to every node", async () => {
