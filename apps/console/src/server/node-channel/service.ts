@@ -49,6 +49,7 @@ import {
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { accessAuthSecretBinding } from "../lib/access-auth-secrets";
 import type { AppContext } from "../lib/context";
+import { heartbeatSeconds } from "../lib/node-online";
 import { PURGE_KEY, siteSecretBinding } from "../lib/site-secrets";
 import { NODE_CERT_LIFETIME_DAYS, NODE_ORGANIZATION } from "../pki/ca";
 import { ingestLogs } from "../services/access-logs";
@@ -113,7 +114,6 @@ import {
 import { watchStream } from "./watch";
 import { bridgedClientAddress } from "./websocket";
 
-const HEARTBEAT_SECONDS = 15;
 const KEEPALIVE_MS = 15_000;
 
 /**
@@ -925,7 +925,7 @@ export function createNodeService(
       return {
         latestRevision: BigInt(latest?.revision ?? 0),
         renewCertificate: expiresIn < RENEW_BEFORE_MS,
-        reportIntervalSeconds: HEARTBEAT_SECONDS,
+        reportIntervalSeconds: heartbeatSeconds(),
         tasksPending,
         // The node probes only while its node group has a region to probe from.
         probe: node.probeEnabled && !!(await nodeProbeRegion(app.db, node)),

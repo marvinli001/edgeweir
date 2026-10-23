@@ -6,6 +6,7 @@ import { schema } from "@edgeweir/db";
 import { ORPCError } from "@orpc/server";
 import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
+import { onlineWindowSeconds } from "../lib/node-online";
 import { directoryRootCa, issuanceDirectory } from "./acme-directory";
 import { recordAudit, systemActor } from "./audit";
 import {
@@ -365,7 +366,7 @@ async function presentHttpChallenges(
       and(
         inArray(schema.node.clusterId, clusterIds),
         eq(schema.node.status, "active"),
-        gt(schema.node.lastSeenAt, new Date(Date.now() - 45_000)),
+        gt(schema.node.lastSeenAt, new Date(Date.now() - onlineWindowSeconds() * 1000)),
       ),
     );
   if (!nodes.length || nodes.some((n) => !n.features.includes("http01-v1")))

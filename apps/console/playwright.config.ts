@@ -13,6 +13,8 @@ export default defineConfig({
   workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: [["list"]],
+  // A parallel lane of scripts/e2e.sh (E2E_LANE) writes its own results: a run empties the folder.
+  outputDir: process.env.E2E_LANE ? `test-results-${process.env.E2E_LANE}` : "test-results",
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:13000",
     locale: "zh-CN",

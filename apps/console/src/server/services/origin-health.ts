@@ -2,7 +2,7 @@ import type { OriginHealth, OriginHealthSource } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { and, eq, gt, inArray } from "drizzle-orm";
 import { cleanErrorCode, cleanErrorParams, originError } from "../lib/node-errors";
-import { ONLINE_WINDOW_SECONDS } from "./nodes";
+import { onlineWindowSeconds } from "./nodes";
 import type { Executor } from "./revisions";
 import { findSite, shareSites } from "./sites";
 
@@ -98,7 +98,7 @@ export async function replaceOriginHealth(
  */
 export async function siteOriginHealth(db: Database, siteId: string): Promise<OriginHealth[]> {
   const site = await findSite(db, siteId);
-  const since = new Date(Date.now() - ONLINE_WINDOW_SECONDS * 1000);
+  const since = new Date(Date.now() - onlineWindowSeconds() * 1000);
   const onlineNodes = await db
     .select({ id: schema.node.id, name: schema.node.name })
     .from(schema.node)

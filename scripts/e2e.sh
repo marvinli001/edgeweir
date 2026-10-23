@@ -284,8 +284,10 @@
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
-#   bash scripts/e2e.sh [--up] [--down] [--skip-ui] [--only SECTION,... | --from SECTION] [--list] [--plan]
+#   bash scripts/e2e.sh [--up] [--down] [--skip-ui] [--only SECTION,... | --from SECTION] [--serial] [--list] [--plan]
 # The run is a chain of sections (--list prints them with what each needs).
+# A few sections run in a parallel lane beside a stretch of the chain (LANES;
+# --serial runs everything in turn); a lane's output follows when it ends.
 # --only runs the named sections, --from a section and all after it. On a
 # fresh stack the core section and the sections they need run first; on a
 # stack where an earlier run got past the core section, the run continues
@@ -324,6 +326,7 @@ ONLY=""
 FROM=""
 LIST=false
 PLAN_ONLY=false
+SERIAL=false
 while (($#)); do
   case "$1" in
     --up) UP=true ;;
@@ -335,6 +338,7 @@ while (($#)); do
     --from=*) FROM="${1#*=}" ;;
     --list) LIST=true ;;
     --plan) PLAN_ONLY=true ;;
+    --serial) SERIAL=true ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
@@ -352,6 +356,34 @@ SECTIONS=(
   "g12:m6-upgrades" "g13:m6-upgrades" "g14:m6-upgrades" "g16:m6-upgrades" "g17:m6-upgrades"
   "g18:m6-upgrades" "g19:m6-upgrades" "usage-guard:m6-upgrades" "allowlist:" "lifecycle:"
 )
+# Parallel lanes, "FIRST..LAST:SECTION ...": the SECTIONs run in a second
+# lane while the chain runs FIRST to LAST, and the chain waits for the lane
+# before the section after LAST. A lane holds sections that share no state
+# with that stretch (checked section by section, 2026-10-23): their own sites,
+# clusters and audit targets, no bans or IP lists, no node restarts, no
+# platform settings, and waits that tolerate other revisions ("at least").
+# Kept in the chain, with the reason:
+#   core, m1, m2, m5, g17, g19 and the restore step of m6-logs assert exact
+#     revision numbers or that no revision was published;
+#   m3, m4, g5 and g7 assert that nginx did not reload, which any change of
+#     nginx.conf elsewhere breaks (h2's gRPC site, g9's ports, g15's cache zone);
+#   node-logs restarts the console, m5, p0 and dns stop nodes, lifecycle
+#     deletes the core node, m6-upgrades upgrades both nodes, g6 blocks the
+#     edge node's ports, channel and wss move every node to other channel URLs;
+#   m4 blocks every site (0.0.0.0/0), g1 and g2 clear every ban and count
+#     them, g10's scan protection and g13's IP check need client-b alone,
+#     allowlist locks the host out of the console;
+#   g2 turns on platform Under Attack, g3 adds old nodes to the default
+#     cluster, g4 resets platform error pages, g16 changes log retention and
+#     uses client-b (g10), g18 counts origin requests that g15's cache zone
+#     reload repeats.
+# install only adds its own cluster and fills the download mirror nobody
+# else reads at that time; h2, g8 (own cluster), g12 and usage-guard keep to
+# their own sites. Each lane runs Playwright with its own session (E2E_LANE).
+LANES=(
+  "m3..m4:install"
+  "g9..g14:h2 g8 g12 usage-guard"
+)
 section_names() { local s; for s in "${SECTIONS[@]}"; do printf '%s\n' "${s%%:*}"; done; }
 section_deps() { local s; for s in "${SECTIONS[@]}"; do [[ "${s%%:*}" != "$1" ]] || { printf '%s\n' "${s#*:}"; return; }; done; }
 if $LIST; then
@@ -367,6 +399,7 @@ RUN_STARTED=$SECONDS
 TIMINGS=() # "SECONDS<TAB>SECTION<TAB>PART"
 CURRENT_SECTION=""
 SECTION_STARTED=0
+LANE_PID="" # the parallel lane running now (start_lane)
 clock() { printf '%d:%02d' $(($1 / 60)) $(($1 % 60)); }
 step() { printf '\n\033[1;34m==> %s\033[0m \033[2m(%s, +%s)\033[0m\n' "$*" "$(date +%H:%M:%S)" "$(clock $((SECONDS - RUN_STARTED)))"; }
 pass() { printf '\033[1;32mPASS\033[0m %s\n' "$*"; }
@@ -396,6 +429,10 @@ if $UP; then
   "${COMPOSE[@]}" up -d --build
 fi
 cleanup() {
+  if [[ -n "$LANE_PID" ]]; then
+    echo "waiting for the parallel lane ($LANE_SECTIONS) to end" >&2
+    finish_lane --no-fail
+  fi
   docker rm -f "$INSTALL_CONTAINER" >/dev/null 2>&1 || true
   # Containers scripts/e2e-g3.mjs and e2e-g8.mjs start next to the stack (old nodes, curl).
   docker ps -aq --filter "label=dev.edgeweir.e2e-g3=${COMPOSE_PROJECT_NAME:-edgeweir-e2e}" | xargs docker rm -f >/dev/null 2>&1 || true
@@ -466,6 +503,47 @@ run_section() {
   TIMINGS+=("$((SECONDS - SECTION_STARTED))"$'\t'"$1"$'\t'"total")
   CURRENT_SECTION=""
   echo "$1" >>"$RUN_DONE"
+}
+
+# start_lane NAME SECTION...: the SECTIONs in turn in the background, their
+# output in $STATE_DIR/lane-NAME.log and their timings in lane-NAME.tsv;
+# finish_lane waits for it, prints its output and fails when it failed
+# (with --no-fail, as the run ends anyway).
+start_lane() {
+  LANE_NAME="$1"
+  shift
+  LANE_SECTIONS="$*"
+  LANE_STARTED=$SECONDS
+  LANE_LOG="$STATE_DIR/lane-$LANE_NAME.log"
+  LANE_TIMINGS="$STATE_DIR/lane-$LANE_NAME.tsv"
+  step "parallel lane: $LANE_SECTIONS (output in $LANE_LOG until it ends)"
+  rm -f "$LANE_TIMINGS"
+  (
+    export E2E_LANE="$LANE_NAME"
+    TIMINGS=()
+    lane_exit() {
+      if [[ -n "$CURRENT_SECTION" ]]; then
+        TIMINGS+=("$((SECONDS - SECTION_STARTED))"$'\t'"$CURRENT_SECTION"$'\t'"unfinished")
+      fi
+      ((${#TIMINGS[@]} == 0)) || printf '%s\n' "${TIMINGS[@]}" >"$LANE_TIMINGS"
+    }
+    trap lane_exit EXIT
+    for s in $LANE_SECTIONS; do run_section "$s"; done
+  ) >"$LANE_LOG" 2>&1 &
+  LANE_PID=$!
+}
+finish_lane() {
+  [[ -n "$LANE_PID" ]] || return 0
+  local status=0 line
+  wait "$LANE_PID" || status=$?
+  LANE_PID=""
+  step "parallel lane: $LANE_SECTIONS ended after $(clock $((SECONDS - LANE_STARTED))) (exit $status); its output:"
+  cat "$LANE_LOG"
+  if [[ -f "$LANE_TIMINGS" ]]; then
+    while IFS= read -r line; do TIMINGS+=("$line"); done <"$LANE_TIMINGS"
+  fi
+  TIMINGS+=("$((SECONDS - LANE_STARTED))"$'\t'"lane:${LANE_SECTIONS// /,}"$'\t'"total")
+  ((status == 0)) || [[ "${1:-}" == --no-fail ]] || fail "parallel lane failed: $LANE_SECTIONS (output above)"
 }
 
 # api METHOD PATH [JSON] -> body on stdout; fails on non-2xx.
@@ -749,6 +827,10 @@ fi
 # For --from / --only on this stack later on.
 printf 'RUN_PROJECT=%q\nRUN_CONSOLE=%q\nAPI_KEY=%q\nCLUSTER_ID=%q\nSITE_ID=%q\n' \
   "${COMPOSE_PROJECT_NAME:-edgeweir-e2e}" "$CONSOLE" "$API_KEY" "$CLUSTER_ID" "$SITE_ID" >"$RUN_ENV"
+
+step "P0 usage traffic now: its 5-minute window is complete when the p0 section checks it"
+part usage-traffic env E2E_API_KEY="$API_KEY" E2E_SITE_ID="$SITE_ID" node scripts/e2e-p0.mjs --usage-traffic ||
+  fail "P0 usage traffic failed"
 }
 
 # ------------------------------------------------------------------ section m1
@@ -1098,20 +1180,28 @@ need syft
   { cat "$STATE_DIR/goreleaser-check.log" >&2; fail "goreleaser check failed in $NODE_CONTEXT"; }
 pass "goreleaser check: $(tr -d '\033' <"$STATE_DIR/goreleaser-check.log" | sed -E 's/\[[0-9;]*m//g' | grep -iE 'valid|checked' | tail -n1 | sed -E 's/^[[:space:]•]*//')"
 # The snapshot copies the edgeweir-openresty packages of `make
-# openresty-packages` (out/openresty) into dist/; build them for the
-# architecture of the install container when they are missing.
+# openresty-packages` (out/openresty) into dist/; when they are missing for
+# the architecture of the install container they come from the cache of
+# scripts/e2e-cache.mjs (by the git tree of packaging/openresty), or are
+# built and cached.
 DOCKER_ARCH="$(docker version --format '{{.Server.Arch}}')"
 OPENRESTY_VERSION="$(awk '$1 == "openresty" { print $2 }' "$NODE_CONTEXT/packaging/openresty/sources.lock")"
 OPENRESTY_RELEASE="$(awk '$1 == "release:" { print $2 }' "$NODE_CONTEXT/packaging/openresty/nfpm/edgeweir-openresty.yaml")"
 OPENRESTY_PKG="$OPENRESTY_VERSION-$OPENRESTY_RELEASE"
 OPENRESTY_FILES=("edgeweir-openresty_${OPENRESTY_PKG}_$DOCKER_ARCH.deb" "edgeweir-openresty-modsecurity_${OPENRESTY_PKG}_$DOCKER_ARCH.deb"
   "edgeweir-openresty_${OPENRESTY_PKG}_$DOCKER_ARCH.sbom.json")
+RPM_ARCH="$([[ "$DOCKER_ARCH" == arm64 ]] && echo aarch64 || echo x86_64)"
+OPENRESTY_CACHED=("${OPENRESTY_FILES[@]}" "edgeweir-openresty-$OPENRESTY_PKG.$RPM_ARCH.rpm"
+  "edgeweir-openresty-modsecurity-$OPENRESTY_PKG.$RPM_ARCH.rpm")
 openresty_packages_built() { for f in "${OPENRESTY_FILES[@]}"; do [[ -f "$NODE_CONTEXT/out/openresty/$f" ]] || return 1; done; }
-if ! openresty_packages_built; then
+if ! openresty_packages_built &&
+  ! node scripts/e2e-cache.mjs openresty restore "$NODE_CONTEXT" "$DOCKER_ARCH" "${OPENRESTY_CACHED[@]}"; then
   echo "make openresty-packages ARCH=$DOCKER_ARCH (in $NODE_CONTEXT, log in $STATE_DIR/openresty-packages.log)"
   part openresty-packages make -C "$NODE_CONTEXT" openresty-packages ARCH="$DOCKER_ARCH" >"$STATE_DIR/openresty-packages.log" 2>&1 ||
     { tail -n 40 "$STATE_DIR/openresty-packages.log" >&2; fail "building the edgeweir-openresty packages failed"; }
   openresty_packages_built || fail "make openresty-packages did not produce ${OPENRESTY_FILES[*]}"
+  node scripts/e2e-cache.mjs openresty save "$NODE_CONTEXT" "$DOCKER_ARCH" "${OPENRESTY_CACHED[@]}" ||
+    echo "not cached: packaging/openresty has uncommitted changes in $NODE_CONTEXT"
 fi
 pass "edgeweir-openresty $OPENRESTY_PKG packages for $DOCKER_ARCH in $NODE_CONTEXT/out/openresty"
 echo "goreleaser release --snapshot --clean (in $NODE_CONTEXT, log in $STATE_DIR/goreleaser.log)"
@@ -1641,13 +1731,50 @@ for s in $TARGETS; do
 done
 PLAN=()
 for s in $(section_names); do [[ "$WANT" != *" $s "* ]] || PLAN+=("$s"); done
+# The chain without the lanes' sections, and where each lane starts and ends:
+# a lane runs when its sections and at least one section of its stretch are
+# planned, otherwise its sections stay in the chain.
+CHAIN=" ${PLAN[*]} "
+LANE_PLAN=() # "START END SECTION..."
+if ! $SERIAL; then
+  for lane in "${LANES[@]}"; do
+    window="${lane%%:*}" first="${lane%%..*}" last="${window#*..}" on=false start="" end="" members=""
+    for s in $(section_names); do
+      [[ "$s" != "$first" ]] || on=true
+      if $on && [[ "$CHAIN" == *" $s "* && " ${lane#*:} " != *" $s "* ]]; then
+        start="${start:-$s}"
+        end="$s"
+      fi
+      [[ "$s" != "$last" ]] || on=false
+    done
+    for s in ${lane#*:}; do [[ "$CHAIN" != *" $s "* ]] || members+=" $s"; done
+    [[ -n "$start" && -n "$members" ]] || continue
+    LANE_PLAN+=("$start $end$members")
+    for s in $members; do CHAIN="${CHAIN/ $s / }"; done
+  done
+fi
 $FRESH || echo "continuing the run on this stack; passed before:${DONE% }"
 echo "sections: ${PLAN[*]}"
+for lane in ${LANE_PLAN[@]+"${LANE_PLAN[@]}"}; do
+  read -r start end members <<<"$lane"
+  echo "parallel: $members beside $start..$end"
+done
 ! $PLAN_ONLY || exit 0
-if $FRESH; then rm -f "$RUN_ENV" "$RUN_DONE"; fi
+if $FRESH; then rm -f "$RUN_ENV" "$RUN_DONE" "$STATE_DIR/p0-usage.json"; fi
 NETWORK="$(e2e_network)"
 
-for s in "${PLAN[@]}"; do run_section "$s"; done
+for s in $CHAIN; do
+  for lane in ${LANE_PLAN[@]+"${LANE_PLAN[@]}"}; do
+    read -r start end members <<<"$lane"
+    # shellcheck disable=SC2086
+    [[ "$s" != "$start" ]] || start_lane "$start" $members
+  done
+  run_section "$s"
+  for lane in ${LANE_PLAN[@]+"${LANE_PLAN[@]}"}; do
+    read -r start end members <<<"$lane"
+    [[ "$s" != "$end" ]] || finish_lane
+  done
+done
 
 report_timings
 if [[ -z "$ONLY$FROM" ]]; then

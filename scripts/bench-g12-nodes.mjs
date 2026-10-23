@@ -17,6 +17,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { rpc, signInResponse } from "./e2e-auth.mjs";
+import { ensureNodeImage } from "./e2e-cache.mjs";
 
 const execute = promisify(execFile);
 const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
@@ -118,25 +119,7 @@ if (process.argv.includes("--cleanup")) {
 }
 
 await cleanup();
-try {
-  await run(["image", "inspect", OLD_IMAGE]);
-} catch {
-  console.log(`building ${OLD_IMAGE} from edgeweir-node ${OLD_COMMIT}`);
-  await execute(
-    "sh",
-    [
-      "-c",
-      'git -C "$1" archive "$2" | docker build -q -t "$3" -',
-      "sh",
-      nodeContext,
-      OLD_COMMIT,
-      OLD_IMAGE,
-    ],
-    {
-      maxBuffer: 16 * 1024 * 1024,
-    },
-  );
-}
+console.log(`${OLD_IMAGE}: ${await ensureNodeImage(OLD_IMAGE, OLD_COMMIT, nodeContext)}`);
 const network = Object.keys(
   JSON.parse(await run(["inspect", consoleId]))[0].NetworkSettings.Networks,
 ).find((name) => name.endsWith("_default"));

@@ -31,7 +31,7 @@
 | Go | 1.27.2 | `helpers/certd`、`pnpm e2e` |
 | buf | 1.73.0 | 随开发依赖安装（`@bufbuild/buf`），由 `pnpm lint` 与 `pnpm proto:*` 调用 |
 
-端到端测试另需：curl、jq、goreleaser v2、syft、cosign v3.1.3，与本仓库同级的 [edgeweir-node](https://github.com/marvinli001/edgeweir-node) 检出（或 `EDGEWEIR_NODE_CONTEXT`），其中 `out/openresty` 有 Docker 架构对应的 edgeweir-openresty 包（`make openresty-packages`；缺少时 `scripts/e2e.sh` 先构建，需要 Docker Buildx），G3 之前的节点镜像 `edgeweir-node:pre-g3`（缺少时 `scripts/e2e-g3.mjs` 从 edgeweir-node 提交 `6da3403` 构建），以及对 deb.debian.org、openresty.org 的网络访问（首次构建节点镜像或 edgeweir-openresty 包时另需 github.com、download.gnome.org、vault.almalinux.org）。Playwright 步骤需要 Chromium：
+端到端测试另需：curl、jq、goreleaser v2、syft、cosign v3.1.3，与本仓库同级的 [edgeweir-node](https://github.com/marvinli001/edgeweir-node) 检出（或 `EDGEWEIR_NODE_CONTEXT`），其中 `out/openresty` 有 Docker 架构对应的 edgeweir-openresty 包（`make openresty-packages`；缺少时 `scripts/e2e.sh` 先构建，需要 Docker Buildx），G3、G8 之前的节点镜像 `edgeweir-node:pre-g3`、`edgeweir-node:pre-g8`（缺少时 `scripts/e2e-g3.mjs`、`e2e-g8.mjs` 从 edgeweir-node 提交 `6da3403`、`7e1338f` 构建，或从 `~/.cache/edgeweir-e2e` 载入），以及对 deb.debian.org、openresty.org 的网络访问（首次构建节点镜像或 edgeweir-openresty 包时另需 github.com、download.gnome.org、vault.almalinux.org）。Playwright 步骤需要 Chromium：
 
 ```bash
 pnpm --filter @edgeweir/console exec playwright install chromium
@@ -144,6 +144,8 @@ pnpm exec vitest run test/server/docs.test.ts
    ```
 
 3. 验证：输出以 `E2E OK` 结束，之前列出各段与其中各部分（checks、ui、cleanup 等）的耗时，从慢到快（也写入 `.e2e/timings.tsv`）。
+
+几段在并行通道中与一段主链同时运行（`scripts/e2e.sh` 的 `LANES`，写明了其余各段不能并行的原因）：通道的输出在它结束时整体打印，各自使用自己的 Playwright 会话；`--serial` 按顺序逐段运行。
 
 只跑部分段：`--list` 列出各段及其依赖；`--only g12,g15` 只跑这些段，`--from g12` 从该段跑到最后；`--plan` 只显示将要运行的段。新环境先跑 core 与所需的前置段；已跑过 core 的环境在原来的运行上继续（`.e2e/run.env`、`.e2e/run.done`），已通过的前置段不再重跑，例如失败后修好再 `--from <失败的段>`。只跑部分段时输出以 `SECTIONS OK` 结束。
 

@@ -6,7 +6,7 @@ import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import { siteChanges } from "./config-changes";
 import { assertBindingReleased } from "./dns";
-import { isOnline, ONLINE_WINDOW_SECONDS } from "./nodes";
+import { isOnline, onlineWindowSeconds } from "./nodes";
 import { resolvePlatformAlert } from "./platform-alerts";
 import {
   type Executor,
@@ -48,7 +48,7 @@ async function toClusterDto(
   db: Executor,
   row: typeof schema.cluster.$inferSelect,
 ): Promise<Cluster> {
-  const since = sql`now() - make_interval(secs => ${ONLINE_WINDOW_SECONDS})`;
+  const since = sql`now() - make_interval(secs => ${onlineWindowSeconds()})`;
   // Sequential on purpose: `db` may be a transaction, i.e. a single connection.
   const [nodes] = await db
     .select({ n: count() })

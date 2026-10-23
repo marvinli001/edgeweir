@@ -8,7 +8,7 @@ import {
 import { type Database, schema } from "@edgeweir/db";
 import { and, asc, eq, inArray, notInArray } from "drizzle-orm";
 import { fail } from "../lib/errors";
-import { isOnline, ONLINE_WINDOW_SECONDS } from "../lib/node-online";
+import { isOnline, onlineWindowSeconds } from "../lib/node-online";
 import { alertPolicySetting } from "./alert-policy";
 import { type Actor, recordAudit } from "./audit";
 import { skipNodeTasks } from "./cache-tasks";
@@ -35,7 +35,7 @@ import {
 } from "./revisions";
 import { discardNodeUpgrades } from "./upgrades";
 
-export { isOnline, ONLINE_WINDOW_SECONDS };
+export { isOnline, onlineWindowSeconds };
 
 type NodeRow = typeof schema.node.$inferSelect;
 
