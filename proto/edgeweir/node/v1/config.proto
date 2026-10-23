@@ -29,7 +29,8 @@ import "google/protobuf/timestamp.proto";
 //     (v0.24.0);
 //   - inside a site domains, and offline_hosts, by (name, wildcard, match)
 //     (v0.25.0; a name sorts before the same name with wildcard);
-//   - origin_client_certificates by id (v1.3.0).
+//   - origin_client_certificates by id (v1.3.0);
+//   - connection_limits ports by start (v1.6.0).
 // content_hash is the lowercase hex SHA-256 of the deterministic binary
 // encoding of this message with `revision` and `content_hash` cleared.
 message NodeConfig {
@@ -105,6 +106,42 @@ message NodeConfig {
   // it (OriginPool.tls_trust ORIGIN_TLS_TRUST_ORIGIN_CA). Changing it is a
   // structural change. Added in v1.3.0 (feature origin-ca-v1).
   OriginCa origin_ca = 22;
+  // Per-client limits of new TCP connections, enforced in the kernel
+  // (nftables) by nodes that manage table inet edgeweir. Unset: no limits.
+  // Added in v1.6.0; no feature is required (nodes without nftables, and
+  // older nodes, accept the configuration without enforcing it; nodes that
+  // understand the field report conn-limit-v1).
+  ConnectionLimits connection_limits = 23;
+}
+
+// ConnectionLimits limits each client's TCP connections to ports in the
+// kernel (nftables table inet edgeweir, chain input), after the allow sets
+// (loopback, the node's own and the console's addresses, platform allow
+// lists, trusted proxies: never limited) and the ban sets. A client is an
+// IPv4 address or an IPv6 /64. Packets over a limit are dropped. UDP
+// (QUIC, layer-4 UDP applications) is not limited.
+//
+// per_ip_connections > 0 (1-100000): at most this many connections a
+// client may hold at once (conntrack count, ct count); 0: no limit.
+// new_per_second > 0 (1-100000): new connections a client may open per
+// second, with burst (new_per_second-1000000; 0 means new_per_second)
+// above that; 0: no limit. At least one of the two is set.
+//
+// ports: the TCP ports the limits apply to, 1-256 ranges, sorted by start
+// and neither overlapping nor adjacent; the console fills in the cluster's
+// listener and TCP layer-4 application ports unless the operator named
+// ports. Anything else rejects the configuration.
+message ConnectionLimits {
+  uint32 per_ip_connections = 1;
+  uint32 new_per_second = 2;
+  uint32 burst = 3;
+  repeated PortRange ports = 4;
+}
+
+// PortRange is the ports start..end (end >= start, both 1-65535).
+message PortRange {
+  uint32 start = 1;
+  uint32 end = 2;
 }
 
 // OriginCa is the certificate authority that signs certificates for origin
@@ -234,6 +271,8 @@ message NodeConfigDiff {
   // Always sent in full (NodeConfig fields 21 and 22). Added in v1.3.0.
   repeated CertificateRef origin_client_certificates = 23;
   OriginCa origin_ca = 24;
+  // Sent in full. Added in v1.6.0.
+  ConnectionLimits connection_limits = 25;
 }
 
 // L4Protocol is the transport of a layer-4 application.
