@@ -11,6 +11,7 @@ import {
   MODSECURITY_FEATURE,
   MULTI_CERTIFICATE_FEATURE,
   ORIGIN_CA_FEATURE,
+  ORIGIN_CA_ROTATION_FEATURE,
   ORIGIN_HTTP2_FEATURE,
   ORIGIN_MTLS_FEATURE,
   RULES_BODY_FEATURE,
@@ -48,6 +49,7 @@ import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { rangeWindow, sourceFor } from "./analytics";
 import type { Actor } from "./audit";
+import { originCaRotating } from "./origin-pki";
 import type { Executor } from "./revisions";
 import { publishSiteChange } from "./site-change";
 import { findSite } from "./sites";
@@ -215,7 +217,10 @@ export async function siteFeatures(db: Database, siteId: string): Promise<SiteFe
     sessionAffinity: byNodes(SESSION_AFFINITY_FEATURE, "challenge-v1"),
     originHttp2: byNodes(ORIGIN_HTTP2_FEATURE),
     originMtls: byNodes(ORIGIN_MTLS_FEATURE),
-    originCa: byNodes(ORIGIN_CA_FEATURE),
+    // During a rotation nodes trust the previous Origin CA as well.
+    originCa: (await originCaRotating(db))
+      ? byNodes(ORIGIN_CA_FEATURE, ORIGIN_CA_ROTATION_FEATURE)
+      : byNodes(ORIGIN_CA_FEATURE),
     errorPages: byNodes(ERROR_PAGES_FEATURE),
     purgeByTag: byNodes(PURGE_TAG_FEATURE),
     prefetchVariants: byNodes(PREFETCH_V2_FEATURE),

@@ -56,7 +56,7 @@ import { defaultClusterId } from "./clusters";
 import { newCnamePrefix } from "./cname-prefixes";
 import { listBindings } from "./config-input";
 import { assertOriginsAllowed } from "./origin-allow-list";
-import { ensureOriginClientCertificate, ORIGIN_CA_ID, originAuthorityExists } from "./origin-pki";
+import { ensureOriginClientCertificate, ORIGIN_CA_KIND, originAuthorityExists } from "./origin-pki";
 import { type Executor, latestRevision, type Tx, toRevisionDto } from "./revisions";
 import { actionOriginGroup, availableLists, failUnknownLists } from "./rules";
 import { publishSiteChange } from "./site-change";
@@ -587,7 +587,7 @@ export async function assertOriginProtection(
     if (!settings.tlsVerify)
       fail("ORIGIN_TLS_TRUST_REQUIRES_VERIFY", "the Origin CA as trust needs verification");
     if (hasS3Origin) fail("ORIGIN_CA_S3", "S3 origins cannot be verified against the Origin CA");
-    if (!(await originAuthorityExists(tx, ORIGIN_CA_ID)))
+    if (!(await originAuthorityExists(tx, ORIGIN_CA_KIND)))
       fail("ORIGIN_CA_NOT_FOUND", "the Origin CA has not been created");
   }
   if (settings.clientCertificate) await ensureOriginClientCertificate(tx, masterKey, clusterId);

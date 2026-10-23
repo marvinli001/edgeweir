@@ -959,6 +959,7 @@ const originCertificates = [
     notAfter: ahead(15 * 365 * DAY - 30 * DAY),
     revokedAt: null,
     createdAt: ago(30 * DAY),
+    authority: "active" as const,
   },
   {
     id: id(41, 1),
@@ -972,16 +973,25 @@ const originCertificates = [
     notAfter: ahead(365 * DAY - 90 * DAY),
     revokedAt: ago(2 * DAY),
     createdAt: ago(90 * DAY),
+    authority: "previous" as const,
   },
 ];
 
 export const accessFixtures: Fixtures = {
   originCa: {
-    get: () => ({ authority: authority("7c".repeat(32), 20) }),
+    get: () => ({
+      authority: authority("7c".repeat(32), 20),
+      previous: authority("3a".repeat(32), 20),
+      previousCertificates: 1,
+    }),
   },
   originClientCa: {
     get: () => ({
       authority: authority("d4".repeat(32), 10),
+      next: null,
+      previous: null,
+      trustBundlePem: PEM,
+      pendingClusters: [],
       certificates: [
         {
           id: id(42, 1),
@@ -991,6 +1001,7 @@ export const accessFixtures: Fixtures = {
           fingerprint: "e1".repeat(32),
           notBefore: ago(20 * DAY),
           notAfter: ahead(70 * DAY),
+          authority: "active",
         },
       ],
     }),

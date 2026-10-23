@@ -851,6 +851,7 @@ export async function loadConfigInput(
     certificates,
     originClientCertificates: protection.originClientCertificates,
     ...(protection.originCa ? { originCa: protection.originCa } : {}),
+    ...(protection.originCaPrevious ? { originCaPrevious: protection.originCaPrevious } : {}),
     httpChallenges,
     ipLists,
     platformRules,
