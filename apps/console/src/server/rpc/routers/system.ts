@@ -6,7 +6,7 @@ import { listAttention } from "../../services/attention";
 import { auditFacets, listAuditLogs } from "../../services/audit";
 import { demoAuditEntry, isDemoEnabled } from "../../services/demo";
 import { getHiddenCards, updateHiddenCards } from "../../services/hidden-cards";
-import { ONLINE_WINDOW_SECONDS } from "../../services/nodes";
+import { onlineWindowSeconds } from "../../services/nodes";
 import { toRevisionDto } from "../../services/revisions";
 import {
   createServiceAccount,
@@ -75,7 +75,7 @@ export const systemRouter = {
   overview: {
     get: authed.overview.get.handler(async ({ context }) => {
       const db = context.app.db;
-      const since = sql`now() - make_interval(secs => ${ONLINE_WINDOW_SECONDS})`;
+      const since = sql`now() - make_interval(secs => ${onlineWindowSeconds()})`;
       const [[clusters], [nodes], [online], sites, revisions, attention] = await Promise.all([
         db.select({ n: count() }).from(schema.cluster),
         db.select({ n: count() }).from(schema.node),

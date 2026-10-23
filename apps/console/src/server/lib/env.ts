@@ -160,6 +160,22 @@ const schema = z.object({
   EDGEWEIR_DNS_TEST_ENDPOINT: z.string().default(""),
   /** Fallback CA certificates (PEM file) of the custom ACME directory. */
   EDGEWEIR_ACME_CA_FILE: z.string().default(""),
+  /**
+   * End-to-end tests only: the worker's every-minute jobs also run every this
+   * many seconds. Unset in deployments.
+   */
+  EDGEWEIR_E2E_TICK_SECONDS: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.coerce.number().int().min(1).max(59).optional(),
+  ),
+  /**
+   * End-to-end tests only: the heartbeat interval nodes are told (default
+   * 15 s); the online window stays three heartbeats. Unset in deployments.
+   */
+  EDGEWEIR_E2E_HEARTBEAT_SECONDS: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.coerce.number().int().min(1).max(15).optional(),
+  ),
 });
 
 /**

@@ -162,6 +162,35 @@ describe("node channel listen address", () => {
   });
 });
 
+describe("end-to-end test timings", () => {
+  it("are unset by default and when empty", () => {
+    for (const value of [undefined, ""]) {
+      const env = loadEnv({
+        ...base,
+        EDGEWEIR_E2E_TICK_SECONDS: value,
+        EDGEWEIR_E2E_HEARTBEAT_SECONDS: value,
+      });
+      expect(env.EDGEWEIR_E2E_TICK_SECONDS).toBeUndefined();
+      expect(env.EDGEWEIR_E2E_HEARTBEAT_SECONDS).toBeUndefined();
+    }
+  });
+  it("take whole seconds in range", () => {
+    const env = loadEnv({
+      ...base,
+      EDGEWEIR_E2E_TICK_SECONDS: "5",
+      EDGEWEIR_E2E_HEARTBEAT_SECONDS: "5",
+    });
+    expect([env.EDGEWEIR_E2E_TICK_SECONDS, env.EDGEWEIR_E2E_HEARTBEAT_SECONDS]).toEqual([5, 5]);
+    for (const [name, value] of [
+      ["EDGEWEIR_E2E_TICK_SECONDS", "60"],
+      ["EDGEWEIR_E2E_TICK_SECONDS", "0"],
+      ["EDGEWEIR_E2E_HEARTBEAT_SECONDS", "16"],
+      ["EDGEWEIR_E2E_HEARTBEAT_SECONDS", "2.5"],
+    ] as const)
+      expect(() => loadEnv({ ...base, [name]: value }), `${name}=${value}`).toThrow(name);
+  });
+});
+
 describe("outbound allow list", () => {
   it.each(["intranet", "10.0.0.0/33", "10.0.0.0/8,192.168.1.0/24x"])(
     "refuses %j at startup",

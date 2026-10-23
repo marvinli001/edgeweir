@@ -37,6 +37,11 @@ services:
       context: .
     image: edgeweir:${E2E_TAG:-e2e}
     environment:
+      # Test-only timings (lib/env.ts): the every-minute jobs every 5 s, heartbeats
+      # every 5 s (online window 15 s); E2E_TICK_SECONDS= / E2E_HEARTBEAT_SECONDS=
+      # (empty) runs with the production timings.
+      EDGEWEIR_E2E_TICK_SECONDS: ${E2E_TICK_SECONDS-5}
+      EDGEWEIR_E2E_HEARTBEAT_SECONDS: ${E2E_HEARTBEAT_SECONDS-5}
       ROLE: all
       DATABASE_URL: postgres://edgeweir:e2e-only-password@postgres:5432/edgeweir
       EDGEWEIR_MASTER_KEY: ZTJlLW9ubHktbWFzdGVyLWtleS1kby1ub3QtcmV1c2UhIQ==
@@ -332,6 +337,8 @@ services:
     # Kernel bans: the agent reports kernel-ban-v1 only with this capability.
     cap_add: [NET_ADMIN]
     environment:
+      # Statistics of completed minutes within seconds (production: 1m).
+      EDGEWEIR_STATS_INTERVAL: ${E2E_STATS_INTERVAL:-5s}
       # Trust store for HTTPS origins (instead of the system bundle): the
       # test CA only, so the self-signed :443 of "files" stays untrusted.
       EDGEWEIR_TRUSTED_CA: /etc/edgeweir-e2e/origin-ca.pem
@@ -402,6 +409,8 @@ services:
     hostname: edge-upgrade-peer
     cap_add: [NET_ADMIN]
     environment:
+      # Statistics of completed minutes within seconds (production: 1m).
+      EDGEWEIR_STATS_INTERVAL: ${E2E_STATS_INTERVAL:-5s}
       EDGEWEIR_TRUSTED_CA: /etc/edgeweir-e2e/origin-ca.pem
       EDGEWEIR_GEOIP_IPINFO: /etc/edgeweir-geoip/ipinfo_lite.mmdb
       EDGEWEIR_GEOIP_CITY: /etc/edgeweir-geoip/city.mmdb
@@ -426,6 +435,8 @@ services:
     profiles: ["dns"]
     hostname: edge-dns-b
     environment:
+      # Statistics of completed minutes within seconds (production: 1m).
+      EDGEWEIR_STATS_INTERVAL: ${E2E_STATS_INTERVAL:-5s}
       EDGEWEIR_TRUSTED_CA: /etc/edgeweir-e2e/origin-ca.pem
       EDGEWEIR_GEOIP_IPINFO: /etc/edgeweir-geoip/ipinfo_lite.mmdb
       EDGEWEIR_GEOIP_CITY: /etc/edgeweir-geoip/city.mmdb
@@ -480,6 +491,8 @@ services:
     profiles: ["wss"]
     hostname: edge-wss
     environment:
+      # Statistics of completed minutes within seconds (production: 1m).
+      EDGEWEIR_STATS_INTERVAL: ${E2E_STATS_INTERVAL:-5s}
       SSL_CERT_DIR: /etc/edgeweir-wss
       EDGEWEIR_TRUSTED_CA: /etc/edgeweir-e2e/origin-ca.pem
       EDGEWEIR_GEOIP_IPINFO: /etc/edgeweir-geoip/ipinfo_lite.mmdb
@@ -529,6 +542,8 @@ services:
     profiles: ["channel"]
     hostname: edge-channel
     environment:
+      # Statistics of completed minutes within seconds (production: 1m).
+      EDGEWEIR_STATS_INTERVAL: ${E2E_STATS_INTERVAL:-5s}
       SSL_CERT_DIR: /etc/edgeweir-wss
       EDGEWEIR_TRUSTED_CA: /etc/edgeweir-e2e/origin-ca.pem
       EDGEWEIR_GEOIP_IPINFO: /etc/edgeweir-geoip/ipinfo_lite.mmdb
@@ -571,6 +586,8 @@ services:
         until ip=$$(getent hosts g14-dns | cut -d' ' -f1) && [ -n "$$ip" ]; do sleep 1; done;
         EDGEWEIR_RESOLVER=$$ip exec /usr/local/bin/edgeweir-node supervise --manage-nginx
     environment:
+      # Statistics of completed minutes within seconds (production: 1m).
+      EDGEWEIR_STATS_INTERVAL: ${E2E_STATS_INTERVAL:-5s}
       EDGEWEIR_TRUSTED_CA: /etc/edgeweir-e2e/origin-ca.pem
       EDGEWEIR_GEOIP_IPINFO: /etc/edgeweir-geoip/ipinfo_lite.mmdb
       EDGEWEIR_GEOIP_CITY: /etc/edgeweir-geoip/city.mmdb

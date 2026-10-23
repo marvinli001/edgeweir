@@ -12,6 +12,7 @@ import { MasterKey } from "./lib/envelope";
 import { ConfigEventBus } from "./lib/events";
 import { logger, setLogLevel } from "./lib/logger";
 import { assertMasterKey } from "./lib/master-key";
+import { setHeartbeatSeconds } from "./lib/node-online";
 import { CLOSE_GRACE_MS, type NodeChannel, startNodeChannel } from "./node-channel/server";
 import { loadOrCreateNodeCa } from "./pki/store";
 import { resealEnvelopes } from "./services/envelope-rotation";
@@ -143,6 +144,12 @@ export async function bootstrap(): Promise<Running> {
       "EDGEWEIR_ACME_DIRECTORY is the fallback of the custom ACME directory; one saved in system settings wins",
       { directoryUrl: env.EDGEWEIR_ACME_DIRECTORY },
     );
+  setHeartbeatSeconds(env.EDGEWEIR_E2E_HEARTBEAT_SECONDS);
+  if (env.EDGEWEIR_E2E_TICK_SECONDS || env.EDGEWEIR_E2E_HEARTBEAT_SECONDS)
+    log.warn("end-to-end test timings in effect; unset them in a deployment", {
+      tickSeconds: env.EDGEWEIR_E2E_TICK_SECONDS,
+      heartbeatSeconds: env.EDGEWEIR_E2E_HEARTBEAT_SECONDS,
+    });
   // A promise nobody awaits must not take down the UI, API, node channel and
   // worker with it (Node.js exits on an unhandled rejection by default).
   process.on("unhandledRejection", (reason) => log.error("unhandled rejection", { error: reason }));

@@ -50,6 +50,16 @@ export const QUEUES = {
   pruneNodeLogs: "maintenance.prune-node-logs",
 } as const;
 
+/** Queues scheduled every minute ("* * * * *"). */
+const MINUTE_QUEUES = [
+  QUEUES.alerts,
+  QUEUES.mitigation,
+  QUEUES.rollouts,
+  QUEUES.dns,
+  QUEUES.traffic,
+  QUEUES.certificates,
+] as const;
+
 /**
  * Background worker (ROLE=worker|all): pg-boss queues and cron schedules
  * (listed in ARCHITECTURE.md), plus the in-process scheduling timer.
@@ -215,6 +225,20 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   }, SCHEDULING_INTERVAL_MS);
   scheduling.unref();
   boss.on("stopped", () => clearInterval(scheduling));
+
+  // End-to-end tests only (EDGEWEIR_E2E_TICK_SECONDS): the every-minute jobs
+  // run every few seconds too, one per queue and time slot.
+  const tick = ctx.env.EDGEWEIR_E2E_TICK_SECONDS;
+  if (tick) {
+    const timer = setInterval(() => {
+      for (const name of MINUTE_QUEUES)
+        boss
+          .send(name, {}, { singletonKey: "e2e-tick", singletonSeconds: tick })
+          .catch((error: unknown) => log.warn("e2e tick failed", { queue: name, error }));
+    }, tick * 1000);
+    timer.unref();
+    boss.on("stopped", () => clearInterval(timer));
+  }
 
   await boss.schedule(QUEUES.pruneBans, "*/10 * * * *");
   await boss.schedule(QUEUES.rotateChallengeKeys, "11 * * * *");

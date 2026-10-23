@@ -42,7 +42,7 @@ import {
 import { fail } from "../lib/errors";
 import { BANS_CHANNEL } from "../lib/events";
 import { lockBans } from "../lib/locks";
-import { ONLINE_WINDOW_SECONDS } from "../lib/node-online";
+import { onlineWindowSeconds } from "../lib/node-online";
 import { deleteInBatches } from "../lib/retention";
 import { type Actor, recordAudit } from "./audit";
 import type { Executor } from "./revisions";
@@ -140,7 +140,7 @@ const active = (now: Date) =>
 /** Online nodes that report each of these bans as not applied. */
 async function unappliedCounts(db: Executor, ids: string[]): Promise<Map<string, number>> {
   if (ids.length === 0) return new Map();
-  const since = new Date(Date.now() - ONLINE_WINDOW_SECONDS * 1000);
+  const since = new Date(Date.now() - onlineWindowSeconds() * 1000);
   const result = await db.execute<{ id: string; nodes: number }>(sql`
     select u.id, count(*)::int as nodes
     from ${schema.node} n, jsonb_array_elements_text(n.ban_status -> 'unappliedIds') as u(id)

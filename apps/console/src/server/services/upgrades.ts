@@ -19,6 +19,7 @@ import { and, asc, desc, eq, inArray, lt, or } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { lockClusterUpgrade } from "../lib/locks";
+import { heartbeatSeconds, onlineWindowSeconds } from "../lib/node-online";
 import { outboundGet } from "../lib/outbound";
 import { type Actor, recordAudit } from "./audit";
 import { getReleaseSource } from "./release-source";
@@ -35,8 +36,9 @@ import {
 const job = schema.nodeUpgrade,
   delivery = schema.nodeUpgradeDelivery;
 const ACTIVE = ["held", "pending", "running"];
-const FRESH = 45_000,
-  OBSERVE = 30_000;
+// A heartbeat is fresh within the online window; an upgraded node is watched for two heartbeats.
+const FRESH = () => onlineWindowSeconds() * 1000,
+  OBSERVE = () => heartbeatSeconds() * 2 * 1000;
 /** A released delivery fails when its node has not finished within this time. */
 const UPGRADE_DEADLINE_MS = 30 * 60_000;
 /** Share of the rollout nodes upgrading at the same time after promotion (at least one). */
@@ -222,12 +224,12 @@ async function dtos(db: Executor, rows: JobRow[], now = Date.now()): Promise<Upg
       return (
         d.state === "succeeded" &&
         d.healthySince &&
-        now - d.healthySince.getTime() >= OBSERVE &&
+        now - d.healthySince.getTime() >= OBSERVE() &&
         current?.node.clusterId === r.clusterId &&
         current.node.status === "active" &&
         current.node.agentVersion.replace(/^v/, "") === r.version &&
         current.node.lastSeenAt &&
-        now - current.node.lastSeenAt.getTime() <= FRESH &&
+        now - current.node.lastSeenAt.getTime() <= FRESH() &&
         current.status?.dataPlaneHealthy &&
         current.status.state === "applied" &&
         target &&
@@ -453,7 +455,7 @@ export async function createUpgrade(
         release.artifacts.some((a) => a.arch === n.arch) &&
         n.supportedFeatures.includes("self-upgrade-v1") &&
         !!n.lastSeenAt &&
-        now - n.lastSeenAt.getTime() <= FRESH &&
+        now - n.lastSeenAt.getTime() <= FRESH() &&
         !!s?.dataPlaneHealthy &&
         s.state === "applied" &&
         !!target;
@@ -701,7 +703,7 @@ export async function reportUpgrade(
         receipt.node.clusterId !== found.job.clusterId ||
         receipt.node.agentVersion.replace(/^v/, "") !== found.job.version ||
         !receipt.node.lastSeenAt ||
-        Date.now() - receipt.node.lastSeenAt.getTime() > FRESH ||
+        Date.now() - receipt.node.lastSeenAt.getTime() > FRESH() ||
         !receipt.status?.dataPlaneHealthy ||
         receipt.status.state !== "applied" ||
         !desired ||
@@ -785,7 +787,7 @@ export async function recordUpgradeHealth(
       report.state === "applied" &&
       report.dataPlaneHealthy &&
       desired?.contentHash === report.appliedContentHash;
-    const continuous = !!node.lastSeenAt && now.getTime() - node.lastSeenAt.getTime() <= FRESH;
+    const continuous = !!node.lastSeenAt && now.getTime() - node.lastSeenAt.getTime() <= FRESH();
     await tx
       .update(delivery)
       .set({
