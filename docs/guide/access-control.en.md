@@ -34,7 +34,7 @@ While an active node of the cluster lacks the capability `access-auth-v1`, the t
 | Excluded path prefixes | As path prefixes | Paths starting with one of them are not checked |
 
 - The path is nginx's normalized path (percent-decoded, as the rule field `http.request.uri.path`). Signed URLs of kinds B and C are matched by the path without their two signature segments.
-- The origin receives the raw path the visitor sent. When it holds an encoded `/`, `\`, `.`, `%` or `;` (`%2F`, `%5C`, `%2E`, `%25`, `%3B`, in either case), a `%u` escape, a `\`, a `;`, a `#`, or a `.` or `..` segment, or starts with `//`, the origin may route it elsewhere than the normalized path (`/admin/..%2Fx` is `/x` on the node, but under `/admin/` at a Go ServeMux origin): such a request is inside every rule's path prefixes and extensions, no excluded prefix applies to it, and it is not cached; when the domains of more than one rule cover the Host, which rule checks it cannot be told and it gets 400 (`auth-path-ambiguous`); so does one with a single rule when that rule is forward authentication, without asking the service (it decides on the path it is given, which the origin may read otherwise). Ordinary URLs can hold these markers too (`100%25.pdf`, `;jsessionid=`). Excluded prefixes compare exactly; no excluded prefix applies to a raw path with `//` inside (the node merges slashes, while an origin that keeps the empty segment may hand `/admin//public/x` to its `/admin/` handler), whose scope and caching still follow the merged path.
+- The origin receives the raw path the visitor sent. When it holds an encoded `/`, `\`, `.`, `%` or `;` (`%2F`, `%5C`, `%2E`, `%25`, `%3B`, in either case), a `%u` escape, a `\`, a `;`, a `#`, or a `.` or `..` segment, or starts with `//`, the origin may route it elsewhere than the normalized path (`/admin/..%2Fx` is `/x` on the node, but under `/admin/` at a Go ServeMux origin): such a request is inside every rule's path prefixes and extensions, no excluded prefix applies to it, and it is not cached; when the domains of more than one rule cover the Host, which rule checks it cannot be told and it gets 400 (`auth-path-ambiguous`); so does one with a single rule when that rule is forward authentication, without asking the service (it decides on the path it is given, which the origin may read otherwise). Ordinary URLs can hold these markers too (`100%25.pdf`, `;jsessionid=`); paths whose origin reads `%2F` or `;` as they are can be listed as [encoded path exceptions](#encoded-path-exceptions). Excluded prefixes compare exactly; no excluded prefix applies to a raw path with `//` inside (the node merges slashes, while an origin that keeps the empty segment may hand `/admin//public/x` to its `/admin/` handler), whose scope and caching still follow the merged path.
 - **The first enabled rule whose scope the request matches decides**; later rules are not looked at. Disabled rules are not sent to nodes. Path prefixes ignore case: with an origin that does not (S3, Go, Django), `/TEAM/x` matches an earlier `/team/` rule while the origin treats it as another resource, so put the stricter rule first.
 - The identity headers rules set (Basic's `X-Auth-User`, forward authentication's **Response headers copied to the origin**) are removed from the request when the rule is picked: a visitor's own values neither reach the origin nor show in the rules' `http.request.headers.*`. Those of disabled and deleted rules are removed as well, from every request of the site (the console keeps the header names a site has used, at most 64 no longer in use, the oldest dropped first; nodes 1.1.0 and later, earlier nodes remove those of the enabled rules only). Once the origin no longer trusts them, click **Stop removing** under **Headers of former rules still removed** at the bottom of the **Access authentication** card: a new configuration revision is published and `site.auth_identity_forget` audited; headers the current rules (disabled ones included) set are not affected.
 - Domains removed from the site disappear from scopes; when that removes all of a scope's domains, the rule covers every domain of the site (more requests are authenticated, never fewer).
@@ -306,6 +306,26 @@ Turn on what you need on the "Security headers" card and click "Save".
 
 The headers replace the origin's headers of the same name on cache hits, origin responses and responses the node makes. Rules of the response-transform phase run afterwards: a rule that sets or removes one of these headers wins.
 
+## Encoded path exceptions
+
+When the origin reads `%2F` or `;` path parameters as they are (object storage keys, matrix parameter APIs, Java's `;jsessionid=`), such requests are ambiguous by default: inside every authentication and access control scope, no excluded prefix applies, not cached. In the "Encoded path exceptions" card click "Add prefix", enter a raw path prefix, turn on "Allow %2F" and / or "Allow ; parameters", and click "Save".
+
+| Field | Meaning |
+| --- | --- |
+| Raw path prefix | Compared bytewise with the raw path the visitor sent (case-sensitive, nothing decoded); starts with `/`, at most 256 bytes of printable ASCII, without `%`, `;`, `\`, `#`, `?`, spaces, `//` or `.` and `..` segments; `/` covers the whole site. At most 32, no prefix twice |
+| Allow %2F | Encoded slashes (either case) no longer make the path ambiguous |
+| Allow ; parameters | `;` parameters in path segments no longer make the path ambiguous |
+
+| Behaviour | Meaning |
+| --- | --- |
+| Still ambiguous | With `%2F` read as `/` and every segment's parameters from `;` on removed, a path with any other marker stays ambiguous: `..%2F`, `..;`, `%2E`, `%25` (double encoding), `%5C`, `%3B`, `\`, `#`, `.` and `..` segments, a leading `//` |
+| Scopes | Compared in every way the origin may read the path: decoded, with `%2F` kept inside its segment, and either without `;` parameters. Scopes that add a check (authentication rules, geo, hotlink, user agents) apply when any reading is in them; excluded and exception prefixes, maintenance's allowed paths, WAF exclusions and CORS only when every reading is |
+| Authentication rules | Readings that select different authentication rules get 400 (`auth-path-ambiguous`); otherwise the selected rule checks the request. For example `/admin;x/secret` is inside an `/admin/` rule through the reading without parameters |
+| Cache | Cached by the cache rules; a path with `%2F` gets a cache key that keeps it (apart from `/`), while cache rules and purges still match the decoded path, so purging `/a/b` also purges `/a%2Fb` |
+| `//` inside | Excluded prefixes still do not apply |
+
+An exception only relaxes the characters it turns on under its prefix: outside the prefix, or for characters left off, paths stay ambiguous.
+
 ## IP check
 
 **Sites → (site) → Access control → IP check** (for that site) or **IP lists → IP check** (a site is optional): enter an IP address and click "Check".
@@ -329,7 +349,7 @@ Requests authentication refused (401, 403, 429, 503, a browser's first request w
 | `auth-denied` | 403 (forward authentication also 401 or 3xx) | A missing or wrong signature; forward authentication refused |
 | `auth-expired` | 403 | An expired signature or a timestamp ahead |
 | `auth-rate-limited` | 429 | Basic verification limit |
-| `auth-path-ambiguous` | 400 | An ambiguous raw path on a Host with more than one authentication rule, or whose one rule is forward authentication |
+| `auth-path-ambiguous` | 400 | An ambiguous raw path on a Host with more than one authentication rule, or whose one rule is forward authentication; or the readings of a path under an encoded path exception select different rules |
 | `auth-unavailable` | 503 | The authentication service is unavailable |
 
 Access control refusals do not count as authentication failures:
@@ -360,6 +380,7 @@ Access control refusals do not count as authentication failures:
 | Hot updates | Rules, users and keys are hot-updated; upgrading a node to a version with the capability adds one shared dictionary and one internal location to its nginx configuration (one structural reload that keeps open connections) |
 | Access control | Node capability `access-control-v1` (any part on or a site list chosen); geo access with countries or subdivisions also needs `geoip-city-v1`, with subdivisions the console also checks `geoip-subdivision-v1`, with ASNs `geoip-asn-v1`. While an active node of the cluster lacks it the cards show "Some nodes of the site's cluster do not support it yet", and publishes by service accounts and background jobs answer `NODE_CAPABILITY_REQUIRED`. Sites without any access control setting compile byte for byte as before |
 | Access control updates | Every setting is hot-updated without an nginx reload; upgrading a node to a version with the capability raises the timeouts of the edge layer's hop to the origin layer to 86400 seconds for longer WebSocket idle timeouts (one structural reload that keeps open connections) |
+| Encoded path exceptions | Node capability `encoded-path-exemptions-v1`; never holds a publish: nodes without it keep treating such paths as ambiguous. While an active node of the cluster lacks it the card says so and cannot add any |
 
 ## API
 
