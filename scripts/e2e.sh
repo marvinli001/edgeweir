@@ -133,6 +133,15 @@
 #   both nodes: unary, bidirectional streaming and error trailers; an update
 #   without the protocol keeps it; back on HTTP/1.1 the nodes no longer reach
 #   the h2c-only origin; Playwright e2e/h2.spec.ts.
+#   PROXY protocol to origins and gRPC health checks (scripts/e2e-pp.mjs,
+#   test origin h2-origin, after HTTP/2): both nodes report
+#   origin-proxy-protocol-v1 and active-health-grpc-v1; PROXY protocol v2
+#   and v1 through both nodes carry the client and the node, one origin
+#   connection per client connection; without it the origin refuses (502);
+#   HTTP/2 and gRPC to an origin that reads PROXY protocol first; a
+#   grpc.health.v1 check through PROXY protocol marks the origin down on
+#   NOT_SERVING (grpc_not_serving) and back on SERVING; Playwright
+#   e2e/pp.spec.ts.
 #   Site parity G8 (scripts/e2e-g8.mjs, after HTTP/2): both nodes report
 #   rules-v3; the origin sees X-Client-Country = ip.geoip.country and X-Req =
 #   http.request.id, a header whose computed value is invalid is skipped (and
@@ -330,6 +339,7 @@ SECTIONS=(
   "core:" "m1:" "analytics:" "m2:" "install:" "wss:" "channel:" "node-logs:" "diagnostics:" "m3:" "m4:" "m5:" "m6-logs:m5" "m6-upgrades:m5"
   "p0:m5 m6-upgrades" "g1:p0 m5 m6-upgrades" "g2:m3 m6-upgrades" "g3:m6-upgrades" "g4:m6-upgrades"
   "g5:m6-upgrades" "dns:m5 m6-upgrades" "g6:dns m5 m6-upgrades" "g7:m6-upgrades" "h2:m6-upgrades"
+  "pp:m6-upgrades"
   "g8:m6-upgrades" "g9:m6-upgrades" "g15:m6-upgrades" "g10:dns m5 m6-upgrades" "g11:m6-upgrades"
   "g12:m6-upgrades" "g13:m6-upgrades" "g14:m6-upgrades" "g16:m6-upgrades" "g17:m6-upgrades"
   "g18:m6-upgrades" "g19:m6-upgrades" "usage-guard:m6-upgrades" "allowlist:" "lifecycle:"
@@ -1464,6 +1474,12 @@ section_h2() {
 step "HTTP/2 and gRPC to origins: h2c origin, gRPC unary, bidirectional streaming and trailers through both nodes"
 story h2 --cleanup
 pass "HTTP/2 and gRPC checks passed"
+}
+
+section_pp() {
+step "PROXY protocol to origins and gRPC health checks: v1 and v2 through both nodes, per-client connections, HTTP/2 and gRPC over PROXY protocol, grpc.health.v1 down and up"
+story pp --cleanup
+pass "PROXY protocol and gRPC health checks passed"
 }
 
 section_g8() {
