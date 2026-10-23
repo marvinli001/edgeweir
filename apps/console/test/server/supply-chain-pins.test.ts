@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 // edgeweir-node are referenced by tag.
 const repo = resolve(import.meta.dirname, "../../../..");
 const read = (file: string) => readFileSync(resolve(repo, file), "utf8");
-const DIGEST = /@sha256:[0-9a-f]{64}$/;
+const DIGEST = /@sha256:[0-9a-f]{64}\}?$/;
 const OWN_IMAGE = /^(?:ghcr\.io\/marvinli001\/)?edgeweir(?:-node|-geoip-fixture)?:/;
 
 describe("supply-chain pins", () => {

@@ -343,7 +343,7 @@ feat(console)!: drop the public landing page from the open core
    ```
 
 3. tag 与 digest（或 SHA 与版本注释）一起修改。
-4. 修改 `compose.baota.yml` 或 `compose.baota-host.yml` 后，把全文同步进 `deploy.sh` 的内嵌模板；`deploy.sh` 的 `PG_IMAGE` 与 `compose.baota.yml` 的 PostgreSQL 镜像保持一致。
+4. 修改 `compose.baota.yml` 或 `compose.baota-host.yml` 后，把全文同步进 `deploy.sh` 的内嵌模板；`deploy.sh` 的 `PG_TAG`、`PG_PINNED` 与 `compose.baota.yml` 的 PostgreSQL 镜像保持一致，并更新 `pg_tag_ids` 中各架构的镜像 ID（`docker buildx imagetools inspect <镜像> --raw` 取各架构 manifest 的 digest 与其 config digest）。
 5. 验证。
 
    ```bash

@@ -15,7 +15,8 @@
 set -Eeuo pipefail
 
 readonly IMAGE=ghcr.io/marvinli001/edgeweir
-readonly PG_IMAGE=postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+readonly PG_TAG=postgres:18.6-alpine
+readonly PG_PINNED=$PG_TAG@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
 readonly CONTAINER=edgeweir-console
 # The bundled database's volume: project "edgeweir" (the templates' name:), volume postgres-data.
 readonly PG_VOLUME=edgeweir_postgres-data
@@ -248,10 +249,65 @@ db_url() {
 
 is_loopback() { [[ $1 == 127.* || $1 == localhost || $1 == ::1 ]]; }
 
+# pg_tag_ids <docker architecture>: the IDs PG_TAG has locally after `docker load`:
+# the image config digest (classic image store) and the platform manifest digest
+# (containerd image store). Keep in step with PG_PINNED when it changes.
+pg_tag_ids() {
+  case $1 in
+    x86_64 | amd64) echo "sha256:c293117fcecda7344b5480222e813b9f673d7abd69b1dd95eff239b768b04f59 sha256:d8703cd7fba306b9fec9268ecedfa8a966846c053036a60e3635791957eb2f66" ;;
+    aarch64 | arm64) echo "sha256:d7a8005067f55a2f8ea369e767545fd467b1943a4f0f1a48b7dc44f06c366109 sha256:89f747171c4b0af0eacf5984550060be79786dbe286eb60cfa691d79d1e8b23f" ;;
+  esac
+}
+
+# select_pg_image: sets PG_IMAGE, the PostgreSQL image for host-mode clients and
+# the bundled database. EDGEWEIR_POSTGRES_IMAGE (environment, then .env) wins.
+# With EDGEWEIR_NO_PULL, an image loaded with `docker load` has no digest on the
+# classic image store, so the pinned reference is missing: PG_TAG is used when
+# its ID is the one this architecture ships.
+PG_IMAGE=''
+select_pg_image() {
+  local arch id ids
+  [[ -z $PG_IMAGE ]] || return 0
+  PG_IMAGE=${EDGEWEIR_POSTGRES_IMAGE:-$(env_get EDGEWEIR_POSTGRES_IMAGE)}
+  if [[ -n $PG_IMAGE ]]; then
+    if [[ -n ${EDGEWEIR_NO_PULL:-} ]] && ! docker image inspect "$PG_IMAGE" >/dev/null 2>&1; then
+      die "本机没有 ${PG_IMAGE}（EDGEWEIR_NO_PULL 不会拉取）。"
+    fi
+    return 0
+  fi
+  PG_IMAGE=$PG_PINNED
+  [[ -n ${EDGEWEIR_NO_PULL:-} ]] || return 0
+  docker image inspect "$PG_PINNED" >/dev/null 2>&1 && return 0
+  arch=$(docker info -f '{{.Architecture}}' 2>/dev/null || true)
+  ids=$(pg_tag_ids "$arch")
+  id=$(docker image inspect -f '{{.Id}}' "$PG_TAG" 2>/dev/null || true)
+  if [[ -z $id ]]; then
+    die "本机没有 ${PG_TAG}（EDGEWEIR_NO_PULL 不会拉取）。docker load 导入它，或用 EDGEWEIR_POSTGRES_IMAGE 指定另一个本机镜像。"
+  elif [[ -z $ids ]]; then
+    die "无法核对 ${arch:-未知架构} 上的 ${PG_TAG}。用 EDGEWEIR_POSTGRES_IMAGE 指定要使用的本机镜像。"
+  elif [[ " $ids " != *" $id "* ]]; then
+    die "本机 ${PG_TAG}（${id}）不是脚本固定的版本。导入 ${PG_PINNED}，或用 EDGEWEIR_POSTGRES_IMAGE 指定要使用的本机镜像。"
+  fi
+  PG_IMAGE=$PG_TAG
+  info "本机的 ${PG_TAG} 与固定版本一致（镜像 ID 已核对），使用它。"
+}
+
+# persist_pg_image: keeps a PostgreSQL image other than the pinned one in .env,
+# which the bundled template and later commands read.
+persist_pg_image() {
+  select_pg_image
+  [[ $PG_IMAGE != "$PG_PINNED" ]] || return 0
+  [[ $(env_get EDGEWEIR_POSTGRES_IMAGE) == "$PG_IMAGE" ]] || env_set EDGEWEIR_POSTGRES_IMAGE "$PG_IMAGE"
+  if [[ $(deploy_mode) == bundled ]] && ! grep -q 'EDGEWEIR_POSTGRES_IMAGE' "$DIR/$COMPOSE_FILE"; then
+    warn "${COMPOSE_FILE} 是较早的模板，不读取 EDGEWEIR_POSTGRES_IMAGE；数据库仍用其中写明的镜像。"
+  fi
+}
+
 # pg_client [--stdin] <command>...: runs a PostgreSQL client on the host network
 # with the DB_* connection; --stdin hands it this script's standard input. The
 # password travels in the environment, never in argv.
 pg_client() {
+  select_pg_image
   local args=(--rm --network host -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE -e PGSSLMODE -e PGCONNECT_TIMEOUT=8)
   local sslmode ca=''
   if [[ ${1:-} == --stdin ]]; then
@@ -286,6 +342,7 @@ pg_client() {
 DB_USED=''
 db_check() {
   local out major create_db create_public
+  select_pg_image
   info "正在连接 ${DB_HOST}:${DB_PORT}/${DB_NAME}（用户 ${DB_USER}）…"
   if ! out=$(pg_client psql -XAtq -F ' ' -c "select current_setting('server_version_num')::int / 10000, has_database_privilege(current_database(), 'CREATE'), has_schema_privilege('public', 'CREATE'), to_regclass('drizzle.__drizzle_migrations') is not null" 2>&1); then
     warn "连接失败："
@@ -698,7 +755,7 @@ services:
       - no-new-privileges:true
 
   postgres:
-    image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    image: ${EDGEWEIR_POSTGRES_IMAGE:-postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873}
     container_name: edgeweir-postgres
     restart: unless-stopped
     environment:
@@ -778,6 +835,7 @@ cmd_install() {
       "编排内置 PostgreSQL（数据库跟控制台一起在 Docker 里运行，数据存在 Docker 卷）"
   fi
   if [[ $mode_choice == 1 ]]; then mode=host; else mode=bundled; fi
+  select_pg_image
 
   if [[ $mode == host ]]; then
     info "先准备好一个空数据库和它的所有者用户，例如宝塔「数据库 → PgSQL → 添加数据库」。"
@@ -918,6 +976,7 @@ cmd_install() {
   ok "已写入 ${DIR}/.env（600）、${DIR}/${COMPOSE_FILE} 和 ${DIR}/deploy.sh"
 
   step "启动"
+  persist_pg_image
   pull
   up_and_wait
   ok "控制台已启动，版本 $(running_version)"
@@ -994,6 +1053,7 @@ cmd_backup() {
   step "备份到 ${dest}"
   if [[ $(deploy_mode) == host ]]; then
     db_parse "$(database_url)" || die "DATABASE_URL（.env 或 DATABASE_URL_FILE）无法解析，不能备份。"
+    select_pg_image
     pg_client pg_dump --format=custom >"$dest/edgeweir.dump" || die "pg_dump 失败，已中止。"
   else
     compose exec -T postgres pg_dump -U edgeweir -d edgeweir --format=custom >"$dest/edgeweir.dump" ||
@@ -1087,6 +1147,7 @@ cmd_restore() {
   step "检查备份 ${dump}"
   if [[ $(deploy_mode) == host ]]; then
     db_parse "$(database_url)" || die "DATABASE_URL（.env 或 DATABASE_URL_FILE）无法解析，不能恢复。"
+    select_pg_image
   else
     compose up -d --wait postgres || die "数据库容器没有启动。"
   fi
@@ -1209,6 +1270,7 @@ cmd_update() {
   update_template "$skip_backup"
 
   env_set EDGEWEIR_VERSION "$version"
+  persist_pg_image
   step "升级"
   up_and_wait
   ok "当前版本 $(running_version)"
@@ -1347,7 +1409,7 @@ usage() {
 
 无人值守安装：EDGEWEIR_YES=1 EDGEWEIR_DB=host|bundled EDGEWEIR_PUBLIC_URL=https://…
   [DATABASE_URL=…] [EDGEWEIR_NODE_API_URL=…] [EDGEWEIR_VERSION=…] [EDGEWEIR_DIR=…]
-只用本机已有镜像（docker load 导入）：EDGEWEIR_NO_PULL=1
+只用本机已有镜像（docker load 导入）：EDGEWEIR_NO_PULL=1；PostgreSQL 镜像另指定：EDGEWEIR_POSTGRES_IMAGE=镜像
 备份保留份数：EDGEWEIR_BACKUP_KEEP=5（0 为全部保留）
 自己的编排改动放进与编排文件同目录的 compose.override.yml，升级替换模板时保留
 EOF

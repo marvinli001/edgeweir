@@ -343,7 +343,7 @@ Third-party inputs are pinned by immutable references; `pnpm test` rejects unpin
    ```
 
 3. Change the tag and digest (or the SHA and version comment) together.
-4. After changing `compose.baota.yml` or `compose.baota-host.yml`, copy the full file into the embedded template in `deploy.sh`; keep `PG_IMAGE` in `deploy.sh` equal to the PostgreSQL image in `compose.baota.yml`.
+4. After changing `compose.baota.yml` or `compose.baota-host.yml`, copy the full file into the embedded template in `deploy.sh`; keep `PG_TAG` and `PG_PINNED` in `deploy.sh` equal to the PostgreSQL image in `compose.baota.yml`, and update the per-architecture image IDs in `pg_tag_ids` (`docker buildx imagetools inspect <image> --raw` gives each architecture's manifest digest and, from that manifest, its config digest).
 5. Verify.
 
    ```bash

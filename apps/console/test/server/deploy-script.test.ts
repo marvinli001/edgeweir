@@ -97,9 +97,107 @@ describe("deploy.sh", () => {
   });
 
   it("dumps host databases with the pinned PostgreSQL image of the bundled template", () => {
-    const pinned = read("compose.baota.yml").match(/^\s*image:\s*(postgres:\S+)$/m)?.[1];
-    expect(pinned).toMatch(/@sha256:[0-9a-f]{64}$/);
-    expect(read("deploy.sh")).toContain(`readonly PG_IMAGE=${pinned}\n`);
+    const image = read("compose.baota.yml").match(
+      /^\s*image:\s*\$\{EDGEWEIR_POSTGRES_IMAGE:-(postgres:\S+)\}$/m,
+    )?.[1];
+    expect(image).toMatch(/@sha256:[0-9a-f]{64}$/);
+    const [tag] = (image ?? "").split("@");
+    expect(read("deploy.sh")).toContain(`readonly PG_TAG=${tag}\n`);
+    expect(read("deploy.sh")).toContain(`readonly PG_PINNED=$PG_TAG@${image?.split("@")[1]}\n`);
+  });
+
+  describe("PostgreSQL image (EDGEWEIR_POSTGRES_IMAGE)", () => {
+    const pinned =
+      read("deploy.sh").match(/^readonly PG_PINNED=\$PG_TAG@(sha256:\w+)$/m)?.[1] ?? "";
+    const amd64Id = read("deploy.sh").match(/x86_64 \| amd64\) echo "(sha256:\w+)/)?.[1] ?? "";
+    // A host whose images are all loaded by `docker load`: they have IDs, the
+    // pinned digest is unknown (classic image store), LOCAL names the images.
+    const docker = `docker() {
+      case "$1 $2" in
+        "info -f") echo "\${ARCH:-x86_64}" ;;
+        "image inspect")
+          if [[ $3 == -f ]]; then [[ " $LOCAL " == *" $5 "* ]] && echo "\${ID:-}"; return; fi
+          [[ " $LOCAL " == *" $3 "* ]] ;;
+      esac
+    }`;
+    const select = (env: Record<string, string>) =>
+      run(`${docker}; DIR="\${EDGEWEIR_DIR:-}"; select_pg_image; echo "$PG_IMAGE"`, env);
+
+    it("pulls the pinned image by default", () => {
+      expect(select({ LOCAL: "" }).stdout).toBe(`postgres:18.6-alpine@${pinned}\n`);
+    });
+
+    it("uses the pinned image under EDGEWEIR_NO_PULL when it is local", () => {
+      const result = select({
+        EDGEWEIR_NO_PULL: "1",
+        LOCAL: `postgres:18.6-alpine@${pinned}`,
+        ID: "sha256:other",
+      });
+      expect(result.stdout).toBe(`postgres:18.6-alpine@${pinned}\n`);
+    });
+
+    it("falls back to the tag when its image ID is the one this architecture ships", () => {
+      const result = select({ EDGEWEIR_NO_PULL: "1", LOCAL: "postgres:18.6-alpine", ID: amd64Id });
+      expect(result.status).toBe(0);
+      expect(result.stdout).toBe("postgres:18.6-alpine\n");
+    });
+
+    it("refuses a tag with another image ID, another architecture, or no image", () => {
+      const other = select({
+        EDGEWEIR_NO_PULL: "1",
+        LOCAL: "postgres:18.6-alpine",
+        ID: "sha256:0",
+      });
+      expect(other.status).toBe(1);
+      expect(other.stderr).toContain("不是脚本固定的版本");
+      const arch = select({
+        EDGEWEIR_NO_PULL: "1",
+        LOCAL: "postgres:18.6-alpine",
+        ID: amd64Id,
+        ARCH: "riscv64",
+      });
+      expect(arch.status).toBe(1);
+      expect(arch.stderr).toContain("EDGEWEIR_POSTGRES_IMAGE");
+      const none = select({ EDGEWEIR_NO_PULL: "1", LOCAL: "" });
+      expect(none.status).toBe(1);
+      expect(none.stderr).toContain("本机没有 postgres:18.6-alpine");
+    });
+
+    it("uses EDGEWEIR_POSTGRES_IMAGE, which must be local under EDGEWEIR_NO_PULL", () => {
+      const ok = select({
+        EDGEWEIR_NO_PULL: "1",
+        EDGEWEIR_POSTGRES_IMAGE: "registry.example/pg:18",
+        LOCAL: "registry.example/pg:18",
+      });
+      expect(ok.stdout).toBe("registry.example/pg:18\n");
+      const missing = select({
+        EDGEWEIR_NO_PULL: "1",
+        EDGEWEIR_POSTGRES_IMAGE: "registry.example/pg:18",
+        LOCAL: "",
+      });
+      expect(missing.status).toBe(1);
+      expect(missing.stderr).toContain("本机没有 registry.example/pg:18");
+    });
+
+    it("reads the image from .env and keeps a non-default one there", () => {
+      const dir = directory({
+        ".env": "EDGEWEIR_POSTGRES_IMAGE=registry.example/pg:18\n",
+        "compose.yml": "image: ${EDGEWEIR_POSTGRES_IMAGE:-x}\n",
+      });
+      expect(select({ EDGEWEIR_DIR: dir, LOCAL: "" }).stdout).toBe("registry.example/pg:18\n");
+      const fresh = directory({
+        ".env": "A=1\n",
+        "compose.yml": "image: ${EDGEWEIR_POSTGRES_IMAGE:-x}\n",
+      });
+      const result = run(
+        `${docker}; DIR="$EDGEWEIR_DIR"; COMPOSE_FILE=compose.yml; persist_pg_image; env_get EDGEWEIR_POSTGRES_IMAGE`,
+        { EDGEWEIR_DIR: fresh, EDGEWEIR_NO_PULL: "1", LOCAL: "postgres:18.6-alpine", ID: amd64Id },
+      );
+      expect(result.stdout).toBe("postgres:18.6-alpine");
+      expect(readFileSync(resolve(fresh, ".env"), "utf8")).toContain(
+        "EDGEWEIR_POSTGRES_IMAGE=postgres:18.6-alpine",
+      );
+    });
   });
 
   it.each(["compose.yml", "compose.baota.yml", "compose.baota-host.yml"])(
