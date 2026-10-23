@@ -520,7 +520,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `tag` | 网站标签：名称（1–32 字符）与 `key`（NFC 后小写，唯一，不区分大小写去重）；只在控制台使用，不下发节点 |
 | `site_tag` | 网站与标签（每个网站最多 10 个） |
 | `origin_pool` | 源站池：超时、keepalive、失败阈值、回源 TLS 校验、回源 HTTP 版本与 gRPC、主动健康检查与会话保持（关闭时保留设置） |
-| `origin` | 源站与所属的源站组（空为默认组） |
+| `origin` | 源站、所属的源站组（空为默认组）与回源 PROXY protocol 版本 |
 | `origin_credential` | S3 源站密钥，信封加密 |
 | `site_secret` | 网站的其他密钥（PURGE 方法的密钥），信封加密，只经节点通道下发 |
 | `site_auth_rule` | 网站的访问鉴权规则（最多 16 条，有序）；Basic 用户哈希与 URL 鉴权密钥信封加密在同一行，只经节点通道下发 |
@@ -674,6 +674,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0072_site_auto_mitigation` | `site_auto_mitigation` |
 | `0073_origin_stats` | 分钟、小时、天统计与视图 `traffic_hour_stats` 的 `origin_stats`（按源站的回源计数） |
 | `0074_node_clock_dns_failures` | `node.clock_offset_ms`、`node.clock_measured_at`（节点时钟偏差）；`dns_binding.failing_since`（对账连续失败的起始时间） |
+| `0075_origin_proxy_protocol` | `origin.proxy_protocol_version`（回源连接发送的 PROXY protocol 版本，0 为不发送） |
 
 ## 构建产物
 

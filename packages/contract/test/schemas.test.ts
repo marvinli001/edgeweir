@@ -60,6 +60,7 @@ describe("siteCreateInput", () => {
       sni: "",
       s3: null,
       group: "",
+      proxyProtocolVersion: 0,
     });
     expect(parsed.cacheRules).toEqual([]);
     expect(parsed.originSettings).toEqual({
@@ -80,6 +81,8 @@ describe("siteCreateInput", () => {
       grpc: false,
       activeHealthCheck: {
         enabled: false,
+        type: "http",
+        grpcService: "",
         path: "/",
         method: "GET",
         expectedStatusMin: 200,

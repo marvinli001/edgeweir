@@ -77,6 +77,8 @@ describe("origin settings", () => {
   it("defaults active health checks and session affinity to off with the documented values", () => {
     expect(activeHealthCheck.parse({})).toEqual({
       enabled: false,
+      type: "http",
+      grpcService: "",
       path: "/",
       method: "GET",
       expectedStatusMin: 200,
