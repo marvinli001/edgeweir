@@ -4,6 +4,7 @@ import { schema } from "@edgeweir/db";
 import { and, eq, inArray } from "drizzle-orm";
 import { isOnline } from "../lib/node-online";
 import { type Executor, getRevision, latestRevision, loadRollout } from "./revisions";
+import { rolloutWindowEndsAt } from "./rollout";
 
 /**
  * Compiled sites of revisions (site id → siteBytes), by cluster, revision and content hash:
@@ -60,7 +61,7 @@ async function runningCanary(
     return undefined;
   const stable = await getRevision(db, clusterId, row.stableRevision);
   return {
-    endsAt: new Date(row.windowStartedAt.getTime() + row.windowSeconds * 1000).toISOString(),
+    endsAt: (await rolloutWindowEndsAt(db, row)).toISOString(),
     autoPromote: row.autoPromote,
     stable: stable
       ? await sitesOf(db, clusterId, stable.revision, stable.contentHash, stable.ir)

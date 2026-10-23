@@ -49,12 +49,13 @@ describe("configuration canary with automatic rollback", async () => {
   };
   const rollout = () => admin.clusters.rollout({ id: clusterId });
   const target = async (node: typeof canary) => (await nodeTarget(ctx.db, node))?.revision;
-  /** Heartbeat: the node reports `revision` applied (or failed) at `at`. */
+  /** Heartbeat at `at`: the node reports `revision` applied (at `appliedAt`) or failed. */
   const report = async (
     node: typeof canary,
     revision: number,
     opts: {
       at?: Date;
+      appliedAt?: Date;
       state?: "applied" | "failed";
       healthy?: boolean;
       certificateFailures?: schema.NodeCertificateFailure[];
@@ -76,6 +77,7 @@ describe("configuration canary with automatic rollback", async () => {
       appliedContentHash: opts.state === "failed" ? "" : (row?.contentHash ?? ""),
       state: opts.state ?? "applied",
       dataPlaneHealthy: opts.healthy ?? true,
+      appliedAt: opts.appliedAt ?? null,
       reportedAt: at,
       certificateFailures: opts.certificateFailures ?? [],
     };
@@ -86,6 +88,30 @@ describe("configuration canary with automatic rollback", async () => {
     await ctx.db.update(schema.node).set({ lastSeenAt: at }).where(eq(schema.node.id, node.id));
   };
   const later = (seconds: number) => new Date(Date.now() + seconds * 1000);
+  const nextMinute = (ms: number) => Math.ceil(ms / 60_000) * 60_000;
+  /** The node's statistics watermark (ReportStatsV2.complete_until). */
+  const statsUntil = async (node: typeof canary, until: number) => {
+    const values = { nodeId: node.id, completeUntil: new Date(until) };
+    await ctx.db
+      .insert(schema.nodeStatsCursor)
+      .values(values)
+      .onConflictDoUpdate({ target: schema.nodeStatsCursor.nodeId, set: values });
+  };
+  /** The running window: its candidate, start and end (as shown). */
+  const running = async () => {
+    const r = await rollout();
+    return {
+      candidate: r.candidateRevision ?? 0,
+      start: new Date(r.windowStartedAt ?? 0).getTime(),
+      end: new Date(r.windowEndsAt ?? 0).getTime(),
+    };
+  };
+  /** Heartbeats of both nodes at `at`, the canary node on the candidate it applied at `appliedAt`. */
+  const beat = async (at: number, appliedAt: number) => {
+    const { candidate } = await running();
+    await report(canary, candidate, { at: new Date(at), appliedAt: new Date(appliedAt) });
+    await report(stable, (await rollout()).stableRevision ?? 0, { at: new Date(at) });
+  };
   const dnsPolicy = () => ({
     mode: "auto" as const,
     providerId,
@@ -208,9 +234,16 @@ describe("configuration canary with automatic rollback", async () => {
 
   it("promotes automatically after a healthy window", async () => {
     const { candidateRevision } = await rollout();
-    await report(canary, candidateRevision ?? 0, { at: later(301) });
-    await report(stable, (await rollout()).stableRevision ?? 0, { at: later(301) });
-    expect(await evaluateRollout(ctx, clusterId, later(301))).toBe("promoted");
+    const { start } = await running();
+    await beat(Date.now() + 301_000, Date.now());
+    // The window spans whole minutes of statistics: it ends once the canary node's are in.
+    const { end } = await running();
+    expect(end).toBe(nextMinute(start + 300_000));
+    await statsUntil(canary, end - 60_000);
+    await beat(end + 1000, Date.now());
+    expect(await evaluateRollout(ctx, clusterId, new Date(end + 1000))).toBe("canary");
+    await statsUntil(canary, end);
+    expect(await evaluateRollout(ctx, clusterId, new Date(end + 1000))).toBe("promoted");
     const done = await rollout();
     expect(done).toMatchObject({
       state: "promoted",
@@ -309,24 +342,104 @@ describe("configuration canary with automatic rollback", async () => {
     expect(second.stableRevision).toBe(first.stableRevision);
   });
 
-  it("rolls back when the canary 5xx ratio passes the threshold", async () => {
-    const { candidateRevision, windowStartedAt } = await rollout();
-    await report(canary, candidateRevision ?? 0);
-    const minute = new Date(Math.floor(new Date(windowStartedAt ?? 0).getTime() / 60_000) * 60_000);
-    await ctx.db.insert(schema.nodeMinuteStats).values([
-      { minute, nodeId: canary.id, siteId, requests: 20, statusCodes: { "502": 19, "200": 1 } },
-      { minute, nodeId: stable.id, siteId, requests: 40, statusCodes: { "200": 39, "503": 1 } },
-    ]);
-    const running = await rollout();
-    expect(running.window).toEqual({
+  it("rolls back when the canary 5xx ratio passes the threshold, counting the candidate's minutes only", async () => {
+    const { start } = await running();
+    // The canary node applies the candidate 30 seconds into a minute: that
+    // minute's 5xx are the previous configuration's (a failing one, say).
+    const applied = Math.floor(start / 60_000) * 60_000 + 90_000;
+    const since = applied + 30_000;
+    const stats = (minute: number, canary5xx: number) =>
+      ctx.db.insert(schema.nodeMinuteStats).values([
+        {
+          minute: new Date(minute),
+          nodeId: canary.id,
+          siteId,
+          requests: 20,
+          statusCodes: { "502": canary5xx, "200": 20 - canary5xx },
+        },
+        {
+          minute: new Date(minute),
+          nodeId: stable.id,
+          siteId,
+          requests: 40,
+          statusCodes: { "200": 39, "503": 1 },
+        },
+      ]);
+    await stats(applied - 30_000, 20);
+    await beat(since + 30_000, applied);
+    expect((await rollout()).window).toEqual({
+      canaryRequests: 0,
+      canary5xx: 0,
+      baselineRequests: 0,
+      baseline5xx: 0,
+    });
+    expect(await evaluateRollout(ctx, clusterId, new Date(since + 30_000))).toBe("canary");
+    // The candidate's own 5xx still roll it back.
+    await stats(since, 19);
+    expect((await rollout()).window).toEqual({
       canaryRequests: 20,
       canary5xx: 19,
       baselineRequests: 40,
       baseline5xx: 1,
     });
-    expect(await evaluateRollout(ctx, clusterId)).toBe("rolled_back");
+    expect(await evaluateRollout(ctx, clusterId, new Date(since + 30_000))).toBe("rolled_back");
     expect((await rollout()).outcome).toBe("error_ratio");
     await ctx.db.delete(schema.nodeMinuteStats);
+  });
+
+  it("does not decide on fewer canary requests than the minimum and promotes after the window", async () => {
+    const stableRevision = (await rollout()).stableRevision ?? 0;
+    await report(canary, stableRevision);
+    await report(stable, stableRevision);
+    await change();
+    const { start } = await running();
+    const applied = start + 1000;
+    const since = nextMinute(applied);
+    await ctx.db.insert(schema.nodeMinuteStats).values({
+      minute: new Date(since),
+      nodeId: canary.id,
+      siteId,
+      requests: policy.minRequests - 1,
+      statusCodes: { "502": policy.minRequests - 1 },
+    });
+    await beat(since + 61_000, applied);
+    expect(await evaluateRollout(ctx, clusterId, new Date(since + 61_000))).toBe("canary");
+    const { end } = await running();
+    await statsUntil(canary, end);
+    await beat(end + 1000, applied);
+    expect(await evaluateRollout(ctx, clusterId, new Date(end + 1000))).toBe("promoted");
+    await ctx.db.delete(schema.nodeMinuteStats);
+  });
+
+  it("promotes a window without traffic once its statistics are in, or after a grace when they lag", async () => {
+    await change();
+    const { start } = await running();
+    const applied = start + 1000;
+    await beat(applied, applied);
+    const { end } = await running();
+    // No statistics past the window's start: it waits two minutes past its end.
+    await statsUntil(canary, Math.floor(start / 60_000) * 60_000);
+    await beat(end + 119_000, applied);
+    expect(await evaluateRollout(ctx, clusterId, new Date(end + 119_000))).toBe("canary");
+    await beat(end + 120_000, applied);
+    expect(await evaluateRollout(ctx, clusterId, new Date(end + 120_000))).toBe("promoted");
+  });
+
+  it("observes a candidate that replaced another late in the window for a whole minute", async () => {
+    await change();
+    const { start } = await running();
+    const end = nextMinute(start + 300_000);
+    await change();
+    // The replacement is applied a second before the window's last minute ends.
+    const applied = end - 1000;
+    await beat(applied, applied);
+    expect((await running()).end).toBe(end + 60_000);
+    await statsUntil(canary, end);
+    await beat(end + 30_000, applied);
+    expect(await evaluateRollout(ctx, clusterId, new Date(end + 30_000))).toBe("canary");
+    await statsUntil(canary, end + 60_000);
+    await beat(end + 61_000, applied);
+    expect(await evaluateRollout(ctx, clusterId, new Date(end + 61_000))).toBe("promoted");
   });
 
   it("rolls back when a canary node reports an unhealthy data plane or goes offline", async () => {
@@ -372,10 +485,12 @@ describe("configuration canary with automatic rollback", async () => {
 
   it("waits for an administrator without auto promotion; promote and abort are audited", async () => {
     await admin.clusters.setRolloutPolicy({ id: clusterId, ...policy, autoPromote: false });
-    const { candidateRevision } = await rollout();
-    await report(canary, candidateRevision ?? 0, { at: later(301) });
-    await report(stable, (await rollout()).stableRevision ?? 0, { at: later(301) });
-    expect(await evaluateRollout(ctx, clusterId, later(301))).toBe("awaiting_promotion");
+    const { start } = await running();
+    await beat(start + 1000, start + 1000);
+    const { end } = await running();
+    await statsUntil(canary, end);
+    await beat(end + 1000, start + 1000);
+    expect(await evaluateRollout(ctx, clusterId, new Date(end + 1000))).toBe("awaiting_promotion");
     const promoted = await admin.clusters.promoteRollout({ id: clusterId });
     expect(promoted).toMatchObject({ state: "promoted", outcome: "manual_promote" });
     expect((await rpcError(admin.clusters.promoteRollout({ id: clusterId }))).code).toBe(

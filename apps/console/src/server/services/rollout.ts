@@ -114,25 +114,92 @@ interface WindowTraffic {
   baseline5xx: number;
 }
 
-/** Requests and 5xx of the window so far: canary nodes against the cluster's other active nodes. */
+/**
+ * How long past its window a canary waits for the canary nodes' statistics
+ * (uploaded after each minute, every 60 seconds by default) before it
+ * decides on what arrived.
+ */
+const STATS_GRACE_MS = 120_000;
+
+const nextMinute = (ms: number) => Math.ceil(ms / 60_000) * 60_000;
+
+/**
+ * A canary node's part of the window (epoch ms, whole minutes): its minute
+ * buckets from `since` on count, and the window waits for its statistics
+ * watermark to reach `due`.
+ */
+interface Counted {
+  nodeId: string;
+  since: number;
+  due: number;
+}
+
+/**
+ * The canary nodes that run the candidate, each counted from the first whole
+ * minute after it applied it (by its own clock, like its minute buckets) and
+ * not before the window: the minute it applied the candidate in also holds
+ * traffic of the configuration before (a failing one the candidate fixes,
+ * say). The window needs every minute it spans and at least one whole minute
+ * of the candidate; a candidate that replaced another late in the window
+ * extends it by that minute. Nodes that do not run the candidate yet count
+ * for neither side.
+ */
+function countedNodes(
+  row: RolloutRow,
+  contentHash: string,
+  nodes: { node: { id: string }; status: typeof schema.nodeConfigStatus.$inferSelect | null }[],
+): Counted[] {
+  const started = row.windowStartedAt?.getTime() ?? 0;
+  const end = nextMinute(started + row.windowSeconds * 1000);
+  return nodes.flatMap(({ node, status }) => {
+    if (status?.state !== "applied" || status.appliedContentHash !== contentHash) return [];
+    const since = nextMinute(Math.max(status.appliedAt?.getTime() ?? started, started));
+    return [{ nodeId: node.id, since, due: Math.max(end, since + 60_000) }];
+  });
+}
+
+/**
+ * When a window ends (epoch ms): windowSeconds after its start, or once the
+ * statistics of its canary nodes are due when all of them run the candidate.
+ * A lagging watermark holds the decision STATS_GRACE_MS longer.
+ */
+function windowEnd(row: RolloutRow, counted: Counted[], participating: number) {
+  const end = (row.windowStartedAt?.getTime() ?? 0) + row.windowSeconds * 1000;
+  return counted.length && counted.length === participating
+    ? Math.max(end, ...counted.map((c) => c.due))
+    : end;
+}
+
+/**
+ * Requests and 5xx of the window so far: the counted canary nodes against the
+ * cluster's other active nodes from the earliest counted minute on.
+ */
 async function windowTraffic(
   db: Executor,
   row: RolloutRow,
   participating: string[],
+  counted: Counted[],
 ): Promise<WindowTraffic> {
-  if (!row.windowStartedAt)
-    return { canaryRequests: 0, canary5xx: 0, baselineRequests: 0, baseline5xx: 0 };
-  const since = new Date(Math.floor(row.windowStartedAt.getTime() / 60_000) * 60_000);
+  const out = { canaryRequests: 0, canary5xx: 0, baselineRequests: 0, baseline5xx: 0 };
+  if (!counted.length) return out;
+  const since = new Date(Math.min(...counted.map((c) => c.since)));
+  const values = sql.join(
+    counted.map((c) => sql`(${c.nodeId}::uuid, ${new Date(c.since).toISOString()}::timestamptz)`),
+    sql`, `,
+  );
   const result = await db.execute<{ canary: boolean; requests: string; errors: string }>(sql`
-    select (m.node_id = any(${`{${participating.join(",")}}`}::uuid[])) as canary,
+    with counted(node_id, since) as (values ${values})
+    select (c.node_id is not null) as canary,
       coalesce(sum(m.requests), 0) as requests,
       coalesce(sum((select coalesce(sum(value::numeric), 0) from jsonb_each_text(m.status_codes) where key like '5%')), 0) as errors
     from node_minute_stats m
     join node n on n.id = m.node_id
-    where n.cluster_id = ${row.clusterId}::uuid and n.status = 'active' and m.minute >= ${since.toISOString()}::timestamptz
+    left join counted c on c.node_id = m.node_id
+    where n.cluster_id = ${row.clusterId}::uuid and n.status = 'active'
+      and m.minute >= coalesce(c.since, ${since.toISOString()}::timestamptz)
+      and (c.node_id is not null or not (m.node_id = any(${`{${participating.join(",")}}`}::uuid[])))
     group by 1
   `);
-  const out = { canaryRequests: 0, canary5xx: 0, baselineRequests: 0, baseline5xx: 0 };
   for (const r of result.rows) {
     if (r.canary) {
       out.canaryRequests = Number(r.requests);
@@ -143,6 +210,21 @@ async function windowTraffic(
     }
   }
   return out;
+}
+
+/** Whether every counted node's statistics watermark reached its `due`. */
+async function statsCover(db: Executor, counted: Counted[]) {
+  const cursors = await db
+    .select({ nodeId: schema.nodeStatsCursor.nodeId, until: schema.nodeStatsCursor.completeUntil })
+    .from(schema.nodeStatsCursor)
+    .where(
+      inArray(
+        schema.nodeStatsCursor.nodeId,
+        counted.map((c) => c.nodeId),
+      ),
+    );
+  const until = new Map(cursors.map((c) => [c.nodeId, c.until?.getTime() ?? 0]));
+  return counted.every((c) => (until.get(c.nodeId) ?? 0) >= c.due);
 }
 
 /**
@@ -162,6 +244,17 @@ async function participants(db: Executor, row: RolloutRow) {
         eq(schema.node.clusterId, row.clusterId),
       ),
     );
+}
+
+/** When the running window of a rollout row with a window start ends (see windowEnd). */
+export async function rolloutWindowEndsAt(db: Executor, row: RolloutRow) {
+  const candidate =
+    row.candidateRevision !== null
+      ? await getRevision(db, row.clusterId, row.candidateRevision, "head")
+      : undefined;
+  const nodes = candidate ? await participants(db, row) : [];
+  const counted = candidate ? countedNodes(row, candidate.contentHash, nodes) : [];
+  return new Date(windowEnd(row, counted, nodes.length));
 }
 
 /**
@@ -238,10 +331,12 @@ export async function evaluateRollout(
         return "rolled_back";
       }
     }
+    const counted = countedNodes(row, candidate.contentHash, nodes);
     const traffic = await windowTraffic(
       tx,
       row,
       nodes.map((n) => n.node.id),
+      counted,
     );
     if (traffic.canaryRequests >= row.minRequests) {
       const baseline = traffic.baselineRequests
@@ -269,6 +364,12 @@ export async function evaluateRollout(
       }
       return row.state as RolloutState;
     }
+    // Every canary node runs the candidate: the window ends once their
+    // statistics are in (see countedNodes), or STATS_GRACE_MS later for a
+    // node whose watermark lags.
+    const due = Math.max(...counted.map((c) => c.due));
+    if (now.getTime() < due + STATS_GRACE_MS && !(await statsCover(tx, counted)))
+      return row.state as RolloutState;
     if (row.autoPromote) {
       await promote(tx, row, "auto_promote", systemActor);
       return "promoted";
@@ -385,6 +486,14 @@ export async function getRollout(db: Executor, clusterId: string): Promise<Clust
     )
     .orderBy(schema.node.name);
   const latest = await latestRevision(db, clusterId);
+  const participating =
+    running && row ? nodes.filter((n) => row.canaryNodeIds.includes(n.node.id)) : [];
+  const candidate =
+    running && row.candidateRevision !== null
+      ? await getRevision(db, clusterId, row.candidateRevision, "head")
+      : undefined;
+  const counted =
+    running && candidate ? countedNodes(row, candidate.contentHash, participating) : [];
   return {
     clusterId,
     policy: policyOf(row),
@@ -397,7 +506,7 @@ export async function getRollout(db: Executor, clusterId: string): Promise<Clust
     windowStartedAt: running ? (row?.windowStartedAt?.toISOString() ?? null) : null,
     windowEndsAt:
       running && row?.windowStartedAt
-        ? new Date(row.windowStartedAt.getTime() + row.windowSeconds * 1000).toISOString()
+        ? new Date(windowEnd(row, counted, participating.length)).toISOString()
         : null,
     outcome: (row?.outcome ?? "") as RolloutOutcome,
     finishedAt: row?.finishedAt?.toISOString() ?? null,
@@ -413,7 +522,8 @@ export async function getRollout(db: Executor, clusterId: string): Promise<Clust
         ? await windowTraffic(
             db,
             row,
-            row.canaryNodeIds.filter((id) => nodes.some((n) => n.node.id === id)),
+            participating.map((n) => n.node.id),
+            counted,
           )
         : null,
     candidateChanges:

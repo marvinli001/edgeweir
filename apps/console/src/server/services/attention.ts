@@ -5,6 +5,7 @@ import type { AppContext } from "../lib/context";
 import { listBindings } from "./dns";
 import { listNodes } from "./nodes";
 import { loadRollout } from "./revisions";
+import { rolloutWindowEndsAt } from "./rollout";
 import { listUpgrades } from "./upgrades";
 
 /** A rolled-back canary or a failed upgrade stays on the list this long. */
@@ -113,9 +114,7 @@ export async function listAttention(app: AppContext, now = Date.now()): Promise<
           item("canary_running", cluster, {
             revision: rollout.candidateRevision,
             at: rollout.windowStartedAt
-              ? new Date(
-                  rollout.windowStartedAt.getTime() + rollout.windowSeconds * 1000,
-                ).toISOString()
+              ? (await rolloutWindowEndsAt(db, rollout)).toISOString()
               : null,
           }),
         );
