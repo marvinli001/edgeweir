@@ -1,0 +1,490 @@
+{
+  "ambiguous": [
+    { "raw": "/admin/..%2Fx", "result": true },
+    { "raw": "/admin/..%2fx", "result": true },
+    { "raw": "/a/%2e%2e/x", "result": true },
+    { "raw": "/a%5Cb", "result": true },
+    { "raw": "/a\\b", "result": true },
+    { "raw": "/video.mp4;x=1", "result": true },
+    { "raw": "/a/../b", "result": true },
+    { "raw": "/a/.", "result": true },
+    { "raw": "//public/admin", "result": true },
+    { "raw": "/a#b", "result": true },
+    { "raw": "/admin/..%252Fx", "result": true },
+    { "raw": "/a%3Bb", "result": true },
+    { "raw": "/%u002e%u002e/x", "result": true },
+    { "raw": "/", "result": false },
+    { "raw": "/a..b/c", "result": false },
+    { "raw": "/%61dmin/x", "result": false },
+    { "raw": "/a/.hidden", "result": false },
+    { "raw": "/a//b", "result": false }
+  ],
+  "prefixes": [
+    { "prefix": "/", "valid": true },
+    { "prefix": "/files/", "valid": true },
+    { "prefix": "/api/v1", "valid": true },
+    { "prefix": "/a/.well-known/", "valid": true },
+    { "prefix": "", "valid": false },
+    { "prefix": "files/", "valid": false },
+    { "prefix": "/a%2Fb/", "valid": false },
+    { "prefix": "/a;b/", "valid": false },
+    { "prefix": "/a\\b/", "valid": false },
+    { "prefix": "/a#b", "valid": false },
+    { "prefix": "/a?b", "valid": false },
+    { "prefix": "/a b/", "valid": false },
+    { "prefix": "/a//b/", "valid": false },
+    { "prefix": "/a/../b/", "valid": false },
+    { "prefix": "/a/./", "valid": false },
+    { "prefix": "/a/..", "valid": false },
+    { "prefix": "/café/", "valid": false }
+  ],
+  "classify": [
+    {
+      "name": "plain path",
+      "raw": "/files/a/b",
+      "exemptions": [{ "prefix": "/files/", "encodedSlash": true, "semicolon": true }],
+      "ambiguous": false,
+      "noExemption": false,
+      "views": null,
+      "keyPath": null
+    },
+    {
+      "name": "plain path with //",
+      "raw": "/files//a",
+      "exemptions": [],
+      "ambiguous": false,
+      "noExemption": true,
+      "views": null,
+      "keyPath": null
+    },
+    {
+      "name": "no exemptions",
+      "raw": "/files/a%2Fb",
+      "exemptions": [],
+      "ambiguous": true,
+      "noExemption": true,
+      "views": null,
+      "keyPath": null
+    },
+    {
+      "name": "object key",
+      "raw": "/files/a%2Fb.txt",
+      "exemptions": [{ "prefix": "/files/", "encodedSlash": true, "semicolon": false }],
+      "ambiguous": false,
+      "noExemption": false,
+      "views": ["/files/a/b.txt", "/files/a%2Fb.txt"],
+      "keyPath": "/files/a%2Fb.txt"
+    },
+    {
+      "name": "lowercase escape, other escapes decoded",
+      "raw": "/files/%61%2fb%20c",
+      "exemptions": [{ "prefix": "/files/", "encodedSlash": true, "semicolon": false }],
+      "ambiguous": false,
+      "noExemption": false,
+      "views": ["/files/a/b c", "/files/a%2Fb c"],
+      "keyPath": "/files/a%2Fb c"
+    },
+    {
+      "name": "outside the prefix",
+      "raw": "/other/a%2Fb",
+      "exemptions": [{ "prefix": "/files/", "encodedSlash": true, "semicolon": true }],
+      "ambiguous": true,
+      "noExemption": true,
+      "views": null,
+      "keyPath": null
+    },
+    {
+      "name": "prefixes match bytes exactly",
+      "raw": "/FILES/a%2Fb",
+      "exemptions": [{ "prefix": "/files/", "encodedSlash": true, "semicolon": false }],
+      "ambiguous": true,
+      "noExemption": true,
+      "views": null,
+      "keyPath": null
+    },
+    {
+      "name": "prefix decoded into place",
+      "raw": "/%66iles/a%2Fb",
+      "exemptions": [{ "prefix": "/files/", "encodedSlash": true, "semicolon": false }],
+      "ambiguous": true,
+      "noExemption": true,
+      "views": null,
+      "keyPath": null
+    },
+    {
+      "name": "encoded dot segment",
+      "raw": "/files/..%2Fadmin/x",
+      "exemptions": [{ "prefix": "/files/", "encodedSlash": true, "semicolon": true }],
+      "ambiguous": true,
+      "noExemption": true,
+      "views": null,
+      "keyPath": null
+    },
+    {
+      "name": "trailing encoded dot segment",
+      "raw": "/admin%2F..",
+      "exemptions": [{ "prefix": "/", "encodedSlash": true, "semicolon": true }],
+      "ambiguous": true,
+      "noExemption": true,
+      "views": null,
+      "keyPath": null
+    },
+    {
+      "name": "dot then encoded slash",
+      "raw": "/files/x/.%2Fy",
+      "exemptions": [{ "prefix": "/files/", "encodedSlash": true, "semicolon": false }],
+      "ambiguous": true,
+      "noExemption": true,
+      "views": null,
+      "keyPath": null
+    },
+    {
+      "name": "encoded slash at the root",
+      "raw": "/%2Fadmin",
+      "exemptions": [{ "prefix": "/", "encodedSlash": true, "semicolon": false }],
+      "ambiguous": true,
+      "noExemption": true,
+      "views": null,
+      "keyPath": null
+    },
+    {
+      "name": "double encoding stays ambiguous",
+      "raw": "/files/a%252Fb",
+      "exemptions": [{ "prefix": "/files/", "encodedSlash": true, "semicolon": true }],
+      "ambiguous": true,
+      "noExemption": true,
+      "views": null,
+      "keyPath": null
+    },
+    {
+      "name": "other encoded separators stay ambiguous",
+      "raw": "/files/a%5Cb%2Fc",
+      "exemptions": [{ "prefix": "/files/", "encodedSlash": true, "semicolon": true }],
+      "ambiguous": true,
+      "noExemption": true,
+      "views": null,
+      "keyPath": null
+    },
+    {
+      "name": "encoded dots stay ambiguous",
+      "raw": "/files/a%2F%2E%2E/x",
+      "exemptions": [{ "prefix": "/files/", "encodedSlash": true, "semicolon": true }],
+      "ambiguous": true,
+      "noExemption": true,
+      "views": null,
+      "keyPath": null
+    },
+    {
+      "name": "semicolon not allowed",
+      "raw": "/files/a;b",
+      "exemptions": [{ "prefix": "/files/", "encodedSlash": true, "semicolon": false }],
+      "ambiguous": true,
+      "noExemption": true,
+      "views": null,
+      "keyPath": null
+    },
+    {
+      "name": "encoded slash not allowed",
+      "raw": "/api/a%2Fb",
+      "exemptions": [{ "prefix": "/api/", "encodedSlash": false, "semicolon": true }],
+      "ambiguous": true,
+      "noExemption": true,
+      "views": null,
+      "keyPath": null
+    },
+    {
+      "name": "encoded semicolon stays ambiguous",
+      "raw": "/api/a%3Bv=1",
+      "exemptions": [{ "prefix": "/api/", "encodedSlash": true, "semicolon": true }],
+      "ambiguous": true,
+      "noExemption": true,
+      "views": null,
+      "keyPath": null
+    },
+    {
+      "name": "matrix parameters",
+      "raw": "/api/cars;color=red/items",
+      "exemptions": [{ "prefix": "/api/", "encodedSlash": false, "semicolon": true }],
+      "ambiguous": false,
+      "noExemption": false,
+      "views": ["/api/cars;color=red/items", "/api/cars/items"],
+      "keyPath": null
+    },
+    {
+      "name": "servlet session id",
+      "raw": "/app/page;jsessionid=AB12",
+      "exemptions": [{ "prefix": "/app/", "encodedSlash": false, "semicolon": true }],
+      "ambiguous": false,
+      "noExemption": false,
+      "views": ["/app/page;jsessionid=AB12", "/app/page"],
+      "keyPath": null
+    },
+    {
+      "name": "parameters hiding a dot segment",
+      "raw": "/public/..;/admin/x",
+      "exemptions": [{ "prefix": "/", "encodedSlash": false, "semicolon": true }],
+      "ambiguous": true,
+      "noExemption": true,
+      "views": null,
+      "keyPath": null
+    },
+    {
+      "name": "parameters on a single dot",
+      "raw": "/a/.;x/b",
+      "exemptions": [{ "prefix": "/", "encodedSlash": false, "semicolon": true }],
+      "ambiguous": true,
+      "noExemption": true,
+      "views": null,
+      "keyPath": null
+    },
+    {
+      "name": "parameters as a whole first segment",
+      "raw": "/;x/admin",
+      "exemptions": [{ "prefix": "/", "encodedSlash": false, "semicolon": true }],
+      "ambiguous": true,
+      "noExemption": true,
+      "views": null,
+      "keyPath": null
+    },
+    {
+      "name": "parameters as a whole inner segment",
+      "raw": "/a/;x/b",
+      "exemptions": [{ "prefix": "/", "encodedSlash": false, "semicolon": true }],
+      "ambiguous": false,
+      "noExemption": true,
+      "views": ["/a/;x/b", "/a//b"],
+      "keyPath": null
+    },
+    {
+      "name": "both allowed by two entries",
+      "raw": "/data/v1;a=1/k%2Fx",
+      "exemptions": [
+        { "prefix": "/data/", "encodedSlash": true, "semicolon": false },
+        { "prefix": "/data/v1", "encodedSlash": false, "semicolon": true }
+      ],
+      "ambiguous": false,
+      "noExemption": false,
+      "views": ["/data/v1;a=1/k/x", "/data/v1;a=1/k%2Fx", "/data/v1/k/x", "/data/v1/k%2Fx"],
+      "keyPath": "/data/v1;a=1/k%2Fx"
+    },
+    {
+      "name": "the entry that does not match adds nothing",
+      "raw": "/data/v2;a=1/k%2Fx",
+      "exemptions": [
+        { "prefix": "/data/", "encodedSlash": true, "semicolon": false },
+        { "prefix": "/data/v1", "encodedSlash": false, "semicolon": true }
+      ],
+      "ambiguous": true,
+      "noExemption": true,
+      "views": null,
+      "keyPath": null
+    },
+    {
+      "name": "encoded double slash",
+      "raw": "/files/a%2F%2Fb",
+      "exemptions": [{ "prefix": "/files/", "encodedSlash": true, "semicolon": false }],
+      "ambiguous": false,
+      "noExemption": true,
+      "views": ["/files/a/b", "/files/a%2F%2Fb"],
+      "keyPath": "/files/a%2F%2Fb"
+    }
+  ],
+  "scope": [
+    {
+      "name": "encoded slash out of an excluded prefix",
+      "raw": "/admin/public%2Fsecret",
+      "uri": "/admin/public/secret",
+      "exemptions": [{ "prefix": "/", "encodedSlash": true, "semicolon": true }],
+      "prefixes": ["/admin/"],
+      "excluded": ["/admin/public/"],
+      "result": true
+    },
+    {
+      "name": "excluded in every reading",
+      "raw": "/admin/public/a%2Fb",
+      "uri": "/admin/public/a/b",
+      "exemptions": [{ "prefix": "/", "encodedSlash": true, "semicolon": true }],
+      "prefixes": ["/admin/"],
+      "excluded": ["/admin/public/"],
+      "result": false
+    },
+    {
+      "name": "parameters cut into a prefix",
+      "raw": "/admin;x/secret",
+      "uri": "/admin;x/secret",
+      "exemptions": [{ "prefix": "/", "encodedSlash": false, "semicolon": true }],
+      "prefixes": ["/admin/"],
+      "excluded": [],
+      "result": true
+    },
+    {
+      "name": "parameters on the last segment",
+      "raw": "/admin;x",
+      "uri": "/admin;x",
+      "exemptions": [{ "prefix": "/", "encodedSlash": false, "semicolon": true }],
+      "prefixes": ["/admin"],
+      "excluded": ["/admin;"],
+      "result": true
+    },
+    {
+      "name": "encoded slash into a prefix",
+      "raw": "/ADMIN%2Fx",
+      "uri": "/ADMIN/x",
+      "exemptions": [{ "prefix": "/", "encodedSlash": true, "semicolon": false }],
+      "prefixes": ["/admin/"],
+      "excluded": [],
+      "result": true
+    },
+    {
+      "name": "dot segment through an encoded slash",
+      "raw": "/admin%2F..",
+      "uri": "/",
+      "exemptions": [{ "prefix": "/", "encodedSlash": true, "semicolon": true }],
+      "prefixes": ["/admin/"],
+      "excluded": [],
+      "result": true
+    },
+    {
+      "name": "dot segment behind parameters",
+      "raw": "/public/..;/admin/x",
+      "uri": "/public/..;/admin/x",
+      "exemptions": [{ "prefix": "/", "encodedSlash": false, "semicolon": true }],
+      "prefixes": ["/admin/"],
+      "excluded": [],
+      "result": true
+    },
+    {
+      "name": "an exempt path out of scope",
+      "raw": "/files/a%2Fb",
+      "uri": "/files/a/b",
+      "exemptions": [{ "prefix": "/files/", "encodedSlash": true, "semicolon": false }],
+      "prefixes": ["/admin/"],
+      "excluded": [],
+      "result": false
+    },
+    {
+      "name": "the same path without an exemption",
+      "raw": "/files/a%2Fb",
+      "uri": "/files/a/b",
+      "exemptions": [],
+      "prefixes": ["/admin/"],
+      "excluded": [],
+      "result": true
+    },
+    {
+      "name": "// still disables exclusions",
+      "raw": "/admin/public/a;x//b",
+      "uri": "/admin/public/a;x/b",
+      "exemptions": [{ "prefix": "/", "encodedSlash": false, "semicolon": true }],
+      "prefixes": ["/admin/"],
+      "excluded": ["/admin/public/"],
+      "result": true
+    }
+  ],
+  "grant": [
+    {
+      "name": "every reading under the prefix",
+      "raw": "/api/v1;x=1/items",
+      "uri": "/api/v1;x=1/items",
+      "exemptions": [{ "prefix": "/api/", "encodedSlash": false, "semicolon": true }],
+      "prefixes": ["/api/"],
+      "result": true
+    },
+    {
+      "name": "one reading out of the prefix",
+      "raw": "/api/public%2Fx",
+      "uri": "/api/public/x",
+      "exemptions": [{ "prefix": "/", "encodedSlash": true, "semicolon": false }],
+      "prefixes": ["/api/public/"],
+      "result": false
+    },
+    {
+      "name": "ambiguous",
+      "raw": "/api/a%2Fb",
+      "uri": "/api/a/b",
+      "exemptions": [],
+      "prefixes": ["/api/"],
+      "result": false
+    },
+    {
+      "name": "no prefixes",
+      "raw": "/api/a%2Fb",
+      "uri": "/api/a/b",
+      "exemptions": [{ "prefix": "/", "encodedSlash": true, "semicolon": false }],
+      "prefixes": [],
+      "result": true
+    }
+  ],
+  "auth": [
+    {
+      "name": "parameters select the rule they cut into",
+      "raw": "/admin;x/y",
+      "uri": "/admin;x/y",
+      "exemptions": [{ "prefix": "/", "encodedSlash": false, "semicolon": true }],
+      "rules": [
+        { "pathPrefixes": ["/team/"], "extensions": [], "excludePathPrefixes": [] },
+        { "pathPrefixes": ["/admin/"], "extensions": [], "excludePathPrefixes": [] }
+      ],
+      "result": 1
+    },
+    {
+      "name": "readings that select different rules",
+      "raw": "/a;p/x",
+      "uri": "/a;p/x",
+      "exemptions": [{ "prefix": "/", "encodedSlash": false, "semicolon": true }],
+      "rules": [
+        { "pathPrefixes": ["/a/"], "extensions": [], "excludePathPrefixes": [] },
+        { "pathPrefixes": [], "extensions": [], "excludePathPrefixes": [] }
+      ],
+      "result": "ambiguous"
+    },
+    {
+      "name": "an encoded slash that selects a nested rule",
+      "raw": "/files/private%2Fx",
+      "uri": "/files/private/x",
+      "exemptions": [{ "prefix": "/files/", "encodedSlash": true, "semicolon": false }],
+      "rules": [
+        { "pathPrefixes": ["/files/private/"], "extensions": [], "excludePathPrefixes": [] },
+        { "pathPrefixes": ["/files/"], "extensions": [], "excludePathPrefixes": [] }
+      ],
+      "result": "ambiguous"
+    },
+    {
+      "name": "one rule for every reading",
+      "raw": "/files/a%2Fb",
+      "uri": "/files/a/b",
+      "exemptions": [{ "prefix": "/files/", "encodedSlash": true, "semicolon": false }],
+      "rules": [{ "pathPrefixes": ["/files/"], "extensions": [], "excludePathPrefixes": [] }],
+      "result": 0
+    },
+    {
+      "name": "a reading under no rule takes the other's",
+      "raw": "/files/public%2Fx",
+      "uri": "/files/public/x",
+      "exemptions": [{ "prefix": "/files/", "encodedSlash": true, "semicolon": false }],
+      "rules": [
+        { "pathPrefixes": ["/files/"], "extensions": [], "excludePathPrefixes": ["/files/public/"] }
+      ],
+      "result": 0
+    },
+    {
+      "name": "extensions of every reading",
+      "raw": "/x/run.php;.jpg",
+      "uri": "/x/run.php;.jpg",
+      "exemptions": [{ "prefix": "/", "encodedSlash": false, "semicolon": true }],
+      "rules": [{ "pathPrefixes": [], "extensions": ["php"], "excludePathPrefixes": [] }],
+      "result": 0
+    },
+    {
+      "name": "ambiguous with two rules",
+      "raw": "/admin/..%2Fx",
+      "uri": "/x",
+      "exemptions": [],
+      "rules": [
+        { "pathPrefixes": ["/team/"], "extensions": [], "excludePathPrefixes": [] },
+        { "pathPrefixes": ["/admin/"], "extensions": [], "excludePathPrefixes": [] }
+      ],
+      "result": "ambiguous"
+    }
+  ]
+}

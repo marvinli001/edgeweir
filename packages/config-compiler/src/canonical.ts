@@ -121,6 +121,7 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
       if (access.websocket) access.websocket.origins = sortedByteSet(access.websocket.origins);
     }
     site.authIdentityHeaders = sortedByteSet(site.authIdentityHeaders);
+    site.encodedPathExemptions.sort(byBytes((e) => e.prefix));
     // Access authentication rules keep their order; their lists are sets.
     for (const rule of site.authRules) {
       rule.domains = sortedByteSet(rule.domains);

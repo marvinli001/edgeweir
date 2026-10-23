@@ -2,6 +2,7 @@ import type { AccessControlModel } from "@edgeweir/config-compiler";
 import {
   type AccessControlSettings,
   corsSettings,
+  encodedPathSettings,
   geoSettings,
   hotlinkSettings,
   securityHeaderSettings,
@@ -49,6 +50,7 @@ export function readAccessControl(
     geo: part(geoSettings, stored.geo),
     websocket: part(websocketSettings, stored.websocket),
     securityHeaders: part(securityHeaderSettings, stored.securityHeaders),
+    encodedPaths: part(encodedPathSettings, stored.encodedPaths),
   };
 }
 

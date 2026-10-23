@@ -505,6 +505,38 @@ message Site {
   // auth-identity-headers-v1 remove only those of the enabled rules (no
   // feature required).
   repeated string auth_identity_headers = 37;
+  // Path prefixes whose raw request paths may carry an encoded slash
+  // ("%2F") and / or ";" path parameters as they are, at most 32, sorted by
+  // prefix and unique (EncodedPathExemption). Without an entry such a path
+  // is ambiguous: in every path scope, under no exemption, never cached.
+  // Added in v1.6.0; nodes without feature encoded-path-exemptions-v1 keep
+  // treating every such path as ambiguous (no feature required).
+  repeated EncodedPathExemption encoded_path_exemptions = 38;
+}
+
+// EncodedPathExemption lets raw paths that start with prefix carry an
+// encoded slash and / or path parameters, for origins that read them as
+// they are (object storage keys, matrix parameter APIs). Such a path stays
+// ambiguous unless, with those characters taken out (every "%2F" as "/",
+// every ";" up to the end of its segment removed), it is otherwise plain:
+// no other encoded "/", "\", ".", "%" or ";", no "\" or "#", no dot
+// segment, not starting with "//". Its path scopes then compare every way
+// an origin may read it (nginx's $uri, "%2F" kept inside its segment, ";"
+// parameters removed): a scope that adds a check applies when any of them
+// is in it, an exemption or grant (excluded prefixes, maintenance's allowed
+// paths, CRS exclusions, CORS) only when all are, and access
+// authentication refuses the request (400 auth-path-ambiguous) when they
+// would select different rules. It is cached under a key that keeps "%2F"
+// apart from "/"; cache rules and purges still match $uri.
+message EncodedPathExemption {
+  // A byte prefix of the raw path: 1-256 bytes of printable ASCII starting
+  // with "/", without "%", ";", "\", "#", "?", spaces, "//" or a dot
+  // segment.
+  string prefix = 1;
+  // Encoded slashes ("%2F", any case) are allowed.
+  bool encoded_slash = 2;
+  // ";" path parameters are allowed.
+  bool semicolon = 3;
 }
 
 // ImageConvert turns cached JPEG and PNG responses into WebP or AVIF for

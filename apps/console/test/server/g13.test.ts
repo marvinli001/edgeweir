@@ -456,6 +456,74 @@ describe("access control (G13)", async () => {
     });
   });
 
+  describe("encoded path exemptions", () => {
+    it("refuses prefixes nodes could not match on every reading", async () => {
+      const one = (e: Record<string, unknown>) => ({ encodedPaths: { exemptions: [e] } });
+      for (const prefix of ["files/", "/a%2Fb/", "/a;b/", "/a//b/", "/a/../b/", "/a/.", "/a b/"])
+        expect(await refused(one({ prefix, encodedSlash: true })), prefix).toBe("BAD_REQUEST");
+      expect(await refused(one({ prefix: "/files/" }))).toBe("BAD_REQUEST");
+      expect(
+        await refused({
+          encodedPaths: {
+            exemptions: [
+              { prefix: "/files/", encodedSlash: true },
+              { prefix: "/files/", semicolon: true },
+            ],
+          },
+        }),
+      ).toBe("BAD_REQUEST");
+      expect(
+        await refused({
+          encodedPaths: {
+            exemptions: Array.from({ length: 33 }, (_, i) => ({
+              prefix: `/p${i}/`,
+              encodedSlash: true,
+            })),
+          },
+        }),
+      ).toBe("BAD_REQUEST");
+    });
+
+    it("sends them sorted by prefix without requiring a feature, and audits counts", async () => {
+      const before = (await config()).ir.requiredFeatures;
+      await save({
+        encodedPaths: {
+          exemptions: [
+            { prefix: "/files/", encodedSlash: true },
+            { prefix: " /api/ ", semicolon: true },
+          ],
+        } as Update["encodedPaths"],
+      });
+      const read = await admin.accessControl.get({ id: siteId });
+      expect(read.encodedPaths.exemptions).toEqual([
+        { prefix: "/files/", encodedSlash: true, semicolon: false },
+        { prefix: "/api/", encodedSlash: false, semicolon: true },
+      ]);
+      const { ir } = await config();
+      const site = ir.sites.find((s) => s.id === siteId);
+      expect(
+        site?.encodedPathExemptions.map((e) => [e.prefix, e.encodedSlash, e.semicolon]),
+      ).toEqual([
+        ["/api/", false, true],
+        ["/files/", true, false],
+      ]);
+      expect(ir.requiredFeatures).toEqual(before);
+      expect(ir.sites.find((s) => s.id === otherSiteId)?.encodedPathExemptions).toEqual([]);
+      const [last] = (await audits("site.access_control_update")).sort(
+        (a, b) => b.occurredAt.getTime() - a.occurredAt.getTime(),
+      );
+      expect(last?.metadata).toMatchObject({
+        parts: ["encodedPaths"],
+        to: { encodedPaths: { exemptions: 2, encodedSlash: 1, semicolon: 1 } },
+      });
+      expect(JSON.stringify(last?.metadata)).not.toContain("/files/");
+      await save({ encodedPaths: { exemptions: [] } });
+      expect((await config()).ir.sites.find((s) => s.id === siteId)?.encodedPathExemptions).toEqual(
+        [],
+      );
+    });
+  });
+
   describe("nodes (0.4)", () => {
     it("holds access control for changes without the operator while a node lacks access-control-v1", async () => {
       await save({

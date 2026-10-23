@@ -204,7 +204,9 @@
 #   preflights answered at the edge (204, echoed Origin with credentials,
 #   Vary: Origin; 403 for other origins) and headers on cache hits;
 #   WebSocket origins; security headers on cache hits without Server and
-#   X-Powered-By; the IP check; Playwright e2e/g13.spec.ts.
+#   X-Powered-By; the IP check; encoded path exemptions (an exempt %2F path
+#   out of a user agent scope, cached apart from /, ..%2F and paths outside
+#   the prefix still in it); Playwright e2e/g13.spec.ts.
 #   Site parity G14 (scripts/e2e-g14.mjs, after G13): both nodes report
 #   waf-v2, rules-body-v1 and challenge-v2; the ban action (403 ip-banned,
 #   shared, source rule in the ban list, lifted); custom responses, error

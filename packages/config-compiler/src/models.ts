@@ -445,10 +445,23 @@ export interface SiteModel {
   /** Access control (access-control-v1); omitted or null: none. */
   accessControl?: AccessControlModel | null;
   /**
+   * Raw path prefixes that may carry "%2F" and / or ";" as they are
+   * (Site.encoded_path_exemptions; no feature: older nodes keep such paths
+   * ambiguous). Omitted: none.
+   */
+  encodedPathExemptions?: readonly EncodedPathExemptionModel[];
+  /**
    * Largest request body the rules read (rules-body-v1); compiled only when the site's or
    * the platform's rules read the body. Omitted: RULES_BODY_LIMIT.default.
    */
   rulesBodyLimit?: number;
+}
+
+/** One of a site's encoded path exemptions (rule-engine encoded-path). */
+interface EncodedPathExemptionModel {
+  prefix: string;
+  encodedSlash: boolean;
+  semicolon: boolean;
 }
 
 /** A site's listener ports. */

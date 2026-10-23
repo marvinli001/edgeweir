@@ -352,6 +352,7 @@ async function loadSiteModels(
           allAuthRules.filter((rule) => rule.siteId === s.id),
         ),
         accessControl: accessControlModel(readAccessControl(s), listIds),
+        encodedPathExemptions: readAccessControl(s).encodedPaths.exemptions,
         certificateId: s.certificateId ?? "",
         ...(() => {
           const {

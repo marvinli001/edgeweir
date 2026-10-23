@@ -1,6 +1,8 @@
 import {
+  ENCODED_PATH_MAX_EXEMPTIONS,
   normalizeHostForm,
   normalizeOriginForm,
+  validEncodedPathPrefix,
   validUserAgentPattern,
 } from "@edgeweir/rule-engine";
 import { oc } from "@orpc/contract";
@@ -15,6 +17,9 @@ import { expectedUpdatedAt, extension, isoDateTime, pathPrefix, uuid } from "./s
  * and allow lists, geo, CORS, hotlink protection, user agents, WebSocket
  * origins and idle timeout, and security response headers. Each part keeps
  * its settings while off; a site without settings reads as the defaults.
+ * encodedPaths (Site.encoded_path_exemptions, feature
+ * encoded-path-exemptions-v1) is saved with them but needs no
+ * access-control-v1.
  */
 const ACCESS_MAX_SITE_LISTS = 16;
 const ACCESS_MAX_PREFIXES = 32;
@@ -238,6 +243,44 @@ export const securityHeaderSettings = z.object({
   removePoweredBy: z.boolean().default(false),
 });
 
+/**
+ * A path prefix whose raw paths may carry "%2F" and / or ";" as they are
+ * (rule-engine encoded-path): compared bytewise to the raw path.
+ */
+const encodedPathExemption = z
+  .object({
+    prefix: z
+      .string()
+      .trim()
+      .refine(
+        validEncodedPathPrefix,
+        "a raw path prefix without %, ;, \\, #, ?, // or dot segments",
+      ),
+    encodedSlash: z.boolean().default(false),
+    semicolon: z.boolean().default(false),
+  })
+  .refine((e) => e.encodedSlash || e.semicolon, {
+    message: "allow %2F or ;",
+    path: ["encodedSlash"],
+  });
+
+export const encodedPathSettings = z
+  .object({
+    exemptions: z.array(encodedPathExemption).max(ENCODED_PATH_MAX_EXEMPTIONS).default([]),
+  })
+  .superRefine((s, ctx) => {
+    const seen = new Set<string>();
+    s.exemptions.forEach((e, i) => {
+      if (seen.has(e.prefix))
+        ctx.addIssue({
+          code: "custom",
+          message: "duplicate prefix",
+          path: ["exemptions", i, "prefix"],
+        });
+      seen.add(e.prefix);
+    });
+  });
+
 const siteListSettings = z.object({
   /** IP lists whose addresses get 403 on this site. */
   blockListIds: z.array(uuid).max(ACCESS_MAX_SITE_LISTS).default([]).transform(unique),
@@ -253,6 +296,7 @@ export const accessControlSettings = z.object({
   geo: geoSettings.default(geoSettings.parse({})),
   websocket: websocketSettings.default(websocketSettings.parse({})),
   securityHeaders: securityHeaderSettings.default(securityHeaderSettings.parse({})),
+  encodedPaths: encodedPathSettings.default(encodedPathSettings.parse({})),
 });
 
 const siteAccessControl = accessControlSettings.extend({
@@ -271,6 +315,7 @@ export const siteAccessControlUpdate = z.object({
   geo: geoSettings.optional(),
   websocket: websocketSettings.optional(),
   securityHeaders: securityHeaderSettings.optional(),
+  encodedPaths: encodedPathSettings.optional(),
   expectedUpdatedAt,
 });
 
@@ -282,6 +327,7 @@ export const ACCESS_CONTROL_PARTS = [
   "geo",
   "websocket",
   "securityHeaders",
+  "encodedPaths",
 ] as const;
 export type AccessControlPart = (typeof ACCESS_CONTROL_PARTS)[number];
 
@@ -368,6 +414,7 @@ export type CorsSettings = z.infer<typeof corsSettings>;
 export type GeoSettings = z.infer<typeof geoSettings>;
 export type WebsocketSettings = z.infer<typeof websocketSettings>;
 export type SecurityHeaderSettings = z.infer<typeof securityHeaderSettings>;
+export type EncodedPathSettings = z.infer<typeof encodedPathSettings>;
 export type SiteListSettings = z.infer<typeof siteListSettings>;
 export type AccessControlSettings = z.infer<typeof accessControlSettings>;
 export type SiteAccessControl = z.infer<typeof siteAccessControl>;

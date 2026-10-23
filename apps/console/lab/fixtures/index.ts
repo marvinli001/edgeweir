@@ -333,6 +333,7 @@ const core: Fixtures = {
         clientCertificate: on,
         accessAuth: on,
         accessControl: on,
+        encodedPaths: older,
         wafV2: on,
         rulesBody: on,
         challengeV2: on,

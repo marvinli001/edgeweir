@@ -1,6 +1,8 @@
 export {
+  authRuleIndex,
   corsAllowOrigin,
   geoDecision,
+  grantInScope,
   hostFormMatches,
   hotlinkDecision,
   normalizeHostForm,
@@ -51,6 +53,12 @@ export {
   structuredCacheCondition,
   structuredCacheMatch,
 } from "./cache-conditions.ts";
+export {
+  classifyRawPath,
+  ENCODED_PATH_MAX_EXEMPTIONS,
+  rawPathAmbiguous,
+  validEncodedPathPrefix,
+} from "./encoded-path.ts";
 export { evaluate, evaluateHeaderValue, evaluateValue } from "./evaluate.ts";
 export {
   ARG_FIELD,

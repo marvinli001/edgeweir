@@ -6,6 +6,8 @@
  * test/access_vectors.json.
  */
 import { wildcardMatchBytes } from "./bytes.ts";
+import { pathExtension } from "./cache-conditions.ts";
+import { anyView, everyView, type RawPathClass } from "./encoded-path.ts";
 import { wildcardSegments } from "./language.ts";
 
 const LABEL = /^[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?$/;
@@ -170,15 +172,77 @@ const underPrefix = (path: string, prefixes: readonly string[]) => {
  * Whether `path` is in a scope: under a prefix (none: every path) and under
  * no excluded one. Prefixes ignore the case of ASCII letters (an origin may
  * not tell /Admin from /admin), excluded prefixes match exactly; nothing is
- * decoded.
+ * decoded. `request` is the raw path's class (classifyRawPath): an
+ * ambiguous path is in every scope, noExemption puts it under no excluded
+ * prefix, and an exempt path is under a prefix when $uri or any view is,
+ * under an excluded one only when $uri and every view are.
  */
 export function pathInScope(
   path: string,
   prefixes: readonly string[],
   excluded: readonly string[] = [],
+  request?: Pick<RawPathClass, "ambiguous" | "noExemption" | "views">,
 ): boolean {
-  if (prefixes.length && !underPrefix(path, prefixes)) return false;
-  return !excluded.some((p) => path.startsWith(p));
+  if (request?.ambiguous) return true;
+  const views = request?.views;
+  if (prefixes.length && !anyView(path, views, (v) => underPrefix(v, prefixes))) return false;
+  if (request?.noExemption) return true;
+  return !everyView(path, views, (v) => excluded.some((p) => v.startsWith(p)));
+}
+
+/**
+ * Whether a grant (CORS) covers `path`: under one of `prefixes` exactly (none:
+ * every path), for $uri and every view; never for an ambiguous path.
+ */
+export function grantInScope(
+  path: string,
+  prefixes: readonly string[],
+  request?: Pick<RawPathClass, "ambiguous" | "views">,
+): boolean {
+  if (request?.ambiguous) return false;
+  return (
+    prefixes.length === 0 ||
+    everyView(path, request?.views, (v) => prefixes.some((p) => v.startsWith(p)))
+  );
+}
+
+/** The path scope of an access authentication rule (domains aside). */
+export interface AuthScope {
+  pathPrefixes: readonly string[];
+  /** Lowercase; empty: every extension. */
+  extensions: readonly string[];
+  excludePathPrefixes: readonly string[];
+}
+
+/**
+ * The rule access authentication applies to a request: the index of the
+ * first rule whose scope `path` is in, null for none. An exempt path picks
+ * a rule for $uri and for every view on its own (excluded prefixes, with
+ * noExemption, never apply); "ambiguous" (refused with 400
+ * auth-path-ambiguous) when they pick different rules. An ambiguous path
+ * is in every rule's scope: "ambiguous" with more than one rule. (Nodes
+ * also refuse one with a single forward authentication rule.)
+ */
+export function authRuleIndex(
+  rules: readonly AuthScope[],
+  path: string,
+  request?: Pick<RawPathClass, "ambiguous" | "noExemption" | "views">,
+): number | null | "ambiguous" {
+  if (request?.ambiguous) return rules.length > 1 ? "ambiguous" : rules.length ? 0 : null;
+  const pick = (v: string) => {
+    const i = rules.findIndex(
+      (r) =>
+        (!r.pathPrefixes.length || underPrefix(v, r.pathPrefixes)) &&
+        (!r.extensions.length || r.extensions.includes(pathExtension(v))) &&
+        (request?.noExemption || !r.excludePathPrefixes.some((p) => v.startsWith(p))),
+    );
+    return i < 0 ? null : i;
+  };
+  const picked = new Set(
+    [path, ...(request?.views ?? [])].map(pick).filter((i): i is number => i !== null),
+  );
+  if (picked.size > 1) return "ambiguous";
+  return picked.size ? (picked.values().next().value as number) : null;
 }
 
 /** A user agent pattern: "" or a valid wildcard of 1-512 printable ASCII bytes. */
