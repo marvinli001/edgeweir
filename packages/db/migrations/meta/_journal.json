@@ -526,6 +526,13 @@
       "when": 1792538267591,
       "tag": "0074_node_clock_dns_failures",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1792715122360,
+      "tag": "0075_node_debug_log",
+      "breakpoints": true
     }
   ]
 }
