@@ -96,36 +96,38 @@ function EncodedPathFields({ draft, set, blocked, invalid }: PartFields<Draft>) 
               spellCheck={false}
               aria-invalid={invalid("exemptions", index) || undefined}
               onChange={(event) => change(index, { prefix: event.target.value })}
-              className="h-8 min-w-0 basis-full font-mono text-sm sm:flex-1 sm:basis-0"
+              className="h-8 min-w-0 flex-1 basis-0 font-mono text-sm"
               data-testid="encoded-paths-prefix"
-            />
-            <SwitchField
-              id={`encoded-paths-slash-${row.key}`}
-              label={m.access_encoded_slash()}
-              checked={row.encodedSlash}
-              onCheckedChange={(encodedSlash) => change(index, { encodedSlash })}
-              className="self-center"
-              testId="encoded-paths-slash"
-            />
-            <SwitchField
-              id={`encoded-paths-semicolon-${row.key}`}
-              label={m.access_encoded_semicolon()}
-              checked={row.semicolon}
-              onCheckedChange={(semicolon) => change(index, { semicolon })}
-              className="self-center"
-              testId="encoded-paths-semicolon"
             />
             <Button
               type="button"
               size="icon-sm"
               variant="ghost"
-              className="ml-auto"
+              className="sm:order-last"
               aria-label={m.common_delete()}
               onClick={() => setRows(rows.filter((_, i) => i !== index))}
               data-testid="encoded-paths-delete"
             >
               <HugeiconsIcon icon={Delete02Icon} />
             </Button>
+            <div className="flex basis-full items-center gap-4 sm:basis-auto">
+              <SwitchField
+                id={`encoded-paths-slash-${row.key}`}
+                label={m.access_encoded_slash()}
+                checked={row.encodedSlash}
+                onCheckedChange={(encodedSlash) => change(index, { encodedSlash })}
+                className="self-center"
+                testId="encoded-paths-slash"
+              />
+              <SwitchField
+                id={`encoded-paths-semicolon-${row.key}`}
+                label={m.access_encoded_semicolon()}
+                checked={row.semicolon}
+                onCheckedChange={(semicolon) => change(index, { semicolon })}
+                className="self-center"
+                testId="encoded-paths-semicolon"
+              />
+            </div>
           </li>
         ))}
       </ul>
