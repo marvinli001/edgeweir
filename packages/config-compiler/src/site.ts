@@ -27,6 +27,7 @@ import {
   DomainMatch,
   DomainSchema,
   type EdgeRule,
+  EncodedPathExemptionSchema,
   ErrorPageSchema,
   ForwardAuthSchema,
   GeoAccessSchema,
@@ -507,6 +508,15 @@ export function compileSite(
       (model.authIdentityHeaders ?? []).map((name) => name.toLowerCase()),
     ),
     accessControl: model.accessControl ? compileAccessControl(model.accessControl) : undefined,
+    encodedPathExemptions: [...(model.encodedPathExemptions ?? [])]
+      .sort(byBytes((e) => e.prefix))
+      .map((e) =>
+        create(EncodedPathExemptionSchema, {
+          prefix: e.prefix,
+          encodedSlash: e.encodedSlash,
+          semicolon: e.semicolon,
+        }),
+      ),
   });
 }
 
