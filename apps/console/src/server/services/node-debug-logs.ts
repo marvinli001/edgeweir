@@ -22,9 +22,9 @@ import { type Database, schema } from "@edgeweir/db";
 import {
   DebugLogsTaskSchema,
   NodeLogLevel as Level,
-  NodeLogSource as Source,
   NodeTaskSchema,
   type ReportTaskResultRequest,
+  NodeLogSource as Source,
   TaskState,
   type UploadDebugLogsRequest,
 } from "@edgeweir/proto";
@@ -86,11 +86,7 @@ async function expirePulls(db: Executor, nodeId?: string, now = new Date()) {
       leaseUntil: null,
     })
     .where(
-      and(
-        inArray(t.state, OPEN),
-        lt(t.deadlineAt, now),
-        nodeId ? eq(t.nodeId, nodeId) : undefined,
-      ),
+      and(inArray(t.state, OPEN), lt(t.deadlineAt, now), nodeId ? eq(t.nodeId, nodeId) : undefined),
     );
 }
 
@@ -367,7 +363,9 @@ export async function reportDebugLogResult(
     .update(t)
     .set({
       state: "failed",
-      errorCode: failed ? result.errorCode.slice(0, 64) || "debug_logs_failed" : "debug_logs_failed",
+      errorCode: failed
+        ? result.errorCode.slice(0, 64) || "debug_logs_failed"
+        : "debug_logs_failed",
       errorParams: failed ? limitParams(result.errorParams) : { reason: "upload_failed" },
       message: result.message.slice(0, 1000),
       finishedAt: result.finishedAt ? timestampDate(result.finishedAt) : new Date(),

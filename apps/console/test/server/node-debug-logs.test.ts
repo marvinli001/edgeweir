@@ -218,9 +218,7 @@ describe("node debug log pulls (ADR-0050)", async () => {
     const done = pulls.find((p) => p.state === "succeeded");
     const got = await demo.nodes.debugLog({ id: nodeId, pullId: done?.id ?? "" });
     expect(got.entries[0]?.fields.client).toBe("192.0.2.0/24");
-    expect((await rpcError(demo.nodes.pullDebugLogs({ id: nodeId }))).code).toBe(
-      "DEMO_READ_ONLY",
-    );
+    expect((await rpcError(demo.nodes.pullDebugLogs({ id: nodeId }))).code).toBe("DEMO_READ_ONLY");
     await admin.settings.setDemo({ enabled: false });
   });
 

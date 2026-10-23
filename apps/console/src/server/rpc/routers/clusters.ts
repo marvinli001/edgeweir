@@ -21,13 +21,13 @@ import {
 import { createEnrollmentToken, getEnrollmentToken } from "../../services/enrollment";
 import { getPortPools, setPortPools } from "../../services/l4";
 import { nodeChannelUrl } from "../../services/node-channel-url";
+import { getDebugLog, listDebugLogs, pullDebugLogs } from "../../services/node-debug-logs";
 import {
   createNodeGroup,
   deleteNodeGroup,
   listNodeGroups,
   updateNodeGroup,
 } from "../../services/node-groups";
-import { getDebugLog, listDebugLogs, pullDebugLogs } from "../../services/node-debug-logs";
 import { listNodeLogs } from "../../services/node-logs";
 import {
   deleteNode,
