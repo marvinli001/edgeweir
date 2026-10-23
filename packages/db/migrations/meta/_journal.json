@@ -533,6 +533,13 @@
       "when": 1792714636535,
       "tag": "0075_alert_channel_send_times",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1792716322529,
+      "tag": "0076_rule_versions",
+      "breakpoints": true
     }
   ]
 }

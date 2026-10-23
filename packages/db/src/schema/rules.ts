@@ -28,6 +28,38 @@ export const edgeRule = pgTable(
   (t) => [index("edge_rule_site_idx").on(t.siteId)],
 );
 
+/**
+ * The saved states of each rule (ADR-0054): one row per save that created,
+ * changed or deleted it, numbered per rule. Rows outlive the rule (no foreign
+ * key on rule_id) so deleted rules can be restored; they go with their site.
+ * `rule` holds the rule as saved (name, phase, expression, enabled, action);
+ * a deletion keeps the last state. `source`: ui, api, restore, copy or
+ * initial (the rules that existed when versions began).
+ */
+export const edgeRuleVersion = pgTable(
+  "edge_rule_version",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ruleId: uuid("rule_id").notNull(),
+    siteId: uuid("site_id").references(() => site.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    /** created, updated or deleted. */
+    change: text("change").notNull(),
+    source: text("source").notNull(),
+    /** The version a restore brought back. */
+    restoredFrom: integer("restored_from"),
+    rule: jsonb("rule").$type<Record<string, unknown>>().notNull(),
+    actorType: text("actor_type").notNull().default(""),
+    actorId: text("actor_id").notNull().default(""),
+    actorName: text("actor_name").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("edge_rule_version_rule_uq").on(t.ruleId, t.version),
+    index("edge_rule_version_site_idx").on(t.siteId, t.createdAt),
+  ],
+);
+
 export const ipList = pgTable(
   "ip_list",
   {

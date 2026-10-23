@@ -21,6 +21,7 @@ import {
   SkipFields,
 } from "@/components/site/rules/fields/protection";
 import { HeaderFields, TargetFields } from "@/components/site/rules/fields/transform";
+import { RuleHistoryButton } from "@/components/site/rules/history";
 import { actionLabel, kinds, LocksContext, v2Kinds } from "@/components/site/rules/labels";
 import { useSortableRow } from "@/components/sortable-list";
 import { Button } from "@/components/ui/button";
@@ -95,6 +96,7 @@ export function RuleRow({
           maxLength={100}
           onChange={(e) => patch({ name: e.target.value })}
         />
+        <RuleHistoryButton ruleId={row.id} />
         <Button
           type="button"
           size="icon-sm"

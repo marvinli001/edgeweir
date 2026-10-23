@@ -25,6 +25,7 @@ import {
   logQuery,
   parseCidr,
   type RuleDto,
+  type RuleVersion,
   type SecurityEvent,
   type Site,
   type SiteAuthRules,
@@ -560,6 +561,89 @@ const PLATFORM_RULE_SEEDS: RuleSeed[] = [
 
 const PLATFORM_BASE = 0x1000;
 const platformRuleList = rules(PLATFORM_BASE, PLATFORM_RULE_SEEDS, ["Hosting networks"]);
+
+// ---------------------------------------------------------------------------------------------
+// Rule versions: each rule was created, then changed once (condition and switch) by the operator
+
+const OPERATOR = { type: "user", id: "operator", name: "Operator" };
+
+function versionsOf(rule: RuleDto | undefined): RuleVersion[] {
+  if (!rule) return [];
+  const state = ({ name, phase, expression, enabled, action }: RuleDto) => ({
+    name,
+    phase,
+    expression,
+    enabled,
+    action: action as Record<string, unknown>,
+  });
+  const base = { ruleId: rule.id, restoredFrom: null, actor: OPERATOR };
+  return [
+    {
+      ...base,
+      version: 3,
+      change: "updated",
+      source: "ui",
+      rule: state(rule),
+      createdAt: ago(2 * HOUR),
+    },
+    {
+      ...base,
+      version: 2,
+      change: "updated",
+      source: "api",
+      rule: {
+        ...state(rule),
+        expression: `${rule.expression} and http.request.method eq "GET"`,
+        enabled: !rule.enabled,
+      },
+      createdAt: ago(3 * DAY),
+    },
+    {
+      ...base,
+      version: 1,
+      change: "created",
+      source: "initial",
+      rule: { ...state(rule), enabled: false },
+      actor: { type: "system", id: "", name: "system" },
+      createdAt: ago(9 * DAY),
+    },
+  ];
+}
+
+const DELETED_RULES: RuleVersion[] = [
+  {
+    ruleId: id(11, 1),
+    version: 4,
+    change: "deleted",
+    source: "ui",
+    restoredFrom: null,
+    rule: {
+      name: "Old admin path",
+      phase: "waf-custom",
+      expression: 'http.request.uri.path wildcard "/admin*"',
+      enabled: true,
+      action: { kind: "challenge", type: "captcha" },
+    },
+    actor: OPERATOR,
+    createdAt: ago(5 * HOUR),
+  },
+  {
+    ruleId: id(11, 2),
+    version: 2,
+    change: "deleted",
+    source: "api",
+    restoredFrom: null,
+    rule: {
+      name: "Legacy redirect",
+      phase: "redirect",
+      expression: 'http.host eq "old.example.com"',
+      enabled: true,
+      action: { kind: "redirect", value: "https://example.com/", statusCode: 301 },
+    },
+    actor: OPERATOR,
+    createdAt: ago(6 * DAY),
+  },
+];
 
 // ---------------------------------------------------------------------------------------------
 // Match counts over a range (rules with the log action, CRS rules)
@@ -2540,11 +2624,16 @@ const rangeOf = (range: AnalyticsRange | undefined) => range ?? "24h";
 export const siteDetailFixtures: Fixtures = {
   rules: {
     get: ({ id: siteId }) => siteRules(siteOf(siteId)),
+    versions: ({ id: siteId, ruleId }) =>
+      versionsOf(siteRules(siteOf(siteId)).find((rule) => rule.id === ruleId)),
+    deleted: () => DELETED_RULES,
     topLogged: (input) =>
       topLogged(siteOf(input.id), rangeOf(input.range), Number(input.limit ?? 10)),
   },
   platformRules: {
     get: () => platformRuleList,
+    versions: ({ ruleId }) => versionsOf(platformRuleList.find((rule) => rule.id === ruleId)),
+    deleted: () => DELETED_RULES,
   },
   bulkRedirects: {
     get: ({ id: siteId }) => redirectsOf(siteOf(siteId)),

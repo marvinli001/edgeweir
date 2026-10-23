@@ -72,6 +72,10 @@ export const errorDefs = {
   /** A requested reconciliation of a cluster's DNS waited in vain for the one in progress. */
   DNS_RECONCILE_BUSY: { status: 409, params: [] },
   RULE_INVALID: { status: 400, params: [] },
+  /** The rule has no such version kept in this scope (pruned, or another site's rule). */
+  RULE_VERSION_NOT_FOUND: { status: 404, params: [] },
+  /** Restoring a deleted rule would exceed the rules a site (64) or the platform (32) may have. */
+  RULE_LIMIT_REACHED: { status: 400, params: ["limit"] },
   /** CRS rules (first 5) that set up or evaluate the others (CRS_EVALUATION_FILES). */
   WAF_RULE_NOT_EXCLUDABLE: { status: 400, params: ["ids"] },
   /** A "host/path" bulk redirect source whose host is none of the site's domains. */

@@ -23,7 +23,7 @@ import { oc } from "@orpc/contract";
 import * as z from "zod";
 import { addExpressionIssue, expressionKinds } from "./expressions";
 import type { PresetLevel } from "./protection";
-import { analyticsRange, optionalHostname, uuid } from "./schemas";
+import { analyticsRange, isoDateTime, optionalHostname, uuid } from "./schemas";
 
 const text = z
   .string()
@@ -507,6 +507,34 @@ export const siteRuleInput = ruleInput.refine(
   (rule) => rule.action.kind !== "ban" || rule.action.banScope === "site",
   { message: "only platform rules ban at platform scope", path: ["action", "banScope"] },
 );
+/** Versions kept per rule; the oldest go first (ADR-0054). */
+export const RULE_VERSION_LIMIT = 50;
+/** Deleted rules kept per site and for the platform; the longest deleted go first. */
+export const DELETED_RULE_LIMIT = 100;
+const ruleVersionChanges = ["created", "updated", "deleted"] as const;
+export const ruleVersionSources = ["ui", "api", "restore", "copy", "initial"] as const;
+/**
+ * A saved state of a rule. `rule` is the rule as it was saved, checked
+ * again only on restore (actions may have changed shape since).
+ */
+const ruleVersion = z.object({
+  ruleId: uuid,
+  version: z.number().int(),
+  change: z.enum(ruleVersionChanges),
+  source: z.enum(ruleVersionSources),
+  /** The version a restore brought back. */
+  restoredFrom: z.number().int().nullable(),
+  rule: z.object({
+    name: z.string(),
+    phase: z.string(),
+    expression: z.string(),
+    enabled: z.boolean(),
+    action: z.record(z.string(), z.unknown()),
+  }),
+  actor: z.object({ type: z.string(), id: z.string(), name: z.string() }),
+  createdAt: isoDateTime,
+});
+const ruleRestoreInput = z.object({ version: z.number().int().min(1) });
 export const rulesContract = {
   get: oc
     .route({ method: "GET", path: "/sites/{id}/rules", tags: ["rules"] })
@@ -515,6 +543,24 @@ export const rulesContract = {
   save: oc
     .route({ method: "PUT", path: "/sites/{id}/rules", tags: ["rules"] })
     .input(z.object({ id: uuid, rules: z.array(siteRuleInput).max(64) }))
+    .output(z.array(ruleDto)),
+  /** The kept versions of a rule of the site (deleted ones too), newest first. */
+  versions: oc
+    .route({ method: "GET", path: "/sites/{id}/rules/{ruleId}/versions", tags: ["rules"] })
+    .input(z.object({ id: uuid, ruleId: uuid }))
+    .output(z.array(ruleVersion)),
+  /** The site's deleted rules, each as its last version, last deleted first. */
+  deleted: oc
+    .route({ method: "GET", path: "/sites/{id}/rules/deleted", tags: ["rules"] })
+    .input(z.object({ id: uuid }))
+    .output(z.array(ruleVersion)),
+  /**
+   * Saves a version of a rule as the rule again: in place when it exists,
+   * appended to the end of its phase when it was deleted. Returns the rules.
+   */
+  restore: oc
+    .route({ method: "POST", path: "/sites/{id}/rules/{ruleId}/restore", tags: ["rules"] })
+    .input(ruleRestoreInput.extend({ id: uuid, ruleId: uuid }))
     .output(z.array(ruleDto)),
   /**
    * Requests that matched the site's rules with the log action (and platform
@@ -558,6 +604,17 @@ export const platformRulesContract = {
   save: oc
     .route({ method: "PUT", path: "/platform-rules", tags: ["rules"] })
     .input(z.object({ rules: z.array(ruleInput).max(32) }))
+    .output(z.array(ruleDto)),
+  versions: oc
+    .route({ method: "GET", path: "/platform-rules/{ruleId}/versions", tags: ["rules"] })
+    .input(z.object({ ruleId: uuid }))
+    .output(z.array(ruleVersion)),
+  deleted: oc
+    .route({ method: "GET", path: "/platform-rules/deleted", tags: ["rules"] })
+    .output(z.array(ruleVersion)),
+  restore: oc
+    .route({ method: "POST", path: "/platform-rules/{ruleId}/restore", tags: ["rules"] })
+    .input(ruleRestoreInput.extend({ ruleId: uuid }))
     .output(z.array(ruleDto)),
 };
 const entries = z
@@ -603,3 +660,4 @@ export type RuleDto = z.infer<typeof ruleDto>;
 export type IpListInput = z.infer<typeof ipListInput>;
 export type IpListDto = z.infer<typeof ipListDto>;
 export type LoggedRules = z.infer<typeof loggedRules>;
+export type RuleVersion = z.infer<typeof ruleVersion>;

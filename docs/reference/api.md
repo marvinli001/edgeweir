@@ -424,6 +424,9 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | `platformRules.get`、`platformRules.save`（全局规则） | `GET`、`PUT /platform-rules` |
 | `rules.validate` | `POST /rules/validate` |
 | `rules.topLogged`（记录命中） | `GET /sites/{id}/rules/logged` |
+| `rules.versions`、`platformRules.versions`（规则版本） | `GET /sites/{id}/rules/{ruleId}/versions`、`GET /platform-rules/{ruleId}/versions` |
+| `rules.deleted`、`platformRules.deleted`（已删除的规则） | `GET /sites/{id}/rules/deleted`、`GET /platform-rules/deleted` |
+| `rules.restore`、`platformRules.restore`（恢复版本） | `POST /sites/{id}/rules/{ruleId}/restore`、`POST /platform-rules/{ruleId}/restore` |
 | `bulkRedirects.get` | `GET /sites/{id}/bulk-redirects` |
 | `bulkRedirects.save` | `PUT /sites/{id}/bulk-redirects` |
 
@@ -441,6 +444,7 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | `POST /sites`、`PATCH /sites/{id}` | `cacheRules[]` 增加 `expression`（`cache` 阶段的条件，最长 16384 字符；为空时由 `pathPrefixes`、`paths`、`extensions` 生成；不为空时这三项为空或等于它的构建器形式）与 `browserTtlSeconds`（0–31536000，0 保留源站的 `Cache-Control`）；`origins[]` 增加 `group`（`[a-z0-9_-]{0,32}`，空为默认组，至少一个源站在默认组） |
 | `PUT /sites/{id}/bulk-redirects` | `redirects`：整体替换，最多 5000 条，`source` 不重复；每条 `source`（`/路径` 或 `域名/路径`，2–512 字节，不含空白、`?` 与控制字符，域名小写）、`target`（静态重定向目标，最长 1024 字节）、`statusCode`（默认 301）、`preserveQuery`（默认 `false`） |
 | `POST /rules/validate` | `expression`（最长 16384 字符）、`phase`、`kind`：`condition`（默认，规则条件）、`value`（`phase` 阶段的值表达式：重定向目标、改写路径、报头值或查询参数值）、`cacheRule`（缓存规则条件，忽略 `phase`） |
+| `POST /sites/{id}/rules/{ruleId}/restore`、`POST /platform-rules/{ruleId}/restore` | `version`：该规则保留的版本号。规则存在时原位替换内容，已删除时加到同阶段最后并沿用原 `id`；按保存时的检查校验，失败返回 400 `RULE_INVALID`、`IP_LIST_REFERENCE_UNKNOWN`、`RULE_LIMIT_REACHED`（`limit`）；版本不存在（已清除或属于其他网站）返回 404 `RULE_VERSION_NOT_FOUND` |
 | `GET /sites/{id}/rules/logged` | `range`（`1h`、`6h`、`24h`（默认）、`7d`、`30d`）、`limit`（1–50，默认 10） |
 
 响应：
@@ -448,13 +452,16 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | 过程 | 内容 |
 | --- | --- |
 | `rules.get`、`rules.save`、`platformRules.*` | 规则数组，按保存顺序，带 `id` |
+| `rules.versions`、`platformRules.versions` | `[{ ruleId, version, change, source, restoredFrom, rule, actor, createdAt }]`，版本号大的在前：`change` 为 `created`、`updated`、`deleted`（`rule` 为删除前的内容）；`source` 为 `ui`、`api`、`restore`、`copy`、`initial`；`restoredFrom` 为恢复的版本号；`rule` 为 `{ name, phase, expression, enabled, action }`；`actor` 为 `{ type, id, name }`。每条规则保留最近 50 个版本；其他网站的规则返回空数组 |
+| `rules.deleted`、`platformRules.deleted` | 已删除规则各自的最后一个版本（同上），最近删除的在前；每个网站与全局各保留最近删除的 100 条 |
+| `rules.restore`、`platformRules.restore` | 恢复后的规则数组（同 `rules.save`） |
 | `rules.topLogged` | `{ approximate: true, items: [{ ruleId, name, platform, requests }], unsupportedNodes }`：网站的「记录」规则与全局「记录」规则命中的请求数，多的在前；`name` 为规则当前名称，规则已删除时为 `null`；`platform` 为全局规则；`unsupportedNodes` 为网站所在集群中不上报命中（缺少节点能力 `rule-log-v1`）的活动节点数 |
 | `bulkRedirects.*` | `[{ source, target, statusCode, preserveQuery }]`，按保存顺序 |
 | `sites.get`；`sites.create`、`sites.update` 的 `site` | `cacheRules[]` 总带 `expression`（`"true"` 匹配所有请求）；条件是构建器形状时 `pathPrefixes`、`paths`、`extensions` 为其结构化形式，否则为空；另有 `browserTtlSeconds`。`origins[]` 带 `group` |
 | `rules.validate` | `{ valid, position, message, code?, params? }`；无效时 `position` 为出错的字符位置（从 0 计），`message` 为英文原因，`code` 为稳定的原因代码（如 `unknown_field`、`ordered_comparison`、`expected_token`），`params` 为原因中的值（如 `expected_token` 的 `token`） |
 | `sites.features` | 增加 `rulesV2`、`rulesV3`；`reason` 为 `nodes` 时集群有活动节点缺少 `rules-v2` 或 `rules-v3` |
 
-- `rules.save` 发布网站所在集群（原因 `rules_updated`），审计 `site.rules_update`；`platformRules.save` 发布所有集群，审计 `platform.rules_update`；`bulkRedirects.save` 发布网站所在集群（`rules_updated`），审计 `site.bulk_redirects_update`（条目数）。
+- `rules.save` 发布网站所在集群（原因 `rules_updated`），审计 `site.rules_update`；`platformRules.save` 发布所有集群，审计 `platform.rules_update`；`rules.restore`、`platformRules.restore` 同样发布，审计 `site.rule_restore`、`platform.rule_restore`（规则 `id` 与名称、版本号）；`bulkRedirects.save` 发布网站所在集群（`rules_updated`），审计 `site.bulk_redirects_update`（条目数）。
 - 用到函数、新字段、值表达式、查询参数编辑、`origin` 或 `compression` 动作、`config` 阶段的新字段、`gzip: true`、非构建器形状的缓存规则条件、`browserTtlSeconds`、批量重定向或非默认源站组的配置要求节点能力 `rules-v2`。
 - 用到 `rules-v3` 字段（`http.request.cookies[…]`、`http.request.uri.args[…]`、`http.referer`、`http.user_agent`、`http.request.version`、`http.request.scheme`、`http.request.id`、`http.request.timestamp.sec`、`edge.server_port`、`ip.geoip.as_name`、`http.response.cache_status`）、函数（`url_encode`、`base64_encode`、`base64_decode`、`md5`、`sha1`、`sha256`、`substring`、`to_string`）、`wildcard` / `strict wildcard`、报头或查询参数的 `expression`、`append`、`statusCode: 303`，或错误页模板含 `{{time}}`、`{{path}}` 的配置要求节点能力 `rules-v3`。批量重定向的 `statusCode` 仍为 301、302、307、308。
 - `rules.validate` 的 `code` 增加 `cookie_name`、`argument_name`、`integer_argument`（`params` 为 `min`、`max`）。

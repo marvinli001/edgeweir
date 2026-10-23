@@ -37,6 +37,7 @@ import { newCnamePrefix } from "./cname-prefixes";
 import { loadSiteErrorPages, storeSiteErrorPages } from "./error-pages";
 import { assertOriginsAllowed } from "./origin-allow-list";
 import { type Executor, publishRevision, type Tx, toRevisionDto } from "./revisions";
+import { recordRuleVersions } from "./rule-versions";
 import { actionOriginGroup, siteOriginGroups } from "./rules";
 import { assertSitePorts, portsOf } from "./site-ports";
 import { siteTagRefs } from "./site-tags";
@@ -73,10 +74,12 @@ interface Part<V> {
    * the target decides (no certificate). Absent: the value itself.
    */
   plan?(tx: Tx, target: SiteRow, value: V, ctx: CopyContext): Promise<V>;
-  write(tx: Tx, target: SiteRow, value: V, ctx: CopyContext): Promise<void>;
+  write(tx: Tx, target: SiteRow, value: V, ctx: WriteContext): Promise<void>;
   /** List parts: the number of items. */
   count?(value: V): number;
 }
+/** Who copies: rule versions name them (ADR-0054). */
+type WriteContext = CopyContext & { actor: Actor };
 const part = <V>(definition: Part<V>) => definition as Part<unknown>;
 
 /** JSON with sorted object keys: equal settings give equal text. */
@@ -417,18 +420,21 @@ export const COPY_PARTS: Record<SiteCopyPart, Part<unknown>> = {
       );
       return value;
     },
-    async write(tx, target, value) {
+    async write(tx, target, value, ctx) {
+      const before = await tx
+        .select()
+        .from(schema.edgeRule)
+        .where(eq(schema.edgeRule.siteId, target.id));
       await tx.delete(schema.edgeRule).where(eq(schema.edgeRule.siteId, target.id));
       // Rule ids are unique platform-wide: copies get new ones.
-      if (value.rules.length)
-        await tx.insert(schema.edgeRule).values(
-          value.rules.map((rule, priority) => ({
-            ...rule,
-            id: randomUUID(),
-            siteId: target.id,
-            priority,
-          })),
-        );
+      const rows = value.rules.map((rule, priority) => ({
+        ...rule,
+        id: randomUUID(),
+        siteId: target.id,
+        priority,
+      }));
+      if (rows.length) await tx.insert(schema.edgeRule).values(rows);
+      await recordRuleVersions(tx, target.id, before, rows, { actor: ctx.actor, source: "copy" });
       await tx
         .update(schema.site)
         .set({ rulesBodyLimit: value.rulesBodyLimit })
@@ -711,7 +717,7 @@ async function applyParts(
   tx: Tx,
   siteId: string,
   values: Map<SiteCopyPart, unknown>,
-  ctx: CopyContext,
+  ctx: WriteContext,
 ): Promise<SiteCopyChange[]> {
   const changes: SiteCopyChange[] = [];
   for (const [name, value] of values) {
@@ -761,7 +767,7 @@ async function copyToTarget(
   source: Pick<SiteRow, "id" | "name">,
   targetId: string,
   values: Map<SiteCopyPart, unknown>,
-  ctx: CopyContext & { actor: Actor; dryRun: boolean },
+  ctx: WriteContext & { dryRun: boolean },
 ): Promise<TargetOutcome> {
   let name = "";
   try {
@@ -979,7 +985,7 @@ export async function cloneSite(
       .values(domains.map((d, i) => ({ siteId: row.id, createdAt: ordered(i, Date.now()), ...d })));
     await cloneOrigins(tx, source, row.id, ctx.masterKey);
     await clonePurgeKey(tx, source, row.id, ctx.masterKey);
-    const copy = { masterKey: ctx.masterKey, clone: true };
+    const copy = { masterKey: ctx.masterKey, actor: ctx.actor, clone: true };
     const values = await readSource(tx, source, Object.keys(COPY_PARTS) as SiteCopyPart[], copy);
     await applyParts(tx, row.id, values, copy);
     const tags =

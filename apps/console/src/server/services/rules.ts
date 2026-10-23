@@ -5,6 +5,8 @@ import {
   type RuleDto,
   type RuleInput,
   ruleDto,
+  ruleInput,
+  siteRuleInput,
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import {
@@ -22,7 +24,13 @@ import { assertHostHeader } from "../lib/host-header";
 import { lockIpLists, lockPlatformRules } from "../lib/locks";
 import { type Actor, recordAudit } from "./audit";
 import { listBindings } from "./config-input";
-import { type Executor, publishClusters } from "./revisions";
+import { type Executor, publishClusters, type Tx } from "./revisions";
+import {
+  findRuleVersion,
+  type RuleVersionSource,
+  recordRuleVersions,
+  sourceOf,
+} from "./rule-versions";
 import { findSite } from "./sites";
 
 const ruleScope = (siteId: string | null) =>
@@ -70,70 +78,154 @@ export async function saveRules(
   rules: RuleInput[],
   ctx: { actor: Actor },
 ): Promise<RuleDto[]> {
+  return app.db.transaction((tx) =>
+    writeRules(tx, siteId, rules, { actor: ctx.actor, source: sourceOf(ctx.actor) }),
+  );
+}
+
+/**
+ * Replaces a scope's rules, records their versions, publishes and audits.
+ * `restored` keeps a deleted rule's id (its history continues) and audits
+ * the write as that restore.
+ */
+async function writeRules(
+  tx: Tx,
+  siteId: string | null,
+  rules: RuleInput[],
+  ctx: {
+    actor: Actor;
+    source: RuleVersionSource;
+    restored?: { ruleId: string; version: number; name: string };
+  },
+): Promise<RuleDto[]> {
+  if (!siteId) await lockPlatformRules(tx);
+  const site = siteId ? await findSite(tx, siteId, true) : null;
+  const bindings = listBindings(await availableLists(tx, true));
+  // Origin rules choose among the site's origin groups; the platform has no origins.
+  const groups = siteId ? await siteOriginGroups(tx, siteId) : new Set<string>();
+  for (const rule of rules) {
+    const group = actionOriginGroup(rule.action);
+    if (group && !siteId)
+      fail("RULE_INVALID", `rule ${rule.name}: platform rules cannot choose an origin group`);
+    if (group && !groups.has(group))
+      fail("RULE_INVALID", `rule ${rule.name}: the site has no origin group ${group}`);
+    if (rule.action.kind === "origin") assertHostHeader(rule.action.hostHeader);
+    // Only platform rules ban at platform scope (waf-v2).
+    if (rule.action.kind === "ban" && rule.action.banScope === "platform" && siteId)
+      fail("RULE_INVALID", `rule ${rule.name}: only platform rules ban at platform scope`);
+  }
+  const ids = rules.flatMap((rule) => (rule.id ? [rule.id] : []));
+  if (new Set(ids).size !== ids.length) fail("RULE_INVALID", "duplicate rule ID");
+  // Ids of this scope's rules are kept; any other id (e.g. rules copied
+  // from another site) gets a new one, since ids are unique platform-wide.
+  const before = await tx.select().from(schema.edgeRule).where(ruleScope(siteId));
+  const owned = new Set(before.map((row) => row.id));
+  if (ctx.restored) owned.add(ctx.restored.ruleId);
+  const rows = rules.map((rule, priority) => {
+    const expression = parseExpression(rule.expression, rule.phase);
+    const names = listReferences(expression);
+    failUnknownLists(names.filter((name) => !bindings[name]));
+    return {
+      id: rule.id && owned.has(rule.id) ? rule.id : randomUUID(),
+      siteId,
+      name: rule.name,
+      phase: rule.phase,
+      expression: rule.expression,
+      enabled: rule.enabled,
+      priority,
+      action: rule.action as Record<string, unknown>,
+      listIds: names.map((name) => bindings[name] as string),
+    };
+  });
+  await tx.delete(schema.edgeRule).where(ruleScope(siteId));
+  if (rows.length) await tx.insert(schema.edgeRule).values(rows);
+  await recordRuleVersions(tx, siteId, before, rows, ctx);
+  const clusters = site
+    ? [{ id: site.clusterId }]
+    : await tx.select({ id: schema.cluster.id }).from(schema.cluster);
+  await publishClusters(
+    tx,
+    clusters.map((c) => c.id),
+    {
+      reason: { code: "rules_updated", params: {} },
+      actor: ctx.actor,
+      site: site?.id,
+    },
+  );
+  const restored = ctx.restored;
+  await recordAudit(tx, ctx.actor, {
+    action: restored
+      ? siteId
+        ? "site.rule_restore"
+        : "platform.rule_restore"
+      : siteId
+        ? "site.rules_update"
+        : "platform.rules_update",
+    targetType: siteId ? "site" : "platform",
+    targetId: siteId ?? "",
+    targetName: site?.name ?? "",
+    metadata: restored
+      ? {
+          count: rows.length,
+          rule: { id: restored.ruleId, name: restored.name },
+          version: restored.version,
+        }
+      : { count: rows.length },
+  });
+  return rows.map((row) => ruleDto.parse(row));
+}
+
+/**
+ * Saves a kept version of a scope's rule as the rule again (ADR-0054): in
+ * place when the rule exists, else appended after the last rule of its
+ * phase under its old id. The version must pass today's rule checks; the
+ * write is a save like any other (versions, revision, audit).
+ */
+export async function restoreRuleVersion(
+  app: AppContext,
+  siteId: string | null,
+  ruleId: string,
+  version: number,
+  actor: Actor,
+): Promise<RuleDto[]> {
   return app.db.transaction(async (tx) => {
     if (!siteId) await lockPlatformRules(tx);
-    const site = siteId ? await findSite(tx, siteId, true) : null;
-    const bindings = listBindings(await availableLists(tx, true));
-    // Origin rules choose among the site's origin groups; the platform has no origins.
-    const groups = siteId ? await siteOriginGroups(tx, siteId) : new Set<string>();
-    for (const rule of rules) {
-      const group = actionOriginGroup(rule.action);
-      if (group && !siteId)
-        fail("RULE_INVALID", `rule ${rule.name}: platform rules cannot choose an origin group`);
-      if (group && !groups.has(group))
-        fail("RULE_INVALID", `rule ${rule.name}: the site has no origin group ${group}`);
-      if (rule.action.kind === "origin") assertHostHeader(rule.action.hostHeader);
-      // Only platform rules ban at platform scope (waf-v2).
-      if (rule.action.kind === "ban" && rule.action.banScope === "platform" && siteId)
-        fail("RULE_INVALID", `rule ${rule.name}: only platform rules ban at platform scope`);
+    else await findSite(tx, siteId, true);
+    const kept = await findRuleVersion(tx, siteId, ruleId, version);
+    if (!kept) fail("RULE_VERSION_NOT_FOUND", "rule version not found");
+    const parsed = (siteId ? siteRuleInput : ruleInput).safeParse({ ...kept.rule, id: ruleId });
+    if (!parsed.success)
+      fail(
+        "RULE_INVALID",
+        `rule ${kept.rule.name} version ${version}: ${parsed.error.issues[0]?.message ?? "invalid"}`,
+      );
+    const rule = parsed.data;
+    const rules: RuleInput[] = (
+      await tx
+        .select()
+        .from(schema.edgeRule)
+        .where(ruleScope(siteId))
+        .orderBy(asc(schema.edgeRule.priority))
+    ).map((row) => ruleDto.parse(row));
+    const at = rules.findIndex((current) => current.id === ruleId);
+    if (at >= 0) rules[at] = rule;
+    else {
+      const limit = siteId ? 64 : 32;
+      if (rules.length >= limit) fail("RULE_LIMIT_REACHED", `at most ${limit} rules`, { limit });
+      // A rule of this id elsewhere (never expected: ids are random) keeps it.
+      const [taken] = await tx
+        .select({ id: schema.edgeRule.id })
+        .from(schema.edgeRule)
+        .where(eq(schema.edgeRule.id, ruleId));
+      if (taken) fail("RULE_INVALID", "rule ID in use");
+      const last = rules.findLastIndex((current) => current.phase === rule.phase);
+      rules.splice(last < 0 ? rules.length : last + 1, 0, rule);
     }
-    const ids = rules.flatMap((rule) => (rule.id ? [rule.id] : []));
-    if (new Set(ids).size !== ids.length) fail("RULE_INVALID", "duplicate rule ID");
-    // Ids of this scope's rules are kept; any other id (e.g. rules copied
-    // from another site) gets a new one, since ids are unique platform-wide.
-    const owned = new Set(
-      (
-        await tx.select({ id: schema.edgeRule.id }).from(schema.edgeRule).where(ruleScope(siteId))
-      ).map((row) => row.id),
-    );
-    const rows = rules.map((rule, priority) => {
-      const expression = parseExpression(rule.expression, rule.phase);
-      const names = listReferences(expression);
-      failUnknownLists(names.filter((name) => !bindings[name]));
-      return {
-        id: rule.id && owned.has(rule.id) ? rule.id : randomUUID(),
-        siteId,
-        name: rule.name,
-        phase: rule.phase,
-        expression: rule.expression,
-        enabled: rule.enabled,
-        priority,
-        action: rule.action as Record<string, unknown>,
-        listIds: names.map((name) => bindings[name] as string),
-      };
+    return writeRules(tx, siteId, rules, {
+      actor,
+      source: "restore",
+      restored: { ruleId, version, name: rule.name },
     });
-    await tx.delete(schema.edgeRule).where(ruleScope(siteId));
-    if (rows.length) await tx.insert(schema.edgeRule).values(rows);
-    const clusters = site
-      ? [{ id: site.clusterId }]
-      : await tx.select({ id: schema.cluster.id }).from(schema.cluster);
-    await publishClusters(
-      tx,
-      clusters.map((c) => c.id),
-      {
-        reason: { code: "rules_updated", params: {} },
-        actor: ctx.actor,
-        site: site?.id,
-      },
-    );
-    await recordAudit(tx, ctx.actor, {
-      action: siteId ? "site.rules_update" : "platform.rules_update",
-      targetType: siteId ? "site" : "platform",
-      targetId: siteId ?? "",
-      targetName: site?.name ?? "",
-      metadata: { count: rows.length },
-    });
-    return rows.map((row) => ruleDto.parse(row));
   });
 }
 /**

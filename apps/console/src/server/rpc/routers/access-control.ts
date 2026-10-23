@@ -2,11 +2,13 @@ import { ipCheck } from "../../services/access-control";
 import { createBan, deleteBan, listBans } from "../../services/bans";
 import { getSiteProtection, updateSiteProtection } from "../../services/protection";
 import { topLoggedRules } from "../../services/rule-logs";
+import { listDeletedRules, listRuleVersions } from "../../services/rule-versions";
 import {
   createIpList,
   deleteIpList,
   getRules,
   listIpLists,
+  restoreRuleVersion,
   saveRules,
   updateIpList,
   validateExpression,
@@ -22,6 +24,15 @@ export const accessControlRouter = {
     save: authed.rules.save.handler(({ input, context }) =>
       saveRules(context.app, input.id, input.rules, context),
     ),
+    versions: authed.rules.versions.handler(({ input, context }) =>
+      listRuleVersions(context.app.db, input.id, input.ruleId),
+    ),
+    deleted: authed.rules.deleted.handler(({ input, context }) =>
+      listDeletedRules(context.app.db, input.id),
+    ),
+    restore: authed.rules.restore.handler(({ input, context }) =>
+      restoreRuleVersion(context.app, input.id, input.ruleId, input.version, context.actor),
+    ),
     validate: authed.rules.validate.handler(({ input }) =>
       validateExpression(input.expression, input.phase, input.kind),
     ),
@@ -33,6 +44,15 @@ export const accessControlRouter = {
     get: authed.platformRules.get.handler(({ context }) => getRules(context.app, null)),
     save: authed.platformRules.save.handler(({ input, context }) =>
       saveRules(context.app, null, input.rules, context),
+    ),
+    versions: authed.platformRules.versions.handler(({ input, context }) =>
+      listRuleVersions(context.app.db, null, input.ruleId),
+    ),
+    deleted: authed.platformRules.deleted.handler(({ context }) =>
+      listDeletedRules(context.app.db, null),
+    ),
+    restore: authed.platformRules.restore.handler(({ input, context }) =>
+      restoreRuleVersion(context.app, null, input.ruleId, input.version, context.actor),
     ),
   },
   ipCheck: {
