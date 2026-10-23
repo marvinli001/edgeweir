@@ -220,6 +220,29 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 
 Behavior: [Bans](../guide/bans.en.md).
 
+### Greylist and connection limits
+
+| Procedure | Endpoint |
+| --- | --- |
+| `greylist.list` | `GET /greylist` |
+| `greylist.create` | `POST /greylist` |
+| `greylist.delete` | `DELETE /greylist/{id}` |
+| `clusters.connectionLimits`, `clusters.setConnectionLimits` | `GET`, `PUT /clusters/{clusterId}/connection-limits` |
+
+Access as for bans: service accounts cannot call them, read-only AccessKeys call `GET` only.
+
+| Request | Fields |
+| --- | --- |
+| `POST /greylist` | As `POST /bans`, plus `action`: `{ kind: "challenge", challenge }` (`cookie302`, `js`, `pow`, `captcha`) or `{ kind: "rate_limit", requests, windowSeconds }` (1–100000, 1–3600) |
+| `GET /greylist` | Query parameters `scope`, `siteId`, `address`, `page`, `pageSize` |
+| `PUT /clusters/{clusterId}/connection-limits` | `settings`: `enabled`, `perIp` (0–100000), `newPerSecond` (0–100000), `burst` (0–1000000; 0 or at least `newPerSecond`), `ports` (`[{ start, end }]`, 1–64 non-overlapping ranges; `null`: the cluster's listener and TCP L4 ports) |
+
+- The greylist responds `{ items, total, unsupportedNodes }`; entry fields `id`, `scope`, `cidr`, `reason`, `siteId`, `siteName`, `action`, `createdBy`, `createdAt`, `expiresAt`, `unappliedNodes`. `create` for the same scope, site and address returns the same `id` and audits `greylist.update`; error codes as for bans (`BAN_*`).
+- Connection limits respond `{ clusterId, settings, effectivePorts, nodes: { total, enforcing, unsupported, failing } }`; `setConnectionLimits` publishes a revision (reason `connection_limits_updated`) and audits `cluster.connection_limits_update`.
+- Node state: `banStatus.connectionLimitsActive`, `connectionLimitsError`; capabilities `greylist-v1`, `conn-limit-v1`.
+
+Behavior: [Greylist](../guide/bans.en.md#greylist), [Connection limits](../guide/bans.en.md#connection-limits).
+
 ### Challenges and CC mitigation
 
 | Procedure | Endpoint |

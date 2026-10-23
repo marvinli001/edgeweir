@@ -165,6 +165,7 @@ IP 封禁（`ip_ban`）不产生 revision，也不经配置金丝雀，经节点
 2. 具备 `bans-v1` 的节点在 `WatchConfig` 流建立时与每次通知后收到 `WATCH_EVENT_BANS`（`ban_sequence` 为序列当前值）。
 3. 节点调用 `GetBans(after_sequence)`：从 0 或从大于序列当前值的序号（数据库恢复后）开始时返回快照（`reset`），否则返回之后变化的有效封禁与已解封的 id；到期的封禁不返回，节点按到期时间失效。读取先取同一把锁的共享模式，序列当前值不会越过未提交的写入。每页默认 2000 条、最多 5000 条；`sequence` 为本页最大序号，最后一页为序列当前值。
 4. 节点以 `ReportBans` 上报自己产生的自动封禁（每次最多 1000 条），控制台按（节点、网站、地址）合并；以 `ReportStatus.bans` 上报已应用序号、容量与未生效的封禁，保存在 `node.ban_status`。
+5. 灰名单条目是 `action` 为 `challenge` 或 `rate_limit` 的 `ip_ban` 行，共用序号、锁、通知与清理，只发给在 `GetBans` 中带 `greylist = true` 的节点（`greylist-v1`）；`Ban.action` 等字段描述动作，节点不把它们写入内核。集群的内核连接数限制（`cluster.connection_limits`）则随 revision 下发（`NodeConfig.connection_limits`），节点以 `BanStatus.connection_limits_active` / `_error` 上报是否生效。
 
 | 限制 | 值 |
 | --- | --- |
@@ -674,6 +675,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0072_site_auto_mitigation` | `site_auto_mitigation` |
 | `0073_origin_stats` | 分钟、小时、天统计与视图 `traffic_hour_stats` 的 `origin_stats`（按源站的回源计数） |
 | `0074_node_clock_dns_failures` | `node.clock_offset_ms`、`node.clock_measured_at`（节点时钟偏差）；`dns_binding.failing_since`（对账连续失败的起始时间） |
+| `0075_greylist_connection_limits` | `ip_ban.action`、`challenge`、`rate_limit_requests`、`rate_limit_window_seconds`（灰名单条目，唯一索引按封禁 / 灰名单分开）；`cluster.connection_limits`（内核连接数限制） |
 
 ## 构建产物
 
