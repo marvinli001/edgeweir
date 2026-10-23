@@ -53,6 +53,30 @@ export async function postNotification(
   payload: unknown,
   bearer?: string,
 ): Promise<unknown> {
+  const response = await outboundPost(app, target, Buffer.from(JSON.stringify(payload)), {
+    "content-type": "application/json",
+    ...(bearer ? { authorization: `Bearer ${bearer}` } : {}),
+  });
+  if (response.status < 200 || response.status >= 300)
+    throw new Error("notification destination rejected request");
+  const text = response.body.toString();
+  try {
+    return text ? JSON.parse(text) : null;
+  } catch {
+    return null;
+  }
+}
+/**
+ * POST a notification body (at most 32 KiB) to a pinned, policy-checked
+ * address within 10 seconds and return the status and body (at most 64 KiB)
+ * whatever the status: provider APIs explain refusals in the body.
+ */
+export async function outboundPost(
+  app: AppContext,
+  target: string,
+  body: Buffer,
+  headers: Record<string, string>,
+): Promise<{ status: number; body: Buffer }> {
   // A socket inactivity timeout alone does not bound a complete delivery.
   const signal = AbortSignal.timeout(10000);
   const url = new URL(target);
@@ -63,7 +87,6 @@ export async function postNotification(
   // Cleartext HTTP is only permitted for explicitly allowed private fixtures/LAN endpoints.
   if (url.protocol === "http:" && forbiddenOriginRange(address.address, []) === null)
     throw new Error("HTTPS required for public notifications");
-  const body = Buffer.from(JSON.stringify(payload));
   if (body.length > 32768) throw new Error("notification payload too large");
   return new Promise((resolve, reject) => {
     const request = (url.protocol === "https:" ? https : http).request(
@@ -74,12 +97,7 @@ export async function postNotification(
         port: url.port || undefined,
         path: url.pathname + url.search,
         method: "POST",
-        headers: {
-          host: url.host,
-          "content-type": "application/json",
-          "content-length": body.length,
-          ...(bearer ? { authorization: `Bearer ${bearer}` } : {}),
-        },
+        headers: { host: url.host, ...headers, "content-length": body.length },
         timeout: 10000,
         signal,
       },
@@ -92,18 +110,9 @@ export async function postNotification(
           else chunks.push(chunk);
         });
         response.once("error", reject);
-        response.once("end", () => {
-          if (!response.statusCode || response.statusCode < 200 || response.statusCode >= 300) {
-            reject(new Error("notification destination rejected request"));
-            return;
-          }
-          const text = Buffer.concat(chunks).toString();
-          try {
-            resolve(text ? JSON.parse(text) : null);
-          } catch {
-            resolve(null);
-          }
-        });
+        response.once("end", () =>
+          resolve({ status: response.statusCode ?? 0, body: Buffer.concat(chunks) }),
+        );
       },
     );
     request.once("error", () => reject(new Error("notification transport failed")));
