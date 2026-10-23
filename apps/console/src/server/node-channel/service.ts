@@ -73,6 +73,12 @@ import { nodeCertificates } from "../services/certificates";
 import { challengeKeySecrets } from "../services/challenge-keys";
 import { mirrorMinuteStats } from "../services/clickhouse";
 import { claimEnrollmentToken } from "../services/enrollment";
+import {
+  hasDebugLogTasks,
+  pullDebugLogTask,
+  reportDebugLogResult,
+  uploadDebugLogs,
+} from "../services/node-debug-logs";
 import { ingestNodeLogs, nodeLogCursor } from "../services/node-logs";
 import { acceptedCertificate, isSerialRevoked, replaceReportedAddresses } from "../services/nodes";
 import { replaceOriginHealth } from "../services/origin-health";
@@ -902,7 +908,9 @@ export function createNodeService(
       const latest = await currentTarget(node.id);
       await evaluateAfterHeartbeat(app, node);
       const tasksPending =
-        (await hasDeliverableTasks(app.db, node.id)) || (await hasUpgradeTasks(app.db, node.id));
+        (await hasDeliverableTasks(app.db, node.id)) ||
+        (await hasUpgradeTasks(app.db, node.id)) ||
+        (await hasDebugLogTasks(app.db, node.id));
       const expiresIn = (node.certNotAfter?.getTime() ?? 0) - now.getTime();
       log.debug("status", {
         nodeId: node.id,
@@ -949,6 +957,13 @@ export function createNodeService(
     },
     reportStats: statsHandler,
     reportStatsV2: statsHandler,
+
+    async uploadDebugLogs(req, ctx) {
+      const node = await requireNode(ctx);
+      const stored = await uploadDebugLogs(app, node, req);
+      log.info("debug logs uploaded", { nodeId: node.id, pullId: req.taskId, entries: stored });
+      return {};
+    },
 
     async reportNodeLogs(req, ctx) {
       const node = await requireNode(ctx);
@@ -1119,7 +1134,8 @@ export function createNodeService(
       // The node's purge lane (proto v0.17.0) takes purges only.
       const purgeOnly = req.purgeOnly;
       const upgrade = purgeOnly ? null : await pullUpgrade(app, node);
-      const limit = max - (upgrade ? 1 : 0);
+      const debugLogs = purgeOnly ? null : await pullDebugLogTask(app, node);
+      const limit = max - (upgrade ? 1 : 0) - (debugLogs ? 1 : 0);
       const tasks = limit > 0 ? await pullCacheTasks(app.db, node, limit, { purgeOnly }) : [];
       // Only prefetches depend on the cache key's device type.
       const deviceType = await deviceTypeSites(
@@ -1134,6 +1150,7 @@ export function createNodeService(
         tasks: [
           ...tasks.map((task) => toNodeTask(task, deviceType)),
           ...(upgrade ? [upgrade] : []),
+          ...(debugLogs ? [debugLogs] : []),
         ],
       };
     },
@@ -1147,6 +1164,7 @@ export function createNodeService(
         throw new ConnectError("state must be SUCCEEDED or FAILED", Code.InvalidArgument);
       }
       if (await reportUpgrade(app, node.id, req)) return {};
+      if (await reportDebugLogResult(app, node.id, req)) return {};
       const recorded = await reportCacheTaskResult(app.db, node, {
         taskId: req.taskId,
         state: req.state === TaskState.SUCCEEDED ? "succeeded" : "failed",

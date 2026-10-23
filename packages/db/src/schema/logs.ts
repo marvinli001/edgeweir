@@ -9,6 +9,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { node, site } from "./core";
@@ -114,3 +115,59 @@ export const nodeLogEntry = pgTable(
     index("node_log_entry_time_idx").on(t.time),
   ],
 );
+
+/**
+ * A pull of a node's debug log buffer (debug-logs-v1, ADR-0050): asked for
+ * by the operator, handed to the node as a DebugLogsTask, answered once with
+ * UploadDebugLogs. At most one open (pending or running) per node; kept with
+ * its entries until the node log retention ends, at most 10 per node.
+ */
+export const nodeDebugLog = pgTable(
+  "node_debug_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    nodeId: uuid("node_id")
+      .notNull()
+      .references(() => node.id, { onDelete: "cascade" }),
+    /** pending (not handed out), running (handed out), succeeded, failed. */
+    state: text("state").notNull().default("pending"),
+    since: timestamp("since", { withTimezone: true }),
+    until: timestamp("until", { withTimezone: true }),
+    components: jsonb("components").$type<string[]>().notNull().default([]),
+    sources: jsonb("sources").$type<string[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Unanswered by then, the pull fails (debug_logs_timeout). */
+    deadlineAt: timestamp("deadline_at", { withTimezone: true }).notNull(),
+    /** A running pull is handed out again after this. */
+    leaseUntil: timestamp("lease_until", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    errorCode: text("error_code").notNull().default(""),
+    errorParams: jsonb("error_params").$type<Record<string, string>>().notNull().default({}),
+    message: text("message").notNull().default(""),
+    /** Oldest first, secrets removed (null until the upload). */
+    entries: jsonb("entries").$type<NodeDebugLogRow[]>(),
+    entryCount: integer("entry_count").notNull().default(0),
+    truncated: boolean("truncated").notNull().default(false),
+    bufferSince: timestamp("buffer_since", { withTimezone: true }),
+    overwritten: bigint("overwritten", { mode: "number" }).notNull().default(0),
+    supervisorMissing: boolean("supervisor_missing").notNull().default(false),
+  },
+  (t) => [
+    index("node_debug_log_node_idx").on(t.nodeId, t.createdAt),
+    uniqueIndex("node_debug_log_open_uq")
+      .on(t.nodeId)
+      .where(sql`${t.state} in ('pending', 'running')`),
+  ],
+);
+
+/** One entry of a debug log pull as stored. */
+export interface NodeDebugLogRow {
+  time: string;
+  level: string;
+  source: string;
+  component: string;
+  message: string;
+  fields: Record<string, string>;
+  truncated: boolean;
+  event: string;
+}

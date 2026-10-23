@@ -77,6 +77,7 @@ export const auditActions = [
   "l4_app.update",
   "node.cache_update",
   "node.certificate_renew",
+  "node.debug_logs_pull",
   "node.delete",
   "node.disable",
   "node.enable",

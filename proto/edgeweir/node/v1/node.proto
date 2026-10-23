@@ -85,6 +85,10 @@ service NodeService {
   // supervisor, OpenResty) in sequenced batches; an empty sequence-zero
   // request reads the cursor (feature node-logs-v1).
   rpc ReportNodeLogs(ReportNodeLogsRequest) returns (ReportNodeLogsResponse);
+  // UploadDebugLogs answers a DebugLogsTask with the node's debug log
+  // buffer; ReportTaskResult follows. Added in v1.6.0 (feature
+  // debug-logs-v1).
+  rpc UploadDebugLogs(UploadDebugLogsRequest) returns (UploadDebugLogsResponse);
 }
 
 // CheckChannelRequest is empty: the client certificate names the node.
@@ -635,6 +639,9 @@ message NodeTask {
     // Added in v0.12.0 (feature prefetch-v2); older nodes report
     // task_unsupported.
     SitemapPrefetchTask sitemap = 6;
+    // Added in v1.6.0 (feature debug-logs-v1); older nodes report
+    // task_unsupported.
+    DebugLogsTask debug_logs = 7;
   }
 }
 
@@ -745,7 +752,9 @@ message ReportTaskResultRequest {
   // total}, task_unsupported {type}, purge_failed, and since v0.12.0
   // sitemap_failed {url, reason, status} (the sitemap or a sitemap of the
   // index could not be fetched or parsed; reason as for prefetch_failed or
-  // invalid, too_large) and sitemap_empty {url} (no URL of the site).
+  // invalid, too_large) and sitemap_empty {url} (no URL of the site),
+  // and since v1.6.0 debug_logs_failed {reason} (reason upload_failed or
+  // disabled: the node keeps no debug log buffer).
   // Sitemap tasks count each URL and variant as one target. The console
   // localizes the code and falls back to message for codes it does not
   // know. Added in v0.2.1.

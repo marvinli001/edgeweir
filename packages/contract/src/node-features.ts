@@ -102,3 +102,10 @@ export const CHANNEL_FOLLOW_FEATURE = "channel-follow-v1";
  * never required; the node's logs view tells older nodes apart.
  */
 export const NODE_LOGS_FEATURE = "node-logs-v1";
+
+/**
+ * debug-logs-v1: the node keeps a debug log buffer in memory and answers a
+ * DebugLogsTask with UploadDebugLogs (ADR-0050). Never required: pulling
+ * from a node without it is refused.
+ */
+export const NODE_DEBUG_LOGS_FEATURE = "debug-logs-v1";

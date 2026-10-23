@@ -8,8 +8,9 @@ import { pick, signedIn, test } from "./helpers";
  * node's details open on the logs tab from the URL; the Lua warning about the origin that does not
  * resolve is listed with its source and, expanded, its request without the query string; the
  * secret of the run is nowhere on the page; the level filter hides it, a search without matches
- * shows the empty state and clearing the filters brings it back; the node log retention card is on
- * the system page.
+ * shows the empty state and clearing the filters brings it back; a debug log pull started from the
+ * tab finishes, its viewer lists the warning without the secret, filters by level and downloads
+ * JSON lines; the node log retention card is on the system page.
  */
 const STATE = resolve("../../.e2e/node-logs-state.json");
 const state = existsSync(STATE)
@@ -84,6 +85,46 @@ test("the node's logs tab lists the warning without secrets", async ({ page }) =
   // The overview tab is one click away and leaves the URL without nodeTab.
   await sheet.getByTestId("node-detail-tab-overview").click();
   await expect(page).not.toHaveURL(/nodeTab=/);
+});
+
+test("a debug log pull from the tab can be viewed and downloaded", async ({ page }) => {
+  test.skip(!state, "run scripts/e2e-node-logs.mjs first");
+  if (!state) return;
+  await signedIn(page);
+  await page.goto(`/clusters?cluster=${state.clusterId}&node=${state.nodeId}&nodeTab=logs`);
+  const sheet = page.getByTestId("node-detail");
+  const section = sheet.getByTestId("node-debug-logs");
+  await expect(section).toBeVisible();
+  const done = section.locator('[data-testid="node-debug-pull-row"][data-state="succeeded"]');
+  // The pulls of scripts/e2e-node-logs.mjs.
+  await expect(done).not.toHaveCount(0);
+  const before = await done.count();
+  await section.getByTestId("node-debug-pull").click();
+  await pick(page, page.getByTestId("node-debug-source"), "Lua");
+  await page.getByTestId("node-debug-pull-submit").click();
+  await expect(done).toHaveCount(before + 1, { timeout: 60_000 });
+  await expect(section.getByTestId("node-debug-pull")).toBeEnabled();
+  await check(page, "debug");
+
+  await done.first().getByTestId("node-debug-view").click();
+  const viewer = page.getByTestId("node-debug-viewer");
+  await expect(viewer).toBeVisible();
+  const warning = viewer
+    .getByTestId("node-debug-entry")
+    .filter({ hasText: `of site ${state.siteId} marked down` })
+    .first();
+  await expect(warning).toBeVisible();
+  await expect(warning).toContainText("?[redacted] HTTP/1.1");
+  expect(await page.content()).not.toContain(state.secret);
+  await check(page, "debug-viewer");
+  await pick(page, viewer.getByTestId("node-debug-level"), "警告及以上");
+  for (const level of await viewer
+    .getByTestId("node-debug-entry")
+    .evaluateAll((rows) => rows.map((row) => row.getAttribute("data-level"))))
+    expect(["warn", "error"]).toContain(level);
+  const download = page.waitForEvent("download");
+  await viewer.getByTestId("node-debug-viewer-download").click();
+  expect((await download).suggestedFilename()).toMatch(/-debug-.*\.jsonl$/);
 });
 
 test("the system page has the node log retention card", async ({ page }) => {

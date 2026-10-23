@@ -13,6 +13,7 @@ import { Meter } from "@/components/appica/meter";
 import { markOverflow } from "@/components/data-table";
 import { OptionSelect } from "@/components/form-select";
 import { NodeChannelFact } from "@/components/node-channel-state";
+import { NodeDebugLogs } from "@/components/node-debug-logs";
 import { NodeLogs } from "@/components/node-logs";
 import { ProbeResults } from "@/components/probes";
 import { SafetyNote } from "@/components/safety-note";
@@ -140,8 +141,8 @@ export type NodeDetailTab = "overview" | "logs";
 /**
  * A node's details in a side sheet. Overview: host metrics, the scheduling addresses with their
  * levels and reachability (and an editor for configured ones), whether it also probes, and how the
- * probes see it. Logs: the node's warnings, errors and events. `node` comes from the polling node
- * list.
+ * probes see it. Logs: pulls of the node's debug log buffer, then its warnings, errors and events.
+ * `node` comes from the polling node list.
  */
 export function NodeDetailSheet({
   node,
@@ -201,7 +202,11 @@ export function NodeDetailSheet({
               <ProbeResults input={{ nodeId: node.id }} by="prober" testId="node-probe-results" />
             </section>
           </TabsContent>
-          <TabsContent value="logs" className="min-w-0 flex-1 overflow-y-auto p-6">
+          <TabsContent
+            value="logs"
+            className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto p-6"
+          >
+            <NodeDebugLogs node={node} />
             <NodeLogs node={node} />
           </TabsContent>
         </Tabs>

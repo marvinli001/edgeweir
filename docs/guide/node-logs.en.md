@@ -48,6 +48,19 @@ A message is at most 2048 bytes, an entry has at most 16 fields of at most 512 b
 - While the console is unreachable, entries wait in the node's `nodelogs-spool.json` (at most 5,000) and go up in order once it is back; the supervisor keeps OpenResty's entries while the agent restarts, upgrades or crashes.
 - Entries dropped over the rate limits or for full buffers show as one line "The node dropped N entries".
 
+## Debug logs
+
+The list above has warnings, errors and events only. When a problem needs more detail, choose **Pull debug logs** on the same tab:
+
+- The node keeps its recent logs in memory at every level (the agent's and the supervisor's from debug up, every level of OpenResty's error log): 5,000 entries by default, at most 4 MiB, the oldest going first. Nothing is written to disk or uploaded until a pull asks for it.
+- A pull may narrow the time (the whole buffer, the last 15 minutes, the last hour), the source and the components (e.g. `channel`, `tasks`, comma-separated). The node uploads the matching entries once, at most 10,000 entries and 4 MiB; beyond that only the newest part is kept and the pull shows **Newest part only**.
+- A pull the node has not answered within 2 minutes fails. A node has at most one unfinished pull at a time.
+- A finished pull can be viewed (filtered by level and message) or downloaded as a JSON Lines file. The last 10 pulls of each node are kept, for as many days as node logs.
+- Entries are redacted like the list above; the demo account can view and download pulls but not start one. Each pull is recorded in the audit log.
+- The node option `--debug-log-buffer` sets the number of entries (0 turns it off, at most 100,000). While an older supervisor still runs, pulls show **Supervisor and OpenResty entries missing** until the node service restarts.
+
+API: `POST /api/v1/nodes/{id}/debug-logs` (`from`, `to`, `components`, `sources`), `GET /api/v1/nodes/{id}/debug-logs`, `GET /api/v1/nodes/{id}/debug-logs/{pullId}`.
+
 ## Retention
 
 **System settings** → **Node log retention**: days kept 1–30 (7 by default), at most 1,000–100,000 entries per node (10,000 by default). The console deletes what is beyond them at its start and every 10 minutes. Deleting a node deletes its logs.

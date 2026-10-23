@@ -8,6 +8,7 @@ import { compressionGzip, createConnectTransport } from "@connectrpc/connect-nod
 import {
   type CacheTaskCreateInput,
   cacheTaskCreateInput,
+  NODE_DEBUG_LOGS_FEATURE,
   NODE_LOGS_FEATURE,
   siteCreateInput,
   tlsSettings,
@@ -33,6 +34,7 @@ import { logsCsv, queryLogs } from "../../src/server/services/access-logs";
 import { createCacheTask, getCacheTask } from "../../src/server/services/cache-tasks";
 import { createClusterTx } from "../../src/server/services/clusters";
 import { createEnrollmentToken } from "../../src/server/services/enrollment";
+import { getDebugLog, pullDebugLogs } from "../../src/server/services/node-debug-logs";
 import { listNodeLogs } from "../../src/server/services/node-logs";
 import {
   deleteNode,
@@ -396,6 +398,47 @@ describe("node channel", async () => {
     const page = await listNodeLogs(ctx.db, { id: nodeId, limit: 10 });
     expect(page.supported).toBe(true);
     expect(page.entries.map((e) => e.fields.request)).toEqual(["GET /a?[redacted] HTTP/1.1"]);
+  });
+
+  it("hands a debug log pull to the node and stores its upload once (debug-logs-v1)", async () => {
+    const { nodeId, mtls } = await enroll("node-debug", {}, [
+      ...AGENT_FEATURES,
+      NODE_DEBUG_LOGS_FEATURE,
+    ]);
+    const pull = await pullDebugLogs(ctx, actor, {
+      id: nodeId,
+      components: [],
+      sources: ["lua"],
+    });
+    const { tasks } = await mtls.pullTasks({ maxTasks: 5 });
+    expect(tasks.map((t) => t.id)).toEqual([pull.id]);
+    expect(tasks[0]?.kind.case).toBe("debugLogs");
+    // Not on the purge lane, and not twice while leased.
+    expect((await mtls.pullTasks({ purgeOnly: true })).tasks).toHaveLength(0);
+    expect((await mtls.pullTasks({})).tasks).toHaveLength(0);
+    await expect(
+      anonymous().uploadDebugLogs({ taskId: pull.id, entries: [] }),
+    ).rejects.toMatchObject({ code: Code.Unauthenticated });
+    await mtls.uploadDebugLogs({
+      taskId: pull.id,
+      entries: [
+        {
+          time: timestampFromDate(new Date()),
+          level: NodeLogLevel.DEBUG,
+          source: NodeLogSource.LUA,
+          message: "cache miss /a?sig=s3cr3t",
+        },
+      ],
+    });
+    await expect(mtls.uploadDebugLogs({ taskId: pull.id, entries: [] })).rejects.toMatchObject({
+      code: Code.FailedPrecondition,
+    });
+    await mtls.reportTaskResult({ taskId: pull.id, state: TaskState.SUCCEEDED, succeeded: 1 });
+    const stored = await getDebugLog(ctx.db, { id: nodeId, pullId: pull.id });
+    expect(stored.state).toBe("succeeded");
+    expect(stored.entries.map((e) => [e.level, e.message])).toEqual([
+      ["debug", "cache miss /a?[redacted]"],
+    ]);
   });
 
   it("refuses disabled nodes, ends their watch stream and revokes deleted nodes", async () => {

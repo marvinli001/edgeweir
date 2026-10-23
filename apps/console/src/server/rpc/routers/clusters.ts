@@ -21,6 +21,7 @@ import {
 import { createEnrollmentToken, getEnrollmentToken } from "../../services/enrollment";
 import { getPortPools, setPortPools } from "../../services/l4";
 import { nodeChannelUrl } from "../../services/node-channel-url";
+import { getDebugLog, listDebugLogs, pullDebugLogs } from "../../services/node-debug-logs";
 import {
   createNodeGroup,
   deleteNodeGroup,
@@ -261,6 +262,15 @@ export const clustersRouter = {
     ),
     logs: authed.nodes.logs.handler(({ input, context }) =>
       listNodeLogs(context.app.db, input, context.demo),
+    ),
+    debugLogs: authed.nodes.debugLogs.handler(({ input, context }) =>
+      listDebugLogs(context.app.db, input.id),
+    ),
+    debugLog: authed.nodes.debugLog.handler(({ input, context }) =>
+      getDebugLog(context.app.db, input, context.demo),
+    ),
+    pullDebugLogs: authed.nodes.pullDebugLogs.handler(({ input, context }) =>
+      pullDebugLogs(context.app, context.actor, input),
     ),
   },
 };

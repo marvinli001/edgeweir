@@ -234,6 +234,9 @@ export const errorDefs = {
   /** Ending the automatic mitigation of a site that holds no Under Attack. */
   AUTO_MITIGATION_NOT_ACTIVE: { status: 409, params: [] },
   NODE_LOG_CURSOR_INVALID: { status: 400, params: [] },
+  /** The node has a debug log pull that has not finished. */
+  NODE_DEBUG_LOGS_BUSY: { status: 409, params: [] },
+  NODE_DEBUG_LOG_NOT_FOUND: { status: 404, params: [] },
   CACHE_TASK_URL_INVALID: { status: 400, params: ["urls"] },
   CACHE_TASK_HOST_UNKNOWN: { status: 400, params: ["hosts"] },
   CACHE_TASK_HOST_INVALID: { status: 400, params: ["hosts"] },

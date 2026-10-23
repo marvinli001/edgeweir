@@ -540,6 +540,13 @@
       "when": 1792716322529,
       "tag": "0076_rule_versions",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1792716800919,
+      "tag": "0077_node_debug_log",
+      "breakpoints": true
     }
   ]
 }

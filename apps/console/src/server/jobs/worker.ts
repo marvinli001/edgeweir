@@ -15,6 +15,7 @@ import { markUnloadableCertificates } from "../services/certificates";
 import { rotateChallengeKeys } from "../services/challenge-keys";
 import { expireCnamePrefixes } from "../services/cname-prefixes";
 import { pruneDnsRevisions, reconcileDns } from "../services/dns";
+import { pruneNodeDebugLogs } from "../services/node-debug-logs";
 import { pruneNodeLogs } from "../services/node-logs";
 import { rotateOriginClientCertificates } from "../services/origin-pki";
 import { recompileAfterUpgrade } from "../services/recompile";
@@ -197,6 +198,8 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   await boss.work(QUEUES.pruneNodeLogs, async () => {
     const removed = await pruneNodeLogs(ctx.db);
     if (removed) log.info("deleted old node logs", { removed });
+    const pulls = await pruneNodeDebugLogs(ctx.db);
+    if (pulls) log.info("deleted old debug log pulls", { pulls });
   });
   await boss.send(QUEUES.pruneNodeLogs, {}, { singletonKey: "prune-node-logs" });
 
