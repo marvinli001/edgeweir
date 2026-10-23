@@ -25,7 +25,10 @@ async function operatorSession(baseURL: string): Promise<string> {
   const url = new URL(baseURL);
   const dir = resolve("../../.e2e");
   mkdirSync(dir, { recursive: true });
-  const file = resolve(dir, `operator-session-${url.port || "80"}.json`);
+  // A parallel lane of scripts/e2e.sh (E2E_LANE) keeps a session of its own: another lane's
+  // specs sign out.
+  const lane = process.env.E2E_LANE ? `-${process.env.E2E_LANE}` : "";
+  const file = resolve(dir, `operator-session-${url.port || "80"}${lane}.json`);
   if (existsSync(file)) {
     const context = await request.newContext({ baseURL, storageState: file });
     const response = await context.get("/api/auth/get-session");
