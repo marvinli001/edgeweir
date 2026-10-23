@@ -173,6 +173,7 @@ async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
           hostHeader: o.hostHeader,
           sni: o.sni,
           group: o.groupName,
+          proxyProtocolVersion: o.proxyProtocolVersion,
           s3: o.credentialId
             ? {
                 region: o.s3Region,
@@ -475,6 +476,8 @@ async function writeOrigins(
   origins: OriginInput[],
   masterKey: MasterKey,
 ) {
+  if (origins.some((o) => o.s3 && o.proxyProtocolVersion !== 0))
+    fail("ORIGIN_PROXY_PROTOCOL_S3", "S3 origins do not read PROXY protocol");
   const credentials = await syncCredentials(tx, pool.siteId, origins, masterKey);
   const existing = await tx
     .select({
@@ -500,6 +503,7 @@ async function writeOrigins(
       hostHeader: o.hostHeader,
       sni: o.sni,
       groupName: o.group,
+      proxyProtocolVersion: o.proxyProtocolVersion,
       credentialId: o.s3 ? (credentials.get(o.s3.accessKeyId) ?? null) : null,
       s3Region: o.s3?.region ?? "",
       s3Bucket: o.s3?.bucket ?? "",

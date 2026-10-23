@@ -3,6 +3,7 @@ import {
   ACCESS_CONTROL_FEATURE,
   ACCESS_LOGS_V2_FEATURE,
   ACTIVE_HEALTH_FEATURE,
+  ACTIVE_HEALTH_GRPC_FEATURE,
   BROTLI_FEATURE,
   CHALLENGE_V2_FEATURE,
   CLIENT_CERT_FEATURE,
@@ -13,6 +14,7 @@ import {
   ORIGIN_CA_FEATURE,
   ORIGIN_HTTP2_FEATURE,
   ORIGIN_MTLS_FEATURE,
+  ORIGIN_PROXY_PROTOCOL_FEATURE,
   RULES_BODY_FEATURE,
   RULES_V2_FEATURE,
   RULES_V3_FEATURE,
@@ -188,9 +190,9 @@ export async function updateSiteWaf(
 const AVAILABLE: FeatureAvailability = { available: true, reason: null };
 
 /**
- * Whether Brotli, Zstandard, CRS, active health checks, session affinity
- * (which also needs challenge-v1 for its keys), HTTP/2 and gRPC towards the
- * origins, error pages and the rule engine extensions (rules-v2, rules-v3)
+ * Whether Brotli, Zstandard, CRS, active health checks (gRPC ones too),
+ * session affinity (which also needs challenge-v1 for its keys), HTTP/2,
+ * gRPC and PROXY protocol towards the origins, error pages and the rule engine extensions (rules-v2, rules-v3)
  * can be turned on for a site now: every active
  * node of its cluster must report the feature (it may still be required
  * through the API, as with other features). purgeByTag and prefetchVariants
@@ -214,6 +216,8 @@ export async function siteFeatures(db: Database, siteId: string): Promise<SiteFe
     activeHealthCheck: byNodes(ACTIVE_HEALTH_FEATURE),
     sessionAffinity: byNodes(SESSION_AFFINITY_FEATURE, "challenge-v1"),
     originHttp2: byNodes(ORIGIN_HTTP2_FEATURE),
+    originProxyProtocol: byNodes(ORIGIN_PROXY_PROTOCOL_FEATURE),
+    activeHealthGrpc: byNodes(ACTIVE_HEALTH_GRPC_FEATURE),
     originMtls: byNodes(ORIGIN_MTLS_FEATURE),
     originCa: byNodes(ORIGIN_CA_FEATURE),
     errorPages: byNodes(ERROR_PAGES_FEATURE),
