@@ -1,7 +1,11 @@
 import { randomUUID, X509Certificate } from "node:crypto";
 import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
-import { decodeNodeConfig, usesOriginCa } from "@edgeweir/config-compiler";
+import {
+  decodeNodeConfig,
+  ORIGIN_CA_ROTATION_FEATURE,
+  usesOriginCa,
+} from "@edgeweir/config-compiler";
 import {
   type AuditAction,
   ORIGIN_CA_YEARS,
@@ -27,6 +31,7 @@ import type { AppContext } from "../lib/context";
 import type { Envelope, MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
 import { lockOriginAuthority } from "../lib/locks";
+import { assertNodeFeatures } from "../lib/node-features";
 import { CsrError, generateCa, OriginAuthority, sha256Fingerprint } from "../pki/ca";
 import { caKeyBinding } from "../pki/store";
 import { type Actor, recordAudit, systemActor } from "./audit";
@@ -590,9 +595,7 @@ async function trustingClusters(db: Executor) {
  * A rotation step of the Origin CA in one transaction, serialized with the
  * other steps and revocations: `step` changes the authorities and returns
  * the audit entry, then every cluster trusting the Origin CA gets a
- * revision with the new trust (reason `reason`). A cluster that cannot
- * take it (NODE_CAPABILITY_REQUIRED: nodes without origin-ca-rotation-v1)
- * refuses the whole step.
+ * revision with the new trust (reason `reason`).
  */
 async function originCaStep(
   app: AppContext,
@@ -617,11 +620,20 @@ async function originCaStep(
 /**
  * Rotation, step 1: a new authority issues the origin certificates from
  * now on; the active one becomes the previous, which nodes keep trusting
- * (with its CRL) until it is retired.
+ * (with its CRL) until it is retired. Every active node of a cluster
+ * trusting the Origin CA must support origin-ca-rotation-v1
+ * (NODE_CAPABILITY_REQUIRED).
  */
 export const rotateOriginCa = (app: AppContext, ctx: { actor: Actor }) =>
   originCaStep(app, ctx, "origin_ca_rotation_started", async (tx, found) => {
     if (found.previous) fail("CA_ROTATION_IN_PROGRESS", "the Origin CA is being rotated");
+    // Older nodes would refuse every revision until they are upgraded.
+    await assertNodeFeatures(
+      tx,
+      await trustingClusters(tx),
+      [ORIGIN_CA_ROTATION_FEATURE],
+      "cluster nodes cannot trust two Origin CAs",
+    );
     await setStatus(tx, found.active, "previous");
     const next = await insertAuthority(
       tx,
