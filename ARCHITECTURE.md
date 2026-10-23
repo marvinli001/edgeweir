@@ -306,11 +306,12 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 | `ReportStats`、`ReportStatsV2` | 按分钟预聚合的流量统计（`ReportStatsV2` 另含 L4 应用的分钟统计，`l4-v1`）；按批次序号去重 |
 | `ReportLogs` | 采样访问日志；按批次序号去重 |
 | `ReportNodeLogs` | 节点自己的警告、错误与白名单事件（agent、监督进程、OpenResty 的 error log，`node-logs-v1`）；按批次序号去重，存入 `node_log_entry`；控制台入库前再脱敏一次，节点报告的限速与积压丢弃条数记为一行 `dropped` |
+| `UploadDebugLogs` | 节点对 debug 日志拉取任务（`DebugLogsTask`，`debug-logs-v1`）的一次性回答：内存缓冲区中匹配的条目，最多 10,000 条 / 4 MiB；控制台再脱敏一次，存入 `node_debug_log` |
 | `GetOriginCredentials` | 本集群网站引用的 S3 源站密钥、PURGE 密钥（`site_secret`）与访问鉴权规则的密钥（`site_auth_rule`，JSON）；后两种 `access_key_id` 为空 |
 | `SubmitPurge` | 节点转交的 PURGE 请求（`site-content-v1`）：控制台确认节点所在集群服务该网站、网站开启了 PURGE 且 URL 属于网站，以节点身份创建 URL 刷新任务（来源 `purge_method`），每个网站每分钟至多 120 个 |
 | `GetCertificates` | 本集群网站引用的证书链与私钥（含网站的其他证书） |
 | `GetSessionTicketKeys` | 本集群的 TLS 会话票据密钥（80 字节），只能取到本集群的 |
-| `PullTasks`、`ReportTaskResult` | 刷新预热与升级任务 |
+| `PullTasks`、`ReportTaskResult` | 刷新预热、升级与 debug 日志拉取任务 |
 | `GetBans`、`ReportBans` | 按序号增量拉取本集群的封禁；上报节点的自动封禁 |
 | `EnrollProbe`（`ProbeService`） | 用一次性探针 token（`ewp_`）和 CSR 换取探针证书；与 `Enroll` 相同的请求大小限制，token 只在注册成功时消耗 |
 | `RenewProbeCertificate` | 轮换探针证书（节点经 `RenewCertificate`） |
@@ -467,7 +468,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `maintenance.rotate-session-ticket-keys` | 每小时第 13 分 | 轮换满 12 小时的 TLS 会话票据密钥 |
 | `maintenance.rotate-origin-client-certificates` | 每小时第 19 分 | 为剩余不足 30 天的集群签发新的回源客户端证书，删除过期 7 天的 |
 | `maintenance.prune-security-events` | 每小时第 37 分 | 删除超过保留天数的安全事件 |
-| `maintenance.prune-node-logs` | 启动时，之后每 10 分钟 | 删除超过保留天数的节点日志，以及每个节点超出条数上限的最旧条目 |
+| `maintenance.prune-node-logs` | 启动时，之后每 10 分钟 | 删除超过保留天数的节点日志，以及每个节点超出条数上限的最旧条目；debug 日志拉取同样按天数删除，每个节点保留最近 10 次 |
 | 调度求值（进程内定时器，不是 pg-boss 队列） | 每 10 秒；同一时间一个进程（租约），上一次未完成时跳过 | 探针判定的地址可达性与智能调度规则，见 [区域探针与智能调度](#区域探针与智能调度) |
 
 ## 数据模型
@@ -581,6 +582,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `node_log_cursor` | 每个节点访问日志批次的序号高水位 |
 | `node_log_entry` | 节点的警告、错误与白名单事件（时间、级别、来源、组件、消息、结构化字段、折叠条数、是否截断、事件），`kind = dropped` 的行记录节点丢弃的条数；按（节点、批次、序号）去重 |
 | `node_log_entry_cursor` | 每个节点 `ReportNodeLogs` 批次的序号高水位 |
+| `node_debug_log` | 节点 debug 日志的拉取：筛选条件、状态（等待、已下发、成功、失败）、期限与租约、上传的条目（jsonb）；每个节点同时只有一次未完成，保留最近 10 次 |
 | `origin_health` | 节点上报的源站健康状态与错误码，被动检查与主动检查各一行 |
 | `cache_task` | 刷新预热任务 |
 | `cache_task_node` | 任务在每个节点上的交付与结果 |
@@ -674,6 +676,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0072_site_auto_mitigation` | `site_auto_mitigation` |
 | `0073_origin_stats` | 分钟、小时、天统计与视图 `traffic_hour_stats` 的 `origin_stats`（按源站的回源计数） |
 | `0074_node_clock_dns_failures` | `node.clock_offset_ms`、`node.clock_measured_at`（节点时钟偏差）；`dns_binding.failing_since`（对账连续失败的起始时间） |
+| `0075_node_debug_log` | `node_debug_log`（节点 debug 日志的拉取） |
 
 ## 构建产物
 

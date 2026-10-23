@@ -305,12 +305,13 @@ Every RPC other than `Enroll` and `EnrollProbe` requires a client certificate ve
 | `CheckChannel` | No side effects: returns the node id of the certificate, the current node channel address and the console's time, also for disabled nodes; used before a node switches address, by `edgeweir-node set-server` to check a new address and by `edgeweir-node diagnose` to check connectivity and the clock |
 | `ReportStats`, `ReportStatsV2` | Per-minute pre-aggregated traffic statistics (`ReportStatsV2` also carries the L4 apps' minute statistics, `l4-v1`); deduplicated by batch sequence |
 | `ReportLogs` | Sampled access logs; deduplicated by batch sequence |
+| `UploadDebugLogs` | The node's one answer to a debug log pull (`DebugLogsTask`, `debug-logs-v1`): the matching entries of its in-memory buffers, at most 10,000 entries / 4 MiB; the console removes secrets again and stores them in `node_debug_log` |
 | `ReportNodeLogs` | The node's own warnings, errors and whitelisted events (agent, supervisor, OpenResty's error log; `node-logs-v1`); deduplicated by batch sequence and stored in `node_log_entry`; the console removes secrets again before storing, and the drops the node counts (rate limit, backlog) become one `dropped` row |
 | `GetOriginCredentials` | S3 origin keys, PURGE keys (`site_secret`) and access authentication secrets (`site_auth_rule`, JSON) referenced by the cluster's sites; the latter two with an empty `access_key_id` |
 | `SubmitPurge` | A PURGE request the node hands on (`site-content-v1`): the console checks that the node's cluster serves the site, that the site has PURGE on and that the URL belongs to it, then creates a URL purge task as the node (source `purge_method`), at most 120 per site and minute |
 | `GetCertificates` | Certificate chains and private keys referenced by the cluster's sites (further certificates included) |
 | `GetSessionTicketKeys` | The cluster's TLS session ticket keys (80 bytes); a node only gets its own cluster's |
-| `PullTasks`, `ReportTaskResult` | Purge, prefetch, and upgrade tasks |
+| `PullTasks`, `ReportTaskResult` | Purge, prefetch, upgrade, and debug log pull tasks |
 | `GetBans`, `ReportBans` | Incremental ban changes of the node's cluster by sequence; upload of the node's automatic bans |
 | `EnrollProbe` (`ProbeService`) | Exchange a single-use probe token (`ewp_`) and a CSR for a probe certificate; the same request size limit as `Enroll`, and the token is used up only by a successful enrollment |
 | `RenewProbeCertificate` | Rotate the probe certificate (nodes use `RenewCertificate`) |
@@ -466,7 +467,7 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, skewed node clocks (
 | `maintenance.rotate-session-ticket-keys` | Hourly at minute 13 | Rotates TLS session ticket keys that are 12 hours old |
 | `maintenance.rotate-origin-client-certificates` | Hourly at minute 19 | Issues clusters a new origin client certificate 30 days before expiry, deletes those expired a week ago |
 | `maintenance.prune-security-events` | Hourly at minute 37 | Deletes security events past the retention |
-| `maintenance.prune-node-logs` | At start, then every 10 minutes | Deletes node logs past the retention and each node's oldest entries beyond its limit |
+| `maintenance.prune-node-logs` | At start, then every 10 minutes | Deletes node logs past the retention and each node's oldest entries beyond its limit; debug log pulls go after as many days, the last 10 of each node kept |
 | Scheduling evaluation (an in-process timer, not a pg-boss queue) | Every 10 seconds; one process at a time (lease), a tick is skipped while the previous run is busy | Probe-driven address reachability and scheduling rules, see [Regional probes and scheduling](#regional-probes-and-scheduling) |
 
 ## Data model
@@ -579,6 +580,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `node_log_cursor` | Per-node high-water mark of access log batches |
 | `node_log_entry` | Nodes' warnings, errors and whitelisted events (time, level, source, component, message, structured fields, folded count, truncation, event); rows with `kind = dropped` record how many entries the node dropped; deduplicated by (node, batch, index) |
 | `node_log_entry_cursor` | Per-node high-water mark of `ReportNodeLogs` batches |
+| `node_debug_log` | Pulls of a node's debug logs: filters, state (pending, handed out, succeeded, failed), deadline and lease, the uploaded entries (jsonb); at most one unfinished per node, the last 10 kept |
 | `origin_health` | Origin health and error codes reported by nodes, one row each for the passive and the active check |
 | `cache_task` | Purge and prefetch tasks |
 | `cache_task_node` | Delivery and result of a task on each node |
@@ -672,6 +674,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0072_site_auto_mitigation` | `site_auto_mitigation` |
 | `0073_origin_stats` | `origin_stats` (fetches per origin) in minute, hour and day statistics and the view `traffic_hour_stats` |
 | `0074_node_clock_dns_failures` | `node.clock_offset_ms`, `node.clock_measured_at` (node clock offset); `dns_binding.failing_since` (since when DNS reconciliation has kept failing) |
+| `0075_node_debug_log` | `node_debug_log` (pulls of a node's debug logs) |
 
 ## Build output
 
