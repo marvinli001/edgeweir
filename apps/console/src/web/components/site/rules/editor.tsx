@@ -6,6 +6,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation } from "@tanstack/react-query";
 import * as React from "react";
 import { SafetyNote } from "@/components/safety-note";
+import { DeletedRules, RuleHistoryContext } from "@/components/site/rules/history";
 import {
   kinds,
   phaseLabel,
@@ -84,114 +85,117 @@ export function RulesEditor({
     // Rules reach revisions, the sites' delivery and the platform's views.
     meta: { invalidates: "all", success: m.common_saved },
   });
+  const dirty = JSON.stringify(initial) !== JSON.stringify(rows);
+  const history = React.useMemo(
+    () => ({ siteId, saved: new Map(initial.map((rule) => [rule.id, rule])), dirty }),
+    [siteId, initial, dirty],
+  );
   const position = (id: unknown) => rows.findIndex((r) => r.id === id) + 1;
   const patch = (id: string, update: Partial<RuleDto>) =>
     setRows(rows.map((row) => (row.id === id ? { ...row, ...update } : row)));
   return (
-    <form
-      className="flex flex-col gap-5"
-      onSubmit={async (event) => {
-        event.preventDefault();
-        setError(null);
-        const rules: RuleInput[] = [];
-        // A site's rules ban on the request's site only.
-        const schema = siteId ? siteRuleInput : ruleInput;
-        for (const row of rows) {
-          const parsed = schema.safeParse(row);
-          if (!parsed.success) {
-            setError(ruleIssueText(row, parsed.error.issues[0]));
-            return;
+    <RuleHistoryContext.Provider value={history}>
+      <form
+        className="flex flex-col gap-5"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          setError(null);
+          const rules: RuleInput[] = [];
+          // A site's rules ban on the request's site only.
+          const schema = siteId ? siteRuleInput : ruleInput;
+          for (const row of rows) {
+            const parsed = schema.safeParse(row);
+            if (!parsed.success) {
+              setError(ruleIssueText(row, parsed.error.issues[0]));
+              return;
+            }
+            const { action } = parsed.data;
+            if (action.kind === "origin" && invalidHostHeader(action.hostHeader)) {
+              setError(m.rules_check_rule({ name: row.name, field: m.site_form_host_header() }));
+              return;
+            }
+            rules.push(parsed.data);
           }
-          const { action } = parsed.data;
-          if (action.kind === "origin" && invalidHostHeader(action.hostHeader)) {
-            setError(m.rules_check_rule({ name: row.name, field: m.site_form_host_header() }));
-            return;
+          try {
+            await save.mutateAsync(rules);
+          } catch (err) {
+            setError(errorMessage(err));
           }
-          rules.push(parsed.data);
-        }
-        try {
-          await save.mutateAsync(rules);
-        } catch (err) {
-          setError(errorMessage(err));
-        }
-      }}
-    >
-      <UnavailableNote features={features} />
-      {rows.length === 0 ? <EmptyState title={m.rules_empty()} /> : null}
-      <SortableList
-        position={position}
-        activationDistance={8}
-        onMove={(active, over) => {
-          const from = position(active) - 1,
-            to = position(over) - 1;
-          if (from >= 0 && to >= 0 && rows[from]?.phase === rows[to]?.phase)
-            setRows(arrayMove(rows, from, to));
         }}
       >
-        {phases.map((phase) => {
-          const group = rows.filter((row) => row.phase === phase);
-          const first = kinds[phase][0] ?? "block";
-          return (
-            // A card per phase; its rules are flat rows split by hairlines.
-            <section
-              key={phase}
-              className="flex flex-col rounded-2xl bg-card shadow-elev-1 edge-lit animate-enter"
-              data-testid={`rules-phase-${phase}`}
-            >
-              <div className="flex min-h-14 items-center justify-between gap-3 px-5 py-3">
-                <h3 className="font-heading text-base font-medium">{phaseLabel(phase)}</h3>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={rows.length >= (siteId ? 64 : 32) || (locked && v2Kinds.has(first))}
-                  data-testid={`rule-add-${phase}`}
-                  onClick={() =>
-                    setRows([
-                      ...rows,
-                      {
-                        id: randomUuid(),
-                        name: m.rules_new(),
-                        phase,
-                        expression: "true",
-                        // Saved with an edit elsewhere, an enabled `true` rule would redirect or
-                        // block every request.
-                        enabled: false,
-                        action: defaultAction(first),
-                      },
-                    ])
-                  }
-                >
-                  <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-                  {m.rules_add()}
-                </Button>
-              </div>
-              <SortableContext
-                items={group.map((r) => r.id)}
-                strategy={verticalListSortingStrategy}
+        <UnavailableNote features={features} />
+        <DeletedRules />
+        {rows.length === 0 ? <EmptyState title={m.rules_empty()} /> : null}
+        <SortableList
+          position={position}
+          activationDistance={8}
+          onMove={(active, over) => {
+            const from = position(active) - 1,
+              to = position(over) - 1;
+            if (from >= 0 && to >= 0 && rows[from]?.phase === rows[to]?.phase)
+              setRows(arrayMove(rows, from, to));
+          }}
+        >
+          {phases.map((phase) => {
+            const group = rows.filter((row) => row.phase === phase);
+            const first = kinds[phase][0] ?? "block";
+            return (
+              // A card per phase; its rules are flat rows split by hairlines.
+              <section
+                key={phase}
+                className="flex flex-col rounded-2xl bg-card shadow-elev-1 edge-lit animate-enter"
+                data-testid={`rules-phase-${phase}`}
               >
-                {group.map((row) => (
-                  <RuleRow
-                    key={row.id}
-                    row={row}
-                    originGroups={originGroups}
-                    locked={locked}
-                    lockedV3={lockedV3}
-                    patch={(update) => patch(row.id, update)}
-                    remove={() => setRows(rows.filter((r) => r.id !== row.id))}
-                  />
-                ))}
-              </SortableContext>
-            </section>
-          );
-        })}
-      </SortableList>
-      <SaveBar
-        dirty={JSON.stringify(initial) !== JSON.stringify(rows)}
-        pending={save.isPending}
-        error={error}
-        testId="rules-save"
-      />
-    </form>
+                <div className="flex min-h-14 items-center justify-between gap-3 px-5 py-3">
+                  <h3 className="font-heading text-base font-medium">{phaseLabel(phase)}</h3>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={rows.length >= (siteId ? 64 : 32) || (locked && v2Kinds.has(first))}
+                    data-testid={`rule-add-${phase}`}
+                    onClick={() =>
+                      setRows([
+                        ...rows,
+                        {
+                          id: randomUuid(),
+                          name: m.rules_new(),
+                          phase,
+                          expression: "true",
+                          // Saved with an edit elsewhere, an enabled `true` rule would redirect or
+                          // block every request.
+                          enabled: false,
+                          action: defaultAction(first),
+                        },
+                      ])
+                    }
+                  >
+                    <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+                    {m.rules_add()}
+                  </Button>
+                </div>
+                <SortableContext
+                  items={group.map((r) => r.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {group.map((row) => (
+                    <RuleRow
+                      key={row.id}
+                      row={row}
+                      originGroups={originGroups}
+                      locked={locked}
+                      lockedV3={lockedV3}
+                      patch={(update) => patch(row.id, update)}
+                      remove={() => setRows(rows.filter((r) => r.id !== row.id))}
+                    />
+                  ))}
+                </SortableContext>
+              </section>
+            );
+          })}
+        </SortableList>
+        <SaveBar dirty={dirty} pending={save.isPending} error={error} testId="rules-save" />
+      </form>
+    </RuleHistoryContext.Provider>
   );
 }
