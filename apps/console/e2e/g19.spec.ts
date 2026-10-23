@@ -60,6 +60,41 @@ test("origin protection: the certificates page's Origin CA and origin client tab
   expect(pageErrors).toEqual([]);
 });
 
+test("origin protection: rotating a CA from the certificates page", async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await signedIn(page);
+  // The origin client CA: started (the next CA and the trust bundle), then cancelled.
+  await page.goto("/certificates?tab=origin-client");
+  await expect(page.getByTestId("origin-client-ca-next")).toHaveCount(0);
+  await page.getByTestId("origin-client-ca-rotate").click();
+  await expect(page.getByText("先让源站信任新 CA，再启用")).toBeVisible();
+  await page.getByTestId("confirm-action").click();
+  await expect(page.getByTestId("origin-client-ca-next")).toBeVisible();
+  await expect(page.getByTestId("origin-client-ca-bundle")).toBeVisible();
+  await expect(page.getByTestId("origin-client-ca-activate")).toBeVisible();
+  await check(page, "origin-client-rotating");
+  await page.getByTestId("origin-client-ca-rotation-cancel").click();
+  await page.getByTestId("confirm-action").click();
+  await expect(page.getByTestId("origin-client-ca-next")).toHaveCount(0);
+  await expect(page.getByTestId("origin-client-ca-rotate")).toBeVisible();
+
+  // The Origin CA: started (the previous CA beside it), then cancelled while the new one issued nothing.
+  await page.goto("/certificates?tab=origin-ca");
+  await expect(page.getByTestId("origin-ca-previous")).toHaveCount(0);
+  await page.getByTestId("origin-ca-rotate").click();
+  await page.getByTestId("confirm-action").click();
+  await expect(page.getByTestId("origin-ca-previous")).toBeVisible();
+  await expect(page.getByTestId("origin-ca-previous-certificates")).toContainText("张有效证书");
+  await expect(page.getByTestId("cert-authority-previous").first()).toHaveText("旧 CA");
+  await check(page, "origin-ca-rotating");
+  await page.getByTestId("origin-ca-rotation-cancel").click();
+  await page.getByTestId("confirm-action").click();
+  await expect(page.getByTestId("origin-ca-previous")).toHaveCount(0);
+  await expect(page.getByTestId("cert-authority-previous")).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
+});
+
 test("origin protection: a pool's trust and client certificate", async ({ page }) => {
   await signedIn(page);
   await page.goto(`/sites/${state.ocaSiteId}?tab=origins`);

@@ -112,6 +112,12 @@ message NodeConfig {
   // older nodes, accept the configuration without enforcing it; nodes that
   // understand the field report conn-limit-v1).
   ConnectionLimits connection_limits = 23;
+  // The Origin CA being retired while the console rotates it, with its own
+  // CRL: pools trusting the Origin CA trust both until the operator retires
+  // it, so origin certificates it issued keep working. Present only with
+  // origin_ca. Changing it is a structural change. Added in v1.6.0
+  // (feature origin-ca-rotation-v1).
+  OriginCa origin_ca_previous = 24;
 }
 
 // ConnectionLimits limits each client's TCP connections to ports in the
@@ -273,6 +279,8 @@ message NodeConfigDiff {
   OriginCa origin_ca = 24;
   // Sent in full. Added in v1.6.0.
   ConnectionLimits connection_limits = 25;
+  // Always sent in full (NodeConfig field 24). Added in v1.6.0.
+  OriginCa origin_ca_previous = 26;
 }
 
 // L4Protocol is the transport of a layer-4 application.
@@ -1447,7 +1455,8 @@ enum OriginTlsTrust {
   // The node's trust store (the system's CA bundle or --trusted-ca).
   ORIGIN_TLS_TRUST_UNSPECIFIED = 0;
   ORIGIN_TLS_TRUST_SYSTEM = 1;
-  // Only NodeConfig.origin_ca; certificates its CRL lists are refused.
+  // Only NodeConfig.origin_ca (and origin_ca_previous during a rotation);
+  // certificates their CRLs list are refused.
   ORIGIN_TLS_TRUST_ORIGIN_CA = 2;
 }
 

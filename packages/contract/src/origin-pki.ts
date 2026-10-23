@@ -8,6 +8,13 @@ import { optionalHostname, uuid } from "./schemas";
  * to origins that verify clients (origin mutual TLS), and the Origin CA,
  * which signs origin server certificates only the edge trusts. Both are
  * ECDSA P-256 authorities separate from the node channel's CA.
+ *
+ * Rotation keeps the old and the new authority side by side. The origin
+ * client CA: rotate (the new CA is only trusted: origins add it), activate
+ * (clusters get certificates of the new CA; the old ones stay valid until
+ * they expire), retire. The Origin CA: rotate (the new CA issues, nodes
+ * trust both), retire (nodes trust the new one alone). Cancel undoes a
+ * rotation before the new CA is in use.
  */
 
 /** Lifetime of the origin client CA. */
@@ -48,6 +55,12 @@ const certificateAuthorityDto = z.object({
   notAfter: z.string(),
 });
 
+/**
+ * Which authority of its kind signed a certificate: the active one, the
+ * previous one of a rotation, or one retired (or cancelled) since.
+ */
+const issuingAuthority = z.enum(["active", "previous", "retired"]);
+
 const originClientCertificateDto = z.object({
   id: uuid,
   clusterId: uuid,
@@ -56,18 +69,36 @@ const originClientCertificateDto = z.object({
   fingerprint: z.string(),
   notBefore: z.string(),
   notAfter: z.string(),
+  authority: issuingAuthority,
 });
 
+const clusterRef = z.object({ clusterId: uuid, clusterName: z.string() });
+
 const originClientCa = z.object({
-  /** null until the operator creates it. */
+  /** The active authority (signs the clusters' certificates); null until the operator creates it. */
   authority: certificateAuthorityDto.nullable(),
+  /** A rotation's new authority before it is activated: origins should trust it already. */
+  next: certificateAuthorityDto.nullable(),
+  /** The authority a rotation replaced, until it is retired. */
+  previous: certificateAuthorityDto.nullable(),
+  /**
+   * PEM of every authority origins verifying clients should trust now:
+   * the active one, then the next or previous one during a rotation.
+   */
+  trustBundlePem: z.string(),
   /** The current certificate of every cluster that has one, by cluster name. */
   certificates: z.array(originClientCertificateDto),
+  /** With a previous authority: clusters whose sites still present its certificates. */
+  pendingClusters: z.array(clusterRef),
 });
 
 const originCa = z.object({
-  /** null until the operator creates it. */
+  /** The active authority (issues origin certificates); null until the operator creates it. */
   authority: certificateAuthorityDto.nullable(),
+  /** The authority a rotation replaced: nodes trust both until it is retired. */
+  previous: certificateAuthorityDto.nullable(),
+  /** Certificates of the previous authority, neither revoked nor expired, that retiring it ends. */
+  previousCertificates: z.number().int(),
 });
 
 const originCertificateDto = z.object({
@@ -83,6 +114,7 @@ const originCertificateDto = z.object({
   notAfter: z.string(),
   revokedAt: z.string().nullable(),
   createdAt: z.string(),
+  authority: issuingAuthority,
 });
 
 /**
@@ -123,11 +155,48 @@ export const originClientCaContract = {
   create: oc
     .route({ method: "POST", path: "/origin-client-ca", tags: ["certificates"] })
     .output(originClientCa),
+  /** Creates the next authority, which origins should trust before it is activated. */
+  rotate: oc
+    .route({ method: "POST", path: "/origin-client-ca/rotation", tags: ["certificates"] })
+    .output(originClientCa),
+  /**
+   * Makes the next authority the active one and gives every cluster a certificate it signed
+   * (clusters that fail are retried hourly); the previous one stays trusted until retired.
+   */
+  activate: oc
+    .route({ method: "POST", path: "/origin-client-ca/rotation/activate", tags: ["certificates"] })
+    .output(originClientCa),
+  /** Deletes the previous authority once no cluster presents its certificates (CA_ROTATION_INCOMPLETE). */
+  retire: oc
+    .route({ method: "POST", path: "/origin-client-ca/rotation/retire", tags: ["certificates"] })
+    .output(originClientCa),
+  /** Deletes the next authority before it is activated. */
+  cancel: oc
+    .route({ method: "DELETE", path: "/origin-client-ca/rotation", tags: ["certificates"] })
+    .output(originClientCa),
 };
 export const originCaContract = {
   get: oc.route({ method: "GET", path: "/origin-ca", tags: ["certificates"] }).output(originCa),
   /** Creates the authority; when it exists already, returns it unchanged. */
   create: oc.route({ method: "POST", path: "/origin-ca", tags: ["certificates"] }).output(originCa),
+  /**
+   * Creates a new authority that issues from now on; every cluster trusting the Origin CA gets a
+   * revision trusting both (nodes need origin-ca-rotation-v1).
+   */
+  rotate: oc
+    .route({ method: "POST", path: "/origin-ca/rotation", tags: ["certificates"] })
+    .output(originCa),
+  /** Deletes the previous authority: nodes stop trusting the certificates it issued. */
+  retire: oc
+    .route({ method: "POST", path: "/origin-ca/rotation/retire", tags: ["certificates"] })
+    .output(originCa),
+  /**
+   * Deletes the new authority and makes the previous one active again, while the new one has no
+   * valid certificates (CA_ROTATION_IN_USE).
+   */
+  cancel: oc
+    .route({ method: "DELETE", path: "/origin-ca/rotation", tags: ["certificates"] })
+    .output(originCa),
 };
 export const originCertificatesContract = {
   list: oc

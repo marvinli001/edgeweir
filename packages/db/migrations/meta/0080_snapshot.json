@@ -1,6 +1,6 @@
 {
-  "id": "01d47fa1-97f7-42a5-9182-68105b0c1bb5",
-  "prevId": "e28fdbf9-2316-4f10-8f57-4ab5b432f152",
+  "id": "8edf027c-6640-4208-86d9-9dff88a1a2f3",
+  "prevId": "01d47fa1-97f7-42a5-9182-68105b0c1bb5",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -5984,6 +5984,27 @@
           "primaryKey": true,
           "notNull": true
         },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "generation": {
+          "name": "generation",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
         "certificate_pem": {
           "name": "certificate_pem",
           "type": "text",
@@ -6023,7 +6044,29 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "pki_authority_kind_status_idx": {
+          "name": "pki_authority_kind_status_idx",
+          "columns": [
+            {
+              "expression": "kind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -9250,6 +9293,13 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
+        "authority_id": {
+          "name": "authority_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'origin-ca'"
+        },
         "hostnames": {
           "name": "hostnames",
           "type": "text[]",
@@ -9344,6 +9394,13 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "authority_id": {
+          "name": "authority_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'origin-client'"
         },
         "chain_pem": {
           "name": "chain_pem",

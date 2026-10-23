@@ -217,6 +217,14 @@ export const errorDefs = {
   ORIGIN_CA_NOT_FOUND: { status: 409, params: [] },
   /** The origin client CA has not been created. */
   ORIGIN_CLIENT_CA_NOT_FOUND: { status: 409, params: [] },
+  /** Starting a rotation of an origin authority while one is under way. */
+  CA_ROTATION_IN_PROGRESS: { status: 409, params: [] },
+  /** A rotation step that does not apply to the rotation's current state. */
+  CA_ROTATION_STEP_UNAVAILABLE: { status: 409, params: [] },
+  /** Retiring the previous origin client CA while clusters (first 5, then "+N") still present its certificates. */
+  CA_ROTATION_INCOMPLETE: { status: 409, params: ["clusters"] },
+  /** Cancelling an Origin CA rotation after the new CA issued certificates that are still valid. */
+  CA_ROTATION_IN_USE: { status: 409, params: ["count"] },
   ORIGIN_CERTIFICATE_NOT_FOUND: { status: 404, params: [] },
   ORIGIN_CERTIFICATE_REVOKED: { status: 409, params: [] },
   /** A CSR that cannot be read, whose signature fails, or with a key other than RSA 2048-4096 or ECDSA P-256 / P-384. */
@@ -387,6 +395,9 @@ export const revisionReasonDefs = {
   },
   origin_certificate_revoked: { params: [], en: "origin certificate revoked" },
   origin_client_certificate_rotated: { params: [], en: "origin client certificate replaced" },
+  origin_ca_rotation_started: { params: [], en: "Origin CA rotation started" },
+  origin_ca_rotation_cancelled: { params: [], en: "Origin CA rotation cancelled" },
+  origin_ca_retired: { params: [], en: "previous Origin CA retired" },
 } as const satisfies Record<string, { params: readonly string[]; en: string }>;
 
 export type RevisionReasonCode = keyof typeof revisionReasonDefs;

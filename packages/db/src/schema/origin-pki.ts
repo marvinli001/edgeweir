@@ -5,8 +5,8 @@ const createdAt = () => timestamp("created_at", { withTimezone: true }).defaultN
 
 /**
  * Client certificates the nodes of a cluster present to origins that request
- * one (origin mutual TLS), signed by the origin client CA (`pki_authority`
- * row `origin-client`). The newest unexpired one is current; earlier ones
+ * one (origin mutual TLS), signed by an origin client CA (`pki_authority`
+ * kind `origin-client`). The newest unexpired one is current; earlier ones
  * stay until they expire for nodes still on earlier revisions.
  */
 export const originClientCertificate = pgTable(
@@ -16,6 +16,8 @@ export const originClientCertificate = pgTable(
     clusterId: uuid("cluster_id")
       .notNull()
       .references(() => cluster.id, { onDelete: "cascade" }),
+    /** The `pki_authority` row that signed it (kept after that CA is retired). */
+    authorityId: text("authority_id").notNull().default("origin-client"),
     chainPem: text("chain_pem").notNull(),
     /** Envelope with purpose `origin_client_certificate.private_key_envelope`, bound to the row. */
     privateKeyEnvelope: text("private_key_envelope").notNull(),
@@ -29,11 +31,13 @@ export const originClientCertificate = pgTable(
 );
 
 /**
- * Certificates the origin CA (`pki_authority` row `origin-ca`) issued for
+ * Certificates an Origin CA (`pki_authority` kind `origin-ca`) issued for
  * origin servers, which only the edge trusts. Private keys are never stored.
  */
 export const originCertificate = pgTable("origin_certificate", {
   id: uuid("id").primaryKey().defaultRandom(),
+  /** The `pki_authority` row that signed it (kept after that CA is retired). */
+  authorityId: text("authority_id").notNull().default("origin-ca"),
   hostnames: text("hostnames").array().notNull(),
   /** ec256 | ec384 | rsa2048 | rsa3072 | rsa4096 */
   keyType: text("key_type").notNull(),

@@ -13,6 +13,7 @@ import {
   diffNodeConfig,
   encodeNodeConfig,
   ORIGIN_CA_FEATURE,
+  ORIGIN_CA_ROTATION_FEATURE,
   ORIGIN_MTLS_FEATURE,
   OriginAuthorityMissingError,
   refreshDerived,
@@ -158,6 +159,40 @@ describe("origin protection (origin-mtls-v1, origin-ca-v1)", () => {
     expect(back.originCa).toBeUndefined();
     expect(back.originClientCertificates).toEqual([]);
     expect(back.contentHash).toBe(plain.contentHash);
+  });
+
+  it("compiles the previous Origin CA during a rotation and requires origin-ca-rotation-v1", () => {
+    const previous = { certificatePem: "previous-ca", crlPem: "previous-crl" };
+    const input = { ...v130Models(), originCaPrevious: previous };
+    const config = compileNodeConfig(input, 1n);
+    expect(config.originCaPrevious).toMatchObject(previous);
+    expect(config.originCa?.crlPem).toBe(VECTOR_ORIGIN_CRL);
+    expect(config.requiredFeatures).toContain(ORIGIN_CA_ROTATION_FEATURE);
+    expect(config.contentHash).not.toBe(compileNodeConfig(v130Models(), 1n).contentHash);
+    // Without a pool trusting the Origin CA, neither is compiled.
+    const untrusted = compileNodeConfig(
+      { clusterId: "c", sites: [protectedSite("a", {})], originCa, originCaPrevious: previous },
+      1n,
+    );
+    expect(untrusted.originCaPrevious).toBeUndefined();
+    expect(untrusted.requiredFeatures).not.toContain(ORIGIN_CA_ROTATION_FEATURE);
+    // Retired: the next revision trusts the current one alone.
+    const retired = compileNodeConfig(v130Models(), 2n);
+    const diffed = applyNodeConfigDiff(config, diffNodeConfig(config, retired));
+    expect(diffed.originCaPrevious).toBeUndefined();
+    expect(diffed.contentHash).toBe(retired.contentHash);
+    const forward = applyNodeConfigDiff(
+      retired,
+      diffNodeConfig(retired, { ...config, revision: 3n }),
+    );
+    expect(forward.originCaPrevious?.certificatePem).toBe("previous-ca");
+    const pruned = clone(NodeConfigSchema, config);
+    for (const s of pruned.sites)
+      if (s.originPool) s.originPool.tlsTrust = OriginTlsTrust.UNSPECIFIED;
+    const refreshed = refreshDerived(pruned);
+    expect(refreshed.originCaPrevious).toBeUndefined();
+    expect(refreshed.requiredFeatures).not.toContain(ORIGIN_CA_ROTATION_FEATURE);
+    expect(refreshDerived(config).contentHash).toBe(config.contentHash);
   });
 
   it("round-trips through the binary encoding", () => {

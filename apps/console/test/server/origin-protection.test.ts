@@ -100,7 +100,14 @@ describe("origin protection: client CA, Origin CA and the sites using them", asy
 
   it("has neither authority until the operator creates it, once", async () => {
     expect((await admin.originCa.get()).authority).toBeNull();
-    expect(await admin.originClientCa.get()).toEqual({ authority: null, certificates: [] });
+    expect(await admin.originClientCa.get()).toEqual({
+      authority: null,
+      next: null,
+      previous: null,
+      trustBundlePem: "",
+      certificates: [],
+      pendingClusters: [],
+    });
     const created = await admin.originCa.create();
     const again = await admin.originCa.create();
     expect(again.authority?.fingerprint).toBe(created.authority?.fingerprint);

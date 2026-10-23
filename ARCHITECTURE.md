@@ -360,6 +360,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 3. 节点把私钥写到 `<prefix>/conf/origin-client/<id>-<指纹前 16 位>.key`（0600，属主为 nginx worker 用户），证书写到同名 `.crt`；三种回源层（HTTP/1.1、HTTP/2、gRPC）都渲染 `*_ssl_certificate $edgeweir_origin_cert` 与 `*_ssl_certificate_cache`，由 `balancer_by_lua` 按所选源站设置（S3 与 HTTP 源站为空，不出示）。保持连接池的键是 SNI、信任方式与客户端证书（`edgeweir.origin.pool_key`），不同证书或信任方式的请求不复用连接。主动健康检查出示同一张证书。
 4. Origin CA 签发的源站证书在 `origin_certificate`（主机名、密钥类型、来源 `generated` / `csr`、序列号、吊销时间），不保存私钥（生成的私钥只返回一次），也不能作为面向访客的证书上传（`CERTIFICATE_ORIGIN_CA`）。吊销时控制台用 Origin CA 重新签发 CRL（只列未过期的已吊销证书，`nextUpdate` 为 CA 到期时间），存于 `pki_authority.crl_pem`，并为信任 Origin CA 的集群发布新 revision（原因 `origin_certificate_revoked`）；回滚也使用当前的 CRL 与客户端证书。
 5. 信任：`OriginPool.tls_trust`（`ORIGIN_TLS_TRUST_ORIGIN_CA`）只在校验开启、池中没有 S3 源站时可用，配合 `NodeConfig.origin_ca`（证书与 CRL），要求 `origin-ca-v1`。节点只在有网站信任 Origin CA 时渲染 `origin-oca[-h2|-grpc].sock` 三个回源层，用 `*_ssl_trusted_certificate` 与 `*_ssl_crl` 指向 `<prefix>/conf/origin-ca/<内容哈希>.pem` / `.crl`（文件名随内容变化，吊销触发 reload）。nginx 的 CRL 检查覆盖整条链，因此 Origin CA 只能单独作为信任，不能与系统 CA 合用。
+6. 轮换：`pki_authority` 每行有 `kind`（`node-channel`、`origin-client`、`origin-ca`）、`status`（`active` 签发、`next` 只被信任、`previous` 被替换但仍受信任）与 `generation`，`(kind, status)` 唯一；第一代的 ID 就是 kind，之后为 `<kind>-g<n>`，名称加 ` G<n>`（两个同时受信任的 CA 主题不同，OpenSSL 按主题找签发者与 CRL）。`origin_certificate` 与 `origin_client_certificate` 记录签发它的 `authority_id`。Origin CA：`rotate`（新 CA 签发，旧的成为 `previous`，`NodeConfig.origin_ca_previous` 带旧 CA 与它自己的 CRL，要求 `origin-ca-rotation-v1`，集群活动节点缺少时拒绝）→ `retire`（删除旧 CA 行与私钥，节点不再信任）；新 CA 没有有效证书时可 `cancel`。吊销重建签发它的那个 CA 的 CRL；回滚与金丝雀的 stable 使用当前的两个 CA。回源客户端 CA：`rotate`（`next`，只出现在信任包里）→ `activate`（`next` 变为在用，各集群换上新 CA 的证书并发布；失败的由每小时的更换任务补上，签发时对在用 CA 行加 `FOR SHARE`）→ `retire`（还有集群出示旧 CA 的证书时拒绝）；`activate` 前可 `cancel`。每一步在同一事务中写审计（`origin_ca.rotation_start|retire|rotation_cancel`、`origin_client_ca.rotation_start|activate|retire|rotation_cancel`）。
 
 ## 访问鉴权
 
@@ -683,6 +684,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0077_node_debug_log` | `node_debug_log`（节点 debug 日志的拉取） |
 | `0078_greylist_connection_limits` | `ip_ban.action`、`challenge`、`rate_limit_requests`、`rate_limit_window_seconds`（灰名单条目，唯一索引按封禁 / 灰名单分开）；`cluster.connection_limits`（内核连接数限制） |
 | `0079_origin_proxy_protocol` | `origin.proxy_protocol_version`（向源站发送 PROXY protocol：0 关闭、1、2） |
+| `0080_origin_ca_rotation` | `pki_authority.kind`、`status`、`generation`（CA 轮换：同类 CA 新旧并存）；`origin_certificate.authority_id`、`origin_client_certificate.authority_id`（签发它的 CA） |
 
 ## 构建产物
 

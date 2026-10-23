@@ -1,8 +1,13 @@
 import { randomUUID, X509Certificate } from "node:crypto";
 import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
-import { decodeNodeConfig, usesOriginCa } from "@edgeweir/config-compiler";
 import {
+  decodeNodeConfig,
+  ORIGIN_CA_ROTATION_FEATURE,
+  usesOriginCa,
+} from "@edgeweir/config-compiler";
+import {
+  type AuditAction,
   ORIGIN_CA_YEARS,
   ORIGIN_CLIENT_CA_YEARS,
   ORIGIN_CLIENT_CERTIFICATE_DAYS,
@@ -12,6 +17,7 @@ import {
   type OriginCertificateIssue,
   type OriginCertificateIssued,
   type OriginClientCa,
+  type RevisionReasonCode,
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import {
@@ -20,25 +26,31 @@ import {
   type NodeConfig,
   OriginCaSchema,
 } from "@edgeweir/proto";
-import { and, asc, desc, eq, gt, inArray, isNotNull, lt } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, lt } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import type { Envelope, MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
 import { lockOriginAuthority } from "../lib/locks";
+import { assertNodeFeatures } from "../lib/node-features";
 import { CsrError, generateCa, OriginAuthority, sha256Fingerprint } from "../pki/ca";
 import { caKeyBinding } from "../pki/store";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import { type Executor, getRevision, latestRevision, publishClusters, type Tx } from "./revisions";
 import { publishedRevisions } from "./rollout";
 
-/** pki_authority rows of the two origin authorities. */
-const ORIGIN_CLIENT_CA_ID = "origin-client";
-export const ORIGIN_CA_ID = "origin-ca";
+/** Kinds of the two origin authorities (pki_authority.kind). */
+const ORIGIN_CLIENT_CA_KIND = "origin-client";
+export const ORIGIN_CA_KIND = "origin-ca";
 const AUTHORITY_NAMES = {
-  [ORIGIN_CLIENT_CA_ID]: { commonName: "Edgeweir Origin Client CA", years: ORIGIN_CLIENT_CA_YEARS },
-  [ORIGIN_CA_ID]: { commonName: "Edgeweir Origin CA", years: ORIGIN_CA_YEARS },
+  [ORIGIN_CLIENT_CA_KIND]: {
+    commonName: "Edgeweir Origin Client CA",
+    years: ORIGIN_CLIENT_CA_YEARS,
+  },
+  [ORIGIN_CA_KIND]: { commonName: "Edgeweir Origin CA", years: ORIGIN_CA_YEARS },
 } as const;
-type AuthorityId = keyof typeof AUTHORITY_NAMES;
+type AuthorityKind = keyof typeof AUTHORITY_NAMES;
+/** active signs; next is trusted before it signs (origin client CA); previous is trusted until retired. */
+type AuthorityStatus = "active" | "next" | "previous";
 
 /** Subject organization of the clusters' origin client certificates (CN is the cluster id). */
 const ORIGIN_CLIENT_ORGANIZATION = "Edgeweir Origin Client";
@@ -53,10 +65,30 @@ const EXPIRED_CLIENT_CERTIFICATE_RETENTION_MS = 7 * DAY;
 
 type AuthorityRow = typeof schema.pkiAuthority.$inferSelect;
 type OriginCertificateRow = typeof schema.originCertificate.$inferSelect;
+type Authorities = Partial<Record<AuthorityStatus, AuthorityRow>>;
+type AuditEntry = Parameters<typeof recordAudit>[2];
 
-async function authorityRow(db: Executor, id: AuthorityId): Promise<AuthorityRow | undefined> {
-  const [row] = await db.select().from(schema.pkiAuthority).where(eq(schema.pkiAuthority.id, id));
-  return row;
+/**
+ * The authorities of a kind by status. `lock` takes their rows FOR SHARE:
+ * a certificate is issued by the authority that is still active when the
+ * transaction commits (activating or retiring updates the rows).
+ */
+async function authorities(
+  db: Executor,
+  kind: AuthorityKind,
+  opts: { lock?: boolean } = {},
+): Promise<Authorities> {
+  const query = db.select().from(schema.pkiAuthority).where(eq(schema.pkiAuthority.kind, kind));
+  const rows = opts.lock ? await query.for("share") : await query;
+  return Object.fromEntries(rows.map((row) => [row.status, row]));
+}
+
+async function activeAuthority(
+  db: Executor,
+  kind: AuthorityKind,
+  opts: { lock?: boolean } = {},
+): Promise<AuthorityRow | undefined> {
+  return (await authorities(db, kind, opts)).active;
 }
 
 function openAuthority(row: AuthorityRow, masterKey: MasterKey): Promise<OriginAuthority> {
@@ -79,23 +111,62 @@ const authorityDto = (row: AuthorityRow | undefined) =>
       }
     : null;
 
-/** Creates an origin authority unless it exists; the second value tells whether it was created. */
-async function ensureAuthority(
+/** Which authority of the kind issued a certificate (issuingAuthority of the contract). */
+const issuer = (found: Authorities, authorityId: string) =>
+  found.active?.id === authorityId
+    ? ("active" as const)
+    : found.previous?.id === authorityId
+      ? ("previous" as const)
+      : ("retired" as const);
+
+/** The common name of the kind's authority of a generation. */
+const authorityName = (kind: AuthorityKind, generation: number) =>
+  generation === 1
+    ? AUTHORITY_NAMES[kind].commonName
+    : `${AUTHORITY_NAMES[kind].commonName} G${generation}`;
+
+/** Audit entry of an authority's rotation step. */
+const authorityAudit = (
+  row: AuthorityRow,
+  action: AuditAction,
+  metadata: Record<string, unknown> = {},
+) => ({
+  action,
+  targetType: "certificate_authority" as const,
+  targetId: row.id,
+  targetName: authorityName(row.kind as AuthorityKind, row.generation),
+  metadata: {
+    fingerprint: row.fingerprintSha256,
+    generation: row.generation,
+    notAfter: row.notAfter.toISOString(),
+    ...metadata,
+  },
+});
+
+/**
+ * Generates an authority of the kind: the first generation's id and name
+ * are the kind's, later ones add " G<n>" to the name (two trusted CAs never
+ * share a subject, which is how OpenSSL finds issuers and CRLs) and
+ * "-g<n>" to the id. The private key is sealed to the row.
+ */
+async function insertAuthority(
   tx: Tx,
   masterKey: MasterKey,
-  id: AuthorityId,
-): Promise<[AuthorityRow, boolean]> {
-  await lockOriginAuthority(tx, id);
-  const existing = await authorityRow(tx, id);
-  if (existing) return [existing, false];
-  const { commonName, years } = AUTHORITY_NAMES[id];
-  const material = await generateCa(commonName, years);
+  kind: AuthorityKind,
+  generation: number,
+  status: AuthorityStatus,
+): Promise<AuthorityRow> {
+  const id = generation === 1 ? kind : `${kind}-g${generation}`;
+  const material = await generateCa(authorityName(kind, generation), AUTHORITY_NAMES[kind].years);
   const authority = await OriginAuthority.load(material);
-  const crlPem = id === ORIGIN_CA_ID ? await authority.crl([]) : "";
+  const crlPem = kind === ORIGIN_CA_KIND ? await authority.crl([]) : "";
   const [row] = await tx
     .insert(schema.pkiAuthority)
     .values({
       id,
+      kind,
+      status,
+      generation,
       certificatePem: material.certificatePem,
       fingerprintSha256: sha256Fingerprint(authority.certificate),
       privateKeyEnvelope: JSON.stringify(
@@ -106,16 +177,39 @@ async function ensureAuthority(
     })
     .returning();
   if (!row) throw new Error("authority insert failed");
-  return [row, true];
+  return row;
 }
+
+/** Creates an origin authority unless one of its kind exists; the second value tells whether it was created. */
+async function ensureAuthority(
+  tx: Tx,
+  masterKey: MasterKey,
+  kind: AuthorityKind,
+): Promise<[AuthorityRow, boolean]> {
+  await lockOriginAuthority(tx, kind);
+  const existing = await activeAuthority(tx, kind);
+  if (existing) return [existing, false];
+  return [await insertAuthority(tx, masterKey, kind, 1, "active"), true];
+}
+
+const setStatus = (tx: Tx, row: AuthorityRow, status: AuthorityStatus) =>
+  tx.update(schema.pkiAuthority).set({ status }).where(eq(schema.pkiAuthority.id, row.id));
+const deleteAuthority = (tx: Tx, row: AuthorityRow) =>
+  tx.delete(schema.pkiAuthority).where(eq(schema.pkiAuthority.id, row.id));
 
 // --- origin client CA ------------------------------------------------------
 
 export async function getOriginClientCa(app: AppContext): Promise<OriginClientCa> {
-  const row = await authorityRow(app.db, ORIGIN_CLIENT_CA_ID);
+  const found = await authorities(app.db, ORIGIN_CLIENT_CA_KIND);
   return {
-    authority: authorityDto(row),
-    certificates: row ? await currentClientCertificates(app.db) : [],
+    authority: authorityDto(found.active),
+    next: authorityDto(found.next),
+    previous: authorityDto(found.previous),
+    trustBundlePem: [found.active, found.next, found.previous]
+      .flatMap((row) => (row ? [row.certificatePem] : []))
+      .join(""),
+    certificates: found.active ? await currentClientCertificates(app.db, found) : [],
+    pendingClusters: found.previous ? await pendingClusters(app.db, found.active?.id ?? "") : [],
   };
 }
 
@@ -124,21 +218,146 @@ export async function createOriginClientCa(
   ctx: { actor: Actor },
 ): Promise<OriginClientCa> {
   await app.db.transaction(async (tx) => {
-    const [row, created] = await ensureAuthority(tx, app.masterKey, ORIGIN_CLIENT_CA_ID);
+    const [row, created] = await ensureAuthority(tx, app.masterKey, ORIGIN_CLIENT_CA_KIND);
     if (!created) return;
     await recordAudit(tx, ctx.actor, {
       action: "origin_client_ca.create",
       targetType: "certificate_authority",
-      targetId: ORIGIN_CLIENT_CA_ID,
-      targetName: AUTHORITY_NAMES[ORIGIN_CLIENT_CA_ID].commonName,
+      targetId: row.id,
+      targetName: AUTHORITY_NAMES[ORIGIN_CLIENT_CA_KIND].commonName,
       metadata: { fingerprint: row.fingerprintSha256, notAfter: row.notAfter.toISOString() },
     });
   });
   return getOriginClientCa(app);
 }
 
+/**
+ * A rotation step of the origin client CA in one transaction, serialized
+ * with the other steps: `step` gets the authorities and returns the audit
+ * entry (the target is the authority it names).
+ */
+async function clientCaStep(
+  app: AppContext,
+  ctx: { actor: Actor },
+  step: (
+    tx: Tx,
+    found: Authorities & { active: AuthorityRow },
+  ) => Promise<{ action: AuditAction; target: AuthorityRow; metadata?: Record<string, unknown> }>,
+) {
+  await app.db.transaction(async (tx) => {
+    await lockOriginAuthority(tx, ORIGIN_CLIENT_CA_KIND);
+    const found = await authorities(tx, ORIGIN_CLIENT_CA_KIND);
+    const { active } = found;
+    if (!active) fail("ORIGIN_CLIENT_CA_NOT_FOUND", "the origin client CA has not been created");
+    const { action, target, metadata } = await step(tx, { ...found, active });
+    await recordAudit(tx, ctx.actor, authorityAudit(target, action, metadata));
+  });
+}
+
+/** Rotation, step 1: a next authority that origins verifying clients should trust before it signs. */
+export async function rotateOriginClientCa(app: AppContext, ctx: { actor: Actor }) {
+  await clientCaStep(app, ctx, async (tx, found) => {
+    if (found.next || found.previous)
+      fail("CA_ROTATION_IN_PROGRESS", "the origin client CA is being rotated");
+    const next = await insertAuthority(
+      tx,
+      app.masterKey,
+      ORIGIN_CLIENT_CA_KIND,
+      found.active.generation + 1,
+      "next",
+    );
+    return {
+      action: "origin_client_ca.rotation_start",
+      target: next,
+      metadata: { replaces: found.active.fingerprintSha256 },
+    };
+  });
+  return getOriginClientCa(app);
+}
+
+/**
+ * Rotation, step 2: the next authority becomes the active one and the
+ * active one the previous; then every cluster whose sites present a client
+ * certificate gets one the new authority signed and a revision presenting
+ * it. Those that fail keep the previous authority's certificate (still
+ * valid) and are retried by the hourly rotation.
+ */
+export async function activateOriginClientCa(app: AppContext, ctx: { actor: Actor }) {
+  await clientCaStep(app, ctx, async (tx, found) => {
+    if (!found.next)
+      fail("CA_ROTATION_STEP_UNAVAILABLE", "the origin client CA has no next authority");
+    // The unique (kind, status) index: the active one moves out of the way first.
+    await setStatus(tx, found.active, "previous");
+    await setStatus(tx, found.next, "active");
+    return {
+      action: "origin_client_ca.activate",
+      target: found.next,
+      metadata: { replaces: found.active.fingerprintSha256 },
+    };
+  });
+  await rotateOriginClientCertificates(app, new Date(), ctx.actor);
+  return getOriginClientCa(app);
+}
+
+/** Rotation, step 3: deletes the previous authority once no cluster presents its certificates. */
+export async function retireOriginClientCa(app: AppContext, ctx: { actor: Actor }) {
+  await clientCaStep(app, ctx, async (tx, found) => {
+    const { previous } = found;
+    if (!previous)
+      fail("CA_ROTATION_STEP_UNAVAILABLE", "the origin client CA has no previous authority");
+    // Deleted first: a certificate being issued by it (FOR SHARE) commits
+    // before this goes on, and then counts as pending below.
+    await deleteAuthority(tx, previous);
+    const pending = await pendingClusters(tx, found.active.id);
+    if (pending.length) {
+      const names = pending.map((c) => c.clusterName);
+      const shown = names.slice(0, 5).join(", ");
+      fail("CA_ROTATION_INCOMPLETE", "clusters still present the previous CA's certificates", {
+        clusters: names.length > 5 ? `${shown} +${names.length - 5}` : shown,
+      });
+    }
+    return { action: "origin_client_ca.retire", target: previous };
+  });
+  return getOriginClientCa(app);
+}
+
+/** Cancels a rotation before activation: deletes the next authority. */
+export async function cancelOriginClientCaRotation(app: AppContext, ctx: { actor: Actor }) {
+  await clientCaStep(app, ctx, async (tx, found) => {
+    if (!found.next)
+      fail("CA_ROTATION_STEP_UNAVAILABLE", "the origin client CA has no next authority");
+    await deleteAuthority(tx, found.next);
+    return { action: "origin_client_ca.rotation_cancel", target: found.next };
+  });
+  return getOriginClientCa(app);
+}
+
+/** Clusters whose sites present a client certificate, by cluster id. */
+const presentingClusters = (db: Executor) =>
+  db
+    .selectDistinct({ clusterId: schema.site.clusterId })
+    .from(schema.originPool)
+    .innerJoin(schema.site, eq(schema.site.id, schema.originPool.siteId))
+    .where(eq(schema.originPool.clientCertificate, true))
+    .orderBy(schema.site.clusterId);
+
+/** Presenting clusters whose current certificate the active authority did not sign, by name. */
+async function pendingClusters(db: Executor, activeId: string) {
+  const out: { clusterId: string; clusterName: string }[] = [];
+  for (const { clusterId } of await presentingClusters(db)) {
+    const current = await currentClientCertificate(db, clusterId);
+    if (current?.authorityId === activeId) continue;
+    const [row] = await db
+      .select({ name: schema.cluster.name })
+      .from(schema.cluster)
+      .where(eq(schema.cluster.id, clusterId));
+    out.push({ clusterId, clusterName: row?.name ?? clusterId });
+  }
+  return out.sort((x, y) => x.clusterName.localeCompare(y.clusterName));
+}
+
 /** The newest certificate of every cluster that has one, by cluster name. */
-async function currentClientCertificates(db: Executor) {
+async function currentClientCertificates(db: Executor, found: Authorities) {
   const rows = await db
     .select({ cert: schema.originClientCertificate, clusterName: schema.cluster.name })
     .from(schema.originClientCertificate)
@@ -155,6 +374,7 @@ async function currentClientCertificates(db: Executor) {
       fingerprint: cert.fingerprint,
       notBefore: cert.notBefore.toISOString(),
       notAfter: cert.notAfter.toISOString(),
+      authority: issuer(found, cert.authorityId),
     }));
 }
 
@@ -171,9 +391,10 @@ async function currentClientCertificate(db: Executor, clusterId: string) {
 
 /**
  * Issues the cluster an origin client certificate unless its newest one is
- * valid for more than ORIGIN_CLIENT_CERTIFICATE_RENEW_DAYS. Earlier ones
- * stay valid until they expire: nodes still on an earlier revision keep
- * presenting them. Requires the origin client CA (ORIGIN_CLIENT_CA_NOT_FOUND).
+ * signed by the active authority and valid for more than
+ * ORIGIN_CLIENT_CERTIFICATE_RENEW_DAYS. Earlier ones stay valid until they
+ * expire: nodes still on an earlier revision keep presenting them.
+ * Requires the origin client CA (ORIGIN_CLIENT_CA_NOT_FOUND).
  */
 export async function ensureOriginClientCertificate(
   tx: Tx,
@@ -181,15 +402,16 @@ export async function ensureOriginClientCertificate(
   clusterId: string,
   now = new Date(),
 ): Promise<{ id: string; issued: boolean }> {
-  await lockOriginAuthority(tx, `${ORIGIN_CLIENT_CA_ID}/${clusterId}`);
+  await lockOriginAuthority(tx, `${ORIGIN_CLIENT_CA_KIND}/${clusterId}`);
+  const row = await activeAuthority(tx, ORIGIN_CLIENT_CA_KIND, { lock: true });
+  if (!row) fail("ORIGIN_CLIENT_CA_NOT_FOUND", "the origin client CA has not been created");
   const current = await currentClientCertificate(tx, clusterId);
   if (
     current &&
+    current.authorityId === row.id &&
     current.notAfter.getTime() - now.getTime() > ORIGIN_CLIENT_CERTIFICATE_RENEW_DAYS * DAY
   )
     return { id: current.id, issued: false };
-  const row = await authorityRow(tx, ORIGIN_CLIENT_CA_ID);
-  if (!row) fail("ORIGIN_CLIENT_CA_NOT_FOUND", "the origin client CA has not been created");
   const authority = await openAuthority(row, masterKey);
   const issued = await authority.issueClientCertificate(
     clusterId,
@@ -201,6 +423,7 @@ export async function ensureOriginClientCertificate(
   await tx.insert(schema.originClientCertificate).values({
     id,
     clusterId,
+    authorityId: row.id,
     chainPem: issued.certificatePem,
     privateKeyEnvelope: JSON.stringify(
       masterKey.seal(issued.privateKeyPem, originClientKeyBinding(id)),
@@ -214,25 +437,21 @@ export async function ensureOriginClientCertificate(
 }
 
 /**
- * Replaces the origin client certificates that are due in every cluster
- * whose sites present one, publishing the clusters whose latest revision
- * carries origin client certificates (reason origin_client_certificate_rotated),
+ * Replaces the origin client certificates that are due (expiring, or not
+ * signed by the active authority after a rotation) in every cluster whose
+ * sites present one, publishing the clusters whose latest revision carries
+ * origin client certificates (reason origin_client_certificate_rotated),
  * and deletes certificates that expired a week ago. Returns the clusters
  * that got a new certificate.
  */
 export async function rotateOriginClientCertificates(
   app: AppContext,
   now = new Date(),
+  actor: Actor = systemActor,
 ): Promise<string[]> {
-  if (!(await authorityRow(app.db, ORIGIN_CLIENT_CA_ID))) return [];
-  const clusters = await app.db
-    .selectDistinct({ clusterId: schema.site.clusterId })
-    .from(schema.originPool)
-    .innerJoin(schema.site, eq(schema.site.id, schema.originPool.siteId))
-    .where(eq(schema.originPool.clientCertificate, true))
-    .orderBy(schema.site.clusterId);
+  if (!(await activeAuthority(app.db, ORIGIN_CLIENT_CA_KIND))) return [];
   const rotated: string[] = [];
-  for (const { clusterId } of clusters) {
+  for (const { clusterId } of await presentingClusters(app.db)) {
     try {
       const done = await app.db.transaction(async (tx) => {
         const { id, issued } = await ensureOriginClientCertificate(
@@ -248,11 +467,11 @@ export async function rotateOriginClientCertificates(
             ? (
                 await publishClusters(tx, [clusterId], {
                   reason: { code: "origin_client_certificate_rotated", params: {} },
-                  actor: systemActor,
+                  actor,
                 })
               ).get(clusterId)
             : undefined;
-        await recordAudit(tx, systemActor, {
+        await recordAudit(tx, actor, {
           action: "origin_client_certificate.rotate",
           targetType: "origin_client_certificate",
           targetId: id,
@@ -322,25 +541,148 @@ export async function nodeOriginClientCertificates(
 // --- Origin CA -------------------------------------------------------------
 
 export async function getOriginCa(app: AppContext): Promise<OriginCa> {
-  return { authority: authorityDto(await authorityRow(app.db, ORIGIN_CA_ID)) };
+  const found = await authorities(app.db, ORIGIN_CA_KIND);
+  return {
+    authority: authorityDto(found.active),
+    previous: authorityDto(found.previous),
+    previousCertificates: found.previous
+      ? await validCertificateCount(app.db, found.previous.id)
+      : 0,
+  };
+}
+
+/** Certificates of the authority that are neither revoked nor expired. */
+async function validCertificateCount(db: Executor, authorityId: string, now = new Date()) {
+  const [row] = await db
+    .select({ n: count() })
+    .from(schema.originCertificate)
+    .where(
+      and(
+        eq(schema.originCertificate.authorityId, authorityId),
+        isNull(schema.originCertificate.revokedAt),
+        gt(schema.originCertificate.notAfter, now),
+      ),
+    );
+  return row?.n ?? 0;
 }
 
 export async function createOriginCa(app: AppContext, ctx: { actor: Actor }): Promise<OriginCa> {
   await app.db.transaction(async (tx) => {
-    const [row, created] = await ensureAuthority(tx, app.masterKey, ORIGIN_CA_ID);
+    const [row, created] = await ensureAuthority(tx, app.masterKey, ORIGIN_CA_KIND);
     if (!created) return;
     await recordAudit(tx, ctx.actor, {
       action: "origin_ca.create",
       targetType: "certificate_authority",
-      targetId: ORIGIN_CA_ID,
-      targetName: AUTHORITY_NAMES[ORIGIN_CA_ID].commonName,
+      targetId: row.id,
+      targetName: AUTHORITY_NAMES[ORIGIN_CA_KIND].commonName,
       metadata: { fingerprint: row.fingerprintSha256, notAfter: row.notAfter.toISOString() },
     });
   });
   return getOriginCa(app);
 }
 
-const originCertificateDto = (row: OriginCertificateRow): OriginCertificateDto => ({
+/** Clusters with a site trusting the Origin CA. */
+async function trustingClusters(db: Executor) {
+  const rows = await db
+    .selectDistinct({ clusterId: schema.site.clusterId })
+    .from(schema.originPool)
+    .innerJoin(schema.site, eq(schema.site.id, schema.originPool.siteId))
+    .where(eq(schema.originPool.tlsTrust, "origin_ca"));
+  return rows.map((r) => r.clusterId);
+}
+
+/**
+ * A rotation step of the Origin CA in one transaction, serialized with the
+ * other steps and revocations: `step` changes the authorities and returns
+ * the audit entry, then every cluster trusting the Origin CA gets a
+ * revision with the new trust (reason `reason`).
+ */
+async function originCaStep(
+  app: AppContext,
+  ctx: { actor: Actor },
+  reason: RevisionReasonCode,
+  step: (tx: Tx, found: Authorities & { active: AuthorityRow }) => Promise<AuditEntry>,
+) {
+  await app.db.transaction(async (tx) => {
+    await lockOriginAuthority(tx, ORIGIN_CA_KIND);
+    const found = await authorities(tx, ORIGIN_CA_KIND);
+    const { active } = found;
+    if (!active) fail("ORIGIN_CA_NOT_FOUND", "the Origin CA has not been created");
+    await recordAudit(tx, ctx.actor, await step(tx, { ...found, active }));
+    await publishClusters(tx, await trustingClusters(tx), {
+      reason: { code: reason, params: {} },
+      actor: ctx.actor,
+    });
+  });
+  return getOriginCa(app);
+}
+
+/**
+ * Rotation, step 1: a new authority issues the origin certificates from
+ * now on; the active one becomes the previous, which nodes keep trusting
+ * (with its CRL) until it is retired. Every active node of a cluster
+ * trusting the Origin CA must support origin-ca-rotation-v1
+ * (NODE_CAPABILITY_REQUIRED).
+ */
+export const rotateOriginCa = (app: AppContext, ctx: { actor: Actor }) =>
+  originCaStep(app, ctx, "origin_ca_rotation_started", async (tx, found) => {
+    if (found.previous) fail("CA_ROTATION_IN_PROGRESS", "the Origin CA is being rotated");
+    // Older nodes would refuse every revision until they are upgraded.
+    await assertNodeFeatures(
+      tx,
+      await trustingClusters(tx),
+      [ORIGIN_CA_ROTATION_FEATURE],
+      "cluster nodes cannot trust two Origin CAs",
+    );
+    await setStatus(tx, found.active, "previous");
+    const next = await insertAuthority(
+      tx,
+      app.masterKey,
+      ORIGIN_CA_KIND,
+      found.active.generation + 1,
+      "active",
+    );
+    return authorityAudit(next, "origin_ca.rotation_start", {
+      replaces: found.active.fingerprintSha256,
+    });
+  });
+
+/** Rotation, step 2: deletes the previous authority; nodes stop trusting its certificates. */
+export const retireOriginCa = (app: AppContext, ctx: { actor: Actor }) =>
+  originCaStep(app, ctx, "origin_ca_retired", async (tx, found) => {
+    const { previous } = found;
+    if (!previous) fail("CA_ROTATION_STEP_UNAVAILABLE", "the Origin CA has no previous authority");
+    const valid = await validCertificateCount(tx, previous.id);
+    await deleteAuthority(tx, previous);
+    return authorityAudit(previous, "origin_ca.retire", { validCertificates: valid });
+  });
+
+/**
+ * Cancels a rotation while the new authority has issued no certificate
+ * that is still valid (CA_ROTATION_IN_USE): it is deleted with the
+ * certificates it issued and the previous one is active again.
+ */
+export const cancelOriginCaRotation = (app: AppContext, ctx: { actor: Actor }) =>
+  originCaStep(app, ctx, "origin_ca_rotation_cancelled", async (tx, found) => {
+    const { previous } = found;
+    if (!previous) fail("CA_ROTATION_STEP_UNAVAILABLE", "the Origin CA has no previous authority");
+    const valid = await validCertificateCount(tx, found.active.id);
+    if (valid)
+      fail("CA_ROTATION_IN_USE", "the new Origin CA issued certificates", { count: valid });
+    // Its certificates are all revoked or expired, and the next rotation
+    // reuses its generation and id: they go with it.
+    await tx
+      .delete(schema.originCertificate)
+      .where(eq(schema.originCertificate.authorityId, found.active.id));
+    await deleteAuthority(tx, found.active);
+    await setStatus(tx, previous, "active");
+    return authorityAudit(found.active, "origin_ca.rotation_cancel");
+  });
+
+const originCertificateDto = (
+  row: OriginCertificateRow,
+  found: Authorities,
+): OriginCertificateDto => ({
   id: row.id,
   hostnames: row.hostnames,
   keyType: row.keyType,
@@ -352,14 +694,16 @@ const originCertificateDto = (row: OriginCertificateRow): OriginCertificateDto =
   notAfter: row.notAfter.toISOString(),
   revokedAt: row.revokedAt?.toISOString() ?? null,
   createdAt: row.createdAt.toISOString(),
+  authority: issuer(found, row.authorityId),
 });
 
 export async function listOriginCertificates(app: AppContext): Promise<OriginCertificateDto[]> {
+  const found = await authorities(app.db, ORIGIN_CA_KIND);
   const rows = await app.db
     .select()
     .from(schema.originCertificate)
     .orderBy(desc(schema.originCertificate.createdAt));
-  return rows.map(originCertificateDto);
+  return rows.map((row) => originCertificateDto(row, found));
 }
 
 export async function issueOriginCertificate(
@@ -367,25 +711,29 @@ export async function issueOriginCertificate(
   input: OriginCertificateIssue,
   ctx: { actor: Actor },
 ): Promise<OriginCertificateIssued> {
-  const row = await authorityRow(app.db, ORIGIN_CA_ID);
-  if (!row) fail("ORIGIN_CA_NOT_FOUND", "the Origin CA has not been created");
-  const authority = await openAuthority(row, app.masterKey);
-  let issued: Awaited<ReturnType<OriginAuthority["issueOriginCertificate"]>>;
-  try {
-    issued = await authority.issueOriginCertificate({
-      hostnames: input.hostnames,
-      years: input.validityYears,
-      keyType: input.keyType,
-      ...(input.csrPem ? { csrPem: input.csrPem } : {}),
-    });
-  } catch (error) {
-    if (error instanceof CsrError) fail("ORIGIN_CERTIFICATE_CSR_INVALID", error.message);
-    throw error;
-  }
   return app.db.transaction(async (tx) => {
+    // FOR SHARE: a rotation that starts meanwhile waits, so the certificate
+    // never comes from an authority that stopped issuing.
+    const found = await authorities(tx, ORIGIN_CA_KIND, { lock: true });
+    const row = found.active;
+    if (!row) fail("ORIGIN_CA_NOT_FOUND", "the Origin CA has not been created");
+    const authority = await openAuthority(row, app.masterKey);
+    let issued: Awaited<ReturnType<OriginAuthority["issueOriginCertificate"]>>;
+    try {
+      issued = await authority.issueOriginCertificate({
+        hostnames: input.hostnames,
+        years: input.validityYears,
+        keyType: input.keyType,
+        ...(input.csrPem ? { csrPem: input.csrPem } : {}),
+      });
+    } catch (error) {
+      if (error instanceof CsrError) fail("ORIGIN_CERTIFICATE_CSR_INVALID", error.message);
+      throw error;
+    }
     const [inserted] = await tx
       .insert(schema.originCertificate)
       .values({
+        authorityId: row.id,
         hostnames: input.hostnames,
         keyType: issued.keyType,
         source: input.csrPem ? "csr" : "generated",
@@ -408,16 +756,19 @@ export async function issueOriginCertificate(
         keyType: inserted.keyType,
         serial: inserted.serial,
         notAfter: inserted.notAfter.toISOString(),
+        authority: row.id,
       },
     });
-    return { ...originCertificateDto(inserted), privateKeyPem: issued.privateKeyPem };
+    return { ...originCertificateDto(inserted, found), privateKeyPem: issued.privateKeyPem };
   });
 }
 
 /**
- * Revokes an Origin CA certificate: the CRL is rebuilt and every cluster
- * whose sites trust the Origin CA gets a new revision (reason
- * origin_certificate_revoked), after which its nodes refuse the certificate.
+ * Revokes an Origin CA certificate: the CRL of the authority that issued it
+ * is rebuilt and every cluster whose sites trust the Origin CA gets a new
+ * revision (reason origin_certificate_revoked), after which its nodes
+ * refuse the certificate. A certificate of a retired authority, which no
+ * node trusts any more, is only marked.
  */
 export async function revokeOriginCertificate(
   app: AppContext,
@@ -425,7 +776,7 @@ export async function revokeOriginCertificate(
   ctx: { actor: Actor },
 ): Promise<OriginCertificateDto> {
   return app.db.transaction(async (tx) => {
-    await lockOriginAuthority(tx, ORIGIN_CA_ID);
+    await lockOriginAuthority(tx, ORIGIN_CA_KIND);
     const [row] = await tx
       .select()
       .from(schema.originCertificate)
@@ -440,49 +791,51 @@ export async function revokeOriginCertificate(
       .where(eq(schema.originCertificate.id, row.id))
       .returning();
     if (!revoked) throw new Error("origin certificate update failed");
-    const authority = await authorityRow(tx, ORIGIN_CA_ID);
-    if (!authority) fail("ORIGIN_CA_NOT_FOUND", "the Origin CA has not been created");
-    // Expired certificates fail verification anyway; the CRL lists the others.
-    const listed = await tx
-      .select({
-        serial: schema.originCertificate.serial,
-        revokedAt: schema.originCertificate.revokedAt,
-      })
-      .from(schema.originCertificate)
-      .where(
-        and(
-          isNotNull(schema.originCertificate.revokedAt),
-          gt(schema.originCertificate.notAfter, now),
-        ),
-      )
-      .orderBy(asc(schema.originCertificate.serial));
-    const crlPem = await (await openAuthority(authority, app.masterKey)).crl(
-      listed.map((r) => ({ serial: r.serial, revokedAt: r.revokedAt ?? now })),
-      now,
-    );
-    await tx
-      .update(schema.pkiAuthority)
-      .set({ crlPem })
-      .where(eq(schema.pkiAuthority.id, ORIGIN_CA_ID));
+    const found = await authorities(tx, ORIGIN_CA_KIND);
     await recordAudit(tx, ctx.actor, {
       action: "origin_certificate.revoke",
       targetType: "origin_certificate",
       targetId: row.id,
       targetName: row.hostnames[0] ?? "",
-      metadata: { serial: row.serial, hostnames: row.hostnames },
+      metadata: { serial: row.serial, hostnames: row.hostnames, authority: row.authorityId },
     });
-    const clusters = await tx
-      .selectDistinct({ clusterId: schema.site.clusterId })
-      .from(schema.originPool)
-      .innerJoin(schema.site, eq(schema.site.id, schema.originPool.siteId))
-      .where(eq(schema.originPool.tlsTrust, "origin_ca"));
-    await publishClusters(
-      tx,
-      clusters.map((c) => c.clusterId),
-      { reason: { code: "origin_certificate_revoked", params: {} }, actor: ctx.actor },
-    );
-    return originCertificateDto(revoked);
+    const authority = [found.active, found.previous].find((a) => a?.id === row.authorityId);
+    if (authority) {
+      await rebuildCrl(tx, app.masterKey, authority, now);
+      await publishClusters(tx, await trustingClusters(tx), {
+        reason: { code: "origin_certificate_revoked", params: {} },
+        actor: ctx.actor,
+      });
+    }
+    return originCertificateDto(revoked, found);
   });
+}
+
+/** Replaces the authority's CRL with one listing its revoked certificates that have not expired. */
+async function rebuildCrl(tx: Tx, masterKey: MasterKey, authority: AuthorityRow, now: Date) {
+  // Expired certificates fail verification anyway; the CRL lists the others.
+  const listed = await tx
+    .select({
+      serial: schema.originCertificate.serial,
+      revokedAt: schema.originCertificate.revokedAt,
+    })
+    .from(schema.originCertificate)
+    .where(
+      and(
+        eq(schema.originCertificate.authorityId, authority.id),
+        isNotNull(schema.originCertificate.revokedAt),
+        gt(schema.originCertificate.notAfter, now),
+      ),
+    )
+    .orderBy(asc(schema.originCertificate.serial));
+  const crlPem = await (await openAuthority(authority, masterKey)).crl(
+    listed.map((r) => ({ serial: r.serial, revokedAt: r.revokedAt ?? now })),
+    now,
+  );
+  await tx
+    .update(schema.pkiAuthority)
+    .set({ crlPem })
+    .where(eq(schema.pkiAuthority.id, authority.id));
 }
 
 // --- configuration ---------------------------------------------------------
@@ -491,7 +844,8 @@ export async function revokeOriginCertificate(
  * What the cluster's configuration needs for origin protection: the
  * cluster's newest origin client certificate when a site presents one
  * (ORIGIN_CLIENT_CA_NOT_FOUND without it) and the Origin CA with its CRL
- * when a site trusts it (ORIGIN_CA_NOT_FOUND).
+ * when a site trusts it (ORIGIN_CA_NOT_FOUND), during a rotation with the
+ * previous Origin CA and its CRL.
  */
 export async function loadOriginProtection(
   tx: Executor,
@@ -501,6 +855,7 @@ export async function loadOriginProtection(
   clientCertificateId?: string;
   originClientCertificates: CertificateRef[];
   originCa?: { certificatePem: string; crlPem: string };
+  originCaPrevious?: { certificatePem: string; crlPem: string };
 }> {
   let clientCertificateId: string | undefined;
   const originClientCertificates: CertificateRef[] = [];
@@ -518,23 +873,28 @@ export async function loadOriginProtection(
     );
   }
   let originCa: { certificatePem: string; crlPem: string } | undefined;
+  let originCaPrevious: { certificatePem: string; crlPem: string } | undefined;
   if (needs.originCa) {
-    const row = await authorityRow(tx, ORIGIN_CA_ID);
-    if (!row) fail("ORIGIN_CA_NOT_FOUND", "the Origin CA has not been created");
-    originCa = { certificatePem: row.certificatePem, crlPem: row.crlPem };
+    const { active, previous } = await authorities(tx, ORIGIN_CA_KIND);
+    if (!active) fail("ORIGIN_CA_NOT_FOUND", "the Origin CA has not been created");
+    originCa = { certificatePem: active.certificatePem, crlPem: active.crlPem };
+    if (previous)
+      originCaPrevious = { certificatePem: previous.certificatePem, crlPem: previous.crlPem };
   }
   return {
     ...(clientCertificateId ? { clientCertificateId } : {}),
     originClientCertificates,
     ...(originCa ? { originCa } : {}),
+    ...(originCaPrevious ? { originCaPrevious } : {}),
   };
 }
 
 /**
  * Origin protection of an earlier configuration as it may be published now
  * (rollbacks, the canary's stable revision): sites present the cluster's
- * current client certificate, and the Origin CA comes with its current CRL,
- * so a rollback never accepts a certificate revoked since. Without a current
+ * current client certificate, and the Origin CAs are the current ones with
+ * their current CRLs, so a rollback never accepts a certificate revoked
+ * since nor trusts an Origin CA retired since. Without a current
  * client certificate or the Origin CA, `strict` refuses with
  * ROLLBACK_RESOURCE_UNAVAILABLE; otherwise those sites stop presenting a
  * certificate (their origins refuse them) or keep the configuration's CRL.
@@ -563,23 +923,36 @@ export async function restoreOriginProtection(
       : [];
   }
   if (usesOriginCa(config.sites)) {
-    const row = await authorityRow(tx, ORIGIN_CA_ID);
-    if (!row && opts.strict)
+    const { active, previous } = await authorities(tx, ORIGIN_CA_KIND);
+    if (!active && opts.strict)
       fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback references the Origin CA");
-    if (row)
+    if (active) {
       config.originCa = create(OriginCaSchema, {
-        certificatePem: row.certificatePem,
-        crlPem: row.crlPem,
+        certificatePem: active.certificatePem,
+        crlPem: active.crlPem,
       });
+      config.originCaPrevious = previous
+        ? create(OriginCaSchema, {
+            certificatePem: previous.certificatePem,
+            crlPem: previous.crlPem,
+          })
+        : undefined;
+    }
   }
 }
 
-/** The Origin CA's certificate (PEM), if it has been created. */
-export async function originCaCertificate(db: Executor): Promise<string | undefined> {
-  return (await authorityRow(db, ORIGIN_CA_ID))?.certificatePem;
+/** The certificates (PEM) of the Origin CAs there are: the active one and a rotation's previous one. */
+export async function originCaCertificates(db: Executor): Promise<string[]> {
+  const { active, previous } = await authorities(db, ORIGIN_CA_KIND);
+  return [active, previous].flatMap((row) => (row ? [row.certificatePem] : []));
+}
+
+/** Whether the Origin CA is being rotated (nodes then trust the previous one too). */
+export async function originCaRotating(db: Executor): Promise<boolean> {
+  return !!(await authorities(db, ORIGIN_CA_KIND)).previous;
 }
 
 /** Whether the authority exists (sites may present client certificates / trust the Origin CA). */
-export async function originAuthorityExists(db: Executor, id: AuthorityId): Promise<boolean> {
-  return !!(await authorityRow(db, id));
+export async function originAuthorityExists(db: Executor, kind: AuthorityKind): Promise<boolean> {
+  return !!(await activeAuthority(db, kind));
 }

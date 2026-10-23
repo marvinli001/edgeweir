@@ -77,6 +77,11 @@ export const ORIGIN_CA_FEATURE = "origin-ca-v1";
  */
 export const ORIGIN_PROXY_PROTOCOL_FEATURE = "origin-proxy-protocol-v1";
 export const ACTIVE_HEALTH_GRPC_FEATURE = "active-health-grpc-v1";
+/**
+ * Feature of trusting the previous Origin CA along with the current one
+ * while the console rotates it (proto v1.6.0, NodeConfig.origin_ca_previous).
+ */
+export const ORIGIN_CA_ROTATION_FEATURE = "origin-ca-rotation-v1";
 
 /**
  * Feature of the rule engine extensions (proto v0.13.0): functions and the
@@ -330,7 +335,8 @@ export function moduleFeatures(config: NodeConfig): string[] {
  * protocol towards the origins, origin protection and error pages that the
  * sites of a compiled configuration use: active-health-v1,
  * active-health-grpc-v1, session-affinity-v1, origin-http2-v1,
- * origin-proxy-protocol-v1, origin-mtls-v1, origin-ca-v1 and error-pages-v1.
+ * origin-proxy-protocol-v1, origin-mtls-v1, origin-ca-v1,
+ * origin-ca-rotation-v1 and error-pages-v1.
  */
 export function poolAndPageFeatures(config: NodeConfig): string[] {
   return [
@@ -357,6 +363,7 @@ export function poolAndPageFeatures(config: NodeConfig): string[] {
       ? [ORIGIN_MTLS_FEATURE]
       : []),
     ...(usesOriginCa(config.sites) ? [ORIGIN_CA_FEATURE] : []),
+    ...(config.originCaPrevious ? [ORIGIN_CA_ROTATION_FEATURE] : []),
     ...(config.sites.some((site) => site.errorPages) ? [ERROR_PAGES_FEATURE] : []),
   ];
 }
@@ -586,7 +593,10 @@ export function refreshDerived(config: NodeConfig, edge?: EdgeModel): NodeConfig
   if (!usesSessionTickets(out.sites)) out.sessionTicketKeys = [];
   const presented = clientCertificateIds(out.sites);
   out.originClientCertificates = out.originClientCertificates.filter((c) => presented.has(c.id));
-  if (!usesOriginCa(out.sites)) out.originCa = undefined;
+  if (!usesOriginCa(out.sites)) {
+    out.originCa = undefined;
+    out.originCaPrevious = undefined;
+  }
   out.requiredFeatures = derivedFeatures(out);
   const canonical = canonicalize(out);
   canonical.contentHash = contentHash(canonical);
