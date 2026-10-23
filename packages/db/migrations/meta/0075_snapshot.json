@@ -1,6 +1,6 @@
 {
-  "id": "9892de0c-3a8a-45e8-ac34-6dbe3620942d",
-  "prevId": "8b7fa44f-fea3-47d3-bc35-06437552220d",
+  "id": "54985804-6409-4b28-8954-ed5cb165cd1b",
+  "prevId": "9892de0c-3a8a-45e8-ac34-6dbe3620942d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2440,6 +2440,31 @@
           "primaryKey": false,
           "notNull": true,
           "default": true
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'block'"
+        },
+        "challenge": {
+          "name": "challenge",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rate_limit_requests": {
+          "name": "rate_limit_requests",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rate_limit_window_seconds": {
+          "name": "rate_limit_window_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -2541,7 +2566,7 @@
             }
           ],
           "isUnique": true,
-          "where": "\"ip_ban\".\"scope\" = 'site' and \"ip_ban\".\"source\" = 'manual' and \"ip_ban\".\"removed_at\" is null",
+          "where": "\"ip_ban\".\"scope\" = 'site' and \"ip_ban\".\"source\" = 'manual' and \"ip_ban\".\"action\" = 'block' and \"ip_ban\".\"removed_at\" is null",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -2557,7 +2582,45 @@
             }
           ],
           "isUnique": true,
-          "where": "\"ip_ban\".\"scope\" = 'platform' and \"ip_ban\".\"removed_at\" is null",
+          "where": "\"ip_ban\".\"scope\" = 'platform' and \"ip_ban\".\"action\" = 'block' and \"ip_ban\".\"removed_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ip_ban_site_grey_uq": {
+          "name": "ip_ban_site_grey_uq",
+          "columns": [
+            {
+              "expression": "site_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "cidr",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"ip_ban\".\"scope\" = 'site' and \"ip_ban\".\"action\" <> 'block' and \"ip_ban\".\"removed_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ip_ban_platform_grey_uq": {
+          "name": "ip_ban_platform_grey_uq",
+          "columns": [
+            {
+              "expression": "cidr",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"ip_ban\".\"scope\" = 'platform' and \"ip_ban\".\"action\" <> 'block' and \"ip_ban\".\"removed_at\" is null",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -3762,6 +3825,12 @@
         },
         "unknown_hosts": {
           "name": "unknown_hosts",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "connection_limits": {
+          "name": "connection_limits",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
