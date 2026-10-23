@@ -1,0 +1,1 @@
+ALTER TABLE "origin" ADD COLUMN "proxy_protocol_version" integer DEFAULT 0 NOT NULL;

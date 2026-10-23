@@ -1,6 +1,6 @@
 {
-  "id": "9892de0c-3a8a-45e8-ac34-6dbe3620942d",
-  "prevId": "8b7fa44f-fea3-47d3-bc35-06437552220d",
+  "id": "14ae6df1-cc2a-470c-9085-fc765ce7a7ed",
+  "prevId": "9892de0c-3a8a-45e8-ac34-6dbe3620942d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -5384,6 +5384,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "''"
+        },
+        "proxy_protocol_version": {
+          "name": "proxy_protocol_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "created_at": {
           "name": "created_at",
