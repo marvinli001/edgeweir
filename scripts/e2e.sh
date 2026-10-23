@@ -263,7 +263,10 @@
 #   trusting the Origin CA alone the nodes reach its certificates and refuse
 #   the test CA's, on the system store they refuse the Origin CA's, a system
 #   store site is unaffected; a revoked certificate fails on both nodes and
-#   in the active checks; Playwright e2e/g19.spec.ts.
+#   in the active checks; rotating the Origin CA, nodes and active checks
+#   accept either CA's certificates until the first one is retired; rotating
+#   the origin client CA, nodes switch certificates only when it is
+#   activated; Playwright e2e/g19.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build

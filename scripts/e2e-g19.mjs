@@ -24,6 +24,13 @@
 //   e. revoked, the certificate fails (the data plane and the active health
 //      check), the Origin CA's other certificate and the system store site
 //      keep working
+//   f. rotating the Origin CA: the new one issues and nodes trust both (the
+//      first one's certificate on :8443 and the new one's on :9443, also in
+//      the active check); retired, the first one's certificate fails until
+//      the origin gets one of the new CA. Rotating the origin client CA:
+//      before activation nodes still present the first CA's certificate (an
+//      origin trusting only the new CA refuses them, one trusting the bundle
+//      accepts them); activated, they present the new CA's; retired
 // State for apps/console/e2e/g19.spec.ts: .e2e/g19-state.json.
 // `node scripts/e2e-g19.mjs --cleanup` deletes the sites.
 import assert from "node:assert/strict";
@@ -401,4 +408,87 @@ await waitFor("the active checks refuse the revoked certificate", async () => {
 });
 pass(
   "revoked, the certificate fails on both nodes and in the active checks; the Origin CA's other certificate and the system store site keep working",
+);
+
+// -------------------------------------------------------------- f. CA rotation
+const reason = async () => (await a("GET", `/clusters/${clusterA}`)).latestRevision.reasonCode;
+const firstOriginCa = (await a("GET", "/origin-ca")).authority;
+const rotating = await a("POST", "/origin-ca/rotation");
+assert.equal(rotating.previous?.fingerprint, firstOriginCa.fingerprint);
+assert.notEqual(rotating.authority.fingerprint, firstOriginCa.fingerprint);
+assert.equal(await reason(), "origin_ca_rotation_started");
+await synced("both nodes trust both Origin CAs");
+// :9443 gets a certificate of the new CA; :8443 keeps the first one's.
+const fromNew = await a("POST", "/origin-certificates", { hostnames: ["origin-tls"] });
+assert.equal(fromNew.authority, "active");
+await originFile("server-csr.pem", fromNew.certificatePem);
+await originFile("server-csr.key", fromNew.privateKeyPem);
+await reloadOrigin();
+for (const service of Object.keys(NODES)) {
+  await ok(service, "oca", "1.1 client=none");
+  await ok(service, "oca-mtls", `1.1 client=${clusterA}`);
+  await refused(service, "oca-public");
+}
+await waitFor("the active checks accept the new CA's certificate", async () => {
+  // Down since the revocation (e.); nodes stop reporting it once healthy.
+  return ((await originHealth("oca"))?.downNodes ?? 0) === 0;
+});
+const retired = await a("POST", "/origin-ca/rotation/retire");
+assert.equal(retired.previous, null);
+assert.equal(await reason(), "origin_ca_retired");
+await synced("both nodes trust the new Origin CA alone");
+for (const service of Object.keys(NODES)) {
+  await waitFor(
+    `${service} refuses the retired CA's certificate`,
+    async () => !(await get(addresses[service], "oca-mtls")).startsWith("200 "),
+  );
+  await ok(service, "oca", "1.1 client=none");
+}
+const reissued = await a("POST", "/origin-certificates", { hostnames: ["origin-tls"] });
+await originFile("server.pem", reissued.certificatePem);
+await originFile("server.key", reissued.privateKeyPem);
+await reloadOrigin();
+for (const service of Object.keys(NODES)) await ok(service, "oca-mtls", `1.1 client=${clusterA}`);
+pass(
+  "Origin CA rotation: during the overlap both nodes and their active checks accept certificates of either CA; retired, the first CA's certificate fails until the origin gets one of the new CA",
+);
+
+const firstClientCa = (await a("GET", "/origin-client-ca")).authority;
+const staged = await a("POST", "/origin-client-ca/rotation");
+assert.ok(staged.next && staged.next.fingerprint !== firstClientCa.fingerprint);
+assert.equal(staged.trustBundlePem, firstClientCa.certificatePem + staged.next.certificatePem);
+// Not active yet: nodes still present the first CA's certificate.
+await originFile("client-ca.pem", staged.next.certificatePem);
+await reloadOrigin();
+for (const service of Object.keys(NODES))
+  await waitFor(
+    `${service} is refused by an origin trusting only the next CA`,
+    async () => !(await get(addresses[service], "mtls")).startsWith("200 "),
+    60,
+  );
+await originFile("client-ca.pem", staged.trustBundlePem);
+await reloadOrigin();
+for (const service of Object.keys(NODES)) await ok(service, "mtls", `1.1 client=${clusterA}`);
+const latestBefore = (await a("GET", `/clusters/${clusterA}`)).latestRevision.revision;
+const activated = await a("POST", "/origin-client-ca/rotation/activate");
+assert.equal(activated.authority.fingerprint, staged.next.fingerprint);
+assert.equal(activated.previous?.fingerprint, firstClientCa.fingerprint);
+assert.deepEqual(activated.pendingClusters, []);
+const afterActivation = (await a("GET", `/clusters/${clusterA}`)).latestRevision;
+assert.ok(afterActivation.revision > latestBefore);
+assert.equal(afterActivation.reasonCode, "origin_client_certificate_rotated");
+await synced("both nodes present the new CA's client certificate");
+// Only the new CA now: the nodes' certificate is the new CA's.
+await originFile("client-ca.pem", activated.authority.certificatePem);
+await reloadOrigin();
+for (const service of Object.keys(NODES)) {
+  await ok(service, "mtls", `1.1 client=${clusterA}`);
+  await ok(service, "mtls-h2", `2.0 client=${clusterA}`);
+}
+const done = await a("POST", "/origin-client-ca/rotation/retire");
+assert.equal(done.previous, null);
+assert.equal(done.trustBundlePem, activated.authority.certificatePem);
+for (const service of Object.keys(NODES)) await ok(service, "mtls", `1.1 client=${clusterA}`);
+pass(
+  "origin client CA rotation: before activation the nodes present the first CA's certificate (refused by an origin trusting the next CA alone, accepted with the bundle); activated, the new CA's; retired",
 );
