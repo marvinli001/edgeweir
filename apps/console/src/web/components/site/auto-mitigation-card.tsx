@@ -278,7 +278,7 @@ function MitigationDialog({
         />
         <NumberField
           id="auto-mitigation-duration"
-          label={m.attacks_mitigation_duration()}
+          label={m.attacks_mitigation_hold_minutes()}
           value={draft.minutes}
           onChange={(value) => set("minutes", value)}
           min={MIN_MINUTES}
@@ -288,7 +288,6 @@ function MitigationDialog({
           testId="auto-mitigation-duration-input"
         />
       </div>
-      <SafetyNote>{m.attacks_mitigation_hold_note()}</SafetyNote>
     </FormDialog>
   );
 }

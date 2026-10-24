@@ -57,7 +57,7 @@ test("M5: DNS provider controls, statistics and alert subscriptions", async ({ p
   await expect(page.getByTestId("analytics")).toBeVisible();
   await page.getByTestId("nav-alerts").click();
   await page.getByTestId("alert-subscribe").click();
-  await pick(page, dialog.getByLabel("通知渠道", { exact: true }), channelName);
+  await pick(page, dialog.getByLabel("告警渠道", { exact: true }), channelName);
   await dialog.getByLabel("搜索网站", { exact: true }).fill("M5 site");
   await dialog.getByTestId("site-option").filter({ hasText: "M5 site" }).click();
   await expect(dialog.getByTestId("alert-sites-selected")).toHaveText("已选 1 个");

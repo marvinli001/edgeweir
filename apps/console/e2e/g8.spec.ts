@@ -174,9 +174,7 @@ test("G8: a cluster with a node without rules-v3 locks the additions", async ({ 
   const pageErrors = errors(page);
   await signedIn(page);
   await openTab(page, state.legacySiteId, "rules");
-  await expect(page.getByTestId("rules-v3-unavailable")).toHaveText(
-    "所在集群有节点不支持，暂时无法开启",
-  );
+  await expect(page.getByTestId("rules-v3-unavailable")).toHaveText("集群中有节点不支持");
   await expect(page.getByTestId("rules-v2-unavailable")).toHaveCount(0);
   const row = await ruleNamed(page, "request-transform", "g8 old");
   await expect(row.getByTestId("rule-header-value")).toHaveValue("2");
@@ -201,9 +199,7 @@ test("G8: a cluster with a node without rules-v3 locks the additions", async ({ 
   await expect(variables).toContainText("{{host}}");
   await expect(variables).not.toContainText("{{time}}");
   await page.getByTestId("error-page-503").fill("<p>{{path}}</p>");
-  await expect(page.getByTestId("error-pages-v3-unavailable")).toHaveText(
-    "所在集群有节点不支持，暂时无法开启",
-  );
+  await expect(page.getByTestId("error-pages-v3-unavailable")).toHaveText("集群中有节点不支持");
   await check(page, "legacy-errors");
   await page.reload();
   expect(pageErrors).toEqual([]);

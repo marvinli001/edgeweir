@@ -92,7 +92,7 @@ test("the card shows the current IP, refuses a list without it and adds it", asy
   await list.fill("192.0.2.0/24");
   await card.getByTestId("login-allow-list-save").click();
   await expect(card.getByTestId("login-allow-list-error")).toHaveText(
-    `名单不含当前 IP ${ip}，保存后会把你锁在外面`,
+    `名单不含当前 IP ${ip}，保存后将无法登录`,
   );
   await card.getByTestId("login-allow-list-add-current").click();
   await expect(card.getByTestId("login-allow-list-add-current")).toBeDisabled();

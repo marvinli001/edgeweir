@@ -77,7 +77,7 @@ export async function login(page: Page, email: string, password: string) {
     const error = page.getByTestId("login-error");
     await expect(title.or(error)).toBeVisible();
     if (await title.isVisible()) break;
-    await expect(error).toHaveText("请求太频繁，请稍后再试");
+    await expect(error).toHaveText("请求过于频繁，请稍后重试");
     expect(attempt, "still rate-limited after retries").toBeLessThan(4);
     await page.waitForTimeout(11_000);
   }

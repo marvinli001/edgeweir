@@ -41,7 +41,7 @@ describe("node error texts", () => {
         { failed: "1", total: "1", url: "https://a.test/", reason: "https_unsupported" },
         "",
       ),
-    ).toBe("1 of 1 URL failed, first https://a.test/ (the node has no HTTPS listener yet)");
+    ).toBe("1 of 1 URL failed, first https://a.test/ (the node has no HTTPS listener)");
     // An unknown reason reads as "other".
     expect(
       taskErrorText(

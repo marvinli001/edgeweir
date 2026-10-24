@@ -28,7 +28,7 @@ test("PROXY protocol and gRPC health checks: an origin's version and the probe t
 
   // The script's last state.
   await expect(version).toHaveText("v2");
-  await expect(note).toHaveText("源站须接收 PROXY protocol；回源连接只在同一访客连接内复用");
+  await expect(note).toHaveText("源站须支持 PROXY protocol");
   await expect(page.getByTestId("origins-proxy-unavailable")).toHaveCount(0);
   await expect(type).toHaveText("gRPC");
   await expect(service).toHaveValue("e2e.Echo");

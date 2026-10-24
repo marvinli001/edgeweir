@@ -76,7 +76,7 @@ describe("localizeError", () => {
       "Cancelled",
     );
     expect(localizeError(failure("ERROR_INVALID_DOMAIN", "10.0.0.5 is an invalid domain"))).toBe(
-      "Passkeys do not work on this address; open the console by its domain",
+      "Passkeys work only on the console's domain",
     );
     expect(localizeError(failure("ERROR_AUTHENTICATOR_GENERAL_ERROR", "The authenticator…"))).toBe(
       "Passkey verification failed",
@@ -91,7 +91,7 @@ describe("localizeError", () => {
       data: { features: "purge-tag-v1, future-v9", nodes: "edge-1, edge-2" },
     };
     expect(localizeError(error)).toBe(
-      "Some nodes don't support Host and tag purges, future-v9 yet: edge-1, edge-2",
+      "Nodes do not support Host and tag purges, future-v9 yet: edge-1, edge-2",
     );
   });
 
@@ -143,7 +143,7 @@ describe("localizeError", () => {
     expect(
       localizeError(failure("DNS_BINDING_CONFLICT", { name: "telecom.cdn.xn--fiqs8s.example" })),
     ).toBe(
-      "Another cluster's DNS binding or a CNAME prefix of a site or L4 app uses telecom.cdn.中国.example (telecom.cdn.xn--fiqs8s.example)",
+      "telecom.cdn.中国.example (telecom.cdn.xn--fiqs8s.example) is taken by another cluster's DNS binding or a CNAME prefix",
     );
     expect(localizeError(failure("DNS_RECORD_CONFLICT", { name: "www.xn--fiqs8s.example" }))).toBe(
       "DNS name www.中国.example (www.xn--fiqs8s.example) has an unmanaged record",

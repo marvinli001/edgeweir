@@ -19,7 +19,7 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/g3-state.json"), "utf8
   crsLoggedPath: string;
   legacySiteId: string;
 };
-const BY_NODES = "所在集群有节点不支持，暂时无法开启";
+const BY_NODES = "集群中有节点不支持";
 
 test.describe.configure({ mode: "serial" });
 

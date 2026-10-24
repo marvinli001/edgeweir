@@ -16,12 +16,12 @@ test("M6: start signed canary upgrade and explicitly promote healthy nodes", asy
   await page.goto(`/clusters?cluster=${fixture.clusterId}`);
   await page.getByTestId("upgrade-create").click();
   await page.getByLabel("目标版本", { exact: true }).fill(fixture.version);
-  await pick(page, page.getByLabel("先升级的节点组"), `${fixture.groupName}（1 个节点）`);
+  await pick(page, page.getByLabel("金丝雀节点组"), `${fixture.groupName}（1 个节点）`);
   await page.getByTestId("upgrade-submit").click();
   await expect(page.getByRole("dialog")).toBeHidden();
   const job = page.getByTestId(`upgrade-${fixture.version}`).first();
   await expect(job).toBeVisible();
-  await expect(job.getByText("等待试运行组", { exact: true })).toHaveCount(1);
+  await expect(job.getByText("等待金丝雀组", { exact: true })).toHaveCount(1);
   await expect(job.getByTestId("upgrade-promote")).toBeDisabled();
   await expect(job.getByTestId("upgrade-promote")).toBeEnabled({ timeout: 150000 });
   await page.screenshot({

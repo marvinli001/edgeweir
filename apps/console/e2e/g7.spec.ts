@@ -124,7 +124,7 @@ test("G7: the L4 apps list shows the e2e apps with their ports and DNS targets",
     await expect(page.getByTestId("page-title")).toHaveText("网站");
     await page.getByTestId("sites-tab-l4").click();
     await expect(page).toHaveURL(/\/l4$/);
-    await expect(page.getByTestId("page-title")).toHaveText("四层转发");
+    await expect(page.getByTestId("page-title")).toHaveText("L4 应用");
     await expect(page.getByTestId("sites-tab-l4")).toHaveAttribute("aria-selected", "true");
     await expect(page.getByTestId("nav-sites")).toHaveAttribute("data-active");
     const sidebar = page.locator("[data-slot=sidebar-content]");

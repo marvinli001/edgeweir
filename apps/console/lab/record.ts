@@ -155,7 +155,7 @@ await page.waitForTimeout(2000);
 await page.click('[data-testid="tab-overview"]');
 await page.waitForTimeout(700);
 await page
-  .getByRole("button", { name: /清除缓存/ })
+  .getByRole("button", { name: /刷新缓存/ })
   .first()
   .click();
 await page.waitForTimeout(600);

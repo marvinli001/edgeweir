@@ -649,9 +649,6 @@ function ManualRecords({ clusterId, updatedAt }: { clusterId: string; updatedAt:
           </Button>
         ) : null}
       </CardHeader>
-      <CardContent>
-        <SafetyNote>{m.dns_manual_note()}</SafetyNote>
-      </CardContent>
       <QueryView query={exported} frame={CardContent}>
         {({ records, zoneFile }) => (
           <>

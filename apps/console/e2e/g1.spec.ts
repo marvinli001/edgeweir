@@ -78,7 +78,7 @@ test("G1: the operator bans an address on a site and lifts it", async ({ page })
   dialog = await openBanDialog(page, state.siteName);
   await dialog.getByTestId("ban-cidr").fill("10.0.0.0/8");
   await dialog.getByTestId("ban-submit").click();
-  await expect(dialog.getByTestId("form-error")).toHaveText("前缀太短，最短为 /16");
+  await expect(dialog.getByTestId("form-error")).toHaveText("前缀过短，最短为 /16");
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
 
