@@ -1574,7 +1574,7 @@
   "upgrade_promote": "Promote remaining nodes",
   "upgrade_cancel": "Cancel queued work",
   "upgrade_cancel_note": "Upgraded nodes keep their version",
-  "upgrade_start": "Start canary",
+  "upgrade_start": "Start upgrade",
   "upgrade_version": "Target version",
   "upgrade_version_placeholder": "0.1.0",
   "upgrade_version_invalid": "Use a version such as 0.2.0",

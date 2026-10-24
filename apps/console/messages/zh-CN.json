@@ -1462,7 +1462,7 @@
   "upgrade_promote": "推进剩余节点",
   "upgrade_cancel": "取消待执行任务",
   "upgrade_cancel_note": "已升级的节点保持当前版本",
-  "upgrade_start": "开始金丝雀",
+  "upgrade_start": "开始升级",
   "upgrade_version": "目标版本",
   "upgrade_version_placeholder": "0.1.0",
   "upgrade_version_invalid": "版本号格式如 0.2.0",
