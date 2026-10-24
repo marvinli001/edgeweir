@@ -21,6 +21,7 @@ export const errorDefs = {
 
   ACCESS_KEY_NOT_FOUND: { status: 404, params: [] },
   ACCESS_KEY_READ_ONLY: { status: 403, params: [] },
+  ACCESS_KEY_REVOKED: { status: 409, params: [] },
   ACCESS_KEY_SESSION_REQUIRED: { status: 403, params: [] },
   /** The demo account can read everything and change nothing. */
   DEMO_READ_ONLY: { status: 403, params: [] },

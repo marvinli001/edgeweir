@@ -22,6 +22,7 @@ export const auditActions = [
   "alert.unsubscribe",
   "api_key.create",
   "api_key.revoke",
+  "api_key.update",
   "acme_account.delete",
   "auth.sign_in",
   "auth.sign_in_failed",
