@@ -96,7 +96,7 @@ A rule's **Ban** action and a rate limit's **Ban when exceeded** are written and
 
 Greylisted addresses are not refused: they are challenged or rate-limited until the entry expires. Manage them on the **Greylist** tab of **Bans**. Entries travel with the bans over the node channel, apply within seconds and make no configuration revision (except the first **Challenge** entry, see "Challenge keys" below).
 
-1. Open **Bans → Greylist** and click **Add to greylist**.
+1. Open **Bans → Greylist** and click **Greylist entry added**.
 2. Choose the scope ("Site" or "Global") and the site, enter the IP or CIDR, and choose the reason and duration.
 3. Choose the action:
    - **Challenge**: pick the challenge (Cookie redirect, JavaScript, Proof of work, Image captcha). Requests without a pass of that level get the challenge first.
@@ -238,7 +238,7 @@ Read-only AccessKeys can call only `bans.list`; service accounts cannot call the
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | "Invalid IP address or CIDR" | Not an IP address or CIDR, or it has leading zeros or a zone ID | Use the standard notation |
-| "The prefix is too short; the shortest allowed is /16" (or `/48`) | The prefix is shorter than the minimum | Split it into longer prefixes, or use an IP list |
+| "Prefix too short; the shortest is /16" (or `/48`) | The prefix is shorter than the minimum | Split it into longer prefixes, or use an IP list |
 | "A ban lasts from 1 minute to 7 days" | Expiry out of range | Use an IP list to block for longer |
 | "The ban covers the protected address …" | The ban covers a node address, loopback or an unspecified address, or overlaps an allow list | Narrow it |
 | "At most N manual bans can be active" | Limit of manual bans reached | Unban addresses no longer needed, or raise **Protection settings → Bans → Limit of manual bans** |

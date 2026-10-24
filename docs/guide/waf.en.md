@@ -106,7 +106,7 @@ While any site on a node runs CRS, the node loads ModSecurity and the bundled ru
 | `modsecurity-v1` | Any site with CRS on (detect or block) |
 | `waf-v2` | Exclusions with a path or targets; the **OWASP CRS** override; the **Skip** action |
 
-While an active node of the cluster lacks `modsecurity-v1`, **Mode** of a site without CRS cannot be changed and shows "Some nodes of the site's cluster do not support it yet" (`crs.reason` is `nodes` in `GET /sites/{id}/features`); CRS already on can still be changed or turned off. The API can still turn it on: the configuration is published, and nodes without the capability keep their last-known-good configuration and show **Upgrade required** until `edgeweir-openresty-modsecurity` is installed or the node is upgraded.
+While an active node of the cluster lacks `modsecurity-v1`, **Mode** of a site without CRS cannot be changed and shows "Some nodes in the cluster do not support it" (`crs.reason` is `nodes` in `GET /sites/{id}/features`); CRS already on can still be changed or turned off. The API can still turn it on: the configuration is published, and nodes without the capability keep their last-known-good configuration and show **Upgrade required** until `edgeweir-openresty-modsecurity` is installed or the node is upgraded.
 
 ## Limits
 
@@ -121,7 +121,7 @@ While an active node of the cluster lacks `modsecurity-v1`, **Mode** of a site w
 
 | Symptom | Cause | Action |
 | --- | --- | --- |
-| **Mode** is unavailable with "Some nodes of the site's cluster do not support it yet" | An active node of the cluster lacks `edgeweir-openresty-modsecurity` or is too old | Install the package on the node or upgrade it |
+| **Mode** is unavailable with "Some nodes in the cluster do not support it" | An active node of the cluster lacks `edgeweir-openresty-modsecurity` or is too old | Install the package on the node or upgrade it |
 | A node shows **Upgrade required** | CRS was turned on through the API and the node lacks `modsecurity-v1` | Install the package on the node or upgrade it |
 | Legitimate requests get 403 | False positive | Find the rule ID in **Most-matched CRS rules** or the access logs and exclude it (for the path, or the whole site); or lower the paranoia level or raise the threshold |
 | The test payload is not blocked | Mode is **Detect only**; the anomaly score stays below the threshold; the rules are excluded; the node has not applied the configuration yet | Check the settings and the node's applied revision |

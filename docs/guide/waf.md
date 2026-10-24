@@ -106,7 +106,7 @@
 | `modsecurity-v1` | 任一网站开启 CRS（仅检测或拦截） |
 | `waf-v2` | 带路径或目标的排除条目；覆盖设置「OWASP CRS」；「跳过」动作 |
 
-集群中有活动节点不支持 `modsecurity-v1` 时，未开启 CRS 的网站「模式」不可选，并显示「所在集群有节点不支持，暂时无法开启」（`GET /sites/{id}/features` 的 `crs.reason` 为 `nodes`）；已开启的 CRS 仍可修改或关闭。通过 API 仍可开启：配置照常发布，缺少该能力的节点保留 last-known-good 配置并显示「需要升级」，直到节点安装 `edgeweir-openresty-modsecurity` 或升级。
+集群中有活动节点不支持 `modsecurity-v1` 时，未开启 CRS 的网站「模式」不可选，并显示「集群中有节点不支持」（`GET /sites/{id}/features` 的 `crs.reason` 为 `nodes`）；已开启的 CRS 仍可修改或关闭。通过 API 仍可开启：配置照常发布，缺少该能力的节点保留 last-known-good 配置并显示「需要升级」，直到节点安装 `edgeweir-openresty-modsecurity` 或升级。
 
 ## 限制
 
@@ -121,7 +121,7 @@
 
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
-| 「模式」不可选，显示「所在集群有节点不支持，暂时无法开启」 | 集群中有活动节点未安装 `edgeweir-openresty-modsecurity` 或版本过旧 | 在节点上安装该软件包或升级节点 |
+| 「模式」不可选，显示「集群中有节点不支持」 | 集群中有活动节点未安装 `edgeweir-openresty-modsecurity` 或版本过旧 | 在节点上安装该软件包或升级节点 |
 | 节点显示「需要升级」 | 经 API 开启了 CRS，节点缺少 `modsecurity-v1` | 在节点上安装该软件包或升级节点 |
 | 正常请求被 403 | 误报 | 在「命中最多的 CRS 规则」或访问日志中找到规则 ID，按路径或整站排除；或降低 Paranoia 等级、提高异常分数阈值 |
 | 测试载荷没有被拦截 | 模式为「仅检测」；异常分数未达到阈值；相关规则已被排除；节点尚未应用配置 | 检查设置与节点的已应用版本 |

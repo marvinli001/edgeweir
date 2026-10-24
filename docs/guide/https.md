@@ -73,7 +73,7 @@ DNS-01 验证需要先添加凭据。
 | 验证方式 | HTTP-01 / DNS-01 | HTTP-01 | 域名控制验证方式；泛域名必须使用 DNS-01，选择 HTTP-01 时表单在「域名」下提示「泛域名需要 DNS-01 验证」 |
 | DNS 凭据 | 已添加的 DNS 凭据 | 第一个凭据 | DNS-01 写入 TXT 所用的账户；每张证书一个区域 |
 | 跳过解析检查 | 开 / 关 | 关 | 仅 HTTP-01：不检查域名是否解析到节点（申请时与每次签发前），例如节点前面还有负载均衡 |
-| EAB 密钥 ID / EAB HMAC 密钥 | CA 提供的 EAB 凭据 | 无 | ZeroSSL 与 Google Trust Services 必填，两者同时填写或都留空；自定义目录留空时使用系统设置中的 EAB（占位文字「留空则用系统设置中的 EAB」）。加密保存 |
+| EAB 密钥 ID / EAB HMAC 密钥 | CA 提供的 EAB 凭据 | 无 | ZeroSSL 与 Google Trust Services 必填，两者同时填写或都留空；自定义目录留空时使用系统设置中的 EAB（占位文字「留空使用系统设置中的 EAB」）。加密保存 |
 
 同一 ACME 目录、EAB 密钥 ID 与账户邮箱的证书共用一个 ACME 账户：CA 限制每个 IP 新注册的账户数（Let's Encrypt 为 3 小时 10 个）。账户列在「ACME 账户」卡片中，见 [ACME 账户](#acme-账户)。
 
@@ -84,7 +84,7 @@ DNS-01 验证需要先添加凭据。
 | Let's Encrypt | `https://acme-v02.api.letsencrypt.org/directory` | 不需要 | `letsencrypt.org` |
 | ZeroSSL | `https://acme.zerossl.com/v2/DV90` | 必填（ZeroSSL 控制台生成） | `sectigo.com`、`trust-provider.com`、`usertrust.com` |
 | Google Trust Services | `https://dv.acme-v02.api.pki.goog/directory` | 必填（`gcloud publicca external-account-keys create` 生成，7 天内使用、只能注册一次） | `pki.goog` |
-| 自定义 ACME 目录 | **系统设置 → 证书颁发机构** 中的地址，或 `EDGEWEIR_ACME_DIRECTORY` | 目录要求时填写；申请时留空则用系统设置中的 EAB | 目录 `meta.caaIdentities` 列出的名称；没有时不检查 CAA |
+| 自定义 ACME 目录 | **系统设置 → 证书颁发机构** 中的地址，或 `EDGEWEIR_ACME_DIRECTORY` | 目录要求时填写；申请时留空使用系统设置中的 EAB | 目录 `meta.caaIdentities` 列出的名称；没有时不检查 CAA |
 
 自定义目录的地址、EAB 与 CA 证书见[系统设置](system.md#证书颁发机构)，界面保存的值优先于 `EDGEWEIR_ACME_DIRECTORY` 与 `EDGEWEIR_ACME_CA_FILE`。没有指定 CA 的 API 申请在自定义目录的地址只来自环境变量时使用自定义目录，其余情况使用 Let's Encrypt：只用环境变量的已有部署升级后行为不变；此前用环境变量签发的证书在后台任务启动时记为「自定义 ACME 目录」，续期仍向该目录申请。删除自定义目录的配置后，选择它的证书续期失败（「已不再配置自定义 ACME 目录」）。
 
@@ -231,7 +231,7 @@ HTTP-01 证书不能扩展到泛域名，DNS-01 证书只能扩展到其 DNS 凭
 | OCSP 装订 | 按所选证书装订其自己的 OCSP 响应 |
 | 添加域名 | 新域名只扩展第一张证书（控制台申请且自动续期时），见[为 HTTPS 网站添加域名](#为-https-网站添加域名) |
 | 删除证书 | 网站的任一证书都算被使用，删除返回「证书仍被网站使用：…」 |
-| 节点能力 | 多于一张证书需要 `multi-certificate-v1`；集群有活动节点缺少它时「添加证书」不可用，显示「所在集群有节点不支持，暂时无法开启」 |
+| 节点能力 | 多于一张证书需要 `multi-certificate-v1`；集群有活动节点缺少它时「添加证书」不可用，显示「集群中有节点不支持」 |
 
 验证（节点应用该版本后）：
 
@@ -311,7 +311,7 @@ openssl s_client -connect <节点 IP>:443 -servername www.example.com -sess_in s
 | 不重复压缩 | 响应已有 `Content-Encoding`（如源站已压缩）时原样返回 |
 | 缓存 | 缓存保存未压缩或源站原样的内容，每次响应时按请求压缩；缓存命中后编码同样按请求协商 |
 | 规则 | 覆盖设置可按请求关闭或重新允许某种算法，压缩规则可限定本次响应的算法与 q 值相同时的顺序；只在已开启的算法中选择，不绕过缓存，见[规则](rules.md#覆盖设置) |
-| 能力 | 开启 Brotli 需要集群全部活动节点支持 `brotli-v1`，Zstandard 需要 `zstd-v1`。有节点不支持时开关不可用，并显示「所在集群有节点不支持，暂时无法开启」；已开启的算法仍可关闭 |
+| 能力 | 开启 Brotli 需要集群全部活动节点支持 `brotli-v1`，Zstandard 需要 `zstd-v1`。有节点不支持时开关不可用，并显示「集群中有节点不支持」；已开启的算法仍可关闭 |
 
 验证（节点应用该版本后）：
 
@@ -347,7 +347,7 @@ HTTPS 请求的 SNI 必须与 `Host` 一致，否则返回 421（交给[默认�
 | 端口池 | 不能落在集群的 [L4 端口池](l4.md#设置端口池)内（「端口 {port} 在端口池内：…」）；端口池也不能包含监听端口 |
 | 移除 | 仍有网站绑定的端口不能移除（「端口 {port} 仍被网站使用：…」） |
 | 审计 | `cluster.listen_ports_update`，元数据为修改前后的端口 |
-| 节点能力 | 有附加端口的配置需要 `edge-ports-v1`；集群有活动节点缺少它时卡片显示「所在集群有节点不支持，暂时无法开启」，只能移除端口 |
+| 节点能力 | 有附加端口的配置需要 `edge-ports-v1`；集群有活动节点缺少它时卡片显示「集群中有节点不支持」，只能移除端口 |
 
 ### 网站端口
 
@@ -515,7 +515,7 @@ ACME 账户私钥、证书私钥、EAB HMAC 密钥（证书的与系统设置中
 | 「证书链顺序错误：叶证书在前，签发者依次在后」 | 中间证书排在叶证书前，或某张证书不是下一张签发的 | 按叶证书、中间证书的顺序重新组织 PEM |
 | 「证书当前不在有效期内（… 至 …）」 | 证书未生效或已过期（时间为 UTC） | 核对服务器时间，或换用有效的证书 |
 | 「证书没有 DNS 类型的 SAN」 | 证书只有 IP 地址或只有 CN | 换用含 DNS SAN 的证书 |
-| 「不支持该证书的密钥类型；请使用 RSA（2048 位及以上）或 ECDSA P-256、P-384、P-521」 | 叶证书的密钥节点无法加载（secp256k1、Brainpool、SM2 等曲线，Ed448、RSA-PSS、DSA，或公钥指数大于 2³¹−1 的 RSA），或者浏览器无法使用（P-224、Ed25519、ML-DSA、小于 2048 位的 RSA）；节点加载失败会让集群所有节点的版本应用失败 | `openssl x509 -in cert.pem -noout -text` 的「Public Key Algorithm」一段显示密钥类型与位数；用 RSA 2048 位或 ECDSA P-256 私钥重新签发，例如 `openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -pkeyopt ec_param_enc:named_curve -out key.pem` |
+| 「不支持的密钥类型，请使用 RSA（2048 位及以上）或 ECDSA P-256、P-384、P-521」 | 叶证书的密钥节点无法加载（secp256k1、Brainpool、SM2 等曲线，Ed448、RSA-PSS、DSA，或公钥指数大于 2³¹−1 的 RSA），或者浏览器无法使用（P-224、Ed25519、ML-DSA、小于 2048 位的 RSA）；节点加载失败会让集群所有节点的版本应用失败 | `openssl x509 -in cert.pem -noout -text` 的「Public Key Algorithm」一段显示密钥类型与位数；用 RSA 2048 位或 ECDSA P-256 私钥重新签发，例如 `openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -pkeyopt ec_param_enc:named_curve -out key.pem` |
 | 「证书尚未签发或已过期」 | 网站选择的证书还在等待签发，或已过期 | 等待签发完成，或续期后再选择 |
 | 「以下名称未解析到节点：…」 | HTTP-01 名称没有解析记录，或解析到源站、其他代理等不属于该集群节点的地址 | 把名称解析到节点；节点前面另有负载均衡或解析在变更中时，打开「跳过解析检查」 |
 | 「集群 … 没有在线节点应答 HTTP-01」 | 服务这些名称的集群没有在线的活动节点 | 检查节点状态，或改用 DNS-01 |

@@ -34,7 +34,7 @@
 | `--server` | **系统设置** 中的「节点通道」地址，见 [节点通道地址与证书](networking.md#节点通道地址与证书)。 |
 | `--ca-sha256` | 节点通道内部 CA 的 SHA-256 指纹，与 **系统设置** 中的「CA 指纹」相同。 |
 | API | `POST /api/v1/enrollment-tokens`，`ttlMinutes` 取值 5–10080，默认 60；`GET /api/v1/enrollment-tokens/{id}` 返回 `usedAt` 与注册的节点。见 [API 与端点](../reference/api.md)。 |
-| 地址提醒 | 控制台地址（`install.sh` 从此下载）或节点通道地址是 localhost、回环或内网地址时，对话框逐条提醒，**系统设置** 中的地址旁显示「仅本机可达」或「内网地址」；控制台地址是公网 HTTP 地址时提醒「控制台地址是 HTTP，install.sh 以明文传给要用 root 运行它的主机」，**系统设置** 中标「未加密」。控制台启动时为每条提醒写一条警告日志；不阻止生成。 |
+| 地址提醒 | 控制台地址（`install.sh` 从此下载）或节点通道地址是 localhost、回环或内网地址时，对话框逐条提醒，**系统设置** 中的地址旁显示「仅本机可达」或「内网地址」；控制台地址是公网 HTTP 地址时提醒「控制台地址未加密，install.sh 将以明文传输」，**系统设置** 中标「未加密」。控制台启动时为每条提醒写一条警告日志；不阻止生成。 |
 | 清理 | 过期或使用超过 7 天的 token 每 30 分钟删除一次。 |
 
 ### 节点通道连接检查
@@ -121,7 +121,7 @@ deb、rpm 由包脚本创建 `edgeweir` 用户与目录；tar.gz 由 `install.sh
 | 443/UDP | HTTP/3 | 绑定 443 的网站开启 HTTP/3，见 [监听端口](../guide/https.md#监听端口) |
 | 集群的附加 HTTP / HTTPS 端口（TCP） | HTTP、HTTPS | 集群「网络」页签设置了这些端口，见 [集群的监听端口](../guide/https.md#集群的监听端口) |
 | 附加 HTTPS 端口的同号 UDP | HTTP/3 | 绑定该端口的网站开启 HTTP/3 |
-| 集群的端口池 | [四层转发](../guide/l4.md) | TCP 端口池放行 TCP，UDP 端口池放行 UDP，TCP + UDP 两者都放行；也可以只放行已有 L4 应用使用的端口 |
+| 集群的端口池 | [L4 转发](../guide/l4.md) | TCP 端口池放行 TCP，UDP 端口池放行 UDP，TCP + UDP 两者都放行；也可以只放行已有 L4 应用使用的端口 |
 
 | 项目 | 说明 |
 | --- | --- |
@@ -149,7 +149,7 @@ deb、rpm 由包脚本创建 `edgeweir` 用户与目录；tar.gz 由 `install.sh
 | 报头格式 | 由 nginx realip 模块解析：值不是合法地址时用对端地址；`地址:端口` 取地址；`X-Real-IP` 等单值报头含逗号时取最后一项；`X-Forwarded-For` 中可信地址之前出现非法项时，取最后一个合法的可信地址；全部为可信地址时取最左一项 |
 | 内核封禁 | 只匹配 TCP 对端，后两种模式下对访客地址不生效，见 [节点前的负载均衡](../guide/bans.md#节点前的负载均衡) |
 | 探针 | 区域探针对要求 PROXY 头的监听先发送 PROXY v1 头 |
-| 节点能力 | PROXY protocol、可信代理报头与「丢弃访客自带的 X-Forwarded-For」需要 `client-ip-v1`；集群有活动节点缺少它时卡片显示「所在集群有节点不支持，暂时无法开启」 |
+| 节点能力 | PROXY protocol、可信代理报头与「丢弃访客自带的 X-Forwarded-For」需要 `client-ip-v1`；集群有活动节点缺少它时卡片显示「集群中有节点不支持」 |
 | 审计 | `cluster.client_ip_update` |
 
 > [!WARNING]

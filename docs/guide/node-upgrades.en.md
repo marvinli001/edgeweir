@@ -6,7 +6,7 @@ Staged node upgrades: canary, promotion, signature checks and automatic rollback
 
 | Term | Definition |
 | --- | --- |
-| Canary group | The node group upgraded first. Other nodes stay **Waiting for canary** until promotion. |
+| Canary group | The node group upgraded first. Other nodes stay **Waiting for the canary group** until promotion. |
 | Release source | The base URL of node release artifacts, with one `v<version>/` directory per version. |
 | Supervisor | `edgeweir-node supervise --manage-nginx`, which downloads, verifies, switches, and rolls back. |
 | Node capability | A feature flag a node reports. When the cluster configuration needs a capability a node lacks, **Clusters & nodes** shows **Upgrade required**. |
@@ -28,7 +28,7 @@ Nodes that do not meet the supervisor conditions do not report `self-upgrade-v1`
 1. Open **Clusters & nodes** and select the cluster.
 2. In **Node upgrades**, click **New upgrade**.
 3. Enter **Target version**, for example `0.1.0` (the tag `v0.1.0` works too), and select **Canary node group**.
-4. Click **Start canary**. While the dialog lists **Nodes not ready**, it cannot start: deal with those nodes first (see below).
+4. Click **Start upgrade**. While the dialog lists **Nodes not ready**, it cannot start: deal with those nodes first (see below).
 5. Wait until the canary nodes show **Succeeded** and stay healthy for 30 seconds.
 6. Click **Promote remaining nodes**. The rest are upgraded in batches: at most a quarter of them at a time (at least one, by node name); when a node succeeds the next one is released.
 7. Verify: the upgrade shows **Succeeded**; **Agent / engine** on the **Nodes** cards shows the target version.
@@ -48,7 +48,7 @@ An upgrade restarts the node's agent. OpenResty runs under the supervisor (node 
 | Item | Behavior |
 | --- | --- |
 | Condition | The canary node reports the target agent version, revision, and content hash, with a healthy data plane |
-| Duration | At least 30 continuous seconds before promotion ("Promote after the canary group stays healthy for 30 seconds.") |
+| Duration | At least 30 continuous seconds before promotion ("Promotable after the canary group is healthy for 30 s") |
 | Restart | An unhealthy report or a heartbeat gap over 45 seconds restarts the window |
 
 ### States
@@ -61,7 +61,7 @@ An upgrade restarts the node's agent. OpenResty runs under the supervisor (node 
 
 | Node state | Meaning |
 | --- | --- |
-| Waiting for canary | Not in the canary group; waits for promotion |
+| Waiting for the canary group | Not in the canary group; waits for promotion |
 | Queued | Promoted; waits for the previous batch |
 | Pending | Sent; the node has not started; shows the deadline |
 | Upgrading | The node is downloading, verifying, or in its trial; shows the deadline |
@@ -71,7 +71,7 @@ An upgrade restarts the node's agent. OpenResty runs under the supervisor (node 
 
 | Action | Behavior |
 | --- | --- |
-| **Cancel queued work** | Cancels node tasks that are **Waiting for canary**, **Queued** or **Pending**; completed nodes keep their current version; not possible while a node is **Upgrading** |
+| **Cancel queued work** | Cancels node tasks that are **Waiting for the canary group**, **Queued** or **Pending**; completed nodes keep their current version; not possible while a node is **Upgrading** |
 | Expiry | A node task not finished 30 minutes after it was sent shows "Upgrade task expired" and fails the upgrade; the canary group's tasks are sent when the upgrade is created, the others when their batch is released. Observing the canary before promotion has no time limit |
 | Disabled or deleted node | Its task shows "Node disabled or deleted; not upgraded" and the other nodes go on; with every canary node disabled or deleted the upgrade cannot be promoted: cancel it and start again |
 
@@ -145,10 +145,10 @@ Signing and verification are covered in the [Sigstore documentation](https://doc
 | `metrics-v1` | Host metrics in the heartbeat (CPU, load, memory, egress, active connections), reported by Linux nodes; without it node metrics and node-metric scheduling conditions show **No data**. Never shows **Upgrade required** |
 | `edge-ports-v1` | The cluster has extra listener ports, a site is bound to ports other than the defaults, or the HTTPS redirect uses a status, port or excluded domains other than the defaults, see [HTTPS](https.en.md#the-clusters-listener-ports) |
 | `client-ip-v1` | The cluster's client IP is not direct (or drops the client's X-Forwarded-For), or a rule reads `ip.peer`, see [Client IP](../deploy/nodes.en.md#client-ip) |
-| `l4-v2` | An L4 app uses a port range, origins on the arriving port or TLS termination, see [Layer-4 forwarding](l4.en.md#port-ranges-and-origin-ports) |
+| `l4-v2` | An L4 app uses a port range, origins on the arriving port or TLS termination, see [L4 forwarding](l4.en.md#port-ranges-and-origin-ports) |
 | `domains-v2` | A site (disabled ones included) has `.` suffix or pattern domains, see [domain forms](domains.en.md#domain-forms) |
 | `unknown-host-v1` | The cluster's unknown host settings are not the defaults (a handling other than the unknown host page, or scan protection on), see [unknown hosts and node IP access](domains.en.md#unknown-hosts-and-node-ip-access) |
-| `l4-v1` | The cluster has an enabled [L4 app](l4.en.md): layer-4 forwarding and L4 statistics. Without it the node refuses configurations with L4 apps, and the port pools tab, the L4 app list, and the dialog warn "Nodes {nodes} of {cluster} lack L4 forwarding and refuse configurations with L4 apps until upgraded" |
+| `l4-v1` | The cluster has an enabled [L4 app](l4.en.md): layer-4 forwarding and L4 statistics. Without it the node refuses configurations with L4 apps, and the port pools tab, the L4 app list, and the dialog warn "Nodes {nodes} in {cluster} lack L4 forwarding and skip configurations with L4 apps until upgraded" |
 
 When a node lacks a capability the cluster's current configuration needs, or lacks `stats-sequence-v1`, the node list in **Clusters & nodes** shows **Upgrade required**; the node keeps its last-known-good configuration and rejects configurations with unknown capabilities or enum values. Such a node can be [upgraded](#upgrade-nodes) as it is and applies the current configuration afterwards; the target version must have the missing capabilities, otherwise the candidate cannot apply the current configuration and rolls back after 90 seconds.
 
@@ -181,7 +181,7 @@ The endpoints are under `/api/v1`. Read-only AccessKeys can call the GET endpoin
 | --- | --- | --- |
 | "Use a version such as 0.2.0" | **Target version** is not in `major.minor.patch` form (optionally with a pre-release suffix such as `1.0.0-rc.1`) | Correct the version |
 | "These nodes must be online, healthy, in sync and support signed upgrades: …" | The listed active nodes (at most 10, the rest as "+N") are offline, have not applied the current revision (unless they lag only for missing capabilities), have an unhealthy data plane, lack `self-upgrade-v1`, or have an architecture missing from the release | Fix or disable those nodes and retry |
-| "The node group to upgrade first has no active nodes" | The chosen node group has no active node | Choose another node group |
+| "The canary node group has no enabled nodes" | The chosen node group has no active node | Choose another node group |
 | "An upgrade covers at most 1000 nodes" | The cluster has more than 1000 active nodes | Split the cluster |
 | "This release manifest is unavailable" | The version does not exist, the release source is unreachable, or the manifest lists no Linux archive | Check the version and the console release source |
 | "The release source must use HTTPS and resolve to an allowed address" | The release source saved in **System settings → Node release source** fails the outbound policy | See [Node release source](system.en.md#node-release-source) |

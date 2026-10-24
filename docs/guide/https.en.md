@@ -73,7 +73,7 @@ Prerequisites:
 | Validation method | HTTP-01 / DNS-01 | HTTP-01 | Domain control validation; wildcards require DNS-01, and with HTTP-01 the form shows "Wildcards need DNS-01" under **Domains** |
 | DNS credentials | A DNS credential that has been added | The first credential | Account DNS-01 writes TXT records with; one zone per certificate |
 | Skip the DNS check | On / off | Off | HTTP-01 only: do not check that the names resolve to the nodes (at the request and before each issuance), for example with a load balancer in front of the nodes |
-| EAB key ID / EAB HMAC key | EAB credentials from the CA | None | Required for ZeroSSL and Google Trust Services, both or neither; for the custom directory, empty fields use the system settings' EAB (placeholder "Empty: the system settings' EAB key"). Stored encrypted |
+| EAB key ID / EAB HMAC key | EAB credentials from the CA | None | Required for ZeroSSL and Google Trust Services, both or neither; for the custom directory, empty fields use the system settings' EAB (placeholder "Leave empty to use the system EAB"). Stored encrypted |
 
 Certificates with the same ACME directory, EAB key ID, and account email share one ACME account: CAs limit the accounts an IP address may register (Let's Encrypt: 10 in 3 hours). Accounts are listed in the **ACME accounts** card, see [ACME accounts](#acme-accounts).
 
@@ -90,7 +90,7 @@ The custom directory's URL, EAB and CA certificates: [system settings](system.en
 
 ### ACME accounts
 
-The **ACME accounts** card of the **Certificates** page lists the accounts the console registered: email, CA, directory URL, EAB key ID, creation time and **Certificates using it**. An account no certificate uses can be deleted (confirm "Delete the ACME account {email}?"): only the account and key the console stores are deleted, the account is not deactivated at the CA. While certificates use it the delete button is disabled and the API answers "Certificates use the ACME account: …". Deletion is audited as `acme_account.delete`. A later request with the same directory, EAB and email registers a new account.
+The **ACME accounts** card of the **Certificates** page lists the accounts the console registered: email, CA, directory URL, EAB key ID, creation time and **Certificates using it**. An account no certificate uses can be deleted (confirm "Delete the ACME account {email}?"): only the account and key the console stores are deleted, the account is not deactivated at the CA. While certificates use it the delete button is disabled and the API answers "The ACME account is used by certificates: …". Deletion is audited as `acme_account.delete`. A later request with the same directory, EAB and email registers a new account.
 
 ### Validation methods
 
@@ -231,7 +231,7 @@ A site has up to 4 certificates: **Certificates** is the first, **Add certificat
 | OCSP stapling | Staples the chosen certificate's own OCSP response |
 | Adding domains | New domains only grow the first certificate (when the console requested it with automatic renewal), see [Adding domains](#adding-domains-to-an-https-site) |
 | Deleting a certificate | Any of a site's certificates counts as used: deletion answers "The certificate is used by sites: …" |
-| Node capability | More than one certificate needs `multi-certificate-v1`; while an active node of the cluster lacks it, **Add certificate** is disabled with "Some nodes of the site's cluster do not support it yet" |
+| Node capability | More than one certificate needs `multi-certificate-v1`; while an active node of the cluster lacks it, **Add certificate** is disabled with "Some nodes in the cluster do not support it" |
 
 Check (after the nodes apply the revision):
 
@@ -311,7 +311,7 @@ The **Compression** card on a site's **Cache** tab has a group of settings each 
 | No double compression | Responses that already have a `Content-Encoding` (for example compressed by the origin) are passed through |
 | Cache | The cache keeps uncompressed or origin-encoded content and each response is compressed for its request; cache hits negotiate the encoding the same way |
 | Rules | Override settings turn an algorithm off or back on per request, and compression rules limit the algorithms of a response and their order at equal q-values; both choose only among the algorithms that are on and never bypass the cache, see [Rules](rules.en.md#override-settings) |
-| Capabilities | Brotli needs `brotli-v1` on every active node of the cluster, Zstandard needs `zstd-v1`. While a node lacks it, the switch is unavailable with "Some nodes of the site's cluster do not support it yet"; an algorithm already on can still be turned off |
+| Capabilities | Brotli needs `brotli-v1` on every active node of the cluster, Zstandard needs `zstd-v1`. While a node lacks it, the switch is unavailable with "Some nodes in the cluster do not support it"; an algorithm already on can still be turned off |
 
 Verify after the node applies the revision:
 
@@ -347,7 +347,7 @@ The SNI of an HTTPS request must equal its `Host`; otherwise the node returns 42
 | Port pools | Never inside one of the cluster's [L4 port pools](l4.en.md) ("Port {port} is inside port pools: …"); port pools never hold listener ports either |
 | Removing | A port sites are bound to stays ("Port {port} is still used by sites: …") |
 | Audit | `cluster.listen_ports_update`, with the ports before and after |
-| Node capability | Configurations with extra ports need `edge-ports-v1`; while an active node of the cluster lacks it, the card shows "Some nodes of the site's cluster do not support it yet" and ports can only be removed |
+| Node capability | Configurations with extra ports need `edge-ports-v1`; while an active node of the cluster lacks it, the card shows "Some nodes in the cluster do not support it" and ports can only be removed |
 
 ### Site ports
 
@@ -427,7 +427,7 @@ Both CAs can be replaced; while that happens the old and the new one are used si
 
 The Origin CA (**Origin certificates** tab):
 
-1. **Rotate CA**: the new CA issues origin certificates from now on; the clusters trusting the Origin CA publish a configuration (reason "Origin CA rotation started") in which nodes trust both CAs, each checked against its own CRL. Every active node of those clusters must support `origin-ca-rotation-v1`, otherwise the step is refused ("Some nodes don't support Origin CA rotation yet: …").
+1. **Rotate CA**: the new CA issues origin certificates from now on; the clusters trusting the Origin CA publish a configuration (reason "Origin CA rotation started") in which nodes trust both CAs, each checked against its own CRL. Every active node of those clusters must support `origin-ca-rotation-v1`, otherwise the step is refused ("Nodes do not support Origin CA rotation yet: …").
 2. Issue the origins new certificates from the new CA and deploy them. The previous CA's card shows how many of its certificates are still valid; in the list they are marked **Previous CA**. They can still be revoked during the overlap.
 3. **Retire previous CA**: the previous CA and its key are deleted, the clusters publish a configuration (reason "Previous Origin CA retired") and nodes stop trusting its certificates (marked **CA retired**). The confirmation shows how many valid certificates stop working.
 
@@ -516,11 +516,11 @@ A change saved in the console or with an AccessKey is published even when it nee
 | "Wrong chain order: the leaf certificate first, then each issuer" | An intermediate comes before the leaf, or a certificate is not issued by the next one | Order the PEM as leaf then intermediates |
 | "The certificate is not valid now (valid from … to …)" | Not yet valid or expired (times in UTC) | Check the server clock, or use a valid certificate |
 | "The certificate has no DNS names (subject alternative names)" | The certificate has only IP addresses or only a CN | Use a certificate with DNS SANs |
-| "The certificate's key type is not supported; use RSA (2048 bits or more) or ECDSA P-256, P-384 or P-521" | Nodes cannot load the leaf's key (curves such as secp256k1, Brainpool or SM2; Ed448, RSA-PSS, DSA; RSA with a public exponent above 2³¹−1), or browsers cannot use it (P-224, Ed25519, ML-DSA, RSA under 2048 bits); a key the nodes cannot load would fail the revision on every node of the cluster | The "Public Key Algorithm" part of `openssl x509 -in cert.pem -noout -text` shows the key type and size; reissue the certificate with an RSA 2048-bit or ECDSA P-256 key, for example `openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -pkeyopt ec_param_enc:named_curve -out key.pem` |
+| "Unsupported key type; use RSA (2048 bits or more) or ECDSA P-256, P-384 or P-521" | Nodes cannot load the leaf's key (curves such as secp256k1, Brainpool or SM2; Ed448, RSA-PSS, DSA; RSA with a public exponent above 2³¹−1), or browsers cannot use it (P-224, Ed25519, ML-DSA, RSA under 2048 bits); a key the nodes cannot load would fail the revision on every node of the cluster | The "Public Key Algorithm" part of `openssl x509 -in cert.pem -noout -text` shows the key type and size; reissue the certificate with an RSA 2048-bit or ECDSA P-256 key, for example `openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -pkeyopt ec_param_enc:named_curve -out key.pem` |
 | "The certificate is not issued yet or has expired" | The certificate selected for a site is still pending, or has expired | Wait for issuance, or renew it first |
 | "These names do not resolve to the nodes: …" | HTTP-01 names have no records, or resolve to the origin, another proxy, or other addresses that are not the cluster's nodes | Point the names to the nodes; with a load balancer in front of the nodes or a DNS change in progress, turn on **Skip the DNS check** |
 | "No online node can answer HTTP-01 in cluster …" | The cluster serving the names has no online active node | Check the nodes, or use DNS-01 |
-| "Some nodes don't support http01-v1 yet: …" | The listed online nodes lack `http01-v1` | Upgrade them, see [Node upgrades](node-upgrades.en.md) |
+| "Nodes do not support http01-v1 yet: …" | The listed online nodes lack `http01-v1` | Upgrade them, see [Node upgrades](node-upgrades.en.md) |
 | "Certificate domains do not match the site or DNS zone: …" | The listed names: an HTTP-01 name is not a domain of any site; the DNS credential zone does not cover them; the selected certificate does not cover these site domains; a domain added to the site is not in its uploaded certificate, or is a wildcard an HTTP-01 certificate cannot get or a name outside a DNS-01 certificate's credential zone | Add the domain to a site first, or use DNS-01; use a matching DNS credential or certificate |
 | Certificate shows **Issuance failed** | The reason on the card, see the rows below | Fix it and click **Renew now**; otherwise it retries after the [retry interval](#renewal) |
 | "The CA did not accept the domain validation", "The CA received a wrong challenge answer", "The CA could not connect to the domain" | HTTP-01: the domain does not resolve to the nodes, port 80 is blocked, or another proxy is in front; DNS-01: the TXT record went to another zone | Check the DNS records and port 80 |
@@ -544,7 +544,7 @@ A change saved in the console or with an AccessKey is published even when it nee
 | "Configure a custom ACME directory in the system settings first", "No custom ACME directory is configured any more" | The custom ACME directory was chosen, but neither system settings nor the environment have its URL | Enter it in **System settings → Certificate authorities**, or choose another CA |
 | "The URL does not answer with an ACME directory" | The console cannot read an ACME directory there: wrong URL, untrusted TLS certificate (no CA certificates entered), a timeout, or not a directory | Check the URL with `curl`; for a private CA paste its issuer into **CA certificates (PEM)** |
 | "Enter the EAB HMAC key with its key ID" | Only the EAB key ID was entered and no key for that ID is saved | Enter both, or neither |
-| "Certificates use the ACME account: …" | The listed certificates were issued with the account | Delete those certificates first |
+| "The ACME account is used by certificates: …" | The listed certificates were issued with the account | Delete those certificates first |
 | `openssl s_client -sess_in` always prints `New` | Another site's SNI; a node from before session resumption; a session older than 1 hour; a TLS 1.2 session ID (`-no_ticket`) on another node | Use the same SNI and check the node version |
 | "The DNS credential is used by certificates: …" | The listed certificates use the credential for DNS-01 | Delete those certificates first |
 | A node shows **Upgrade required** | The node lacks a capability the configuration needs (such as `http3-v1`) and keeps its last-known-good configuration | Upgrade the node, see [Node upgrades](node-upgrades.en.md) |

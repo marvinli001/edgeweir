@@ -22,7 +22,7 @@ Access authentication of a site (Basic authentication, forward authentication, s
 3. Order the rules with move up and move down; turn rules on and off with their switch.
 4. Click "Save". The console publishes a configuration revision (reason "Access authentication of {site} updated"); nodes hot-update without an nginx reload.
 
-While an active node of the cluster lacks the capability `access-auth-v1`, the tab shows "Some nodes of the site's cluster do not support it yet" and no rule can be added; saved rules can still be changed or removed.
+While an active node of the cluster lacks the capability `access-auth-v1`, the tab shows "Some nodes in the cluster do not support it" and no rule can be added; saved rules can still be changed or removed.
 
 ## Scope and selection
 
@@ -378,7 +378,7 @@ Access control refusals do not count as authentication failures:
 | --- | --- |
 | Authentication rules | Node capability `access-auth-v1`; while an active node of the cluster lacks it the UI cannot turn rules on, publishes by service accounts and background jobs answer `NODE_CAPABILITY_REQUIRED`, and nodes without it keep their last-known-good configuration |
 | Hot updates | Rules, users and keys are hot-updated; upgrading a node to a version with the capability adds one shared dictionary and one internal location to its nginx configuration (one structural reload that keeps open connections) |
-| Access control | Node capability `access-control-v1` (any part on or a site list chosen); geo access with countries or subdivisions also needs `geoip-city-v1`, with subdivisions the console also checks `geoip-subdivision-v1`, with ASNs `geoip-asn-v1`. While an active node of the cluster lacks it the cards show "Some nodes of the site's cluster do not support it yet", and publishes by service accounts and background jobs answer `NODE_CAPABILITY_REQUIRED`. Sites without any access control setting compile byte for byte as before |
+| Access control | Node capability `access-control-v1` (any part on or a site list chosen); geo access with countries or subdivisions also needs `geoip-city-v1`, with subdivisions the console also checks `geoip-subdivision-v1`, with ASNs `geoip-asn-v1`. While an active node of the cluster lacks it the cards show "Some nodes in the cluster do not support it", and publishes by service accounts and background jobs answer `NODE_CAPABILITY_REQUIRED`. Sites without any access control setting compile byte for byte as before |
 | Access control updates | Every setting is hot-updated without an nginx reload; upgrading a node to a version with the capability raises the timeouts of the edge layer's hop to the origin layer to 86400 seconds for longer WebSocket idle timeouts (one structural reload that keeps open connections) |
 | Encoded path exceptions | Node capability `encoded-path-exemptions-v1`; never holds a publish: nodes without it keep treating such paths as ambiguous. While an active node of the cluster lacks it the card says so and cannot add any |
 

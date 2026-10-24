@@ -14,7 +14,7 @@ The four forms of site domains, internationalized domain names, how unknown host
 | Unknown host | The request's Host belongs to no site of the cluster, or its site is not bound to the port the request arrived on. |
 | Node IP access | A request whose Host is an IP address (`203.0.113.5`, `[2001:db8::1]`) or empty. |
 | Default site | An enabled site of the cluster that unknown hosts or node IP access can be handed to. |
-| CNAME prefix | The first label of the CNAME target `<prefix>.<cluster domain>` of a site or L4 application. |
+| CNAME prefix | The first label of the CNAME target `<prefix>.<cluster domain>` of a site or L4 app. |
 
 ## Domain forms
 
@@ -92,7 +92,7 @@ Purges find sites by Host as nodes do: among each cluster's enabled sites, with 
 
 - Domains of disabled sites still get the disabled page (503), never the default site; when an enabled site's `*.`, suffix or pattern domain also matches the host, that site serves it.
 - A request without a Host (HTTP/1.0) is node IP access, even though the default site takes the listener's default server.
-- While the default site is disabled, requests handed to it get the unknown host page and the card shows "The default site is disabled: the unknown host page is shown meanwhile"; deleting the default site clears it from the setting.
+- While the default site is disabled, requests handed to it get the unknown host page and the card shows "Default site disabled; the unknown host page is used"; deleting the default site clears it from the setting.
 - When the default site is not bound to the port the request arrived on ([site ports](https.en.md#site-ports)), the unknown host page answers.
 - The default site must be an enabled site of this cluster (`DEFAULT_SITE_INVALID`); **Default site's certificate for unknown SNI** needs a default site with a certificate (`DEFAULT_SITE_CERTIFICATE_REQUIRED`).
 - With **Hand to the default site**, nodes answer the requests handed to it with the default site's HTTP/2, compression and cipher settings (requests without a Host with the node's defaults).
@@ -118,16 +118,16 @@ Purges find sites by Host as nodes do: among each cluster's enabled sites, with 
 
 ## CNAME prefixes
 
-Once the cluster has [DNS scheduling](dns-and-alerts.en.md), the CNAME target of a site or L4 application is `<CNAME prefix>.<cluster domain>`.
+Once the cluster has [DNS scheduling](dns-and-alerts.en.md), the CNAME target of a site or L4 app is `<CNAME prefix>.<cluster domain>`.
 
 | Object | Prefix |
 | --- | --- |
-| New sites and L4 applications | 8 random characters: a lowercase letter, then lowercase letters or digits |
-| Sites and L4 applications from before the upgrade | Their UUID: their CNAME target does not change |
+| New sites and L4 apps | 8 random characters: a lowercase letter, then lowercase letters or digits |
+| Sites and L4 apps from before the upgrade | Their UUID: their CNAME target does not change |
 
 ### Regenerate and customize
 
-1. Open the **CNAME target** card on the site's **Domains** tab, or **CNAME target** on the L4 application's page.
+1. Open the **CNAME target** card on the site's **Domains** tab, or **CNAME target** on the L4 app's page.
 2. Click **Regenerate** and confirm to get a new random prefix, or click **Customize**, fill in **CNAME prefix** and click **Save**.
 3. The console shows "CNAME prefix changed". In Automatic mode it publishes a DNS revision of the cluster at once (reason "CNAME prefix of … changed"); in Manual mode it writes no records: create the new name from the records the DNS tab lists.
 4. Point the CNAME records of the domains at the new target. The old name is shown struck through with "Resolves until …".
@@ -135,7 +135,7 @@ Once the cluster has [DNS scheduling](dns-and-alerts.en.md), the CNAME target of
 | Rule | Details |
 | --- | --- |
 | Format | 1–30 lowercase letters, digits or `-`, not starting or ending with `-` (uppercase is lowered) |
-| Unique | Unique across all sites and L4 applications; an old prefix of another object still in its transition is taken too |
+| Unique | Unique across all sites and L4 apps; an old prefix of another object still in its transition is taken too |
 | Reserved | `all`, `all-<digits>`, and every all-lines record name and line name of the clusters' DNS bindings |
 | Conflict | `CNAME_PREFIX_CONFLICT` ("CNAME prefix … is taken or reserved"); a malformed prefix is a validation error |
 | Records already in the zone | In Automatic mode a custom prefix whose `<prefix>.<cluster domain>` (with **Keep per-site line targets** also `<line name>.<prefix>.<cluster domain>`) already holds a record in the DNS provider's zone that the cluster does not manage is `CNAME_PREFIX_CONFLICT` too; not checked when the zone cannot be read within 15 seconds |
@@ -153,7 +153,7 @@ Saving a DNS binding whose line name equals a prefix (old prefixes in their tran
 | `domains-v2` | A site (disabled ones included) has suffix or pattern domains |
 | `unknown-host-v1` | The unknown host settings are not the defaults (a handling other than the unknown host page, or scan protection on) |
 
-While an active node of the cluster lacks `domains-v2`, the **Domains** tab and the **New site** dialog show "Some nodes of the site's cluster do not support suffix and pattern domains yet"; while one lacks `unknown-host-v1`, the **Unknown hosts** card shows "Some nodes of the site's cluster do not support it yet". Service accounts and background tasks get `NODE_CAPABILITY_REQUIRED`. Upgrading nodes: [node upgrades](node-upgrades.en.md).
+While an active node of the cluster lacks `domains-v2`, the **Domains** tab and the **New site** dialog show "Some nodes in the cluster do not support suffix and pattern domains"; while one lacks `unknown-host-v1`, the **Unknown hosts** card shows "Some nodes in the cluster do not support it". Service accounts and background tasks get `NODE_CAPABILITY_REQUIRED`. Upgrading nodes: [node upgrades](node-upgrades.en.md).
 
 | Change | How it applies |
 | --- | --- |
@@ -166,8 +166,8 @@ While an active node of the cluster lacks `domains-v2`, the **Domains** tab and 
 | --- | --- |
 | Read the unknown host settings | `GET /api/v1/clusters/{clusterId}/unknown-hosts` |
 | Save the unknown host settings | `PUT /api/v1/clusters/{clusterId}/unknown-hosts` |
-| Change a site's CNAME prefix | `PUT /api/v1/sites/{id}/cname-prefix` (`{"prefix": "shop"}`; without `prefix` a new random one) |
-| Change an L4 application's CNAME prefix | `PUT /api/v1/l4-apps/{id}/cname-prefix` |
+| Site CNAME prefix changed | `PUT /api/v1/sites/{id}/cname-prefix` (`{"prefix": "shop"}`; without `prefix` a new random one) |
+| L4 app CNAME prefix changed | `PUT /api/v1/l4-apps/{id}/cname-prefix` |
 
 Fields: [API reference](../reference/api.en.md).
 

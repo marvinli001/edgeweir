@@ -31,10 +31,10 @@ The error pages nodes answer with: a site's templates and redirects, maintenance
 | --- | --- | --- |
 | 401 Unauthorized | [Access authentication](access-control.en.md) by Basic without or with wrong credentials (with `WWW-Authenticate`; redirect pages and response statuses do not apply); also to replace the origin's 401 | `auth-required`; the origin's `origin-error` |
 | 403 Forbidden | Rule and IP list denials (including rate limit rules set to 403), bans and automatic CC bans, OWASP CRS blocks, WebSocket upgrades while WebSocket is off, signed URLs that fail, forward authentication refusals, [access control](access-control.en.md) refusals | `policy-denied`, `ip-banned`, `waf-blocked`, `websocket-disabled`, `auth-denied`, `auth-expired`, `ip-blocked`, `geo-denied`, `cors-origin-denied`, `hotlink-denied`, `ua-denied`, `websocket-origin-denied` |
-| 429 Too Many Requests | Rate limit rules, the Basic failure limit | `policy-denied`, `auth-rate-limited` |
+| 429 Too many requests | Rate limit rules, the Basic failure limit | `policy-denied`, `auth-rate-limited` |
 | 502 Bad Gateway | The node cannot connect to the origin, every origin was dropped before the attempt, origin signing failed | `origin-unreachable`, `no-origin`, and others |
-| 503 Service Unavailable | The node cannot complete a check for now (for example, challenge keys not delivered yet), the forward authentication service is unavailable | `challenge-unavailable`, `policy-unavailable`, `auth-unavailable` |
-| 504 Gateway Timeout | The origin timed out | `origin-timeout` |
+| 503 Service unavailable | The node cannot complete a check for now (for example, challenge keys not delivered yet), the forward authentication service is unavailable | `challenge-unavailable`, `policy-unavailable`, `auth-unavailable` |
+| 504 Gateway timeout | The origin timed out | `origin-timeout` |
 | 400 Bad request | Requests the node cannot parse, request headers too large, plain HTTP on an HTTPS port (when the site is known) | `bad-request`, `header-too-large`, `https-required`, `waf-blocked` |
 | 405 Method not allowed | Methods an S3 origin does not take | `method-not-allowed` |
 | 500 Server error | The node failed while handling the request (when the site is known) | `internal-error` |
@@ -164,11 +164,11 @@ Nodes recognize disabled sites from the offline host list in their configuration
 
 | Feature | Requirement |
 | --- | --- |
-| Site error pages | Node feature `error-pages-v1`; while an active node of the cluster lacks it, pages cannot be saved ("Some nodes of the site's cluster do not support it yet") |
+| Site error pages | Node feature `error-pages-v1`; while an active node of the cluster lacks it, pages cannot be saved ("Some nodes in the cluster do not support it") |
 | Platform error pages, offline hosts | No feature needed; older nodes ignore them, keep their plain-text answers and answer offline hosts with 404 |
-| `{{time}}`, `{{path}}` | A site template or platform page that uses them makes the configuration need the node feature `rules-v3`; while an active node of the site's cluster lacks it, the **Error pages** tab leaves the two placeholders out and shows "Some nodes of the site's cluster do not support it yet" when a template uses them; a platform page that uses them shows "{{time}} and {{path}} need nodes with rules-v3; older nodes keep their last configuration". Nodes without the feature keep their last-known-good configuration, see [Node capabilities and publishing](rules.en.md#node-capabilities-and-publishing) |
+| `{{time}}`, `{{path}}` | A site template or platform page that uses them makes the configuration need the node feature `rules-v3`; while an active node of the site's cluster lacks it, the **Error pages** tab leaves the two placeholders out and shows "Some nodes in the cluster do not support it" when a template uses them; a platform page that uses them shows "{{time}} and {{path}} need rules-v3; older nodes keep their last configuration". Nodes without the feature keep their last-known-good configuration, see [Node capabilities and publishing](rules.en.md#node-capabilities-and-publishing) |
 | Built-in pages for refused requests and internal errors | No feature needed; older nodes answer with nginx's own error pages |
-| 400, 401, 404, 405, 410, 500, **Other 4xx**, **Other 5xx**, redirect pages, response status, maintenance mode | Node feature `site-content-v1`; while an active node of the cluster lacks it, the **Error pages** tab lists only the original five statuses, offers no redirect or response status, and shows "Some nodes of the site's cluster do not support it yet" |
+| 400, 401, 404, 405, 410, 500, **Other 4xx**, **Other 5xx**, redirect pages, response status, maintenance mode | Node feature `site-content-v1`; while an active node of the cluster lacks it, the **Error pages** tab lists only the original five statuses, offers no redirect or response status, and shows "Some nodes in the cluster do not support it" |
 | Template space | Templates travel with the site table into the node's shared memory; with many sites and large templates raise the node flag `--sites-dict-mb` (default 64) |
 
 ## Troubleshooting

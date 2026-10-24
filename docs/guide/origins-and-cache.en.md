@@ -149,7 +149,7 @@ Error codes need node proto v0.2.1 or later; other errors and older nodes show t
 | Not probed | S3-compatible origins (an unsigned probe says nothing about signed requests) and origins whose address literal is forbidden |
 | Node stops probing | The data plane's "actively down" marks expire after 3 × the longest interval (at least 90 seconds), back to the passive check only |
 | Reporting | Origins that are unhealthy or have consecutive failures are reported with the heartbeat, source **Active**; the "Origin unavailable" alert uses both sources |
-| Node requirement | Node feature `active-health-v1`; while an active node of the cluster lacks it, it cannot be turned on ("Some nodes of the site's cluster do not support it yet") |
+| Node requirement | Node feature `active-health-v1`; while an active node of the cluster lacks it, it cannot be turned on ("Some nodes in the cluster do not support it") |
 
 #### gRPC probes
 
@@ -242,7 +242,7 @@ An upgraded connection closes after 3600 seconds idle (the [idle timeout](access
 | WebSocket | Upgrades still go to the origin over HTTP/1.1; an origin that speaks HTTP/2 only cannot serve WebSocket |
 | Connection pools | HTTP/1.1, HTTP/2 and gRPC connections to origins are reused separately, never mixed |
 | Active health check | HTTP probes go over HTTP/2; an HTTPS origin that does not negotiate `h2` fails the probe. gRPC services often answer plain requests with 415: set the **Probe** to gRPC, see [gRPC probes](#grpc-probes) |
-| Node requirement | Node feature `origin-http2-v1`; while an active node of the cluster lacks it, it cannot be turned on ("Some nodes of the site's cluster do not support it yet") |
+| Node requirement | Node feature `origin-http2-v1`; while an active node of the cluster lacks it, it cannot be turned on ("Some nodes in the cluster do not support it") |
 
 With **gRPC** on, requests with `Content-Type: application/grpc` (also with a suffix such as `+proto` or `+json`, or parameters) go over HTTP/2 end to end:
 
@@ -275,7 +275,7 @@ When an origin needs the visitor's address but does not read `X-Real-IP` or `X-F
 | Per origin | Each origin has its own setting; origins of one group may differ |
 | S3 origins | Not available ("S3 origins do not read PROXY protocol") |
 | Origin does not expect it | The origin reads the header as part of the request and usually answers 400 or closes the connection |
-| Node requirement | Node feature `origin-proxy-protocol-v1` (`edgeweir-openresty` 1.31.1.1-3 or later); while an active node of the cluster lacks it, it cannot be turned on ("Some nodes of the site's cluster do not support it yet") |
+| Node requirement | Node feature `origin-proxy-protocol-v1` (`edgeweir-openresty` 1.31.1.1-3 or later); while an active node of the cluster lacks it, it cannot be turned on ("Some nodes in the cluster do not support it") |
 
 For L4 apps' PROXY protocol see [L4](l4.en.md#proxy-protocol).
 
@@ -294,7 +294,7 @@ For L4 apps' PROXY protocol see [L4](l4.en.md#proxy-protocol).
 | Cache key | The origin group is not part of it. When a group is chosen by something outside the cache key (a request header, for example), responses of different groups share cached objects |
 | References | Rules can pick only groups the site has; removing a group a rule still picks fails with "Invalid rule" |
 | Global rules | An **Origin override** in the global rules cannot pick an origin group; it overrides only the origin Host, SNI, and port |
-| Node requirement | `rules-v2`; while an active node of the cluster lacks it, the **Origins** card shows "Some nodes of the site's cluster do not support it yet" and origins cannot be moved out of the default group; existing origin groups can still be changed or cleared |
+| Node requirement | `rules-v2`; while an active node of the cluster lacks it, the **Origins** card shows "Some nodes in the cluster do not support it" and origins cannot be moved out of the default group; existing origin groups can still be changed or cleared |
 
 ## Request body limit
 
@@ -432,7 +432,7 @@ With **Browser TTL (s)** above 0, responses the rule caches reach visitors with 
 | Effect | The `Cache-Control` visitors receive becomes `max-age=N`, on cache hits too; the edge cache keeps using the TTL |
 | Otherwise | Visitors receive the origin's `Cache-Control` |
 | Response transform | Response transform rules can still change `Cache-Control` |
-| Node requirement | `rules-v2`; while an active node of the cluster lacks it, it cannot be newly set ("Some nodes of the site's cluster do not support the rule extensions yet"); a value already set can still be changed or cleared |
+| Node requirement | `rules-v2`; while an active node of the cluster lacks it, it cannot be newly set ("Some nodes in the cluster do not support rule extensions"); a value already set can still be changed or cleared |
 
 ### TTL
 
@@ -577,7 +577,7 @@ Below the card are the site's latest 5 tasks, refreshed every 2 seconds while no
 | Prefetch URLs | Full `http://` or `https://` URLs; devices | The node requests the URL through a local edge listener of its own like a normal request, with a browser's `Accept-Encoding`, and caches it; bans, CC, challenges and denying rules do not apply to prefetches, and they are not counted in the statistics. A status below 400 is success; the origin's redirects are cached as they are, not followed. The cache key holds the scheme but not the port (every [listener port](https.en.md#site-ports) of a site shares its cached objects, and purge and prefetch URLs with a port apply to the site whatever the port): for sites with a certificate an `http://` URL is prefetched as `https://` too; the node's own redirect for **Force HTTPS** is followed to the `https://` URL, any other redirect the node makes fails. With **Separate mobile and desktop** on, each checked device is requested once (mobile with a mobile User-Agent); otherwise one request |
 | Prefetch a sitemap | One sitemap URL, a URL limit (1–10000, default 1000); devices | The node fetches the sitemap through its own edge layer (so the origin address policy applies and the console makes no outbound request) and prefetches the site's URLs it lists, see [Sitemaps](#sitemaps) |
 
-URLs must start with `http://` or `https://`, must not carry credentials, and their Host must be served by a site (by the [domain precedence](domains.en.md#precedence), hosts matched by wildcard, `.` suffix and pattern domains included), not a pattern such as `*.example.com`. `https://` URLs are prefetched through the node's local TLS listener while it has an HTTPS listener (the node's own certificate is not verified); without one they fail ("the node has no HTTPS listener yet"). Nodes pull purges on a lane of their own: a purge does not wait for prefetches or upgrades already under way.
+URLs must start with `http://` or `https://`, must not carry credentials, and their Host must be served by a site (by the [domain precedence](domains.en.md#precedence), hosts matched by wildcard, `.` suffix and pattern domains included), not a pattern such as `*.example.com`. `https://` URLs are prefetched through the node's local TLS listener while it has an HTTPS listener (the node's own certificate is not verified); without one they fail ("the node has no HTTPS listener"). Nodes pull purges on a lane of their own: a purge does not wait for prefetches or upgrades already under way.
 
 ### Cache-Tag
 
@@ -656,7 +656,7 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 
 | Symptom | Cause | Action |
 | --- | --- | --- |
-| Saving shows "Origin address … is in the special-purpose range …, which the origin allow list does not include" | The origin IP literal is in a special-purpose range | Use a public address, or add the range to the origin allow list |
+| Saving shows "Origin address … is in the special-purpose range …, outside the origin allow list" | The origin IP literal is in a special-purpose range | Use a public address, or add the range to the origin allow list |
 | The origin shows "… is a special-purpose address outside the origin allow list" | Every DNS answer for the origin name is a special-purpose address | Same as above |
 | An HTTPS origin returns 502 and shows "TLS handshake or certificate verification failed" | Self-signed certificate, certificate not covering the SNI, or incomplete chain; missing CA file on the node | Use a trusted certificate or the correct **SNI**; for self-signed origins turn off **Verify origin certificates**; point the node at a CA file with `--trusted-ca` |
 | 502 with `X-Edgeweir-Error: no-origin` | Every origin was dropped before the attempt (resolution failure, forbidden address, missing S3 credentials) | Read the error on the **Origins** tab |
@@ -673,7 +673,7 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 | With HTTP/1.1, clients get a response they cannot parse, or 502 | The origin speaks HTTP/2 only (a gRPC service listening for h2c, for example) | Set **Origin HTTP version** to HTTP/2 |
 | gRPC clients get 421 | The client used h2c for a domain of a site without **gRPC** | Turn on **gRPC** for that site, or use HTTPS |
 | gRPC clients report missing trailers | **gRPC** is off for the site: the request went to the origin as a plain request | Turn on **gRPC** |
-| "Some nodes don't support HTTP/2 and gRPC to origins yet: {nodes}" | A configuration published by a service account or a background job uses HTTP/2 to origins, and an active node of the cluster lacks `origin-http2-v1` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
+| "Nodes do not support HTTP/2 and gRPC to origins yet: {nodes}" | A configuration published by a service account or a background job uses HTTP/2 to origins, and an active node of the cluster lacks `origin-http2-v1` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
 | 405 with `X-Edgeweir-Error: method-not-allowed` | S3 origins accept only `GET` and `HEAD` | Add a non-S3 origin for write requests |
 | Requests with `Authorization` always show `X-Cache: BYPASS` | Bypassed by default | Turn on **Cache requests with Authorization** on the rule |
 | Responses always show `X-Cache: BYPASS` | No cache rule applies, or only **Bypass** rules apply | Check rule order and conditions |
@@ -686,10 +686,10 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 | `PURGE` requests reach the origin | The site does not have the PURGE method enabled | Enable it in the **PURGE method** card |
 | An origin's 502 reaches the visitor without a retry on another origin | **Retry on 502 / 503 / 504** is off, or **Tries** is 1 | Check **Pool settings** |
 | Saving says "The PURGE method needs a key" | Enabled without a saved key | Enter or generate a key and save |
-| "Some nodes of the site's cluster do not support it yet" | An active node of the cluster lacks `site-content-v1` or `cache-zone-v1` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
+| "Some nodes in the cluster do not support it" | An active node of the cluster lacks `site-content-v1` or `cache-zone-v1` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
 | The **Origins** card shows "Keep at least one origin in the default group" | Every origin has an **Origin group** | Clear **Origin group** on at least one origin |
 | Saving origins or cache rules shows "Invalid rule" | An origin group that an **Origin override** rule still picks was removed; a cache rule condition is invalid | Change the rule first, or keep an origin in that group; fix the condition |
-| "Some nodes don't support Rule extensions yet: {nodes}" | A configuration published by a service account or a background job uses origin groups, advanced conditions, or a browser TTL, and an active node of the cluster lacks `rules-v2` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
+| "Nodes do not support Rule extensions yet: {nodes}" | A configuration published by a service account or a background job uses origin groups, advanced conditions, or a browser TTL, and an active node of the cluster lacks `rules-v2` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
 | Requests sent to different origin groups get the same cached object | The cache key does not include the origin group | Pick origin groups by path, or add what decides the group to the cache key |
 | "No site serves …" | The URL's Host is not a domain of any site | Check the spelling of the domain |
 | "The site is disabled" | A task or **Purge cache** concerns a disabled site | Enable the site on its **Overview** tab, then submit again |
@@ -697,7 +697,7 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 | "Invalid host: …" | Has a port, is a wildcard, or is not a valid host name | Enter one host name per line |
 | "Invalid cache tag: …" | The tag has a comma or non-ASCII characters, or is longer than 128 bytes | Fix the tag; the origin's `Cache-Tag` follows the same rules |
 | "Some nodes … do not support …" (`NODE_CAPABILITY_REQUIRED`) | An active node of the cluster lacks `purge-tag-v1` or `prefetch-v2` | Upgrade the node, see [Node upgrades](node-upgrades.en.md) |
-| Prefetch fails with "the node has no HTTPS listener yet" | No site of the cluster has a certificate, so the node only listens for HTTP | Use `http://` URLs, or give a site a certificate |
+| Prefetch fails with "the node has no HTTPS listener" | No site of the cluster has a certificate, so the node only listens for HTTP | Use `http://` URLs, or give a site a certificate |
 | "Could not fetch the sitemap … (…)" | The sitemap answered an error status or a redirect, timed out, is larger than 50 MiB, or is not a valid sitemap | Request the sitemap URL directly; enter the final address of a redirect |
 | "The sitemap … lists no URL of the site" | The sitemap lists URLs of other domains only | Check the domains in the sitemap |
 | Old content after a tag purge | The origin did not send that tag in the object's `Cache-Tag`, or the tag has characters that are not accepted | Turn on **Forward Cache-Tag to clients** and look at the response header |

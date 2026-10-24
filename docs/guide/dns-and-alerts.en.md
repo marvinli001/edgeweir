@@ -192,7 +192,7 @@ The **Reason** column of the **DNS revisions** table:
 | Binding saved | Saving the DNS binding; changing a node's scheduling addresses |
 | Node health changed | A reconciliation found a different address set; a probe-driven address level change; a backup node group switch or recovery |
 | Rolled back | **Roll back DNS** |
-| Published despite the protection | **Publish anyway** |
+| Force-published | **Publish anyway** |
 | Scheduling: {rule} on {node} | A scheduling rule took effect or recovered; followed by the action and **Activated** or **Recovered** |
 | CNAME prefix of {name} changed | A site or L4 app's CNAME prefix was regenerated or customized |
 | Replaced CNAME prefixes expired | 24 hours after a prefix change the old name leaves the plan |
@@ -387,7 +387,7 @@ The outgoing mail server of email channels, set in the **SMTP** card of the **Al
 | --- | --- | --- |
 | **SMTP host** | None | At most 253 characters |
 | **SMTP port** | 465 | 1–65535 |
-| **Implicit TLS (off uses required STARTTLS)** | On | Off requires STARTTLS; certificate verification is always on |
+| **Implicit TLS (off: STARTTLS)** | On | Off requires STARTTLS; certificate verification is always on |
 | **From address** | None | Email address |
 | **SMTP username** | None | Required |
 | **SMTP password** | None | Envelope-encrypted with the master key before storage; leave blank to keep the current password |
@@ -439,7 +439,7 @@ Deleting a cluster resolves its cluster alerts that are still firing.
 ## Subscribe to alerts
 
 1. Open **Alerts** and click **Subscribe** in the **Subscriptions** card.
-2. Select **Notification channel**.
+2. Select **Alert channel**.
 3. Turn on **All sites**, or tick sites in the **Sites** list (**Search sites** finds them; ticked sites stay ticked across searches).
 4. Turn on the alert kinds to send and click **Save**.
 5. Verify: the subscription row shows the channel, the sites (or **All sites**), and the alert kinds; **Recent events** shows these sites' events.
@@ -488,7 +488,7 @@ Deleting a cluster resolves its cluster alerts that are still firing.
 | "CNAME domain is outside the DNS zone" | The cluster domain is not inside the account's zone | Use the zone itself or a subdomain of it |
 | "DNS name has an unmanaged record" | The target name already has a manual record | Delete the manual record, then **Repair records** |
 | Saving a custom CNAME prefix shows "CNAME prefix … is taken or reserved" | Another object uses or reserves the prefix, or in Automatic mode the zone already has a manual record at `<prefix>.<cluster domain>` (with **Keep per-site line targets** also `<line name>.<prefix>.<cluster domain>`) | Use another prefix, or delete the manual record and save again |
-| "Another cluster's DNS binding or a CNAME prefix of a site or L4 app uses …" | Two clusters use the same cluster domain and line names in one zone, or a line name equals a site's or L4 application's [CNAME prefix](domains.en.md#cname-prefixes) (old prefixes in their 24-hour transition included) | For two clusters, use a different cluster domain or line name; for a CNAME prefix, use another line name or wait until the old prefix's 24-hour transition ends (changing that object's prefix or the cluster domain does not help: a replaced prefix stays reserved for 24 hours) |
+| "… is taken by another cluster's DNS binding or a CNAME prefix" | Two clusters use the same cluster domain and line names in one zone, or a line name equals a site's or L4 app's [CNAME prefix](domains.en.md#cname-prefixes) (old prefixes in their 24-hour transition included) | For two clusters, use a different cluster domain or line name; for a CNAME prefix, use another line name or wait until the old prefix's 24-hour transition ends (changing that object's prefix or the cluster domain does not help: a replaced prefix stays reserved for 24 hours) |
 | "DNS provider is still in use" | A cluster binding still selects the account, or it still owns records | Select another account or switch to Not managed, wait for cleanup, then delete |
 | "Turn the cluster's DNS off and wait for its records to be removed" | The cluster to delete is still Automatic or still owns records | Switch to Not managed and wait for cleanup |
 | "The DNS provider rejected the credentials" | Wrong, expired, or under-privileged credentials; some providers also require the console's egress IP to be allowed | Check the permissions in [Providers and credentials](#providers-and-credentials), then **Test connection** |
@@ -498,7 +498,7 @@ Deleting a cluster resolves its cluster alerts that are still firing.
 | "This cluster's DNS is still being synced; try again later" | **Repair records** waited 30 seconds for another reconciliation that is still running, usually behind a slow provider | Try again later and check the DNS revision's status |
 | Carrier users get the default line's addresses | The resolver is not on that carrier's network, or no binding line maps to that resolution line | Test with a resolver of that carrier; add a binding line for it |
 | Channel shows **Notification delivery failed** | The target refused or timed out, or the outbound policy refused the address | Reproduce with **Send test**; add internal targets to `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
-| "Notification channel limit reached" | 32 channels exist | Delete unused channels |
+| "Alert channel limit reached" | 32 channels exist | Delete unused channels |
 | "SMTP is not configured" | An email channel was tested or delivered before the SMTP settings were saved | Fill in and save the **SMTP** card, then **Send test** |
 | "Enter a new password when changing the SMTP server or account" | The SMTP destination changed without a password | Enter the password and save |
 | "The CA bundle must contain PEM certificates only" | The CA field contains something other than certificates | Paste PEM certificates only |

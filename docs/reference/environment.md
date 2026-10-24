@@ -54,7 +54,7 @@
 | `EDGEWEIR_NODE_API_WEBSOCKET` | `false` | `true`、`1`、`yes`、`on` 为开，`false`、`0`、`no`、`off` 为关（不区分大小写）。开启时：未设置 `EDGEWEIR_NODE_API_URL` 的默认节点通道地址为 `wss://<EDGEWEIR_PUBLIC_URL 的主机[:端口]>`（`EDGEWEIR_PUBLIC_URL` 为 `http://` 时 `ws://`），Web 端口上的 WebSocket 入口 `/node-channel` 始终开放。用于只转发 HTTP 的平台（如 [Render](../deploy/render.md)）。其他值拒绝启动。 |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | 空 | 节点通道服务器证书的附加名称（DNS 名或 IP），逗号分隔。证书始终包含 `localhost`、`127.0.0.1`、`::1`、本机主机名（容器内为容器主机名）、`EDGEWEIR_NODE_API_URL` 的主机，以及系统设置中保存过的节点通道地址的主机。修改此变量后重启生效；已注册节点校验这些名称。 |
 | `EDGEWEIR_TRUSTED_PROXIES` | 空 | 可信反向代理的 IP 或 CIDR，逗号分隔。仅采用来自这些地址的 `X-Forwarded-For`、`X-Real-IP`，用于审计日志 IP 与登录限速。空：TCP 对端地址即客户端地址。条目不是 IP 或 CIDR 时拒绝启动。`compose.baota-host.yml` 默认 `127.0.0.1,::1`。配置见[端口、反向代理与可信代理](../deploy/networking.md)。 |
-| `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` | 空 | 允许控制台访问的私有或特殊用途网段（CIDR，逗号或空白分隔），约束 Web 端保存的出站目标：告警通知渠道、SMTP、节点发布源。空：只允许公网地址。Web 端保存的值不能放宽此边界。经环境变量设置的发布源不受此约束。条目不是 IP 或 CIDR 时拒绝启动。 |
+| `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` | 空 | 允许控制台访问的私有或特殊用途网段（CIDR，逗号或空白分隔），约束 Web 端保存的出站目标：告警渠道、SMTP、节点发布源。空：只允许公网地址。Web 端保存的值不能放宽此边界。经环境变量设置的发布源不受此约束。条目不是 IP 或 CIDR 时拒绝启动。 |
 
 ## 分析
 

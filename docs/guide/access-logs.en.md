@@ -66,7 +66,7 @@ Readouts with a fixed window and no range to pick:
 | Bounds | Per site and minute: at most 250 countries; networks and referring hosts keep the top 50 each (each worker tracks 64 candidates, approximate counts); the other dimensions have fixed keys |
 | Rollups and retention | As for the other analytics: minute detail 7 days, hourly rollups 90 days, daily rollups 365 days |
 | Requests counted | Requests refused once the site is known are counted (client certificate, ban and maintenance refusals included); an SNI that does not match the Host, the PURGE method and unknown hosts are not |
-| Nodes | Needs node capability `stats-dims-v1` (statistics only; it never holds a publish); while an active node of the cluster lacks it, the cards note "Some nodes of the cluster do not report these statistics" |
+| Nodes | Needs node capability `stats-dims-v1` (statistics only; it never holds a publish); while an active node of the cluster lacks it, the cards note "Some nodes in the cluster do not report these statistics" |
 | Approximation | Nodes sum per worker and write once a minute; each worker tracks at most 128 sites per minute, and a worker that exits abnormally loses its current minute's dimensions |
 
 ### Reporting and deduplication
@@ -95,7 +95,7 @@ Readouts with a fixed window and no range to pick:
 | Log request headers | Up to 8 header names | None | Lines carry these headers' values (each at most 512 bytes, several values joined with `, `); `Authorization`, `Cookie` and `Proxy-Authorization` cannot be chosen |
 | Log the peer address | On / off | Off | When client addresses come from the PROXY protocol or a trusted header (the non-direct modes of [Client IP](../deploy/nodes.en.md#client-ip)), lines also carry the connection's peer address; not recorded when it equals the client IP |
 
-The last four publish a new configuration revision when saved; nodes update their site table in place, without reloading nginx. They need node capability `access-logs-v2`: while an active node of the cluster lacks it, these options can only be turned off, with "Some nodes of the site's cluster do not support it yet".
+The last four publish a new configuration revision when saved; nodes update their site table in place, without reloading nginx. They need node capability `access-logs-v2`: while an active node of the cluster lacks it, these options can only be turned off, with "Some nodes in the cluster do not support it".
 
 | Recorded fields | Not recorded |
 | --- | --- |
@@ -164,7 +164,7 @@ Rows with a block reason show its badge under the request (grey for challenges, 
 | Time range | Defaults to the last hour; the earliest is UTC midnight of the retention's first day (6 days ago by default) and the latest 5 minutes from now; the end must be after the start |
 | Filters | Status: exact; client IP: exact; path: prefix; request ID: exact. **More filters**: **Host** (exact, any case), **Method**, **Status class** (1xx–5xx), **Cache status**, **Block reason** (or **Any reason**), **Country code**, **ASN**, **User-Agent contains**, **Referer contains** (any case), **Min duration (ms)**, **Client network (CIDR)** (such as `203.0.113.0/24`). All conditions must hold |
 | Request ID | Each entry shows the request ID the node settled (the same as the `X-Request-Id` response header and the one on [error pages](error-pages.en.md#request-ids)), in the CSV as the `requestId` column; empty for logs of older nodes |
-| Rows | The UI shows at most 100 rows ("Showing the first 100 rows. Narrow your search."); CSV holds at most 1,000 rows ("Exported the first 1,000 rows. Narrow the time range for other records.") |
+| Rows | The UI shows at most 100 rows ("First 100 rows only; narrow the search"); CSV holds at most 1,000 rows ("First 1,000 rows only; narrow the time range") |
 | CSV | Every cell is quoted with quotes escaped; values starting with `=`, `+`, `-`, or `@` get a leading `'` so spreadsheets do not treat them as formulas. Columns: `time`, `clientIp`, `method`, `host`, `path`, `status`, `bytesSent`, `durationMs`, `cacheStatus`, `sampleRate`, `nodeId`, `requestId`, `ja4`, `wafRuleIds`, `wafBlocked`, `ruleIds`, `userAgent`, `referer`, `httpVersion`, `scheme`, `country`, `asn`, `asName`, `upstreamAddr`, `upstreamStatus`, `upstreamMs`, `requestBytes`, `contentType`, `tlsVersion`, `blockReason`, `blockRuleId`, `query`, `headers` (`name: value` joined with `; `), `peerIp` |
 | Callers | A console session or an access key, read-only keys included; service accounts cannot call it |
 
@@ -296,10 +296,10 @@ Request format and endpoints are in [API and endpoints](../reference/api.en.md).
 | "No matching logs" | Sample rate off or too low; time range before retention; the node has not applied the revision that enables logs or lacks `access-logs-v1`; **More filters** too narrow | Check the sample rate, time range, filters, and the node's **Applied** revision |
 | Blocked requests have no lines | **Always log blocked, challenged and refused requests** is off, or more than 100 per second | Turn the option on; beyond the bound the sample rate applies |
 | Log options are disabled | An active node of the cluster lacks `access-logs-v2` | Upgrade the node, see [Node upgrades](node-upgrades.en.md) |
-| Statistics cards note "Some nodes of the cluster do not report these statistics" | An active node of the cluster lacks `stats-dims-v1` | Upgrade the node |
+| Statistics cards note "Some nodes in the cluster do not report these statistics" | An active node of the cluster lacks `stats-dims-v1` | Upgrade the node |
 | Country or network empty or **Unknown** | The node has no GeoIP database, or the client address is private | See [System settings](system.en.md#geoip-databases) |
 | "End time must be after start time" | Invalid time range | Adjust the times |
-| "Showing the first 100 rows. Narrow your search." | More than 100 matches | Narrow the range, add filters, or export CSV |
+| "First 100 rows only; narrow the search" | More than 100 matches | Narrow the range, add filters, or export CSV |
 | "Exported the first 1,000 rows. …" | More than 1,000 matches | Export in several ranges |
 | Analytics charts are empty | The site has no traffic, or nodes are not reporting | Check node heartbeats and whether the site's domains are published |
 | A node shows **Upgrade required** | The node does not support sequenced analytics reports or a capability the current configuration needs | Upgrade the node, see [Node upgrades](node-upgrades.en.md) |

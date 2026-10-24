@@ -598,7 +598,7 @@ Every item of `nodes.list`, `nodes.get` and `probes.list` has `channel` (`null` 
 | `upgrades.list` | `GET /node-upgrades` | Upgrades; query parameter `clusterId` |
 | `upgrades.create` | `POST /node-upgrades` | `{ version, nodeGroupId }`: a leading `v` of `version` is dropped, `nodeGroupId` is the canary node group |
 | `upgrades.promote` | `POST /node-upgrades/{id}/promote` | Promotes the remaining nodes |
-| `upgrades.cancel` | `POST /node-upgrades/{id}/cancel` | Cancels node tasks that are "Waiting for canary" or "Pending" |
+| `upgrades.cancel` | `POST /node-upgrades/{id}/cancel` | Cancels node tasks that are "Waiting for the canary group" or "Pending" |
 
 Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys call `GET` only.
 
@@ -1006,7 +1006,7 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
   https://cdn-admin.example.com/api/v1/l4-apps
 ```
 
-Behavior: [Layer-4 forwarding](../guide/l4.en.md).
+Behavior: [L4 forwarding](../guide/l4.en.md).
 
 ### Origin protection
 

@@ -122,7 +122,7 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 
 网站或 L4 应用已经是请求的启停状态时，`sites.setEnabled`、`l4Apps.setEnabled` 直接返回当前状态，不比较 `expectedUpdatedAt`。
 
-### 站点启停
+### 网站启停
 
 `PUT /sites/{id}/enabled`（过程 `sites.setEnabled`），请求体 `{"enabled":false}`。运营者（会话或读写 AccessKey）与 `sites:write` 服务账号可以调用。
 
@@ -141,7 +141,7 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 | `totalNodes` | 网站所在集群的在线活动节点数 |
 | `servingNodes` | 其中已应用的配置含该网站（任意版本）的节点数；停用的网站为仍在运行它的节点数 |
 | `currentNodes` | 其中运行该网站最新版本（含金丝雀候选版本）且数据面正常的节点数 |
-| `canary` | 集群的配置金丝雀让非金丝雀节点在窗口内继续运行该网站的旧版本时为 `{ endsAt, autoPromote }`（窗口结束时间；`autoPromote` 为 `false` 时等待手动晋升），否则为 `null` |
+| `canary` | 集群的配置金丝雀让非金丝雀节点在窗口内继续运行该网站的旧版本时为 `{ endsAt, autoPromote }`（窗口结束时间；`autoPromote` 为 `false` 时等待手动推进），否则为 `null` |
 
 新建网站（`POST /sites`）时 `name` 可省略，默认为第一个域名（超过 100 字符时截断）。
 
@@ -596,9 +596,9 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | `upgrades.release` | `GET /node-releases/{version}` | 发布源中该版本各架构的发布物 |
 | `upgrades.latestVersion` | `GET /node-upgrades/latest-version` | `{ version }`：发布源的最新版本，无法得知时为 `null`；缓存 10 分钟 |
 | `upgrades.list` | `GET /node-upgrades` | 升级任务；查询参数 `clusterId` |
-| `upgrades.create` | `POST /node-upgrades` | `{ version, nodeGroupId }`：`version` 开头的 `v` 会被去掉，`nodeGroupId` 为先升级的节点组 |
+| `upgrades.create` | `POST /node-upgrades` | `{ version, nodeGroupId }`：`version` 开头的 `v` 会被去掉，`nodeGroupId` 为金丝雀节点组 |
 | `upgrades.promote` | `POST /node-upgrades/{id}/promote` | 推进剩余节点 |
-| `upgrades.cancel` | `POST /node-upgrades/{id}/cancel` | 取消「等待试运行组」与「待执行」的节点任务 |
+| `upgrades.cancel` | `POST /node-upgrades/{id}/cancel` | 取消「等待金丝雀组」与「待执行」的节点任务 |
 
 服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
 
@@ -610,7 +610,7 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | `UPGRADE_TOO_MANY_NODES` | 409 | 集群的已启用节点超过 `data.limit`（1000） |
 | `UPGRADE_BUSY` | 409 | 节点已有未完成的升级，或取消时有节点正在升级；`data.nodes` 列出这些节点 |
 | `UPGRADE_FINISHED` | 409 | 取消已结束的升级任务 |
-| `UPGRADE_NOT_READY` | 409 | 试运行组尚未满足推进条件 |
+| `UPGRADE_NOT_READY` | 409 | 金丝雀组尚未满足推进条件 |
 | `UPGRADE_NOT_FOUND` | 404 | 升级任务不存在 |
 
 前提、状态与节点侧校验见[节点升级](../guide/node-upgrades.md)。
@@ -717,7 +717,7 @@ DNS 绑定与记录的新增字段：
 | 请求 | 字段 |
 | --- | --- |
 | `PUT /clusters/{clusterId}/unknown-hosts` | `settings`：`unknownHost`、`ipAccess`（`page` / `close` / `site`，默认 `page`）；`defaultSiteId`（选了 `site` 时必填，本集群已启用的网站，否则 `DEFAULT_SITE_INVALID`；没有 `site` 时不保存）；`defaultCertificate`（只在 `unknownHost` 为 `site` 时，默认网站须有证书，否则 `DEFAULT_SITE_CERTIFICATE_REQUIRED`）；`scan`：`enabled`（默认 `false`）、`threshold`（10–10000，默认 100）、`banSeconds`（60–86400，默认 3600） |
-| `PUT /sites/{id}/cname-prefix`、`PUT /l4-apps/{id}/cname-prefix` | `prefix`：1–30 位 `[a-z0-9-]`，不以 `-` 开头或结尾；省略时生成新的随机前缀；也可以是对象自己仍在过渡期内的旧前缀。UUID 只接受对象自己升级前的 UUID 前缀，且须仍在解析：当前前缀（不修改）或仍在过渡期内的旧前缀（取回）；其他 UUID（例如以随机前缀新建的对象自己的 ID）返回 400 `CNAME_PREFIX_INVALID`。已被使用、仍在 24 小时过渡期内、为 `all` / `all-<n>` 或任一 DNS 绑定的汇总记录名与线路名时返回 409 `CNAME_PREFIX_CONFLICT`（`data.prefix`）；自动模式下，DNS 服务商区域中该名称（打开「保留站点线路别名」时含 `<线路名称>.<前缀>.<集群域名>`）已有非本集群管理的记录时同样返回（区域读取失败或 15 秒内无响应时不检查）。自动模式下从未写入 DNS 服务商（含切换前的服务商）的旧前缀不进入过渡期 |
+| `PUT /sites/{id}/cname-prefix`、`PUT /l4-apps/{id}/cname-prefix` | `prefix`：1–30 位 `[a-z0-9-]`，不以 `-` 开头或结尾；省略时生成新的随机前缀；也可以是对象自己仍在过渡期内的旧前缀。UUID 只接受对象自己升级前的 UUID 前缀，且须仍在解析：当前前缀（不修改）或仍在过渡期内的旧前缀（取回）；其他 UUID（例如以随机前缀新建的对象自己的 ID）返回 400 `CNAME_PREFIX_INVALID`。已被使用、仍在 24 小时过渡期内、为 `all` / `all-<n>` 或任一 DNS 绑定的汇总记录名与线路名时返回 409 `CNAME_PREFIX_CONFLICT`（`data.prefix`）；自动模式下，DNS 服务商区域中该名称（打开「保留网站线路别名」时含 `<线路名称>.<前缀>.<集群域名>`）已有非本集群管理的记录时同样返回（区域读取失败或 15 秒内无响应时不检查）。自动模式下从未写入 DNS 服务商（含切换前的服务商）的旧前缀不进入过渡期 |
 
 `GET /sites/{siteId}/cname` 新增 `retired`（旧名称 `{ name, expiresAt }`）；DNS 版本的 `reason` 新增 `cname`（`reasonParams.name`）与 `cname_expired`。`GET /sites/{id}/https/check` 的 `blockers` 新增 `no_certificate_names`（网站只有正则域名）。自动封禁的 `reason` 新增 `unknown_host_scan`（`scope` 为 `platform`，`siteId` 为 `null`，`trigger.metric` 为 `unknown_host_requests`）。节点能力新增 `domains-v2`、`unknown-host-v1`。
 
@@ -1006,7 +1006,7 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
   https://cdn-admin.example.com/api/v1/l4-apps
 ```
 
-行为见[四层转发](../guide/l4.md)。
+行为见[L4 转发](../guide/l4.md)。
 
 ### 源站保护
 

@@ -40,7 +40,7 @@ On the **Attacks** tab, click **Set up** in the **Automatic mitigation** card an
 | --- | --- | --- |
 | Enabled | On | Off stops automatic turn-on; a hold in progress turns Under Attack off at once |
 | Trigger level | Proof of work | Cookie redirect, JavaScript, Proof of work or Image captcha |
-| Hold (minutes) | 30 | 5–1440 |
+| Hold below trigger (minutes) | 30 | 5–1440 |
 
 1. On any online, active node of the cluster, the site's CC level reaches the trigger level.
 2. Automatic mitigation turns on the site's Under Attack (the challenge type follows the site's **Challenge type**) and publishes the configuration of the site's cluster. The card shows **Under Attack on until …** and the site's Under Attack card shows **Automatic until …**.

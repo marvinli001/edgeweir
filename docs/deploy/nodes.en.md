@@ -34,7 +34,7 @@ Both packages come as deb and rpm only (amd64, arm64). The openresty.org reposit
 | `--server` | The "Node channel" URL in **System settings**; see [Node channel URL and certificate](networking.en.md#node-channel-url-and-certificate). |
 | `--ca-sha256` | SHA-256 fingerprint of the node channel internal CA, the same as "CA fingerprint" in **System settings**. |
 | API | `POST /api/v1/enrollment-tokens`, `ttlMinutes` 5–10080, default 60; `GET /api/v1/enrollment-tokens/{id}` returns `usedAt` and the enrolled node. See [API and endpoints](../reference/api.en.md). |
-| Address warnings | When the console URL (where `install.sh` comes from) or the node channel URL is localhost, a loopback or a private address, the dialog warns about each and **System settings** marks the URL "This machine only" or "Private address"; a public console URL over plain HTTP gets "The console URL is plain HTTP: install.sh reaches the hosts that run it as root unencrypted" and the mark "Unencrypted". The console logs a warning for each at startup; generating is not refused. |
+| Address warnings | When the console URL (where `install.sh` comes from) or the node channel URL is localhost, a loopback or a private address, the dialog warns about each and **System settings** marks the URL "This machine only" or "Private address"; a public console URL over plain HTTP gets "Console URL is plain HTTP: install.sh is sent unencrypted" and the mark "Unencrypted". The console logs a warning for each at startup; generating is not refused. |
 | Cleanup | Tokens expired or used more than 7 days ago are deleted every 30 minutes. |
 
 ### Node channel connection check
@@ -121,7 +121,7 @@ Nodes accept user traffic on these ports; open them in the host firewall and the
 | 443/UDP | HTTP/3 | A site bound to 443 has HTTP/3 on, see [Listening ports](../guide/https.en.md#listening-ports) |
 | The cluster's extra HTTP / HTTPS ports (TCP) | HTTP, HTTPS | Set on the cluster's **Network** tab, see [The cluster's listener ports](../guide/https.en.md#the-clusters-listener-ports) |
 | UDP of the same number as an extra HTTPS port | HTTP/3 | A site bound to that port has HTTP/3 on |
-| The cluster's port pools | [Layer-4 forwarding](../guide/l4.en.md) | TCP for TCP pools, UDP for UDP pools, both for TCP + UDP; opening only the ports L4 apps use is enough |
+| The cluster's port pools | [L4 forwarding](../guide/l4.en.md) | TCP for TCP pools, UDP for UDP pools, both for TCP + UDP; opening only the ports L4 apps use is enough |
 
 | Item | Notes |
 | --- | --- |
@@ -149,7 +149,7 @@ Nodes accept user traffic on these ports; open them in the host firewall and the
 | Header format | Parsed by nginx's realip module: a value that is no address leaves the peer's address; `address:port` takes the address; a single-value header such as `X-Real-IP` with commas takes its last item; an invalid item before trusted addresses in `X-Forwarded-For` leaves the last valid trusted address; when every address is trusted, the leftmost one |
 | Kernel bans | Match the TCP peer only: with the last two sources they do not apply to visitor addresses, see [Load balancers in front of the nodes](../guide/bans.en.md#load-balancers-in-front-of-the-nodes) |
 | Probes | Region probes send a PROXY v1 header first to listeners that require one |
-| Node capability | PROXY protocol, trusted proxy header and **Drop the client's X-Forwarded-For** need `client-ip-v1`; while an active node of the cluster lacks it, the card shows "Some nodes of the site's cluster do not support it yet" |
+| Node capability | PROXY protocol, trusted proxy header and **Drop the client's X-Forwarded-For** need `client-ip-v1`; while an active node of the cluster lacks it, the card shows "Some nodes in the cluster do not support it" |
 | Audit | `cluster.client_ip_update` |
 
 > [!WARNING]

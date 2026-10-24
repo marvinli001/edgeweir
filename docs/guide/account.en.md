@@ -103,7 +103,7 @@ For using and revoking AccessKeys, see [Access logs and access keys](access-logs
 | Group | Menu | Path | Content |
 | --- | --- | --- | --- |
 | — | **Overview** | `/overview` | See [Overview](#overview); shows how many items [need attention](system.en.md#needs-attention), if any |
-| — | **Sites** | `/sites` | Site list and details; for enabling and disabling, see [Site enabling](system.en.md#site-enabling). The **Sites \| L4 apps** switch above the list leads to the L4 app list (`/l4`), see [Layer-4 forwarding](l4.en.md) |
+| — | **Sites** | `/sites` | Site list and details; for enabling and disabling, see [Site enabling](system.en.md#site-enabling). The **Sites \| L4 apps** switch above the list leads to the L4 app list (`/l4`), see [L4 forwarding](l4.en.md) |
 | — | **Certificates** | `/certificates` | Certificates and DNS credentials; see [HTTPS and certificates](https.en.md) |
 | — | **Purge & prefetch** | `/purge` | URL, directory, and site purges, URL prefetch, and tasks; see [Origins and cache](origins-and-cache.en.md) |
 | **Access control** | **Global rules** | `/rules` | Rules applied to every site; see [Rules, IP lists, and GeoIP](rules.en.md) |
@@ -161,7 +161,7 @@ Needs attention, nodes, recent revisions, the edge network, and nodes online ref
 | --- | --- | --- |
 | **Invalid code** | The two-factor code is wrong | Check the time on the authenticator device and retry, or use a backup code |
 | **Verification expired, sign in again** | The two-factor step took longer than 10 minutes | Sign in again |
-| **Too many requests, try again later** | Sign-in rate limit reached | Retry after 10 seconds |
+| **Too many requests; try again later** | Sign-in rate limit reached | Retry after 10 seconds |
 | **This IP is not on the login allow list** | The current address is outside the [login IP allow list](system.en.md#login-ip-allow-list) | Sign in from a network on the list; if the list no longer holds any of your addresses, clear it on the server, see [Account recovery](#account-recovery) |
 | **Incorrect password** | **Current password** is wrong when changing the password or enabling or disabling two-factor authentication | Enter the current password again |
 | A passkey no longer signs in | The console host name changed | Sign in with the password, delete the old passkey, and add it again |

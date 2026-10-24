@@ -135,7 +135,7 @@ Every change that affects node configuration publishes a new revision in the clu
 | Cluster {cluster} created | New cluster |
 | Site {site} created / updated / deleted | Site changes |
 | Site {site} enabled / disabled | [Site enabling](#site-enabling) |
-| L4 application {app} created / updated / deleted | [L4 app](l4.en.md) changes; disabling and enabling use "updated" |
+| L4 app {app} created / updated / deleted | [L4 app](l4.en.md) changes; disabling and enabling use "updated" |
 | Site {site} purged | **Purge cache** on a site in older consoles (now a node task that publishes no revision) |
 | Certificate policy for {site} updated | HTTPS settings changed; a certificate used by the site was issued or renewed |
 | ACME challenge updated | HTTP-01 challenge changes |
@@ -170,10 +170,10 @@ When a change needs a capability that active nodes of the cluster lack:
 | --- | --- |
 | **Unhealthy nodes: N** | Enabled nodes that connected before and are now offline, failed to apply, have an unhealthy data plane (after applying a configuration), or whose certificate the node channel refuses |
 | **DNS revision #N failed** | The cluster's DNS is not **Not managed** and a DNS revision failed to publish |
-| **DNS publication held back by the mass removal protection** | [Mass removal protection](dns-and-alerts.en.md#mass-removal-protection) stopped the cluster's DNS publication |
+| **DNS publication held by mass removal protection** | [Mass removal protection](dns-and-alerts.en.md#mass-removal-protection) stopped the cluster's DNS publication |
 | **Upgrade to X failed** | The cluster's latest [node upgrade](node-upgrades.en.md) failed, within the last 24 hours |
 | **Canary #N rolled back** | The [configuration canary](#configuration-canary) rolled back, within the last 24 hours |
-| **Canary #N awaits promotion** | The window passed; waiting for **Promote to all now** |
+| **Canary #N awaiting promotion** | The window passed; waiting for **Promote to all now** |
 | **Canary #N under observation** | The candidate runs on the canary nodes, with a countdown to the window's end |
 | **Lagging nodes: N** | Online, healthy nodes that do not run their target revision or need an upgrade |
 | **Nodes without a public address: N** | Online nodes without an address DNS can use, only in clusters whose DNS is not **Not managed**; see [Nodes without a public address](scheduling.en.md#nodes-without-a-public-address) |
@@ -243,7 +243,7 @@ Page: **Audit log** (`/audit`). Management actions are written to the audit log.
 | Field | Content |
 | --- | --- |
 | Time | When the action happened |
-| Actor | Type (**User**, **AccessKey**, **Service account**, **Node**, **Probe**, **System**), ID, name |
+| Actor | Type (**User**, **Access key**, **Service account**, **Node**, **Probe**, **System**), ID, name |
 | IP, User-Agent | Request origin; empty for actions no request carried (nodes, probes, the system). For how the IP is determined, see [Trusted proxies and client IP](../deploy/networking.en.md#trusted-proxies-and-client-ip) |
 | Action | A code such as `site.create`; the UI shows its name (e.g. **Site created**) |
 | Target | Type, ID, name; the name is recorded at the time of the action and stays readable after the target is deleted |
@@ -297,7 +297,7 @@ Read-only (card **System**).
 | --- | --- |
 | Format | `https://host[:port]` (the node channel port), or `wss://host[:port]` or `ws://host[:port]` (the [WebSocket entry](../deploy/networking.en.md#the-node-channels-websocket-entry) on the web port); without a path, query, or credentials; saved with the host name in lower case, without a trailing `/` or the default port (443, 80 for `ws://`) |
 | Effect | Applies on saving, without a restart: new install and probe commands carry the URL, and the node channel certificate adds its host name or IP |
-| Enrolled nodes | Nodes and probes from v1.2.0 check the new URL and switch to it; the previous URL's name stays in the certificate. While editing, the card notes "Enrolled nodes switch once the new URL answers; keep the previous URL reachable until all have". See [Changing the node channel URL](../deploy/networking.en.md#changing-the-node-channel-url) |
+| Enrolled nodes | Nodes and probes from v1.2.0 check the new URL and switch to it; the previous URL's name stays in the certificate. While editing, the card notes "Keep the previous URL reachable until every node has switched". See [Changing the node channel URL](../deploy/networking.en.md#changing-the-node-channel-url) |
 | Clearing | Saving an empty value falls back to the environment variable or the default |
 
 A localhost, loopback, or private address is marked "This machine only" or "Private address": nodes on other networks cannot enroll. Below the URL is the result of the [connection check](../deploy/nodes.en.md#node-channel-connection-check): **Reachable**, **The console cannot connect to this URL**, **Certificate mismatch: a proxy or CDN may be in front**, or **The outbound policy does not allow this address** (the saved URL is a private, loopback, or other special-purpose address that `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` does not allow, so the console does not connect). Changes are audited as `system.node_channel_update`. For the certificate names, see [Node channel URL and certificate](../deploy/networking.en.md#node-channel-url-and-certificate).
@@ -448,7 +448,7 @@ Changes are audited as `system.bans_update`. See [Bans](bans.en.md).
 
 | Field | Values | Default | Description |
 | --- | --- | --- | --- |
-| **Global Under Attack** | On / off | Off | Every GET/HEAD request without a pass is challenged first, on every site; switching asks for confirmation |
+| **Global Under Attack** | On / off | Off | GET/HEAD requests without a pass are challenged first, on every site; switching asks for confirmation |
 | **Challenge type** | Cookie redirect / JavaScript / Proof of work / Image captcha | JavaScript | Challenge type of global Under Attack |
 | **Security event retention (days)** | 7–365 | 30 | How long CC mitigation events reported by nodes are kept |
 
@@ -474,7 +474,7 @@ Read-only. Shows, per node, the state of the **Country**, **Subdivision**, and *
 | **The node group belongs to another cluster** | Moving a node across clusters | Nodes move only within their cluster; changing clusters means deleting and enrolling again |
 | **This cluster has reached its limit of 512 published sites** | The cluster's enabled sites reached the limit | Disable sites no longer in use, or create new sites in another cluster through `/api/v1` with `clusterId` |
 | **Cluster nodes need these capabilities first: …** | A change published by a service account or an automatic job needs a capability active nodes of the cluster lack | Upgrade the nodes; see [Node upgrades](node-upgrades.en.md) |
-| **Rollback references resources that are no longer assigned or available** (in the rollback confirmation) | A site, domain, certificate, or IP list the chosen revision references was deleted, or the certificate has expired | Pick a more recent revision, or fix the current configuration |
+| **The rollback references resources that are gone or unavailable** (in the rollback confirmation) | A site, domain, certificate, or IP list the chosen revision references was deleted, or the certificate has expired | Pick a more recent revision, or fix the current configuration |
 | **Service accounts cannot call this** | A service account called a procedure outside the [Service accounts](#service-accounts) table | Use an AccessKey |
 | **Missing scope: …** | The service account lacks the scope the procedure needs | Edit its scopes on the **Service accounts** tab of **System settings** |
 | **The release source must use HTTPS and resolve to an allowed address** | Public HTTP URL, or a private address that is not allowed | Use HTTPS, or allow the range in `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |

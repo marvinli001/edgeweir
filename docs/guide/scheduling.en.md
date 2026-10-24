@@ -92,9 +92,9 @@ The **Probe settings** card on the **Monitoring** tab applies to every prober; p
 | Interval (seconds) | 5–60 | 10 | Time between two rounds |
 | Timeout per attempt (ms) | 500–10000, not longer than the interval | 3000 | Longest time one attempt may take |
 | Attempts per round | 1–10 | 3 | Attempts per target and round |
-| Loss that fails an address (%) | 1–100 | 50 | A prober whose loss on an address reaches this value counts the address as failing |
-| Failing before unreachable (seconds) | 5–3600 | 30 | How long an address fails before it counts as unreachable |
-| Answering before reachable (seconds) | 5–3600 | 60 | How long an unreachable address answers before it counts as reachable again |
+| Failure loss threshold (%) | 1–100 | 50 | A prober whose loss on an address reaches this value counts the address as failing |
+| Down after (seconds) | 5–3600 | 30 | How long an address fails before it counts as unreachable |
+| Up after (seconds) | 5–3600 | 60 | How long an unreachable address answers before it counts as reachable again |
 
 ### Probe list
 
@@ -356,7 +356,7 @@ The preview writes nothing and refreshes with the rule list.
 | Every result is TCP | An active node of the cluster lacks `probe-health-v1` | [Upgrade the nodes](node-upgrades.en.md) |
 | Error **Unexpected status** or **TLS handshake failed** | Something other than an Edgeweir node listener answers on the address, or a device sits in front of it | Check the scheduling addresses and port forwarding |
 | **Also probes** is unavailable, with **The node group has no region** | The node group has no region | Edit the node group and select a region |
-| "Give the node's group a region before the node probes" | The same, through the API | The same |
+| "Set a region on the node's group first" | The same, through the API | The same |
 | "N probes still belong to this region" | Deleting a region that still has probes | Delete those probes first |
 | "Not a single unicast IP address: …" | A scheduling address is a CIDR, a host name, a special-purpose address, or a duplicate | Enter one IP per row |
 | "The rule needs a line of the cluster's DNS binding" | **Switch to backup groups** without a line, or a line missing from the binding | Select a line of the binding |

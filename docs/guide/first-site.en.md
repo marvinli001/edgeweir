@@ -169,7 +169,7 @@ For issuance methods, renewal, TLS, and HTTP/3, see [HTTPS and certificates](htt
 | Symptom | Cause | Action |
 | --- | --- | --- |
 | Setup shows **Invalid setup token** | Wrong token, or already used | Read it from the log again; after setup, use the sign-in page |
-| Setup shows **Setup is already in progress. Retry shortly.** | Another setup request is running | Retry shortly |
+| Setup shows **Setup is in progress; try again shortly** | Another setup request is running | Retry shortly |
 | Node missing or **Offline** | Enrollment failed, or the node cannot reach the node channel | See [Adding nodes](../deploy/nodes.en.md) and [Ports, reverse proxy, and trusted proxies](../deploy/networking.en.md) |
 | Node stays **Awaiting heartbeat** | Enrolled, but the node's agent has not connected to the node channel yet | See [Adding nodes](../deploy/nodes.en.md#troubleshooting) |
 | **Applied** shows **Apply failed** | The node failed to validate or apply the configuration | Hover the badge for the reason |
@@ -183,5 +183,5 @@ For issuance methods, renewal, TLS, and HTTP/3, see [HTTPS and certificates](htt
 | 421 with `X-Edgeweir-Error: sni-host-mismatch` | SNI and `Host` of an HTTPS request differ | Use `--resolve` |
 | 502 with `X-Edgeweir-Error: no-origin` | No usable origin | Check origin address, port, protocol, and health; see [Origins and cache](origins-and-cache.en.md) |
 | 508 with `X-Edgeweir-Error: loop-detected` | The origin points back to a node | Point the origin at the real origin server |
-| New site shows **Origin address … is in the special-purpose range …, which the origin allow list does not include** | The origin is a private, loopback, or similar address | Use a public address, or add the range to the [origin allow list](system.en.md#origin-allow-list) |
+| New site shows **Origin address … is in the special-purpose range …, outside the origin allow list** | The origin is a private, loopback, or similar address | Use a public address, or add the range to the [origin allow list](system.en.md#origin-allow-list) |
 | New site shows **Domain already in use: …** | The domain belongs to another site | Use another domain, or remove it from the other site first |
