@@ -33,7 +33,7 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 - AccessKey 以运营者（初始化向导创建的唯一账户）身份调用，可调用的过程由其权限范围决定，见 [AccessKey](#accesskey)。服务账号 key 只能调用[服务账号](#服务账号)中列出的过程。
 - 密钥无效、已吊销或缺失：401。
 - 请求体：无有效密钥时至多 1 MiB，有有效密钥（或界面的会话）时至多 16 MiB；超出返回 413 `PAYLOAD_TOO_LARGE`，在读取请求体之前判断。
-- 每个 AccessKey 连续最多 600 次请求：距上一次请求超过 60 秒时计数清零。超出返回 429 `API_KEY_RATE_LIMITED`，`data.retryAfterSeconds` 为需等待的秒数。持续轮询用服务账号 key，服务账号 key 不计数。
+- 每个 AccessKey 有自己的「每分钟请求数」（默认 600，1–100000，或不限）：连续请求最多这么多次，距上一次请求超过 60 秒时计数清零。超出返回 429 `API_KEY_RATE_LIMITED`，`data.retryAfterSeconds` 为需等待的秒数。不限的 AccessKey 不计数；服务账号 key 也不计数。
 - 无需密钥的过程（OpenAPI 中 `security: []`）：`GET /system/status`、`POST /system/setup`。
 - `GET /me` 返回调用方：`{ user: { id, name, email, twoFactorEnabled }, serviceAccount }`；使用 AccessKey 时 `serviceAccount` 为 `null`。
 
@@ -43,16 +43,17 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 
 | 操作 | 位置 | 说明 |
 | --- | --- | --- |
-| 创建 | 填写「名称」（最长 64 字符），选择「权限范围」，点击「创建」 | 默认「读写」。密钥只显示一次。只能在已登录的控制台会话中创建；经 `/api/v1` 用密钥调用 `POST /access-keys` 返回 403 `ACCESS_KEY_SESSION_REQUIRED`。 |
-| 查看 | 密钥列表；`GET /api/v1/access-keys` | 前缀、权限范围、状态、最后使用时间 |
+| 创建 | 填写「名称」（最长 64 字符），选择「权限范围」与「每分钟请求数」，点击「创建」 | 默认「读写」、600 次/分钟；「每分钟请求数」留空为不限（`requestsPerMinute: null`）。密钥只显示一次。只能在已登录的控制台会话中创建；经 `/api/v1` 用密钥调用 `POST /access-keys` 返回 403 `ACCESS_KEY_SESSION_REQUIRED`。 |
+| 编辑 | 密钥行的编辑按钮；`PATCH /api/v1/access-keys/{id}` | 修改「名称」与「每分钟请求数」（`name`、`requestsPerMinute`，省略的字段不变）。新的上限重新计数。只能在已登录的控制台会话中修改，用密钥调用返回 403 `ACCESS_KEY_SESSION_REQUIRED`；已吊销的密钥返回 409 `ACCESS_KEY_REVOKED` |
+| 查看 | 密钥列表；`GET /api/v1/access-keys` | 前缀、权限范围、每分钟请求数（`requestsPerMinute`，`null` 为不限）、状态、最后使用时间 |
 | 吊销 | 「吊销密钥」；`DELETE /api/v1/access-keys/{id}` | 吊销后使用该密钥的请求返回 401；列表中保留并标记「已吊销」 |
 
 | 权限范围 | 可调用的过程 |
 | --- | --- |
 | 只读 | `GET` 过程，以及 `POST /rules/validate`；其他方法返回 403 `ACCESS_KEY_READ_ONLY` |
-| 读写 | 全部过程，创建 AccessKey 除外 |
+| 读写 | 全部过程，创建与修改 AccessKey 除外 |
 
-未设置权限范围的密钥按读写处理。创建与吊销写入审计日志（`api_key.create`、`api_key.revoke`）；经 AccessKey 执行的操作在审计日志中的操作者类型为 `api_key`。better-auth 的 `/api/auth/api-key/*` 端点不开放，返回 404。
+未设置权限范围的密钥按读写处理。创建、修改与吊销写入审计日志（`api_key.create`、`api_key.update`、`api_key.revoke`；修改记录前后的名称与每分钟请求数）；经 AccessKey 执行的操作在审计日志中的操作者类型为 `api_key`。better-auth 的 `/api/auth/api-key/*` 端点不开放，返回 404。
 
 ### 服务账号
 

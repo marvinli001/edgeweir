@@ -1,5 +1,6 @@
 import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
+import { ACCESS_KEY_DEFAULT_REQUESTS_PER_MINUTE } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -121,7 +122,12 @@ export function createAuth(opts: {
         permissions: { defaultPermissions: { edgeweir: ["read", "write"] } },
         // API keys act as the account they belong to, so /api/v1 passes the same checks as /rpc.
         enableSessionForAPIKeys: true,
-        rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 600 },
+        // Defaults for a new key; each key keeps its own limit (services/access-keys.ts).
+        rateLimit: {
+          enabled: true,
+          timeWindow: 60_000,
+          maxRequests: ACCESS_KEY_DEFAULT_REQUESTS_PER_MINUTE,
+        },
       }),
       // Last, so its hooks see the other plugins' final responses: audit entries
       // for sign-in, password, passkey and API key changes.

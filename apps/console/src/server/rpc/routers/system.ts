@@ -1,6 +1,11 @@
 import { schema } from "@edgeweir/db";
 import { count, desc, gt, sql } from "drizzle-orm";
-import { createAccessKey, listAccessKeys, revokeAccessKey } from "../../services/access-keys";
+import {
+  createAccessKey,
+  listAccessKeys,
+  revokeAccessKey,
+  updateAccessKey,
+} from "../../services/access-keys";
 import { serviceAccountMe, toMe } from "../../services/account";
 import { listAttention } from "../../services/attention";
 import { auditFacets, listAuditLogs } from "../../services/audit";
@@ -104,6 +109,9 @@ export const systemRouter = {
     ),
     create: authed.accessKeys.create.handler(({ input, context }) =>
       createAccessKey(context.app, context.user.id, input, context.actor),
+    ),
+    update: authed.accessKeys.update.handler(({ input, context }) =>
+      updateAccessKey(context.app, context.user.id, input, context.actor),
     ),
     revoke: authed.accessKeys.revoke.handler(({ input, context }) =>
       revokeAccessKey(context.app, context.user.id, input.id, context.actor),

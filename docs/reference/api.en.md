@@ -33,7 +33,7 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 - An AccessKey acts as the operator (the only account, created by the setup wizard); its scope decides which procedures it can call, see [AccessKey](#accesskey). A service account key can call only the procedures listed under [Service accounts](#service-accounts).
 - Invalid, revoked, or missing key: 401.
 - Request bodies: at most 1 MiB without a valid key, at most 16 MiB with one (or the UI's session); larger bodies get 413 `PAYLOAD_TOO_LARGE`, decided before the body is read.
-- Each AccessKey allows up to 600 requests in a row; the count restarts when more than 60 seconds pass since the previous request. Beyond that the answer is 429 `API_KEY_RATE_LIMITED` with `data.retryAfterSeconds`. Use a service account key for continuous polling; service account keys are not counted.
+- Each AccessKey has its own "Requests per minute" (default 600, 1–100000, or no limit): it allows that many requests in a row, and the count restarts when more than 60 seconds pass since the previous request. Beyond that the answer is 429 `API_KEY_RATE_LIMITED` with `data.retryAfterSeconds`. AccessKeys without a limit are not counted; neither are service account keys.
 - Procedures that need no key (`security: []` in OpenAPI): `GET /system/status` and `POST /system/setup`.
 - `GET /me` returns the caller: `{ user: { id, name, email, twoFactorEnabled }, serviceAccount }`; with an AccessKey, `serviceAccount` is `null`.
 
@@ -43,16 +43,17 @@ Managed in **Personal settings → Access keys** (user menu), or through `access
 
 | Action | Where | Notes |
 | --- | --- | --- |
-| Create | Enter "Name" (up to 64 characters), choose "Scope", click "Create" | Default "Read and write". The key is shown once. Keys are created only from a signed-in console session; `POST /access-keys` on `/api/v1` with a key returns 403 `ACCESS_KEY_SESSION_REQUIRED`. |
-| View | Key list; `GET /api/v1/access-keys` | Prefix, scope, state, last use |
+| Create | Enter "Name" (up to 64 characters), choose "Scope" and "Requests per minute", click "Create" | Default "Read and write" and 600/min; an empty "Requests per minute" means no limit (`requestsPerMinute: null`). The key is shown once. Keys are created only from a signed-in console session; `POST /access-keys` on `/api/v1` with a key returns 403 `ACCESS_KEY_SESSION_REQUIRED`. |
+| Edit | The key row's edit button; `PATCH /api/v1/access-keys/{id}` | Changes "Name" and "Requests per minute" (`name`, `requestsPerMinute`; omitted fields stay). A new limit starts a fresh count. Only from a signed-in console session; with a key it returns 403 `ACCESS_KEY_SESSION_REQUIRED`, and a revoked key returns 409 `ACCESS_KEY_REVOKED` |
+| View | Key list; `GET /api/v1/access-keys` | Prefix, scope, requests per minute (`requestsPerMinute`, `null` for no limit), state, last use |
 | Revoke | "Revoke key"; `DELETE /api/v1/access-keys/{id}` | Requests with the key return 401 afterwards; the key stays in the list marked "Revoked" |
 
 | Scope | Callable procedures |
 | --- | --- |
 | Read only | `GET` procedures and `POST /rules/validate`; other methods return 403 `ACCESS_KEY_READ_ONLY` |
-| Read and write | Every procedure except creating AccessKeys |
+| Read and write | Every procedure except creating and changing AccessKeys |
 
-Keys without a scope count as read and write. Creation and revocation are written to the audit log (`api_key.create`, `api_key.revoke`); actions performed with an AccessKey appear in the audit log with actor type `api_key`. better-auth's `/api/auth/api-key/*` endpoints are closed and return 404.
+Keys without a scope count as read and write. Creation, changes and revocation are written to the audit log (`api_key.create`, `api_key.update` with the name and requests per minute before and after, `api_key.revoke`); actions performed with an AccessKey appear in the audit log with actor type `api_key`. better-auth's `/api/auth/api-key/*` endpoints are closed and return 404.
 
 ### Service accounts
 

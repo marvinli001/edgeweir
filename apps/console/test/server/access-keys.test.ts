@@ -1,5 +1,5 @@
 import { schema } from "@edgeweir/db";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import {
@@ -125,5 +125,149 @@ describe("M6 AccessKey scope, revocation and auth boundaries", async () => {
       .where(eq(schema.apikey.id, key.id));
     expect((await api(key.key, "GET", "/sites")).status).toBe(200);
     await admin.accessKeys.revoke({ id: key.id });
+  });
+  it("gives a new key 600 requests per minute unless it names another limit", async () => {
+    const plain = await admin.accessKeys.create({ name: "default-limit" });
+    const custom = await admin.accessKeys.create({ name: "custom-limit", requestsPerMinute: 5000 });
+    const open = await admin.accessKeys.create({ name: "no-limit", requestsPerMinute: null });
+    expect([plain, custom, open].map((k) => k.requestsPerMinute)).toEqual([600, 5000, null]);
+    const listed = new Map((await admin.accessKeys.list()).map((k) => [k.id, k.requestsPerMinute]));
+    expect([listed.get(plain.id), listed.get(custom.id), listed.get(open.id)]).toEqual([
+      600,
+      5000,
+      null,
+    ]);
+    // Written to the plugin's own columns, which it checks on every request.
+    const rows = new Map(
+      (await ctx.db.select().from(schema.apikey)).map((row) => [row.id, row] as const),
+    );
+    expect(rows.get(custom.id)).toMatchObject({
+      rateLimitEnabled: true,
+      rateLimitMax: 5000,
+      rateLimitTimeWindow: 60_000,
+    });
+    expect(rows.get(open.id)?.rateLimitEnabled).toBe(false);
+    const [audit] = await ctx.db
+      .select()
+      .from(schema.auditLog)
+      .where(
+        and(eq(schema.auditLog.action, "api_key.create"), eq(schema.auditLog.targetId, open.id)),
+      );
+    expect(audit?.metadata).toMatchObject({ requestsPerMinute: null });
+    for (const key of [plain, custom, open]) await admin.accessKeys.revoke({ id: key.id });
+  });
+
+  it("lists keys created before the setting at 600 requests per minute", async () => {
+    const key = await admin.accessKeys.create({ name: "older", requestsPerMinute: 10 });
+    // The columns every key got from the plugin's defaults before.
+    await ctx.db
+      .update(schema.apikey)
+      .set({ rateLimitEnabled: true, rateLimitMax: 600, rateLimitTimeWindow: 60_000 })
+      .where(eq(schema.apikey.id, key.id));
+    expect((await admin.accessKeys.list()).find((k) => k.id === key.id)?.requestsPerMinute).toBe(
+      600,
+    );
+    await admin.accessKeys.revoke({ id: key.id });
+  });
+
+  it("changes a key's name and limit and audits both values", async () => {
+    const key = await admin.accessKeys.create({ name: "tuned", scope: "read" });
+    const raised = await admin.accessKeys.update({ id: key.id, requestsPerMinute: 20_000 });
+    expect(raised).toMatchObject({
+      id: key.id,
+      name: "tuned",
+      scope: "read",
+      requestsPerMinute: 20_000,
+    });
+    const lifted = await admin.accessKeys.update({
+      id: key.id,
+      name: "tuned-2",
+      requestsPerMinute: null,
+    });
+    expect(lifted).toMatchObject({ name: "tuned-2", requestsPerMinute: null });
+    const renamed = await admin.accessKeys.update({ id: key.id, name: "tuned-3" });
+    expect(renamed).toMatchObject({ name: "tuned-3", requestsPerMinute: null });
+    expect((await admin.accessKeys.list()).find((k) => k.id === key.id)).toMatchObject({
+      name: "tuned-3",
+      requestsPerMinute: null,
+    });
+    const entries = await ctx.db
+      .select()
+      .from(schema.auditLog)
+      .where(
+        and(eq(schema.auditLog.action, "api_key.update"), eq(schema.auditLog.targetId, key.id)),
+      )
+      .orderBy(desc(schema.auditLog.id));
+    expect(entries.map((e) => e.metadata)).toEqual([
+      {
+        from: { name: "tuned-2", requestsPerMinute: null },
+        to: { name: "tuned-3", requestsPerMinute: null },
+      },
+      {
+        from: { name: "tuned", requestsPerMinute: 20_000 },
+        to: { name: "tuned-2", requestsPerMinute: null },
+      },
+      {
+        from: { name: "tuned", requestsPerMinute: 600 },
+        to: { name: "tuned", requestsPerMinute: 20_000 },
+      },
+    ]);
+    expect(entries[0]).toMatchObject({ targetType: "api_key", targetName: "tuned-3" });
+    expect(JSON.stringify(entries)).not.toContain(key.key);
+
+    expect((await rpcError(admin.accessKeys.update({ id: "missing", name: "x" }))).code).toBe(
+      "ACCESS_KEY_NOT_FOUND",
+    );
+    await admin.accessKeys.revoke({ id: key.id });
+    expect(
+      (await rpcError(admin.accessKeys.update({ id: key.id, requestsPerMinute: 5 }))).code,
+    ).toBe("ACCESS_KEY_REVOKED");
+  });
+
+  it("lets only the signed-in operator change a key's limit", async () => {
+    const key = await admin.accessKeys.create({ name: "self-raise", requestsPerMinute: 5 });
+    const denied = await api(key.key, "PATCH", `/access-keys/${key.id}`, {
+      requestsPerMinute: null,
+    });
+    expect(denied.status).toBe(403);
+    expect(await denied.json()).toMatchObject({ code: "ACCESS_KEY_SESSION_REQUIRED" });
+    expect((await admin.accessKeys.list()).find((k) => k.id === key.id)?.requestsPerMinute).toBe(5);
+    const invalid = await api(key.key, "PATCH", `/access-keys/${key.id}`, { requestsPerMinute: 0 });
+    expect(invalid.status).toBe(400);
+    await admin.accessKeys.revoke({ id: key.id });
+  });
+
+  it("answers 429 over a key's own limit and never for an unlimited key", async () => {
+    const limited = await admin.accessKeys.create({
+      name: "three",
+      scope: "read",
+      requestsPerMinute: 3,
+    });
+    for (let i = 0; i < 3; i++) expect((await api(limited.key, "GET", "/sites")).status).toBe(200);
+    const over = await api(limited.key, "GET", "/sites");
+    expect(over.status).toBe(429);
+    expect(await over.json()).toMatchObject({ code: "API_KEY_RATE_LIMITED" });
+
+    // A new limit starts a fresh count.
+    await admin.accessKeys.update({ id: limited.id, requestsPerMinute: 4 });
+    for (let i = 0; i < 4; i++) expect((await api(limited.key, "GET", "/sites")).status).toBe(200);
+    expect((await api(limited.key, "GET", "/sites")).status).toBe(429);
+
+    // Lifting the limit lets the same key through at once.
+    await admin.accessKeys.update({ id: limited.id, requestsPerMinute: null });
+    expect((await api(limited.key, "GET", "/sites")).status).toBe(200);
+
+    const open = await admin.accessKeys.create({
+      name: "open",
+      scope: "read",
+      requestsPerMinute: null,
+    });
+    // Far past the default limit within the minute.
+    await ctx.db
+      .update(schema.apikey)
+      .set({ requestCount: 1_000_000, lastRequest: new Date() })
+      .where(eq(schema.apikey.id, open.id));
+    for (let i = 0; i < 3; i++) expect((await api(open.key, "GET", "/sites")).status).toBe(200);
+    for (const key of [limited, open]) await admin.accessKeys.revoke({ id: key.id });
   });
 });
