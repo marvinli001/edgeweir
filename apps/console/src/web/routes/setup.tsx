@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/arc/button/button";
+import { Input } from "@/components/arc/input/input";
 import { AuthFrame, AuthShell } from "@/components/auth-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { useAction } from "@/hooks/use-action";
 import { authClient } from "@/lib/auth-client";

@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Countdown } from "@/components/appica/countdown";
 import { Button } from "@/components/arc/button/button";
+import { Input } from "@/components/arc/input/input";
 import { CodeBlock } from "@/components/copy-button";
 import { AnimatedBeam } from "@/components/effects/animated-beam";
 import { OptionSelect } from "@/components/form-select";
@@ -23,7 +24,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { useOpenKey } from "@/hooks/use-open-key";
 import { formatDateTime, m } from "@/lib/i18n";

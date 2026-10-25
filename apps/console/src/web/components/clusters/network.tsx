@@ -21,6 +21,8 @@ import {
 import * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
+import { Input } from "@/components/arc/input/input";
+import { Textarea } from "@/components/arc/textarea/textarea";
 import { OptionSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { ListInput, SwitchField } from "@/components/site/fields";
@@ -28,9 +30,7 @@ import { SaveBar } from "@/components/site/save-site";
 import { ErrorState, QueryView } from "@/components/states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { Textarea } from "@/components/ui/textarea";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { defaultSiteChoices, loadedSites, nextSitePage, SITE_PAGE_SIZE } from "@/lib/default-site";

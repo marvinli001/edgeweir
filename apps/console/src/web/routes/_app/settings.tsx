@@ -10,6 +10,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
+import { Input } from "@/components/arc/input/input";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { FormDialog } from "@/components/form-dialog";
@@ -21,7 +22,6 @@ import { EmptyState, QueryView } from "@/components/states";
 import { useTheme } from "@/components/theme-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import {

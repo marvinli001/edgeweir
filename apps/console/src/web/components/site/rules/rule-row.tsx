@@ -5,6 +5,7 @@ import { Delete02Icon, DragDropVerticalIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
 import { Button } from "@/components/arc/button/button";
+import { Input } from "@/components/arc/input/input";
 import { FormSelect } from "@/components/form-select";
 import { ExpressionEditor } from "@/components/site/expression-editor";
 import { SwitchField } from "@/components/site/fields";
@@ -25,7 +26,6 @@ import { HeaderFields, TargetFields } from "@/components/site/rules/fields/trans
 import { RuleHistoryButton } from "@/components/site/rules/history";
 import { actionLabel, kinds, LocksContext, v2Kinds } from "@/components/site/rules/labels";
 import { useSortableRow } from "@/components/sortable-list";
-import { Input } from "@/components/ui/input";
 import { m } from "@/lib/i18n";
 import { challengeLabel } from "@/lib/protection";
 import { type Action, defaultAction, type Kind, WAF_V2_KINDS } from "@/lib/rule-actions";

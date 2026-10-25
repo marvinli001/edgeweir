@@ -1,8 +1,8 @@
 import { DEMO_EMAIL, DEMO_PASSWORD } from "@edgeweir/contract";
+import { Switch } from "@/components/arc/switch/switch";
 import { SettingRow, SettingRows } from "@/components/protection-settings";
 import { SafetyNote } from "@/components/safety-note";
 import { SettingsCard } from "@/components/settings-card";
-import { Switch } from "@/components/ui/switch";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 

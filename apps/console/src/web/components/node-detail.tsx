@@ -12,6 +12,8 @@ import * as React from "react";
 import { Meter } from "@/components/appica/meter";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
+import { Input } from "@/components/arc/input/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/arc/tabs/tabs";
 import { markOverflow } from "@/components/data-table";
 import { OptionSelect } from "@/components/form-select";
 import { NodeChannelFact } from "@/components/node-channel-state";
@@ -23,7 +25,6 @@ import { NumberField, SwitchField } from "@/components/site/fields";
 import { nextDraftKey } from "@/components/site/save-site";
 import { StatusDot } from "@/components/status-dot";
 import { FieldError } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -34,7 +35,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   formatBitRate,
   formatBytes,

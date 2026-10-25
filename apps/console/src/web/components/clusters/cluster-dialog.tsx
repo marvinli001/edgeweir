@@ -1,8 +1,8 @@
 import type { Cluster } from "@edgeweir/contract";
 import { useMutation } from "@tanstack/react-query";
+import { Input } from "@/components/arc/input/input";
 import { FormDialog } from "@/components/form-dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 

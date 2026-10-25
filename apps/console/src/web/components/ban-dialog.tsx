@@ -7,11 +7,11 @@ import {
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
+import { Input } from "@/components/arc/input/input";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { QueryView } from "@/components/states";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import type { DialogProps } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";

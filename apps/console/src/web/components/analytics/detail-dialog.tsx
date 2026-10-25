@@ -13,9 +13,9 @@ import {
 } from "@/components/analytics/breakdown-charts";
 import { Panel, PanelHeader } from "@/components/analytics/panel";
 import { RangeSelect } from "@/components/analytics/range-select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/arc/tabs/tabs";
 import { LoadingState, QueryView } from "@/components/states";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { DialogProps } from "@/hooks/use-dialog-state";
 import { type DetailView, detailViewId, type Metric, OTHER_COLOR } from "@/lib/analytics";
 import { formatBitRate, formatBytes, formatCompact, formatPercent, m } from "@/lib/i18n";

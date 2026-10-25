@@ -4,9 +4,9 @@ import {
   RULES_V3_PLACEHOLDERS,
   utf8Bytes,
 } from "@edgeweir/contract";
+import { Textarea } from "@/components/arc/textarea/textarea";
 import { SafetyNote } from "@/components/safety-note";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
-import { Textarea } from "@/components/ui/textarea";
 import { formatNumber, m } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 

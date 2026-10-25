@@ -18,9 +18,9 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Button } from "@/components/arc/button/button";
+import { Input } from "@/components/arc/input/input";
 import { OptionSelect } from "@/components/form-select";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import {
   BOT_TEMPLATES,
   CONDITION_TEMPLATES,

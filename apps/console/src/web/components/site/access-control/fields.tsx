@@ -1,7 +1,7 @@
 import * as React from "react";
+import { Input } from "@/components/arc/input/input";
+import { Textarea } from "@/components/arc/textarea/textarea";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { splitList } from "@/lib/lists";
 
 const splitLines = (value: string) =>

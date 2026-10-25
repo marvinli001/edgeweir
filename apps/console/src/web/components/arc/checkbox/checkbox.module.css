@@ -1,0 +1,91 @@
+/*
+ * Ported from Arc's checkbox.module.css (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md): the Base UI
+ * root carries data-checked / data-unchecked / data-indeterminate, on `--arc-` tokens, with the
+ * console's control edge (3:1) and focus ring.
+ */
+@layer components {
+  .box {
+    position: relative;
+    flex: 0 0 auto;
+    display: inline-grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    color: var(--arc-control-glyph);
+    cursor: pointer;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* A wider hit area than the drawn square. */
+  .box::after {
+    content: "";
+    position: absolute;
+    inset: -8px -12px;
+  }
+  /* The square is the only part that reacts to a press, so the hit area and label never move. */
+  .visual {
+    position: relative;
+    display: block;
+    width: 18px;
+    height: 18px;
+    border: 1px solid var(--arc-control-edge);
+    border-radius: 5px;
+    background: var(--arc-surface);
+    transition:
+      border-color var(--arc-duration-fast) var(--arc-ease-standard),
+      transform var(--arc-duration-spring) var(--arc-ease-spring);
+  }
+  .fill {
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background: var(--arc-control-on);
+  }
+  .mark {
+    position: absolute;
+    inset: -1px;
+    width: 18px;
+    height: 18px;
+    overflow: visible;
+  }
+  .box[data-checked] .visual,
+  .box[data-indeterminate] .visual {
+    border-color: var(--arc-control-on);
+  }
+  .box:focus-visible .visual {
+    border-color: var(--arc-focus-ring);
+    outline: 3px solid color-mix(in oklab, var(--arc-focus-ring) 30%, transparent);
+  }
+  .box[aria-invalid="true"] .visual {
+    border-color: var(--arc-danger);
+  }
+  .box:active:not([data-disabled]) .visual {
+    transform: scale(0.95);
+    transition:
+      border-color var(--arc-duration-fast) var(--arc-ease-standard),
+      transform var(--arc-duration-instant) var(--arc-ease-standard);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .box[data-unchecked]:not(
+        [data-indeterminate],
+        [data-disabled],
+        [aria-invalid="true"],
+        :focus-visible
+      ):hover
+      .visual {
+      border-color: var(--arc-foreground);
+    }
+  }
+  .box[data-disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .visual,
+    .box:active:not([data-disabled]) .visual {
+      transition: none;
+      transform: none;
+    }
+  }
+}

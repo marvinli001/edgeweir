@@ -7,6 +7,8 @@ import {
 } from "@edgeweir/contract";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { Input } from "@/components/arc/input/input";
+import { Switch } from "@/components/arc/switch/switch";
 import { OptionSelect } from "@/components/form-select";
 import {
   GRID_CARD,
@@ -17,8 +19,6 @@ import {
 import { SafetyNote } from "@/components/safety-note";
 import { SettingsCard } from "@/components/settings-card";
 import { StatusDot } from "@/components/status-dot";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { formatPorts, parsePorts } from "@/lib/ports";

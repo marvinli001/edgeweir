@@ -1,10 +1,10 @@
 import { smtpInput } from "@edgeweir/contract";
 import type * as React from "react";
+import { Input } from "@/components/arc/input/input";
+import { Textarea } from "@/components/arc/textarea/textarea";
 import { SettingsCard } from "@/components/settings-card";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 /** The mail server of email alert channels. */

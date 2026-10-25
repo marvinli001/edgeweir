@@ -8,6 +8,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Button } from "@/components/arc/button/button";
+import { Input } from "@/components/arc/input/input";
 import { CopyButton } from "@/components/copy-button";
 import { FormSelect, type Option } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
@@ -15,7 +16,6 @@ import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar, useSaveSite } from "@/components/site/save-site";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { localizeError } from "@/lib/errors";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";

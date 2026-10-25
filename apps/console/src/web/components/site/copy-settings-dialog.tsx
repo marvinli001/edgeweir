@@ -10,11 +10,11 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { Button } from "@/components/arc/button/button";
+import { Checkbox } from "@/components/arc/checkbox/checkbox";
 import { OptionSelect } from "@/components/form-select";
 import { enterDelay } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { SiteMultiSelect } from "@/components/site-multi-select";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,

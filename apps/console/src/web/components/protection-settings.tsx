@@ -1,14 +1,14 @@
 import { CHALLENGE_TYPES, type ChallengeType, EVENT_RETENTION_RANGE } from "@edgeweir/contract";
 import type * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
+import { Input } from "@/components/arc/input/input";
+import { Switch } from "@/components/arc/switch/switch";
 import { CcThresholdFields, fromCcDraft, toCcDraft } from "@/components/cc-thresholds";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { OptionSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { SettingsCard } from "@/components/settings-card";
 import { FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { challengeLabel } from "@/lib/protection";

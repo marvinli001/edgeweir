@@ -15,6 +15,8 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
+import { Input } from "@/components/arc/input/input";
+import { Switch } from "@/components/arc/switch/switch";
 import { FormSelect, type Option, OptionSelect } from "@/components/form-select";
 import { RowMenu } from "@/components/quick-actions";
 import { SafetyNote } from "@/components/safety-note";
@@ -24,9 +26,7 @@ import { combineQueries, EmptyState, ErrorState, QueryView } from "@/components/
 import { Card, CardContent } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { Switch } from "@/components/ui/switch";
 import { useAction } from "@/hooks/use-action";
 import { useDraft } from "@/hooks/use-draft";
 import {

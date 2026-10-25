@@ -12,6 +12,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
+import { Input } from "@/components/arc/input/input";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { enterDelay } from "@/components/page";
 import { EmptyState, QueryView } from "@/components/states";
@@ -27,7 +28,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FieldError } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";

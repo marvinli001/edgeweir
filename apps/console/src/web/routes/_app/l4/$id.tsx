@@ -7,6 +7,7 @@ import * as React from "react";
 import * as z from "zod";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/arc/tabs/tabs";
 import { CopyButton } from "@/components/copy-button";
 import { DeleteL4AppDialog, L4EnabledSwitch } from "@/components/l4/app-actions";
 import { L4AppDialog } from "@/components/l4/app-dialog";
@@ -18,7 +19,6 @@ import { QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { NotFoundPage } from "@/components/status-page";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
 import {
   L4_STATS_RANGES,

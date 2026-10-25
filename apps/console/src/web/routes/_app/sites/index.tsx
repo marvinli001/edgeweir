@@ -14,6 +14,10 @@ import * as z from "zod";
 import { Sparkline } from "@/components/appica/sparkline";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
+import { Checkbox } from "@/components/arc/checkbox/checkbox";
+import { Input } from "@/components/arc/input/input";
+import { Switch } from "@/components/arc/switch/switch";
+import { Textarea } from "@/components/arc/textarea/textarea";
 import { type Columns, DataTable, FilterBar } from "@/components/data-table";
 import { FilterSelect, FormSelect, OptionSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
@@ -28,7 +32,6 @@ import { TagBadges, TagFilter, TagManagerDialog, useSiteTags } from "@/component
 import { SitesBatchBar } from "@/components/sites-batch-bar";
 import { SitesTabs } from "@/components/sites-tabs";
 import { EmptyState, QueryView } from "@/components/states";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -37,10 +40,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Field, FieldError, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { useOpenKey } from "@/hooks/use-open-key";
 import { domainList, fillOrigin, replacesField } from "@/lib/address-input";
 import { formatCompact, m, timeAgo } from "@/lib/i18n";

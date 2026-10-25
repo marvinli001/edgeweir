@@ -3,12 +3,12 @@ import { ENCODED_PATH_MAX_EXEMPTIONS } from "@edgeweir/rule-engine";
 import { Add01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@/components/arc/button/button";
+import { Input } from "@/components/arc/input/input";
 import { SafetyNote } from "@/components/safety-note";
 import { AccessPartCard, type PartFields } from "@/components/site/access-control/part-card";
 import { SwitchField } from "@/components/site/fields";
 import { nextDraftKey } from "@/components/site/save-site";
 import { EmptyState } from "@/components/states";
-import { Input } from "@/components/ui/input";
 import { m } from "@/lib/i18n";
 
 type Exemption = EncodedPathSettings["exemptions"][number];

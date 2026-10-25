@@ -1,0 +1,78 @@
+/*
+ * Ported from Arc's input.module.css (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md): the control's
+ * rules, on `--arc-` tokens, with the console's focus ring instead of a border-only focus.
+ */
+@layer components {
+  /* The field itself never changes size: hover, focus and errors answer in color. */
+  .input {
+    width: 100%;
+    min-width: 0;
+    height: var(--arc-control-height-md);
+    padding: 0 var(--arc-space-3);
+    border: 1px solid var(--arc-border-strong);
+    border-radius: var(--arc-radius-control);
+    background: var(--arc-surface);
+    color: var(--arc-foreground);
+    font: inherit;
+    font-size: var(--arc-text-sm);
+    line-height: var(--arc-leading-body);
+    letter-spacing: var(--arc-tracking-body);
+    outline: none;
+    transition:
+      border-color var(--arc-duration-fast) var(--arc-ease-standard),
+      background-color var(--arc-duration-fast) var(--arc-ease-standard),
+      outline-color var(--arc-duration-fast) var(--arc-ease-standard);
+  }
+  .input::placeholder {
+    color: var(--arc-text-muted);
+  }
+  .input::file-selector-button {
+    height: calc(var(--arc-control-height-md) - var(--arc-space-2));
+    margin-right: var(--arc-space-2);
+    border: 0;
+    background: transparent;
+    color: var(--arc-foreground);
+    font: inherit;
+    font-size: var(--arc-text-sm);
+    font-weight: 500;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .input:hover:not(:disabled, :focus-visible, [aria-invalid="true"]) {
+      border-color: var(--arc-control-edge);
+    }
+  }
+  .input:focus-visible {
+    border-color: var(--arc-focus-ring);
+    outline: 3px solid color-mix(in oklab, var(--arc-focus-ring) 30%, transparent);
+  }
+  .input[aria-invalid="true"] {
+    border-color: var(--arc-danger);
+  }
+  .input[aria-invalid="true"]:focus-visible {
+    outline-color: color-mix(in oklab, var(--arc-danger) 20%, transparent);
+  }
+  .input:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+    background: var(--arc-surface-muted);
+  }
+  /* Inside an InputGroup the group draws the frame, the focus ring and the error state. */
+  .input[data-slot="input-group-control"] {
+    height: auto;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    outline: none;
+  }
+  /* 16px on phones, so iOS does not zoom into a focused field. */
+  @media (max-width: 767px) {
+    .input {
+      font-size: var(--arc-text-base);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .input {
+      transition-duration: 0.01ms;
+    }
+  }
+}

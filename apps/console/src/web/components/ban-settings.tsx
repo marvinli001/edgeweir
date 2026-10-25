@@ -1,4 +1,5 @@
 import type * as React from "react";
+import { Switch } from "@/components/arc/switch/switch";
 import {
   GRID_CARD,
   SettingNumber,
@@ -6,7 +7,6 @@ import {
   SettingRows,
 } from "@/components/protection-settings";
 import { SettingsCard } from "@/components/settings-card";
-import { Switch } from "@/components/ui/switch";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";

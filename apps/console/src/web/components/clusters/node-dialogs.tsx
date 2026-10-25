@@ -1,11 +1,11 @@
 import type { Node } from "@edgeweir/contract";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { Input } from "@/components/arc/input/input";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { OptionSelect } from "@/components/form-select";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import type { DialogProps } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";

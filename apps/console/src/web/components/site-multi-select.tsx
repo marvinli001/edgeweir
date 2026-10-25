@@ -1,11 +1,11 @@
 import { displaySiteDomain } from "@edgeweir/contract";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { Checkbox } from "@/components/arc/checkbox/checkbox";
+import { Input } from "@/components/arc/input/input";
 import { enterDelay } from "@/components/page";
 import { ErrorState, QueryView } from "@/components/states";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 

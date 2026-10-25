@@ -18,6 +18,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
+import { Input } from "@/components/arc/input/input";
+import { Switch } from "@/components/arc/switch/switch";
 import { CardTable } from "@/components/clusters/card-table";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
@@ -29,8 +31,6 @@ import { nextDraftKey } from "@/components/site/save-site";
 import { EmptyState, QueryView } from "@/components/states";
 import { Dot, type StatusTone } from "@/components/status-dot";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,

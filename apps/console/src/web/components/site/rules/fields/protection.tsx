@@ -7,16 +7,16 @@ import {
   validRespondBody,
 } from "@edgeweir/rule-engine";
 import * as React from "react";
+import { Checkbox } from "@/components/arc/checkbox/checkbox";
+import { Input } from "@/components/arc/input/input";
+import { Textarea } from "@/components/arc/textarea/textarea";
 import { durationLabel } from "@/components/ban-dialog";
 import { FormSelect } from "@/components/form-select";
 import { PresetSelect, usePreset } from "@/components/preset-select";
 import { IntegerField, NumberField, SwitchField } from "@/components/site/fields";
 import { StatusSelect } from "@/components/site/rules/fields/common";
 import { HEADER_KEY, keyChoice, LocksContext } from "@/components/site/rules/labels";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { m } from "@/lib/i18n";
 import {
   type Action,

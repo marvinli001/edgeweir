@@ -9,6 +9,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
+import { Checkbox } from "@/components/arc/checkbox/checkbox";
+import { Input } from "@/components/arc/input/input";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { type Columns, DataTable } from "@/components/data-table";
@@ -18,7 +20,6 @@ import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +28,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { useOpenKey } from "@/hooks/use-open-key";

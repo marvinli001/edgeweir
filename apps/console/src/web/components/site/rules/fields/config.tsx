@@ -11,6 +11,7 @@ import { ArrowDown01Icon, ArrowUp01Icon, Cancel01Icon } from "@hugeicons/core-fr
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
 import { Button } from "@/components/arc/button/button";
+import { Input } from "@/components/arc/input/input";
 import { FormSelect, OptionSelect } from "@/components/form-select";
 import { NumberField } from "@/components/site/fields";
 import {
@@ -22,7 +23,6 @@ import {
   UNCHANGED,
 } from "@/components/site/rules/labels";
 import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { m } from "@/lib/i18n";
 import { invalidHostHeader } from "@/lib/lists";
 import { challengeLabel, wafModeLabel } from "@/lib/protection";

@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/arc/tabs/tabs";
 import { m } from "@/lib/i18n";
 
 /**

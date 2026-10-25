@@ -10,6 +10,8 @@ import {
 } from "@edgeweir/contract";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
+import { Input } from "@/components/arc/input/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/arc/tabs/tabs";
 import {
   TemplateBytes,
   TemplateInput,
@@ -24,8 +26,6 @@ import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, QueryView } from "@/components/states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";

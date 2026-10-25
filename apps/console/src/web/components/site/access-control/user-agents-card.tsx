@@ -7,12 +7,12 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@/components/arc/button/button";
+import { Input } from "@/components/arc/input/input";
 import { OptionSelect } from "@/components/form-select";
 import { ListText } from "@/components/site/access-control/fields";
 import { AccessPartCard, type PartFields } from "@/components/site/access-control/part-card";
 import { nextDraftKey } from "@/components/site/save-site";
 import { EmptyState } from "@/components/states";
-import { Input } from "@/components/ui/input";
 import { m } from "@/lib/i18n";
 
 type Action = UserAgentSettings["rules"][number]["action"];

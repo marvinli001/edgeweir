@@ -1,0 +1,182 @@
+/*
+ * Ported from Arc's tabs.module.css (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md): Base UI's data
+ * attributes (data-active, data-orientation, data-activation-direction) and its indicator's
+ * --active-tab-* properties, on `--arc-` tokens; the line variant and vertical layout are the
+ * console's.
+ */
+@layer components {
+  .root {
+    display: flex;
+    gap: var(--arc-space-2);
+  }
+  .root[data-orientation="horizontal"] {
+    flex-direction: column;
+  }
+  /* The list owns the stacking context so the gliding selection passes under every label. */
+  .list {
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    width: fit-content;
+    max-width: 100%;
+    min-height: var(--arc-control-height-md);
+    align-items: stretch;
+    gap: var(--arc-space-1);
+    padding: 3px;
+    border: 1px solid var(--arc-border);
+    border-radius: var(--arc-radius-control);
+    background: var(--arc-surface-muted);
+  }
+  .list[data-orientation="vertical"] {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .list[data-variant="line"] {
+    gap: var(--arc-space-1);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  /* Base UI measures the active tab; the selection follows on Arc's critically damped spring. */
+  .selection {
+    position: absolute;
+    z-index: -1;
+    top: var(--active-tab-top);
+    left: var(--active-tab-left);
+    width: var(--active-tab-width);
+    height: var(--active-tab-height);
+    border: 1px solid var(--arc-border);
+    border-radius: calc(var(--arc-radius-control) - 3px);
+    background: var(--arc-surface);
+    box-shadow: var(--arc-shadow-resting);
+    transition:
+      top var(--arc-duration-spring) var(--arc-ease-spring),
+      left var(--arc-duration-spring) var(--arc-ease-spring),
+      width var(--arc-duration-spring) var(--arc-ease-spring),
+      height var(--arc-duration-spring) var(--arc-ease-spring);
+  }
+  .trigger {
+    position: relative;
+    display: inline-flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 0;
+    padding: 0 var(--arc-space-3);
+    border: 0;
+    border-radius: calc(var(--arc-radius-control) - 3px);
+    background: transparent;
+    color: var(--arc-text-muted);
+    font: inherit;
+    font-size: var(--arc-text-sm);
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: color var(--arc-duration-fast) var(--arc-ease-standard);
+  }
+  .trigger svg {
+    flex: none;
+    pointer-events: none;
+  }
+  .trigger svg:not([class*="size-"]) {
+    width: 1rem;
+    height: 1rem;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .trigger:hover {
+      color: var(--arc-foreground);
+    }
+  }
+  .trigger:active {
+    color: var(--arc-foreground);
+  }
+  .trigger[data-active] {
+    color: var(--arc-accent-strong);
+  }
+  .trigger:focus-visible {
+    outline: 2px solid var(--arc-focus-ring);
+    outline-offset: -2px;
+  }
+  .trigger[data-disabled] {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  .list[data-orientation="vertical"] .trigger {
+    justify-content: flex-start;
+  }
+  /* Page tab bars: no track, a bar under the active tab (Highlight in forced colors, index.css). */
+  .list[data-variant="line"] .trigger::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: -5px;
+    left: 0;
+    height: 2px;
+    border-radius: var(--arc-radius-pill);
+    background: var(--arc-accent-fill);
+    opacity: 0;
+    transition: opacity var(--arc-duration-fast) var(--arc-ease-standard);
+  }
+  .list[data-variant="line"] .trigger[data-active] {
+    color: var(--arc-foreground);
+  }
+  .list[data-variant="line"] .trigger[data-active]::after {
+    opacity: 1;
+  }
+  .content {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--arc-text-sm);
+    outline: none;
+  }
+  .content:focus-visible {
+    outline: 2px solid var(--arc-focus-ring);
+    outline-offset: 3px;
+    border-radius: var(--arc-radius-control);
+  }
+  /* The incoming panel slides in from the side of the tab that was chosen. */
+  .content[data-activation-direction="right"] {
+    animation: panel-from-right var(--arc-duration-standard) var(--arc-ease-enter) both;
+  }
+  .content[data-activation-direction="left"] {
+    animation: panel-from-left var(--arc-duration-standard) var(--arc-ease-enter) both;
+  }
+  @media (forced-colors: active) {
+    .selection {
+      border: 2px solid Highlight;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .selection,
+    .trigger,
+    .list[data-variant="line"] .trigger::after {
+      transition: none;
+    }
+    .content[data-activation-direction="right"],
+    .content[data-activation-direction="left"] {
+      animation: panel-fade var(--arc-duration-instant) var(--arc-ease-standard) both;
+    }
+  }
+}
+
+@keyframes panel-from-right {
+  from {
+    opacity: 0;
+    translate: 8px 0;
+  }
+}
+@keyframes panel-from-left {
+  from {
+    opacity: 0;
+    translate: -8px 0;
+  }
+}
+@keyframes panel-fade {
+  from {
+    opacity: 0;
+  }
+}

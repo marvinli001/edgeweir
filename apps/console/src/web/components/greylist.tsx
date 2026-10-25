@@ -14,6 +14,7 @@ import * as React from "react";
 import { AccessTabs } from "@/components/access-tabs";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
+import { Input } from "@/components/arc/input/input";
 import {
   BAN_REASON_LABELS,
   BAN_SCOPE_LABELS,
@@ -32,7 +33,6 @@ import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, formatNumber, m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";

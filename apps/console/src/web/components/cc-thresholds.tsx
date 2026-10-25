@@ -4,11 +4,11 @@ import {
   CHALLENGE_TYPES,
   type ChallengeType,
 } from "@edgeweir/contract";
+import { Input } from "@/components/arc/input/input";
 import { OptionSelect } from "@/components/form-select";
 import { PresetSelect, usePreset } from "@/components/preset-select";
 import { SwitchField } from "@/components/site/fields";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { formatNumber, m } from "@/lib/i18n";
 import { challengeLabel } from "@/lib/protection";
 

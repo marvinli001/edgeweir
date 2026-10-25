@@ -1,11 +1,11 @@
 import type { Site } from "@edgeweir/contract";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { Checkbox } from "@/components/arc/checkbox/checkbox";
 import { SafetyNote } from "@/components/safety-note";
 import { SaveBar, useSaveSite } from "@/components/site/save-site";
 import { combineQueries, QueryView } from "@/components/states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";

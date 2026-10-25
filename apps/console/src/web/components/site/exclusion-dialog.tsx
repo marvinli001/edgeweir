@@ -1,9 +1,9 @@
 import * as React from "react";
+import { Input } from "@/components/arc/input/input";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { m } from "@/lib/i18n";
 import {
   type Exclusion,

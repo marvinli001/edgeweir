@@ -1,7 +1,7 @@
 import { type AcmeCa, type CertificateSettings, EAB_REQUIRED_CAS } from "@edgeweir/contract";
+import { Input } from "@/components/arc/input/input";
 import { FormSelect } from "@/components/form-select";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { m } from "@/lib/i18n";
 
 /** A certificate authority's name. */

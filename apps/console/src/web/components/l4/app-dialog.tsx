@@ -14,6 +14,7 @@ import { Link } from "@tanstack/react-router";
 import * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
+import { Input } from "@/components/arc/input/input";
 import { FormSelect, OptionSelect } from "@/components/form-select";
 import { L4NodesWarning } from "@/components/l4/common";
 import { SafetyNote } from "@/components/safety-note";
@@ -34,7 +35,6 @@ import {
   FieldLegend,
   FieldSet,
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { m } from "@/lib/i18n";
 import {
