@@ -5,14 +5,14 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { AccessTabs } from "@/components/access-tabs";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { IpCheckDialog } from "@/components/ip-check";
 import { enterDelay, Page } from "@/components/page";
 import { EmptyState, QueryView } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -55,7 +55,7 @@ export function IpListsPage() {
   const check = useDialogState();
   const actions = (
     <>
-      <Button variant="outline" onClick={() => check.show()} data-testid="ip-check-open">
+      <Button variant="secondary" onClick={() => check.show()} data-testid="ip-check-open">
         <HugeiconsIcon icon={Search01Icon} strokeWidth={2} />
         {m.ip_check_title()}
       </Button>
@@ -133,7 +133,7 @@ function IpListCard({
         <CardTitle className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="font-mono text-sm break-all">{`$${list.name}`}</span>
           {list.kind === "collection" ? null : (
-            <Badge variant={list.kind === "block" ? "destructive" : "secondary"}>
+            <Badge size="sm" tone={list.kind === "block" ? "danger" : "neutral"}>
               {list.kind === "allow" ? m.rules_allow() : m.rules_block()}
             </Badge>
           )}
@@ -142,13 +142,13 @@ function IpListCard({
           {m.ip_lists_count({ count: formatNumber(list.entries.length) })}
         </p>
         <CardAction className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={onEdit}>
+          <Button size="sm" variant="secondary" onClick={onEdit}>
             {m.common_edit()}
           </Button>
           <ConfirmDialog
             title={m.common_delete()}
             trigger={
-              <Button size="sm" variant="destructive">
+              <Button size="sm" variant="danger">
                 {m.common_delete()}
               </Button>
             }

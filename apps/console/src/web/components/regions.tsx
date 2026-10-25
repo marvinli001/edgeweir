@@ -8,12 +8,12 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
 import { EmptyState, QueryView } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useDialogState } from "@/hooks/use-dialog-state";
@@ -108,7 +108,7 @@ function DeleteRegionAction({ region }: { region: Region }) {
   return (
     <ConfirmDialog
       trigger={
-        <Button size="icon-sm" variant="ghost" aria-label={m.common_delete()}>
+        <Button className="icon-button" size="sm" variant="ghost" aria-label={m.common_delete()}>
           <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
         </Button>
       }
@@ -159,7 +159,7 @@ function RegionsList({ onCreate }: { onCreate: () => void }) {
         id: "code",
         header: () => m.regions_code(),
         cell: ({ row }) => (
-          <Badge variant="outline" className="font-mono">
+          <Badge size="sm" tone="neutral" className="font-mono">
             {row.original.code}
           </Badge>
         ),
@@ -182,7 +182,8 @@ function RegionsList({ onCreate }: { onCreate: () => void }) {
         cell: ({ row }) => (
           <div className="flex justify-end gap-1">
             <Button
-              size="icon-sm"
+              className="icon-button"
+              size="sm"
               variant="ghost"
               aria-label={m.regions_edit()}
               onClick={() => edit.show(row.original)}

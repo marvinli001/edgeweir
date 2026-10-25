@@ -5,6 +5,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
 import { OtpField } from "@/components/appica/otp-field";
+import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { enterDelay, Page } from "@/components/page";
@@ -12,7 +13,6 @@ import { QrCode } from "@/components/qr-code";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -263,7 +263,7 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
             {error ? <FieldError className="mr-auto animate-in fade-in">{error}</FieldError> : null}
             <Button
               type="submit"
-              variant={enabled ? "destructive" : "default"}
+              variant={enabled ? "danger" : "primary"}
               disabled={pending}
               data-testid="toggle-2fa"
             >
@@ -360,7 +360,12 @@ function PasskeysCard() {
                   ) : null}
                   <ConfirmDialog
                     trigger={
-                      <Button size="icon-sm" variant="ghost" aria-label={m.common_delete()}>
+                      <Button
+                        className="icon-button"
+                        size="sm"
+                        variant="ghost"
+                        aria-label={m.common_delete()}
+                      >
                         <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
                       </Button>
                     }

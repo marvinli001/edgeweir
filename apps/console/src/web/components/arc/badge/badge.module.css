@@ -1,0 +1,126 @@
+@layer components {
+  .badge {
+    display: inline-flex;
+    min-height: 26px;
+    align-items: center;
+    border: 1px solid var(--badge-border, var(--arc-border));
+    border-radius: var(--arc-radius-pill);
+    padding: 0 10px;
+    color: var(--badge-foreground, var(--arc-foreground));
+    background: var(--badge-background, var(--arc-surface));
+    font-size: var(--arc-text-xs);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1;
+    white-space: nowrap;
+    /* Clip keeps the inline baseline while the pill morphs around swapped text. */
+    overflow: clip;
+    transition:
+      border-color var(--arc-duration-standard) var(--arc-ease-standard),
+      background-color var(--arc-duration-standard) var(--arc-ease-standard),
+      color var(--arc-duration-standard) var(--arc-ease-standard);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .badge:hover {
+      border-color: color-mix(
+        in oklab,
+        var(--badge-color, var(--arc-foreground)) 32%,
+        var(--arc-border)
+      );
+      background: color-mix(
+        in oklab,
+        var(--badge-color, var(--arc-foreground)) 10%,
+        var(--arc-surface)
+      );
+    }
+  }
+  /* The console's chip height (h-5) at its text size. */
+  .sm {
+    min-height: 20px;
+    padding: 0 8px;
+    font-size: var(--arc-text-xs);
+  }
+  .md {
+    font-size: var(--arc-text-xs);
+  }
+
+  .body {
+    display: block;
+  }
+  .content {
+    position: relative;
+    display: inline-flex;
+    width: max-content;
+    align-items: center;
+    gap: 5px;
+  }
+  .sm .content {
+    gap: 4px;
+  }
+  .label,
+  .glyph {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+  }
+  .text {
+    display: block;
+  }
+  /* Icons are 12px unless they set their own size class (Hugeicons render 24px by default). */
+  .icon svg:not([class*="size-"]),
+  .content > svg:not([class*="size-"]) {
+    width: 0.75rem;
+    height: 0.75rem;
+    flex: none;
+  }
+
+  .icon {
+    position: relative;
+    display: inline-flex;
+    width: auto;
+    height: auto;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    color: var(--badge-color, var(--arc-foreground));
+    line-height: 1;
+  }
+
+  .neutral {
+    --badge-color: var(--arc-text-secondary);
+    --badge-foreground: var(--arc-foreground);
+    --badge-background: var(--arc-wash);
+    --badge-border: var(--arc-border);
+  }
+  .success {
+    --badge-color: var(--arc-success);
+    --badge-foreground: var(--arc-success);
+    --badge-background: color-mix(in oklab, var(--arc-success) 10%, var(--arc-surface));
+    --badge-border: color-mix(in oklab, var(--arc-success) 25%, var(--arc-border));
+  }
+  .info {
+    --badge-color: var(--arc-accent);
+    --badge-foreground: var(--arc-accent-strong);
+    --badge-background: var(--arc-accent-subtle);
+    --badge-border: color-mix(in oklab, var(--arc-accent) 24%, var(--arc-border));
+  }
+  .warning {
+    --badge-color: var(--arc-warning);
+    --badge-foreground: var(--arc-warning);
+    --badge-background: color-mix(in oklab, var(--arc-warning) 11%, var(--arc-surface));
+    --badge-border: color-mix(in oklab, var(--arc-warning) 27%, var(--arc-border));
+  }
+  .danger {
+    --badge-color: var(--arc-danger);
+    --badge-foreground: var(--arc-danger);
+    --badge-background: var(--arc-danger-subtle);
+    --badge-border: color-mix(in oklab, var(--arc-danger) 26%, var(--arc-border));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .badge {
+      transition-duration: var(--arc-duration-instant);
+    }
+  }
+}

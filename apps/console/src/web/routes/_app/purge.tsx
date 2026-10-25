@@ -14,10 +14,12 @@ import {
 import { Add01Icon, Cancel01Icon, DatabaseSync01Icon, GlobeIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
 import * as z from "zod";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import {
   CacheTaskList,
   cacheTaskTypeLabel,
@@ -26,13 +28,12 @@ import {
   useExpandedTasks,
 } from "@/components/cache-tasks";
 import { OptionSelect } from "@/components/form-select";
+import { LinkButton } from "@/components/link-button";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField } from "@/components/site/fields";
 import { EmptyState, ErrorState, QueryView } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
@@ -124,11 +125,12 @@ function PurgePage() {
             {m.purge_tasks()}
           </h2>
           {search.site ? (
-            <Badge variant="secondary" className="gap-1 pr-1" data-testid="purge-site-filter">
+            <Badge size="sm" tone="neutral" className="gap-1 pr-1" data-testid="purge-site-filter">
               {site.data?.name ?? "…"}
               <Button
+                className="icon-button size-6 min-h-6"
                 type="button"
-                size="icon-xs"
+                size="sm"
                 variant="ghost"
                 aria-label={m.purge_site_filter_clear()}
                 onClick={() =>
@@ -643,10 +645,10 @@ function TagSiteSelect({
 function NoSites() {
   return (
     <EmptyState icon={GlobeIcon} title={m.sites_empty_title()}>
-      <Button nativeButton={false} render={<Link to="/sites" search={{ create: true }} />}>
+      <LinkButton to="/sites" search={{ create: true }}>
         <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
         {m.nav_new_site()}
-      </Button>
+      </LinkButton>
     </EmptyState>
   );
 }

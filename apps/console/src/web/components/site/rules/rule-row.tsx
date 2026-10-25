@@ -4,6 +4,7 @@ import { type ChallengeType, challengeTypes, type Phase } from "@edgeweir/rule-e
 import { Delete02Icon, DragDropVerticalIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
+import { Button } from "@/components/arc/button/button";
 import { FormSelect } from "@/components/form-select";
 import { ExpressionEditor } from "@/components/site/expression-editor";
 import { SwitchField } from "@/components/site/fields";
@@ -24,7 +25,6 @@ import { HeaderFields, TargetFields } from "@/components/site/rules/fields/trans
 import { RuleHistoryButton } from "@/components/site/rules/history";
 import { actionLabel, kinds, LocksContext, v2Kinds } from "@/components/site/rules/labels";
 import { useSortableRow } from "@/components/sortable-list";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { m } from "@/lib/i18n";
 import { challengeLabel } from "@/lib/protection";
@@ -79,10 +79,10 @@ export function RuleRow({
       <div className="flex items-center gap-2">
         <Button
           type="button"
-          size="icon-sm"
+          size="sm"
           variant="ghost"
           ref={setActivatorNodeRef}
-          className="cursor-grab touch-none active:cursor-grabbing"
+          className="icon-button cursor-grab touch-none active:cursor-grabbing"
           aria-label={m.rules_drag()}
           {...attributes}
           {...listeners}
@@ -98,8 +98,9 @@ export function RuleRow({
         />
         <RuleHistoryButton ruleId={row.id} />
         <Button
+          className="icon-button"
           type="button"
-          size="icon-sm"
+          size="sm"
           variant="ghost"
           aria-label={m.common_delete()}
           onClick={remove}

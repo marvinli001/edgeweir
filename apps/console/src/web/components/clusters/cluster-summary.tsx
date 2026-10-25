@@ -4,12 +4,12 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation } from "@tanstack/react-query";
 import * as React from "react";
 import { Meter } from "@/components/appica/meter";
+import { Button } from "@/components/arc/button/button";
 import { ClusterDialog } from "@/components/clusters/cluster-dialog";
 import { ClusterLinks } from "@/components/clusters/cluster-links";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { OptionSelect } from "@/components/form-select";
 import { Dot } from "@/components/status-dot";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
@@ -83,7 +83,8 @@ export function ClusterSummary({
             <DropdownMenuTrigger
               render={
                 <Button
-                  size="icon-sm"
+                  className="icon-button"
+                  size="sm"
                   variant="ghost"
                   aria-label={m.common_actions()}
                   data-testid="cluster-actions"

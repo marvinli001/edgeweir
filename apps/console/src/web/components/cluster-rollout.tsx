@@ -7,14 +7,14 @@ import type {
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Countdown } from "@/components/appica/countdown";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { SiteChangeList } from "@/components/config-changes";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { QueryView } from "@/components/states";
 import { StatusDot, type StatusTone } from "@/components/status-dot";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDraft } from "@/hooks/use-draft";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
@@ -199,11 +199,13 @@ function RolloutStatus({ rollout }: { rollout: ClusterRollout }) {
                 <StatusDot tone={node.online ? "good" : "idle"} glow={node.online}>
                   {node.name}
                 </StatusDot>
-                <Badge variant="outline" className="font-mono">
+                <Badge size="sm" tone="neutral" className="font-mono">
                   #{node.appliedRevision}
                 </Badge>
                 {node.participating ? (
-                  <Badge variant="secondary">{m.rollout_participating()}</Badge>
+                  <Badge size="sm" tone="neutral">
+                    {m.rollout_participating()}
+                  </Badge>
                 ) : null}
               </span>
             ))
@@ -222,7 +224,7 @@ function RolloutStatus({ rollout }: { rollout: ClusterRollout }) {
           />
           <ConfirmDialog
             trigger={
-              <Button variant="destructive" data-testid="rollout-abort">
+              <Button variant="danger" data-testid="rollout-abort">
                 {m.rollout_abort()}
               </Button>
             }

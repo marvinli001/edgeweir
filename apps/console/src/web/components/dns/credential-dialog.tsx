@@ -1,13 +1,13 @@
 import type { DnsProviderDto } from "@edgeweir/contract";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect, OptionSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
 import { QueryView } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -44,10 +44,20 @@ export function CapabilityBadges({ provider }: { provider?: DnsProviderDto }) {
   const { lines, apex, endpoint } = provider.capabilities;
   return (
     <span className="flex flex-wrap gap-1">
-      {lines.length > 1 ? <Badge variant="secondary">{m.dns_capability_lines()}</Badge> : null}
-      {apex ? <Badge variant="secondary">{m.dns_capability_apex()}</Badge> : null}
+      {lines.length > 1 ? (
+        <Badge size="sm" tone="neutral">
+          {m.dns_capability_lines()}
+        </Badge>
+      ) : null}
+      {apex ? (
+        <Badge size="sm" tone="neutral">
+          {m.dns_capability_apex()}
+        </Badge>
+      ) : null}
       {endpoint === "custom" ? (
-        <Badge variant="secondary">{m.dns_capability_custom()}</Badge>
+        <Badge size="sm" tone="neutral">
+          {m.dns_capability_custom()}
+        </Badge>
       ) : null}
     </span>
   );
@@ -261,7 +271,7 @@ export function DnsCredentialDialog({
                 {!initial && entry?.capabilities.listZones ? (
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     disabled={listing.pending}
                     onClick={(e) => void listZones(e.currentTarget.form)}
                     data-testid="dns-list-zones"
@@ -275,7 +285,7 @@ export function DnsCredentialDialog({
             <div className="flex flex-wrap items-center gap-3">
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 disabled={testing.pending || !zone}
                 onClick={(e) => void test(e.currentTarget.form)}
                 data-testid="dns-test-connection"

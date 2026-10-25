@@ -1,7 +1,7 @@
 import type { AnalyticsRange } from "@edgeweir/contract";
 import { Calendar03Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/arc/button/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,7 +24,7 @@ export function RangeSelect({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<Button size="sm" variant="outline" data-testid="analytics-range" />}
+        render={<Button size="sm" variant="secondary" data-testid="analytics-range" />}
       >
         <HugeiconsIcon icon={Calendar03Icon} strokeWidth={2} />
         {rangeLabel(value)}

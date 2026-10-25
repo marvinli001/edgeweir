@@ -1,7 +1,7 @@
 import { DashboardSquareEditIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/arc/button/button";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -38,7 +38,8 @@ export function CardsMenu<S extends CardScope>({
       <DropdownMenuTrigger
         render={
           <Button
-            size="icon-sm"
+            className="icon-button"
+            size="sm"
             variant="ghost"
             aria-label={m.cards_customize()}
             title={m.cards_customize()}

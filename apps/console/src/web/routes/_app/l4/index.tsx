@@ -5,6 +5,8 @@ import { keepPreviousData, useQueries, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { type Columns, DataTable, FilterBar } from "@/components/data-table";
 import { FilterSelect } from "@/components/form-select";
 import { L4AppActions, L4EnabledSwitch } from "@/components/l4/app-actions";
@@ -14,8 +16,6 @@ import { Page } from "@/components/page";
 import { SitesTabs } from "@/components/sites-tabs";
 import { EmptyState, QueryView } from "@/components/states";
 import { Dot } from "@/components/status-dot";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
 import { originLabel, portsLabel } from "@/lib/l4";
@@ -113,7 +113,7 @@ function L4AppsPage() {
               data-testid="l4-app-origins"
               data-count={origins.length}
             >
-              <Badge variant="outline" className="tabular-nums">
+              <Badge size="sm" tone="neutral" className="tabular-nums">
                 {origins.length}
               </Badge>
               {first ? (

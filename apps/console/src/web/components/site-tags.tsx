@@ -10,11 +10,11 @@ import { Cancel01Icon, Delete02Icon, Edit02Icon, Tag01Icon } from "@hugeicons/co
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { enterDelay } from "@/components/page";
 import { EmptyState, QueryView } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -48,19 +48,22 @@ export function TagBadges({
     <span className={cn("flex flex-wrap gap-1", className)} data-testid="site-tags">
       {tags.map((tag) =>
         onSelect ? (
-          <Badge
+          <button
             key={tag.id}
-            variant="secondary"
-            render={<button type="button" onClick={() => onSelect(tag)} />}
-            className="max-w-40 cursor-pointer truncate hover:bg-foreground/10"
+            type="button"
+            onClick={() => onSelect(tag)}
+            className="max-w-40 cursor-pointer rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
             data-testid="site-tag"
           >
-            {tag.name}
-          </Badge>
+            <Badge size="sm" tone="neutral" className="max-w-full truncate">
+              {tag.name}
+            </Badge>
+          </button>
         ) : (
           <Badge
+            size="sm"
             key={tag.id}
-            variant="secondary"
+            tone="neutral"
             className="max-w-40 truncate"
             data-testid="site-tag"
           >
@@ -141,8 +144,9 @@ export function TagPicker({
       <div className="flex min-h-9 flex-wrap items-center gap-1.5 rounded-xl border border-input px-2 py-1.5 focus-within:ring-[3px] focus-within:ring-ring/50">
         {value.map((name) => (
           <Badge
+            size="sm"
             key={tagKey(name)}
-            variant="secondary"
+            tone="neutral"
             className="gap-1 pr-1"
             data-testid="tag-chip"
           >
@@ -191,21 +195,18 @@ export function TagPicker({
       {suggestions.length ? (
         <div className="flex flex-wrap gap-1">
           {suggestions.map((tag) => (
-            <Badge
+            <button
               key={tag.id}
-              variant="outline"
-              render={
-                <button
-                  type="button"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => add([tag.name])}
-                />
-              }
-              className="cursor-pointer"
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => add([tag.name])}
+              className="cursor-pointer rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
               data-testid="tag-suggestion"
             >
-              {tag.name}
-            </Badge>
+              <Badge size="sm" tone="neutral">
+                {tag.name}
+              </Badge>
+            </button>
           ))}
         </div>
       ) : null}
@@ -236,7 +237,7 @@ export function TagFilter({
       <DropdownMenuTrigger
         render={
           <Button
-            variant="outline"
+            variant="secondary"
             className={cn("w-full justify-start sm:w-auto", selected.length && "text-foreground")}
             data-testid="tag-filter"
           />
@@ -404,9 +405,9 @@ function TagRow({ tag, index }: { tag: SiteTag; index: number }) {
             {m.tags_sites_count({ count: tag.sites })}
           </span>
           <Button
-            size="icon-sm"
+            size="sm"
             variant="ghost"
-            className="ml-auto"
+            className="icon-button ml-auto"
             aria-label={m.tags_rename()}
             onClick={() => setEditing(true)}
             data-testid="tag-rename"
@@ -414,7 +415,8 @@ function TagRow({ tag, index }: { tag: SiteTag; index: number }) {
             <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} />
           </Button>
           <Button
-            size="icon-sm"
+            className="icon-button"
+            size="sm"
             variant="ghost"
             aria-label={m.common_delete()}
             onClick={() => setConfirming(true)}

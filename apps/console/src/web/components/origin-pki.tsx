@@ -8,6 +8,8 @@ import { Add01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { FormDialog } from "@/components/form-dialog";
@@ -15,8 +17,6 @@ import { FormSelect } from "@/components/form-select";
 import { enterDelay } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, QueryView } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
@@ -66,7 +66,7 @@ function AuthorityCard({
         {actions}
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           onClick={() => downloadText(file, authority.certificatePem)}
           data-testid={`${testId}-download`}
         >
@@ -117,7 +117,7 @@ function StepButton({
       trigger={
         <Button
           size="sm"
-          variant={destructive ? "destructive" : "outline"}
+          variant={destructive ? "danger" : "secondary"}
           disabled={disabled}
           data-testid={testId}
         >
@@ -279,11 +279,17 @@ function OriginCertificates({ onIssue }: { onIssue: () => void }) {
             >
               <div className="flex min-w-0 flex-col gap-1.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary">{KEY_TYPE_LABELS[cert.keyType] ?? cert.keyType}</Badge>
-                  {cert.source === "csr" ? <Badge variant="outline">CSR</Badge> : null}
+                  <Badge size="sm" tone="neutral">
+                    {KEY_TYPE_LABELS[cert.keyType] ?? cert.keyType}
+                  </Badge>
+                  {cert.source === "csr" ? (
+                    <Badge size="sm" tone="neutral">
+                      CSR
+                    </Badge>
+                  ) : null}
                   <AuthorityBadge authority={cert.authority} />
                   {cert.revokedAt ? (
-                    <Badge variant="destructive" data-testid="origin-cert-revoked">
+                    <Badge size="sm" tone="danger" data-testid="origin-cert-revoked">
                       {m.origin_cert_revoked()}
                     </Badge>
                   ) : null}
@@ -299,7 +305,7 @@ function OriginCertificates({ onIssue }: { onIssue: () => void }) {
               <div className="flex shrink-0 flex-wrap gap-2 @3xl/main:justify-end">
                 <Button
                   size="sm"
-                  variant="outline"
+                  variant="secondary"
                   onClick={() =>
                     downloadText(`${fileStem(cert.hostnames[0])}.pem`, cert.certificatePem)
                   }
@@ -311,7 +317,7 @@ function OriginCertificates({ onIssue }: { onIssue: () => void }) {
                     title={m.origin_cert_revoke_confirm({ name: cert.hostnames[0] ?? "" })}
                     destructive
                     trigger={
-                      <Button size="sm" variant="destructive" data-testid="origin-cert-revoke">
+                      <Button size="sm" variant="danger" data-testid="origin-cert-revoke">
                         {m.origin_cert_revoke()}
                       </Button>
                     }
@@ -333,7 +339,7 @@ function OriginCertificates({ onIssue }: { onIssue: () => void }) {
 function AuthorityBadge({ authority }: { authority: "active" | "previous" | "retired" }) {
   if (authority === "active") return null;
   return (
-    <Badge variant="outline" data-testid={`cert-authority-${authority}`}>
+    <Badge size="sm" tone="neutral" data-testid={`cert-authority-${authority}`}>
       {authority === "previous" ? m.origin_cert_previous_ca() : m.origin_cert_retired_ca()}
     </Badge>
   );
@@ -373,7 +379,7 @@ function IssueDialog({ open, onOpenChange }: DialogProps) {
             <Button
               type="button"
               size="sm"
-              variant="outline"
+              variant="secondary"
               onClick={() =>
                 downloadText(`${fileStem(issued.hostnames[0])}.pem`, issued.certificatePem)
               }
@@ -390,7 +396,7 @@ function IssueDialog({ open, onOpenChange }: DialogProps) {
               <Button
                 type="button"
                 size="sm"
-                variant="outline"
+                variant="secondary"
                 onClick={() =>
                   downloadText(`${fileStem(issued.hostnames[0])}.key`, issued.privateKeyPem)
                 }
@@ -501,7 +507,7 @@ export function OriginClientPanel() {
                 next || previous ? (
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     onClick={() => downloadText("origin-client-ca-bundle.pem", trustBundlePem)}
                     data-testid="origin-client-ca-bundle"
                   >

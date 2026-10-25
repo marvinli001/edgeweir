@@ -10,8 +10,8 @@ import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/arc/button/button";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -113,7 +113,8 @@ export function L4AppActions({ app, onEdit }: { app: L4App; onEdit: (app: L4App)
         <DropdownMenuTrigger
           render={
             <Button
-              size="icon-sm"
+              className="icon-button"
+              size="sm"
               variant="ghost"
               aria-label={m.common_actions()}
               data-testid="l4-app-actions"

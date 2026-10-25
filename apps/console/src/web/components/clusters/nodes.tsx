@@ -3,6 +3,8 @@ import { Add01Icon, MoreHorizontalIcon, ServerStack01Icon } from "@hugeicons/cor
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type * as React from "react";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { type NodeAction, NodeActionDialog } from "@/components/clusters/node-dialogs";
 import { NodeChannelBadge } from "@/components/node-channel-state";
 import {
@@ -15,8 +17,6 @@ import {
 import { enterDelay } from "@/components/page";
 import { EmptyState, QueryView } from "@/components/states";
 import { Dot, StatusDot } from "@/components/status-dot";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,32 +31,32 @@ import { orpc } from "@/lib/orpc";
 function RevisionBadge({ node, latest }: { node: Node; latest: number }) {
   if (node.upgradeRequired) {
     return (
-      <Badge variant="outline" data-testid="node-upgrade-required">
+      <Badge size="sm" tone="neutral" data-testid="node-upgrade-required">
         {m.node_upgrade_required()}
       </Badge>
     );
   }
   if (node.applyState === "failed") {
     return (
-      <Badge variant="destructive" title={node.applyMessage}>
+      <Badge size="sm" tone="danger" title={node.applyMessage}>
         {m.nodes_apply_failed()}
       </Badge>
     );
   }
   if (node.appliedRevision === 0)
     return node.online && node.status === "active" ? (
-      <Badge variant="outline" data-testid="node-awaiting-config">
+      <Badge size="sm" tone="neutral" data-testid="node-awaiting-config">
         {m.nodes_pending()}
       </Badge>
     ) : null;
   // A canary rollout gives each node its own target revision.
   return node.appliedRevision >= (node.targetRevision ?? latest) ? (
-    <Badge variant="secondary" data-testid="node-up-to-date">
+    <Badge size="sm" tone="neutral" data-testid="node-up-to-date">
       <Dot tone="good" small />
       {m.nodes_up_to_date()}
     </Badge>
   ) : (
-    <Badge variant="outline" data-testid="node-behind">
+    <Badge size="sm" tone="neutral" data-testid="node-behind">
       <Dot tone="warn" small />
       {m.nodes_behind()}
     </Badge>
@@ -88,7 +88,8 @@ function NodeActions({
       <DropdownMenuTrigger
         render={
           <Button
-            size="icon-sm"
+            className="icon-button"
+            size="sm"
             variant="ghost"
             aria-label={m.common_actions()}
             data-testid="node-actions"
@@ -155,7 +156,7 @@ function NodeState({ node }: { node: Node }) {
           {m.nodes_online()}
         </StatusDot>
         {servesOrStarts(node) ? null : (
-          <Badge variant="destructive" data-testid="node-unhealthy">
+          <Badge size="sm" tone="danger" data-testid="node-unhealthy">
             {m.nodes_unhealthy()}
           </Badge>
         )}
@@ -206,7 +207,7 @@ function NodeCard({
               {node.name}
             </span>
             {node.probeEnabled ? (
-              <Badge variant="outline" data-testid="node-probe-badge">
+              <Badge size="sm" tone="neutral" data-testid="node-probe-badge">
                 {m.node_probe_switch()}
               </Badge>
             ) : null}
@@ -247,7 +248,8 @@ function NodeCard({
           !node.upgradeRequired &&
           nodeUpgradeRecommended(node.supportedFeatures) ? (
             <Badge
-              variant="outline"
+              size="sm"
+              tone="neutral"
               title={m.node_upgrade_recommended_title()}
               data-testid="node-upgrade-recommended"
             >
@@ -270,7 +272,7 @@ function NodeCard({
             <span>—</span>
           )}
           {node.dnsIssue === "no_public_address" ? (
-            <Badge variant="outline" data-testid="node-dns-issue">
+            <Badge size="sm" tone="neutral" data-testid="node-dns-issue">
               {m.node_dns_no_public_address()}
             </Badge>
           ) : null}

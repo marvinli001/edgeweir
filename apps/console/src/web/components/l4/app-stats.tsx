@@ -8,9 +8,9 @@ import { Panel, PanelHeader } from "@/components/analytics/panel";
 import { RangeSelect } from "@/components/analytics/range-select";
 import { AnimatedValue } from "@/components/appica/effects";
 import { Sparkline } from "@/components/appica/sparkline";
+import { Button } from "@/components/arc/button/button";
 import { type Columns, DataTable } from "@/components/data-table";
 import { EmptyState, QueryView } from "@/components/states";
-import { Button } from "@/components/ui/button";
 import { SERIES_COLORS } from "@/lib/analytics";
 import { formatBytes, formatCompact, formatNumber, m } from "@/lib/i18n";
 import { L4_STATS_RANGE_SECONDS, L4_STATS_RANGES, type L4StatsRange } from "@/lib/l4";
@@ -91,7 +91,8 @@ export function L4AppStats({
           onChange={(next) => isL4StatsRange(next) && onRangeChange(next)}
         />
         <Button
-          size="icon-sm"
+          className="icon-button"
+          size="sm"
           variant="ghost"
           aria-label={m.analytics_refresh()}
           disabled={stats.isFetching}

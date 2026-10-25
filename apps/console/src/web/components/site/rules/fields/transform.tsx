@@ -3,12 +3,12 @@ import { type Phase, QUERY_NAME_RE } from "@edgeweir/rule-engine";
 import { Add01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
+import { Button } from "@/components/arc/button/button";
 import { OptionSelect } from "@/components/form-select";
 import { ExpressionEditor, expressionFailure } from "@/components/site/expression-editor";
 import { ListInput, SwitchField } from "@/components/site/fields";
 import { literalText, StatusSelect } from "@/components/site/rules/fields/common";
 import { nextDraftKey } from "@/components/site/save-site";
-import { Button } from "@/components/ui/button";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -377,8 +377,9 @@ function SetQueryFields({
             onChange={(change) => update(index, change)}
           />
           <Button
+            className="icon-button"
             type="button"
-            size="icon-sm"
+            size="sm"
             variant="ghost"
             aria-label={m.common_remove()}
             onClick={() => {
@@ -392,7 +393,7 @@ function SetQueryFields({
       ))}
       <Button
         type="button"
-        variant="outline"
+        variant="secondary"
         size="sm"
         className="self-start"
         disabled={params.length >= 16 || locked}

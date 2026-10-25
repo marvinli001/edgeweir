@@ -5,6 +5,7 @@ import { Add01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation } from "@tanstack/react-query";
 import * as React from "react";
+import { Button } from "@/components/arc/button/button";
 import { SafetyNote } from "@/components/safety-note";
 import { DeletedRules, RuleHistoryContext } from "@/components/site/rules/history";
 import {
@@ -18,7 +19,6 @@ import { RuleRow } from "@/components/site/rules/rule-row";
 import { SaveBar } from "@/components/site/save-site";
 import { SortableList } from "@/components/sortable-list";
 import { EmptyState } from "@/components/states";
-import { Button } from "@/components/ui/button";
 import { m } from "@/lib/i18n";
 import { invalidHostHeader } from "@/lib/lists";
 import { client, errorMessage } from "@/lib/orpc";
@@ -150,7 +150,7 @@ export function RulesEditor({
                   <h3 className="font-heading text-base font-medium">{phaseLabel(phase)}</h3>
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     disabled={rows.length >= (siteId ? 64 : 32) || (locked && v2Kinds.has(first))}
                     data-testid={`rule-add-${phase}`}

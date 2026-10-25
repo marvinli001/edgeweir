@@ -1,11 +1,11 @@
 import { Alert02Icon, type InboxIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type * as React from "react";
+import { Button } from "@/components/arc/button/button";
 import { InboxIcon as AnimatedInbox, useIconPlay } from "@/components/effects/animated-icons";
 import { EmptyArt, type EmptyArtKind } from "@/components/empty-art";
 import { LoadingState } from "@/components/loading-state";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { m } from "@/lib/i18n";
 import { errorMessage, isNotFound } from "@/lib/orpc";
@@ -21,7 +21,7 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
       <AlertDescription>{errorMessage(error, m.common_unknown_error())}</AlertDescription>
       {onRetry ? (
         <AlertAction>
-          <Button size="sm" variant="outline" onClick={onRetry}>
+          <Button size="sm" variant="secondary" onClick={onRetry}>
             {m.common_retry()}
           </Button>
         </AlertAction>

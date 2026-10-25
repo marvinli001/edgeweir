@@ -1,6 +1,6 @@
 import { displaySiteDomain, siteDomainKind } from "@edgeweir/contract";
 import { cn } from "cn";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/arc/badge/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { m } from "@/lib/i18n";
 
@@ -32,7 +32,7 @@ export function DomainKindBadge({ domain }: { domain: string }) {
   const kind = siteDomainKind(domain);
   if (kind === "exact") return null;
   return (
-    <Badge variant="secondary" data-testid={`domain-kind-${kind}`}>
+    <Badge size="sm" tone="neutral" data-testid={`domain-kind-${kind}`}>
       {kind === "wildcard"
         ? m.site_domain_wildcard()
         : kind === "suffix"

@@ -5,7 +5,7 @@ import {
   nodeChannelStateOf,
 } from "@edgeweir/contract";
 import { useQuery } from "@tanstack/react-query";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/arc/badge/badge";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
@@ -55,7 +55,8 @@ export function NodeChannelBadge({
   const title = status?.error ? channelErrorText(status.error) : undefined;
   return (
     <Badge
-      variant={state === "failed" ? "destructive" : "outline"}
+      size="sm"
+      tone={state === "failed" ? "danger" : "neutral"}
       title={title}
       data-testid={testId}
       data-state={state}

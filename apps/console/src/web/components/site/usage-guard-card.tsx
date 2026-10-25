@@ -14,6 +14,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Meter } from "@/components/appica/meter";
+import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect, type Option } from "@/components/form-select";
@@ -21,7 +22,6 @@ import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
 import { Alert, AlertAction, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   formatBitRate,
@@ -69,7 +69,8 @@ export function UsageGuardCard({ site }: { site: Site }) {
         {guard?.settings ? (
           <CardAction className="flex gap-1">
             <Button
-              size="icon-sm"
+              className="icon-button"
+              size="sm"
               variant="ghost"
               aria-label={m.common_edit()}
               onClick={() => setEditing(true)}
@@ -217,7 +218,7 @@ function HeldAlert({ site, guard }: { site: Site; guard: UsageGuard }) {
       <AlertAction>
         <ConfirmDialog
           trigger={
-            <Button size="sm" variant="outline" data-testid="usage-guard-restore">
+            <Button size="sm" variant="secondary" data-testid="usage-guard-restore">
               {m.usage_guard_restore()}
             </Button>
           }
@@ -244,7 +245,8 @@ function DeleteButton({ guard }: { guard: UsageGuard }) {
     <ConfirmDialog
       trigger={
         <Button
-          size="icon-sm"
+          className="icon-button"
+          size="sm"
           variant="ghost"
           aria-label={m.common_delete()}
           data-testid="usage-guard-delete"

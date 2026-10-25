@@ -2,8 +2,8 @@ import { ArrowLeft01Icon, FingerPrintIcon, ViewIcon } from "@hugeicons/core-free
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
 import { OtpField } from "@/components/appica/otp-field";
+import { Button } from "@/components/arc/button/button";
 import { AuthViews } from "@/components/auth-views";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -117,7 +117,7 @@ export function LoginForm({
             {onDemo ? (
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 disabled={pending}
                 onClick={() => void run("password", onDemo)}
                 data-testid="login-demo"
@@ -129,7 +129,7 @@ export function LoginForm({
             {onPasskey ? (
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 disabled={pending}
                 onClick={() => void run("password", onPasskey)}
               >
@@ -193,9 +193,9 @@ export function LoginForm({
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <Button
                   type="button"
-                  variant="link"
+                  variant="ghost"
                   size="sm"
-                  className="px-0"
+                  className="px-0 text-primary-ink hover:bg-transparent hover:underline"
                   onClick={() => setView("password")}
                 >
                   <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
@@ -203,9 +203,9 @@ export function LoginForm({
                 </Button>
                 <Button
                   type="button"
-                  variant="link"
+                  variant="ghost"
                   size="sm"
-                  className="px-0"
+                  className="px-0 text-primary-ink hover:bg-transparent hover:underline"
                   onClick={() => setView(kind === "backup" ? "totp" : "backup")}
                 >
                   {kind === "backup" ? m.login_use_totp() : m.login_use_backup_code()}

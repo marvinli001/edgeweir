@@ -5,12 +5,12 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
+import { Button } from "@/components/arc/button/button";
 import { type Columns, DataTable, FilterBar } from "@/components/data-table";
 import { FilterSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
 import { EmptyState, QueryView } from "@/components/states";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -90,7 +90,8 @@ function AuditDetails({ entry }: { entry: AuditLogEntry }) {
       <DialogTrigger
         render={
           <Button
-            size="icon-sm"
+            className="icon-button"
+            size="sm"
             variant="ghost"
             aria-label={m.audit_details()}
             data-testid="audit-details"

@@ -2,12 +2,11 @@ import type { IpListDto, SiteListSettings } from "@edgeweir/contract";
 import { Add01Icon, ListViewIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { IpListKind } from "@/components/ip-check";
+import { LinkButton } from "@/components/link-button";
 import { enterDelay } from "@/components/page";
 import { AccessPartCard, type PartFields } from "@/components/site/access-control/part-card";
 import { EmptyState, QueryView } from "@/components/states";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FieldLegend, FieldSet } from "@/components/ui/field";
 import { formatNumber, m } from "@/lib/i18n";
@@ -45,14 +44,10 @@ function SiteListsFields({ draft, set, blocked }: PartFields<SiteListSettings>) 
       query={lists}
       empty={
         <EmptyState icon={ListViewIcon} art="checkpoint" title={m.ip_lists_empty()}>
-          <Button
-            render={<Link to="/ip-lists" />}
-            nativeButton={false}
-            data-testid="site-lists-create"
-          >
+          <LinkButton to="/ip-lists" data-testid="site-lists-create">
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             {m.ip_lists_create()}
-          </Button>
+          </LinkButton>
         </EmptyState>
       }
     >

@@ -11,6 +11,8 @@ import { Edit02Icon, Shield01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect, type Option } from "@/components/form-select";
@@ -18,8 +20,6 @@ import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
 import { Alert, AlertAction, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDateMinutes, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
@@ -58,7 +58,8 @@ export function AutoMitigationCard({ siteId, siteName }: { siteId: string; siteN
         {data?.settings ? (
           <CardAction>
             <Button
-              size="icon-sm"
+              className="icon-button"
+              size="sm"
               variant="ghost"
               aria-label={m.common_edit()}
               onClick={() => setEditing(true)}
@@ -136,7 +137,7 @@ function MitigationBody({
           <AlertAction>
             <ConfirmDialog
               trigger={
-                <Button size="sm" variant="outline" data-testid="auto-mitigation-end">
+                <Button size="sm" variant="secondary" data-testid="auto-mitigation-end">
                   {m.attacks_mitigation_end()}
                 </Button>
               }
@@ -168,8 +169,9 @@ function MitigationBody({
               "state",
               m.attacks_mitigation_state(),
               <Badge
+                size="sm"
                 key="state"
-                variant={active ? "destructive" : settings.enabled ? "secondary" : "outline"}
+                tone={active ? "danger" : settings.enabled ? "neutral" : "neutral"}
               >
                 {active
                   ? m.protection_on()
@@ -187,7 +189,7 @@ function MitigationBody({
             [
               "level",
               m.attacks_mitigation_level_now(),
-              <Badge key="level" variant={level === "normal" ? "outline" : "destructive"}>
+              <Badge size="sm" key="level" tone={level === "normal" ? "neutral" : "danger"}>
                 {levelLabel(level)}
               </Badge>,
             ],

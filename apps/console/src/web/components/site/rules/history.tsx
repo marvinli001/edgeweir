@@ -4,11 +4,11 @@ import { HistoryIcon, RestoreBinIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { Button } from "@/components/arc/button/button";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { SafetyNote } from "@/components/safety-note";
 import { actionLabel, phaseLabel } from "@/components/site/rules/labels";
 import { EmptyState, QueryView } from "@/components/states";
-import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatDateTime, m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
@@ -207,7 +207,7 @@ function VersionItem({
         <Button
           type="button"
           size="sm"
-          variant="outline"
+          variant="secondary"
           disabled={same}
           data-testid="rule-version-restore"
           onClick={onRestore}
@@ -262,8 +262,9 @@ export function RuleHistoryButton({ ruleId }: { ruleId: string }) {
   return (
     <>
       <Button
+        className="icon-button"
         type="button"
-        size="icon-sm"
+        size="sm"
         variant="ghost"
         aria-label={m.rules_history()}
         data-testid="rule-history"
@@ -351,7 +352,7 @@ export function DeletedRules() {
                       <Button
                         type="button"
                         size="sm"
-                        variant="outline"
+                        variant="secondary"
                         data-testid="rule-deleted-restore"
                         onClick={() => setTarget(version)}
                       >

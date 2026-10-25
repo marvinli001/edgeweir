@@ -10,9 +10,9 @@ import {
   useSeriesSlots,
 } from "@/components/analytics/breakdown-charts";
 import { RangeSelect } from "@/components/analytics/range-select";
+import { Badge } from "@/components/arc/badge/badge";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, QueryView } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatNumber, formatPercent, m } from "@/lib/i18n";
 import { originLabel } from "@/lib/l4";
@@ -161,8 +161,16 @@ function QualityRow({ item }: { item: OriginQualityItem }) {
     >
       <span className="col-span-2 flex min-w-0 items-center gap-2 sm:col-span-1">
         <span className="min-w-0 break-all font-mono text-xs">{originLabel(item)}</span>
-        {item.backup ? <Badge variant="outline">{m.site_origin_backup()}</Badge> : null}
-        {item.group ? <Badge variant="outline">{item.group}</Badge> : null}
+        {item.backup ? (
+          <Badge size="sm" tone="neutral">
+            {m.site_origin_backup()}
+          </Badge>
+        ) : null}
+        {item.group ? (
+          <Badge size="sm" tone="neutral">
+            {item.group}
+          </Badge>
+        ) : null}
       </span>
       <Metric label={m.origin_quality_requests()} value={formatNumber(item.requests)} />
       <Metric

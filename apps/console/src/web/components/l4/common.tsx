@@ -1,9 +1,9 @@
 import type { L4Protocol } from "@edgeweir/contract";
 import { Alert02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { Badge } from "@/components/arc/badge/badge";
 import { CopyButton } from "@/components/copy-button";
 import { Alert, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { m } from "@/lib/i18n";
 import { protocolLabel } from "@/lib/l4";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,8 @@ import { cn } from "@/lib/utils";
 export function ProtocolBadge({ protocol }: { protocol: L4Protocol }) {
   return (
     <Badge
-      variant={protocol === "tcp" ? "secondary" : "outline"}
+      size="sm"
+      tone={protocol === "tcp" ? "neutral" : "neutral"}
       className="font-mono"
       data-testid="l4-app-protocol"
     >

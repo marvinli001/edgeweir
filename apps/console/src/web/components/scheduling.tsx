@@ -17,6 +17,8 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { CardTable } from "@/components/clusters/card-table";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
@@ -27,8 +29,6 @@ import { NumberField, SwitchField } from "@/components/site/fields";
 import { nextDraftKey } from "@/components/site/save-site";
 import { EmptyState, QueryView } from "@/components/states";
 import { Dot, type StatusTone } from "@/components/status-dot";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -130,7 +130,7 @@ export function ClusterScheduling({ clusterId }: { clusterId: string }) {
           row.original.activeNodes.length ? (
             <div className="flex flex-wrap gap-1" data-testid="scheduling-rule-active">
               {row.original.activeNodes.map((n) => (
-                <Badge key={n.nodeId} variant="destructive" title={formatDateTime(n.since)}>
+                <Badge size="sm" key={n.nodeId} tone="danger" title={formatDateTime(n.since)}>
                   {n.nodeName}
                 </Badge>
               ))}
@@ -150,7 +150,8 @@ export function ClusterScheduling({ clusterId }: { clusterId: string }) {
         cell: ({ row }) => (
           <div className="flex justify-end gap-1">
             <Button
-              size="icon-sm"
+              className="icon-button"
+              size="sm"
               variant="ghost"
               aria-label={m.scheduling_rule_edit()}
               onClick={() => edit.show(row.original)}
@@ -173,7 +174,7 @@ export function ClusterScheduling({ clusterId }: { clusterId: string }) {
           <h2 className="flex-1 text-sm font-medium">{m.scheduling_rules()}</h2>
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             onClick={() => edit.show("new")}
             data-testid="scheduling-rule-create"
           >
@@ -272,7 +273,8 @@ function DeleteRuleAction({ rule }: { rule: SchedulingRule }) {
     <ConfirmDialog
       trigger={
         <Button
-          size="icon-sm"
+          className="icon-button"
+          size="sm"
           variant="ghost"
           aria-label={m.common_delete()}
           data-testid="scheduling-rule-delete"
@@ -543,7 +545,7 @@ function RuleDialog({
         <Button
           type="button"
           size="sm"
-          variant="outline"
+          variant="secondary"
           className="self-start"
           disabled={draft.conditions.length >= MAX_CONDITIONS}
           onClick={() => setDraft({ ...draft, conditions: [...draft.conditions, newCondition()] })}
@@ -584,8 +586,9 @@ function ConditionEditor({
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-medium text-muted-foreground tabular-nums">{index + 1}</span>
         <Button
+          className="icon-button"
           type="button"
-          size="icon-sm"
+          size="sm"
           variant="ghost"
           disabled={!removable}
           aria-label={m.scheduling_condition_remove({ index: index + 1 })}
@@ -714,13 +717,13 @@ function SchedulingPreviewSection({ clusterId }: { clusterId: string }) {
   );
 }
 
-const stateVariant = (state: PreviewNode["state"]) =>
+const stateTone = (state: PreviewNode["state"]) =>
   (
     ({
-      idle: "outline",
-      pending: "secondary",
-      active: "destructive",
-      recovering: "secondary",
+      idle: "neutral",
+      pending: "neutral",
+      active: "danger",
+      recovering: "neutral",
     }) as const
   )[state];
 
@@ -735,9 +738,17 @@ function PreviewRuleBlock({ rule, index }: { rule: PreviewRule; index: number })
     >
       <div className="flex flex-wrap items-center gap-2 px-4 py-3">
         <span className="mr-auto font-medium">{rule.ruleName}</span>
-        {rule.enabled ? null : <Badge variant="outline">{m.nodes_disabled()}</Badge>}
-        <Badge variant="outline">{rule.lineName ?? m.scheduling_line_all()}</Badge>
-        <Badge variant="secondary">{actionLabel(rule.action)}</Badge>
+        {rule.enabled ? null : (
+          <Badge size="sm" tone="neutral">
+            {m.nodes_disabled()}
+          </Badge>
+        )}
+        <Badge size="sm" tone="neutral">
+          {rule.lineName ?? m.scheduling_line_all()}
+        </Badge>
+        <Badge size="sm" tone="neutral">
+          {actionLabel(rule.action)}
+        </Badge>
       </div>
       {rule.nodes.length === 0 ? (
         <p className="border-t border-edge px-4 py-3 text-sm text-muted-foreground">
@@ -767,7 +778,8 @@ function PreviewRuleBlock({ rule, index }: { rule: PreviewRule; index: number })
                   </TableCell>
                   <TableCell className="align-top">
                     <Badge
-                      variant={stateVariant(node.state)}
+                      size="sm"
+                      tone={stateTone(node.state)}
                       data-testid="scheduling-preview-state"
                     >
                       {stateLabel(node.state)}

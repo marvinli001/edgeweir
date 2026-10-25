@@ -1,6 +1,8 @@
 import type { IpCheckResult, IpListDto } from "@edgeweir/contract";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import {
   BAN_REASON_LABELS,
   BAN_SCOPE_LABELS,
@@ -12,8 +14,6 @@ import { enterDelay } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { QueryView } from "@/components/states";
 import { StatusDot, type StatusTone } from "@/components/status-dot";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
@@ -33,7 +33,8 @@ const KIND_LABELS: Record<IpListDto["kind"], () => string> = {
 export function IpListKind({ kind }: { kind: IpListDto["kind"] }) {
   return (
     <Badge
-      variant={kind === "block" ? "destructive" : kind === "allow" ? "secondary" : "outline"}
+      size="sm"
+      tone={kind === "block" ? "danger" : kind === "allow" ? "neutral" : "neutral"}
       data-testid="ip-list-kind"
     >
       {KIND_LABELS[kind]()}
@@ -111,10 +112,14 @@ function IpCheckResultView({ result }: { result: IpCheckResult }) {
               {outcome.label()}
             </StatusDot>
             {verdict.platformAllowed ? (
-              <Badge variant="secondary">{m.ip_check_platform_allowed()}</Badge>
+              <Badge size="sm" tone="neutral">
+                {m.ip_check_platform_allowed()}
+              </Badge>
             ) : null}
             {verdict.siteAllowed ? (
-              <Badge variant="secondary">{m.access_site_allow_lists()}</Badge>
+              <Badge size="sm" tone="neutral">
+                {m.access_site_allow_lists()}
+              </Badge>
             ) : null}
           </>
         ) : null}
@@ -132,7 +137,8 @@ function IpCheckResultView({ result }: { result: IpCheckResult }) {
               <IpListKind kind={list.kind} />
               {list.siteRole ? (
                 <Badge
-                  variant={list.siteRole === "block" ? "destructive" : "default"}
+                  size="sm"
+                  tone={list.siteRole === "block" ? "danger" : "info"}
                   data-testid="ip-check-site-role"
                 >
                   {list.siteRole === "block"
@@ -156,7 +162,7 @@ function IpCheckResultView({ result }: { result: IpCheckResult }) {
             data-testid="ip-check-ban"
           >
             <span className="font-mono break-all">{ban.cidr}</span>
-            <Badge variant={ban.scope === "platform" ? "destructive" : "outline"}>
+            <Badge size="sm" tone={ban.scope === "platform" ? "danger" : "neutral"}>
               {BAN_SCOPE_LABELS[ban.scope]()}
             </Badge>
             {ban.siteName ? <span className="min-w-0 truncate">{ban.siteName}</span> : null}
@@ -177,10 +183,14 @@ function IpCheckResultView({ result }: { result: IpCheckResult }) {
             <span className="min-w-0 truncate font-medium">{cluster.name}</span>
             <span className="text-muted-foreground">{CLIENT_IP_MODES[cluster.clientIp]()}</span>
             {cluster.trustedProxy ? (
-              <Badge variant="default">{m.ip_check_trusted_proxy()}</Badge>
+              <Badge size="sm" tone="info">
+                {m.ip_check_trusted_proxy()}
+              </Badge>
             ) : null}
             {cluster.nodeAddress ? (
-              <Badge variant="secondary">{m.ip_check_node_address()}</Badge>
+              <Badge size="sm" tone="neutral">
+                {m.ip_check_node_address()}
+              </Badge>
             ) : null}
           </li>
         ))}
@@ -244,7 +254,7 @@ function IpCheckPanel({ siteId, pickSite }: { siteId?: string; pickSite?: boolea
           </Field>
           <Button
             type="submit"
-            variant="outline"
+            variant="secondary"
             disabled={!ip.trim() || result.isFetching}
             data-testid="ip-check-submit"
           >

@@ -1,9 +1,9 @@
 import type { MutationOptions, QueryOptionsBase } from "@orpc/tanstack-query";
 import { type QueryKey, useQuery } from "@tanstack/react-query";
 import type * as React from "react";
+import { Badge } from "@/components/arc/badge/badge";
 import { SaveBar } from "@/components/site/save-site";
 import { QueryView } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type SettingsFormOptions, useSettingsForm } from "@/hooks/use-settings-form";
 import { m } from "@/lib/i18n";
@@ -23,7 +23,7 @@ export function SettingSourceBadge({
   testId: string;
 }) {
   return (
-    <Badge variant="secondary" data-testid={testId}>
+    <Badge size="sm" tone="neutral" data-testid={testId}>
       {SOURCE_LABEL[source]()}
     </Badge>
   );

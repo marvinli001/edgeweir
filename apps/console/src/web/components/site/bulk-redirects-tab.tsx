@@ -9,6 +9,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/arc/button/button";
 import { FormDialog } from "@/components/form-dialog";
 import { OptionSelect } from "@/components/form-select";
 import { Pager } from "@/components/pager";
@@ -16,7 +17,6 @@ import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
 import { nextDraftKey, SaveBar, serializeDrafts } from "@/components/site/save-site";
 import { combineQueries, EmptyState, QueryView } from "@/components/states";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -143,7 +143,7 @@ function BulkRedirectsForm({
     <>
       <Button
         type="button"
-        variant="outline"
+        variant="secondary"
         onClick={() => importDialog.show()}
         data-testid="bulk-redirects-import"
       >
@@ -152,7 +152,7 @@ function BulkRedirectsForm({
       </Button>
       <Button
         type="button"
-        variant="outline"
+        variant="secondary"
         disabled={rows.length >= BULK_REDIRECT_LIMIT}
         onClick={add}
         data-testid="bulk-redirects-add"
@@ -368,8 +368,9 @@ function RedirectRow({
       </Field>
       {editable ? (
         <Button
+          className="icon-button"
           type="button"
-          size="icon-sm"
+          size="sm"
           variant="ghost"
           aria-label={m.common_remove()}
           onClick={onRemove}

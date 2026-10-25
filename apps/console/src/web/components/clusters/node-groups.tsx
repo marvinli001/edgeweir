@@ -3,14 +3,14 @@ import { Add01Icon, Delete02Icon, PencilEdit01Icon } from "@hugeicons/core-free-
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
 import { OptionSelect } from "@/components/form-select";
 import { SwitchField } from "@/components/site/fields";
 import { QueryView } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useDialogState } from "@/hooks/use-dialog-state";
@@ -98,7 +98,7 @@ function DeleteNodeGroupAction({ group }: { group: NodeGroup }) {
   return (
     <ConfirmDialog
       trigger={
-        <Button size="icon-sm" variant="ghost" aria-label={m.common_delete()}>
+        <Button className="icon-button" size="sm" variant="ghost" aria-label={m.common_delete()}>
           <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
         </Button>
       }
@@ -128,10 +128,12 @@ export function NodeGroupsSection({ cluster }: { cluster: Cluster }) {
               {row.original.name}
             </span>
             {row.original.isDefault ? (
-              <Badge variant="outline">{m.node_groups_default()}</Badge>
+              <Badge size="sm" tone="neutral">
+                {m.node_groups_default()}
+              </Badge>
             ) : null}
             {row.original.isCanary ? (
-              <Badge variant="secondary" data-testid="node-group-canary-badge">
+              <Badge size="sm" tone="neutral" data-testid="node-group-canary-badge">
                 {m.node_groups_canary()}
               </Badge>
             ) : null}
@@ -143,7 +145,7 @@ export function NodeGroupsSection({ cluster }: { cluster: Cluster }) {
         header: () => m.node_groups_region(),
         cell: ({ row }) =>
           row.original.regionName ? (
-            <Badge variant="secondary">
+            <Badge size="sm" tone="neutral">
               {row.original.regionName} · {row.original.regionCode}
             </Badge>
           ) : (
@@ -161,7 +163,8 @@ export function NodeGroupsSection({ cluster }: { cluster: Cluster }) {
         cell: ({ row }) => (
           <div className="flex justify-end gap-1">
             <Button
-              size="icon-sm"
+              className="icon-button"
+              size="sm"
               variant="ghost"
               aria-label={m.node_groups_edit()}
               onClick={() => edit.show(row.original)}
@@ -182,7 +185,7 @@ export function NodeGroupsSection({ cluster }: { cluster: Cluster }) {
         <h2 className="flex-1 text-sm font-medium">{m.node_groups_title()}</h2>
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           onClick={() => create.show()}
           data-testid="create-node-group"
         >

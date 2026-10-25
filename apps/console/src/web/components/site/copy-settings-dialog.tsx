@@ -10,11 +10,11 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/arc/button/button";
 import { OptionSelect } from "@/components/form-select";
 import { enterDelay } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { SiteMultiSelect } from "@/components/site-multi-select";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -159,8 +159,9 @@ export function CopySettingsDialog({
               <div className="flex items-center justify-between gap-2">
                 <FieldLabel id="copy-parts-label">{m.copy_parts()}</FieldLabel>
                 <Button
+                  className="min-h-6 px-2 text-xs"
                   type="button"
-                  size="xs"
+                  size="sm"
                   variant="ghost"
                   onClick={() => setParts(allParts ? [] : [...SITE_COPY_PARTS])}
                   data-testid="copy-parts-all"
@@ -258,7 +259,7 @@ export function CopySettingsDialog({
               </FieldError>
             ) : null}
             <DialogFooter>
-              <Button variant="outline" onClick={() => setStep({ kind: "form" })}>
+              <Button variant="secondary" onClick={() => setStep({ kind: "form" })}>
                 {m.copy_back()}
               </Button>
               <Button

@@ -25,6 +25,8 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { type Option, OptionSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { CachePurgeCard } from "@/components/site/cache-purge-card";
@@ -35,8 +37,6 @@ import { NumberField, SwitchField } from "@/components/site/fields";
 import { ImageConvertCard, ImageSavingsCard } from "@/components/site/image-convert-card";
 import { nextDraftKey, SaveBar, serializeDrafts, useSaveSite } from "@/components/site/save-site";
 import { SortableList, useSortableRow } from "@/components/sortable-list";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -340,7 +340,7 @@ function CacheRulesCard({ site }: { site: Site }) {
             <Button
               type="button"
               size="sm"
-              variant="outline"
+              variant="secondary"
               onClick={() => setRows([...rows, newRule()])}
               data-testid="cache-rule-add"
             >
@@ -453,9 +453,9 @@ function SortableRule({
             <Button
               ref={setActivatorNodeRef}
               type="button"
-              size="icon-sm"
+              size="sm"
               variant="ghost"
-              className="cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
+              className="icon-button cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
               aria-label={m.site_rule_drag({ index: index + 1 })}
               data-testid="cache-rule-handle"
               {...attributes}
@@ -479,7 +479,7 @@ function SortableRule({
             >
               {m.site_rule_more()}
               {hidden > 0 ? (
-                <Badge variant="secondary" className="tabular-nums">
+                <Badge size="sm" tone="neutral" className="tabular-nums">
                   {hidden}
                 </Badge>
               ) : null}
@@ -493,8 +493,9 @@ function SortableRule({
               />
             </CollapsibleTrigger>
             <Button
+              className="icon-button"
               type="button"
-              size="icon-sm"
+              size="sm"
               variant="ghost"
               aria-label={m.common_remove()}
               onClick={onRemove}

@@ -19,6 +19,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { AcmeCaFields, caLabel, type Eab, eabMissing, eabParams } from "@/components/acme-ca";
+import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DnsCredentialDialog } from "@/components/dns/credential-dialog";
 import { FormSelect, OptionSelect } from "@/components/form-select";
@@ -28,7 +29,6 @@ import { NumberField, SwitchField } from "@/components/site/fields";
 import { CheckboxList } from "@/components/site/ports-card";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, ErrorState, QueryView } from "@/components/states";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
@@ -153,7 +153,7 @@ function CertificateState({ cert, actions }: { cert: CertificateDto; actions?: R
           {retry ? (
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={renew.isPending}
               onClick={() => renew.mutate({ id: cert.id })}
             >
@@ -293,7 +293,12 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
                     {httpsBlockerText(blocker, caLabel(ca))}
                   </span>
                   {blocker.code === "dns_credential_missing" ? (
-                    <Button size="xs" variant="outline" onClick={() => addCredential.show()}>
+                    <Button
+                      className="min-h-6 px-2 text-xs"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => addCredential.show()}
+                    >
                       {m.cert_dns_add()}
                     </Button>
                   ) : null}
@@ -341,7 +346,7 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
                 />
               </div>
               <Button
-                variant="outline"
+                variant="secondary"
                 disabled={pending || !chosen}
                 data-testid="https-use-existing"
                 onClick={() =>
@@ -386,7 +391,7 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
           </CollapsibleTrigger>
           {blockers.length ? (
             <Button
-              variant="outline"
+              variant="secondary"
               disabled={check.isFetching}
               onClick={() => void check.refetch()}
             >
@@ -550,9 +555,9 @@ function HttpsEditor({
                 />
               </div>
               <Button
+                className="icon-button"
                 type="button"
                 variant="ghost"
-                size="icon"
                 aria-label={m.https_certificate_remove()}
                 data-testid={`https-certificate-remove-${index + 2}`}
                 onClick={() =>
@@ -572,7 +577,7 @@ function HttpsEditor({
             <div className="flex flex-col gap-2 self-end sm:col-span-2">
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 className="self-start"
                 disabled={!multiAvailable}

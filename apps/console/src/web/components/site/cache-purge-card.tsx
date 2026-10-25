@@ -1,17 +1,17 @@
 import { displaySiteDomain, MAX_CACHE_TASK_URLS, type Site } from "@edgeweir/contract";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/arc/button/button";
 import {
   CacheTaskList,
   cacheTaskTypeLabel,
   followTasks,
   useExpandedTasks,
 } from "@/components/cache-tasks";
+import { LinkButton } from "@/components/link-button";
 import { SafetyNote } from "@/components/safety-note";
 import { QueryView } from "@/components/states";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
@@ -165,15 +165,15 @@ export function CachePurgeCard({ site }: { site: Site }) {
       <CardContent className="flex flex-col gap-3 border-t pt-(--card-spacing)">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-medium text-muted-foreground">{m.purge_tasks()}</h3>
-          <Button
+          <LinkButton
             size="sm"
             variant="ghost"
-            nativeButton={false}
-            render={<Link to="/purge" search={{ site: site.id }} />}
+            to="/purge"
+            search={{ site: site.id }}
             data-testid="cache-purge-all-tasks"
           >
             {m.purge_view_tasks()}
-          </Button>
+          </LinkButton>
         </div>
         <QueryView
           query={tasks}

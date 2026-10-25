@@ -13,11 +13,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/arc/button/button";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { CopySettingsDialog } from "@/components/site/copy-settings-dialog";
 import { TagPicker } from "@/components/site-tags";
-import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { m } from "@/lib/i18n";
@@ -63,7 +63,7 @@ export function SitesBatchBar({
     kind: Exclude<Dialog, null>,
     icon: typeof PlayIcon,
     label: string,
-    variant: "outline" | "destructive" = "outline",
+    variant: "secondary" | "danger" = "secondary",
   ) => (
     <Button size="sm" variant={variant} onClick={() => open(kind)} data-testid={`batch-${kind}`}>
       <HugeiconsIcon icon={icon} strokeWidth={2} />
@@ -92,7 +92,7 @@ export function SitesBatchBar({
       {action("addTags", Tag01Icon, m.batch_add_tags())}
       {action("removeTags", Tag01Icon, m.batch_remove_tags())}
       {action("copy", Copy01Icon, m.copy_title())}
-      {action("delete", Delete02Icon, m.common_delete(), "destructive")}
+      {action("delete", Delete02Icon, m.common_delete(), "danger")}
       <Button
         size="sm"
         variant="ghost"

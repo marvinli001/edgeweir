@@ -5,6 +5,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useLocation } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { CopyButton } from "@/components/copy-button";
 import { DeleteL4AppDialog, L4EnabledSwitch } from "@/components/l4/app-actions";
 import { L4AppDialog } from "@/components/l4/app-dialog";
@@ -15,8 +17,6 @@ import { CnamePrefixActions } from "@/components/site/cname-prefix";
 import { QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { NotFoundPage } from "@/components/status-page";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
@@ -177,7 +177,7 @@ function Overview({ app }: { app: L4App }) {
           <CardTitle className="flex-1">{m.site_tab_overview()}</CardTitle>
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             onClick={() => setEditOpen(true)}
             data-testid="l4-app-edit-open"
           >
@@ -186,7 +186,7 @@ function Overview({ app }: { app: L4App }) {
           </Button>
           <Button
             size="sm"
-            variant="destructive"
+            variant="danger"
             onClick={() => setDeleteOpen(true)}
             data-testid="l4-app-delete-open"
           >
@@ -250,9 +250,13 @@ function Overview({ app }: { app: L4App }) {
                     data-testid="l4-app-origin"
                   >
                     <span className="font-mono text-xs break-all">{originLabel(origin)}</span>
-                    <Badge variant="outline">{m.l4_origin_weight({ weight: origin.weight })}</Badge>
+                    <Badge size="sm" tone="neutral">
+                      {m.l4_origin_weight({ weight: origin.weight })}
+                    </Badge>
                     {origin.backup ? (
-                      <Badge variant="secondary">{m.site_origin_backup()}</Badge>
+                      <Badge size="sm" tone="neutral">
+                        {m.site_origin_backup()}
+                      </Badge>
                     ) : null}
                   </li>
                 ))}
@@ -261,7 +265,7 @@ function Overview({ app }: { app: L4App }) {
             {app.certificateName ? (
               <InfoRow label={m.l4_tls_certificate()} testId="l4-app-tls">
                 {app.certificateName}
-                <Badge variant="outline">{`TLS ${app.tlsMinimumVersion}+`}</Badge>
+                <Badge size="sm" tone="neutral">{`TLS ${app.tlsMinimumVersion}+`}</Badge>
               </InfoRow>
             ) : null}
             <InfoRow label={m.l4_proxy()} testId="l4-app-proxy">
@@ -325,7 +329,7 @@ function ListNames({ label, chips }: { label: string; chips: { id: string; name:
         <span>{m.l4_lists_none()}</span>
       ) : (
         chips.map((chip) => (
-          <Badge key={chip.id} variant="outline" className="font-mono">
+          <Badge size="sm" key={chip.id} tone="neutral" className="font-mono">
             {chip.name}
           </Badge>
         ))

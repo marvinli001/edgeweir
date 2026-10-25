@@ -1,9 +1,9 @@
 import { useMutation } from "@tanstack/react-query";
+import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { SettingsCard } from "@/components/settings-card";
 import { NumberField } from "@/components/site/fields";
 import { Alert, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import { formatNumber, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
@@ -30,7 +30,7 @@ export function DnsHeldBack({
         </span>
         <ConfirmDialog
           trigger={
-            <Button size="sm" variant="destructive" data-testid="dns-force-publish">
+            <Button size="sm" variant="danger" data-testid="dns-force-publish">
               {m.dns_force_publish()}
             </Button>
           }

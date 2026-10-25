@@ -1,6 +1,6 @@
 import type { OriginHealth, OriginHealthSource } from "@edgeweir/contract";
+import { Badge } from "@/components/arc/badge/badge";
 import { Dot } from "@/components/status-dot";
-import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { m, timeAgo } from "@/lib/i18n";
 import { originErrorText } from "@/lib/node-errors";
@@ -16,14 +16,14 @@ export function OriginHealthBadge({ health }: { health: OriginHealth | undefined
   if (!health) return null;
   if (health.onlineNodes === 0) {
     return (
-      <Badge variant="outline" className="text-muted-foreground" data-testid="origin-health">
+      <Badge size="sm" tone="neutral" className="text-muted-foreground" data-testid="origin-health">
         {m.site_origin_health_no_nodes()}
       </Badge>
     );
   }
   if (health.downNodes === 0) {
     return (
-      <Badge variant="outline" data-testid="origin-health" data-state="healthy">
+      <Badge size="sm" tone="neutral" data-testid="origin-health" data-state="healthy">
         <Dot tone="good" small />
         {m.site_origin_health_ok()}
       </Badge>
@@ -35,7 +35,8 @@ export function OriginHealthBadge({ health }: { health: OriginHealth | undefined
       <TooltipTrigger
         render={
           <Badge
-            variant="destructive"
+            size="sm"
+            tone="danger"
             tabIndex={0}
             data-testid="origin-health"
             data-state="down"

@@ -2,12 +2,12 @@ import type { EncodedPathSettings } from "@edgeweir/contract";
 import { ENCODED_PATH_MAX_EXEMPTIONS } from "@edgeweir/rule-engine";
 import { Add01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { Button } from "@/components/arc/button/button";
 import { SafetyNote } from "@/components/safety-note";
 import { AccessPartCard, type PartFields } from "@/components/site/access-control/part-card";
 import { SwitchField } from "@/components/site/fields";
 import { nextDraftKey } from "@/components/site/save-site";
 import { EmptyState } from "@/components/states";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { m } from "@/lib/i18n";
 
@@ -101,9 +101,9 @@ function EncodedPathFields({ draft, set, blocked, invalid }: PartFields<Draft>) 
             />
             <Button
               type="button"
-              size="icon-sm"
+              size="sm"
               variant="ghost"
-              className="sm:order-last"
+              className="icon-button sm:order-last"
               aria-label={m.common_delete()}
               onClick={() => setRows(rows.filter((_, i) => i !== index))}
               data-testid="encoded-paths-delete"
@@ -133,7 +133,7 @@ function EncodedPathFields({ draft, set, blocked, invalid }: PartFields<Draft>) 
       </ul>
       <Button
         type="button"
-        variant="outline"
+        variant="secondary"
         size="sm"
         className="self-start"
         disabled={rows.length >= ENCODED_PATH_MAX_EXEMPTIONS}

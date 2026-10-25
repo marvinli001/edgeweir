@@ -12,6 +12,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
 import { Sparkline } from "@/components/appica/sparkline";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { type Columns, DataTable, FilterBar } from "@/components/data-table";
 import { FilterSelect, FormSelect, OptionSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
@@ -26,8 +28,6 @@ import { TagBadges, TagFilter, TagManagerDialog, useSiteTags } from "@/component
 import { SitesBatchBar } from "@/components/sites-batch-bar";
 import { SitesTabs } from "@/components/sites-tabs";
 import { EmptyState, QueryView } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -293,7 +293,11 @@ function SitesPage() {
       {
         id: "cluster",
         header: () => m.sites_col_cluster(),
-        cell: ({ row }) => <Badge variant="secondary">{row.original.clusterName}</Badge>,
+        cell: ({ row }) => (
+          <Badge size="sm" tone="neutral">
+            {row.original.clusterName}
+          </Badge>
+        ),
       },
     ],
     [

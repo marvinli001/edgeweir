@@ -19,13 +19,13 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import * as React from "react";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { OptionSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { ListInput, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { ErrorState, QueryView } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -126,10 +126,10 @@ function ListenPortsForm({ data }: { data: ClusterListenPorts }) {
           data-testid="listen-ports-always"
         >
           <span className="text-muted-foreground">{m.listen_ports_always()}</span>
-          <Badge variant="secondary" className="font-mono">
+          <Badge size="sm" tone="neutral" className="font-mono">
             80
           </Badge>
-          <Badge variant="secondary" className="font-mono">
+          <Badge size="sm" tone="neutral" className="font-mono">
             443
           </Badge>
         </div>
@@ -522,7 +522,7 @@ function UnknownHostsForm({ data }: { data: ClusterUnknownHosts }) {
               ) : more && sites.hasNextPage && !sites.isPlaceholderData ? (
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   className="self-start"
                   disabled={sites.isFetchingNextPage}

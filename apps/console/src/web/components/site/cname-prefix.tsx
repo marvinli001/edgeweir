@@ -3,8 +3,8 @@ import { PencilEdit01Icon, RefreshIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -54,7 +54,12 @@ export function CnamePrefixActions({
             done();
           }}
           trigger={
-            <Button type="button" variant="outline" size="sm" data-testid={`${testId}-regenerate`}>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              data-testid={`${testId}-regenerate`}
+            >
               <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} />
               {m.cname_prefix_regenerate()}
             </Button>
@@ -146,9 +151,10 @@ function RetiredNames({
             {m.cname_retired_until({ time: formatDateTime(retired.expiresAt) })}
           </span>
           <Button
+            className="min-h-6 px-2 text-xs"
             type="button"
             variant="ghost"
-            size="xs"
+            size="sm"
             disabled={pending !== null}
             onClick={async () => {
               setPending(retired.name);

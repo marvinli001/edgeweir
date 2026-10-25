@@ -1,11 +1,12 @@
 import { ArrowLeft01Icon, RefreshIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Link, useMatches, useRouter } from "@tanstack/react-router";
+import { useMatches, useRouter } from "@tanstack/react-router";
 import * as React from "react";
+import { Button } from "@/components/arc/button/button";
 import { CopyButton } from "@/components/copy-button";
+import { LinkButton } from "@/components/link-button";
 import { SiteHeader } from "@/components/site-header";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Button } from "@/components/ui/button";
 import { formatDateTime, m } from "@/lib/i18n";
 import { errorMessage } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
@@ -318,17 +319,17 @@ function StatusPage({
   return instrument;
 }
 
-function OverviewButton({ variant }: { variant?: "outline" }) {
+function OverviewButton({ variant }: { variant?: "secondary" }) {
   return (
-    <Button variant={variant} render={<Link to="/overview" />} nativeButton={false}>
+    <LinkButton variant={variant} to="/overview">
       {m.status_back_overview()}
-    </Button>
+    </LinkButton>
   );
 }
 
 function BackButton() {
   return (
-    <Button variant="outline" onClick={() => window.history.back()}>
+    <Button variant="secondary" onClick={() => window.history.back()}>
       <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} data-icon="inline-start" />
       {m.status_back()}
     </Button>
@@ -410,7 +411,7 @@ export function RouteErrorPage({ error }: { error: unknown }) {
         ) : kind === "error" ? (
           <>
             {retry}
-            {inConsole ? <OverviewButton variant="outline" /> : null}
+            {inConsole ? <OverviewButton variant="secondary" /> : null}
           </>
         ) : (
           <>

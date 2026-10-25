@@ -4,6 +4,8 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Countdown } from "@/components/appica/countdown";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { type Columns, DataTable } from "@/components/data-table";
@@ -16,8 +18,6 @@ import { SettingsCard } from "@/components/settings-card";
 import { NumberField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -108,7 +108,8 @@ function ProbeActions({
       <DropdownMenuTrigger
         render={
           <Button
-            size="icon-sm"
+            className="icon-button"
+            size="sm"
             variant="ghost"
             aria-label={m.common_actions()}
             data-testid="probe-actions"
@@ -186,7 +187,7 @@ export function ProbesPanel({
         id: "region",
         header: () => m.node_groups_region(),
         cell: ({ row }) => (
-          <Badge variant="secondary" data-testid="probe-region">
+          <Badge size="sm" tone="neutral" data-testid="probe-region">
             {row.original.regionName} · {row.original.regionCode}
           </Badge>
         ),
@@ -650,7 +651,9 @@ function ResultRow({
             <span className="flex items-center gap-1.5 font-medium">
               {r.proberName}
               {r.proberKind === "node" ? (
-                <Badge variant="outline">{m.probes_prober_node()}</Badge>
+                <Badge size="sm" tone="neutral">
+                  {m.probes_prober_node()}
+                </Badge>
               ) : null}
             </span>
             {r.regionName ? (
@@ -664,7 +667,7 @@ function ResultRow({
           <span className="font-mono text-xs whitespace-nowrap">
             {r.address.includes(":") ? `[${r.address}]` : r.address}:{r.port}
           </span>
-          <Badge variant="secondary" className="font-mono uppercase">
+          <Badge size="sm" tone="neutral" className="font-mono uppercase">
             {r.method}
           </Badge>
         </div>
@@ -831,7 +834,9 @@ function ProbeMatrix({ results }: { results: ProbeResultDto[] }) {
                   <span className="flex items-center gap-1.5 text-sm font-medium">
                     {prober.name}
                     {prober.kind === "node" ? (
-                      <Badge variant="outline">{m.probes_prober_node()}</Badge>
+                      <Badge size="sm" tone="neutral">
+                        {m.probes_prober_node()}
+                      </Badge>
                     ) : null}
                   </span>
                   {prober.region ? (

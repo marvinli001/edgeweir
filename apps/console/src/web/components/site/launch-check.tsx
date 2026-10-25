@@ -3,11 +3,11 @@ import { RefreshIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
 import type { LinkProps } from "@tanstack/react-router";
+import { Button } from "@/components/arc/button/button";
 import { ResourceRow } from "@/components/resource-list";
 import { canaryLabel } from "@/components/site-status";
 import { QueryView } from "@/components/states";
 import { Dot, type StatusTone } from "@/components/status-dot";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAction } from "@/hooks/use-action";
 import { certificateErrorText } from "@/lib/certificate-errors";
@@ -39,8 +39,9 @@ export function RecheckButton({ queries }: { queries: { refetch: () => Promise<u
   const action = useAction();
   return (
     <Button
+      className="icon-button"
       type="button"
-      size="icon-sm"
+      size="sm"
       variant="ghost"
       aria-label={m.site_launch_recheck()}
       title={m.site_launch_recheck()}

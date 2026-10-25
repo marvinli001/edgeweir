@@ -5,6 +5,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
 import { AcmeDirectoryCard } from "@/components/acme-directory";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { CopyButton } from "@/components/copy-button";
 import { DemoSettingsCard } from "@/components/demo-settings";
 import { LogRetentionCard } from "@/components/log-retention";
@@ -19,8 +21,6 @@ import { ProbesPanel } from "@/components/probes";
 import { ReleaseSourceCard } from "@/components/release-source";
 import { ServiceAccountsPanel } from "@/components/service-accounts";
 import { QueryView } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UsageSettingsCard } from "@/components/usage-settings";
@@ -152,12 +152,12 @@ function GeneralSettings() {
                   <CopyButton value={system.nodeCaSha256} iconOnly />
                 </Row>
                 <Row label={m.system_analytics()}>
-                  <Badge variant="secondary" className="font-mono">
+                  <Badge size="sm" tone="neutral" className="font-mono">
                     {system.analyticsMode}
                   </Badge>
                 </Row>
                 <Row label={m.system_setup_token()}>
-                  <Badge variant="secondary" data-testid="setup-token-state">
+                  <Badge size="sm" tone="neutral" data-testid="setup-token-state">
                     {system.setupCompletedAt
                       ? m.system_setup_token_used({
                           time: formatDateTime(system.setupCompletedAt),

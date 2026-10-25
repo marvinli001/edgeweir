@@ -15,13 +15,13 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect, OptionSelect } from "@/components/form-select";
 import { nodeLogSourceLabel } from "@/components/node-logs";
 import { EmptyState, QueryView } from "@/components/states";
 import { Dot, type StatusTone } from "@/components/status-dot";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -90,7 +90,7 @@ export function NodeDebugLogs({ node }: { node: Node }) {
         <h3 className="text-sm font-medium">{m.node_debug_title()}</h3>
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           disabled={open}
           onClick={() => setPulling(true)}
           data-testid="node-debug-pull"
@@ -173,17 +173,30 @@ function PullRow({
           {m.node_debug_entries({ count: formatNumber(pull.entryCount) })}
         </span>
       )}
-      {pull.truncated ? <Badge variant="outline">{m.node_debug_truncated()}</Badge> : null}
+      {pull.truncated ? (
+        <Badge size="sm" tone="neutral">
+          {m.node_debug_truncated()}
+        </Badge>
+      ) : null}
       {pull.supervisorMissing ? (
-        <Badge variant="outline">{m.node_debug_supervisor_missing()}</Badge>
+        <Badge size="sm" tone="neutral">
+          {m.node_debug_supervisor_missing()}
+        </Badge>
       ) : null}
       {pull.state === "succeeded" ? (
         <span className="ml-auto flex items-center gap-1">
-          <Button size="xs" variant="ghost" onClick={onView} data-testid="node-debug-view">
+          <Button
+            className="min-h-6 px-2 text-xs"
+            size="sm"
+            variant="ghost"
+            onClick={onView}
+            data-testid="node-debug-view"
+          >
             {m.node_debug_view()}
           </Button>
           <Button
-            size="xs"
+            className="min-h-6 px-2 text-xs"
+            size="sm"
             variant="ghost"
             disabled={downloading}
             onClick={() => void download()}
@@ -335,14 +348,18 @@ function DebugLogViewer({
                   </span>
                 ) : null}
                 {data.truncated ? (
-                  <Badge variant="outline">{m.node_debug_truncated()}</Badge>
+                  <Badge size="sm" tone="neutral">
+                    {m.node_debug_truncated()}
+                  </Badge>
                 ) : null}
                 {data.supervisorMissing ? (
-                  <Badge variant="outline">{m.node_debug_supervisor_missing()}</Badge>
+                  <Badge size="sm" tone="neutral">
+                    {m.node_debug_supervisor_missing()}
+                  </Badge>
                 ) : null}
                 <Button
                   size="sm"
-                  variant="outline"
+                  variant="secondary"
                   className="ml-auto"
                   onClick={() => saveDebugLog(node, data)}
                   data-testid="node-debug-viewer-download"
@@ -402,7 +419,7 @@ function DebugLogViewer({
                   {entries.length > shown ? (
                     <Button
                       size="sm"
-                      variant="outline"
+                      variant="secondary"
                       className="self-center"
                       onClick={() => setShown((n) => n + PAGE)}
                       data-testid="node-debug-more"
@@ -436,11 +453,15 @@ function DebugEntryRow({ entry }: { entry: NodeDebugLogEntry }) {
         <span className="font-mono whitespace-nowrap text-muted-foreground">
           {formatDateTime(entry.time)}
         </span>
-        <Badge variant="outline">
+        <Badge size="sm" tone="neutral">
           {nodeLogSourceLabel(entry.source)}
           {entry.component ? ` · ${entry.component}` : ""}
         </Badge>
-        {entry.truncated ? <Badge variant="outline">{m.node_logs_truncated()}</Badge> : null}
+        {entry.truncated ? (
+          <Badge size="sm" tone="neutral">
+            {m.node_logs_truncated()}
+          </Badge>
+        ) : null}
       </div>
       <p className="min-w-0 font-mono break-words whitespace-pre-wrap">{entry.message}</p>
       {fields.length > 0 ? (

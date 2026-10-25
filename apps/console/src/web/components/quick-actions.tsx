@@ -13,11 +13,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/arc/button/button";
 import { BanDialog } from "@/components/ban-dialog";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { ExclusionDialog } from "@/components/site/exclusion-dialog";
 import { ErrorState } from "@/components/states";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -101,9 +101,9 @@ export function RowMenu({ items, className }: { items: RowMenuItem[]; className?
       <DropdownMenuTrigger
         render={
           <Button
-            size="icon-xs"
+            size="sm"
             variant="ghost"
-            className={cn("-my-1 shrink-0", className)}
+            className={cn("icon-button -my-1 size-6 min-h-6 shrink-0", className)}
             aria-label={m.common_actions()}
             data-testid="row-actions"
           />

@@ -4,6 +4,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Countdown } from "@/components/appica/countdown";
+import { Button } from "@/components/arc/button/button";
 import { CodeBlock } from "@/components/copy-button";
 import { AnimatedBeam } from "@/components/effects/animated-beam";
 import { OptionSelect } from "@/components/form-select";
@@ -14,7 +15,6 @@ import {
 } from "@/components/node-enrollment";
 import { SafetyNote } from "@/components/safety-note";
 import { LoadingState } from "@/components/states";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -271,7 +271,7 @@ function EnrollDialog({
                 <div className="flex justify-end">
                   <Button
                     type="submit"
-                    variant="outline"
+                    variant="secondary"
                     disabled={create.isPending}
                     data-testid="generate-install-command"
                   >

@@ -10,6 +10,7 @@ import {
 import { ArrowDown01Icon, ArrowUp01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
+import { Button } from "@/components/arc/button/button";
 import { FormSelect, OptionSelect } from "@/components/form-select";
 import { NumberField } from "@/components/site/fields";
 import {
@@ -20,7 +21,6 @@ import {
   LocksContext,
   UNCHANGED,
 } from "@/components/site/rules/labels";
-import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { m } from "@/lib/i18n";
@@ -328,8 +328,9 @@ export function CompressionFields({
                 <span className="w-5 text-xs text-muted-foreground tabular-nums">{index + 1}</span>
                 <span className="flex-1 text-sm">{name}</span>
                 <Button
+                  className="icon-button"
                   type="button"
-                  size="icon-sm"
+                  size="sm"
                   variant="ghost"
                   aria-label={m.rules_compression_up({ name })}
                   disabled={index === 0}
@@ -338,8 +339,9 @@ export function CompressionFields({
                   <HugeiconsIcon icon={ArrowUp01Icon} strokeWidth={2} />
                 </Button>
                 <Button
+                  className="icon-button"
                   type="button"
-                  size="icon-sm"
+                  size="sm"
                   variant="ghost"
                   aria-label={m.rules_compression_down({ name })}
                   disabled={index === list.length - 1}
@@ -348,8 +350,9 @@ export function CompressionFields({
                   <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} />
                 </Button>
                 <Button
+                  className="icon-button"
                   type="button"
-                  size="icon-sm"
+                  size="sm"
                   variant="ghost"
                   aria-label={m.rules_compression_remove({ name })}
                   onClick={() => set(list.filter((c) => c !== coding))}

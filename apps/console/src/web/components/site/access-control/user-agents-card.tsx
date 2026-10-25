@@ -6,12 +6,12 @@ import {
   Delete02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { Button } from "@/components/arc/button/button";
 import { OptionSelect } from "@/components/form-select";
 import { ListText } from "@/components/site/access-control/fields";
 import { AccessPartCard, type PartFields } from "@/components/site/access-control/part-card";
 import { nextDraftKey } from "@/components/site/save-site";
 import { EmptyState } from "@/components/states";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { m } from "@/lib/i18n";
 
@@ -124,8 +124,9 @@ function UserAgentFields({ draft, set, blocked, invalid }: PartFields<Draft>) {
               />
               <div className="ml-auto flex shrink-0 items-center gap-1">
                 <Button
+                  className="icon-button"
                   type="button"
-                  size="icon-sm"
+                  size="sm"
                   variant="ghost"
                   aria-label={m.auth_move_up()}
                   disabled={index === 0}
@@ -134,8 +135,9 @@ function UserAgentFields({ draft, set, blocked, invalid }: PartFields<Draft>) {
                   <HugeiconsIcon icon={ArrowUp01Icon} />
                 </Button>
                 <Button
+                  className="icon-button"
                   type="button"
-                  size="icon-sm"
+                  size="sm"
                   variant="ghost"
                   aria-label={m.auth_move_down()}
                   disabled={index === rows.length - 1}
@@ -144,8 +146,9 @@ function UserAgentFields({ draft, set, blocked, invalid }: PartFields<Draft>) {
                   <HugeiconsIcon icon={ArrowDown01Icon} />
                 </Button>
                 <Button
+                  className="icon-button"
                   type="button"
-                  size="icon-sm"
+                  size="sm"
                   variant="ghost"
                   aria-label={m.common_delete()}
                   onClick={() => setRows(rows.filter((_, i) => i !== index))}
@@ -159,7 +162,7 @@ function UserAgentFields({ draft, set, blocked, invalid }: PartFields<Draft>) {
         </ol>
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           size="sm"
           className="self-start"
           disabled={rows.length >= USER_AGENT_MAX_RULES}

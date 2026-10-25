@@ -3,7 +3,7 @@ import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { cn } from "cn";
 import type * as React from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/arc/button/button";
 import { m } from "@/lib/i18n";
 
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
@@ -59,8 +59,8 @@ function DialogContent({
             render={
               <Button
                 variant="ghost"
-                className="absolute top-4 right-4 bg-wash hover:bg-foreground/10"
-                size="icon-sm"
+                className="icon-button absolute top-4 right-4 bg-wash hover:bg-foreground/10"
+                size="sm"
               />
             }
           >
@@ -95,7 +95,7 @@ function DialogFooter({
     >
       {children}
       {showCloseButton && (
-        <DialogPrimitive.Close render={<Button variant="outline" />}>
+        <DialogPrimitive.Close render={<Button variant="secondary" />}>
           {m.common_close()}
         </DialogPrimitive.Close>
       )}

@@ -13,13 +13,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { FormSelect, OptionSelect } from "@/components/form-select";
 import { L4NodesWarning } from "@/components/l4/common";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SettingsGroup, SwitchField } from "@/components/site/fields";
 import { nextDraftKey } from "@/components/site/save-site";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -367,7 +367,7 @@ function AppForm({
             <Field>
               <FieldLabel>{m.sites_col_cluster()}</FieldLabel>
               <div className="flex h-9 items-center">
-                <Badge variant="secondary" data-testid="l4-app-cluster-name">
+                <Badge size="sm" tone="neutral" data-testid="l4-app-cluster-name">
                   {clusterName}
                 </Badge>
               </div>
@@ -492,7 +492,7 @@ function AppForm({
           <Button
             type="button"
             size="sm"
-            variant="outline"
+            variant="secondary"
             className="self-start"
             disabled={draft.origins.length >= MAX_L4_ORIGINS}
             onClick={() => set({ origins: [...draft.origins, newOrigin()] })}
@@ -846,9 +846,9 @@ function OriginRow({
       />
       <Button
         type="button"
-        size="icon-sm"
+        size="sm"
         variant="ghost"
-        className="mb-0.5 justify-self-end"
+        className="icon-button mb-0.5 justify-self-end"
         aria-label={m.common_remove()}
         disabled={!removable}
         onClick={onRemove}
@@ -887,8 +887,9 @@ function ListPicker({
           listChips(value, lists).map(({ id: listId, name }) => {
             return (
               <Badge
+                size="sm"
                 key={listId}
-                variant="secondary"
+                tone="neutral"
                 className="h-7 gap-1 pr-1 font-mono animate-enter"
                 data-testid={`${testId}-item`}
                 data-list={name}

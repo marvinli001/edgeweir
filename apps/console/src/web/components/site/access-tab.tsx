@@ -27,6 +27,8 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CopyButton } from "@/components/copy-button";
 import { FormDialog } from "@/components/form-dialog";
@@ -45,8 +47,6 @@ import { NumberField, SwitchField } from "@/components/site/fields";
 import { CheckboxList } from "@/components/site/ports-card";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, EmptyState, QueryView } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -334,7 +334,7 @@ function AuthRulesForm({
           <CardTitle>{m.auth_title()}</CardTitle>
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             size="sm"
             disabled={blocked || rows.length >= AUTH_MAX_RULES}
             onClick={() => setEditing({ index: rows.length, draft: newDraft("basic", site.name) })}
@@ -373,7 +373,7 @@ function AuthRulesForm({
                   <span className="w-5 shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
                     {index + 1}
                   </span>
-                  <Badge variant="outline" data-testid="auth-rule-kind">
+                  <Badge size="sm" tone="neutral" data-testid="auth-rule-kind">
                     {authKindLabel(row.kind)}
                   </Badge>
                   <span className="min-w-0 flex-1 truncate text-sm" title={scopeSummary(row)}>
@@ -390,8 +390,9 @@ function AuthRulesForm({
                     />
                     {isUrlAuthKind(row.kind) && row.saved ? (
                       <Button
+                        className="icon-button"
                         type="button"
-                        size="icon-sm"
+                        size="sm"
                         variant="ghost"
                         aria-label={m.auth_sign()}
                         title={m.auth_sign()}
@@ -404,8 +405,9 @@ function AuthRulesForm({
                       </Button>
                     ) : null}
                     <Button
+                      className="icon-button"
                       type="button"
-                      size="icon-sm"
+                      size="sm"
                       variant="ghost"
                       aria-label={m.auth_move_up()}
                       disabled={index === 0}
@@ -414,8 +416,9 @@ function AuthRulesForm({
                       <HugeiconsIcon icon={ArrowUp01Icon} />
                     </Button>
                     <Button
+                      className="icon-button"
                       type="button"
-                      size="icon-sm"
+                      size="sm"
                       variant="ghost"
                       aria-label={m.auth_move_down()}
                       disabled={index === rows.length - 1}
@@ -424,8 +427,9 @@ function AuthRulesForm({
                       <HugeiconsIcon icon={ArrowDown01Icon} />
                     </Button>
                     <Button
+                      className="icon-button"
                       type="button"
-                      size="icon-sm"
+                      size="sm"
                       variant="ghost"
                       aria-label={m.auth_edit()}
                       onClick={() => setEditing({ index, draft: row })}
@@ -434,8 +438,9 @@ function AuthRulesForm({
                       <HugeiconsIcon icon={Edit02Icon} />
                     </Button>
                     <Button
+                      className="icon-button"
                       type="button"
-                      size="icon-sm"
+                      size="sm"
                       variant="ghost"
                       aria-label={m.common_delete()}
                       onClick={() => setRows(rows.filter((_, i) => i !== index))}
@@ -504,7 +509,7 @@ function FormerIdentityHeaders({
     >
       <span className="text-sm text-muted-foreground">{m.auth_former_headers()}</span>
       {names.map((name) => (
-        <Badge key={name} variant="outline" className="font-mono">
+        <Badge size="sm" key={name} tone="neutral" className="font-mono">
           {name}
         </Badge>
       ))}
@@ -512,7 +517,7 @@ function FormerIdentityHeaders({
         trigger={
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             size="sm"
             className="ml-auto"
             disabled={disabled}
@@ -721,8 +726,9 @@ function BasicFields({ d, set }: { d: Draft; set: (change: Partial<Draft>) => vo
               data-testid="auth-user-password"
             />
             <Button
+              className="icon-button"
               type="button"
-              size="icon-sm"
+              size="sm"
               variant="ghost"
               aria-label={m.common_delete()}
               disabled={users.length === 1}
@@ -734,7 +740,7 @@ function BasicFields({ d, set }: { d: Draft; set: (change: Partial<Draft>) => vo
         ))}
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           size="sm"
           className="self-start"
           disabled={users.length >= BASIC_MAX_USERS}
@@ -888,7 +894,7 @@ function UrlFields({
           {generated === "primary" && d.primaryKey ? <CopyButton value={d.primaryKey} /> : null}
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             onClick={() => onGenerate("primary")}
             data-testid="auth-primary-generate"
           >
@@ -910,7 +916,7 @@ function UrlFields({
             data-testid="auth-backup-key"
           />
           {generated === "backup" && d.backupKey ? <CopyButton value={d.backupKey} /> : null}
-          <Button type="button" variant="outline" onClick={() => onGenerate("backup")}>
+          <Button type="button" variant="secondary" onClick={() => onGenerate("backup")}>
             {m.auth_generate()}
           </Button>
           {d.backupStored && !d.removeBackup ? (

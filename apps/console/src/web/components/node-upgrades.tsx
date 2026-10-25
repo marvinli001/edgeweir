@@ -9,13 +9,13 @@ import { Add01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot, type StatusTone } from "@/components/status-dot";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -89,7 +89,7 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
         <h2 className="flex-1 text-sm font-medium">{m.upgrade_title()}</h2>
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           onClick={() => dialog.show()}
           disabled={!groups.data?.length || !nodes.data?.length}
           data-testid="upgrade-create"
@@ -146,7 +146,7 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
                     destructive
                     trigger={
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         disabled={
                           cancel.isPending || job.deliveries.some((d) => d.state === "running")
                         }

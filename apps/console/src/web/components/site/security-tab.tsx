@@ -33,6 +33,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import {
   type CcDraft,
   CcThresholdFields,
@@ -41,14 +43,13 @@ import {
 } from "@/components/cc-thresholds";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormSelect } from "@/components/form-select";
+import { LinkButton } from "@/components/link-button";
 import { PresetSelect, presetLabel, usePreset } from "@/components/preset-select";
 import { SafetyNote } from "@/components/safety-note";
 import { ExclusionDialog } from "@/components/site/exclusion-dialog";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, QueryView } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -107,25 +108,21 @@ export function SecurityTab({ siteId }: { siteId: string }) {
         {protection.data ? <SecuritySummary siteId={siteId} protection={protection.data} /> : null}
         {/* Access control outside this tab: the site's bans, global rules, platform defaults. */}
         <div className="flex flex-wrap justify-end gap-2" data-testid="security-links">
-          <Button
+          <LinkButton
             size="sm"
-            variant="outline"
-            nativeButton={false}
-            render={<Link to="/bans" search={{ site: siteId }} data-testid="security-site-bans" />}
+            variant="secondary"
+            to="/bans"
+            search={{ site: siteId }}
+            data-testid="security-site-bans"
           >
             {m.security_site_bans()}
-          </Button>
-          <Button size="sm" variant="outline" nativeButton={false} render={<Link to="/rules" />}>
+          </LinkButton>
+          <LinkButton size="sm" variant="secondary" to="/rules">
             {m.rules_platform()}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            nativeButton={false}
-            render={<Link to="/protection" />}
-          >
+          </LinkButton>
+          <LinkButton size="sm" variant="secondary" to="/protection">
             {m.protection_page_title()}
-          </Button>
+          </LinkButton>
         </div>
       </div>
       <QueryView query={protection}>
@@ -225,33 +222,39 @@ function SecuritySummary({ siteId, protection }: { siteId: string; protection: S
       className="mr-auto flex min-w-0 flex-wrap items-center gap-1.5 animate-enter"
       data-testid="security-summary"
     >
-      {parts.map((part) => (
-        <Badge
-          key={part.key}
-          variant={part.alert ? "destructive" : "outline"}
-          className="h-6 cursor-pointer px-2.5 hover:bg-wash"
-          render={
-            part.key === "nodes" ? (
-              <Link to="/sites/$id" params={{ id: siteId }} search={{ tab: "attacks" }} />
-            ) : (
-              <button
-                type="button"
-                onClick={() =>
-                  document
-                    .getElementById(CARD_IDS[part.key as keyof typeof CARD_IDS])
-                    ?.scrollIntoView({
-                      behavior: reducedMotion ? "auto" : "smooth",
-                      block: "start",
-                    })
-                }
-              />
-            )
-          }
-          data-testid={`security-summary-${part.key}`}
-        >
-          {part.label}
-        </Badge>
-      ))}
+      {parts.map((part) =>
+        part.key === "nodes" ? (
+          <Link
+            key={part.key}
+            to="/sites/$id"
+            params={{ id: siteId }}
+            search={{ tab: "attacks" }}
+            className="rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+            data-testid={`security-summary-${part.key}`}
+          >
+            <Badge size="sm" tone={part.alert ? "danger" : "neutral"} className="min-h-6 px-2.5">
+              {part.label}
+            </Badge>
+          </Link>
+        ) : (
+          <button
+            key={part.key}
+            type="button"
+            onClick={() =>
+              document.getElementById(CARD_IDS[part.key as keyof typeof CARD_IDS])?.scrollIntoView({
+                behavior: reducedMotion ? "auto" : "smooth",
+                block: "start",
+              })
+            }
+            className="cursor-pointer rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+            data-testid={`security-summary-${part.key}`}
+          >
+            <Badge size="sm" tone={part.alert ? "danger" : "neutral"} className="min-h-6 px-2.5">
+              {part.label}
+            </Badge>
+          </button>
+        ),
+      )}
     </nav>
   );
 }
@@ -292,12 +295,12 @@ function UnderAttackCard({ siteId, protection }: { siteId: string; protection: S
           />
           <FieldLabel htmlFor="protection-under-attack">{m.protection_under_attack()}</FieldLabel>
           {protection.underAttack ? (
-            <Badge variant="destructive" data-testid="protection-under-attack-on">
+            <Badge size="sm" tone="danger" data-testid="protection-under-attack-on">
               {m.protection_on()}
             </Badge>
           ) : null}
           {automatic ? (
-            <Badge variant="outline" data-testid="protection-under-attack-auto">
+            <Badge size="sm" tone="neutral" data-testid="protection-under-attack-auto">
               {m.protection_under_attack_auto({ time: formatDateMinutes(automatic.expiresAt) })}
             </Badge>
           ) : null}
@@ -639,7 +642,8 @@ function WafCard({ siteId }: { siteId: string }) {
         <CardTitle>{m.waf_title()}</CardTitle>
         {waf.data && waf.data.mode !== "off" ? (
           <Badge
-            variant={waf.data.mode === "block" ? "destructive" : "secondary"}
+            size="sm"
+            tone={waf.data.mode === "block" ? "danger" : "neutral"}
             data-testid="waf-mode-badge"
           >
             {wafModeLabel(waf.data.mode)}
@@ -809,7 +813,7 @@ function WafForm({
             />
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               disabled={!ruleInput.trim()}
               data-testid="waf-exclusion-add"
               onClick={addRules}
@@ -825,7 +829,8 @@ function WafForm({
               {siteWide.map((id) => (
                 <li key={id} className="animate-in fade-in">
                   <Badge
-                    variant="outline"
+                    size="sm"
+                    tone="neutral"
                     className="gap-1 font-mono tabular-nums"
                     data-testid="waf-exclusion"
                     data-rule-id={id}
@@ -905,7 +910,7 @@ function ExclusionEntries({
         <Button
           type="button"
           size="sm"
-          variant="outline"
+          variant="secondary"
           disabled={!wafV2.available || full}
           onClick={() => dialog.show(null)}
           data-testid="waf-exclusion-entry-add"
@@ -937,7 +942,7 @@ function ExclusionEntries({
                     {exclusionScope(entry)}
                   </span>
                   {entry.path === "" ? null : (
-                    <Badge variant="outline" data-testid="waf-exclusion-entry-match">
+                    <Badge size="sm" tone="neutral" data-testid="waf-exclusion-entry-match">
                       {entry.exact ? m.waf_exclusion_exact() : m.waf_exclusion_prefix()}
                     </Badge>
                   )}
@@ -959,8 +964,9 @@ function ExclusionEntries({
               </div>
               <div className="-my-1 flex shrink-0 items-center">
                 <Button
+                  className="icon-button"
                   type="button"
-                  size="icon-sm"
+                  size="sm"
                   variant="ghost"
                   aria-label={m.waf_exclusion_edit()}
                   onClick={() => dialog.show(index)}
@@ -969,8 +975,9 @@ function ExclusionEntries({
                   <HugeiconsIcon icon={PencilEdit01Icon} strokeWidth={2} />
                 </Button>
                 <Button
+                  className="icon-button"
                   type="button"
-                  size="icon-sm"
+                  size="sm"
                   variant="ghost"
                   aria-label={m.waf_exclusion_remove({ path: exclusionScope(entry) })}
                   onClick={() => onChange(exclusions.filter((_, at) => at !== index))}

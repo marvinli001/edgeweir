@@ -2,9 +2,11 @@ import type { DnsRevision } from "@edgeweir/contract";
 import { Add01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import type * as React from "react";
 import { toast } from "sonner";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { CardTable } from "@/components/clusters/card-table";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
@@ -15,11 +17,10 @@ import {
 } from "@/components/dns/credential-dialog";
 import { modeLabel, providerLabel, revisionError, statusLabel } from "@/components/dns/labels";
 import { DnsProtectionCard } from "@/components/dns-protection";
+import { LinkButton } from "@/components/link-button";
 import { enterDelay, Page } from "@/components/page";
 import { combineQueries, EmptyState, QueryView } from "@/components/states";
 import { StatusDot, type StatusTone } from "@/components/status-dot";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -84,14 +85,16 @@ function DnsPage() {
                           <ValueWell>{p.zone}</ValueWell>
                         </span>
                         <span className="flex flex-wrap items-center gap-1.5">
-                          <Badge variant="outline">{providerLabel(p.provider)}</Badge>
+                          <Badge size="sm" tone="neutral">
+                            {providerLabel(p.provider)}
+                          </Badge>
                           <CapabilityBadges
                             provider={catalogList.find((c) => c.id === p.provider)}
                           />
                         </span>
                         <span className="flex items-center gap-1">
                           <TestButton id={p.id} />
-                          <Button size="sm" variant="outline" onClick={() => credential.show(p)}>
+                          <Button size="sm" variant="secondary" onClick={() => credential.show(p)}>
                             {m.common_edit()}
                           </Button>
                           <ConfirmDialog
@@ -99,7 +102,7 @@ function DnsPage() {
                             note={p.zone}
                             destructive
                             trigger={
-                              <Button size="sm" variant="destructive">
+                              <Button size="sm" variant="danger">
                                 {m.common_delete()}
                               </Button>
                             }
@@ -146,7 +149,7 @@ function DnsPage() {
                             {b.domain ? <ValueWell>{b.domain}</ValueWell> : "—"}
                           </TableCell>
                           <TableCell>
-                            <Badge variant={b.mode === "off" ? "outline" : "secondary"}>
+                            <Badge size="sm" tone={b.mode === "off" ? "neutral" : "neutral"}>
                               {modeLabel(b.mode)}
                             </Badge>
                           </TableCell>
@@ -170,20 +173,15 @@ function DnsPage() {
                             ) : null}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
+                            <LinkButton
                               size="sm"
                               variant="ghost"
-                              nativeButton={false}
-                              render={
-                                <Link
-                                  to="/clusters"
-                                  search={{ cluster: b.clusterId, tab: "dns" }}
-                                />
-                              }
+                              to="/clusters"
+                              search={{ cluster: b.clusterId, tab: "dns" }}
                             >
                               {m.dns_open_cluster()}
                               <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
-                            </Button>
+                            </LinkButton>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -265,7 +263,7 @@ function TestButton({ id }: { id: string }) {
   return (
     <Button
       size="sm"
-      variant="outline"
+      variant="secondary"
       disabled={test.isPending}
       data-testid="dns-account-test"
       onClick={() => test.mutate({ id })}

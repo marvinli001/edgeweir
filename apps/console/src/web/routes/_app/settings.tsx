@@ -8,6 +8,8 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { FormDialog } from "@/components/form-dialog";
@@ -17,8 +19,6 @@ import { SafetyNote } from "@/components/safety-note";
 import { NumberField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
 import { useTheme } from "@/components/theme-provider";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -263,11 +263,13 @@ function ApiKeysCard() {
                     <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                       <span className="font-medium">{k.name ?? "—"}</span>
                       <code className="font-mono text-xs text-muted-foreground">{k.prefix}…</code>
-                      <Badge variant="outline">
+                      <Badge size="sm" tone="neutral">
                         {k.scope === "read" ? m.access_key_read() : m.access_key_write()}
                       </Badge>
                       {!k.enabled ? (
-                        <Badge variant="secondary">{m.access_key_revoked()}</Badge>
+                        <Badge size="sm" tone="neutral">
+                          {m.access_key_revoked()}
+                        </Badge>
                       ) : null}
                     </span>
                     <span className="flex flex-wrap gap-x-3 text-xs text-muted-foreground tabular-nums">
@@ -284,7 +286,8 @@ function ApiKeysCard() {
                   </div>
                   {k.enabled ? (
                     <Button
-                      size="icon-sm"
+                      className="icon-button"
+                      size="sm"
                       variant="ghost"
                       aria-label={m.access_key_edit()}
                       onClick={() => edit.show(k)}
@@ -297,7 +300,7 @@ function ApiKeysCard() {
                     <ConfirmDialog
                       title={m.access_key_revoke()}
                       trigger={
-                        <Button size="sm" variant="outline" disabled={revoke.isPending}>
+                        <Button size="sm" variant="secondary" disabled={revoke.isPending}>
                           {m.access_key_revoke()}
                         </Button>
                       }

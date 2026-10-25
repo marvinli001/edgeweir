@@ -7,6 +7,8 @@ import { Add01Icon, Delete02Icon, Key01Icon, PencilEdit01Icon } from "@hugeicons
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { type Columns, DataTable } from "@/components/data-table";
@@ -16,8 +18,6 @@ import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -185,7 +185,9 @@ function KeysDialog({ account, open, onOpenChange }: { account: ServiceAccount }
                     <span className="font-medium">{k.name || "—"}</span>
                     <code className="font-mono text-xs text-muted-foreground">{k.prefix}…</code>
                     {k.revokedAt ? (
-                      <Badge variant="secondary">{m.service_accounts_key_revoked()}</Badge>
+                      <Badge size="sm" tone="neutral">
+                        {m.service_accounts_key_revoked()}
+                      </Badge>
                     ) : null}
                   </span>
                   <span className="text-xs text-muted-foreground tabular-nums">
@@ -202,7 +204,7 @@ function KeysDialog({ account, open, onOpenChange }: { account: ServiceAccount }
                     trigger={
                       <Button
                         size="sm"
-                        variant="outline"
+                        variant="secondary"
                         className="shrink-0"
                         data-testid="service-account-key-revoke"
                       >
@@ -222,7 +224,7 @@ function KeysDialog({ account, open, onOpenChange }: { account: ServiceAccount }
           </ul>
         )}
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
+          <Button variant="secondary" onClick={() => setOpen(false)}>
             {m.common_close()}
           </Button>
         </DialogFooter>
@@ -243,7 +245,7 @@ function DeleteAccountAction({ account }: { account: ServiceAccount }) {
   return (
     <ConfirmDialog
       trigger={
-        <Button size="icon-sm" variant="ghost" aria-label={m.common_delete()}>
+        <Button className="icon-button" size="sm" variant="ghost" aria-label={m.common_delete()}>
           <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
         </Button>
       }
@@ -302,7 +304,7 @@ export function ServiceAccountsPanel({
         cell: ({ row }) => (
           <div className="flex max-w-md flex-wrap gap-1">
             {row.original.scopes.map((scope) => (
-              <Badge key={scope} variant="outline" className="font-mono">
+              <Badge size="sm" key={scope} tone="neutral" className="font-mono">
                 {scope}
               </Badge>
             ))}
@@ -332,7 +334,8 @@ export function ServiceAccountsPanel({
               {m.service_accounts_keys()}
             </Button>
             <Button
-              size="icon-sm"
+              className="icon-button"
+              size="sm"
               variant="ghost"
               aria-label={m.service_accounts_edit()}
               onClick={() => edit.show(row.original)}

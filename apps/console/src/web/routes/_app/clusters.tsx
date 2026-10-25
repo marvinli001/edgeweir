@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
+import { Button } from "@/components/arc/button/button";
 import { ClusterRolloutCard } from "@/components/cluster-rollout";
 import { ClusterCacheCard } from "@/components/clusters/cache-zone";
 import { ClusterDialog } from "@/components/clusters/cluster-dialog";
@@ -22,7 +23,6 @@ import { Page } from "@/components/page";
 import { RegionsPanel } from "@/components/regions";
 import { ClusterScheduling } from "@/components/scheduling";
 import { EmptyState, QueryView } from "@/components/states";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTabBar } from "@/hooks/use-tab-bar";
 import { m } from "@/lib/i18n";
@@ -72,7 +72,7 @@ function ClustersPage() {
           <>
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               onClick={() => setCreateOpen(true)}
               data-testid="create-cluster"
             >

@@ -7,6 +7,8 @@ import * as React from "react";
 import * as z from "zod";
 import { AcmeAccountsCard } from "@/components/acme-accounts";
 import { AcmeCaFields, type Eab, eabMissing, eabParams } from "@/components/acme-ca";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DnsCredentialDialog, type EditableCredential } from "@/components/dns/credential-dialog";
 import { providerLabel } from "@/components/dns/labels";
@@ -18,8 +20,6 @@ import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
 import { Dot } from "@/components/status-dot";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -58,11 +58,11 @@ function CertificatesPage() {
       actions={
         tab === "certificates" ? (
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => dialog.show("dns")}>
+            <Button variant="secondary" onClick={() => dialog.show("dns")}>
               {m.cert_dns_add()}
             </Button>
             <Button
-              variant="outline"
+              variant="secondary"
               onClick={() => dialog.show("upload")}
               data-testid="cert-upload"
             >
@@ -227,7 +227,7 @@ function CertificatesPanel({
                   <div className="flex shrink-0 gap-2 @3xl/main:justify-end">
                     {cert.source === "acme" ? (
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         disabled={renew.isPending || ["pending", "issuing"].includes(cert.status)}
                         onClick={() => renew.mutate({ id: cert.id })}
@@ -239,7 +239,7 @@ function CertificatesPanel({
                       title={m.cert_delete_confirm({ name: cert.name })}
                       destructive
                       trigger={
-                        <Button size="sm" variant="destructive">
+                        <Button size="sm" variant="danger">
                           {m.common_delete()}
                         </Button>
                       }
@@ -268,15 +268,17 @@ function CertificatesPanel({
                     <p className="font-medium break-words">{credential.name}</p>
                     <p className="text-sm break-words text-muted-foreground">{credential.zone}</p>
                   </div>
-                  <Badge variant="secondary">{providerLabel(credential.provider)}</Badge>
-                  <Button variant="outline" size="sm" onClick={() => dialog.show(credential)}>
+                  <Badge size="sm" tone="neutral">
+                    {providerLabel(credential.provider)}
+                  </Badge>
+                  <Button variant="secondary" size="sm" onClick={() => dialog.show(credential)}>
                     {m.common_edit()}
                   </Button>
                   <ConfirmDialog
                     title={m.cert_delete_confirm({ name: credential.name })}
                     destructive
                     trigger={
-                      <Button variant="destructive" size="sm">
+                      <Button variant="danger" size="sm">
                         {m.common_delete()}
                       </Button>
                     }
@@ -343,7 +345,7 @@ function NodeFailures({ failures }: { failures: CertificateDto["nodeFailures"] }
 function CertificateStatus({ state }: { state: CertificateState }) {
   if (state === "error" || state === "expired" || state === "unloadable") {
     return (
-      <Badge variant="destructive" data-testid="certificate-status">
+      <Badge size="sm" tone="danger" data-testid="certificate-status">
         <Dot tone="bad" small />
         {state === "expired"
           ? m.cert_status_expired()
@@ -354,7 +356,7 @@ function CertificateStatus({ state }: { state: CertificateState }) {
     );
   }
   return (
-    <Badge variant="secondary" data-testid="certificate-status">
+    <Badge size="sm" tone="neutral" data-testid="certificate-status">
       {state === "issuing" ? (
         <span className="lit-glow dot-pulse relative inline-flex size-1.5 shrink-0 rounded-full border border-transparent bg-signal" />
       ) : (

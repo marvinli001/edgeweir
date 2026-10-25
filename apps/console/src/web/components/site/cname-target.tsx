@@ -1,12 +1,12 @@
 import type { SiteLaunch } from "@edgeweir/contract";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type * as React from "react";
+import { Badge } from "@/components/arc/badge/badge";
 import { CopyButton } from "@/components/copy-button";
 import { CnamePrefixActions } from "@/components/site/cname-prefix";
 import { DomainName } from "@/components/site/domain-name";
 import { PointingStatus, RecheckButton, useSiteLaunch } from "@/components/site/launch-check";
 import { type QueryResult, QueryView } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { m } from "@/lib/i18n";
 import { coversDomain, curlCheck } from "@/lib/launch";
@@ -75,7 +75,7 @@ function DnsSetup({
                 {cname}
               </code>
               <CopyButton iconOnly value={cname} />
-              <Badge variant="outline" data-testid="cname-target-status">
+              <Badge size="sm" tone="neutral" data-testid="cname-target-status">
                 {target.mode === "manual"
                   ? m.dns_mode_manual()
                   : target.published
@@ -126,7 +126,7 @@ function EdgeAddresses({ addresses, online }: { addresses: string[]; online: num
     <ul className="grid gap-1.5" data-testid="edge-address-list">
       {addresses.map((address) => (
         <li key={address} className="flex items-center gap-2">
-          <Badge variant="secondary" className="w-12 justify-center font-mono">
+          <Badge size="sm" tone="neutral" className="w-12 justify-center font-mono">
             {address.includes(":") ? "AAAA" : "A"}
           </Badge>
           <code className="min-w-0 flex-1 break-all text-sm" data-testid="edge-address">

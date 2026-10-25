@@ -10,6 +10,8 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Meter } from "@/components/appica/meter";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { markOverflow } from "@/components/data-table";
 import { OptionSelect } from "@/components/form-select";
 import { NodeChannelFact } from "@/components/node-channel-state";
@@ -20,8 +22,6 @@ import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { nextDraftKey } from "@/components/site/save-site";
 import { StatusDot } from "@/components/status-dot";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -70,11 +70,11 @@ const load = (value: number) =>
 export function AuthErrorBadge({ node }: { node: Node }) {
   if (!node.authError) return null;
   return node.authError === "CERT_HAS_EXPIRED" ? (
-    <Badge variant="destructive" data-testid="node-cert-expired">
+    <Badge size="sm" tone="danger" data-testid="node-cert-expired">
       {m.node_cert_expired()}
     </Badge>
   ) : (
-    <Badge variant="destructive" title={node.authError} data-testid="node-cert-rejected">
+    <Badge size="sm" tone="danger" title={node.authError} data-testid="node-cert-rejected">
       {m.node_cert_rejected()}
     </Badge>
   );
@@ -90,7 +90,8 @@ export function CertificateFailuresBadge({ node }: { node: Node }) {
   const names = failures.map((f) => f.certificateName || f.certificateId);
   return (
     <Badge
-      variant="destructive"
+      size="sm"
+      tone="danger"
       title={m.node_certificate_failures_names({ certificates: formatList(names) })}
       data-testid="node-certificate-failures"
     >
@@ -353,7 +354,7 @@ function NodeClockFact({ clock }: { clock: Node["clock"] }) {
             : m.node_clock_behind({ seconds })}
       </span>
       {clock.skewed ? (
-        <Badge variant="destructive" data-testid="node-clock-skewed">
+        <Badge size="sm" tone="danger" data-testid="node-clock-skewed">
           {m.node_clock_skewed()}
         </Badge>
       ) : null}
@@ -393,11 +394,11 @@ function NodeFacts({ node }: { node: Node }) {
         {node.authError ? (
           <AuthErrorBadge node={node} />
         ) : certLeft === null ? null : certLeft <= 0 ? (
-          <Badge variant="destructive" data-testid="node-cert-expired">
+          <Badge size="sm" tone="danger" data-testid="node-cert-expired">
             {m.node_cert_expired()}
           </Badge>
         ) : certLeft < CERT_WARN_MS ? (
-          <Badge variant="outline" data-testid="node-cert-expiring">
+          <Badge size="sm" tone="neutral" data-testid="node-cert-expiring">
             {m.node_cert_expiring()}
           </Badge>
         ) : null}
@@ -524,7 +525,7 @@ function NodeCache({ node }: { node: Node }) {
         </div>
         <Button
           type="submit"
-          variant="outline"
+          variant="secondary"
           disabled={size === saved || !valid || setCache.isPending}
           data-testid="node-cache-save"
         >
@@ -560,7 +561,7 @@ function NodeAddresses({ node }: { node: Node }) {
         <h3 className="flex items-center gap-2 text-sm font-medium">
           {m.node_addresses_title()}
           {node.dnsIssue === "no_public_address" ? (
-            <Badge variant="outline" data-testid="node-detail-dns-issue">
+            <Badge size="sm" tone="neutral" data-testid="node-detail-dns-issue">
               {m.node_dns_no_public_address()}
             </Badge>
           ) : null}
@@ -568,7 +569,7 @@ function NodeAddresses({ node }: { node: Node }) {
         {editing ? null : (
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             onClick={() => setEditing(true)}
             data-testid="node-addresses-edit"
           >
@@ -612,11 +613,11 @@ function NodeAddresses({ node }: { node: Node }) {
                       <TableCell className="cell-pinned font-mono text-xs">{a.address}</TableCell>
                       <TableCell>
                         <span className="flex items-center gap-1.5">
-                          <Badge variant={a.level === 0 ? "secondary" : "outline"}>
+                          <Badge size="sm" tone={a.level === 0 ? "neutral" : "neutral"}>
                             {levelLabel(a.level)}
                           </Badge>
                           {inUse ? (
-                            <Badge data-testid="node-address-in-use">
+                            <Badge size="sm" tone="info" data-testid="node-address-in-use">
                               {m.node_address_in_use()}
                             </Badge>
                           ) : null}
@@ -746,8 +747,9 @@ function AddressEditor({
               testId="node-address-level"
             />
             <Button
+              className="icon-button"
               type="button"
-              size="icon-sm"
+              size="sm"
               variant="ghost"
               aria-label={m.common_remove()}
               onClick={() => setRows(rows.filter((r) => r.key !== row.key))}
@@ -762,7 +764,7 @@ function AddressEditor({
         <Button
           type="button"
           size="sm"
-          variant="outline"
+          variant="secondary"
           disabled={rows.length >= MAX_ADDRESSES}
           onClick={() => addRow("")}
           data-testid="node-address-add"
@@ -803,7 +805,7 @@ function AddressEditor({
             {m.node_addresses_reset()}
           </Button>
         ) : null}
-        <Button type="button" variant="outline" onClick={onDone} disabled={pending !== null}>
+        <Button type="button" variant="secondary" onClick={onDone} disabled={pending !== null}>
           {m.common_cancel()}
         </Button>
         <Button type="submit" disabled={pending !== null} data-testid="node-addresses-save">

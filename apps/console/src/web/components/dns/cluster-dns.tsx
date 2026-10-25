@@ -17,6 +17,8 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { CardTable } from "@/components/clusters/card-table";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
@@ -27,8 +29,6 @@ import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, EmptyState, QueryView } from "@/components/states";
 import { StatusDot, type StatusTone } from "@/components/status-dot";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -239,7 +239,7 @@ function BindingEditor({
                 <Button
                   type="button"
                   size="sm"
-                  variant="outline"
+                  variant="secondary"
                   disabled={
                     groups.every((g) => draft.lines.some((line) => line.nodeGroupId === g.id)) ||
                     draft.lines.length >= 128
@@ -364,7 +364,7 @@ function BindingEditor({
                   <Button
                     type="button"
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     className="justify-self-end"
                     onClick={() =>
                       setDraft({ ...draft, lines: draft.lines.filter((_, i) => i !== index) })
@@ -432,8 +432,9 @@ function BackupGroups({
                 <span className="w-5 text-xs text-muted-foreground tabular-nums">{index + 1}</span>
                 <span className="min-w-0 flex-1 truncate text-sm">{name}</span>
                 <Button
+                  className="icon-button"
                   type="button"
-                  size="icon-sm"
+                  size="sm"
                   variant="ghost"
                   aria-label={m.dns_backup_up({ name })}
                   disabled={index === 0}
@@ -442,8 +443,9 @@ function BackupGroups({
                   <HugeiconsIcon icon={ArrowUp01Icon} strokeWidth={2} />
                 </Button>
                 <Button
+                  className="icon-button"
                   type="button"
-                  size="icon-sm"
+                  size="sm"
                   variant="ghost"
                   aria-label={m.dns_backup_down({ name })}
                   disabled={index === value.length - 1}
@@ -452,8 +454,9 @@ function BackupGroups({
                   <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} />
                 </Button>
                 <Button
+                  className="icon-button"
                   type="button"
-                  size="icon-sm"
+                  size="sm"
                   variant="ghost"
                   aria-label={m.dns_backup_remove({ name })}
                   onClick={() => onChange(value.filter((other) => other !== id))}
@@ -541,7 +544,7 @@ function RecordTable({
                 <span className="block min-w-28 break-all">{r.name}</span>
               </TableCell>
               <TableCell>
-                <Badge variant="secondary" className="font-mono">
+                <Badge size="sm" tone="neutral" className="font-mono">
                   {r.type}
                 </Badge>
               </TableCell>
@@ -591,7 +594,7 @@ function CurrentRecords({ clusterId, state }: { clusterId: string; state: Bindin
         ) : null}
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           disabled={repair.isPending}
           data-testid="dns-reconcile"
           onClick={async () => {
@@ -632,7 +635,7 @@ function ManualRecords({ clusterId, updatedAt }: { clusterId: string; updatedAt:
         {exported.data?.zoneFile ? (
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             data-testid="dns-download-zone"
             onClick={() => {
               const url = URL.createObjectURL(

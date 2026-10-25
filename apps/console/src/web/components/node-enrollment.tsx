@@ -9,9 +9,9 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import * as React from "react";
+import { Badge } from "@/components/arc/badge/badge";
 import { SafetyNote } from "@/components/safety-note";
 import { Dot, type StatusTone } from "@/components/status-dot";
-import { Badge } from "@/components/ui/badge";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
@@ -52,7 +52,7 @@ export function UrlScopeBadge({ url, testId }: { url: string; testId: string }) 
   const scope = urlHostScope(url) ?? (isPlainHttp(url) ? "http" : null);
   if (!scope) return null;
   return (
-    <Badge variant="outline" data-testid={testId} data-scope={scope}>
+    <Badge size="sm" tone="neutral" data-testid={testId} data-scope={scope}>
       <Dot tone="warn" small />
       {{ local: m.url_scope_local, private: m.url_scope_private, http: m.url_scope_http }[scope]()}
     </Badge>

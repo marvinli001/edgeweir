@@ -1,6 +1,6 @@
 import type { Site, SiteDelivery } from "@edgeweir/contract";
+import { Badge } from "@/components/arc/badge/badge";
 import { StatusDot } from "@/components/status-dot";
-import { Badge } from "@/components/ui/badge";
 import { formatClockTime, m } from "@/lib/i18n";
 
 /** "Canary 1/3, all nodes at 14:05" (or awaiting promotion), or null outside a canary. */
@@ -26,7 +26,7 @@ export function SiteStatus({
   return (
     <span className="inline-flex flex-wrap items-center gap-2">
       {dot}
-      <Badge variant="outline" data-testid="site-usage-guard">
+      <Badge size="sm" tone="neutral" data-testid="site-usage-guard">
         {m.usage_guard_badge()}
       </Badge>
     </span>

@@ -12,11 +12,11 @@ import { ArrowRight01Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { OptionSelect } from "@/components/form-select";
 import { EmptyState, QueryView } from "@/components/states";
 import { Dot, type StatusTone } from "@/components/status-dot";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Spinner } from "@/components/ui/spinner";
 import { formatDateTime, formatNumber, m } from "@/lib/i18n";
@@ -170,7 +170,7 @@ export function NodeLogs({ node }: { node: Node }) {
             <EmptyState art="checkpoint" title={m.node_logs_unsupported()} />
           ) : filtered ? (
             <EmptyState title={m.node_logs_empty_filtered()}>
-              <Button size="sm" variant="outline" onClick={clear} data-testid="node-logs-clear">
+              <Button size="sm" variant="secondary" onClick={clear} data-testid="node-logs-clear">
                 {m.node_logs_clear()}
               </Button>
             </EmptyState>
@@ -194,7 +194,7 @@ export function NodeLogs({ node }: { node: Node }) {
             {logs.hasNextPage ? (
               <Button
                 size="sm"
-                variant="outline"
+                variant="secondary"
                 className="self-center"
                 disabled={logs.isFetchingNextPage}
                 onClick={() => void logs.fetchNextPage()}
@@ -251,24 +251,28 @@ function NodeLogRow({ entry }: { entry: NodeLogEntry }) {
         <span className="font-mono whitespace-nowrap text-muted-foreground">
           {formatDateTime(entry.time)}
         </span>
-        <Badge variant="outline" data-testid="node-log-source">
+        <Badge size="sm" tone="neutral" data-testid="node-log-source">
           {nodeLogSourceLabel(entry.source)}
           {entry.component ? ` · ${entry.component}` : ""}
         </Badge>
         {entry.repeated > 0 ? (
-          <Badge variant="secondary" data-testid="node-log-repeated">
+          <Badge size="sm" tone="neutral" data-testid="node-log-repeated">
             {m.node_logs_repeated({ count: formatNumber(entry.repeated) })}
           </Badge>
         ) : null}
-        {entry.truncated ? <Badge variant="outline">{m.node_logs_truncated()}</Badge> : null}
+        {entry.truncated ? (
+          <Badge size="sm" tone="neutral">
+            {m.node_logs_truncated()}
+          </Badge>
+        ) : null}
       </div>
       <div className="flex min-w-0 items-start gap-1">
         {fields.length > 0 || entry.event ? (
           <Button
             type="button"
-            size="icon-xs"
+            size="sm"
             variant="ghost"
-            className="-my-0.5 -ml-1 shrink-0"
+            className="icon-button size-6 min-h-6 -my-0.5 -ml-1 shrink-0"
             aria-label={m.logs_details()}
             aria-expanded={open}
             aria-controls={open ? detailsId : undefined}

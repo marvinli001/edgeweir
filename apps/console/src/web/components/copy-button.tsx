@@ -2,7 +2,7 @@ import { Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/arc/button/button";
 import { copyText } from "@/lib/browser";
 import { m } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -18,8 +18,9 @@ export function CopyButton({ value, iconOnly }: { value: string; iconOnly?: bool
   return (
     <Button
       type="button"
-      size={iconOnly ? "icon-sm" : "sm"}
-      variant="outline"
+      size="sm"
+      variant="secondary"
+      className={iconOnly ? "icon-button" : undefined}
       aria-label={iconOnly ? label : undefined}
       title={iconOnly ? label : undefined}
       onClick={async (event) => {

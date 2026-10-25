@@ -1,0 +1,212 @@
+/* Press scale is driven by Motion (whileTap) alone, so transform never gets a CSS transition here. */
+@layer components {
+  .button {
+    position: relative;
+    display: inline-flex;
+    min-height: var(--arc-control-height-md);
+    align-items: center;
+    justify-content: center;
+    gap: var(--arc-space-2);
+    border: 1px solid transparent;
+    border-radius: var(--arc-radius-control);
+    padding: 0 var(--arc-space-3);
+    font: inherit;
+    font-size: var(--arc-text-sm);
+    font-weight: 500;
+    line-height: var(--arc-leading-body);
+    white-space: nowrap;
+    cursor: pointer;
+    outline: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      color var(--arc-duration-fast) var(--arc-ease-standard),
+      background var(--arc-duration-fast) var(--arc-ease-standard),
+      border-color var(--arc-duration-fast) var(--arc-ease-standard),
+      opacity var(--arc-duration-fast) var(--arc-ease-standard),
+      box-shadow var(--arc-duration-fast) var(--arc-ease-standard);
+  }
+  /* Keyboard focus: the console's ring (focus-visible:ring-3 ring-ring/30). */
+  .button:focus-visible {
+    border-color: var(--arc-focus-ring);
+    outline: 3px solid color-mix(in oklab, var(--arc-focus-ring) 30%, transparent);
+    outline-offset: 0;
+  }
+  .button:disabled {
+    cursor: not-allowed;
+    opacity: 0.52;
+  }
+  .button[aria-busy="true"] {
+    cursor: progress;
+  }
+  /* Anchors of floating layers never scale: the layer would measure a shrunken trigger. */
+  .button:is([aria-haspopup]:not([aria-haspopup="false"]), [data-state], [role="combobox"]) {
+    transform: none !important;
+  }
+  /* The slot's width follows the incoming label on a spring. The label stays centered and may overflow evenly while the slot catches up;
+     the outgoing label pops out of flow against the slot itself, so it keeps its place instead of following the new content box. */
+  .labelSlot {
+    position: relative;
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: center;
+    transition: opacity var(--arc-duration-fast) var(--arc-ease-standard);
+  }
+  .labelSlot[data-morphing] {
+    clip-path: inset(-50% calc(var(--arc-space-3) * -1));
+  }
+  .labelContent {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+  }
+  .labelPhase {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--arc-space-2);
+    white-space: nowrap;
+  }
+  .labelPhase svg {
+    flex: none;
+    pointer-events: none;
+  }
+  /* Icons are 16px unless they set their own size class (Hugeicons render 24px by default). */
+  .labelPhase svg:not([class*="size-"]) {
+    width: 1rem;
+    height: 1rem;
+  }
+  /* The lit face over its darker plate (--lit-* in index.css); Motion's press replaces btn-lit's lift. */
+  .primary {
+    color: var(--arc-accent-foreground);
+    background-color: var(--arc-accent-fill);
+    background-image: var(--arc-lit-face);
+    box-shadow: var(--arc-lit-shadow);
+  }
+  .secondary {
+    color: var(--arc-foreground);
+    background: var(--arc-surface);
+    box-shadow: var(--arc-shadow-resting);
+  }
+  .ghost {
+    color: var(--arc-text-secondary);
+    background: transparent;
+    border-color: transparent;
+  }
+  .danger {
+    color: var(--arc-danger);
+    background: var(--arc-danger-subtle);
+  }
+  /* Disabled lies flat: no plate, no lit face. An outlined button keeps its shape and fades only its label. */
+  .primary:disabled {
+    background-image: none;
+    box-shadow: none;
+  }
+  .secondary:disabled,
+  .danger:disabled {
+    opacity: 1;
+    color: var(--arc-text-muted);
+    background: var(--arc-surface-muted);
+    box-shadow: none;
+  }
+  .danger:disabled {
+    color: color-mix(in oklab, var(--arc-danger) 55%, var(--arc-surface-muted));
+  }
+  .ghost:disabled {
+    opacity: 1;
+    color: var(--arc-text-muted);
+  }
+  /* An open menu or popover keeps its trigger highlighted. */
+  .secondary[aria-expanded="true"] {
+    background: var(--arc-surface-hover);
+  }
+  .ghost[aria-expanded="true"] {
+    color: var(--arc-foreground);
+    background: var(--arc-wash);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .primary:hover:not(:disabled) {
+      background-color: var(--arc-accent-fill-hover);
+      box-shadow: var(--arc-lit-shadow-hover);
+    }
+    .secondary:hover:not(:disabled) {
+      background: var(--arc-surface-hover);
+    }
+    .ghost:hover:not(:disabled) {
+      color: var(--arc-foreground);
+      background: var(--arc-wash);
+    }
+    .danger:hover:not(:disabled) {
+      background: color-mix(in oklab, var(--arc-danger) 20%, transparent);
+    }
+  }
+  /* Color feedback on press, so touch and menu triggers (which never scale) still answer the finger. */
+  .primary:active:not(:disabled) {
+    box-shadow: var(--arc-lit-shadow-active);
+  }
+  .secondary:active:not(:disabled) {
+    background: var(--arc-surface-hover);
+  }
+  .ghost:active:not(:disabled) {
+    color: var(--arc-foreground);
+    background: var(--arc-wash);
+  }
+  .danger:active:not(:disabled) {
+    background: color-mix(in oklab, var(--arc-danger) 20%, transparent);
+  }
+  .sm {
+    min-height: var(--arc-control-height-sm);
+    padding-inline: var(--arc-space-3);
+    gap: var(--arc-space-1);
+  }
+  .md {
+    min-height: var(--arc-control-height-md);
+  }
+  .lg {
+    min-height: var(--arc-control-height-lg);
+    padding-inline: var(--arc-space-4);
+  }
+  .loader {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    display: grid;
+    width: var(--arc-space-4);
+    height: var(--arc-space-4);
+    margin: calc(var(--arc-space-4) / -2);
+  }
+  .spinner {
+    border: 1.5px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  .loadingLabel {
+    opacity: 0;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .button {
+      transition: none;
+    }
+    .labelSlot {
+      transition: opacity var(--arc-duration-instant) linear;
+    }
+    .spinner {
+      animation-duration: 0.01ms;
+      animation-iteration-count: 1;
+    }
+  }
+  @media (forced-colors: active) {
+    .primary {
+      background-image: none;
+      box-shadow: none;
+      border-color: ButtonText;
+    }
+  }
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

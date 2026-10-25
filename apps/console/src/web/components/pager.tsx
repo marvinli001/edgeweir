@@ -1,6 +1,6 @@
 import { ArrowLeft01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/arc/button/button";
 import { formatNumber, m } from "@/lib/i18n";
 
 /** "21–40 / 57" with previous/next buttons; hidden when everything fits on one page. */
@@ -31,9 +31,9 @@ export function Pager({
       {/* Previous and next ride in one shallow track, like a segmented control. */}
       <div className="flex items-center gap-0.5 rounded-full p-0.5 seg-well">
         <Button
-          size="icon-sm"
+          size="sm"
           variant="ghost"
-          className="rounded-full"
+          className="icon-button rounded-full"
           aria-label={m.pager_previous()}
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
@@ -41,9 +41,9 @@ export function Pager({
           <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
         </Button>
         <Button
-          size="icon-sm"
+          size="sm"
           variant="ghost"
-          className="rounded-full"
+          className="icon-button rounded-full"
           aria-label={m.pager_next()}
           disabled={page >= pages}
           onClick={() => onPageChange(page + 1)}

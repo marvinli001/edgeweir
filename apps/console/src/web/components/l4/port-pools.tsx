@@ -7,14 +7,14 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import * as React from "react";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { OptionSelect } from "@/components/form-select";
 import { L4NodesWarning } from "@/components/l4/common";
+import { LinkButton } from "@/components/link-button";
 import { nextDraftKey, serializeDrafts } from "@/components/site/save-site";
 import { EmptyState, QueryView } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -137,16 +137,16 @@ function PortPoolsCard({ data }: { data: ClusterPortPools }) {
       >
         <CardHeader className="flex flex-row flex-wrap items-center gap-2">
           <CardTitle className="flex-1">{m.l4_pools_title()}</CardTitle>
-          <Button
+          <LinkButton
             size="sm"
             variant="ghost"
-            nativeButton={false}
-            render={<Link to="/l4" search={{ cluster: data.clusterId }} />}
+            to="/l4"
+            search={{ cluster: data.clusterId }}
             data-testid="port-pools-apps"
           >
             {m.l4_title()}
             <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
-          </Button>
+          </LinkButton>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div
@@ -155,7 +155,7 @@ function PortPoolsCard({ data }: { data: ClusterPortPools }) {
           >
             <span className="text-muted-foreground">{m.l4_reserved_ports()}</span>
             {data.reservedPorts.map((port) => (
-              <Badge key={port} variant="outline" className="font-mono" data-port={port}>
+              <Badge size="sm" key={port} tone="neutral" className="font-mono" data-port={port}>
                 {port}
               </Badge>
             ))}
@@ -184,7 +184,7 @@ function PortPoolsCard({ data }: { data: ClusterPortPools }) {
               <Button
                 type="button"
                 size="sm"
-                variant="outline"
+                variant="secondary"
                 className="self-start"
                 disabled={rows.length >= MAX_POOLS}
                 onClick={add}
@@ -293,8 +293,8 @@ function PoolRow({
         />
       </Field>
       <Button
+        className="icon-button"
         type="button"
-        size="icon"
         variant="ghost"
         aria-label={m.common_remove()}
         onClick={onRemove}

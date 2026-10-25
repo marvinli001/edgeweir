@@ -19,6 +19,8 @@ import * as React from "react";
 import { toast } from "sonner";
 import * as z from "zod";
 import { AnalyticsSection } from "@/components/analytics/analytics-section";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { Page } from "@/components/page";
@@ -48,8 +50,6 @@ import { SiteStatus, untilLive } from "@/components/site-status";
 import { TagBadges, TagPicker } from "@/components/site-tags";
 import { QueryView } from "@/components/states";
 import { NotFoundPage } from "@/components/status-page";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -331,7 +331,7 @@ function OverviewTab({ site }: { site: Site }) {
                   <SiteStatus site={site} />
                   <ConfirmDialog
                     trigger={
-                      <Button size="sm" variant="outline" data-testid="site-toggle-enabled">
+                      <Button size="sm" variant="secondary" data-testid="site-toggle-enabled">
                         {site.enabled ? m.site_disable() : m.site_enable()}
                       </Button>
                     }
@@ -366,7 +366,9 @@ function OverviewTab({ site }: { site: Site }) {
                   </span>
                 </InfoRow>
                 <InfoRow label={m.sites_col_cluster()}>
-                  <Badge variant="secondary">{site.clusterName}</Badge>
+                  <Badge size="sm" tone="neutral">
+                    {site.clusterName}
+                  </Badge>
                 </InfoRow>
                 <InfoRow label={m.tags_label()}>
                   <SiteTagsRow site={site} />
@@ -387,16 +389,16 @@ function OverviewTab({ site }: { site: Site }) {
         <UsageGuardCard site={site} />
         <Card>
           <CardContent className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => setCopying(true)} data-testid="site-copy">
+            <Button variant="secondary" onClick={() => setCopying(true)} data-testid="site-copy">
               <HugeiconsIcon icon={Copy01Icon} strokeWidth={2} />
               {m.copy_title()}
             </Button>
-            <Button variant="outline" onClick={() => setCloning(true)} data-testid="site-clone">
+            <Button variant="secondary" onClick={() => setCloning(true)} data-testid="site-clone">
               <HugeiconsIcon icon={Layers01Icon} strokeWidth={2} />
               {m.clone_action()}
             </Button>
             <ConfirmDialog
-              trigger={<Button variant="outline">{m.sites_purge()}</Button>}
+              trigger={<Button variant="secondary">{m.sites_purge()}</Button>}
               title={m.sites_purge()}
               note={site.domains.map(displaySiteDomain).join(", ")}
               onConfirm={async () => {
@@ -411,7 +413,7 @@ function OverviewTab({ site }: { site: Site }) {
             />
             <ConfirmDialog
               trigger={
-                <Button variant="destructive" data-testid="site-delete">
+                <Button variant="danger" data-testid="site-delete">
                   <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
                   {m.common_delete()}
                 </Button>
@@ -459,7 +461,8 @@ function SiteTagsRow({ site }: { site: Site }) {
         onSelect={(tag) => void navigate({ to: "/sites", search: { tags: [tag.id] } })}
       />
       <Button
-        size="icon-sm"
+        className="icon-button"
+        size="sm"
         variant="ghost"
         aria-label={m.tags_label()}
         onClick={() => {
@@ -571,8 +574,9 @@ function DomainsTab({ site }: { site: Site }) {
                   <DomainName domain={domain} className="flex-1 font-mono text-sm break-all" />
                   <DomainKindBadge domain={domain} />
                   <Button
+                    className="icon-button"
                     type="button"
-                    size="icon-sm"
+                    size="sm"
                     variant="ghost"
                     aria-label={m.common_remove()}
                     disabled={domains.length === 1}
@@ -600,7 +604,7 @@ function DomainsTab({ site }: { site: Site }) {
                 aria-label={m.site_domain_add()}
                 data-testid="domain-input"
               />
-              <Button type="button" variant="outline" onClick={add} data-testid="domain-add">
+              <Button type="button" variant="secondary" onClick={add} data-testid="domain-add">
                 <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
                 {m.site_domain_add()}
               </Button>

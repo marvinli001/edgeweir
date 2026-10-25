@@ -14,9 +14,9 @@ import { MetricChart } from "@/components/analytics/metric-chart";
 import { MetricCard } from "@/components/analytics/panel";
 import { RangeSelect } from "@/components/analytics/range-select";
 import { TopRequestsCard } from "@/components/analytics/top-requests";
+import { Button } from "@/components/arc/button/button";
 import { type CardGroup, CardsMenu } from "@/components/cards-menu";
 import { combineQueries, EmptyState, QueryView } from "@/components/states";
-import { Button } from "@/components/ui/button";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { useHiddenCards } from "@/hooks/use-hidden-cards";
 import { detailViews, METRICS, type Metric, relativeChange } from "@/lib/analytics";
@@ -216,7 +216,8 @@ export function AnalyticsSection({
         </h2>
         <RangeSelect value={range} onChange={onRangeChange} />
         <Button
-          size="icon-sm"
+          className="icon-button"
+          size="sm"
           variant="ghost"
           aria-label={m.analytics_refresh()}
           disabled={fetching}
@@ -334,7 +335,7 @@ export function AnalyticsSection({
             <EmptyState title={m.cards_all_hidden()}>
               <Button
                 size="sm"
-                variant="outline"
+                variant="secondary"
                 onClick={() => cards.show(statsGroup.cards.map((card) => card.id))}
                 data-testid="cards-show-all"
               >

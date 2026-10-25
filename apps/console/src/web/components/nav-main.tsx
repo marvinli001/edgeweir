@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, type LinkProps, useRouterState } from "@tanstack/react-router";
 import * as React from "react";
 import { type IconPlayer, useIconPlay } from "@/components/effects/animated-icons";
-import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/link-button";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -91,31 +91,32 @@ function PrimaryAction() {
   });
   const addNode = overview.data?.nodes === 0;
   const title = addNode ? m.nav_add_node() : m.nav_new_site();
-  return (
-    <Button
-      className="w-full justify-start"
-      nativeButton={false}
-      render={
-        addNode ? (
-          <Link
-            to="/clusters"
-            search={{ enroll: true }}
-            data-testid="nav-primary-action"
-            data-action="add-node"
-          />
-        ) : (
-          <Link
-            to="/sites"
-            search={{ create: true }}
-            data-testid="nav-primary-action"
-            data-action="new-site"
-          />
-        )
-      }
-    >
-      <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
+  const label = (
+    <>
+      <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
       <span className="truncate">{title}</span>
-    </Button>
+    </>
+  );
+  return addNode ? (
+    <LinkButton
+      to="/clusters"
+      search={{ enroll: true }}
+      className="w-full justify-start"
+      data-testid="nav-primary-action"
+      data-action="add-node"
+    >
+      {label}
+    </LinkButton>
+  ) : (
+    <LinkButton
+      to="/sites"
+      search={{ create: true }}
+      className="w-full justify-start"
+      data-testid="nav-primary-action"
+      data-action="new-site"
+    >
+      {label}
+    </LinkButton>
   );
 }
 

@@ -1,10 +1,10 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { caLabel } from "@/components/acme-ca";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { enterDelay } from "@/components/page";
 import { EmptyState, QueryView } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDateTime, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
@@ -38,7 +38,11 @@ export function AcmeAccountsCard() {
                 <div className="flex min-w-48 flex-1 flex-col gap-1">
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <span className="font-medium break-all">{account.email}</span>
-                    {account.ca ? <Badge variant="secondary">{caLabel(account.ca)}</Badge> : null}
+                    {account.ca ? (
+                      <Badge size="sm" tone="neutral">
+                        {caLabel(account.ca)}
+                      </Badge>
+                    ) : null}
                   </div>
                   <p className="font-mono text-xs break-all text-muted-foreground">
                     {account.directoryUrl}
@@ -61,7 +65,7 @@ export function AcmeAccountsCard() {
                   trigger={
                     <Button
                       size="sm"
-                      variant="destructive"
+                      variant="danger"
                       disabled={account.certificates > 0}
                       data-testid="acme-account-delete"
                     >

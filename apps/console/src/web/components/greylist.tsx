@@ -12,6 +12,8 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { AccessTabs } from "@/components/access-tabs";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import {
   BAN_REASON_LABELS,
   BAN_SCOPE_LABELS,
@@ -29,8 +31,6 @@ import { Pager } from "@/components/pager";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
@@ -71,7 +71,7 @@ function RemoveAction({ entry }: { entry: GreylistEntry }) {
   return (
     <ConfirmDialog
       trigger={
-        <Button size="sm" variant="outline" data-testid="greylist-remove">
+        <Button size="sm" variant="secondary" data-testid="greylist-remove">
           {m.greylist_remove()}
         </Button>
       }
@@ -286,7 +286,9 @@ export function GreylistPage({ initialAddress }: { initialAddress?: string }) {
         header: () => m.bans_col_site(),
         cell: ({ row }) =>
           row.original.scope === "platform" ? (
-            <Badge variant="outline">{m.bans_scope_platform()}</Badge>
+            <Badge size="sm" tone="neutral">
+              {m.bans_scope_platform()}
+            </Badge>
           ) : (
             <span className="font-medium">{row.original.siteName ?? "—"}</span>
           ),
@@ -363,11 +365,12 @@ export function GreylistPage({ initialAddress }: { initialAddress?: string }) {
             className="col-span-2 w-full sm:w-48"
           />
           {address ? (
-            <Badge variant="secondary" className="col-span-2 h-8 gap-1 pr-1 pl-3 font-mono">
+            <Badge size="sm" tone="neutral" className="col-span-2 h-8 gap-1 pr-1 pl-3 font-mono">
               {address}
               <Button
+                className="icon-button size-6 min-h-6"
                 type="button"
-                size="icon-xs"
+                size="sm"
                 variant="ghost"
                 aria-label={m.bans_address_filter_clear()}
                 onClick={filter(() => setAddress(undefined))}

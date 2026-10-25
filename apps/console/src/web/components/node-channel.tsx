@@ -1,9 +1,9 @@
 import { type NodeChannel, nodeChannelInput } from "@edgeweir/contract";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Button } from "@/components/arc/button/button";
 import { NodeChannelCheckStatus, UrlScopeBadge } from "@/components/node-enrollment";
 import { SafetyNote } from "@/components/safety-note";
 import { SettingSourceBadge, SettingsCard } from "@/components/settings-card";
-import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";

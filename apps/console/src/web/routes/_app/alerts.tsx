@@ -20,6 +20,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
@@ -30,8 +32,6 @@ import { SiteMultiSelect } from "@/components/site-multi-select";
 import { SmtpSettings } from "@/components/smtp-settings";
 import { EmptyState, type QueryResult, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -189,7 +189,7 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
         <CardAction>
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             onClick={() => dialog.show("new")}
             data-testid="alert-channel-create"
           >
@@ -230,11 +230,14 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
                         {kindLabel(channel.kind as AlertChannelConfig["kind"])}
                       </span>
                       {channel.platform ? (
-                        <Badge variant="secondary">{m.alert_platform_scope()}</Badge>
+                        <Badge size="sm" tone="neutral">
+                          {m.alert_platform_scope()}
+                        </Badge>
                       ) : null}
                       {channel.lastError ? (
                         <Badge
-                          variant="destructive"
+                          size="sm"
+                          tone="danger"
                           className="h-auto min-h-5 shrink whitespace-normal [overflow-wrap:anywhere]"
                         >
                           {channelError(channel.lastError)}
@@ -243,11 +246,11 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
                     </div>
                   </div>
                   <div className="col-span-2 flex flex-wrap items-center gap-1.5 sm:col-span-1 sm:justify-end">
-                    <Button size="sm" variant="outline" onClick={() => dialog.show(channel)}>
+                    <Button size="sm" variant="secondary" onClick={() => dialog.show(channel)}>
                       {m.common_edit()}
                     </Button>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       disabled={mutation.isPending}
                       onClick={() => void act("test", channel.id)}
@@ -255,7 +258,7 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
                       {m.alert_test_send()}
                     </Button>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       disabled={mutation.isPending}
                       onClick={() => void act("toggle", channel.id, !channel.enabled)}
@@ -266,7 +269,7 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
                       title={m.common_delete()}
                       destructive
                       trigger={
-                        <Button variant="destructive" size="sm" disabled={mutation.isPending}>
+                        <Button variant="danger" size="sm" disabled={mutation.isPending}>
                           {m.common_delete()}
                         </Button>
                       }
@@ -319,7 +322,7 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
         <CardAction>
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             onClick={() => dialog.show("new")}
             disabled={!subscriptions.data || !available.length}
             data-testid="alert-subscribe"
@@ -360,36 +363,46 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
                     </div>
                     <div className="flex flex-wrap gap-1" data-testid="alert-subscription-sites">
                       {sub.allSites ? (
-                        <Badge variant="secondary">{m.alert_all_sites()}</Badge>
+                        <Badge size="sm" tone="neutral">
+                          {m.alert_all_sites()}
+                        </Badge>
                       ) : (
                         <>
                           {sub.sites.slice(0, SITE_BADGES).map((site) => (
-                            <Badge key={site.id} variant="secondary" className="max-w-48 truncate">
+                            <Badge
+                              size="sm"
+                              key={site.id}
+                              tone="neutral"
+                              className="max-w-48 truncate"
+                            >
                               {site.name}
                             </Badge>
                           ))}
                           {sub.sites.length > SITE_BADGES ? (
-                            <Badge variant="secondary">{`+${sub.sites.length - SITE_BADGES}`}</Badge>
+                            <Badge
+                              size="sm"
+                              tone="neutral"
+                            >{`+${sub.sites.length - SITE_BADGES}`}</Badge>
                           ) : null}
                         </>
                       )}
                     </div>
                     <div className="flex flex-wrap gap-1">
                       {sub.kinds.map((kind) => (
-                        <Badge key={kind} variant="outline">
+                        <Badge size="sm" key={kind} tone="neutral">
                           {label(kind)}
                         </Badge>
                       ))}
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 sm:justify-end sm:self-start">
-                    <Button size="sm" variant="outline" onClick={() => dialog.show(sub)}>
+                    <Button size="sm" variant="secondary" onClick={() => dialog.show(sub)}>
                       {m.common_edit()}
                     </Button>
                     <ConfirmDialog
                       title={m.alert_unsubscribe()}
                       trigger={
-                        <Button size="sm" variant="outline">
+                        <Button size="sm" variant="secondary">
                           {m.alert_unsubscribe()}
                         </Button>
                       }
@@ -459,7 +472,8 @@ function EventsCard() {
                     */}
                     <span className="order-3 col-span-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 sm:order-none sm:contents">
                       <Badge
-                        variant="outline"
+                        size="sm"
+                        tone="neutral"
                         className="h-auto min-h-5 max-w-full justify-start text-left whitespace-normal"
                       >
                         {label(event.kind)}

@@ -7,12 +7,12 @@ import {
 } from "@edgeweir/contract";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { Button } from "@/components/arc/button/button";
 import { CopyButton } from "@/components/copy-button";
 import { FormSelect, type Option } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar, useSaveSite } from "@/components/site/save-site";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -113,7 +113,7 @@ export function PurgeMethodCard({ site }: { site: Site }) {
               {generated ? <CopyButton value={key} /> : null}
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 disabled={blocked}
                 onClick={() => {
                   setKey(generateKey());

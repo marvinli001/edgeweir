@@ -1,7 +1,7 @@
 import { ComputerIcon, Moon02Icon, Sun03Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { Button } from "@/components/arc/button/button";
 import { useTheme } from "@/components/theme-provider";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { m } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 /** Light / dark / follow-system picker; the icon shows the scheme currently on screen. */
 export function ThemeToggle({ className }: { className?: string }) {
@@ -20,8 +21,8 @@ export function ThemeToggle({ className }: { className?: string }) {
         render={
           <Button
             variant="ghost"
-            size="icon-sm"
-            className={className}
+            size="sm"
+            className={cn("icon-button", className)}
             aria-label={m.user_menu_theme()}
             data-testid="theme-toggle"
           />

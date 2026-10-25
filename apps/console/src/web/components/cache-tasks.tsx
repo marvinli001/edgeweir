@@ -8,9 +8,9 @@ import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
 import { BorderBeam } from "@/components/appica/effects";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { Dot } from "@/components/status-dot";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
@@ -95,33 +95,33 @@ function StateBadge({ state, testId }: { state: CacheTaskNodeState; testId: stri
   switch (state) {
     case "skipped":
       return (
-        <Badge variant="outline" className="text-muted-foreground" data-testid={testId}>
+        <Badge size="sm" tone="neutral" className="text-muted-foreground" data-testid={testId}>
           {m.purge_state_skipped()}
         </Badge>
       );
     case "pending":
       return (
-        <Badge variant="outline" className="text-muted-foreground" data-testid={testId}>
+        <Badge size="sm" tone="neutral" className="text-muted-foreground" data-testid={testId}>
           {m.purge_state_pending()}
         </Badge>
       );
     case "running":
       return (
-        <Badge variant="secondary" data-testid={testId}>
+        <Badge size="sm" tone="neutral" data-testid={testId}>
           <Spinner className="size-3 motion-reduce:animate-none" aria-hidden="true" />
           {m.purge_state_running()}
         </Badge>
       );
     case "succeeded":
       return (
-        <Badge variant="outline" data-testid={testId}>
+        <Badge size="sm" tone="neutral" data-testid={testId}>
           <Dot tone="good" small />
           {m.purge_state_succeeded()}
         </Badge>
       );
     case "failed":
       return (
-        <Badge variant="destructive" data-testid={testId}>
+        <Badge size="sm" tone="danger" data-testid={testId}>
           {m.purge_state_failed()}
         </Badge>
       );
@@ -202,7 +202,7 @@ function TaskRow({
             active ? "px-3 py-2" : "px-4 py-3",
           )}
         >
-          <Badge variant="secondary" className="order-1" data-testid="cache-task-type">
+          <Badge size="sm" tone="neutral" className="order-1" data-testid="cache-task-type">
             {cacheTaskTypeLabel[task.type]()}
           </Badge>
           <div className="order-4 flex min-w-0 basis-full items-center gap-2 sm:order-2 sm:flex-1 sm:basis-0">
@@ -214,7 +214,7 @@ function TaskRow({
               {targets[0] ?? "—"}
             </span>
             {more > 0 ? (
-              <Badge variant="outline" className="tabular-nums">
+              <Badge size="sm" tone="neutral" className="tabular-nums">
                 +{formatNumber(more)}
               </Badge>
             ) : null}
@@ -226,9 +226,9 @@ function TaskRow({
             render={
               <Button
                 type="button"
-                size="icon-sm"
+                size="sm"
                 variant="ghost"
-                className="order-3 -my-1 sm:order-4"
+                className="icon-button order-3 -my-1 sm:order-4"
                 aria-label={m.purge_details()}
                 data-testid="cache-task-toggle"
               />

@@ -8,7 +8,6 @@ import {
 import { Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import * as React from "react";
 import {
   type ChartRow,
@@ -18,15 +17,15 @@ import {
   seriesColor,
   useSeriesSlots,
 } from "@/components/analytics/breakdown-charts";
+import { Badge } from "@/components/arc/badge/badge";
 import { FormSelect } from "@/components/form-select";
+import { LinkButton } from "@/components/link-button";
 import { Pager } from "@/components/pager";
 import { RowMenu, type RowMenuItem } from "@/components/quick-actions";
 import { SafetyNote } from "@/components/safety-note";
 import { AutoMitigationCard } from "@/components/site/auto-mitigation-card";
 import { combineQueries, EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { blockReasonLabel, clientJump, type LogJump } from "@/lib/access-logs";
 import { ANALYTICS_RANGES, OTHER_COLOR, RANGE_HOURS, rangeLabel } from "@/lib/analytics";
@@ -58,24 +57,19 @@ function windowJump(jump: LogJump, hours: number): LogJump {
 /** A small link to the site's sampled logs, filtered. */
 function LogsLink({ siteId, jump, testId }: { siteId: string; jump: LogJump; testId?: string }) {
   return (
-    <Button
-      size="icon-xs"
+    <LinkButton
+      size="sm"
       variant="ghost"
-      className="-my-1 shrink-0"
-      nativeButton={false}
+      className="icon-button size-6 min-h-6 -my-1 shrink-0"
       aria-label={m.attacks_view_logs()}
       title={m.attacks_view_logs()}
-      render={
-        <Link
-          to="/sites/$id"
-          params={{ id: siteId }}
-          search={{ tab: "logs", ...jump }}
-          data-testid={testId}
-        />
-      }
+      to="/sites/$id"
+      params={{ id: siteId }}
+      search={{ tab: "logs", ...jump }}
+      data-testid={testId}
     >
       <HugeiconsIcon icon={Search01Icon} strokeWidth={2} />
-    </Button>
+    </LinkButton>
   );
 }
 
@@ -314,7 +308,8 @@ function NodeLevelsCard({ siteId }: { siteId: string }) {
                     {node.online ? m.security_online() : m.security_offline()}
                   </StatusDot>
                   <Badge
-                    variant={node.level === "normal" ? "outline" : "destructive"}
+                    size="sm"
+                    tone={node.level === "normal" ? "neutral" : "danger"}
                     data-testid="security-node-level"
                   >
                     {levelLabel(node.level)}
@@ -657,7 +652,7 @@ function EventsCard({ siteId, range }: { siteId: string; range: AnalyticsRange }
                     data-kind={event.kind}
                   >
                     <div className="flex flex-wrap items-center gap-2 text-sm">
-                      <Badge variant={event.kind === "ip_banned" ? "destructive" : "secondary"}>
+                      <Badge size="sm" tone={event.kind === "ip_banned" ? "danger" : "neutral"}>
                         {eventKindLabel(event.kind)}
                       </Badge>
                       {event.kind === "ip_banned" ? (

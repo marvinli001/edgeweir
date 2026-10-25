@@ -1,8 +1,8 @@
 import { Alert02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
+import { Button } from "@/components/arc/button/button";
 import { SafetyNote } from "@/components/safety-note";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -118,11 +118,11 @@ export function ControlledConfirmDialog({
           </FieldError>
         ) : null}
         <DialogFooter className="-mx-6 -mb-6 border-t border-edge px-6 py-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="secondary" onClick={() => onOpenChange(false)}>
             {m.common_cancel()}
           </Button>
           <Button
-            variant={destructive ? "destructive" : "default"}
+            variant={destructive ? "danger" : "primary"}
             disabled={action.pending || confirmDisabled}
             data-testid="confirm-action"
             onClick={async () => {

@@ -1,7 +1,7 @@
 import { loginAllowListContains, MAX_LOGIN_ALLOWED_CIDRS, normalizeCidr } from "@edgeweir/contract";
+import { Button } from "@/components/arc/button/button";
 import { SafetyNote } from "@/components/safety-note";
 import { SettingsCard } from "@/components/settings-card";
-import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import { m } from "@/lib/i18n";

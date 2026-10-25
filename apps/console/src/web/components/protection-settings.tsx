@@ -1,11 +1,11 @@
 import { CHALLENGE_TYPES, type ChallengeType, EVENT_RETENTION_RANGE } from "@edgeweir/contract";
 import type * as React from "react";
+import { Badge } from "@/components/arc/badge/badge";
 import { CcThresholdFields, fromCcDraft, toCcDraft } from "@/components/cc-thresholds";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { OptionSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { SettingsCard } from "@/components/settings-card";
-import { Badge } from "@/components/ui/badge";
 import { FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -120,7 +120,7 @@ export function ProtectionSettingsCard({
               label={m.protection_platform_under_attack()}
               aside={
                 value.underAttack ? (
-                  <Badge variant="destructive" data-testid="platform-under-attack-on">
+                  <Badge size="sm" tone="danger" data-testid="platform-under-attack-on">
                     {m.protection_on()}
                   </Badge>
                 ) : null

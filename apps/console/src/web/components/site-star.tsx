@@ -2,7 +2,7 @@ import { StarIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/arc/button/button";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
@@ -55,14 +55,14 @@ export function StarButton({
   return (
     <Button
       type="button"
-      size="icon-sm"
+      size="sm"
       variant="ghost"
       aria-pressed={starred}
       aria-label={starred ? m.site_unstar() : m.site_star()}
       title={starred ? m.site_unstar() : m.site_star()}
       disabled={pending}
       onClick={onToggle}
-      className={className}
+      className={cn("icon-button", className)}
       data-testid="site-star"
     >
       {starred ? (

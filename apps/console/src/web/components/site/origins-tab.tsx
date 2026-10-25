@@ -13,6 +13,7 @@ import { Add01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { Button } from "@/components/arc/button/button";
 import { FormSelect, OptionSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { BodyLimitCard } from "@/components/site/content-cards";
@@ -21,7 +22,6 @@ import { OriginHealthBadge, OriginHealthError } from "@/components/site/origin-h
 import { OriginQualityCard } from "@/components/site/origin-quality-card";
 import { OriginTopologyCard } from "@/components/site/origin-topology-card";
 import { nextDraftKey, SaveBar, serializeDrafts, useSaveSite } from "@/components/site/save-site";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -259,7 +259,7 @@ function OriginsCard({ site }: { site: Site }) {
           <Button
             type="button"
             size="sm"
-            variant="outline"
+            variant="secondary"
             className="self-start"
             onClick={() => setRows([...rows, newOrigin()])}
             data-testid="origin-add"
@@ -340,9 +340,9 @@ function OriginRow({
         <OriginHealthBadge health={health} />
         <Button
           type="button"
-          size="icon-sm"
+          size="sm"
           variant="ghost"
-          className="ml-auto"
+          className="icon-button ml-auto"
           aria-label={m.common_remove()}
           disabled={!removable}
           onClick={onRemove}

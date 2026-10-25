@@ -17,6 +17,7 @@ import * as z from "zod";
 import { AnalyticsSection } from "@/components/analytics/analytics-section";
 import { Countdown } from "@/components/appica/countdown";
 import type { CardGroup } from "@/components/cards-menu";
+import { LinkButton } from "@/components/link-button";
 import { EdgeNetworkCard } from "@/components/overview/edge-network";
 import { LiveKpis } from "@/components/overview/live-kpis";
 import { Page } from "@/components/page";
@@ -24,7 +25,6 @@ import { ResourceEmpty, ResourceList, ResourceRow } from "@/components/resource-
 import { StarMark, useSiteStars } from "@/components/site-star";
 import { combineQueries, QueryView } from "@/components/states";
 import { Dot, type StatusTone } from "@/components/status-dot";
-import { buttonVariants } from "@/components/ui/button";
 import { useHiddenCards } from "@/hooks/use-hidden-cards";
 import { DEFAULT_RANGE } from "@/lib/analytics";
 import { formatNumber, m, timeAgo } from "@/lib/i18n";
@@ -310,14 +310,16 @@ function SitesList({
       {rows.length === 0 ? (
         <ResourceEmpty>
           <span>{m.sites_empty_title()}</span>
-          <Link
+          <LinkButton
             to="/sites"
             search={{ create: true }}
-            className={buttonVariants({ size: "xs", variant: "outline" })}
+            size="sm"
+            variant="secondary"
+            className="min-h-6 px-2 text-xs"
           >
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             {m.nav_new_site()}
-          </Link>
+          </LinkButton>
         </ResourceEmpty>
       ) : null}
       {rows.map((site) => (
@@ -381,14 +383,16 @@ function NodesList({
       {rows.length === 0 ? (
         <ResourceEmpty>
           <span>{m.nodes_empty_title()}</span>
-          <Link
+          <LinkButton
             to="/clusters"
             search={{ enroll: true }}
-            className={buttonVariants({ size: "xs", variant: "outline" })}
+            size="sm"
+            variant="secondary"
+            className="min-h-6 px-2 text-xs"
           >
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             {m.nav_add_node()}
-          </Link>
+          </LinkButton>
         </ResourceEmpty>
       ) : (
         rows.map(({ node, state }) => (

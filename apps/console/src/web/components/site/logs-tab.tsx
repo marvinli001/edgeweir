@@ -14,14 +14,14 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import * as React from "react";
 import { toast } from "sonner";
+import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
 import { FormSelect, type Option, OptionSelect } from "@/components/form-select";
 import { RowMenu } from "@/components/quick-actions";
 import { SafetyNote } from "@/components/safety-note";
 import { ListInput } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, EmptyState, ErrorState, QueryView } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
@@ -419,7 +419,7 @@ function LogSearch({ siteId, jump }: { siteId: string; jump?: LogJump }) {
               </Button>
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 disabled={exporter.pending}
                 onClick={async () => {
                   try {
@@ -673,9 +673,9 @@ function LogTable({ entries, siteId }: { entries: LogEntry[]; siteId: string }) 
                     {more.length > 0 ? (
                       <Button
                         type="button"
-                        size="icon-xs"
+                        size="sm"
                         variant="ghost"
-                        className="-my-0.5 -ml-1 shrink-0 font-sans"
+                        className="icon-button size-6 min-h-6 -my-0.5 -ml-1 shrink-0 font-sans"
                         aria-label={m.logs_details()}
                         aria-expanded={expanded}
                         aria-controls={expanded ? detailsId : undefined}
@@ -708,7 +708,8 @@ function LogTable({ entries, siteId }: { entries: LogEntry[]; siteId: string }) 
                       {row.blockReason ? (
                         <span className="flex min-w-0 flex-wrap items-center gap-1.5">
                           <Badge
-                            variant={row.blockReason === "challenge" ? "secondary" : "destructive"}
+                            size="sm"
+                            tone={row.blockReason === "challenge" ? "neutral" : "danger"}
                             data-testid="log-block-reason"
                             data-reason={row.blockReason}
                           >
@@ -749,7 +750,7 @@ function LogTable({ entries, siteId }: { entries: LogEntry[]; siteId: string }) 
                         <span className="flex flex-wrap items-center gap-1.5" data-testid="log-waf">
                           {m.logs_waf()}
                           {row.wafBlocked ? (
-                            <Badge variant="destructive" data-testid="log-waf-blocked">
+                            <Badge size="sm" tone="danger" data-testid="log-waf-blocked">
                               {m.logs_waf_blocked()}
                             </Badge>
                           ) : null}
