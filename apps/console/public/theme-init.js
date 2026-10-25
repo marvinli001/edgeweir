@@ -1,7 +1,7 @@
 // Applies the saved theme (or the OS preference) before first paint, so pages never flash the
 // wrong color scheme. An external file because the CSP forbids inline scripts. ThemeProvider
-// takes over once React mounts; keep the storage key and class names in sync with it
-// (src/web/lib/theme.ts).
+// takes over once React mounts; keep the storage key, class names and data-theme (read by the Arc
+// primitives) in sync with it (src/web/lib/theme.ts).
 (() => {
   const root = document.documentElement;
   let theme = null;
@@ -15,5 +15,6 @@
       (theme !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   } catch {}
   root.classList.add(dark ? "dark" : "light");
+  root.dataset.theme = dark ? "dark" : "light";
   root.style.colorScheme = dark ? "dark" : "light";
 })();

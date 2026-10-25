@@ -50,7 +50,10 @@
   },
   "overrides": [
     {
-      "includes": ["apps/console/src/web/components/ui/**"],
+      "includes": [
+        "apps/console/src/web/components/ui/**",
+        "apps/console/src/web/components/arc/**"
+      ],
       "linter": {
         "rules": {
           "a11y": {
@@ -58,6 +61,9 @@
             "useFocusableInteractive": "off",
             "useKeyWithClickEvents": "off",
             "useSemanticElements": "off"
+          },
+          "complexity": {
+            "noImportantStyles": "off"
           },
           "correctness": {
             "useExhaustiveDependencies": "off"

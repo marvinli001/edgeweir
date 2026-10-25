@@ -20,6 +20,14 @@ Hugeicons). MIT license text below.
 | `animated-icons.tsx` | [hugeicons-animated](https://github.com/enesgules/hugeicons-animated) (`dashboard-square-01`, `notification-03`, `sliders-horizontal`, `list-view`, `inbox`, `use-icon-animation`) | `5d3fcbef342d` (2026-10-06) | Copyright (c) 2026 Abdullah Enes Gules; glyphs from the Hugeicons free set (MIT) | MIT |
 | `world-dots.ts` (generated) | [dotted-map](https://github.com/NTag/dotted-map) 3.1.0 with its bundled Natural Earth land data (public domain) | 3.1.0 | Copyright (c) 2021 Basile Bruneau | MIT |
 
+Arc primitives: copied into `src/web/components/arc/` from Arc's public registry (free tier only)
+and changed as described in each file's header (`--arc-` tokens mapped onto the console's in
+`foundation.css`, Motion's light components, Hugeicons, Paraglide text). MIT license text below.
+
+| Code | From | Version | Copyright | License |
+| --- | --- | --- | --- | --- |
+| `foundation.css`, `motion-tokens.ts`, `arc-provider.tsx`, `button.tsx`, `badge.tsx`, `alert.tsx`, `avatar.tsx`, `progress.tsx` | [Arc](https://github.com/kuratlielia/arc-library) (`arc-foundation`, `arc-motion-tokens`, `button`, `badge`, `alert`, `avatar`, `progress`) | registry (2026-10-25) | Copyright (c) 2026 Elia Kuratli | MIT |
+
 ## Bundled packages
 
 | Package | Version | Copyright | License |

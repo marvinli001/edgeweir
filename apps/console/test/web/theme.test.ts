@@ -22,6 +22,7 @@ function themeInit({
   const classes = new Set<string>();
   const html = {
     classList: { add: (name: string) => classes.add(name) },
+    dataset: {} as { theme?: string },
     style: {} as { colorScheme?: string },
   };
   const window = {
@@ -35,7 +36,7 @@ function themeInit({
     },
   };
   runInNewContext(read("public/theme-init.js"), { window, document: { documentElement: html } });
-  return { classes: [...classes], colorScheme: html.style.colorScheme };
+  return { classes: [...classes], theme: html.dataset.theme, colorScheme: html.style.colorScheme };
 }
 
 /** Replaces globalThis.localStorage for one test (Node ships its own). */
@@ -57,6 +58,7 @@ describe("theme-init.js (first paint)", () => {
     for (const path of ["/", "/overview"]) {
       expect(themeInit({ path, stored: "dark" })).toEqual({
         classes: ["dark"],
+        theme: "dark",
         colorScheme: "dark",
       });
       expect(themeInit({ path, stored: "system", osDark: true }).classes).toEqual(["dark"]);
@@ -64,6 +66,7 @@ describe("theme-init.js (first paint)", () => {
     expect(themeInit({ path: "/login", osDark: true }).classes).toEqual(["dark"]);
     expect(themeInit({ path: "/sites", stored: "light", osDark: true })).toEqual({
       classes: ["light"],
+      theme: "light",
       colorScheme: "light",
     });
   });

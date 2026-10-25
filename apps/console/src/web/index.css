@@ -8,6 +8,8 @@
 /* Simplified Chinese in 101 unicode-range shards: a page downloads only the shards it shows. */
 @import "@fontsource-variable/noto-sans-sc";
 @import "./appica-bridge.css";
+/* Arc primitives (components/arc) read their tokens from here, mapped onto the ones below. */
+@import "./components/arc/foundation.css";
 /* The design lab (lab/) is development only: its class strings stay out of the console CSS. */
 @source not "../../lab";
 
@@ -85,11 +87,8 @@
  * the real border.
  */
 @utility btn-lit {
-  --plate: color-mix(in oklch, var(--primary), black 40%);
-  --tw-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 26%), inset 0 -1px 0 oklch(0 0 0 / 12%), 0 2px 0 0 var(--plate),
-    0 4px 12px -4px color-mix(in oklch, var(--primary) 60%, transparent);
-  background-image: linear-gradient(oklch(1 0 0 / 16%), oklch(1 0 0 / 0%) 60%);
+  --tw-shadow: var(--lit-shadow);
+  background-image: var(--lit-face);
   box-shadow:
     var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
     var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
@@ -98,14 +97,12 @@
   transition-timing-function: var(--ease-lit);
   &:hover:not(:disabled, [data-disabled]) {
     transform: translateY(-1px);
-    --tw-shadow:
-      inset 0 1px 0 oklch(1 0 0 / 30%), inset 0 -1px 0 oklch(0 0 0 / 12%), 0 3px 0 0 var(--plate),
-      0 8px 18px -6px color-mix(in oklch, var(--primary) 65%, transparent);
+    --tw-shadow: var(--lit-shadow-hover);
   }
   &:active:not(:disabled, [data-disabled]) {
     transform: translateY(1px);
     transition-duration: 60ms;
-    --tw-shadow: inset 0 1px 3px oklch(0 0 0 / 28%), 0 0 0 0 var(--plate);
+    --tw-shadow: var(--lit-shadow-active);
   }
   /* Disabled sits flat as well as faded: no plate, no glow, no lit face. */
   &:disabled,
@@ -124,6 +121,12 @@
     box-shadow: none;
     background-image: none;
   }
+}
+
+/* A square, icon-only Arc Button at its size's height: <Button size="sm" className="icon-button">. */
+@utility icon-button {
+  aspect-ratio: 1;
+  padding-inline: 0;
 }
 
 /*
@@ -693,6 +696,19 @@
   --scrim: oklch(0.2 0.02 258 / 30%);
   /* The boundary of checkboxes and switch tracks (toggle-well): 3:1 on the card. */
   --control-edge: color-mix(in oklch, var(--foreground) 45%, transparent);
+  /*
+   * The lit face of the primary action over its darker plate (btn-lit, Arc's primary button):
+   * resting, lifted (hover) and pressed flat.
+   */
+  --lit-plate: color-mix(in oklch, var(--primary), black 40%);
+  --lit-face: linear-gradient(oklch(1 0 0 / 16%), oklch(1 0 0 / 0%) 60%);
+  --lit-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 26%), inset 0 -1px 0 oklch(0 0 0 / 12%), 0 2px 0 0 var(--lit-plate),
+    0 4px 12px -4px color-mix(in oklch, var(--primary) 60%, transparent);
+  --lit-shadow-hover:
+    inset 0 1px 0 oklch(1 0 0 / 30%), inset 0 -1px 0 oklch(0 0 0 / 12%), 0 3px 0 0 var(--lit-plate),
+    0 8px 18px -6px color-mix(in oklch, var(--primary) 65%, transparent);
+  --lit-shadow-active: inset 0 1px 3px oklch(0 0 0 / 28%), 0 0 0 0 var(--lit-plate);
 
   --background: var(--canvas);
   --foreground: oklch(0.18 0.014 258);

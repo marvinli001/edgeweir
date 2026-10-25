@@ -106,10 +106,15 @@ export function ThemeProvider({
   }, []);
 
   // public/theme-init.js applies the same class before first paint; this keeps it in sync. A layout
-  // effect, so a change never paints a frame in the old scheme.
+  // effect, so a change never paints a frame in the old scheme. `data-theme` is the switch the Arc
+  // primitives read (components/arc).
   React.useLayoutEffect(() => {
     const root = document.documentElement;
-    if (root.classList.contains(resolvedTheme) && root.style.colorScheme === resolvedTheme) {
+    if (
+      root.classList.contains(resolvedTheme) &&
+      root.style.colorScheme === resolvedTheme &&
+      root.dataset.theme === resolvedTheme
+    ) {
       return;
     }
 
@@ -117,6 +122,7 @@ export function ThemeProvider({
 
     root.classList.remove("light", "dark");
     root.classList.add(resolvedTheme);
+    root.dataset.theme = resolvedTheme;
     root.style.colorScheme = resolvedTheme;
 
     if (restoreTransitions) {

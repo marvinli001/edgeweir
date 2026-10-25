@@ -1,0 +1,137 @@
+/*
+ * Arc foundation tokens, adapted from Arc's `arc-foundation` (MIT, Elia Kuratli;
+ * THIRD-PARTY-NOTICES.md). Changes: every token is mapped onto the console's Lit Instrument tokens
+ * (index.css), so Arc brings no palette, fonts or radii of its own, and the tokens carry an
+ * `--arc-` prefix.
+ *
+ * Why the prefix: Arc's bare names collide with names that mean something else here. shadcn's
+ * `--accent` is the hover wash (Arc's is the brand color), `--series-*` are the console's chart
+ * series, and Tailwind reads `--text-xl`, `--text-2xl` and `--ease-in-out` for its utilities. The
+ * Arc sources under components/arc read `var(--arc-…)`; rename the token names in any newly added
+ * Arc file the same way (ui-rules.test.ts checks that every token they read is defined here).
+ *
+ * Dark mode follows the console's tokens, which switch under `.dark`; ThemeProvider and
+ * theme-init.js also set `data-theme` on <html> for Arc sources that read it. `data-accent` is not
+ * used: the accent is the console's action blue. Arc's global focus outline is not taken over:
+ * the Arc modules draw the console's focus ring on their own controls.
+ */
+:root {
+  /* Surfaces: the canvas, raised controls and overlays, the muted fill behind hovers. */
+  --arc-background: var(--background);
+  --arc-surface: var(--raised);
+  --arc-surface-raised: var(--overlay);
+  --arc-surface-muted: var(--muted);
+  --arc-surface-sunken: var(--well);
+  --arc-surface-hover: color-mix(in oklch, var(--raised), var(--foreground) 4%);
+  --arc-wash: var(--wash);
+  --arc-foreground: var(--foreground);
+  --arc-text-secondary: var(--muted-foreground);
+  --arc-text-muted: var(--muted-foreground);
+  --arc-border: var(--border);
+  --arc-border-subtle: var(--edge);
+  --arc-border-strong: var(--input);
+
+  /*
+   * The action blue: text-safe ink, the fill of primary buttons and bars (with the lit face and
+   * plate of btn-lit), the focus ring and the tint behind primary chips.
+   */
+  --arc-accent: var(--primary-ink);
+  --arc-accent-strong: var(--primary-ink);
+  --arc-accent-subtle: var(--tint-primary);
+  --arc-accent-foreground: var(--primary-foreground);
+  --arc-accent-fill: var(--primary);
+  --arc-accent-fill-hover: color-mix(in oklch, var(--primary), white 7%);
+  --arc-lit-face: var(--lit-face);
+  --arc-lit-shadow: var(--lit-shadow);
+  --arc-lit-shadow-hover: var(--lit-shadow-hover);
+  --arc-lit-shadow-active: var(--lit-shadow-active);
+  --arc-focus-ring: var(--ring);
+
+  --arc-success: var(--state-good);
+  --arc-warning: var(--state-warn);
+  --arc-danger: var(--destructive);
+  --arc-danger-subtle: var(--tint-destructive);
+
+  --arc-shadow-resting: var(--elev-1);
+  --arc-shadow-raised: var(--elev-2);
+  --arc-shadow-floating: var(--elev-3);
+
+  /* Tailwind's spacing step and the console's radius scale (rounded-2xl controls). */
+  --arc-space-1: calc(var(--spacing) * 1);
+  --arc-space-2: calc(var(--spacing) * 2);
+  --arc-space-3: calc(var(--spacing) * 3);
+  --arc-space-4: calc(var(--spacing) * 4);
+  --arc-space-5: calc(var(--spacing) * 5);
+  --arc-space-6: calc(var(--spacing) * 6);
+  --arc-space-8: calc(var(--spacing) * 8);
+  --arc-radius-control: calc(var(--radius) * 1.8);
+  --arc-radius-panel: calc(var(--radius) * 2.2);
+  --arc-radius-surface: calc(var(--radius) * 2.6);
+  --arc-radius-pill: 9999px;
+  /* h-7, h-8 and h-9: the console's control heights. */
+  --arc-control-height-sm: calc(var(--spacing) * 7);
+  --arc-control-height-md: calc(var(--spacing) * 8);
+  --arc-control-height-lg: calc(var(--spacing) * 9);
+
+  /* Type: the console's faces (Mona Sans, Noto Sans SC) at Tailwind's sizes. */
+  --arc-font-display: var(--font-heading);
+  --arc-font-body: var(--font-sans);
+  --arc-text-xs: 0.75rem;
+  --arc-text-sm: 0.875rem;
+  --arc-text-base: 1rem;
+  --arc-text-lg: 1.125rem;
+  --arc-text-xl: 1.25rem;
+  --arc-leading-body: 1.4;
+  --arc-tracking-body: normal;
+
+  /* Motion: Arc's curves and durations. */
+  --arc-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --arc-ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --arc-ease-exit: cubic-bezier(0.7, 0, 0.84, 0);
+  --arc-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  /* Critically damped spring: fast start, smooth settle, never overshoots. */
+  --arc-ease-spring: linear(
+    0,
+    0.0213,
+    0.0739,
+    0.1443,
+    0.2235,
+    0.305,
+    0.3849,
+    0.4606,
+    0.5305,
+    0.594,
+    0.6508,
+    0.7011,
+    0.7452,
+    0.7836,
+    0.8168,
+    0.8454,
+    0.8699,
+    0.8907,
+    0.9084,
+    0.9234,
+    0.9361,
+    0.9467,
+    0.9557,
+    0.9632,
+    0.9694,
+    0.9747,
+    0.979,
+    0.9826,
+    0.9857,
+    0.9882,
+    0.9902,
+    0.992,
+    0.9934,
+    0.9946,
+    0.9955,
+    0.9963,
+    1
+  );
+  --arc-duration-instant: 120ms;
+  --arc-duration-fast: 160ms;
+  --arc-duration-standard: 240ms;
+  --arc-duration-considered: 480ms;
+  --arc-duration-spring: 580ms;
+}
