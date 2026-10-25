@@ -317,6 +317,14 @@ function columnTemplates(source: string): string[] {
 }
 
 describe("UI behaviour", () => {
+  it("renders Arc buttons as type=button unless told otherwise (a button in a form never submits it)", () => {
+    // Base UI's Button defaulted to type=button; a bare <button> is a submit button, and the site
+    // page's enable toggle saved the name form on every click (e2e p0: a stale-version conflict).
+    const button = read("src/web/components/arc/button/button.tsx");
+    expect(button).toMatch(/\btype = "button",/);
+    expect(button).toMatch(/<motion\.button\s+ref=\{setRefs\}\s+type=\{type\}/);
+  });
+
   it("calls table column templates instead of mounting them (FlexRender remounts cells)", () => {
     const flex = webSources.filter((file) =>
       /import\s*\{[^}]*\b(?:FlexRender|flexRender)\b[^}]*\}\s*from\s*"@tanstack\/react-table"/.test(

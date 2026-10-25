@@ -175,6 +175,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     disabled,
     children,
     onClick,
+    // Not the HTML default ("submit"): a button inside a form submits only when it says so.
+    type = "button",
     ...props
   },
   ref,
@@ -208,6 +210,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   return (
     <motion.button
       ref={setRefs}
+      type={type}
       tabIndex={props.tabIndex ?? 0}
       className={classes}
       disabled={disabled}
