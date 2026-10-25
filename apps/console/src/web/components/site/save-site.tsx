@@ -1,7 +1,6 @@
 import type { SiteUpdateInput } from "@edgeweir/contract";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/arc/button/button";
 import { followSiteDelivery } from "@/components/site/delivery-toast";
 import { CardFooter } from "@/components/ui/card";
@@ -10,6 +9,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
+import { toast } from "@/lib/toast";
 
 /** Saves part of a site; the toast follows the change onto the nodes (followSiteDelivery). */
 export function useSaveSite(siteId: string) {

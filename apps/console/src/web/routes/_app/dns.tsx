@@ -4,7 +4,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import type * as React from "react";
-import { toast } from "sonner";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { CardTable } from "@/components/clusters/card-table";
@@ -34,6 +33,7 @@ import {
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
+import { toast } from "@/lib/toast";
 
 export const Route = createFileRoute("/_app/dns")({ component: DnsPage });
 

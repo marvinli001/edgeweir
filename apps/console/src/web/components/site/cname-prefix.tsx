@@ -2,7 +2,6 @@ import { CNAME_PREFIX_RE, type CnamePrefixState } from "@edgeweir/contract";
 import { PencilEdit01Icon, RefreshIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
@@ -10,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { formatDateTime, m } from "@/lib/i18n";
 import { errorMessage } from "@/lib/orpc";
+import { toast } from "@/lib/toast";
 
 /**
  * Regenerates or sets the first label of a CNAME target (sites and layer-4

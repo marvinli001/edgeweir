@@ -12,7 +12,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/arc/button/button";
 import { BanDialog } from "@/components/ban-dialog";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
@@ -28,6 +27,7 @@ import { useDialogState } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
 import { expandPurgeTargets } from "@/lib/purge";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import {
   addExclusion,

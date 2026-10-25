@@ -245,8 +245,9 @@
 }
 
 /*
- * Glass over the overlay surface (--glass-overlay), for ⌘K only (toasts use toast-lit). On an
- * element that also has bg-popover, add bg-glass-overlay so the fill wins the class merge.
+ * Glass over the overlay surface (--glass-overlay), for ⌘K (toasts draw the same glass in
+ * components/arc/toast-stack). On an element that also has bg-popover, add bg-glass-overlay so
+ * the fill wins the class merge.
  */
 @utility glass-overlay {
   background-color: var(--glass-overlay);
@@ -333,72 +334,6 @@
 @utility readout {
   font-variant-numeric: tabular-nums slashed-zero;
   letter-spacing: -0.02em;
-}
-
-/*
- * Toasts (sonner's toast element, given the class in components/ui/sonner.tsx; nothing else): the
- * frosted overlay (the Toaster's --normal-bg is --glass-overlay), the top elevation and a 2px
- * leading edge in the toast type's color. Plain selectors with enough specificity to beat the
- * stylesheet sonner injects at runtime, which is unlayered.
- */
-[data-sonner-toaster] [data-sonner-toast].toast-lit {
-  --toast-edge: var(--edge);
-  backdrop-filter: blur(20px) saturate(1.6);
-  box-shadow:
-    inset 2px 0 0 0 var(--toast-edge),
-    var(--elev-3);
-  &:focus-visible {
-    box-shadow:
-      inset 2px 0 0 0 var(--toast-edge),
-      0 0 0 1px var(--ring),
-      0 0 0 4px color-mix(in oklch, var(--ring) 30%, transparent),
-      var(--elev-3);
-  }
-  &[data-type="success"] {
-    --toast-edge: var(--state-good);
-  }
-  &[data-type="info"] {
-    --toast-edge: var(--primary-ink);
-  }
-  &[data-type="warning"] {
-    --toast-edge: var(--state-warn);
-  }
-  &[data-type="error"] {
-    --toast-edge: var(--destructive);
-  }
-  /* A change still rolling out is live: the signal edge until it settles. */
-  &[data-type="loading"] {
-    --toast-edge: var(--signal);
-  }
-  & [data-description] {
-    color: var(--muted-foreground);
-  }
-  /* The action (e.g. "view bans") is a raised pill like an outline button, not an inverted chip. */
-  & [data-button] {
-    height: 1.75rem;
-    padding-inline: 0.75rem;
-    border-radius: 9999px;
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--foreground);
-    background: var(--raised);
-    box-shadow: var(--elev-1);
-    transition: background-color 160ms var(--ease-lit);
-    &:hover {
-      background: color-mix(in oklch, var(--raised), var(--foreground) 4%);
-    }
-    &:focus-visible {
-      box-shadow:
-        0 0 0 1px var(--ring),
-        0 0 0 4px color-mix(in oklch, var(--ring) 30%, transparent);
-    }
-    @media (forced-colors: active) {
-      border: 1px solid ButtonText;
-    }
-  }
-  @media (prefers-reduced-transparency: reduce) {
-    backdrop-filter: none;
-  }
 }
 
 /*

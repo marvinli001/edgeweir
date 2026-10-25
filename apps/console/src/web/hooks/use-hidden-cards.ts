@@ -1,8 +1,8 @@
 import type { HiddenCards } from "@edgeweir/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { errorMessage, orpc } from "@/lib/orpc";
+import { toast } from "@/lib/toast";
 
 export type CardScope = keyof HiddenCards;
 export type CardId<S extends CardScope> = HiddenCards[S][number];

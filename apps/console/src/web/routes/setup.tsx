@@ -1,6 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { toast } from "sonner";
 import { Button } from "@/components/arc/button/button";
 import { AuthFrame, AuthShell } from "@/components/auth-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +11,7 @@ import { authClient } from "@/lib/auth-client";
 import { localizeError } from "@/lib/errors";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
+import { toast } from "@/lib/toast";
 
 export const Route = createFileRoute("/setup")({
   beforeLoad: async ({ context }) => {

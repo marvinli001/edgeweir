@@ -9,7 +9,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/arc/button/button";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
 import {
@@ -22,6 +21,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
+import { toast } from "@/lib/toast";
 
 /**
  * The application's enabled switch: turning it either way asks first. A component of its own:

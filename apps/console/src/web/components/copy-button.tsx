@@ -1,10 +1,10 @@
 import { Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/arc/button/button";
 import { copyText } from "@/lib/browser";
 import { m } from "@/lib/i18n";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 export function CopyButton({ value, iconOnly }: { value: string; iconOnly?: boolean }) {

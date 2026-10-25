@@ -16,7 +16,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useLocation } from "@tanstack/react-router";
 import * as React from "react";
-import { toast } from "sonner";
 import * as z from "zod";
 import { AnalyticsSection } from "@/components/analytics/analytics-section";
 import { Badge } from "@/components/arc/badge/badge";
@@ -62,6 +61,7 @@ import { client, orpc } from "@/lib/orpc";
 import { recordRecent } from "@/lib/recents";
 import { needsDomainForms, newDomains } from "@/lib/site-domains";
 import { SITE_TABS, type SiteTab, siteTabLabel } from "@/lib/site-tabs";
+import { toast } from "@/lib/toast";
 
 export const Route = createFileRoute("/_app/sites/$id")({
   validateSearch: z.object({

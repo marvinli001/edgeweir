@@ -9,7 +9,6 @@ import { Alert02Icon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/arc/button/button";
 import { OptionSelect } from "@/components/form-select";
 import { enterDelay } from "@/components/page";
@@ -28,6 +27,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useAction } from "@/hooks/use-action";
 import { m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
+import { toast } from "@/lib/toast";
 
 /** Labels of the parts one copy can take, in the console's order. */
 const copyPartLabel = (part: SiteCopyPart): string =>

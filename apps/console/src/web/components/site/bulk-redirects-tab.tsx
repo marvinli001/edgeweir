@@ -8,7 +8,6 @@ import { Add01Icon, Cancel01Icon, FileImportIcon, Search01Icon } from "@hugeicon
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/arc/button/button";
 import { FormDialog } from "@/components/form-dialog";
 import { OptionSelect } from "@/components/form-select";
@@ -26,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatNumber, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
+import { toast } from "@/lib/toast";
 
 type StatusCode = BulkRedirect["statusCode"];
 const STATUS_CODES: StatusCode[] = [301, 302, 307, 308];

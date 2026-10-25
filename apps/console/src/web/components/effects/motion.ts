@@ -16,6 +16,7 @@ export {
   animate,
   useIsPresent,
   useMotionValue,
+  usePresence,
   useTransform,
 } from "motion/react";
 export * as motion from "motion/react-m";

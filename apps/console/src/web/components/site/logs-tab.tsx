@@ -13,7 +13,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import * as React from "react";
-import { toast } from "sonner";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { FormSelect, type Option, OptionSelect } from "@/components/form-select";
@@ -53,6 +52,7 @@ import {
 import { formatNumber, m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 import { requestUrl } from "@/lib/purge";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { exclusionPath } from "@/lib/waf-exclusions";
 

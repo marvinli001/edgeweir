@@ -14,7 +14,6 @@ import { Download01Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { FormDialog } from "@/components/form-dialog";
@@ -30,6 +29,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { downloadText } from "@/lib/browser";
 import { formatDateTime, formatNumber, m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
+import { toast } from "@/lib/toast";
 
 type RangeChoice = "all" | "15m" | "1h";
 const RANGE_MS: Record<Exclude<RangeChoice, "all">, number> = {

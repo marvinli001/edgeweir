@@ -19,7 +19,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
-import { toast } from "sonner";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -39,6 +38,7 @@ import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, m } from "@/lib/i18n";
 import { splitList } from "@/lib/lists";
 import { client, errorMessage, orpc } from "@/lib/orpc";
+import { toast } from "@/lib/toast";
 
 type EditableChannel = {
   id: string;

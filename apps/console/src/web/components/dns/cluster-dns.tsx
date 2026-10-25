@@ -16,7 +16,6 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { CardTable } from "@/components/clusters/card-table";
@@ -44,6 +43,7 @@ import {
 import { formatDateTime, m } from "@/lib/i18n";
 import { splitList } from "@/lib/lists";
 import { client, errorMessage, orpc } from "@/lib/orpc";
+import { toast } from "@/lib/toast";
 import {
   dnsRevisionReason,
   modeLabel,

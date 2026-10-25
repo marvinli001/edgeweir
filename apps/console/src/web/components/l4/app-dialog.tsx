@@ -12,7 +12,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import * as React from "react";
-import { toast } from "sonner";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { FormSelect, OptionSelect } from "@/components/form-select";
@@ -49,6 +48,7 @@ import {
   proxyVersionLabel,
 } from "@/lib/l4";
 import { errorMessage, orpc } from "@/lib/orpc";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 /** The certificate select's value for plain TCP. */

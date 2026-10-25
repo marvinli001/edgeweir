@@ -26,7 +26,7 @@ and changed as described in each file's header (`--arc-` tokens mapped onto the 
 
 | Code | From | Version | Copyright | License |
 | --- | --- | --- | --- | --- |
-| `foundation.css`, `motion-tokens.ts`, `arc-provider.tsx`, `button.tsx`, `badge.tsx`, `alert.tsx`, `avatar.tsx`, `progress.tsx` | [Arc](https://github.com/kuratlielia/arc-library) (`arc-foundation`, `arc-motion-tokens`, `button`, `badge`, `alert`, `avatar`, `progress`) | registry (2026-10-25) | Copyright (c) 2026 Elia Kuratli | MIT |
+| `foundation.css`, `motion-tokens.ts`, `arc-provider.tsx`, `button.tsx`, `badge.tsx`, `alert.tsx`, `avatar.tsx`, `progress.tsx`, `toast-stack.tsx` | [Arc](https://github.com/kuratlielia/arc-library) (`arc-foundation`, `arc-motion-tokens`, `button`, `badge`, `alert`, `avatar`, `progress`, `toast-stack`) | registry (2026-10-25) | Copyright (c) 2026 Elia Kuratli | MIT |
 
 ## Bundled packages
 

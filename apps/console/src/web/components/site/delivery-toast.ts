@@ -1,9 +1,9 @@
 import type { SiteDelivery } from "@edgeweir/contract";
 import { type QueryClient, QueryObserver } from "@tanstack/react-query";
-import { toast } from "sonner";
 import { canaryLabel } from "@/components/site-status";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
+import { toast } from "@/lib/toast";
 
 /** How long a toast follows a change before it keeps the last state it saw. */
 const FOLLOW_MS = 3 * 60_000;

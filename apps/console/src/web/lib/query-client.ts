@@ -1,6 +1,6 @@
 import { MutationCache, QueryCache, QueryClient, type QueryKey } from "@tanstack/react-query";
-import { toast } from "sonner";
 import { errorMessage } from "@/lib/orpc";
+import { toast } from "@/lib/toast";
 
 declare module "@tanstack/react-query" {
   interface Register {

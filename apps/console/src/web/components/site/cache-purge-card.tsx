@@ -1,7 +1,6 @@
 import { displaySiteDomain, MAX_CACHE_TASK_URLS, type Site } from "@edgeweir/contract";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/arc/button/button";
 import {
   CacheTaskList,
@@ -21,6 +20,7 @@ import { useAction } from "@/hooks/use-action";
 import { formatNumber, m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 import { expandPurgeTargets, purgeLines } from "@/lib/purge";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 const TYPES = ["url", "prefix", "site"] as const;

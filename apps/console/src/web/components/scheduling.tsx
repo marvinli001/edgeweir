@@ -16,7 +16,6 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { CardTable } from "@/components/clusters/card-table";
@@ -60,6 +59,7 @@ import {
   SCHEDULING_METRICS,
   stateLabel,
 } from "@/lib/scheduling";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 const MAX_CONDITIONS = 8;

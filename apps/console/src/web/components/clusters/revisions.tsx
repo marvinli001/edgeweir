@@ -1,7 +1,6 @@
 import type { Cluster, Revision } from "@edgeweir/contract";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/arc/button/button";
 import { SiteChangeList } from "@/components/config-changes";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -11,6 +10,7 @@ import { FieldError } from "@/components/ui/field";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { revisionReason } from "@/lib/revisions";
+import { toast } from "@/lib/toast";
 
 /**
  * Rollback with what it changes: the sites it adds, changes and removes

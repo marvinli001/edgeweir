@@ -3141,5 +3141,14 @@
   "arc_progress": "进度",
   "arc_avatar_status": "{name}，{status}",
   "arc_avatar_online": "在线",
-  "arc_avatar_offline": "离线"
+  "arc_avatar_offline": "离线",
+  "arc_toast_region": "通知",
+  "arc_toast_region_hotkey": "{label}（Alt+T）",
+  "arc_toast_dismiss": "关闭通知",
+  "arc_toast_type": "{type}：",
+  "arc_toast_success": "成功",
+  "arc_toast_info": "提示",
+  "arc_toast_warning": "警告",
+  "arc_toast_error": "错误",
+  "arc_toast_loading": "进行中"
 }

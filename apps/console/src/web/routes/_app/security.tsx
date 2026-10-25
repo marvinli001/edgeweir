@@ -3,7 +3,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
-import { toast } from "sonner";
 import { OtpField } from "@/components/appica/otp-field";
 import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -22,6 +21,7 @@ import { authClient } from "@/lib/auth-client";
 import { localizeError } from "@/lib/errors";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
+import { toast } from "@/lib/toast";
 
 export const Route = createFileRoute("/_app/security")({
   component: SecurityPage,

@@ -32,7 +32,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import * as React from "react";
-import { toast } from "sonner";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import {
@@ -61,6 +60,7 @@ import { useSettingsForm } from "@/hooks/use-settings-form";
 import { formatDateMinutes, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { challengeLabel, levelLabel, wafModeLabel } from "@/lib/protection";
+import { toast } from "@/lib/toast";
 import {
   type Exclusion,
   isSiteWide,

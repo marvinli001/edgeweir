@@ -8,7 +8,6 @@ import {
 } from "@edgeweir/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
-import { toast } from "sonner";
 import { enterDelay } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { SaveBar } from "@/components/site/save-site";
@@ -17,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { localizeError } from "@/lib/errors";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 type PartValue<P extends AccessControlPart> = AccessControlSettings[P];

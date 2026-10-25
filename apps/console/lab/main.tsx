@@ -17,7 +17,7 @@ import "@/index.css";
 import { LoadingState } from "@/components/states";
 import { NotFoundPage, RouteErrorPage } from "@/components/status-page";
 import { ThemeProvider } from "@/components/theme-provider";
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@/components/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getLocale } from "@/lib/i18n";
 import { isNotFound, isUnauthorized } from "@/lib/orpc";

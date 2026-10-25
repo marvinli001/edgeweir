@@ -20,6 +20,7 @@
   --arc-background: var(--background);
   --arc-surface: var(--raised);
   --arc-surface-raised: var(--overlay);
+  --arc-glass-overlay: var(--glass-overlay);
   --arc-surface-muted: var(--muted);
   --arc-surface-sunken: var(--well);
   --arc-surface-hover: color-mix(in oklch, var(--raised), var(--foreground) 4%);
@@ -46,6 +47,8 @@
   --arc-lit-shadow-hover: var(--lit-shadow-hover);
   --arc-lit-shadow-active: var(--lit-shadow-active);
   --arc-focus-ring: var(--ring);
+  /* Live data: a toast that follows a change still rolling out. */
+  --arc-signal: var(--signal);
 
   --arc-success: var(--state-good);
   --arc-warning: var(--state-warn);

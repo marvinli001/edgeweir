@@ -12,7 +12,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/arc/button/button";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
@@ -22,6 +21,7 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
+import { toast } from "@/lib/toast";
 
 type Dialog = "enable" | "disable" | "purge" | "addTags" | "removeTags" | "copy" | "delete" | null;
 

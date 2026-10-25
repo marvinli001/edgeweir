@@ -3347,5 +3347,14 @@
   "arc_progress": "Progress",
   "arc_avatar_status": "{name}, {status}",
   "arc_avatar_online": "online",
-  "arc_avatar_offline": "offline"
+  "arc_avatar_offline": "offline",
+  "arc_toast_region": "Notifications",
+  "arc_toast_region_hotkey": "{label} (Alt+T)",
+  "arc_toast_dismiss": "Dismiss notification",
+  "arc_toast_type": "{type}: ",
+  "arc_toast_success": "Success",
+  "arc_toast_info": "Info",
+  "arc_toast_warning": "Warning",
+  "arc_toast_error": "Error",
+  "arc_toast_loading": "In progress"
 }
