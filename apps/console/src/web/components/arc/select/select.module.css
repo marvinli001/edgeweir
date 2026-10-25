@@ -1,8 +1,9 @@
 /*
- * Ported from Arc's select.module.css (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md): Base UI's
- * data-popup-open, data-placeholder, data-side, data-highlighted, data-starting-style and
- * data-ending-style, and its --anchor-width, --available-height and --transform-origin, on `--arc-`
- * tokens, with the console's focus ring and a small trigger.
+ * Ported from Arc's select.module.css (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md): Base UI's data-popup-open, data-placeholder, data-side,
+ * data-highlighted, data-starting-style and data-ending-style, and its --anchor-width,
+ * --available-height and --transform-origin, on `--arc-` tokens, with the console's focus ring and
+ * a small trigger.
  */
 @layer components {
   /* The trigger anchors the floating menu and is measured when it opens, so it never scales: press feedback is color only. */

@@ -1,12 +1,13 @@
 /*
- * DropdownMenu: ported from Arc's `dropdown-menu` (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md),
- * the primitive switched from Radix to Base UI's Menu. Changes: the console's compound parts
- * (groups, labels, checkbox and radio items, submenus, a destructive item) instead of an `items`
- * array, so the trigger is the caller's (Arc's animated trigger label and chevron are left out);
- * the one gliding highlight follows Base UI's data-highlighted; transitions key off Base UI's
- * data-starting-style / data-ending-style and its --transform-origin; Motion's light components
- * through components/effects/motion, the console's reduced-motion hook, Hugeicons instead of
- * Lucide, `--arc-` tokens (foundation.css), and the module sits in Tailwind's components layer.
+ * DropdownMenu: ported from Arc's `dropdown-menu` (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md), the primitive switched from Radix to Base UI's Menu. Changes: the
+ * console's compound parts (groups, labels, checkbox and radio items, submenus, a destructive item)
+ * instead of an `items` array, so the trigger is the caller's (Arc's animated trigger label and
+ * chevron are left out); the one gliding highlight follows Base UI's data-highlighted; transitions
+ * key off Base UI's data-starting-style / data-ending-style and its --transform-origin; Motion's
+ * light components through components/effects/motion, the console's reduced-motion hook, Hugeicons
+ * instead of Lucide, `--arc-` tokens (foundation.css), and the module sits in Tailwind's components
+ * layer.
  */
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { ArrowRight01Icon, Tick02Icon } from "@hugeicons/core-free-icons";

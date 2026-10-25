@@ -1,8 +1,8 @@
 /*
- * Ported from Arc's dropdown-menu.module.css (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md): Base UI's
- * data-side, data-starting-style, data-ending-style, data-highlighted and --transform-origin,
- * --anchor-width and --available-* properties, on `--arc-` tokens; labels, checkable items and the
- * submenu chevron are the console's parts.
+ * Ported from Arc's dropdown-menu.module.css (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md): Base UI's data-side, data-starting-style, data-ending-style,
+ * data-highlighted and --transform-origin, --anchor-width and --available-* properties, on `--arc-`
+ * tokens; labels, checkable items and the submenu chevron are the console's parts.
  */
 @layer components {
   .positioner {
@@ -77,7 +77,9 @@
   .highlight[data-tone="danger"] {
     background: var(--arc-danger-subtle);
   }
+  /* --i numbers the item for the entrance stagger (set by DropdownMenuContent). */
   .item {
+    --i: 0;
     position: relative;
     display: flex;
     min-height: var(--arc-control-height-md);
@@ -92,8 +94,8 @@
     user-select: none;
     transition:
       color var(--arc-duration-fast) var(--arc-ease-standard),
-      opacity var(--arc-duration-standard) var(--arc-ease-enter) calc(min(var(--i, 0), 4) * 35ms),
-      transform var(--arc-duration-standard) var(--arc-ease-enter) calc(min(var(--i, 0), 4) * 35ms);
+      opacity var(--arc-duration-standard) var(--arc-ease-enter) calc(min(var(--i), 4) * 35ms),
+      transform var(--arc-duration-standard) var(--arc-ease-enter) calc(min(var(--i), 4) * 35ms);
   }
   .item svg {
     flex: none;

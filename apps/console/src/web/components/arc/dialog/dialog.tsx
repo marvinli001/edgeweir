@@ -1,13 +1,14 @@
 /*
- * Dialog: ported from Arc's `dialog` (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md), the primitive
- * switched from Radix to Base UI. Changes: the console's compound parts (header, title, footer,
- * optional close buttons) instead of `title` and `description` props, so there is no description
- * part and the body is the caller's; the overlay is the console's dim without blur (polled content
- * may sit behind it); the panel stays centred with `translate` so the entrance can own
- * `transform`; transitions key off Base UI's data-starting-style / data-ending-style; Motion's
- * light components through components/effects/motion, the console's reduced-motion hook,
- * Hugeicons instead of Lucide, Paraglide text, `--arc-` tokens (foundation.css), and the module
- * sits in Tailwind's components layer.
+ * Dialog: ported from Arc's `dialog` (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md), the primitive switched from Radix to Base UI. Changes: the console's
+ * compound parts (header, title, footer, optional close buttons) instead of `title` and
+ * `description` props, so there is no description part and the body is the caller's; the overlay is
+ * the console's dim without blur (polled content may sit behind it); the panel stays centred with
+ * `translate` so the entrance can own `transform`; transitions key off Base UI's
+ * data-starting-style / data-ending-style; Motion's light components through
+ * components/effects/motion, the console's reduced-motion hook, Hugeicons instead of Lucide,
+ * Paraglide text, `--arc-` tokens (foundation.css), and the module sits in Tailwind's components
+ * layer.
  */
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { Cancel01Icon } from "@hugeicons/core-free-icons";

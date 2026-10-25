@@ -1,9 +1,9 @@
 /*
- * Progress: adapted from Arc's `progress` (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md). Changes:
- * Motion's light components through components/effects/motion, the console's reduced-motion hook,
- * `--arc-` tokens (foundation.css), Hugeicons instead of Lucide, Paraglide text, a caller's
- * aria-label is kept, data-slot names on the track and fill for callers' styles, a well for the
- * track, and the module sits in Tailwind's components layer.
+ * Progress: adapted from Arc's `progress` (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md). Changes: Motion's light components through components/effects/motion,
+ * the console's reduced-motion hook, `--arc-` tokens (foundation.css), Hugeicons instead of Lucide,
+ * Paraglide text, a caller's aria-label is kept, data-slot names on the track and fill for callers'
+ * styles, a well for the track, and the module sits in Tailwind's components layer.
  */
 
 import { Tick02Icon } from "@hugeicons/core-free-icons";

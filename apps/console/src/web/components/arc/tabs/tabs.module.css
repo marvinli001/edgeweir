@@ -1,8 +1,8 @@
 /*
- * Ported from Arc's tabs.module.css (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md): Base UI's data
- * attributes (data-active, data-orientation, data-activation-direction) and its indicator's
- * --active-tab-* properties, on `--arc-` tokens; the line variant and vertical layout are the
- * console's.
+ * Ported from Arc's tabs.module.css (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md): Base UI's data attributes (data-active, data-orientation,
+ * data-activation-direction) and its indicator's --active-tab-* properties, on `--arc-` tokens; the
+ * line variant and vertical layout are the console's.
  */
 @layer components {
   .root {

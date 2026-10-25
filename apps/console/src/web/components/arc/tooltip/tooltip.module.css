@@ -1,7 +1,7 @@
 /*
- * Ported from Arc's tooltip.module.css (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md): Base UI's
- * data-side, data-instant, data-starting-style and data-ending-style, and --transform-origin, on
- * `--arc-` tokens.
+ * Ported from Arc's tooltip.module.css (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md): Base UI's data-side, data-instant, data-starting-style and
+ * data-ending-style, and --transform-origin, on `--arc-` tokens.
  */
 @layer components {
   .positioner {

@@ -197,7 +197,18 @@ describe("UI rules (ADR-0003)", () => {
   it("styles the Arc primitives with the console's tokens: --arc- names defined in foundation.css", () => {
     // Arc's bare token names (--accent, --series-*, --text-xl…) mean something else to shadcn and
     // Tailwind, so the Arc sources read --arc- tokens and foundation.css maps each one onto a
-    // console token. A file may also use custom properties it declares itself (--badge-color).
+    // console token. A file may also use custom properties it declares itself (--badge-color) and
+    // the ones Base UI sets on its positioners and tab indicator at runtime.
+    const baseUi = new Set([
+      "--anchor-width",
+      "--available-height",
+      "--available-width",
+      "--transform-origin",
+      "--active-tab-top",
+      "--active-tab-left",
+      "--active-tab-width",
+      "--active-tab-height",
+    ]);
     const foundation = read("src/web/components/arc/foundation.css");
     const declared = (source: string) =>
       new Set([...source.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1] as string));
@@ -215,7 +226,10 @@ describe("UI rules (ADR-0003)", () => {
       const own = declared(source);
       return [...source.matchAll(/var\((--[a-z0-9-]+)/g)]
         .map((m) => m[1] as string)
-        .filter((name) => !(name.startsWith("--arc-") ? tokens.has(name) : own.has(name)))
+        .filter(
+          (name) =>
+            !(name.startsWith("--arc-") ? tokens.has(name) : own.has(name) || baseUi.has(name)),
+        )
         .map((name) => `${file}: ${name}`);
     });
     expect(unmapped).toEqual([]);
@@ -225,14 +239,15 @@ describe("UI rules (ADR-0003)", () => {
 
   it("takes the Arc primitives from the free registry only, on the console's icons and Motion", () => {
     // Free (MIT) Arc items only; their Lucide icons become Hugeicons, Motion comes through
-    // components/effects/motion, and nothing pulls in a second headless library or Arc Pro code.
+    // components/effects/motion, Arc's Radix primitives are ported onto Base UI (the console's one
+    // headless library), and nothing pulls in Radix or Arc Pro code.
     const arc = webSources.filter((file) => file.includes("components/arc/"));
     const imports = arc.flatMap((file) =>
       [...read(file).matchAll(/^\s*(?:import|export)\b[^;]*?\bfrom\s+"([^"]+)"/gms)]
         .map((m) => m[1] as string)
         .filter(
           (spec) =>
-            !/^(?:react|@hugeicons\/(?:react|core-free-icons)|@\/(?:components\/effects\/motion|hooks\/use-reduced-motion|lib\/i18n|lib\/utils)|\.{1,2}\/.+)$/.test(
+            !/^(?:react|@base-ui\/react\/[a-z-]+|@hugeicons\/(?:react|core-free-icons)|@\/(?:components\/effects\/motion|hooks\/use-reduced-motion|lib\/i18n|lib\/utils)|\.{1,2}\/.+)$/.test(
               spec,
             ),
         )
@@ -243,6 +258,11 @@ describe("UI rules (ADR-0003)", () => {
     expect(components.registries).toEqual({ "@uiarc": "https://uiarc.dev/r/{name}.json" });
     const pro = arc.filter((file) => /uiarc-pro|ARC_PRO_TOKEN/.test(read(file)));
     expect(pro).toEqual([]);
+    const radix = webSources.filter((file) => /from\s+"@radix-ui\//.test(read(file)));
+    expect(radix).toEqual([]);
+    const pkg = JSON.parse(read("package.json"));
+    const deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies });
+    expect(deps.filter((name) => name.startsWith("@radix-ui/"))).toEqual([]);
   });
 
   it("scans every appica component it imports (and their internal deps), and nothing else", () => {

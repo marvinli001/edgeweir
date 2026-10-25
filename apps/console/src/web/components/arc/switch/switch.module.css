@@ -1,7 +1,7 @@
 /*
- * Ported from Arc's switch.module.css (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md): the track is
- * the Base UI root (data-checked / data-unchecked), on `--arc-` tokens, with the console's focus
- * ring, its control edge (3:1) and a small size.
+ * Ported from Arc's switch.module.css (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md): the track is the Base UI root (data-checked / data-unchecked), on
+ * `--arc-` tokens, with the console's focus ring, its control edge (3:1) and a small size.
  */
 @layer components {
   /* Fixed box: the thumb moves inside it with transforms, so nothing around the switch shifts. The track crossfades between the two fills. */

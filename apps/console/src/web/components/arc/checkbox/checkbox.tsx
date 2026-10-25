@@ -1,11 +1,11 @@
 /*
- * Checkbox: ported from Arc's `checkbox` (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md), the
- * primitive switched from Radix to Base UI (Checkbox.Root, and an always-mounted
- * Checkbox.Indicator that reports checked and indeterminate). Changes: Motion's light components
- * through components/effects/motion, the console's reduced-motion hook, `--arc-` tokens
- * (foundation.css), the box is the 18px square with a wider hit area (labels come from Field, so
- * `label` and `description` are left out), the console's focus ring and control edge, and the
- * module sits in Tailwind's components layer.
+ * Checkbox: ported from Arc's `checkbox` (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md), the primitive switched from Radix to Base UI (Checkbox.Root, and an
+ * always-mounted Checkbox.Indicator that reports checked and indeterminate). Changes: Motion's
+ * light components through components/effects/motion, the console's reduced-motion hook, `--arc-`
+ * tokens (foundation.css), the box is the 18px square with a wider hit area (labels come from
+ * Field, so `label` and `description` are left out), the console's focus ring and control edge, and
+ * the module sits in Tailwind's components layer.
  */
 import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox";
 import { motion, type Transition } from "@/components/effects/motion";

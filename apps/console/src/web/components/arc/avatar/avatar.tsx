@@ -1,8 +1,8 @@
 /*
- * Avatar: adapted from Arc's `avatar` (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md). Changes: Motion's
- * light components through components/effects/motion, the console's reduced-motion hook, `--arc-`
- * tokens (foundation.css), Paraglide text for the status, and the module sits in Tailwind's
- * components layer.
+ * Avatar: adapted from Arc's `avatar` (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md). Changes: Motion's light components through components/effects/motion,
+ * the console's reduced-motion hook, `--arc-` tokens (foundation.css), Paraglide text for the
+ * status, and the module sits in Tailwind's components layer.
  */
 import { type HTMLAttributes, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "@/components/effects/motion";

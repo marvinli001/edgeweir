@@ -22,11 +22,14 @@ Hugeicons). MIT license text below.
 
 Arc primitives: copied into `src/web/components/arc/` from Arc's public registry (free tier only)
 and changed as described in each file's header (`--arc-` tokens mapped onto the console's in
-`foundation.css`, Motion's light components, Hugeicons, Paraglide text). MIT license text below.
+`foundation.css`, Motion's light components, Hugeicons, Paraglide text). Arc builds its dialog,
+menu, select, tabs, switch, checkbox and tooltip on Radix; those are ported from Arc with the
+primitives switched to Base UI, keeping Arc's styling and motion. MIT license text below.
 
 | Code | From | Version | Copyright | License |
 | --- | --- | --- | --- | --- |
 | `foundation.css`, `motion-tokens.ts`, `arc-provider.tsx`, `button.tsx`, `badge.tsx`, `alert.tsx`, `avatar.tsx`, `progress.tsx`, `toast-stack.tsx` | [Arc](https://github.com/kuratlielia/arc-library) (`arc-foundation`, `arc-motion-tokens`, `button`, `badge`, `alert`, `avatar`, `progress`, `toast-stack`) | registry (2026-10-25) | Copyright (c) 2026 Elia Kuratli | MIT |
+| `input.tsx`, `input.module.css`, `textarea.tsx`, `textarea.module.css`, `switch.tsx`, `switch.module.css`, `checkbox.tsx`, `checkbox.module.css`, `tabs.tsx`, `tabs.module.css`, `tooltip.tsx`, `tooltip.module.css`, `dropdown-menu.tsx`, `dropdown-menu.module.css`, `select.tsx`, `select.module.css`, `dialog.tsx`, `dialog.module.css` (ported from Arc, primitives switched to Base UI) | [Arc](https://github.com/kuratlielia/arc-library) (`input`, `textarea`, `switch`, `checkbox`, `tabs`, `tooltip`, `dropdown-menu`, `select`, `dialog`) | registry (2026-10-25) | Copyright (c) 2026 Elia Kuratli | MIT |
 
 ## Bundled packages
 

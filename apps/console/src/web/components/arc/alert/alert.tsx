@@ -1,9 +1,9 @@
 /*
- * Alert: adapted from Arc's `alert` (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md). Changes: Motion's
- * light components through components/effects/motion, the console's reduced-motion hook, `--arc-`
- * tokens (foundation.css), Hugeicons instead of Lucide, Paraglide text, a sunk callout (danger on
- * its own tint) instead of a raised card, details in a div so they can hold actions, and the
- * module sits in Tailwind's components layer.
+ * Alert: adapted from Arc's `alert` (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md). Changes: Motion's light components through components/effects/motion,
+ * the console's reduced-motion hook, `--arc-` tokens (foundation.css), Hugeicons instead of Lucide,
+ * Paraglide text, a sunk callout (danger on its own tint) instead of a raised card, details in a
+ * div so they can hold actions, and the module sits in Tailwind's components layer.
  */
 
 import {

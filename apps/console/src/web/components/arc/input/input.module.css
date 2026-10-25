@@ -1,6 +1,7 @@
 /*
- * Ported from Arc's input.module.css (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md): the control's
- * rules, on `--arc-` tokens, with the console's focus ring instead of a border-only focus.
+ * Ported from Arc's input.module.css (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md): the control's rules, on `--arc-` tokens, with the console's focus ring
+ * instead of a border-only focus.
  */
 @layer components {
   /* The field itself never changes size: hover, focus and errors answer in color. */

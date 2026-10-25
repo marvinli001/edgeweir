@@ -1,12 +1,13 @@
 /*
- * Tabs: ported from Arc's `tabs` (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md), the primitive
- * switched from Radix to Base UI. Changes: the gliding selection is Base UI's Tabs.Indicator, which
- * measures the active tab, moving on Arc's spring curve in CSS instead of a Motion layoutId; the
- * incoming panel slides in from the side Base UI reports (data-activation-direction) without the
- * height morph or the outgoing panel; the overflow scroll buttons are left out (segmented lists
- * here are short, and the page tab bars scroll themselves); a `line` variant for page tab bars and
- * a vertical orientation, as the console's tabs had; `--arc-` tokens (foundation.css), the
- * console's focus ring, and the module sits in Tailwind's components layer.
+ * Tabs: ported from Arc's `tabs` (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md), the primitive switched from Radix to Base UI. Changes: the gliding
+ * selection is Base UI's Tabs.Indicator, which measures the active tab, moving on Arc's spring
+ * curve in CSS instead of a Motion layoutId; the incoming panel slides in from the side Base UI
+ * reports (data-activation-direction) without the height morph or the outgoing panel; the overflow
+ * scroll buttons are left out (segmented lists here are short, and the page tab bars scroll
+ * themselves); a `line` variant for page tab bars and a vertical orientation, as the console's tabs
+ * had; `--arc-` tokens (foundation.css), the console's focus ring, and the module sits in
+ * Tailwind's components layer.
  */
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 import { cn } from "@/lib/utils";

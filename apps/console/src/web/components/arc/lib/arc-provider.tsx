@@ -1,7 +1,8 @@
 /*
- * ArcImage: adapted from Arc's `arc-provider` (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md). Changes:
- * only the image Avatar renders is kept, always the plain <img> (the console has no image
- * component to swap in, so the provider, its context and the link half are left out).
+ * ArcImage: adapted from Arc's `arc-provider` (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md). Changes: only the image Avatar renders is kept, always the plain <img>
+ * (the console has no image component to swap in, so the provider, its context and the link half
+ * are left out).
  */
 import type { ImgHTMLAttributes, Ref } from "react";
 

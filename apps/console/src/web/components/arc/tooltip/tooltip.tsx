@@ -1,11 +1,11 @@
 /*
- * Tooltip: ported from Arc's `tooltip` (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md), the primitive
- * switched from Radix to Base UI. Changes: the console's compound parts (provider, root, trigger,
- * content) instead of a `content` prop; Arc's shared warm-up becomes Base UI's provider delay and
- * timeout, and its instant flag Base UI's data-instant; transitions key off Base UI's
- * data-starting-style / data-ending-style; Motion's light components through
- * components/effects/motion, the console's reduced-motion hook, `--arc-` tokens (foundation.css),
- * and the module sits in Tailwind's components layer.
+ * Tooltip: ported from Arc's `tooltip` (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md), the primitive switched from Radix to Base UI. Changes: the console's
+ * compound parts (provider, root, trigger, content) instead of a `content` prop; Arc's shared
+ * warm-up becomes Base UI's provider delay and timeout, and its instant flag Base UI's
+ * data-instant; transitions key off Base UI's data-starting-style / data-ending-style; Motion's
+ * light components through components/effects/motion, the console's reduced-motion hook, `--arc-`
+ * tokens (foundation.css), and the module sits in Tailwind's components layer.
  */
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 import { useLayoutEffect, useRef, useState } from "react";

@@ -1,13 +1,14 @@
 /*
- * Select: ported from Arc's `select` (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md), the primitive
- * switched from Radix to Base UI. Changes: the console's compound parts (trigger, value, content,
- * item) instead of an `options` prop, and no built-in label (labels come from Field or the
- * trigger's aria-label); the shown value rolls up when it changes (Arc rolls by list direction,
- * which the value part does not know); transitions key off Base UI's data-starting-style /
- * data-ending-style and its --transform-origin, --anchor-width and --available-height; a small
- * trigger size; Motion's light components through components/effects/motion, the console's
- * reduced-motion hook, Hugeicons instead of Lucide, `--arc-` tokens (foundation.css), the
- * console's focus ring, and the module sits in Tailwind's components layer.
+ * Select: ported from Arc's `select` (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md), the primitive switched from Radix to Base UI. Changes: the console's
+ * compound parts (trigger, value, content, item) instead of an `options` prop, and no built-in
+ * label (labels come from Field or the trigger's aria-label); the shown value rolls up when it
+ * changes (Arc rolls by list direction, which the value part does not know); transitions key off
+ * Base UI's data-starting-style / data-ending-style and its --transform-origin, --anchor-width and
+ * --available-height; a small trigger size; Motion's light components through
+ * components/effects/motion, the console's reduced-motion hook, Hugeicons instead of Lucide,
+ * `--arc-` tokens (foundation.css), the console's focus ring, and the module sits in Tailwind's
+ * components layer.
  */
 import { Select as SelectPrimitive } from "@base-ui/react/select";
 import { ArrowDown01Icon, ArrowUp01Icon, Tick02Icon } from "@hugeicons/core-free-icons";

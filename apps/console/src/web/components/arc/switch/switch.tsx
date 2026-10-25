@@ -1,10 +1,11 @@
 /*
- * Switch: ported from Arc's `switch` (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md), the primitive
- * switched from Radix to Base UI (Switch.Root and Switch.Thumb, which reports the checked state).
- * Changes: Motion's light components through components/effects/motion, the console's
- * reduced-motion hook, `--arc-` tokens (foundation.css), the root is the track (labels come from
- * Field, so the `label` prop is left out), a small size, the console's focus ring and a wider hit
- * area, and the module sits in Tailwind's components layer.
+ * Switch: ported from Arc's `switch` (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md), the primitive switched from Radix to Base UI (Switch.Root and
+ * Switch.Thumb, which reports the checked state). Changes: Motion's light components through
+ * components/effects/motion, the console's reduced-motion hook, `--arc-` tokens (foundation.css),
+ * the root is the track (labels come from Field, so the `label` prop is left out), a small size,
+ * the console's focus ring and a wider hit area, and the module sits in Tailwind's components
+ * layer.
  */
 import { Switch as SwitchPrimitive } from "@base-ui/react/switch";
 import { type RefObject, useEffect, useRef, useState } from "react";

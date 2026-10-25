@@ -1,9 +1,9 @@
 /*
- * Toast stack: adapted from Arc's `toast-stack` (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md).
- * Changes: Motion's light components through components/effects/motion, the console's
- * reduced-motion hook, `--arc-` tokens (foundation.css), Hugeicons instead of Lucide, Paraglide
- * text, an optional testId per toast, the toast type on the card (its colored edge), no non-null
- * assertions (Biome), and the module sits in Tailwind's components layer.
+ * Toast stack: adapted from Arc's `toast-stack` (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md). Changes: Motion's light components through components/effects/motion,
+ * the console's reduced-motion hook, `--arc-` tokens (foundation.css), Hugeicons instead of Lucide,
+ * Paraglide text, an optional testId per toast, the toast type on the card (its colored edge), no
+ * non-null assertions (Biome), and the module sits in Tailwind's components layer.
  */
 
 import {

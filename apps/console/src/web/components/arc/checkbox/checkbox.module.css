@@ -1,7 +1,7 @@
 /*
- * Ported from Arc's checkbox.module.css (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md): the Base UI
- * root carries data-checked / data-unchecked / data-indeterminate, on `--arc-` tokens, with the
- * console's control edge (3:1) and focus ring.
+ * Ported from Arc's checkbox.module.css (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md): the Base UI root carries data-checked / data-unchecked /
+ * data-indeterminate, on `--arc-` tokens, with the console's control edge (3:1) and focus ring.
  */
 @layer components {
   .box {

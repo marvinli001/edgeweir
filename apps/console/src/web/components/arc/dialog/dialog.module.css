@@ -1,7 +1,7 @@
 /*
- * Ported from Arc's dialog.module.css (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md): Base UI's
- * data-starting-style and data-ending-style on the backdrop and popup, on `--arc-` tokens; the
- * header, footer and padding are the console's layout.
+ * Ported from Arc's dialog.module.css (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md): Base UI's data-starting-style and data-ending-style on the backdrop and
+ * popup, on `--arc-` tokens; the header, footer and padding are the console's layout.
  */
 @layer components {
   .overlay {
