@@ -5,6 +5,13 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import type * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/arc/dropdown-menu/dropdown-menu";
 import { type NodeAction, NodeActionDialog } from "@/components/clusters/node-dialogs";
 import { NodeChannelBadge } from "@/components/node-channel-state";
 import {
@@ -17,13 +24,6 @@ import {
 import { enterDelay } from "@/components/page";
 import { EmptyState, QueryView } from "@/components/states";
 import { Dot, StatusDot } from "@/components/status-dot";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";

@@ -8,8 +8,8 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "cn";
 import * as React from "react";
 import { Button } from "@/components/arc/button/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/arc/tooltip/tooltip";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { m } from "@/lib/i18n";
 

@@ -12,11 +12,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
-import { Input } from "@/components/arc/input/input";
-import { ControlledConfirmDialog } from "@/components/confirm-dialog";
-import { enterDelay } from "@/components/page";
-import { EmptyState, QueryView } from "@/components/states";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -26,7 +21,12 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/arc/dropdown-menu/dropdown-menu";
+import { Input } from "@/components/arc/input/input";
+import { ControlledConfirmDialog } from "@/components/confirm-dialog";
+import { enterDelay } from "@/components/page";
+import { EmptyState, QueryView } from "@/components/states";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FieldError } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
 import { m } from "@/lib/i18n";

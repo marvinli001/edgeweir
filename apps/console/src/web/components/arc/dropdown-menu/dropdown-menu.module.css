@@ -1,0 +1,188 @@
+/*
+ * Ported from Arc's dropdown-menu.module.css (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md): Base UI's
+ * data-side, data-starting-style, data-ending-style, data-highlighted and --transform-origin,
+ * --anchor-width and --available-* properties, on `--arc-` tokens; labels, checkable items and the
+ * submenu chevron are the console's parts.
+ */
+@layer components {
+  .positioner {
+    isolation: isolate;
+    z-index: 60;
+    outline: none;
+  }
+  /* The menu grows from the trigger edge: offset toward the trigger, scale from Base UI's origin, fade quickly.
+     Transitions instead of keyframes, so a close that interrupts the open (or a reopen during the close) reverses from where it is. */
+  .menu {
+    --menu-x: 0px;
+    --menu-y: -5px;
+    position: relative;
+    box-sizing: border-box;
+    width: var(--anchor-width);
+    min-width: 8rem;
+    max-width: var(--available-width);
+    max-height: var(--available-height);
+    overflow: hidden auto;
+    padding: 5px;
+    border: 1px solid var(--arc-border);
+    border-radius: var(--arc-radius-panel);
+    background: var(--arc-surface-raised);
+    color: var(--arc-foreground);
+    box-shadow: var(--arc-shadow-floating);
+    outline: none;
+    transform-origin: var(--transform-origin);
+    transition:
+      opacity var(--arc-duration-fast) var(--arc-ease-enter),
+      transform var(--arc-duration-spring) var(--arc-ease-spring);
+  }
+  .menu[data-sub] {
+    width: auto;
+    min-width: 6rem;
+  }
+  .menu[data-side="top"] {
+    --menu-y: 5px;
+  }
+  .menu[data-side="left"],
+  .menu[data-side="inline-start"] {
+    --menu-x: 5px;
+    --menu-y: 0px;
+  }
+  .menu[data-side="right"],
+  .menu[data-side="inline-end"] {
+    --menu-x: -5px;
+    --menu-y: 0px;
+  }
+  .menu[data-starting-style] {
+    opacity: 0;
+    transform: translate(var(--menu-x), var(--menu-y)) scale(0.97);
+  }
+  .menu[data-ending-style] {
+    opacity: 0;
+    transform: translate(calc(var(--menu-x) * 0.5), calc(var(--menu-y) * 0.5)) scale(0.985);
+    transition:
+      opacity 130ms var(--arc-ease-standard),
+      transform 130ms var(--arc-ease-standard);
+    pointer-events: none;
+  }
+  .highlight {
+    position: absolute;
+    top: 0;
+    right: 5px;
+    left: 5px;
+    border-radius: calc(var(--arc-radius-panel) - 6px);
+    background: var(--arc-wash);
+    opacity: 0;
+    pointer-events: none;
+    transition: background-color var(--arc-duration-fast) var(--arc-ease-standard);
+  }
+  .highlight[data-tone="danger"] {
+    background: var(--arc-danger-subtle);
+  }
+  .item {
+    position: relative;
+    display: flex;
+    min-height: var(--arc-control-height-md);
+    align-items: center;
+    gap: 10px;
+    padding: 0 10px;
+    border-radius: calc(var(--arc-radius-panel) - 6px);
+    color: var(--arc-foreground);
+    font-size: var(--arc-text-sm);
+    cursor: default;
+    outline: none;
+    user-select: none;
+    transition:
+      color var(--arc-duration-fast) var(--arc-ease-standard),
+      opacity var(--arc-duration-standard) var(--arc-ease-enter) calc(min(var(--i, 0), 4) * 35ms),
+      transform var(--arc-duration-standard) var(--arc-ease-enter) calc(min(var(--i, 0), 4) * 35ms);
+  }
+  .item svg {
+    flex: none;
+    pointer-events: none;
+    color: var(--arc-text-secondary);
+  }
+  .item svg:not([class*="size-"]) {
+    width: 1rem;
+    height: 1rem;
+  }
+  .item[data-inset] {
+    padding-left: 30px;
+  }
+  .item[data-variant="destructive"],
+  .item[data-variant="destructive"] svg {
+    color: var(--arc-danger);
+  }
+  /* An open submenu keeps its trigger marked once the highlight has moved into the submenu. */
+  .item[data-popup-open]:not([data-highlighted]) {
+    background: var(--arc-wash);
+  }
+  .item[data-disabled] {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  .chevron {
+    margin-left: auto;
+  }
+  .checkable {
+    padding-right: 32px;
+  }
+  .indicator {
+    position: absolute;
+    right: 10px;
+    display: inline-flex;
+    align-items: center;
+    animation: indicator-in var(--arc-duration-standard) var(--arc-ease-enter) both;
+  }
+  .checkable .indicator svg {
+    color: var(--arc-accent);
+  }
+  .label {
+    padding: var(--arc-space-1) 10px;
+    color: var(--arc-text-muted);
+    font-size: var(--arc-text-xs);
+  }
+  .label[data-inset] {
+    padding-left: 30px;
+  }
+  .separator {
+    height: 1px;
+    margin: var(--arc-space-1) -5px;
+    background: var(--arc-border-subtle);
+  }
+  /* Items rise in after the menu, one after another. */
+  .menu[data-starting-style] .item {
+    opacity: 0;
+    transform: translate(calc(var(--menu-x) * 0.4), calc(var(--menu-y) * 0.4));
+  }
+  @media (forced-colors: active) {
+    .item[data-highlighted] {
+      outline: 2px solid Highlight;
+      outline-offset: -2px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .item,
+    .highlight {
+      transition: none;
+    }
+    .menu,
+    .menu[data-starting-style],
+    .menu[data-ending-style] {
+      transform: none;
+      transition: opacity var(--arc-duration-instant) linear;
+    }
+    .menu[data-starting-style] .item {
+      opacity: 1;
+      transform: none;
+    }
+    .indicator {
+      animation: none;
+    }
+  }
+}
+
+@keyframes indicator-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}

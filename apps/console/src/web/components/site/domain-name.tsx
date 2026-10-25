@@ -1,7 +1,7 @@
 import { displaySiteDomain, siteDomainKind } from "@edgeweir/contract";
 import { cn } from "cn";
 import { Badge } from "@/components/arc/badge/badge";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/arc/tooltip/tooltip";
 import { m } from "@/lib/i18n";
 
 /**

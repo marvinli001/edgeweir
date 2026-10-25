@@ -1,7 +1,7 @@
 import type { OriginHealth, OriginHealthSource } from "@edgeweir/contract";
 import { Badge } from "@/components/arc/badge/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/arc/tooltip/tooltip";
 import { Dot } from "@/components/status-dot";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { m, timeAgo } from "@/lib/i18n";
 import { originErrorText } from "@/lib/node-errors";
 

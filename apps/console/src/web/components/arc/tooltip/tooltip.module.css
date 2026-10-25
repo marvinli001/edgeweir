@@ -1,0 +1,85 @@
+/*
+ * Ported from Arc's tooltip.module.css (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md): Base UI's
+ * data-side, data-instant, data-starting-style and data-ending-style, and --transform-origin, on
+ * `--arc-` tokens.
+ */
+@layer components {
+  .positioner {
+    isolation: isolate;
+    z-index: 90;
+  }
+  .tooltip {
+    --tooltip-y: 3px;
+    display: inline-flex;
+    width: fit-content;
+    max-width: 15rem;
+    align-items: center;
+    gap: 6px;
+    padding: var(--arc-space-2) var(--arc-space-3);
+    border: 1px solid color-mix(in oklab, var(--arc-background) 14%, var(--arc-foreground));
+    border-radius: var(--arc-radius-control);
+    background: var(--arc-foreground);
+    color: var(--arc-background);
+    box-shadow: var(--arc-shadow-raised);
+    font-size: var(--arc-text-xs);
+    font-weight: 400;
+    line-height: var(--arc-leading-body);
+    transform-origin: var(--transform-origin);
+    transition:
+      opacity var(--arc-duration-fast) var(--arc-ease-enter),
+      transform var(--arc-duration-fast) var(--arc-ease-enter);
+  }
+  .tooltip[data-side="bottom"] {
+    --tooltip-y: -3px;
+  }
+  /* The first tooltip waits, then rises a few pixels from its trigger. Within the skip window the next one only fades.
+     Transitions instead of keyframes, so returning to the trigger while it fades out reverses the fade instead of restarting it. */
+  .tooltip[data-starting-style] {
+    opacity: 0;
+    transform: translateY(var(--tooltip-y)) scale(0.97);
+  }
+  .tooltip[data-instant] {
+    transition:
+      opacity var(--arc-duration-instant) var(--arc-ease-standard),
+      transform var(--arc-duration-instant) var(--arc-ease-standard);
+  }
+  .tooltip[data-instant][data-starting-style] {
+    transform: none;
+  }
+  .tooltip[data-ending-style] {
+    opacity: 0;
+    transform: scale(0.98);
+    transition:
+      opacity var(--arc-duration-instant) var(--arc-ease-standard),
+      transform var(--arc-duration-instant) var(--arc-ease-standard);
+  }
+  .text {
+    position: relative;
+    display: block;
+    overflow: clip;
+    overflow-clip-margin: var(--arc-space-2);
+  }
+  .measure {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: max-content;
+    max-width: calc(15rem - 2 * var(--arc-space-3) - 2px);
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .line {
+    display: block;
+    width: max-content;
+    max-width: calc(15rem - 2 * var(--arc-space-3) - 2px);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tooltip,
+    .tooltip[data-starting-style],
+    .tooltip[data-ending-style],
+    .tooltip[data-instant] {
+      transform: none;
+      transition: opacity var(--arc-duration-instant) var(--arc-ease-standard);
+    }
+  }
+}

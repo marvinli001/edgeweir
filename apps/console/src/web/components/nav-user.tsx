@@ -10,8 +10,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Avatar } from "@/components/arc/avatar/avatar";
-import { accountNav } from "@/components/nav-items";
-import { useTheme } from "@/components/theme-provider";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,7 +23,9 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/arc/dropdown-menu/dropdown-menu";
+import { accountNav } from "@/components/nav-items";
+import { useTheme } from "@/components/theme-provider";
 import {
   SidebarMenu,
   SidebarMenuButton,

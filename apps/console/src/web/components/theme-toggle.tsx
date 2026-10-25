@@ -1,14 +1,14 @@
 import { ComputerIcon, Moon02Icon, Sun03Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@/components/arc/button/button";
-import { useTheme } from "@/components/theme-provider";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/arc/dropdown-menu/dropdown-menu";
+import { useTheme } from "@/components/theme-provider";
 import { m } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 

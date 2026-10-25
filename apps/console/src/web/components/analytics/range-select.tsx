@@ -8,7 +8,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/arc/dropdown-menu/dropdown-menu";
 import { ANALYTICS_RANGES, rangeLabel } from "@/lib/analytics";
 
 export function RangeSelect({

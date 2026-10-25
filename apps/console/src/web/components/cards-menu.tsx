@@ -11,7 +11,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/arc/dropdown-menu/dropdown-menu";
 import type { CardId, CardScope, HiddenCardsState } from "@/hooks/use-hidden-cards";
 import { m } from "@/lib/i18n";
 

@@ -13,16 +13,16 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import { Button } from "@/components/arc/button/button";
-import { BanDialog } from "@/components/ban-dialog";
-import { ControlledConfirmDialog } from "@/components/confirm-dialog";
-import { ExclusionDialog } from "@/components/site/exclusion-dialog";
-import { ErrorState } from "@/components/states";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/arc/dropdown-menu/dropdown-menu";
+import { BanDialog } from "@/components/ban-dialog";
+import { ControlledConfirmDialog } from "@/components/confirm-dialog";
+import { ExclusionDialog } from "@/components/site/exclusion-dialog";
+import { ErrorState } from "@/components/states";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";

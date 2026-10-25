@@ -14,11 +14,11 @@ import {
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "@/index.css";
+import { TooltipProvider } from "@/components/arc/tooltip/tooltip";
 import { LoadingState } from "@/components/states";
 import { NotFoundPage, RouteErrorPage } from "@/components/status-page";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { getLocale } from "@/lib/i18n";
 import { isNotFound, isUnauthorized } from "@/lib/orpc";
 import { createQueryClient } from "@/lib/query-client";
