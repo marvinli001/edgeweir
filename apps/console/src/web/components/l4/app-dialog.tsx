@@ -14,19 +14,19 @@ import { Link } from "@tanstack/react-router";
 import * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
-import { Input } from "@/components/arc/input/input";
-import { FormSelect, OptionSelect } from "@/components/form-select";
-import { L4NodesWarning } from "@/components/l4/common";
-import { SafetyNote } from "@/components/safety-note";
-import { NumberField, SettingsGroup, SwitchField } from "@/components/site/fields";
-import { nextDraftKey } from "@/components/site/save-site";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@/components/arc/dialog/dialog";
+import { Input } from "@/components/arc/input/input";
+import { FormSelect, OptionSelect } from "@/components/form-select";
+import { L4NodesWarning } from "@/components/l4/common";
+import { SafetyNote } from "@/components/safety-note";
+import { NumberField, SettingsGroup, SwitchField } from "@/components/site/fields";
+import { nextDraftKey } from "@/components/site/save-site";
 import {
   Field,
   FieldError,

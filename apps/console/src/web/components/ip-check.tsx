@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/arc/dialog/dialog";
 import { Input } from "@/components/arc/input/input";
 import {
   BAN_REASON_LABELS,
@@ -16,7 +17,6 @@ import { SafetyNote } from "@/components/safety-note";
 import { QueryView } from "@/components/states";
 import { StatusDot, type StatusTone } from "@/components/status-dot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
 import type { DialogProps } from "@/hooks/use-dialog-state";

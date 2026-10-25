@@ -2,14 +2,14 @@ import { Alert02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
 import { Button } from "@/components/arc/button/button";
-import { SafetyNote } from "@/components/safety-note";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@/components/arc/dialog/dialog";
+import { SafetyNote } from "@/components/safety-note";
 import { FieldError } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
 import { useAction } from "@/hooks/use-action";

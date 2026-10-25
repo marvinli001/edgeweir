@@ -1,0 +1,216 @@
+/*
+ * Ported from Arc's select.module.css (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md): Base UI's
+ * data-popup-open, data-placeholder, data-side, data-highlighted, data-starting-style and
+ * data-ending-style, and its --anchor-width, --available-height and --transform-origin, on `--arc-`
+ * tokens, with the console's focus ring and a small trigger.
+ */
+@layer components {
+  /* The trigger anchors the floating menu and is measured when it opens, so it never scales: press feedback is color only. */
+  .trigger {
+    position: relative;
+    box-sizing: border-box;
+    display: flex;
+    width: fit-content;
+    min-width: 0;
+    height: var(--arc-control-height-md);
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--arc-space-2);
+    padding: 0 var(--arc-space-2) 0 var(--arc-space-3);
+    border: 1px solid var(--arc-border-strong);
+    border-radius: var(--arc-radius-control);
+    background: var(--arc-surface);
+    color: var(--arc-foreground);
+    font: inherit;
+    font-size: var(--arc-text-sm);
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+    outline: none;
+    transition:
+      border-color var(--arc-duration-fast) var(--arc-ease-standard),
+      background-color var(--arc-duration-fast) var(--arc-ease-standard);
+  }
+  .trigger[data-size="sm"] {
+    height: var(--arc-control-height-sm);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .trigger:hover:not([data-disabled]) {
+      border-color: var(--arc-control-edge);
+      background: var(--arc-surface-hover);
+    }
+  }
+  .trigger:active:not([data-disabled]),
+  .trigger[data-popup-open] {
+    border-color: var(--arc-control-edge);
+    background: var(--arc-surface-hover);
+  }
+  .trigger:focus-visible {
+    border-color: var(--arc-focus-ring);
+    outline: 3px solid color-mix(in oklab, var(--arc-focus-ring) 30%, transparent);
+  }
+  .trigger[aria-invalid="true"] {
+    border-color: var(--arc-danger);
+  }
+  .trigger[data-disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .value {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    align-items: center;
+    gap: 6px;
+  }
+  .trigger[data-placeholder] .value {
+    color: var(--arc-text-muted);
+  }
+  .valueText {
+    display: grid;
+    flex: 1;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .valueText > span {
+    grid-area: 1 / 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .chevron {
+    display: inline-flex;
+    flex: 0 0 auto;
+    width: 1rem;
+    height: 1rem;
+    color: var(--arc-text-muted);
+    pointer-events: none;
+    transition:
+      transform var(--arc-duration-spring) var(--arc-ease-spring),
+      color var(--arc-duration-fast) var(--arc-ease-standard);
+  }
+  .trigger[data-popup-open] .chevron {
+    transform: rotate(180deg);
+  }
+  .positioner {
+    isolation: isolate;
+    z-index: 50;
+  }
+  /* The menu grows from the trigger edge and leaves faster than it arrives. */
+  .content {
+    --menu-x: 0px;
+    --menu-y: -6px;
+    box-sizing: border-box;
+    width: var(--anchor-width);
+    min-width: 9rem;
+    max-width: min(24rem, calc(100vw - 20px));
+    max-height: min(320px, var(--available-height));
+    overflow: hidden auto;
+    padding: 6px;
+    border: 1px solid var(--arc-border);
+    border-radius: calc(var(--arc-radius-control) + 2px);
+    background: var(--arc-surface-raised);
+    color: var(--arc-foreground);
+    box-shadow: var(--arc-shadow-floating);
+    outline: none;
+    transform-origin: var(--transform-origin);
+    transition:
+      opacity var(--arc-duration-standard) var(--arc-ease-enter),
+      transform var(--arc-duration-standard) var(--arc-ease-enter);
+  }
+  .content[data-side="top"] {
+    --menu-y: 6px;
+  }
+  .content[data-starting-style] {
+    opacity: 0;
+    transform: translate(var(--menu-x), var(--menu-y)) scale(0.97);
+  }
+  .content[data-ending-style] {
+    opacity: 0;
+    transform: translate(calc(var(--menu-x) / 2), calc(var(--menu-y) / 2)) scale(0.98);
+    transition:
+      opacity var(--arc-duration-instant) var(--arc-ease-standard),
+      transform var(--arc-duration-instant) var(--arc-ease-standard);
+  }
+  .list {
+    padding: 2px 0;
+  }
+  .item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-height: var(--arc-control-height-md);
+    border-radius: calc(var(--arc-radius-control) - 4px);
+    padding: 0 34px 0 10px;
+    color: var(--arc-foreground);
+    font-size: var(--arc-text-sm);
+    cursor: default;
+    outline: none;
+    user-select: none;
+    transition:
+      background-color var(--arc-duration-instant) var(--arc-ease-standard),
+      color var(--arc-duration-instant) var(--arc-ease-standard);
+  }
+  .item[data-highlighted] {
+    background: var(--arc-wash);
+  }
+  .item[data-disabled] {
+    opacity: 0.45;
+  }
+  .itemText {
+    display: flex;
+    flex: 1;
+    gap: var(--arc-space-2);
+    white-space: nowrap;
+  }
+  .indicator {
+    position: absolute;
+    right: 10px;
+    display: inline-flex;
+    align-items: center;
+    color: var(--arc-accent);
+    animation: indicator-in var(--arc-duration-standard) var(--arc-ease-enter) 40ms both;
+  }
+  .indicator svg,
+  .scrollButton svg {
+    width: 1rem;
+    height: 1rem;
+  }
+  .scrollButton {
+    display: grid;
+    height: 28px;
+    place-items: center;
+    color: var(--arc-text-muted);
+  }
+  @media (forced-colors: active) {
+    .item[data-highlighted] {
+      outline: 2px solid Highlight;
+      outline-offset: -2px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .trigger,
+    .chevron,
+    .item {
+      transition: none;
+    }
+    .content,
+    .content[data-starting-style],
+    .content[data-ending-style] {
+      transform: none;
+      transition: opacity var(--arc-duration-instant) var(--arc-ease-standard);
+    }
+    .indicator {
+      animation: none;
+    }
+  }
+}
+
+@keyframes indicator-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+    filter: blur(2px);
+  }
+}

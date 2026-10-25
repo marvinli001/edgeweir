@@ -5,6 +5,13 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Countdown } from "@/components/appica/countdown";
 import { Button } from "@/components/arc/button/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/arc/dialog/dialog";
 import { Input } from "@/components/arc/input/input";
 import { CodeBlock } from "@/components/copy-button";
 import { AnimatedBeam } from "@/components/effects/animated-beam";
@@ -16,13 +23,6 @@ import {
 } from "@/components/node-enrollment";
 import { SafetyNote } from "@/components/safety-note";
 import { LoadingState } from "@/components/states";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
 import { useOpenKey } from "@/hooks/use-open-key";

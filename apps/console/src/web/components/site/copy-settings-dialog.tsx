@@ -11,17 +11,17 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { Button } from "@/components/arc/button/button";
 import { Checkbox } from "@/components/arc/checkbox/checkbox";
-import { OptionSelect } from "@/components/form-select";
-import { enterDelay } from "@/components/page";
-import { SafetyNote } from "@/components/safety-note";
-import { SiteMultiSelect } from "@/components/site-multi-select";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@/components/arc/dialog/dialog";
+import { OptionSelect } from "@/components/form-select";
+import { enterDelay } from "@/components/page";
+import { SafetyNote } from "@/components/safety-note";
+import { SiteMultiSelect } from "@/components/site-multi-select";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
 import { useAction } from "@/hooks/use-action";

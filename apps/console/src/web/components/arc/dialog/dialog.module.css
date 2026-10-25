@@ -1,0 +1,146 @@
+/*
+ * Ported from Arc's dialog.module.css (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md): Base UI's
+ * data-starting-style and data-ending-style on the backdrop and popup, on `--arc-` tokens; the
+ * header, footer and padding are the console's layout.
+ */
+@layer components {
+  .overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    isolation: isolate;
+    background: var(--arc-scrim);
+    transition: opacity var(--arc-duration-standard) var(--arc-ease-enter);
+  }
+  .overlay[data-starting-style],
+  .overlay[data-ending-style] {
+    opacity: 0;
+  }
+  .overlay[data-ending-style] {
+    transition: opacity var(--arc-duration-fast) var(--arc-ease-standard);
+  }
+  /* Centred with `translate`, so `transform` stays free for the entrance spring. */
+  .content {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: 51;
+    display: grid;
+    gap: var(--arc-space-6);
+    box-sizing: border-box;
+    width: calc(100vw - var(--arc-space-8));
+    max-width: 28rem;
+    max-height: calc(100dvh - var(--arc-space-8));
+    overflow-y: auto;
+    padding: var(--arc-space-6);
+    border: 1px solid var(--arc-border);
+    border-radius: var(--arc-radius-surface);
+    background: var(--arc-surface-raised);
+    color: var(--arc-foreground);
+    font-size: var(--arc-text-sm);
+    box-shadow: var(--arc-shadow-floating);
+    outline: none;
+    translate: -50% -50%;
+    transition:
+      opacity var(--arc-duration-fast) var(--arc-ease-enter),
+      transform var(--arc-duration-spring) var(--arc-ease-spring);
+  }
+  .content[data-starting-style] {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  .content[data-ending-style] {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+    transition:
+      opacity var(--arc-duration-fast) var(--arc-ease-standard),
+      transform var(--arc-duration-fast) var(--arc-ease-standard);
+  }
+  .header {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .footer {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: var(--arc-space-2);
+  }
+  @media (min-width: 640px) {
+    .footer {
+      flex-direction: row;
+      justify-content: flex-end;
+    }
+  }
+  .title {
+    position: relative;
+    margin: 0;
+    font-family: var(--arc-font-body);
+    font-size: var(--arc-text-lg);
+    font-weight: 500;
+    line-height: var(--arc-leading-body);
+    letter-spacing: var(--arc-tracking-body);
+    overflow-wrap: anywhere;
+  }
+  .swap {
+    display: block;
+  }
+  /* A compact icon button: quick press, spring release. */
+  .close {
+    position: absolute;
+    top: var(--arc-space-4);
+    right: var(--arc-space-4);
+    display: grid;
+    width: var(--arc-space-8);
+    height: var(--arc-space-8);
+    place-items: center;
+    padding: 0;
+    border: 1px solid var(--arc-border);
+    border-radius: var(--arc-radius-control);
+    background: color-mix(in oklab, var(--arc-surface-muted) 50%, transparent);
+    color: var(--arc-text-secondary);
+    cursor: pointer;
+    outline: none;
+    transition:
+      background-color var(--arc-duration-fast) var(--arc-ease-standard),
+      color var(--arc-duration-fast) var(--arc-ease-standard),
+      transform var(--arc-duration-spring) var(--arc-ease-spring);
+  }
+  .close svg {
+    width: 1rem;
+    height: 1rem;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .close:hover {
+      background: var(--arc-surface-muted);
+      color: var(--arc-foreground);
+    }
+  }
+  .close:active {
+    transform: scale(0.96);
+    transition:
+      background-color var(--arc-duration-fast) var(--arc-ease-standard),
+      color var(--arc-duration-fast) var(--arc-ease-standard),
+      transform var(--arc-duration-instant) var(--arc-ease-standard);
+  }
+  .close:focus-visible {
+    border-color: var(--arc-focus-ring);
+    outline: 3px solid color-mix(in oklab, var(--arc-focus-ring) 30%, transparent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .overlay,
+    .content,
+    .content[data-ending-style] {
+      transition: opacity var(--arc-duration-instant) var(--arc-ease-standard);
+    }
+    .content[data-starting-style],
+    .content[data-ending-style] {
+      transform: none;
+    }
+    .close,
+    .close:active {
+      transition: none;
+      transform: none;
+    }
+  }
+}

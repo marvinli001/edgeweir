@@ -13,9 +13,9 @@ import {
 } from "@/components/analytics/breakdown-charts";
 import { Panel, PanelHeader } from "@/components/analytics/panel";
 import { RangeSelect } from "@/components/analytics/range-select";
+import { Dialog, DialogContent, DialogTitle } from "@/components/arc/dialog/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/arc/tabs/tabs";
 import { LoadingState, QueryView } from "@/components/states";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import type { DialogProps } from "@/hooks/use-dialog-state";
 import { type DetailView, detailViewId, type Metric, OTHER_COLOR } from "@/lib/analytics";
 import { formatBitRate, formatBytes, formatCompact, formatPercent, m } from "@/lib/i18n";
@@ -505,7 +505,7 @@ export function MetricDetailDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="top-[max(1rem,6dvh)] flex max-h-[calc(100dvh-max(2rem,12dvh))] translate-y-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl"
+        className="top-[max(1rem,6dvh)] flex max-h-[calc(100dvh-max(2rem,12dvh))] -translate-x-1/2 translate-y-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl"
         data-testid="metric-detail"
       >
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 py-4 pr-14 pl-5">

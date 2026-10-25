@@ -6,18 +6,18 @@ import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
 import { Button } from "@/components/arc/button/button";
-import { type Columns, DataTable, FilterBar } from "@/components/data-table";
-import { FilterSelect } from "@/components/form-select";
-import { Page } from "@/components/page";
-import { Pager } from "@/components/pager";
-import { EmptyState, QueryView } from "@/components/states";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@/components/arc/dialog/dialog";
+import { type Columns, DataTable, FilterBar } from "@/components/data-table";
+import { FilterSelect } from "@/components/form-select";
+import { Page } from "@/components/page";
+import { Pager } from "@/components/pager";
+import { EmptyState, QueryView } from "@/components/states";
 import { auditActionLabel, auditTargetLabel } from "@/lib/audit";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";

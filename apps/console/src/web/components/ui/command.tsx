@@ -3,7 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Command as CommandPrimitive } from "cmdk";
 import { cn } from "cn";
 import type * as React from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/arc/dialog/dialog";
 import { InputGroup, InputGroupAddon } from "@/components/ui/input-group";
 import { m } from "@/lib/i18n";
 
@@ -39,8 +39,8 @@ function CommandDialog({
       </DialogHeader>
       <DialogContent
         className={cn(
-          // Frosted overlay glass (bg-glass-overlay wins over the dialog's bg-popover).
-          "glass-overlay bg-glass-overlay top-1/3 translate-y-0 overflow-hidden p-0 **:data-[slot=command]:bg-transparent",
+          // Frosted overlay glass (bg-glass-overlay wins over the dialog's raised surface).
+          "glass-overlay bg-glass-overlay top-1/3 -translate-x-1/2 translate-y-0 overflow-hidden p-0 **:data-[slot=command]:bg-transparent",
           className,
         )}
         showCloseButton={showCloseButton}

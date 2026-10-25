@@ -15,6 +15,13 @@ import { Sparkline } from "@/components/appica/sparkline";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { Checkbox } from "@/components/arc/checkbox/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/arc/dialog/dialog";
 import { Input } from "@/components/arc/input/input";
 import { Switch } from "@/components/arc/switch/switch";
 import { Textarea } from "@/components/arc/textarea/textarea";
@@ -32,13 +39,6 @@ import { TagBadges, TagFilter, TagManagerDialog, useSiteTags } from "@/component
 import { SitesBatchBar } from "@/components/sites-batch-bar";
 import { SitesTabs } from "@/components/sites-tabs";
 import { EmptyState, QueryView } from "@/components/states";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Field, FieldError, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
 import { useOpenKey } from "@/hooks/use-open-key";

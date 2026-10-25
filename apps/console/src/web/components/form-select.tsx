@@ -1,12 +1,12 @@
 import type * as React from "react";
-import { Field, FieldLabel } from "@/components/ui/field";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@/components/arc/select/select";
+import { Field, FieldLabel } from "@/components/ui/field";
 
 export interface Option<T extends string = string> {
   value: T;
