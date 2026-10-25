@@ -317,6 +317,19 @@ function columnTemplates(source: string): string[] {
 }
 
 describe("UI behaviour", () => {
+  it("fixes the cascade layer order in index.html before any stylesheet loads", () => {
+    // Vite puts a shared chunk of CSS modules (@layer components) ahead of Tailwind's stylesheet;
+    // the first stylesheet to name a layer fixes the order, so Tailwind's base reset beat every Arc
+    // component's padding (e2e g13: a dialog and its buttons with no padding).
+    const html = read("index.html");
+    const order = html.indexOf(
+      "<style>@layer properties, theme, base, components, utilities;</style>",
+    );
+    expect(order).toBeGreaterThan(-1);
+    expect(order).toBeLessThan(html.indexOf("</head>"));
+    expect(html.slice(0, order)).not.toMatch(/<link[^>]+stylesheet|<style/);
+  });
+
   it("renders Arc buttons as type=button unless told otherwise (a button in a form never submits it)", () => {
     // Base UI's Button defaulted to type=button; a bare <button> is a submit button, and the site
     // page's enable toggle saved the name form on every click (e2e p0: a stale-version conflict).

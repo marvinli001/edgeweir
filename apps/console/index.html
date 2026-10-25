@@ -8,6 +8,8 @@
     <meta name="color-scheme" content="light dark" />
     <script src="/theme-init.js"></script>
     <title>Edgeweir</title>
+    <!-- Cascade layer order before any stylesheet: a chunk of CSS modules can load ahead of Tailwind's and would rank components below base (whose reset zeroes padding). -->
+    <style>@layer properties, theme, base, components, utilities;</style>
   </head>
   <body>
     <div id="root"></div>
