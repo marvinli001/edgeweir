@@ -2,8 +2,8 @@
  * Toast stack: adapted from Arc's `toast-stack` (MIT, Elia Kuratli; THIRD-PARTY-NOTICES.md).
  * Changes: Motion's light components through components/effects/motion, the console's
  * reduced-motion hook, `--arc-` tokens (foundation.css), Hugeicons instead of Lucide, Paraglide
- * text, an optional testId per toast, the toast type on the card (its colored edge), and the
- * module sits in Tailwind's components layer.
+ * text, an optional testId per toast, the toast type on the card (its colored edge), no non-null
+ * assertions (Biome), and the module sits in Tailwind's components layer.
  */
 
 import {
@@ -136,6 +136,8 @@ const BORDER = 2;
 /** A swipe this far right has faded most of the way out. */
 const SWIPE_FADE = 280;
 const EMPTY: ToastRecord[] = [];
+/** A toast with no target yet (never: layoutStack returns one per toast). */
+const HIDDEN: Target = { y: 0, scale: 1, height: 0, opacity: 0, content: 0 };
 const typeLabels: Record<ToastType, () => string> = {
   success: m.arc_toast_success,
   info: m.arc_toast_info,
@@ -223,20 +225,19 @@ function layoutStack(
   expanded: boolean,
   visibleToasts: number,
 ) {
-  const front = toasts.length ? (heights[toasts[0]!.id] ?? 0) : 0;
-  const tops = toasts.reduce<number[]>(
-    (sum, item, index) => [
-      ...sum,
-      sum[index]! + (index < visibleToasts ? (heights[item.id] ?? 0) + GAP : 0),
-    ],
-    [0],
-  );
+  const first = toasts[0];
+  const front = first ? (heights[first.id] ?? 0) : 0;
+  // tops[i] is how far toast i sits above the bottom edge when open; tops[length] is the total.
+  const tops = [0];
+  toasts.forEach((item, index) => {
+    tops.push((tops[index] ?? 0) + (index < visibleToasts ? (heights[item.id] ?? 0) + GAP : 0));
+  });
   const targets = toasts.map((item, index): Target => {
     const visible = index < visibleToasts;
     const depth = Math.min(index, visibleToasts);
     return expanded
       ? {
-          y: -tops[index]!,
+          y: -(tops[index] ?? 0),
           scale: 1,
           height: heights[item.id] ?? 0,
           opacity: visible ? 1 : 0,
@@ -253,7 +254,7 @@ function layoutStack(
   const listHeight = !toasts.length
     ? 0
     : expanded
-      ? tops[toasts.length]! - GAP
+      ? (tops[toasts.length] ?? 0) - GAP
       : front + PEEK * (Math.min(toasts.length, visibleToasts) - 1);
   return { targets, listHeight };
 }
@@ -264,7 +265,7 @@ function createToastStore(base: number, limit: number): ToastStore {
   const listeners = new Set<() => void>();
   const commit = (next: ToastRecord[]) => {
     toasts = next;
-    listeners.forEach((listener) => listener());
+    for (const listener of listeners) listener();
   };
   const update: ToastStackApi["update"] = (id, patch) => {
     const found = toasts.find((item) => item.id === id);
@@ -556,7 +557,10 @@ function ToastItem({
     // Right follows the finger 1:1; left is the wrong way, so it resists like an overscroll.
     x.set(raw >= 0 ? raw : -rubberBand(-raw, event.currentTarget.offsetWidth));
     current.samples.push({ t: event.timeStamp, x: raw });
-    while (current.samples.length > 2 && event.timeStamp - current.samples[0]!.t > 100)
+    while (
+      current.samples.length > 2 &&
+      event.timeStamp - (current.samples[0]?.t ?? event.timeStamp) > 100
+    )
       current.samples.shift();
   }
 
@@ -756,7 +760,7 @@ export function ToastStack({
           store
             .getSnapshot()
             .filter((item) => item.id in current)
-            .map((item) => [item.id, current[item.id]!]),
+            .map((item) => [item.id, current[item.id] ?? 0]),
         ),
       ),
     [store],
@@ -851,7 +855,7 @@ export function ToastStack({
             <ToastItem
               key={item.id}
               toast={item}
-              target={targets[index]!}
+              target={targets[index] ?? HIDDEN}
               expanded={expanded}
               front={index === 0}
               hidden={index >= visibleToasts}
