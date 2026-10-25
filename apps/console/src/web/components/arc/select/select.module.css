@@ -94,9 +94,10 @@
   .trigger[data-popup-open] .chevron {
     transform: rotate(180deg);
   }
+  /* Above the dialog panel (51), like the menu, so selects inside dialogs open on top. */
   .positioner {
     isolation: isolate;
-    z-index: 50;
+    z-index: 60;
   }
   /* The menu grows from the trigger edge and leaves faster than it arrives. */
   .content {
