@@ -139,11 +139,16 @@
     border-radius: var(--arc-radius-control);
   }
   /* The incoming panel slides in from the side of the tab that was chosen. */
-  .content[data-activation-direction="right"] {
+  .content[data-activation-direction="right"]:not([data-ending-style]) {
     animation: panel-from-right var(--arc-duration-standard) var(--arc-ease-enter) both;
   }
-  .content[data-activation-direction="left"] {
+  .content[data-activation-direction="left"]:not([data-ending-style]) {
     animation: panel-from-left var(--arc-duration-standard) var(--arc-ease-enter) both;
+  }
+  /* The outgoing panel leaves at once: Base UI keeps a panel mounted until its animations end,
+     so an animated exit would leave two panels (and their forms) on the page. */
+  .content[data-ending-style] {
+    display: none !important;
   }
   @media (forced-colors: active) {
     .selection {
@@ -156,8 +161,8 @@
     .list[data-variant="line"] .trigger::after {
       transition: none;
     }
-    .content[data-activation-direction="right"],
-    .content[data-activation-direction="left"] {
+    .content[data-activation-direction="right"]:not([data-ending-style]),
+    .content[data-activation-direction="left"]:not([data-ending-style]) {
       animation: panel-fade var(--arc-duration-instant) var(--arc-ease-standard) both;
     }
   }
