@@ -22,8 +22,8 @@ import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { motionTokens } from "../lib/motion-tokens";
 import styles from "./badge.module.css";
 
-export type BadgeTone = "neutral" | "success" | "info" | "warning" | "danger";
-export type BadgeSize = "sm" | "md";
+type BadgeTone = "neutral" | "success" | "info" | "warning" | "danger";
+type BadgeSize = "sm" | "md";
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   tone?: BadgeTone;
@@ -171,5 +171,3 @@ export function Badge({
     </span>
   );
 }
-
-export default Badge;

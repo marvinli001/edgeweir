@@ -53,7 +53,7 @@ import styles from "./toast-stack.module.css";
 
 export type ToastType = "success" | "info" | "warning" | "error" | "loading";
 
-export interface ToastAction {
+interface ToastAction {
   label: string;
   /** Runs the action. The toast closes afterwards unless the handler updates it, so an Undo can morph the toast into its result. */
   onClick: (id: string) => void;
@@ -869,5 +869,3 @@ export function ToastStack({
     </section>
   );
 }
-
-export default ToastStack;

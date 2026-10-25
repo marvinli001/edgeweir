@@ -32,7 +32,7 @@ import { m } from "@/lib/i18n";
 import { motionTokens } from "../lib/motion-tokens";
 import styles from "./alert.module.css";
 
-export type AlertTone = "info" | "success" | "warning" | "danger";
+type AlertTone = "info" | "success" | "warning" | "danger";
 export interface AlertProps extends HTMLAttributes<HTMLDivElement> {
   tone?: AlertTone;
   title: string;
@@ -289,5 +289,3 @@ export function Alert({ open, onDismiss, ...props }: AlertProps) {
     </AnimatePresence>
   );
 }
-
-export default Alert;
