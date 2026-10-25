@@ -10,6 +10,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Button } from "@/components/arc/button/button";
+import { Progress } from "@/components/arc/progress/progress";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
@@ -19,7 +20,6 @@ import { StatusDot, type StatusTone } from "@/components/status-dot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { taskErrorText } from "@/lib/node-errors";
@@ -304,7 +304,7 @@ function UpgradeProgress({ job }: { job: UpgradeJob }) {
         </span>
         <span className="font-medium tabular-nums">{progress}</span>
       </div>
-      <Progress value={total ? (done / total) * 100 : 0} aria-label={progress} />
+      <Progress value={done} max={total} aria-label={progress} />
     </div>
   );
 }

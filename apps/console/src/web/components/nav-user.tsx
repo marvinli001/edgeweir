@@ -9,9 +9,9 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { Avatar } from "@/components/arc/avatar/avatar";
 import { accountNav } from "@/components/nav-items";
 import { useTheme } from "@/components/theme-provider";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,17 +36,6 @@ import { useAction } from "@/hooks/use-action";
 import { authClient } from "@/lib/auth-client";
 import { getLocale, type Locale, localeLabels, locales, m, setLocale } from "@/lib/i18n";
 
-function initials(name: string) {
-  return (
-    name
-      .split(/\s+/)
-      .map((p) => p[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase() || "?"
-  );
-}
-
 /** The account menu; the demo account shows that it can only view in place of its e-mail. */
 export function NavUser({ user }: { user: { name: string; email: string; demo?: boolean } }) {
   const subtitle = user.demo ? m.user_menu_demo() : user.email;
@@ -68,11 +57,7 @@ export function NavUser({ user }: { user: { name: string; email: string; demo?: 
               />
             }
           >
-            <Avatar className="size-8">
-              <AvatarFallback className="text-xs text-foreground">
-                {initials(user.name)}
-              </AvatarFallback>
-            </Avatar>
+            <Avatar name={user.name} className="size-8" aria-hidden="true" />
             <div className="grid flex-1 text-left text-sm leading-tight">
               <span className="truncate font-medium">{user.name}</span>
               <span

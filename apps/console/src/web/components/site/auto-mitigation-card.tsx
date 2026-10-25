@@ -11,6 +11,7 @@ import { Edit02Icon, Shield01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { Alert } from "@/components/arc/alert/alert";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -19,7 +20,6 @@ import { FormSelect, type Option } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
-import { Alert, AlertAction, AlertTitle } from "@/components/ui/alert";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDateMinutes, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
@@ -130,11 +130,12 @@ function MitigationBody({
   return (
     <CardContent className="flex flex-col gap-4">
       {active ? (
-        <Alert variant="destructive" data-testid="auto-mitigation-active">
-          <AlertTitle>
-            {m.attacks_mitigation_active({ time: formatDateMinutes(active.expiresAt) })}
-          </AlertTitle>
-          <AlertAction>
+        <Alert
+          tone="danger"
+          title={m.attacks_mitigation_active({ time: formatDateMinutes(active.expiresAt) })}
+          data-testid="auto-mitigation-active"
+        >
+          <span className="flex">
             <ConfirmDialog
               trigger={
                 <Button size="sm" variant="secondary" data-testid="auto-mitigation-end">
@@ -146,7 +147,7 @@ function MitigationBody({
               confirmLabel={m.attacks_mitigation_end()}
               onConfirm={() => end.mutateAsync({ id: siteId })}
             />
-          </AlertAction>
+          </span>
         </Alert>
       ) : null}
       {paused ? (

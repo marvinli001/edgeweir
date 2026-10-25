@@ -14,6 +14,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Meter } from "@/components/appica/meter";
+import { Alert } from "@/components/arc/alert/alert";
 import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
@@ -21,7 +22,6 @@ import { FormSelect, type Option } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
-import { Alert, AlertAction, AlertTitle } from "@/components/ui/alert";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   formatBitRate,
@@ -213,9 +213,8 @@ function HeldAlert({ site, guard }: { site: Site; guard: UsageGuard }) {
     held.action === "maintenance" ? m.usage_guard_held_maintenance : m.usage_guard_held_disable
   )({ metric: metricLabel(held.metric) });
   return (
-    <Alert variant="destructive" data-testid="usage-guard-held" data-action={held.action}>
-      <AlertTitle>{title}</AlertTitle>
-      <AlertAction>
+    <Alert tone="danger" title={title} data-testid="usage-guard-held" data-action={held.action}>
+      <span className="flex">
         <ConfirmDialog
           trigger={
             <Button size="sm" variant="secondary" data-testid="usage-guard-restore">
@@ -231,7 +230,7 @@ function HeldAlert({ site, guard }: { site: Site; guard: UsageGuard }) {
           confirmLabel={m.usage_guard_restore()}
           onConfirm={() => restore.mutateAsync({ id: site.id })}
         />
-      </AlertAction>
+      </span>
     </Alert>
   );
 }

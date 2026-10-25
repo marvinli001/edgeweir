@@ -3136,5 +3136,10 @@
   "audit_action_greylist_create": "添加灰名单",
   "audit_action_greylist_update": "更新灰名单",
   "audit_action_greylist_delete": "移出灰名单",
-  "audit_target_greylist": "灰名单"
+  "audit_target_greylist": "灰名单",
+  "arc_alert_dismiss": "关闭：{title}",
+  "arc_progress": "进度",
+  "arc_avatar_status": "{name}，{status}",
+  "arc_avatar_online": "在线",
+  "arc_avatar_offline": "离线"
 }

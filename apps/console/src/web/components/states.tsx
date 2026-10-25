@@ -1,11 +1,11 @@
-import { Alert02Icon, type InboxIcon } from "@hugeicons/core-free-icons";
+import type { InboxIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type * as React from "react";
+import { Alert } from "@/components/arc/alert/alert";
 import { Button } from "@/components/arc/button/button";
 import { InboxIcon as AnimatedInbox, useIconPlay } from "@/components/effects/animated-icons";
 import { EmptyArt, type EmptyArtKind } from "@/components/empty-art";
 import { LoadingState } from "@/components/loading-state";
-import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { m } from "@/lib/i18n";
 import { errorMessage, isNotFound } from "@/lib/orpc";
@@ -15,17 +15,17 @@ export { LoadingState };
 
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   return (
-    <Alert variant="destructive" role="alert" className="animate-enter">
-      <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} />
-      <AlertTitle>{m.common_error_title()}</AlertTitle>
-      <AlertDescription>{errorMessage(error, m.common_unknown_error())}</AlertDescription>
+    <Alert tone="danger" title={m.common_error_title()} className="animate-enter">
       {onRetry ? (
-        <AlertAction>
+        <span className="flex flex-wrap items-center justify-between gap-2">
+          <span className="min-w-0">{errorMessage(error, m.common_unknown_error())}</span>
           <Button size="sm" variant="secondary" onClick={onRetry}>
             {m.common_retry()}
           </Button>
-        </AlertAction>
-      ) : null}
+        </span>
+      ) : (
+        errorMessage(error, m.common_unknown_error())
+      )}
     </Alert>
   );
 }

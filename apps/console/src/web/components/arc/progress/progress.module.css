@@ -1,0 +1,69 @@
+@layer components {
+  .progress {
+    width: 100%;
+    color: var(--arc-text-secondary);
+    font-size: var(--arc-text-sm);
+  }
+  .meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+    line-height: var(--arc-leading-body);
+  }
+  .label {
+    position: relative;
+    min-width: 0;
+  }
+  .line {
+    display: block;
+  }
+  .value {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    color: var(--arc-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .count {
+    display: inline-grid;
+    justify-items: end;
+  } /* A hidden "100%" row reserves the widest count, so the check never shifts as the number gains a digit. */
+  .count::before {
+    content: "100%";
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+  }
+  .done {
+    display: grid;
+    place-items: center;
+    color: var(--arc-success);
+  } /* A shallow well (the console's seg-well) with the action blue filling it. */
+  .track {
+    height: 8px;
+    overflow: hidden;
+    border: 1px solid var(--arc-border-subtle);
+    border-radius: 99px;
+    background: var(--arc-surface-sunken);
+  }
+  .fill {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--arc-accent-fill);
+    transition: background-color var(--arc-duration-standard) var(--arc-ease-standard);
+  }
+  .progress[data-complete] .fill {
+    background: var(--arc-success);
+    transition-delay: 200ms;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fill,
+    .progress[data-complete] .fill {
+      transition: none;
+    }
+  }
+}

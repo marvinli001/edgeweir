@@ -1,9 +1,9 @@
 import { useMutation } from "@tanstack/react-query";
+import { Alert } from "@/components/arc/alert/alert";
 import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { SettingsCard } from "@/components/settings-card";
 import { NumberField } from "@/components/site/fields";
-import { Alert, AlertTitle } from "@/components/ui/alert";
 import { formatNumber, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
@@ -20,14 +20,16 @@ export function DnsHeldBack({
     meta: { invalidates: [orpc.dns.key()], success: m.common_saved },
   });
   return (
-    <Alert variant="destructive" className="animate-enter" data-testid="dns-held-back">
-      <AlertTitle className="flex flex-wrap items-center gap-3">
-        <span className="min-w-0 flex-1">
-          {m.dns_held_back({
-            removed: formatNumber(blocked.removedRecords),
-            previous: formatNumber(blocked.previousRecords),
-          })}
-        </span>
+    <Alert
+      tone="danger"
+      title={m.dns_held_back({
+        removed: formatNumber(blocked.removedRecords),
+        previous: formatNumber(blocked.previousRecords),
+      })}
+      className="animate-enter"
+      data-testid="dns-held-back"
+    >
+      <span className="flex">
         <ConfirmDialog
           trigger={
             <Button size="sm" variant="danger" data-testid="dns-force-publish">
@@ -45,7 +47,7 @@ export function DnsHeldBack({
             await force.mutateAsync({ clusterId, revision: blocked.revision });
           }}
         />
-      </AlertTitle>
+      </span>
     </Alert>
   );
 }

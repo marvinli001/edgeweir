@@ -3342,5 +3342,10 @@
   "audit_action_greylist_create": "Greylist entry added",
   "audit_action_greylist_update": "Greylist entry updated",
   "audit_action_greylist_delete": "Greylist entry removed",
-  "audit_target_greylist": "Greylist entry"
+  "audit_target_greylist": "Greylist entry",
+  "arc_alert_dismiss": "Dismiss: {title}",
+  "arc_progress": "Progress",
+  "arc_avatar_status": "{name}, {status}",
+  "arc_avatar_online": "online",
+  "arc_avatar_offline": "offline"
 }

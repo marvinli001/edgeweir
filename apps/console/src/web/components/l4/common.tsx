@@ -1,9 +1,7 @@
 import type { L4Protocol } from "@edgeweir/contract";
-import { Alert02Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { Alert } from "@/components/arc/alert/alert";
 import { Badge } from "@/components/arc/badge/badge";
 import { CopyButton } from "@/components/copy-button";
-import { Alert, AlertTitle } from "@/components/ui/alert";
 import { m } from "@/lib/i18n";
 import { protocolLabel } from "@/lib/l4";
 import { cn } from "@/lib/utils";
@@ -37,15 +35,11 @@ export function L4NodesWarning({
   if (nodes.length === 0) return null;
   return (
     <Alert
-      variant="destructive"
+      tone="danger"
+      title={m.l4_nodes_without_l4({ cluster, nodes: nodes.map((n) => n.name).join(", ") })}
       className={cn("animate-enter", className)}
       data-testid="l4-nodes-without-l4"
-    >
-      <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} />
-      <AlertTitle className="break-words">
-        {m.l4_nodes_without_l4({ cluster, nodes: nodes.map((n) => n.name).join(", ") })}
-      </AlertTitle>
-    </Alert>
+    />
   );
 }
 

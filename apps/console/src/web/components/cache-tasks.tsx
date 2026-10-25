@@ -10,9 +10,9 @@ import * as React from "react";
 import { BorderBeam } from "@/components/appica/effects";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
+import { Progress } from "@/components/arc/progress/progress";
 import { Dot } from "@/components/status-dot";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
 import { taskErrorText } from "@/lib/node-errors";
@@ -138,10 +138,11 @@ function NodeProgress({ task }: { task: CacheTask }) {
   return (
     <div className="inline-flex items-center gap-2">
       <Progress
-        value={Math.round((done / total) * 100)}
+        value={done}
+        max={total}
         aria-label={m.purge_nodes()}
         className={cn(
-          "w-16 gap-0 **:data-[slot=progress-track]:h-1.5",
+          "w-16 **:data-[slot=progress-track]:h-1.5",
           failed && "**:data-[slot=progress-indicator]:bg-destructive",
         )}
       />
