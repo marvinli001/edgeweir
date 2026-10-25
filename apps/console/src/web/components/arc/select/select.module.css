@@ -128,12 +128,12 @@
     opacity: 0;
     transform: translate(var(--menu-x), var(--menu-y)) scale(0.97);
   }
+  /* Closing is instant. Base UI unmounts the popup only once its exit animations finish, and
+     where the page's animation clock barely advances (e2e g6: the DNS tab) a closed popup stayed
+     on the page with its options, ahead of the next select's. */
   .content[data-ending-style] {
     opacity: 0;
-    transform: translate(calc(var(--menu-x) / 2), calc(var(--menu-y) / 2)) scale(0.98);
-    transition:
-      opacity var(--arc-duration-instant) var(--arc-ease-standard),
-      transform var(--arc-duration-instant) var(--arc-ease-standard);
+    transition: none;
   }
   .list {
     padding: 2px 0;
@@ -198,10 +198,13 @@
       transition: none;
     }
     .content,
-    .content[data-starting-style],
-    .content[data-ending-style] {
+    .content[data-starting-style] {
       transform: none;
       transition: opacity var(--arc-duration-instant) var(--arc-ease-standard);
+    }
+    .content[data-ending-style] {
+      transform: none;
+      transition: none;
     }
     .indicator {
       animation: none;
