@@ -8,7 +8,7 @@
 # Every base image is pinned by tag and multi-arch index digest; the digest is
 # what gets pulled (ADR-0017). Refresh tag and digest together (CONTRIBUTING.md).
 
-ARG NODE_IMAGE=node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
+ARG NODE_IMAGE=node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53
 ARG GO_IMAGE=golang:1.27.2-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d
 
 # The certd and build stages run on the build machine's own platform for

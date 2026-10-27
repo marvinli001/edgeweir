@@ -691,8 +691,8 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `vite build` | `apps/console/dist/web` (SPA) |
 | `node scripts/build-server.mjs` (esbuild) | `apps/console/dist/server/main.js`: the server and all dependencies in one ESM file; `dist/server/recover.js`: the account recovery command, also with all dependencies, without a source map; `install/` copied to `dist/server/install`, migrations to `dist/migrations` |
 | Dockerfile stage `certd` | `golang:1.27.2-alpine` cross-compiles `edgeweir-certd` on the build machine's platform (`$BUILDPLATFORM`, no QEMU) |
-| Dockerfile stage `build` | `node:24.21.0-alpine` with pnpm 12.6.0 builds the console once on the build machine's platform; the output (JavaScript and static assets) serves every architecture |
-| Dockerfile stage `runtime` | `node:24.21.0-alpine` + tini; no `node_modules`; runs as user `node`; `EXPOSE 3000 8443`; health check `edgeweir-healthcheck` |
+| Dockerfile stage `build` | `node:24.22.1-alpine` with pnpm 12.6.0 builds the console once on the build machine's platform; the output (JavaScript and static assets) serves every architecture |
+| Dockerfile stage `runtime` | `node:24.22.1-alpine` + tini; no `node_modules`; runs as user `node`; `EXPOSE 3000 8443`; health check `edgeweir-healthcheck` |
 
 Base images are pinned by tag and multi-arch index digest. The image version is `<YYYYMMDD>-<commit>` (`scripts/image-version.sh`), written to `EDGEWEIR_VERSION` and the image label `org.opencontainers.image.version`; the full commit ID goes to `org.opencontainers.image.revision`. Development commands and tests: [CONTRIBUTING.en.md](CONTRIBUTING.en.md).
 

@@ -255,7 +255,7 @@ if [[ "$BENCH_SCENARIO" == tls* && -n "${BENCH_TLS_NETWORK:-}" ]]; then
     -e BENCH_URL="$BENCH_URL" -e BENCH_HOST="$BENCH_HOST" -e BENCH_SCENARIO="$BENCH_SCENARIO" \
     -e BENCH_REQUESTS="$BENCH_REQUESTS" -e BENCH_CONCURRENCY="$BENCH_CONCURRENCY" \
     -e BENCH_TLS_VERSION="${BENCH_TLS_VERSION:-}" -e BENCH_OUTPUT="/out/$(basename "$BENCH_OUTPUT")" \
-    node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 \
+    node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 \
     node /scripts/bench-tls.mjs
 elif [[ "$BENCH_SCENARIO" == tls* ]]; then
   # Warms the cache, refuses a site that does not answer a HIT, and checks resumption.
