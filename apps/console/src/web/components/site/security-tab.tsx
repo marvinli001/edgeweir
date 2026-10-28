@@ -838,7 +838,7 @@ function WafForm({
                     {id}
                     <button
                       type="button"
-                      className="-mr-1 rounded-full p-0.5 text-muted-foreground hover:text-foreground"
+                      className="relative -mr-1 rounded-full p-0.5 text-muted-foreground hover:text-foreground pointer-coarse:after:absolute pointer-coarse:after:-inset-3.5 pointer-coarse:after:content-['']"
                       aria-label={m.waf_exclusions_remove({ id: String(id) })}
                       data-testid="waf-exclusion-remove"
                       onClick={() =>

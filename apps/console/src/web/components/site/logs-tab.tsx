@@ -52,6 +52,7 @@ import {
 import { formatNumber, m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 import { requestUrl } from "@/lib/purge";
+import { rowActivationHandlers, rowLink } from "@/lib/row-link";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { exclusionPath } from "@/lib/waf-exclusions";
@@ -650,11 +651,12 @@ function LogTable({ entries, siteId }: { entries: LogEntry[]; siteId: string }) 
                 data-index={item.index}
                 aria-rowindex={item.index + 2}
                 className={cn(
-                  "absolute inset-x-0 top-0 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/70 px-4 py-2.5 font-mono text-xs leading-5 transition-colors hover:bg-wash has-aria-expanded:bg-wash",
+                  "absolute inset-x-0 top-0 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/70 px-4 py-2.5 font-mono text-xs leading-5 transition-colors hover:bg-wash has-aria-expanded:bg-wash has-[[data-row-link]]:cursor-pointer has-[[data-row-link]:focus-visible]:bg-wash",
                   "@min-[57rem]/logs:grid @min-[57rem]/logs:items-start @min-[57rem]/logs:gap-0 @min-[57rem]/logs:p-0",
                   LOG_COLUMNS,
                 )}
                 style={{ transform: `translateY(${item.start}px)` }}
+                {...(more.length > 0 ? rowActivationHandlers : {})}
                 data-testid="log-row"
               >
                 <td
@@ -680,6 +682,7 @@ function LogTable({ entries, siteId }: { entries: LogEntry[]; siteId: string }) 
                         aria-expanded={expanded}
                         aria-controls={expanded ? detailsId : undefined}
                         onClick={() => toggle(row.id)}
+                        {...rowLink}
                         data-testid="log-details-toggle"
                       >
                         <HugeiconsIcon

@@ -147,7 +147,7 @@ export function EdgeNetworkCard({
               <Link
                 to="/clusters"
                 search={{ cluster: location.clusterId }}
-                className="grid min-h-10 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-3 rounded-xl px-2 py-1.5 text-sm outline-none transition-colors focus-lit hover:bg-wash focus-visible:bg-wash"
+                className="grid min-h-10 pointer-coarse:min-h-11 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-3 rounded-xl px-2 py-1.5 text-sm outline-none transition-colors focus-lit hover:bg-wash focus-visible:bg-wash"
               >
                 <Dot tone={location.tone} glow={location.online > 0} />
                 <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">

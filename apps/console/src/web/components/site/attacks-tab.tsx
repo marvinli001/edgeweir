@@ -60,7 +60,7 @@ function LogsLink({ siteId, jump, testId }: { siteId: string; jump: LogJump; tes
     <LinkButton
       size="sm"
       variant="ghost"
-      className="icon-button size-6 min-h-6 -my-1 shrink-0"
+      className="icon-button relative size-6 min-h-6 -my-1 shrink-0 pointer-coarse:after:absolute pointer-coarse:after:-inset-2.5 pointer-coarse:after:content-['']"
       aria-label={m.attacks_view_logs()}
       title={m.attacks_view_logs()}
       to="/sites/$id"

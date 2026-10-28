@@ -48,6 +48,7 @@ import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { useOpenKey } from "@/hooks/use-open-key";
 import { formatDateTime, formatPercent, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
+import { rowLink, rowLinkButton } from "@/lib/row-link";
 import { cn } from "@/lib/utils";
 
 const PROBE_ERRORS: Record<string, () => string> = {
@@ -171,8 +172,9 @@ export function ProbesPanel({
           <div className="flex flex-col">
             <button
               type="button"
-              className="w-fit rounded-sm text-left font-medium underline-offset-4 outline-none focus-lit hover:underline"
+              className={cn(rowLinkButton, "font-medium")}
               onClick={() => action.show({ kind: "results", probe: row.original })}
+              {...rowLink}
               data-testid="probe-name"
             >
               {row.original.name}
