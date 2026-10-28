@@ -149,7 +149,7 @@ function RegionsList({ onCreate }: { onCreate: () => void }) {
             data-testid="region-name"
             {...rowLink}
           >
-            {row.original.name}
+            <span>{row.original.name}</span>
             <span className="sr-only">, {m.regions_edit()}</span>
           </button>
         ),

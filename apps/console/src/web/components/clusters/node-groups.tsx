@@ -128,7 +128,7 @@ export function NodeGroupsSection({ cluster }: { cluster: Cluster }) {
               data-testid="node-group-name"
               {...rowLink}
             >
-              {row.original.name}
+              <span>{row.original.name}</span>
               <span className="sr-only">, {m.node_groups_edit()}</span>
             </button>
             {row.original.isDefault ? (
