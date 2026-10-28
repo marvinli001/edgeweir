@@ -2,7 +2,7 @@ import { type Cluster, type Node, nodeUpgradeRecommended } from "@edgeweir/contr
 import { Add01Icon, MoreHorizontalIcon, ServerStack01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import type * as React from "react";
+import * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import {
@@ -13,20 +13,24 @@ import {
   DropdownMenuTrigger,
 } from "@/components/arc/dropdown-menu/dropdown-menu";
 import { type NodeAction, NodeActionDialog } from "@/components/clusters/node-dialogs";
+import { type Columns, DataTable } from "@/components/data-table";
 import { NodeChannelBadge } from "@/components/node-channel-state";
 import {
   AuthErrorBadge,
   CertificateFailuresBadge,
+  LOAD_BAD,
+  LOAD_WARN,
+  memoryPercent,
   NodeDetailSheet,
   type NodeDetailTab,
-  NodeVitals,
 } from "@/components/node-detail";
-import { enterDelay } from "@/components/page";
 import { EmptyState, QueryView } from "@/components/states";
 import { Dot, StatusDot } from "@/components/status-dot";
 import { useDialogState } from "@/hooks/use-dialog-state";
-import { formatDateTime, m, timeAgo } from "@/lib/i18n";
+import { formatBitRate, formatDateTime, formatPercent, m, timeAgo } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
+import { rowLink, rowLinkButton } from "@/lib/row-link";
+import { cn } from "@/lib/utils";
 
 function RevisionBadge({ node, latest }: { node: Node; latest: number }) {
   if (node.upgradeRequired) {
@@ -120,13 +124,64 @@ function NodeActions({
   );
 }
 
-/** One labeled fact at the foot of a node card. */
-function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+/** CPU or memory use, in words; a light from 75 % (warning) and 90 % (error), as on the meters. */
+function LoadFigure({ label, value }: { label: string; value: number | null }) {
+  const high = value !== null && value >= LOAD_WARN;
   return (
-    <div className="grid min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] items-baseline gap-2">
-      <dt className="truncate text-xs text-muted-foreground">{label}</dt>
-      <dd className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">{children}</dd>
-    </div>
+    <span className="inline-flex items-center gap-1 whitespace-nowrap">
+      <span className="text-muted-foreground">{label}</span>
+      {high ? <Dot tone={value >= LOAD_BAD ? "bad" : "warn"} small /> : null}
+      <span className={cn("tabular-nums", high && "font-medium")}>
+        {value === null ? "—" : formatPercent(value)}
+      </span>
+    </span>
+  );
+}
+
+/** A node's CPU and memory use (its details carry the gauges, load and connections). */
+function NodeLoad({ node }: { node: Node }) {
+  const metrics = node.metrics;
+  if (!metrics || !node.online) return <span className="text-muted-foreground">—</span>;
+  return (
+    <span className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs" data-testid="node-load">
+      <LoadFigure label={m.node_metrics_cpu()} value={metrics.cpuPercent} />
+      <LoadFigure label={m.node_metrics_memory()} value={memoryPercent(metrics)} />
+    </span>
+  );
+}
+
+/** The node's applied revision and how it stands against the cluster's. */
+function NodeRevision({ node, latest }: { node: Node; latest: number }) {
+  return (
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span className="font-mono text-xs" data-testid="node-applied-revision">
+        #{node.appliedRevision}
+      </span>
+      <RevisionBadge node={node} latest={latest} />
+      <CertificateFailuresBadge node={node} />
+    </span>
+  );
+}
+
+/** The agent's version, whether it should be upgraded, and its channel. */
+function NodeAgent({ node }: { node: Node }) {
+  return (
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span className="font-mono text-xs">{node.agentVersion || "—"}</span>
+      {node.agentVersion &&
+      !node.upgradeRequired &&
+      nodeUpgradeRecommended(node.supportedFeatures) ? (
+        <Badge
+          size="sm"
+          tone="neutral"
+          title={m.node_upgrade_recommended_title()}
+          data-testid="node-upgrade-recommended"
+        >
+          {m.node_upgrade_recommended()}
+        </Badge>
+      ) : null}
+      <NodeChannelBadge status={node.channel} testId="node-channel-badge" />
+    </span>
   );
 }
 
@@ -173,122 +228,14 @@ function NodeState({ node }: { node: Node }) {
 }
 
 /**
- * A node as an instrument card: name and state, its load (meters and readouts in a well), then its
- * revision, agent and addresses. `data-row-id` keys the card like a table row.
- */
-function NodeCard({
-  node,
-  latest,
-  index,
-  onAction,
-  onDetail,
-}: {
-  node: Node;
-  latest: number;
-  index: number;
-  onAction: (action: NodeAction) => void;
-  onDetail: (id: string) => void;
-}) {
-  return (
-    <li
-      data-row-id={node.id}
-      className="flex min-w-0 flex-col gap-3 rounded-2xl bg-card p-4 shadow-elev-1 edge-lit animate-enter"
-      style={enterDelay(index, 40)}
-    >
-      <div className="flex min-w-0 items-start gap-2">
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <button
-            type="button"
-            className="flex w-fit max-w-full items-center gap-1.5 rounded-md text-left font-medium underline-offset-4 outline-none focus-lit hover:underline"
-            onClick={() => onDetail(node.id)}
-            data-testid="node-open"
-          >
-            <span className="truncate" data-testid="node-name">
-              {node.name}
-            </span>
-            {node.probeEnabled ? (
-              <Badge size="sm" tone="neutral" data-testid="node-probe-badge">
-                {m.node_probe_switch()}
-              </Badge>
-            ) : null}
-          </button>
-          <span className="truncate text-xs text-muted-foreground" title={node.hostname}>
-            {node.hostname}
-          </span>
-        </div>
-        <NodeActions node={node} onAction={onAction} onDetail={onDetail} />
-      </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-        <NodeState node={node} />
-        <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-          <span className="truncate text-foreground" data-testid="node-group">
-            {node.nodeGroupName ?? "—"}
-          </span>
-          {node.regionName ? <span className="truncate">· {node.regionName}</span> : null}
-        </span>
-        <span
-          className="ml-auto shrink-0 text-xs text-muted-foreground"
-          title={node.lastSeenAt ? formatDateTime(node.lastSeenAt) : undefined}
-        >
-          {m.nodes_col_last_seen()} {timeAgo(node.lastSeenAt)}
-        </span>
-      </div>
-      <NodeVitals node={node} />
-      <dl className="flex flex-col gap-1.5">
-        <Fact label={m.nodes_col_revision()}>
-          <span className="font-mono" data-testid="node-applied-revision">
-            #{node.appliedRevision}
-          </span>
-          <RevisionBadge node={node} latest={latest} />
-          <CertificateFailuresBadge node={node} />
-        </Fact>
-        <Fact label={m.nodes_col_agent()}>
-          <span className="font-mono">{node.agentVersion || "—"}</span>
-          {node.agentVersion &&
-          !node.upgradeRequired &&
-          nodeUpgradeRecommended(node.supportedFeatures) ? (
-            <Badge
-              size="sm"
-              tone="neutral"
-              title={m.node_upgrade_recommended_title()}
-              data-testid="node-upgrade-recommended"
-            >
-              {m.node_upgrade_recommended()}
-            </Badge>
-          ) : null}
-          <NodeChannelBadge status={node.channel} testId="node-channel-badge" />
-          <span className="text-muted-foreground">
-            {node.engine} {node.engineVersion}
-          </span>
-        </Fact>
-        <Fact label={m.nodes_col_ips()}>
-          {node.ipAddresses.length ? (
-            node.ipAddresses.map((ip) => (
-              <span key={ip} className="font-mono break-all">
-                {ip}
-              </span>
-            ))
-          ) : (
-            <span>—</span>
-          )}
-          {node.dnsIssue === "no_public_address" ? (
-            <Badge size="sm" tone="neutral" data-testid="node-dns-issue">
-              {m.node_dns_no_public_address()}
-            </Badge>
-          ) : null}
-        </Fact>
-      </dl>
-    </li>
-  );
-}
-
-/**
- * The cluster's nodes, as cards. `detailId` is the node whose details are open (`onDetail` opens
- * and closes them) and `detailTab` their tab; they come from the polling list so they stay
- * current.
+ * The cluster's nodes, one row each: name, state, group, load, revision and agent; a click
+ * anywhere in a row opens the node's details (everything else about it). `detailId` is the node
+ * whose details are open (`onDetail` opens and closes them) and `detailTab` their tab; they come
+ * from the polling list so they stay current.
  */
 export function NodesSection({
   cluster,
+  heading = true,
   onEnroll,
   detailId,
   detailTab,
@@ -296,6 +243,8 @@ export function NodesSection({
   onDetailTab,
 }: {
   cluster: Cluster;
+  /** The section's heading with the node count (off where a tab names it). */
+  heading?: boolean;
   onEnroll: () => void;
   detailId: string | undefined;
   detailTab: NodeDetailTab | undefined;
@@ -310,17 +259,138 @@ export function NodesSection({
   const action = useDialogState<NodeAction>();
   const latest = cluster.latestRevision?.revision ?? 0;
   const detail = detailId ? nodes.data?.find((n) => n.id === detailId) : undefined;
+  const { show } = action;
+  const columns = React.useMemo<Columns<Node>>(
+    () => [
+      {
+        id: "name",
+        stack: "lead",
+        header: () => m.nodes_col_name(),
+        cell: ({ row }) => (
+          <div className="flex min-w-0 flex-col">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <button
+                type="button"
+                className={cn(rowLinkButton, "truncate font-medium")}
+                onClick={() => showDetail(row.original.id)}
+                data-testid="node-open"
+                {...rowLink}
+              >
+                <span data-testid="node-name">{row.original.name}</span>
+              </button>
+              {row.original.probeEnabled ? (
+                <Badge size="sm" tone="neutral" data-testid="node-probe-badge">
+                  {m.node_probe_switch()}
+                </Badge>
+              ) : null}
+            </span>
+            <span
+              className="max-w-56 truncate font-mono text-xs text-muted-foreground"
+              title={row.original.hostname}
+            >
+              {row.original.ipAddresses[0] ?? row.original.hostname}
+            </span>
+          </div>
+        ),
+      },
+      {
+        id: "state",
+        stack: "aside",
+        header: () => m.nodes_col_status(),
+        cell: ({ row }) => (
+          <span className="flex flex-col items-start gap-1">
+            <NodeState node={row.original} />
+            {row.original.dnsIssue === "no_public_address" ? (
+              <Badge size="sm" tone="neutral" data-testid="node-dns-issue">
+                {m.node_dns_no_public_address()}
+              </Badge>
+            ) : null}
+          </span>
+        ),
+      },
+      {
+        id: "group",
+        header: () => m.nodes_col_group(),
+        cell: ({ row }) => (
+          <span className="flex min-w-0 flex-col text-xs">
+            <span className="truncate" data-testid="node-group">
+              {row.original.nodeGroupName ?? "—"}
+            </span>
+            {row.original.regionName ? (
+              <span className="truncate text-muted-foreground">{row.original.regionName}</span>
+            ) : null}
+          </span>
+        ),
+      },
+      {
+        id: "load",
+        header: () => m.nodes_col_load(),
+        cell: ({ row }) => <NodeLoad node={row.original} />,
+      },
+      {
+        id: "egress",
+        hideBelow: "lg",
+        header: () => m.node_metrics_egress(),
+        cell: ({ row }) =>
+          row.original.online && row.original.metrics ? (
+            <span className="text-xs tabular-nums">
+              {formatBitRate(row.original.metrics.egressBps / 8)}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          ),
+      },
+      {
+        id: "revision",
+        header: () => m.nodes_col_revision(),
+        cell: ({ row }) => <NodeRevision node={row.original} latest={latest} />,
+      },
+      {
+        id: "agent",
+        hideBelow: "xl",
+        header: () => m.nodes_col_agent(),
+        cell: ({ row }) => <NodeAgent node={row.original} />,
+      },
+      {
+        id: "seen",
+        hideBelow: "xl",
+        stack: "hide",
+        header: () => m.nodes_col_last_seen(),
+        cell: ({ row }) => (
+          <span
+            className="text-xs text-muted-foreground"
+            title={row.original.lastSeenAt ? formatDateTime(row.original.lastSeenAt) : undefined}
+          >
+            {timeAgo(row.original.lastSeenAt)}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        stack: "end",
+        header: () => <span className="sr-only">{m.common_actions()}</span>,
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <NodeActions node={row.original} onAction={show} onDetail={showDetail} />
+          </div>
+        ),
+      },
+    ],
+    [latest, show, showDetail],
+  );
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="flex items-center gap-2 text-sm font-medium">
-        {m.nodes_title()}
-        {nodes.data?.length ? (
-          <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-wash px-1.5 text-xs font-medium tabular-nums text-muted-foreground">
-            {nodes.data.length}
-          </span>
-        ) : null}
-      </h2>
+      {heading ? (
+        <h2 className="flex items-center gap-2 text-sm font-medium">
+          {m.nodes_title()}
+          {nodes.data?.length ? (
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-wash px-1.5 text-xs font-medium tabular-nums text-muted-foreground">
+              {nodes.data.length}
+            </span>
+          ) : null}
+        </h2>
+      ) : null}
       <QueryView
         query={nodes}
         empty={
@@ -333,22 +403,14 @@ export function NodesSection({
         }
       >
         {(list) => (
-          // The test id predates the cards (the node list was a table).
-          <ul
-            className="grid gap-3 @2xl/main:grid-cols-2 @5xl/main:grid-cols-3"
-            data-testid="nodes-table"
-          >
-            {list.map((node, index) => (
-              <NodeCard
-                key={node.id}
-                node={node}
-                latest={latest}
-                index={index}
-                onAction={action.show}
-                onDetail={showDetail}
-              />
-            ))}
-          </ul>
+          <DataTable
+            data={list}
+            columns={columns}
+            getRowId={(node) => node.id}
+            testId="nodes-table"
+            pinFirstColumn
+            stack
+          />
         )}
       </QueryView>
       {action.value ? (

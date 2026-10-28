@@ -3356,5 +3356,8 @@
   "arc_toast_info": "Info",
   "arc_toast_warning": "Warning",
   "arc_toast_error": "Error",
-  "arc_toast_loading": "In progress"
+  "arc_toast_loading": "In progress",
+  "nodes_col_load": "Load",
+  "cluster_tab_releases": "Releases",
+  "cluster_tab_settings": "Settings"
 }

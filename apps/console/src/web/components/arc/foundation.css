@@ -90,6 +90,12 @@
   --arc-control-height-sm: calc(var(--spacing) * 7);
   --arc-control-height-md: calc(var(--spacing) * 8);
   --arc-control-height-lg: calc(var(--spacing) * 9);
+  /* Touch screens: every control is at least 44px tall (icon buttons 44px square). */
+  @media (pointer: coarse) {
+    --arc-control-height-sm: 2.75rem;
+    --arc-control-height-md: 2.75rem;
+    --arc-control-height-lg: 2.75rem;
+  }
 
   /* Type: the console's faces (Mona Sans, Noto Sans SC) at Tailwind's sizes. */
   --arc-font-display: var(--font-heading);

@@ -178,7 +178,7 @@ test("G15: error pages by class and redirect, maintenance mode", async ({ page }
 test("G15: the cluster's cache zone and a node's own size and usage", async ({ page }) => {
   const pageErrors = errors(page);
   await signedIn(page);
-  await page.goto(`/clusters?cluster=${state.clusterId}`);
+  await page.goto(`/clusters?cluster=${state.clusterId}&tab=network`);
   const card = page.getByTestId("cluster-cache");
   await expect(card.getByTestId("cluster-cache-size")).toHaveValue("10");
   await expect(card.getByTestId("cluster-cache-days")).toHaveValue("7");

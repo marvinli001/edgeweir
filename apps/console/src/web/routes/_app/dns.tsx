@@ -2,12 +2,12 @@ import type { DnsRevision } from "@edgeweir/contract";
 import { Add01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import type * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
+import { DropdownMenuItem } from "@/components/arc/dropdown-menu/dropdown-menu";
 import { CardTable } from "@/components/clusters/card-table";
-import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
   CapabilityBadges,
   DnsCredentialDialog,
@@ -16,12 +16,11 @@ import {
 } from "@/components/dns/credential-dialog";
 import { modeLabel, providerLabel, revisionError, statusLabel } from "@/components/dns/labels";
 import { DnsProtectionCard } from "@/components/dns-protection";
-import { LinkButton } from "@/components/link-button";
 import { enterDelay, Page } from "@/components/page";
+import { RowMenu } from "@/components/row-menu";
 import { combineQueries, EmptyState, QueryView } from "@/components/states";
 import { StatusDot, type StatusTone } from "@/components/status-dot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
   TableBody,
@@ -33,7 +32,9 @@ import {
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
+import { rowActivationHandlers, rowClickable, rowLink, rowLinkButton } from "@/lib/row-link";
 import { toast } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/dns")({ component: DnsPage });
 
@@ -57,142 +58,154 @@ function DnsPage() {
       }
     >
       <QueryView query={combineQueries(providers, bindings, catalog)}>
-        {([providerList, bindingList, catalogList]) => (
-          <>
-            <Card className="animate-enter">
-              <CardHeader className="flex flex-row items-center gap-2">
-                <CardTitle>{m.dns_accounts()}</CardTitle>
-                {providerList.items.length ? <Count value={providerList.items.length} /> : null}
-              </CardHeader>
-              <CardContent>
-                {!providerList.items.length ? (
-                  <EmptyState title={m.dns_accounts_empty()}>
-                    <Button onClick={() => credential.show("new")}>
-                      <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-                      {m.dns_add_account()}
-                    </Button>
-                  </EmptyState>
-                ) : (
-                  <ul className="-my-1 divide-y divide-edge" data-testid="dns-accounts">
-                    {providerList.items.map((p, index) => (
-                      <li
-                        key={p.id}
-                        className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3 animate-enter"
-                        style={enterDelay(index, 40)}
-                      >
-                        <span className="flex w-full flex-wrap items-center gap-2 text-sm @3xl/main:w-auto @3xl/main:min-w-48 @3xl/main:flex-1">
-                          <span className="font-medium break-all">{p.name}</span>
-                          <ValueWell>{p.zone}</ValueWell>
-                        </span>
-                        <span className="flex flex-wrap items-center gap-1.5">
-                          <Badge size="sm" tone="neutral">
-                            {providerLabel(p.provider)}
-                          </Badge>
-                          <CapabilityBadges
-                            provider={catalogList.find((c) => c.id === p.provider)}
-                          />
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <TestButton id={p.id} />
-                          <Button size="sm" variant="secondary" onClick={() => credential.show(p)}>
-                            {m.common_edit()}
-                          </Button>
-                          <ConfirmDialog
-                            title={m.common_delete()}
-                            note={p.zone}
-                            destructive
-                            trigger={
-                              <Button size="sm" variant="danger">
-                                {m.common_delete()}
-                              </Button>
-                            }
-                            onConfirm={async () => {
+        {([providerList, bindingList, catalogList]) => {
+          const anyDomain = bindingList.some((b) => b.domain);
+          return (
+            <>
+              <Card className="animate-enter">
+                <CardHeader className="flex flex-row items-center gap-2">
+                  <CardTitle>{m.dns_accounts()}</CardTitle>
+                  {providerList.items.length ? <Count value={providerList.items.length} /> : null}
+                </CardHeader>
+                <CardContent>
+                  {!providerList.items.length ? (
+                    <EmptyState title={m.dns_accounts_empty()}>
+                      <Button onClick={() => credential.show("new")}>
+                        <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+                        {m.dns_add_account()}
+                      </Button>
+                    </EmptyState>
+                  ) : (
+                    <ul className="-my-1 divide-y divide-edge" data-testid="dns-accounts">
+                      {providerList.items.map((p, index) => (
+                        <li
+                          key={p.id}
+                          className={cn(
+                            "-mx-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl px-3 py-3 animate-enter",
+                            rowClickable,
+                          )}
+                          style={enterDelay(index, 40)}
+                          {...rowActivationHandlers}
+                        >
+                          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-sm @3xl/main:min-w-48">
+                            <button
+                              type="button"
+                              className={cn(rowLinkButton, "font-medium break-all")}
+                              onClick={() => credential.show(p)}
+                              {...rowLink}
+                            >
+                              {p.name}
+                            </button>
+                            <ValueWell>{p.zone}</ValueWell>
+                          </span>
+                          <span className="flex flex-wrap items-center gap-1.5">
+                            <Badge size="sm" tone="neutral">
+                              {providerLabel(p.provider)}
+                            </Badge>
+                            <CapabilityBadges
+                              provider={catalogList.find((c) => c.id === p.provider)}
+                            />
+                          </span>
+                          <AccountMenu
+                            id={p.id}
+                            zone={p.zone}
+                            onDelete={async () => {
                               await client.dns.deleteProvider({ id: p.id });
                               await refresh();
                             }}
                           />
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
-            <Card className="pb-0 animate-enter" style={enterDelay(1, 60)}>
-              <CardHeader className="flex flex-row items-center gap-2">
-                <CardTitle>{m.dns_bindings()}</CardTitle>
-                {bindingList.length ? <Count value={bindingList.length} /> : null}
-              </CardHeader>
-              {!bindingList.length ? (
-                <CardContent className="pb-(--card-spacing)">
-                  <EmptyState art="node" title={m.clusters_empty_title()} />
-                </CardContent>
-              ) : (
-                <CardTable pinFirstColumn>
-                  <Table data-testid="dns-bindings">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="cell-pinned">{m.dns_cluster()}</TableHead>
-                        <TableHead>{m.dns_cluster_domain()}</TableHead>
-                        <TableHead>{m.dns_mode()}</TableHead>
-                        <TableHead>{m.dns_status()}</TableHead>
-                        <TableHead>
-                          <span className="sr-only">{m.common_actions()}</span>
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {bindingList.map((b) => (
-                        <TableRow key={b.clusterId}>
-                          <TableCell className="cell-pinned font-medium">{b.clusterName}</TableCell>
-                          <TableCell>
-                            {b.domain ? <ValueWell>{b.domain}</ValueWell> : "—"}
-                          </TableCell>
-                          <TableCell>
-                            <Badge size="sm" tone={b.mode === "off" ? "neutral" : "neutral"}>
-                              {modeLabel(b.mode)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {b.mode === "auto" && b.revision ? (
-                              <span className="flex items-center gap-2">
-                                <BindingState
-                                  blocked={!!b.blocked}
-                                  applied={b.applied}
-                                  status={b.revision.status}
-                                />
-                                {b.revision.lastError && !b.blocked ? (
-                                  <span className="text-xs text-muted-foreground">
-                                    {revisionError(
-                                      b.revision.lastError,
-                                      b.revision.lastErrorParams,
-                                    )}
-                                  </span>
-                                ) : null}
-                              </span>
-                            ) : null}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <LinkButton
-                              size="sm"
-                              variant="ghost"
-                              to="/clusters"
-                              search={{ cluster: b.clusterId, tab: "dns" }}
-                            >
-                              {m.dns_open_cluster()}
-                              <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
-                            </LinkButton>
-                          </TableCell>
-                        </TableRow>
+                        </li>
                       ))}
-                    </TableBody>
-                  </Table>
-                </CardTable>
-              )}
-            </Card>
-            <DnsProtectionCard />
-          </>
-        )}
+                    </ul>
+                  )}
+                </CardContent>
+              </Card>
+              <Card className="pb-0 animate-enter" style={enterDelay(1, 60)}>
+                <CardHeader className="flex flex-row items-center gap-2">
+                  <CardTitle>{m.dns_bindings()}</CardTitle>
+                  {bindingList.length ? <Count value={bindingList.length} /> : null}
+                </CardHeader>
+                {!bindingList.length ? (
+                  <CardContent className="pb-(--card-spacing)">
+                    <EmptyState art="node" title={m.clusters_empty_title()} />
+                  </CardContent>
+                ) : (
+                  <CardTable pinFirstColumn>
+                    <Table data-testid="dns-bindings">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="cell-pinned">{m.dns_cluster()}</TableHead>
+                          {anyDomain ? <TableHead>{m.dns_cluster_domain()}</TableHead> : null}
+                          <TableHead>{m.dns_status()}</TableHead>
+                          <TableHead>
+                            <span className="sr-only">{m.common_actions()}</span>
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {bindingList.map((b) => (
+                          <TableRow key={b.clusterId}>
+                            <TableCell className="cell-pinned font-medium">
+                              <Link
+                                to="/clusters"
+                                search={{ cluster: b.clusterId, tab: "dns" }}
+                                className="rounded-sm underline-offset-4 outline-none focus-lit hover:underline"
+                                data-testid="dns-binding-open"
+                                {...rowLink}
+                              >
+                                {b.clusterName}
+                              </Link>
+                            </TableCell>
+                            {anyDomain ? (
+                              <TableCell>
+                                {b.domain ? (
+                                  <ValueWell>{b.domain}</ValueWell>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                            ) : null}
+                            <TableCell>
+                              {b.mode === "auto" && b.revision ? (
+                                <span className="flex flex-wrap items-center gap-2">
+                                  <BindingState
+                                    blocked={!!b.blocked}
+                                    applied={b.applied}
+                                    status={b.revision.status}
+                                  />
+                                  {b.revision.lastError && !b.blocked ? (
+                                    <span className="text-xs text-muted-foreground">
+                                      {revisionError(
+                                        b.revision.lastError,
+                                        b.revision.lastErrorParams,
+                                      )}
+                                    </span>
+                                  ) : null}
+                                </span>
+                              ) : (
+                                // Not managed, kept by hand, or automatic before its first
+                                // publication: the mode is the state.
+                                <StatusDot tone="idle">{modeLabel(b.mode)}</StatusDot>
+                              )}
+                            </TableCell>
+                            <TableCell className="w-10 text-right text-muted-foreground">
+                              <HugeiconsIcon
+                                icon={ArrowRight01Icon}
+                                strokeWidth={2}
+                                className="ml-auto size-4"
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardTable>
+                )}
+              </Card>
+              <DnsProtectionCard />
+            </>
+          );
+        }}
       </QueryView>
       {credential.value ? (
         <DnsCredentialDialog
@@ -254,22 +267,33 @@ function BindingState({
   );
 }
 
-function TestButton({ id }: { id: string }) {
+/** An account's menu: test the connection (a toast says how it went), delete. */
+function AccountMenu({
+  id,
+  zone,
+  onDelete,
+}: {
+  id: string;
+  zone: string;
+  onDelete: () => Promise<unknown>;
+}) {
   const test = useMutation({
     ...orpc.dns.testProvider.mutationOptions(),
     meta: { toastError: true },
     onSuccess: (result) => toast.success(m.dns_test_ok({ records: result.records })),
   });
   return (
-    <Button
-      size="sm"
-      variant="secondary"
-      disabled={test.isPending}
-      data-testid="dns-account-test"
-      onClick={() => test.mutate({ id })}
+    <RowMenu
+      testId="dns-account-actions"
+      remove={{ title: m.common_delete(), note: zone, onConfirm: onDelete }}
     >
-      {test.isPending ? <Spinner /> : null}
-      {m.dns_test_connection()}
-    </Button>
+      <DropdownMenuItem
+        disabled={test.isPending}
+        data-testid="dns-account-test"
+        onClick={() => test.mutate({ id })}
+      >
+        {m.dns_test_connection()}
+      </DropdownMenuItem>
+    </RowMenu>
   );
 }

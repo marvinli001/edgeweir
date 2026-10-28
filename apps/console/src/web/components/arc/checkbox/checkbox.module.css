@@ -17,11 +17,14 @@
     outline: none;
     -webkit-tap-highlight-color: transparent;
   }
-  /* A wider hit area than the drawn square. */
+  /* A wider hit area than the drawn square: 44px square on touch screens. */
   .box::after {
     content: "";
     position: absolute;
     inset: -8px -12px;
+    @media (pointer: coarse) {
+      inset: -13px;
+    }
   }
   /* The square is the only part that reacts to a press, so the hit area and label never move. */
   .visual {

@@ -357,6 +357,36 @@ describe("UI behaviour", () => {
     expect(hooks).toEqual([]);
   });
 
+  it("opens list rows from anywhere in the row, not only from their title (lib/row-link)", () => {
+    // Every table row runs the row activation: a row whose cells hold a row link opens it.
+    const table = read("src/web/components/ui/table.tsx");
+    expect(table).toMatch(/onClick=\{\(event\) => \{[^}]*activateRow\(event\)/);
+    expect(table).toMatch(/onAuxClick=\{\(event\) => \{[^}]*activateRow\(event\)/);
+    // A link to a detail page inside a table is that row's row link, or says it is another one.
+    const detailLink = /<(?:Link|LinkButton)\b[^>]*\bto="[^"]*\$[a-z]+[^"]*"[^>]*>/gs;
+    const unmarked = webSources
+      .filter((file) => /Columns<|<TableRow\b/.test(read(file)))
+      .flatMap((file) =>
+        [...read(file).matchAll(detailLink)]
+          .map((match) => match[0])
+          .filter((tag) => !/\{\.\.\.rowLink\}|data-row-ignore/.test(tag))
+          .map((tag) => `${file}: ${tag.split("\n")[0]}`),
+      );
+    expect(unmarked).toEqual([]);
+    // The lists whose rows open their details or editor: each keeps a row link, so a whole row or
+    // card stays clickable.
+    const lists = [
+      "src/web/routes/_app/sites/index.tsx",
+      "src/web/routes/_app/l4/index.tsx",
+      "src/web/routes/_app/alerts.tsx",
+      "src/web/routes/_app/dns.tsx",
+      "src/web/components/ip-lists.tsx",
+      "src/web/components/clusters/nodes.tsx",
+    ];
+    const missing = lists.filter((file) => !/\{\.\.\.rowLink\}/.test(read(file)));
+    expect(missing).toEqual([]);
+  });
+
   it("shows a query's error only when it never loaded: a failed background refetch keeps the data", () => {
     // TanStack Query v5 sets isError on a failed refetch and keeps the data; isLoadingError is the
     // first load failing. Rendering ErrorState on isError unmounted polled pages, open dialogs

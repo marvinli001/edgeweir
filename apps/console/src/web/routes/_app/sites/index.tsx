@@ -45,6 +45,7 @@ import { useOpenKey } from "@/hooks/use-open-key";
 import { domainList, fillOrigin, replacesField } from "@/lib/address-input";
 import { formatCompact, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
+import { rowLink } from "@/lib/row-link";
 import { domainFormsAvailable, needsDomainForms } from "@/lib/site-domains";
 
 const PAGE_SIZE = 20;
@@ -177,12 +178,14 @@ function SitesPage() {
 
   const stars = useSiteStars();
   const { ids: starredIds, pendingId, toggle } = stars;
+  const multiCluster = (clusters.data?.length ?? 0) > 1;
   const columns = React.useMemo<Columns<Site>>(
     () => [
       {
         // The star and the name share the first column, which stays put while the table scrolls
         // sideways on narrow screens.
         id: "name",
+        stack: "lead",
         header: () => (
           <span className="flex items-center gap-2">
             <Checkbox
@@ -216,6 +219,7 @@ function SitesPage() {
                 params={{ id: row.original.id }}
                 className="max-w-56 truncate rounded-sm font-medium underline-offset-4 outline-none focus-lit hover:underline"
                 data-testid="site-link"
+                {...rowLink}
               >
                 {row.original.name}
               </Link>
@@ -233,6 +237,7 @@ function SitesPage() {
       },
       {
         id: "status",
+        stack: "aside",
         header: () => m.sites_col_status(),
         cell: ({ row }) => <SiteStatus site={row.original} />,
       },
@@ -279,6 +284,8 @@ function SitesPage() {
       },
       {
         id: "origins",
+        hideBelow: "lg",
+        stack: "hide",
         header: () => m.sites_col_origins(),
         cell: ({ row }) => (
           <div className="flex flex-col font-mono text-xs leading-5 text-muted-foreground">
@@ -290,17 +297,23 @@ function SitesPage() {
           </div>
         ),
       },
-      {
-        id: "cluster",
-        header: () => m.sites_col_cluster(),
-        cell: ({ row }) => (
-          <Badge size="sm" tone="neutral">
-            {row.original.clusterName}
-          </Badge>
-        ),
-      },
+      // With one cluster every site is on it: the column says nothing.
+      ...(multiCluster
+        ? ([
+            {
+              id: "cluster",
+              header: () => m.sites_col_cluster(),
+              cell: ({ row }) => (
+                <Badge size="sm" tone="neutral">
+                  {row.original.clusterName}
+                </Badge>
+              ),
+            },
+          ] satisfies Columns<Site>)
+        : []),
     ],
     [
+      multiCluster,
       starredIds,
       pendingId,
       toggle,
@@ -405,6 +418,7 @@ function SitesPage() {
               getRowId={(s) => s.id}
               testId="sites-table"
               pinFirstColumn
+              stack
             />
             <Pager
               page={page}

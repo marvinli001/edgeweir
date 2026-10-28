@@ -91,12 +91,13 @@ test("P0: configuration canary status, promote to all and abort", async ({ page 
     .getByTestId("node-groups-table")
     .getByRole("row")
     .filter({ has: page.getByText(state.canaryGroupName, { exact: true }) });
-  await groupRow.getByRole("button", { name: "编辑节点组" }).click();
+  await groupRow.getByTestId("node-group-name").click();
   await page.getByTestId("node-group-canary").click();
   await page.getByTestId("node-group-submit").click();
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(groupRow.getByTestId("node-group-canary-badge")).toBeVisible();
-  // Turn the canary on.
+  // Turn the canary on (the releases tab).
+  await page.getByTestId("cluster-tab-releases").click();
   const card = page.getByTestId("cluster-rollout");
   await card.getByTestId("rollout-enabled").click();
   await card.getByTestId("rollout-window").fill("5");
@@ -108,7 +109,7 @@ test("P0: configuration canary status, promote to all and abort", async ({ page 
     await page.getByTestId("site-name-input").fill(name);
     await page.getByTestId("site-name-save").click();
     await expect(page.getByTestId("site-name-save")).toBeDisabled();
-    await page.goto(`/clusters?cluster=${state.clusterId}`);
+    await page.goto(`/clusters?cluster=${state.clusterId}&tab=releases`);
   };
   await rename("p0-canary-one");
   await expect(card.getByTestId("rollout-state")).toHaveAttribute("data-state", "canary");
@@ -132,7 +133,8 @@ test("P0: configuration canary status, promote to all and abort", async ({ page 
   await card.getByTestId("rollout-enabled").click();
   await card.getByTestId("rollout-policy-save").click();
   await expect(card.getByTestId("rollout-state")).toHaveAttribute("data-state", "idle");
-  await groupRow.getByRole("button", { name: "编辑节点组" }).click();
+  await page.getByTestId("cluster-tab-overview").click();
+  await groupRow.getByTestId("node-group-name").click();
   await page.getByTestId("node-group-canary").click();
   await page.getByTestId("node-group-submit").click();
   await expect(groupRow.getByTestId("node-group-canary-badge")).toHaveCount(0);

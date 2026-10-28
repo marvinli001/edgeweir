@@ -53,6 +53,7 @@ export const PAGES: LabPage[] = [
 
   { name: "clusters", group: "infrastructure", path: "/clusters" },
   { name: "clusters-node", group: "infrastructure", path: `/clusters?node=${LAGGING_NODE}` },
+  { name: "clusters-releases", group: "infrastructure", path: "/clusters?tab=releases" },
   { name: "clusters-dns", group: "infrastructure", path: "/clusters?tab=dns" },
   { name: "clusters-scheduling", group: "infrastructure", path: "/clusters?tab=scheduling" },
   {

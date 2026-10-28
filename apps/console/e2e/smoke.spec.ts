@@ -39,6 +39,7 @@ test("login -> clusters & nodes -> sites, then switch to English", async ({ page
     await expect(nodes.getByTestId("node-applied-revision")).toHaveText(`#${expectedRevision}`);
     await expect(page.getByTestId("cluster-latest-revision")).toContainText(expectedRevision);
   }
+  await page.getByTestId("cluster-tab-releases").click();
   await expect(page.getByTestId("revisions-table")).toBeVisible();
 
   // The "add node" dialog shows a one-time install command with the CA pin at once. The

@@ -507,6 +507,87 @@
   }
 }
 
+/*
+ * A stacking DataTable ([data-stack]) on a phone-wide column: every row is a card of its own, the
+ * lead cell (the name) on the first line with the aside cell (a state) at its end, the other cells
+ * as labeled lines below; the header keeps only a select-all checkbox, if there is one. Unlayered,
+ * so it beats the cells' padding and nowrap utilities.
+ */
+@container main (width < 42rem) {
+  [data-slot="data-table"][data-stack] {
+    & [data-slot="table-container"] {
+      overflow-x: visible;
+    }
+    & table,
+    & tbody {
+      display: block;
+    }
+    & thead:not(:has([role="checkbox"])) {
+      display: none;
+    }
+    & thead tr {
+      display: flex;
+    }
+    & thead th:not(:first-child) {
+      display: none;
+    }
+    & thead th {
+      position: static;
+      flex: 1;
+    }
+    & tbody tr {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      column-gap: 0.75rem;
+      row-gap: 0.375rem;
+      padding: 0.875rem 1rem;
+    }
+    & tbody td {
+      display: block;
+      min-width: 0;
+      padding: 0;
+      white-space: normal;
+      position: static;
+      box-shadow: none;
+      background: none;
+    }
+    & td[data-stack="lead"] {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    & td[data-stack="aside"] {
+      grid-column: 2;
+      grid-row: 1;
+      justify-self: end;
+    }
+    & td[data-stack="end"] {
+      grid-column: 3;
+      grid-row: 1;
+      margin-block: -0.375rem;
+    }
+    & td[data-stack="hide"] {
+      display: none;
+    }
+    & td:not([data-stack]) {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.8125rem;
+    }
+    & td:not([data-stack])[data-label]::before {
+      content: attr(data-label);
+      flex: none;
+      width: 5.5rem;
+      font-size: 0.75rem;
+      color: var(--muted-foreground);
+    }
+    & td:not([data-stack]):empty {
+      display: none;
+    }
+  }
+}
+
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: var(--font-latin), "Noto Sans SC Variable", ui-sans-serif, system-ui, sans-serif;

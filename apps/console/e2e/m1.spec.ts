@@ -162,6 +162,7 @@ test("M1: site editing, clusters, node groups, audit and i18n", async ({ page })
     await page.getByTestId("nav-clusters").click();
     await expect(page.getByTestId("page-title")).toHaveText("Clusters & nodes");
     await expect(page.getByTestId("cluster-name")).toHaveText("default");
+    await page.getByTestId("cluster-tab-releases").click();
     const reasons = page.getByTestId("revisions-table").getByTestId("revision-reason");
     await expect(reasons.filter({ hasText: "Site edited-site updated" }).first()).toBeVisible();
     await expect(reasons.filter({ hasText: "Cluster default created" })).toHaveCount(1);

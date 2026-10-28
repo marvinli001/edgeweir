@@ -100,7 +100,7 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
       </div>
       <QueryView query={jobs} empty={<EmptyState title={m.upgrade_empty()} />}>
         {(list) =>
-          list.map((job) => (
+          list.map((job, index) => (
             <Card key={job.id} data-testid={`upgrade-${job.version}`}>
               <CardHeader className="flex flex-row flex-wrap items-center gap-3">
                 <CardTitle className="min-w-0 flex-1 break-all font-mono">{job.version}</CardTitle>
@@ -112,54 +112,62 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
                   {timeAgo(job.createdAt)}
                 </span>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <UpgradeProgress job={job} />
-                <div className="divide-y divide-edge overflow-hidden rounded-xl sunk-well">
-                  {job.deliveries.map((d) => (
-                    <Delivery key={d.id} delivery={d} version={job.version} jobState={job.state} />
-                  ))}
-                </div>
-                {job.state === "canary" && job.deliveries.some((d) => d.state === "held") ? (
-                  <div className="flex flex-wrap items-center gap-3">
-                    <SafetyNote>{m.upgrade_observe()}</SafetyNote>
+              {/* Earlier jobs that have finished are a line each: version, outcome, time. */}
+              {index > 0 && !["canary", "rollout"].includes(job.state) ? null : (
+                <CardContent className="space-y-4">
+                  <UpgradeProgress job={job} />
+                  <div className="divide-y divide-edge overflow-hidden rounded-xl sunk-well">
+                    {job.deliveries.map((d) => (
+                      <Delivery
+                        key={d.id}
+                        delivery={d}
+                        version={job.version}
+                        jobState={job.state}
+                      />
+                    ))}
+                  </div>
+                  {job.state === "canary" && job.deliveries.some((d) => d.state === "held") ? (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <SafetyNote>{m.upgrade_observe()}</SafetyNote>
+                      <ConfirmDialog
+                        title={m.upgrade_promote()}
+                        note={job.version}
+                        trigger={
+                          <Button
+                            disabled={!job.canPromote || promote.isPending}
+                            data-testid="upgrade-promote"
+                          >
+                            {m.upgrade_promote()}
+                          </Button>
+                        }
+                        onConfirm={async () => {
+                          await promote.mutateAsync({ id: job.id });
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                  {["canary", "rollout"].includes(job.state) ? (
                     <ConfirmDialog
-                      title={m.upgrade_promote()}
-                      note={job.version}
+                      title={m.upgrade_cancel()}
+                      note={m.upgrade_cancel_note()}
+                      destructive
                       trigger={
                         <Button
-                          disabled={!job.canPromote || promote.isPending}
-                          data-testid="upgrade-promote"
+                          variant="secondary"
+                          disabled={
+                            cancel.isPending || job.deliveries.some((d) => d.state === "running")
+                          }
                         >
-                          {m.upgrade_promote()}
+                          {m.upgrade_cancel()}
                         </Button>
                       }
                       onConfirm={async () => {
-                        await promote.mutateAsync({ id: job.id });
+                        await cancel.mutateAsync({ id: job.id });
                       }}
                     />
-                  </div>
-                ) : null}
-                {["canary", "rollout"].includes(job.state) ? (
-                  <ConfirmDialog
-                    title={m.upgrade_cancel()}
-                    note={m.upgrade_cancel_note()}
-                    destructive
-                    trigger={
-                      <Button
-                        variant="secondary"
-                        disabled={
-                          cancel.isPending || job.deliveries.some((d) => d.state === "running")
-                        }
-                      >
-                        {m.upgrade_cancel()}
-                      </Button>
-                    }
-                    onConfirm={async () => {
-                      await cancel.mutateAsync({ id: job.id });
-                    }}
-                  />
-                ) : null}
-              </CardContent>
+                  ) : null}
+                </CardContent>
+              )}
             </Card>
           ))
         }

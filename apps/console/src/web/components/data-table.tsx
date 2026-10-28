@@ -24,7 +24,25 @@ const features = tableFeatures({
   sortedRowModel: createSortedRowModel(),
 });
 
-export type Columns<T extends RowData> = ColumnDef<typeof features, T>[];
+/**
+ * How a column shows where the table stacks into cards (`stack` on DataTable, a narrow column):
+ * `lead` is the card's first line (the row's name and its row link), `aside` sits beside it (a
+ * state), `end` at the line's end (the row's menu), `hide` leaves it out; every other column is a
+ * labeled line under them. `hideBelow`
+ * drops a column of secondary detail where the column is narrower than that (`lg`, `xl`), before
+ * the table scrolls sideways, and from the cards.
+ */
+export interface ColumnLayout {
+  stack?: "lead" | "aside" | "end" | "hide";
+  hideBelow?: "lg" | "xl";
+}
+
+export type Columns<T extends RowData> = (ColumnDef<typeof features, T> & ColumnLayout)[];
+
+const HIDE_BELOW: Record<NonNullable<ColumnLayout["hideBelow"]>, string> = {
+  lg: "@max-5xl/main:hidden",
+  xl: "@max-6xl/main:hidden",
+};
 
 /**
  * Renders a column's `header` or `cell` template by calling it. TanStack's `FlexRender` passes a
@@ -69,6 +87,8 @@ export function markOverflow(root: HTMLElement | null): (() => void) | undefined
   };
 }
 
+const layoutClass = (def: ColumnLayout) => (def.hideBelow ? HIDE_BELOW[def.hideBelow] : undefined);
+
 function useOverflowMark(table: React.RefObject<HTMLTableElement | null>) {
   React.useLayoutEffect(() => markOverflow(table.current), [table]);
 }
@@ -84,11 +104,19 @@ export function FilterBar({ className, ...props }: React.ComponentProps<"div">) 
   );
 }
 
+/** A column header as plain text (the label of a stacked cell), when it is one. */
+function headerText(header: unknown, props: object): string | undefined {
+  const value = typeof header === "function" ? header(props) : header;
+  return typeof value === "string" ? value : undefined;
+}
+
 /**
  * Thin TanStack Table v9 wrapper rendered with the shadcn table primitives, in a card. The header
  * is a well strip that sticks under the page header while the table fits its card; rows enter
- * staggered. `pinFirstColumn` keeps the first column in place while the table scrolls sideways
- * (narrow screens), for tables whose first column names the row.
+ * staggered. A row whose cells hold a row link (`rowLink`) opens it on a click anywhere in the row
+ * (TableRow). `pinFirstColumn` keeps the first column in place while the table scrolls sideways,
+ * for tables whose first column names the row; `stack` turns every row into a card on phones
+ * (columns say how they show there: ColumnLayout), so the table never scrolls sideways there.
  */
 export function DataTable<T extends RowData>({
   data,
@@ -96,12 +124,14 @@ export function DataTable<T extends RowData>({
   getRowId,
   testId,
   pinFirstColumn = false,
+  stack = false,
 }: {
   data: T[];
   columns: Columns<T>;
   getRowId: (row: T) => string;
   testId?: string;
   pinFirstColumn?: boolean;
+  stack?: boolean;
 }) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const table = useTable({
@@ -120,6 +150,7 @@ export function DataTable<T extends RowData>({
       // overflow-clip rounds the corners without becoming a scroll container (sticky header).
       className="overflow-clip rounded-2xl bg-card shadow-elev-1 edge-lit"
       data-slot="data-table"
+      data-stack={stack ? "" : undefined}
       data-testid={testId}
     >
       <Table ref={ref}>
@@ -130,7 +161,11 @@ export function DataTable<T extends RowData>({
                 <TableHead
                   key={header.id}
                   colSpan={header.colSpan}
-                  className={cn("bg-well [--cell-bg:var(--well)]", pinned(index))}
+                  className={cn(
+                    "bg-well [--cell-bg:var(--well)]",
+                    pinned(index),
+                    layoutClass(header.column.columnDef as ColumnLayout),
+                  )}
                 >
                   {header.isPlaceholder
                     ? null
@@ -148,11 +183,25 @@ export function DataTable<T extends RowData>({
               className="animate-enter"
               style={enterDelay(index)}
             >
-              {row.getAllCells().map((cell, cellIndex) => (
-                <TableCell key={cell.id} className={cn("align-top", pinned(cellIndex))}>
-                  {renderTemplate(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-              ))}
+              {row.getAllCells().map((cell, cellIndex) => {
+                const def = cell.column.columnDef as ColumnLayout;
+                // A column of secondary detail is left out of the cards too.
+                const place = def.stack ?? (def.hideBelow ? "hide" : undefined);
+                return (
+                  <TableCell
+                    key={cell.id}
+                    className={cn("align-top", pinned(cellIndex), layoutClass(def))}
+                    data-stack={stack ? place : undefined}
+                    data-label={
+                      stack && !place
+                        ? headerText(cell.column.columnDef.header, cell.getContext())
+                        : undefined
+                    }
+                  >
+                    {renderTemplate(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                );
+              })}
             </TableRow>
           ))}
         </TableBody>

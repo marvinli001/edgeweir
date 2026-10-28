@@ -51,7 +51,8 @@ test("DNS: an account from the catalog form, zones listed and the connection tes
   const row = page.getByTestId("dns-accounts").locator("li", { hasText: name });
   await expect(row).toContainText("cdn-b.dns.test");
   await check(page, "accounts");
-  await row.getByRole("button", { name: "删除" }).click();
+  await row.getByTestId("dns-account-actions").click();
+  await page.getByRole("menuitem", { name: "删除" }).click();
   await page.getByTestId("confirm-action").click();
   await expect(row).toBeHidden();
   await logout(page);

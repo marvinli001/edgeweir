@@ -1,21 +1,23 @@
 import type { Cluster, NodeGroup } from "@edgeweir/contract";
-import { Add01Icon, Delete02Icon, PencilEdit01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { Input } from "@/components/arc/input/input";
-import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
 import { OptionSelect } from "@/components/form-select";
+import { RowMenu } from "@/components/row-menu";
 import { SwitchField } from "@/components/site/fields";
 import { QueryView } from "@/components/states";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
+import { rowLink, rowLinkButton } from "@/lib/row-link";
+import { cn } from "@/lib/utils";
 
 const NO_REGION = "__none__";
 
@@ -87,26 +89,20 @@ function NodeGroupDialog({
 }
 
 /**
- * Delete with confirmation. The row actions of the tables below are components of their own:
- * column templates are plain functions (DataTable) and hold no hooks.
+ * The row's menu: delete with confirmation. The row actions of the tables below are components of
+ * their own: column templates are plain functions (DataTable) and hold no hooks.
  */
-function DeleteNodeGroupAction({ group }: { group: NodeGroup }) {
+function NodeGroupMenu({ group }: { group: NodeGroup }) {
   const remove = useMutation({
     ...orpc.nodeGroups.delete.mutationOptions(),
     meta: { invalidates: "all" },
   });
   return (
-    <ConfirmDialog
-      trigger={
-        <Button className="icon-button" size="sm" variant="ghost" aria-label={m.common_delete()}>
-          <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-        </Button>
-      }
-      destructive
-      title={m.node_groups_delete_confirm({ name: group.name })}
-      confirmLabel={m.common_delete()}
-      onConfirm={async () => {
-        await remove.mutateAsync({ id: group.id });
+    <RowMenu
+      testId="node-group-actions"
+      remove={{
+        title: m.node_groups_delete_confirm({ name: group.name }),
+        onConfirm: () => remove.mutateAsync({ id: group.id }),
       }}
     />
   );
@@ -121,12 +117,19 @@ export function NodeGroupsSection({ cluster }: { cluster: Cluster }) {
     () => [
       {
         id: "name",
+        stack: "lead",
         header: () => m.node_groups_name(),
         cell: ({ row }) => (
           <div className="flex items-center gap-2">
-            <span className="font-medium" data-testid="node-group-name">
+            <button
+              type="button"
+              className={cn(rowLinkButton, "font-medium")}
+              onClick={() => edit.show(row.original)}
+              data-testid="node-group-name"
+              {...rowLink}
+            >
               {row.original.name}
-            </span>
+            </button>
             {row.original.isDefault ? (
               <Badge size="sm" tone="neutral">
                 {m.node_groups_default()}
@@ -159,19 +162,11 @@ export function NodeGroupsSection({ cluster }: { cluster: Cluster }) {
       },
       {
         id: "actions",
+        stack: "end",
         header: () => <span className="sr-only">{m.common_actions()}</span>,
         cell: ({ row }) => (
-          <div className="flex justify-end gap-1">
-            <Button
-              className="icon-button"
-              size="sm"
-              variant="ghost"
-              aria-label={m.node_groups_edit()}
-              onClick={() => edit.show(row.original)}
-            >
-              <HugeiconsIcon icon={PencilEdit01Icon} strokeWidth={2} />
-            </Button>
-            {row.original.isDefault ? null : <DeleteNodeGroupAction group={row.original} />}
+          <div className="flex justify-end">
+            {row.original.isDefault ? null : <NodeGroupMenu group={row.original} />}
           </div>
         ),
       },
@@ -201,6 +196,7 @@ export function NodeGroupsSection({ cluster }: { cluster: Cluster }) {
             getRowId={(g) => g.id}
             testId="node-groups-table"
             pinFirstColumn
+            stack
           />
         )}
       </QueryView>

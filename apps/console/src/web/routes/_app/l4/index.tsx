@@ -20,6 +20,7 @@ import { useDialogState } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
 import { originLabel, portsLabel } from "@/lib/l4";
 import { orpc } from "@/lib/orpc";
+import { rowLink } from "@/lib/row-link";
 
 export const Route = createFileRoute("/_app/l4/")({
   validateSearch: z.object({
@@ -63,6 +64,7 @@ function L4AppsPage() {
     () => [
       {
         id: "name",
+        stack: "lead",
         header: () => m.site_form_name(),
         cell: ({ row }) => (
           <div className="flex max-w-56 min-w-0 items-start gap-2.5">
@@ -73,9 +75,10 @@ function L4AppsPage() {
               <Link
                 to="/l4/$id"
                 params={{ id: row.original.id }}
-                className="truncate font-medium underline-offset-4 hover:underline"
+                className="truncate rounded-sm font-medium underline-offset-4 outline-none focus-lit hover:underline"
                 title={row.original.name}
                 data-testid="l4-app-link"
+                {...rowLink}
               >
                 {row.original.name}
               </Link>
@@ -102,6 +105,7 @@ function L4AppsPage() {
       },
       {
         id: "origins",
+        hideBelow: "lg",
         header: () => m.sites_col_origins(),
         cell: ({ row }) => {
           const origins = row.original.origins;
@@ -141,6 +145,7 @@ function L4AppsPage() {
       },
       {
         id: "actions",
+        stack: "aside",
         header: () => <span className="sr-only">{m.common_actions()}</span>,
         cell: ({ row }) => (
           <div className="flex justify-end">
@@ -210,6 +215,7 @@ function L4AppsPage() {
             getRowId={(app) => app.id}
             testId="l4-apps-table"
             pinFirstColumn
+            stack
           />
         )}
       </QueryView>

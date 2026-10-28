@@ -21,11 +21,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
+import { DropdownMenuItem } from "@/components/arc/dropdown-menu/dropdown-menu";
 import { Input } from "@/components/arc/input/input";
-import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { enterDelay, Page } from "@/components/page";
+import { RowMenu } from "@/components/row-menu";
 import { SettingsCard } from "@/components/settings-card";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SiteMultiSelect } from "@/components/site-multi-select";
@@ -38,7 +39,9 @@ import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, m } from "@/lib/i18n";
 import { splitList } from "@/lib/lists";
 import { client, errorMessage, orpc } from "@/lib/orpc";
+import { rowActivationHandlers, rowClickable, rowLink, rowLinkButton } from "@/lib/row-link";
 import { toast } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 
 type EditableChannel = {
   id: string;
@@ -205,9 +208,13 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
               {list.map((channel, index) => (
                 <li
                   key={channel.id}
-                  className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5 py-3 animate-enter first:pt-0 last:pb-0 sm:grid-cols-[auto_minmax(0,1fr)_auto]"
+                  className={cn(
+                    "-mx-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 rounded-xl px-3 py-3 animate-enter",
+                    rowClickable,
+                  )}
                   style={enterDelay(index)}
                   data-testid="alert-channel"
+                  {...rowActivationHandlers}
                 >
                   <span className="grid size-9 place-items-center rounded-xl text-muted-foreground sunk-well">
                     <HugeiconsIcon
@@ -218,7 +225,17 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
                   </span>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                      <p className="min-w-0 font-medium [overflow-wrap:anywhere]">{channel.name}</p>
+                      <button
+                        type="button"
+                        className={cn(
+                          rowLinkButton,
+                          "min-w-0 font-medium [overflow-wrap:anywhere]",
+                        )}
+                        onClick={() => dialog.show(channel)}
+                        {...rowLink}
+                      >
+                        {channel.name}
+                      </button>
                       <StatusDot tone={channel.enabled ? "good" : "idle"}>
                         <span className="text-xs text-muted-foreground">
                           {channel.enabled ? m.rules_on() : m.rules_off()}
@@ -245,37 +262,28 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
                       ) : null}
                     </div>
                   </div>
-                  <div className="col-span-2 flex flex-wrap items-center gap-1.5 sm:col-span-1 sm:justify-end">
-                    <Button size="sm" variant="secondary" onClick={() => dialog.show(channel)}>
-                      {m.common_edit()}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
+                  <RowMenu
+                    testId="alert-channel-actions"
+                    remove={{
+                      title: m.common_delete(),
+                      note: channel.name,
+                      onConfirm: () => run("delete", channel.id),
+                    }}
+                  >
+                    <DropdownMenuItem
                       disabled={mutation.isPending}
                       onClick={() => void act("test", channel.id)}
+                      data-testid="alert-channel-test"
                     >
                       {m.alert_test_send()}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
                       disabled={mutation.isPending}
                       onClick={() => void act("toggle", channel.id, !channel.enabled)}
                     >
                       {channel.enabled ? m.alert_disable() : m.alert_enable()}
-                    </Button>
-                    <ConfirmDialog
-                      title={m.common_delete()}
-                      destructive
-                      trigger={
-                        <Button variant="danger" size="sm" disabled={mutation.isPending}>
-                          {m.common_delete()}
-                        </Button>
-                      }
-                      onConfirm={() => run("delete", channel.id)}
-                    />
-                  </div>
+                    </DropdownMenuItem>
+                  </RowMenu>
                 </li>
               ))}
             </ul>
@@ -346,15 +354,27 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
               {list.map((sub, index) => (
                 <li
                   key={sub.id}
-                  className="grid grid-cols-1 items-center gap-x-4 gap-y-2.5 py-3 animate-enter first:pt-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto]"
+                  className={cn(
+                    "-mx-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2.5 rounded-xl px-3 py-3 animate-enter",
+                    rowClickable,
+                  )}
                   style={enterDelay(index)}
                   data-testid="alert-subscription"
+                  {...rowActivationHandlers}
                 >
                   <div className="flex min-w-0 flex-col gap-2">
                     <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                      <p className="min-w-0 font-medium [overflow-wrap:anywhere]">
+                      <button
+                        type="button"
+                        className={cn(
+                          rowLinkButton,
+                          "min-w-0 font-medium [overflow-wrap:anywhere]",
+                        )}
+                        onClick={() => dialog.show(sub)}
+                        {...rowLink}
+                      >
                         {sub.channelName}
-                      </p>
+                      </button>
                       {sub.enabled ? null : (
                         <StatusDot tone="idle">
                           <span className="text-xs text-muted-foreground">{m.rules_off()}</span>
@@ -395,20 +415,17 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
                       ))}
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5 sm:justify-end sm:self-start">
-                    <Button size="sm" variant="secondary" onClick={() => dialog.show(sub)}>
-                      {m.common_edit()}
-                    </Button>
-                    <ConfirmDialog
-                      title={m.alert_unsubscribe()}
-                      trigger={
-                        <Button size="sm" variant="secondary">
-                          {m.alert_unsubscribe()}
-                        </Button>
-                      }
-                      onConfirm={async () => {
-                        await client.alerts.unsubscribe({ id: sub.id });
-                        await queries.invalidateQueries({ queryKey: orpc.alerts.key() });
+                  <div className="self-start">
+                    <RowMenu
+                      testId="alert-subscription-actions"
+                      remove={{
+                        label: m.alert_unsubscribe(),
+                        title: m.alert_unsubscribe(),
+                        note: sub.channelName,
+                        onConfirm: async () => {
+                          await client.alerts.unsubscribe({ id: sub.id });
+                          await queries.invalidateQueries({ queryKey: orpc.alerts.key() });
+                        },
                       }}
                     />
                   </div>

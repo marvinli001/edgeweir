@@ -101,12 +101,12 @@ export function CertificateFailuresBadge({ node }: { node: Node }) {
 }
 
 /** Used share of a node's memory, 0-100; null without a total. */
-const memoryPercent = (metrics: NonNullable<Node["metrics"]>) =>
+export const memoryPercent = (metrics: NonNullable<Node["metrics"]>) =>
   metrics.memoryTotalBytes > 0 ? (metrics.memoryUsedBytes / metrics.memoryTotalBytes) * 100 : null;
 
 /** CPU or memory use from which a node's load is a warning, and from which an error. */
-const LOAD_WARN = 75;
-const LOAD_BAD = 90;
+export const LOAD_WARN = 75;
+export const LOAD_BAD = 90;
 
 /**
  * CPU or memory use as a meter: good below 75 %, a warning from 75 % and an error from 90 %. The
@@ -363,13 +363,43 @@ function NodeClockFact({ clock }: { clock: Node["clock"] }) {
 }
 
 /**
- * Data plane health, the connection's source address, the node channel address in use, the
- * client certificate's lifetime and the clock offset.
+ * Its group and region, applied revision, agent and engine, addresses, data plane health, the
+ * connection's source address, the node channel address in use, the client certificate's
+ * lifetime and the clock offset.
  */
 function NodeFacts({ node }: { node: Node }) {
   const certLeft = node.certNotAfter ? Date.parse(node.certNotAfter) - Date.now() : null;
   return (
     <dl className="grid gap-2 sm:grid-cols-2" data-testid="node-facts">
+      <Fact label={m.nodes_col_group()} testId="node-fact-group">
+        <span>{node.nodeGroupName ?? "—"}</span>
+        {node.regionName ? <span className="text-muted-foreground">{node.regionName}</span> : null}
+      </Fact>
+      <Fact label={m.nodes_col_revision()} testId="node-fact-revision">
+        <span className="font-mono">#{node.appliedRevision}</span>
+        {node.applyState === "failed" ? (
+          <Badge size="sm" tone="danger" title={node.applyMessage}>
+            {m.nodes_apply_failed()}
+          </Badge>
+        ) : null}
+      </Fact>
+      <Fact label={m.nodes_col_agent()} testId="node-fact-agent">
+        <span className="font-mono">{node.agentVersion || "—"}</span>
+        <span className="text-muted-foreground">
+          {node.engine} {node.engineVersion}
+        </span>
+      </Fact>
+      <Fact label={m.nodes_col_ips()} testId="node-fact-ips">
+        {node.ipAddresses.length ? (
+          node.ipAddresses.map((ip) => (
+            <span key={ip} className="font-mono break-all">
+              {ip}
+            </span>
+          ))
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </Fact>
       <Fact label={m.node_data_plane()} testId="node-data-plane">
         {node.dataPlaneHealthy ? (
           <StatusDot tone="good" glow={node.online}>
@@ -814,49 +844,5 @@ function AddressEditor({
         </Button>
       </div>
     </form>
-  );
-}
-
-/**
- * A node card's load, in a well: CPU and memory as meters (the test id "node-load"), egress,
- * connections and the 1-minute load as readouts; "no metrics" before it reports them.
- */
-export function NodeVitals({ node }: { node: Node }) {
-  const metrics = node.metrics;
-  if (!metrics)
-    return (
-      <p className="rounded-xl px-3 py-2.5 text-xs text-muted-foreground sunk-well">
-        {m.node_metrics_none()}
-      </p>
-    );
-  const memory = memoryPercent(metrics);
-  const row = (label: string, value: number | null) => (
-    <>
-      <span className="text-muted-foreground">{label}</span>
-      {value === null ? <span /> : <LoadMeter value={value} label={label} />}
-      <span className="text-right tabular-nums">{value === null ? "—" : formatPercent(value)}</span>
-    </>
-  );
-  const readout = (label: string, value: string) => (
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <dt className="truncate text-[11px] text-muted-foreground">{label}</dt>
-      <dd className="truncate text-[13px] font-semibold readout">{value}</dd>
-    </div>
-  );
-  return (
-    <div className="flex flex-col gap-3 rounded-xl px-3 py-2.5 sunk-well">
-      <div
-        className="grid grid-cols-[auto_minmax(0,1fr)_3rem] items-center gap-x-2.5 gap-y-2 text-xs whitespace-nowrap"
-        data-testid="node-load"
-      >
-        {row(m.node_metrics_cpu(), metrics.cpuPercent)}
-        {row(m.node_metrics_memory(), memory)}
-      </div>
-      <dl className="grid grid-cols-3 gap-2 border-t border-edge pt-2.5">
-        {readout(m.node_metrics_egress(), formatBitRate(metrics.egressBps / 8))}
-        {readout(m.node_metrics_connections(), formatNumber(metrics.activeConnections))}
-        {readout(m.scheduling_metric_load1(), load(metrics.load1))}
-      </dl>
-    </div>
   );
 }

@@ -16,7 +16,9 @@ import { ClusterNetwork } from "@/components/clusters/network";
 import { NodeGroupsSection } from "@/components/clusters/node-groups";
 import { NodesSection } from "@/components/clusters/nodes";
 import { RevisionsSection } from "@/components/clusters/revisions";
+import { FilterBar } from "@/components/data-table";
 import { ClusterDns } from "@/components/dns/cluster-dns";
+import { OptionSelect } from "@/components/form-select";
 import { PortPoolsSection } from "@/components/l4/port-pools";
 import type { NodeDetailTab } from "@/components/node-detail";
 import { NodeUpgrades } from "@/components/node-upgrades";
@@ -34,7 +36,7 @@ export const Route = createFileRoute("/_app/clusters")({
     view: z.enum(["regions"]).optional(),
     cluster: z.string().optional(),
     enroll: z.boolean().optional(),
-    tab: z.enum(["overview", "dns", "scheduling", "network", "ports"]).optional(),
+    tab: z.enum(["overview", "releases", "dns", "scheduling", "network", "ports"]).optional(),
     node: z.string().optional(),
     /** The tab of the node's details. */
     nodeTab: z.enum(["logs"]).optional(),
@@ -89,24 +91,36 @@ function ClustersPage() {
         )
       }
     >
-      <Tabs
-        value={regions ? "regions" : "clusters"}
-        onValueChange={(value) =>
-          navigate({
-            search: (prev) => ({ ...prev, view: value === "regions" ? "regions" : undefined }),
-            replace: true,
-          })
-        }
-      >
-        <TabsList>
-          <TabsTrigger value="clusters" data-testid="clusters-view-clusters">
-            {m.clusters_view_clusters()}
-          </TabsTrigger>
-          <TabsTrigger value="regions" data-testid="clusters-view-regions">
-            {m.regions_tab_regions()}
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <FilterBar>
+        <Tabs
+          value={regions ? "regions" : "clusters"}
+          onValueChange={(value) =>
+            navigate({
+              search: (prev) => ({ ...prev, view: value === "regions" ? "regions" : undefined }),
+              replace: true,
+            })
+          }
+        >
+          <TabsList>
+            <TabsTrigger value="clusters" data-testid="clusters-view-clusters">
+              {m.clusters_view_clusters()}
+            </TabsTrigger>
+            <TabsTrigger value="regions" data-testid="clusters-view-regions">
+              {m.regions_tab_regions()}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {!regions && selected && clusters.data && clusters.data.length > 1 ? (
+          <OptionSelect
+            value={selected.id}
+            options={clusters.data.map((c) => ({ label: c.name, value: c.id }))}
+            onChange={(id) => navigate({ search: (prev) => ({ ...prev, cluster: id }) })}
+            label={m.clusters_select()}
+            className="w-full sm:w-52"
+            testId="cluster-select"
+          />
+        ) : null}
+      </FilterBar>
       {regions ? (
         <div className="flex flex-col gap-4 animate-enter">
           <RegionsPanel createOpen={createRegion} onCreateOpenChange={setCreateRegion} />
@@ -153,8 +167,9 @@ function ClustersPage() {
 }
 
 /**
- * One cluster: its summary, then its tabs. A cluster without nodes shows
- * only the node section, whose first step is adding one.
+ * One cluster: its summary, then its tabs: nodes (and node groups), releases (revisions, the
+ * canary policy, agent upgrades), DNS, scheduling, settings (network and cache zone) and port
+ * pools. A cluster without nodes shows only the node section, whose first step is adding one.
  */
 function ClusterView({
   clusters,
@@ -192,6 +207,8 @@ function ClusterView({
   const nodes = (
     <NodesSection
       cluster={selected}
+      // Under the tabs, the "nodes" tab names the table.
+      heading={selected.nodeCount === 0}
       onEnroll={onEnroll}
       detailId={search.node}
       detailTab={search.nodeTab}
@@ -216,6 +233,7 @@ function ClusterView({
               search: (prev) => ({
                 ...prev,
                 tab:
+                  value === "releases" ||
                   value === "dns" ||
                   value === "scheduling" ||
                   value === "network" ||
@@ -238,7 +256,14 @@ function ClusterView({
               className="flex-none px-2.5"
               data-testid="cluster-tab-overview"
             >
-              {m.dns_tab_overview()}
+              {m.nodes_title()}
+            </TabsTrigger>
+            <TabsTrigger
+              value="releases"
+              className="flex-none px-2.5"
+              data-testid="cluster-tab-releases"
+            >
+              {m.cluster_tab_releases()}
             </TabsTrigger>
             <TabsTrigger value="dns" className="flex-none px-2.5" data-testid="cluster-tab-dns">
               {m.dns_tab_dns()}
@@ -255,7 +280,7 @@ function ClusterView({
               className="flex-none px-2.5"
               data-testid="cluster-tab-network"
             >
-              {m.cluster_tab_network()}
+              {m.cluster_tab_settings()}
             </TabsTrigger>
             <TabsTrigger value="ports" className="flex-none px-2.5" data-testid="cluster-tab-ports">
               {m.l4_pools_title()}
@@ -264,10 +289,11 @@ function ClusterView({
           <TabsContent value="overview" className="flex flex-col gap-6 animate-enter">
             {nodes}
             <NodeGroupsSection cluster={selected} />
-            <ClusterRolloutCard key={`rollout-${selected.id}`} clusterId={selected.id} />
-            <ClusterCacheCard key={`cache-${selected.id}`} cluster={selected} />
-            <NodeUpgrades key={selected.id} clusterId={selected.id} />
+          </TabsContent>
+          <TabsContent value="releases" className="flex flex-col gap-6 animate-enter">
             <RevisionsSection cluster={selected} />
+            <ClusterRolloutCard key={`rollout-${selected.id}`} clusterId={selected.id} />
+            <NodeUpgrades key={selected.id} clusterId={selected.id} />
           </TabsContent>
           <TabsContent value="dns" className="animate-enter">
             <ClusterDns key={selected.id} clusterId={selected.id} />
@@ -275,8 +301,9 @@ function ClusterView({
           <TabsContent value="scheduling" className="animate-enter">
             <ClusterScheduling key={selected.id} clusterId={selected.id} />
           </TabsContent>
-          <TabsContent value="network" className="animate-enter">
+          <TabsContent value="network" className="flex flex-col gap-6 animate-enter">
             <ClusterNetwork key={selected.id} clusterId={selected.id} />
+            <ClusterCacheCard key={`cache-${selected.id}`} cluster={selected} />
           </TabsContent>
           <TabsContent value="ports" className="animate-enter">
             <PortPoolsSection

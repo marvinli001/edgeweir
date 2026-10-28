@@ -13,7 +13,7 @@ test("M6: start signed canary upgrade and explicitly promote healthy nodes", asy
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await signedIn(page);
-  await page.goto(`/clusters?cluster=${fixture.clusterId}`);
+  await page.goto(`/clusters?cluster=${fixture.clusterId}&tab=releases`);
   await page.getByTestId("upgrade-create").click();
   await page.getByLabel("目标版本", { exact: true }).fill(fixture.version);
   await pick(page, page.getByLabel("金丝雀节点组"), `${fixture.groupName}（1 个节点）`);

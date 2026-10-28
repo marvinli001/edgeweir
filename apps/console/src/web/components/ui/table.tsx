@@ -2,6 +2,7 @@
 
 import { cn } from "cn";
 import type * as React from "react";
+import { activateRow } from "@/lib/row-link";
 
 /*
  * Lit tables: the header is a well strip with label typography; rows stay flat (no shadows), with
@@ -41,14 +42,27 @@ function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
   );
 }
 
-function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
+/**
+ * A row whose cells hold a row link (`rowLink` from lib/row-link) opens it on a click anywhere in
+ * the row (the pointer, and the wash while its link has keyboard focus, say so); other rows ignore
+ * the handlers.
+ */
+function TableRow({ className, onClick, onAuxClick, ...props }: React.ComponentProps<"tr">) {
   return (
     <tr
       data-slot="table-row"
       className={cn(
-        "border-b transition-colors hover:bg-wash has-aria-expanded:bg-wash data-[state=selected]:bg-primary/6",
+        "border-b transition-colors hover:bg-wash has-aria-expanded:bg-wash data-[state=selected]:bg-primary/6 has-[[data-row-link]]:cursor-pointer has-[[data-row-link]:focus-visible]:bg-wash",
         className,
       )}
+      onClick={(event) => {
+        onClick?.(event);
+        activateRow(event);
+      }}
+      onAuxClick={(event) => {
+        onAuxClick?.(event);
+        activateRow(event);
+      }}
       {...props}
     />
   );

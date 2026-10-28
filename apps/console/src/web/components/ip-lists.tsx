@@ -9,11 +9,11 @@ import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { Input } from "@/components/arc/input/input";
 import { Textarea } from "@/components/arc/textarea/textarea";
-import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { IpCheckDialog } from "@/components/ip-check";
 import { enterDelay, Page } from "@/components/page";
+import { RowMenu } from "@/components/row-menu";
 import { EmptyState, QueryView } from "@/components/states";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -21,6 +21,8 @@ import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatNumber, m } from "@/lib/i18n";
 import { splitList } from "@/lib/lists";
 import { client, orpc } from "@/lib/orpc";
+import { rowActivationHandlers, rowClickable, rowLink, rowLinkButton } from "@/lib/row-link";
+import { cn } from "@/lib/utils";
 
 /** Entries a list card shows in its well; a longer list ends with the count of the rest. */
 const PREVIEW = 6;
@@ -128,10 +130,22 @@ function IpListCard({
   const shown = list.entries.length > PREVIEW ? list.entries.slice(0, PREVIEW - 1) : list.entries;
   const rest = list.entries.length - shown.length;
   return (
-    <Card size="sm" className="animate-enter" style={enterDelay(index)}>
+    <Card
+      size="sm"
+      className={cn("animate-enter", rowClickable)}
+      style={enterDelay(index)}
+      data-testid="ip-list-card"
+      {...rowActivationHandlers}
+    >
       <CardHeader>
         <CardTitle className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="font-mono text-sm break-all">{`$${list.name}`}</span>
+          <button
+            type="button"
+            className={cn(rowLinkButton, "font-mono text-sm break-all")}
+            onClick={onEdit}
+            data-testid="ip-list-open"
+            {...rowLink}
+          >{`$${list.name}`}</button>
           {list.kind === "collection" ? null : (
             <Badge size="sm" tone={list.kind === "block" ? "danger" : "neutral"}>
               {list.kind === "allow" ? m.rules_allow() : m.rules_block()}
@@ -141,19 +155,10 @@ function IpListCard({
         <p className="text-xs text-muted-foreground tabular-nums">
           {m.ip_lists_count({ count: formatNumber(list.entries.length) })}
         </p>
-        <CardAction className="flex gap-2">
-          <Button size="sm" variant="secondary" onClick={onEdit}>
-            {m.common_edit()}
-          </Button>
-          <ConfirmDialog
-            title={m.common_delete()}
-            trigger={
-              <Button size="sm" variant="danger">
-                {m.common_delete()}
-              </Button>
-            }
-            destructive
-            onConfirm={onDelete}
+        <CardAction>
+          <RowMenu
+            testId="ip-list-actions"
+            remove={{ title: m.common_delete(), note: `$${list.name}`, onConfirm: onDelete }}
           />
         </CardAction>
       </CardHeader>
