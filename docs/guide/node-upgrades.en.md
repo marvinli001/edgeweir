@@ -57,7 +57,7 @@ An upgrade restarts the node's agent. OpenResty runs under the supervisor (node 
 | --- | --- |
 | Canary | The canary group is upgrading or under observation |
 | Rollout | The remaining nodes are upgraded in batches |
-| Succeeded / Failed / Cancelled | Final result. The newest upgrade lists its nodes; earlier finished upgrades are one line each: version, outcome, and time |
+| Succeeded / Failed / Cancelled | Final result. The newest upgrade lists its nodes; earlier finished upgrades are one line each: version, outcome, and time; the arrow at the end of the line opens their nodes and errors |
 
 | Node state | Meaning |
 | --- | --- |
