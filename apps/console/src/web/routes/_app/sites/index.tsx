@@ -418,7 +418,6 @@ function SitesPage() {
               getRowId={(s) => s.id}
               testId="sites-table"
               pinFirstColumn
-              stack
             />
             <Pager
               page={page}

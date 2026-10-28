@@ -211,7 +211,6 @@ function RegionsList({ onCreate }: { onCreate: () => void }) {
               getRowId={(r) => r.id}
               testId="regions-table"
               pinFirstColumn
-              stack
             />
           </>
         )}

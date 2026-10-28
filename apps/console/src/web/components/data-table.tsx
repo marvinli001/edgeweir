@@ -115,8 +115,8 @@ function headerText(header: unknown, props: object): string | undefined {
  * is a well strip that sticks under the page header while the table fits its card; rows enter
  * staggered. A row whose cells hold a row link (`rowLink`) opens it on a click anywhere in the row
  * (TableRow). `pinFirstColumn` keeps the first column in place while the table scrolls sideways,
- * for tables whose first column names the row; `stack` turns every row into a card on phones
- * (columns say how they show there: ColumnLayout), so the table never scrolls sideways there.
+ * for tables whose first column names the row; on phones every row is a card (columns say how
+ * they show there: ColumnLayout), so the table never scrolls sideways there.
  */
 export function DataTable<T extends RowData>({
   data,
@@ -124,13 +124,14 @@ export function DataTable<T extends RowData>({
   getRowId,
   testId,
   pinFirstColumn = false,
-  stack = false,
+  stack = true,
 }: {
   data: T[];
   columns: Columns<T>;
   getRowId: (row: T) => string;
   testId?: string;
   pinFirstColumn?: boolean;
+  /** Rows as cards on phones (the default); off for tables that read as a grid there too. */
   stack?: boolean;
 }) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
@@ -144,6 +145,7 @@ export function DataTable<T extends RowData>({
   });
   const ref = React.useRef<HTMLTableElement>(null);
   useOverflowMark(ref);
+  const hasLead = columns.some((column) => column.stack === "lead");
   const pinned = (index: number) => pinFirstColumn && index === 0 && "cell-pinned";
   return (
     <div
@@ -185,8 +187,17 @@ export function DataTable<T extends RowData>({
             >
               {row.getAllCells().map((cell, cellIndex) => {
                 const def = cell.column.columnDef as ColumnLayout;
-                // A column of secondary detail is left out of the cards too.
-                const place = def.stack ?? (def.hideBelow ? "hide" : undefined);
+                // The first column leads the card unless another one does, the row's menu
+                // ("actions") ends its first line, and a column of secondary detail is left out.
+                const place =
+                  def.stack ??
+                  (cellIndex === 0 && !hasLead
+                    ? "lead"
+                    : cell.column.id === "actions"
+                      ? "end"
+                      : def.hideBelow
+                        ? "hide"
+                        : undefined);
                 return (
                   <TableCell
                     key={cell.id}

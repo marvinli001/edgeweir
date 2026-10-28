@@ -362,7 +362,6 @@ export function ServiceAccountsPanel({
             getRowId={(a) => a.id}
             testId="service-accounts-table"
             pinFirstColumn
-            stack
           />
         )}
       </QueryView>

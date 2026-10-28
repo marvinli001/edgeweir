@@ -196,7 +196,6 @@ export function NodeGroupsSection({ cluster }: { cluster: Cluster }) {
             getRowId={(g) => g.id}
             testId="node-groups-table"
             pinFirstColumn
-            stack
           />
         )}
       </QueryView>

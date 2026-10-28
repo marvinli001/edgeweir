@@ -409,7 +409,6 @@ export function NodesSection({
             getRowId={(node) => node.id}
             testId="nodes-table"
             pinFirstColumn
-            stack
           />
         )}
       </QueryView>

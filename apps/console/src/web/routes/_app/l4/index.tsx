@@ -215,7 +215,6 @@ function L4AppsPage() {
             getRowId={(app) => app.id}
             testId="l4-apps-table"
             pinFirstColumn
-            stack
           />
         )}
       </QueryView>
