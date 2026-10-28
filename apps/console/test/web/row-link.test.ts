@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rowActivation } from "../../src/web/lib/row-link";
+import { rowActivation } from "../../src/web/lib/row-activation";
 
 const click = {
   inside: true,

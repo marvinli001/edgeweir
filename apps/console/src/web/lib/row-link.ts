@@ -1,4 +1,5 @@
 import type * as React from "react";
+import { rowActivation } from "@/lib/row-activation";
 
 /**
  * Whole-row activation for list rows and cards. The row's primary control (the link to its detail
@@ -13,37 +14,6 @@ export const rowLink = { "data-row-link": "" } as const;
 /** Controls in a row that act on their own (checkbox, star, menu, copy button, other links). */
 const OWN_ACTION =
   "a[href],button,input,select,textarea,label,summary,[role=button],[role=checkbox],[role=switch],[role=menuitem],[role=combobox],[role=tab],[contenteditable=true],[data-row-ignore]";
-
-export type RowActivation = "ignore" | "open" | "open-in-new-tab";
-
-/**
- * What a click in a row does: nothing when it lands outside the row's own DOM (a menu or dialog
- * opened from it renders in a portal, and React still bubbles its clicks here), on a control of
- * its own, while text in the row is selected, with a button other than the main or middle one, or
- * when the row has no row link; a new tab for the middle button or Cmd/Ctrl when the row link is a
- * link; otherwise the row link's own click.
- */
-export function rowActivation({
-  inside,
-  onControl,
-  selecting,
-  button,
-  newTabKey,
-  linkKind,
-}: {
-  inside: boolean;
-  onControl: boolean;
-  selecting: boolean;
-  button: number;
-  newTabKey: boolean;
-  linkKind: "link" | "button" | null;
-}): RowActivation {
-  if (!inside || onControl || selecting || linkKind === null) return "ignore";
-  if (button !== 0 && button !== 1) return "ignore";
-  if (linkKind === "link" && (button === 1 || newTabKey)) return "open-in-new-tab";
-  // A middle click on a row whose details open in place has nothing to open in a tab.
-  return button === 1 ? "ignore" : "open";
-}
 
 /** onClick / onAuxClick of a row: see `rowActivation`. */
 export function activateRow(event: React.MouseEvent<HTMLElement>) {
