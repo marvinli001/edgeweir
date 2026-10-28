@@ -382,6 +382,10 @@ describe("UI behaviour", () => {
       "src/web/routes/_app/dns.tsx",
       "src/web/components/ip-lists.tsx",
       "src/web/components/clusters/nodes.tsx",
+      "src/web/components/clusters/node-groups.tsx",
+      "src/web/components/regions.tsx",
+      "src/web/components/service-accounts.tsx",
+      "src/web/routes/_app/certificates.tsx",
     ];
     const missing = lists.filter((file) => !/\{\.\.\.rowLink\}/.test(read(file)));
     expect(missing).toEqual([]);
