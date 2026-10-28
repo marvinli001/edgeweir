@@ -157,7 +157,7 @@ Nodes record the reason where they refuse; reasons match the error codes of erro
 
    The toast that follows links to the bans, the purge tasks or the CRS settings.
 
-Rows with a block reason show its badge under the request (grey for challenges, red otherwise) with the rule name (deleted rules by id). The arrow before the request opens the details: User-Agent, Referer, protocol, country, network, origin, request bytes, content type, query string, request headers and peer address; empty fields are left out.
+Rows with a block reason show its badge under the request (grey for challenges, red otherwise) with the rule name (deleted rules by id). A click anywhere in the row (or on the arrow before the request) opens the details: User-Agent, Referer, protocol, country, network, origin, request bytes, content type, query string, request headers and peer address; empty fields are left out.
 
 | Item | Behavior |
 | --- | --- |

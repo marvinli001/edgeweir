@@ -110,7 +110,7 @@ The **Probe settings** card on the **Monitoring** tab applies to every prober; p
 
 | Action | Description |
 | --- | --- |
-| Probe results | The probe's latest result for every node address and port; clicking the probe's name opens it too |
+| Probe results | The probe's latest result for every node address and port; clicking the probe's row opens it too |
 | Rename | At most 64 characters |
 | Disable / Enable | Disabling deletes its results, which no longer count; the node channel refuses it, except for certificate renewal |
 | Delete | After confirming **Delete probe {name}? Its certificate is revoked**, revokes its certificate and deletes its results; joining again needs a new token |
