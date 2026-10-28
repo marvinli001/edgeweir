@@ -1,25 +1,22 @@
 import type { Region } from "@edgeweir/contract";
-import {
-  Add01Icon,
-  Delete02Icon,
-  Location01Icon,
-  PencilEdit01Icon,
-} from "@hugeicons/core-free-icons";
+import { Add01Icon, Location01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { Input } from "@/components/arc/input/input";
-import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
+import { RowMenu } from "@/components/row-menu";
 import { EmptyState, QueryView } from "@/components/states";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { placeOf } from "@/lib/edge-map";
 import { m, timeAgo } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
+import { rowLink, rowLinkButton } from "@/lib/row-link";
+import { cn } from "@/lib/utils";
 
 const RegionMap = React.lazy(() => import("@/components/effects/region-map"));
 
@@ -100,23 +97,17 @@ function RegionDialog({
  * Delete with confirmation. A component of its own: column templates are plain
  * functions (DataTable) and hold no hooks.
  */
-function DeleteRegionAction({ region }: { region: Region }) {
+function RegionMenu({ region }: { region: Region }) {
   const remove = useMutation({
     ...orpc.regions.delete.mutationOptions(),
     meta: { invalidates: "all" },
   });
   return (
-    <ConfirmDialog
-      trigger={
-        <Button className="icon-button" size="sm" variant="ghost" aria-label={m.common_delete()}>
-          <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-        </Button>
-      }
-      destructive
-      title={m.regions_delete_confirm({ name: region.name })}
-      confirmLabel={m.common_delete()}
-      onConfirm={async () => {
-        await remove.mutateAsync({ id: region.id });
+    <RowMenu
+      testId="region-actions"
+      remove={{
+        title: m.regions_delete_confirm({ name: region.name }),
+        onConfirm: () => remove.mutateAsync({ id: region.id }),
       }}
     />
   );
@@ -148,11 +139,18 @@ function RegionsList({ onCreate }: { onCreate: () => void }) {
     () => [
       {
         id: "name",
+        stack: "lead",
         header: () => m.regions_name(),
         cell: ({ row }) => (
-          <span className="font-medium" data-testid="region-name">
+          <button
+            type="button"
+            className={cn(rowLinkButton, "font-medium")}
+            onClick={() => edit.show(row.original)}
+            data-testid="region-name"
+            {...rowLink}
+          >
             {row.original.name}
-          </span>
+          </button>
         ),
       },
       {
@@ -171,6 +169,7 @@ function RegionsList({ onCreate }: { onCreate: () => void }) {
       },
       {
         id: "created",
+        hideBelow: "lg",
         header: () => m.revisions_col_time(),
         cell: ({ row }) => (
           <span className="text-xs text-muted-foreground">{timeAgo(row.original.createdAt)}</span>
@@ -178,19 +177,11 @@ function RegionsList({ onCreate }: { onCreate: () => void }) {
       },
       {
         id: "actions",
+        stack: "end",
         header: () => <span className="sr-only">{m.common_actions()}</span>,
         cell: ({ row }) => (
-          <div className="flex justify-end gap-1">
-            <Button
-              className="icon-button"
-              size="sm"
-              variant="ghost"
-              aria-label={m.regions_edit()}
-              onClick={() => edit.show(row.original)}
-            >
-              <HugeiconsIcon icon={PencilEdit01Icon} strokeWidth={2} />
-            </Button>
-            <DeleteRegionAction region={row.original} />
+          <div className="flex justify-end">
+            <RegionMenu region={row.original} />
           </div>
         ),
       },
@@ -220,6 +211,7 @@ function RegionsList({ onCreate }: { onCreate: () => void }) {
               getRowId={(r) => r.id}
               testId="regions-table"
               pinFirstColumn
+              stack
             />
           </>
         )}

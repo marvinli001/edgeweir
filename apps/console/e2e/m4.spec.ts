@@ -97,10 +97,11 @@ test("M4: IP list and rule editing with syntax errors, ordering and mobile", asy
   // The list is in use: the refusal stays in the confirmation, which stays open.
   await page.goto("/ip-lists");
   await page
-    .locator('[data-slot="card"]')
+    .getByTestId("ip-list-card")
     .filter({ hasText: `$${name}` })
-    .getByRole("button", { name: "删除", exact: true })
+    .getByTestId("ip-list-actions")
     .click();
+  await page.getByRole("menuitem", { name: "删除", exact: true }).click();
   await page.getByTestId("confirm-action").click();
   await expect(page.getByTestId("confirm-error")).toHaveText(
     /^IP 名单正在被使用：Browser block \(.+\)$/,

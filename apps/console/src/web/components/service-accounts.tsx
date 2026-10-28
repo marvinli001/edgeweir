@@ -3,7 +3,7 @@ import {
   type ServiceAccountScope,
   serviceAccountScope,
 } from "@edgeweir/contract";
-import { Add01Icon, Delete02Icon, Key01Icon, PencilEdit01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, Key01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
@@ -17,12 +17,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/arc/dialog/dialog";
+import { DropdownMenuItem } from "@/components/arc/dropdown-menu/dropdown-menu";
 import { Input } from "@/components/arc/input/input";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
 import { enterDelay } from "@/components/page";
+import { RowMenu } from "@/components/row-menu";
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
@@ -33,6 +35,8 @@ import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { useOpenKey } from "@/hooks/use-open-key";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
+import { rowLink, rowLinkButton } from "@/lib/row-link";
+import { cn } from "@/lib/utils";
 
 const SCOPES = serviceAccountScope.options;
 
@@ -237,26 +241,23 @@ function KeysDialog({ account, open, onOpenChange }: { account: ServiceAccount }
  * Delete with confirmation. A component of its own: column templates are plain
  * functions (DataTable) and hold no hooks.
  */
-function DeleteAccountAction({ account }: { account: ServiceAccount }) {
+/** The row's menu: edit, delete with confirmation. */
+function AccountMenu({ account, onEdit }: { account: ServiceAccount; onEdit: () => void }) {
   const remove = useMutation({
     ...orpc.serviceAccounts.delete.mutationOptions(),
     meta: { invalidates: [orpc.serviceAccounts.key()], success: m.service_accounts_deleted },
   });
   return (
-    <ConfirmDialog
-      trigger={
-        <Button className="icon-button" size="sm" variant="ghost" aria-label={m.common_delete()}>
-          <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-        </Button>
-      }
-      destructive
-      title={m.service_accounts_delete_confirm({ name: account.name })}
-      note={m.service_accounts_delete_note()}
-      confirmLabel={m.common_delete()}
-      onConfirm={async () => {
-        await remove.mutateAsync({ id: account.id });
+    <RowMenu
+      testId="service-account-actions"
+      remove={{
+        title: m.service_accounts_delete_confirm({ name: account.name }),
+        note: m.service_accounts_delete_note(),
+        onConfirm: () => remove.mutateAsync({ id: account.id }),
       }}
-    />
+    >
+      <DropdownMenuItem onClick={onEdit}>{m.service_accounts_edit()}</DropdownMenuItem>
+    </RowMenu>
   );
 }
 
@@ -281,15 +282,24 @@ export function ServiceAccountsPanel({
     () => [
       {
         id: "name",
+        stack: "lead",
         header: () => m.service_accounts_name(),
         cell: ({ row }) => (
-          <span className="font-medium" data-testid="service-account-row-name">
-            {row.original.name}
-          </span>
+          // The row opens the account's keys.
+          <button
+            type="button"
+            className={cn(rowLinkButton, "font-medium")}
+            onClick={() => keys.show(row.original.id)}
+            data-testid="service-account-keys-open"
+            {...rowLink}
+          >
+            <span data-testid="service-account-row-name">{row.original.name}</span>
+          </button>
         ),
       },
       {
         id: "status",
+        stack: "aside",
         header: () => m.sites_col_status(),
         cell: ({ row }) =>
           row.original.enabled ? (
@@ -324,25 +334,8 @@ export function ServiceAccountsPanel({
         id: "actions",
         header: () => <span className="sr-only">{m.common_actions()}</span>,
         cell: ({ row }) => (
-          <div className="flex justify-end gap-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => keys.show(row.original.id)}
-              data-testid="service-account-keys-open"
-            >
-              {m.service_accounts_keys()}
-            </Button>
-            <Button
-              className="icon-button"
-              size="sm"
-              variant="ghost"
-              aria-label={m.service_accounts_edit()}
-              onClick={() => edit.show(row.original)}
-            >
-              <HugeiconsIcon icon={PencilEdit01Icon} strokeWidth={2} />
-            </Button>
-            <DeleteAccountAction account={row.original} />
+          <div className="flex justify-end">
+            <AccountMenu account={row.original} onEdit={() => edit.show(row.original)} />
           </div>
         ),
       },
@@ -369,6 +362,7 @@ export function ServiceAccountsPanel({
             getRowId={(a) => a.id}
             testId="service-accounts-table"
             pinFirstColumn
+            stack
           />
         )}
       </QueryView>

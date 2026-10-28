@@ -9,16 +9,17 @@ import { AcmeAccountsCard } from "@/components/acme-accounts";
 import { AcmeCaFields, type Eab, eabMissing, eabParams } from "@/components/acme-ca";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
+import { DropdownMenuItem } from "@/components/arc/dropdown-menu/dropdown-menu";
 import { Input } from "@/components/arc/input/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/arc/tabs/tabs";
 import { Textarea } from "@/components/arc/textarea/textarea";
-import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DnsCredentialDialog, type EditableCredential } from "@/components/dns/credential-dialog";
 import { providerLabel } from "@/components/dns/labels";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { OriginCaPanel, OriginClientPanel } from "@/components/origin-pki";
 import { enterDelay, Page } from "@/components/page";
+import { RowMenu } from "@/components/row-menu";
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
@@ -36,6 +37,8 @@ import {
 import { formatDateTime, formatList, m } from "@/lib/i18n";
 import { splitList } from "@/lib/lists";
 import { orpc } from "@/lib/orpc";
+import { rowActivationHandlers, rowClickable, rowLink, rowLinkButton } from "@/lib/row-link";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/certificates")({
   validateSearch: z.object({ tab: z.enum(["origin-ca", "origin-client"]).optional() }),
@@ -185,7 +188,7 @@ function CertificatesPanel({
               return (
                 <li
                   key={cert.id}
-                  className="grid gap-x-6 gap-y-3 px-5 py-4 animate-enter @3xl/main:grid-cols-[minmax(0,1fr)_minmax(0,24rem)_9.5rem]"
+                  className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-3 px-5 py-4 animate-enter @3xl/main:grid-cols-[minmax(0,1fr)_minmax(0,22rem)_auto]"
                   style={enterDelay(index)}
                   data-testid="certificate-card"
                 >
@@ -204,7 +207,7 @@ function CertificatesPanel({
                     ) : null}
                     <NodeFailures failures={cert.nodeFailures} />
                   </div>
-                  <div className="flex min-w-0 flex-col gap-1 text-sm">
+                  <div className="col-span-2 row-start-2 flex min-w-0 flex-col gap-1 text-sm @3xl/main:col-span-1 @3xl/main:row-start-1">
                     {cert.notAfter ? (
                       <span className="text-muted-foreground">
                         {certificateExpired(cert.notAfter)
@@ -224,27 +227,24 @@ function CertificatesPanel({
                       </span>
                     ) : null}
                   </div>
-                  <div className="flex shrink-0 gap-2 @3xl/main:justify-end">
-                    {cert.source === "acme" ? (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={renew.isPending || ["pending", "issuing"].includes(cert.status)}
-                        onClick={() => renew.mutate({ id: cert.id })}
-                      >
-                        {m.cert_renew()}
-                      </Button>
-                    ) : null}
-                    <ConfirmDialog
-                      title={m.cert_delete_confirm({ name: cert.name })}
-                      destructive
-                      trigger={
-                        <Button size="sm" variant="danger">
-                          {m.common_delete()}
-                        </Button>
-                      }
-                      onConfirm={() => remove.mutateAsync({ id: cert.id })}
-                    />
+                  <div className="col-start-2 row-start-1 flex justify-end @3xl/main:col-start-3">
+                    <RowMenu
+                      testId="certificate-actions"
+                      remove={{
+                        title: m.cert_delete_confirm({ name: cert.name }),
+                        onConfirm: () => remove.mutateAsync({ id: cert.id }),
+                      }}
+                    >
+                      {cert.source === "acme" ? (
+                        <DropdownMenuItem
+                          disabled={renew.isPending || ["pending", "issuing"].includes(cert.status)}
+                          onClick={() => renew.mutate({ id: cert.id })}
+                          data-testid="certificate-renew"
+                        >
+                          {m.cert_renew()}
+                        </DropdownMenuItem>
+                      ) : null}
+                    </RowMenu>
                   </div>
                 </li>
               );
@@ -262,27 +262,29 @@ function CertificatesPanel({
               list.map((credential) => (
                 <div
                   key={credential.id}
-                  className="flex flex-wrap items-center justify-between gap-2 border-b py-3 first:pt-0 last:border-0 last:pb-0"
+                  className={cn("-mx-3 flex items-center gap-2 rounded-xl px-3 py-3", rowClickable)}
+                  {...rowActivationHandlers}
                 >
-                  <div className="min-w-48 flex-1">
-                    <p className="font-medium break-words">{credential.name}</p>
+                  <div className="min-w-0 flex-1">
+                    <button
+                      type="button"
+                      className={cn(rowLinkButton, "font-medium break-words")}
+                      onClick={() => dialog.show(credential)}
+                      {...rowLink}
+                    >
+                      {credential.name}
+                    </button>
                     <p className="text-sm break-words text-muted-foreground">{credential.zone}</p>
                   </div>
                   <Badge size="sm" tone="neutral">
                     {providerLabel(credential.provider)}
                   </Badge>
-                  <Button variant="secondary" size="sm" onClick={() => dialog.show(credential)}>
-                    {m.common_edit()}
-                  </Button>
-                  <ConfirmDialog
-                    title={m.cert_delete_confirm({ name: credential.name })}
-                    destructive
-                    trigger={
-                      <Button variant="danger" size="sm">
-                        {m.common_delete()}
-                      </Button>
-                    }
-                    onConfirm={() => removeDns.mutateAsync({ id: credential.id })}
+                  <RowMenu
+                    testId="dns-credential-actions"
+                    remove={{
+                      title: m.cert_delete_confirm({ name: credential.name }),
+                      onConfirm: () => removeDns.mutateAsync({ id: credential.id }),
+                    }}
                   />
                 </div>
               ))
