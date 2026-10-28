@@ -151,20 +151,17 @@ await page.click('[data-testid="tab-origins"]');
 await page.waitForSelector('[data-testid="origin-topology"] .react-flow__node');
 await page.waitForTimeout(2000);
 
-// A toast: purge the site's cache.
-await page.click('[data-testid="tab-overview"]');
-await page.waitForTimeout(700);
-await page
-  .getByRole("button", { name: /刷新缓存/ })
-  .first()
-  .click();
+// A toast: purge the site's cache from the header menu.
+await page.click('[data-testid="site-actions"]');
+await page.waitForTimeout(500);
+await page.click('[data-testid="site-purge"]');
 await page.waitForTimeout(600);
 await page.getByRole("dialog").getByRole("button", { name: "确认" }).click();
 await page.waitForTimeout(1800);
 
-// Clusters: beams to the nodes.
+// Clusters: the node table.
 await page.click('[data-testid="nav-clusters"]');
-await page.waitForSelector('[data-testid="cluster-links"]');
+await page.waitForSelector('[data-testid="nodes-table"]');
 await page.waitForTimeout(2600);
 
 await cdp.send("Page.stopScreencast");

@@ -3,6 +3,7 @@ import {
   CACHE_ZONE_FEATURE,
   forbiddenOriginRange,
   type Node,
+  nodeUpgradeRecommended,
   unicastAddress,
 } from "@edgeweir/contract";
 import { Add01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
@@ -387,6 +388,23 @@ function NodeFacts({ node }: { node: Node }) {
         <span className="font-mono">{node.agentVersion || "—"}</span>
         <span className="text-muted-foreground">
           {node.engine} {node.engineVersion}
+        </span>
+        {node.agentVersion &&
+        !node.upgradeRequired &&
+        nodeUpgradeRecommended(node.supportedFeatures) ? (
+          <Badge
+            size="sm"
+            tone="neutral"
+            title={m.node_upgrade_recommended_title()}
+            data-testid="node-fact-upgrade-recommended"
+          >
+            {m.node_upgrade_recommended()}
+          </Badge>
+        ) : null}
+      </Fact>
+      <Fact label={m.nodes_col_last_seen()} testId="node-fact-last-seen">
+        <span title={node.lastSeenAt ? formatDateTime(node.lastSeenAt) : undefined}>
+          {timeAgo(node.lastSeenAt)}
         </span>
       </Fact>
       <Fact label={m.nodes_col_ips()} testId="node-fact-ips">

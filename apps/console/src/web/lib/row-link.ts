@@ -5,7 +5,7 @@ import { rowActivation } from "@/lib/row-activation";
  * Whole-row activation for list rows and cards. The row's primary control (the link to its detail
  * page, or the button that opens its details) carries `rowLink`; a click anywhere else in the row
  * clicks it. The control stays the real link or button, so keyboard focus, middle click and
- * Cmd/Ctrl+click open a new tab as on any link; the row itself gets no role. `TableRow` wires this
+ * Cmd/Ctrl/Shift+click open a new tab; the row itself gets no role. `TableRow` wires this
  * up for every table (a row without a row link stays inert); other rows call `activateRow` from
  * their onClick and onAuxClick.
  */
@@ -31,8 +31,9 @@ export function activateRow(event: React.MouseEvent<HTMLElement>) {
       !selection.isCollapsed &&
       selection.toString().trim() !== "" &&
       row.contains(selection.anchorNode),
+    repeat: event.detail > 1,
     button: event.button,
-    newTabKey: event.metaKey || event.ctrlKey,
+    newTabKey: event.metaKey || event.ctrlKey || event.shiftKey,
     linkKind: !link ? null : link instanceof HTMLAnchorElement && link.href ? "link" : "button",
   });
   if (action === "ignore" || !link) return;

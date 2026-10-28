@@ -129,6 +129,7 @@ export function NodeGroupsSection({ cluster }: { cluster: Cluster }) {
               {...rowLink}
             >
               {row.original.name}
+              <span className="sr-only">, {m.node_groups_edit()}</span>
             </button>
             {row.original.isDefault ? (
               <Badge size="sm" tone="neutral">

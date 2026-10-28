@@ -214,6 +214,16 @@ const ATTENTION_TONE: Record<AttentionKind, StatusTone> = {
   nodes_no_address: "warn",
 };
 
+/** The cluster tab an attention item opens: DNS for publications, Releases for upgrades and canaries. */
+const ATTENTION_TAB: Partial<Record<AttentionKind, "dns" | "releases">> = {
+  dns_failed: "dns",
+  dns_blocked: "dns",
+  upgrade_failed: "releases",
+  canary_rolled_back: "releases",
+  canary_awaiting_promotion: "releases",
+  canary_running: "releases",
+};
+
 function attentionText(item: AttentionItem): string {
   const revision = item.revision ?? 0;
   switch (item.kind) {
@@ -259,7 +269,7 @@ function AttentionList({ items }: { items: AttentionItem[] }) {
             to: "/clusters",
             search: {
               cluster: item.clusterId,
-              tab: item.kind === "dns_failed" || item.kind === "dns_blocked" ? "dns" : undefined,
+              tab: ATTENTION_TAB[item.kind],
             },
           }}
           trailing={
@@ -427,7 +437,7 @@ function RevisionsList({ revisions, clusters }: { revisions: Revision[]; cluster
           <ResourceRow
             key={`${r.clusterId}-${r.revision}`}
             icon={<HugeiconsIcon icon={GitCommitIcon} strokeWidth={2} />}
-            link={{ to: "/clusters", search: { cluster: r.clusterId } }}
+            link={{ to: "/clusters", search: { cluster: r.clusterId, tab: "releases" } }}
             trailing={
               <span className="shrink-0 text-xs text-muted-foreground">{timeAgo(r.createdAt)}</span>
             }

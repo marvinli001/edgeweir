@@ -884,6 +884,7 @@ function LogTable({ entries, siteId }: { entries: LogEntry[]; siteId: string }) 
                     id={detailsId}
                     className="order-9 basis-full animate-in fade-in duration-200 motion-reduce:animate-none @min-[57rem]/logs:order-none @min-[57rem]/logs:col-span-full @min-[57rem]/logs:px-4 @min-[57rem]/logs:pb-3"
                     data-testid="log-details"
+                    data-row-ignore
                   >
                     <dl className="grid gap-x-4 gap-y-1.5 rounded-xl bg-card/60 px-3 py-2.5 sm:grid-cols-[8rem_minmax(0,1fr)]">
                       {more.map((entry) => (

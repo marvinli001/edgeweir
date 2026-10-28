@@ -287,6 +287,7 @@ export function NodesSection({
             <span
               className="max-w-56 truncate font-mono text-xs text-muted-foreground"
               title={row.original.hostname}
+              data-row-ignore
             >
               {row.original.ipAddresses[0] ?? row.original.hostname}
             </span>

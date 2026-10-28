@@ -2050,7 +2050,6 @@
   "dns_record_data": "值",
   "dns_zone_file": "Zone 文件",
   "dns_download_zone": "下载",
-  "dns_open_cluster": "打开",
   "dns_cluster": "集群",
   "dns_tab_dns": "DNS",
   "dns_reason": "原因",
@@ -3152,5 +3151,6 @@
   "nodes_col_load": "负载",
   "cluster_tab_releases": "发布",
   "cluster_tab_settings": "设置",
-  "batch_more": "更多"
+  "batch_more": "更多",
+  "upgrade_nodes": "节点"
 }

@@ -5,7 +5,7 @@ import {
   releaseVersion,
   type UpgradeJob,
 } from "@edgeweir/contract";
-import { Add01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
@@ -19,6 +19,7 @@ import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot, type StatusTone } from "@/components/status-dot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
@@ -100,76 +101,103 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
       </div>
       <QueryView query={jobs} empty={<EmptyState compact title={m.upgrade_empty()} />}>
         {(list) =>
-          list.map((job, index) => (
-            <Card key={job.id} data-testid={`upgrade-${job.version}`}>
-              <CardHeader className="flex flex-row flex-wrap items-center gap-3">
-                <CardTitle className="min-w-0 flex-1 break-all font-mono">{job.version}</CardTitle>
-                <StatusDot {...stateTone(job.state)}>{stateLabel(job.state)}</StatusDot>
-                <span
-                  className="text-xs text-muted-foreground"
-                  title={formatDateTime(job.createdAt)}
-                >
-                  {timeAgo(job.createdAt)}
-                </span>
-              </CardHeader>
-              {/* Earlier jobs that have finished are a line each: version, outcome, time. */}
-              {index > 0 && !["canary", "rollout"].includes(job.state) ? null : (
-                <CardContent className="space-y-4">
-                  <UpgradeProgress job={job} />
-                  <div className="divide-y divide-edge overflow-hidden rounded-xl sunk-well">
-                    {job.deliveries.map((d) => (
-                      <Delivery
-                        key={d.id}
-                        delivery={d}
-                        version={job.version}
-                        jobState={job.state}
-                      />
-                    ))}
-                  </div>
-                  {job.state === "canary" && job.deliveries.some((d) => d.state === "held") ? (
-                    <div className="flex flex-wrap items-center gap-3">
-                      <SafetyNote>{m.upgrade_observe()}</SafetyNote>
+          list.map((job, index) => {
+            const active = ["canary", "rollout"].includes(job.state);
+            // Earlier jobs that have finished fold to a line (version, outcome, time); their nodes
+            // and errors open under it.
+            const folded = index > 0 && !active;
+            return (
+              <Card key={job.id} data-testid={`upgrade-${job.version}`}>
+                <Collapsible defaultOpen={!folded} className="contents">
+                  <CardHeader className="flex flex-row flex-wrap items-center gap-3">
+                    <CardTitle className="min-w-0 flex-1 break-all font-mono">
+                      {job.version}
+                    </CardTitle>
+                    <StatusDot {...stateTone(job.state)}>{stateLabel(job.state)}</StatusDot>
+                    <span
+                      className="text-xs text-muted-foreground"
+                      title={formatDateTime(job.createdAt)}
+                    >
+                      {timeAgo(job.createdAt)}
+                    </span>
+                    {folded ? (
+                      <CollapsibleTrigger
+                        render={
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="icon-button -my-1 group"
+                            aria-label={m.upgrade_nodes()}
+                            data-testid="upgrade-toggle"
+                          />
+                        }
+                      >
+                        <HugeiconsIcon
+                          icon={ArrowDown01Icon}
+                          strokeWidth={2}
+                          className="transition-transform group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
+                        />
+                      </CollapsibleTrigger>
+                    ) : null}
+                  </CardHeader>
+                  <CollapsibleContent render={<CardContent className="space-y-4" />}>
+                    <UpgradeProgress job={job} />
+                    <div className="divide-y divide-edge overflow-hidden rounded-xl sunk-well">
+                      {job.deliveries.map((d) => (
+                        <Delivery
+                          key={d.id}
+                          delivery={d}
+                          version={job.version}
+                          jobState={job.state}
+                        />
+                      ))}
+                    </div>
+                    {job.state === "canary" && job.deliveries.some((d) => d.state === "held") ? (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <SafetyNote>{m.upgrade_observe()}</SafetyNote>
+                        <ConfirmDialog
+                          title={m.upgrade_promote()}
+                          note={job.version}
+                          trigger={
+                            <Button
+                              disabled={!job.canPromote || promote.isPending}
+                              data-testid="upgrade-promote"
+                            >
+                              {m.upgrade_promote()}
+                            </Button>
+                          }
+                          onConfirm={async () => {
+                            await promote.mutateAsync({ id: job.id });
+                          }}
+                        />
+                      </div>
+                    ) : null}
+                    {active ? (
                       <ConfirmDialog
-                        title={m.upgrade_promote()}
-                        note={job.version}
+                        title={m.upgrade_cancel()}
+                        note={m.upgrade_cancel_note()}
+                        destructive
                         trigger={
                           <Button
-                            disabled={!job.canPromote || promote.isPending}
-                            data-testid="upgrade-promote"
+                            variant="secondary"
+                            disabled={
+                              cancel.isPending || job.deliveries.some((d) => d.state === "running")
+                            }
                           >
-                            {m.upgrade_promote()}
+                            {m.upgrade_cancel()}
                           </Button>
                         }
                         onConfirm={async () => {
-                          await promote.mutateAsync({ id: job.id });
+                          await cancel.mutateAsync({ id: job.id });
                         }}
                       />
-                    </div>
-                  ) : null}
-                  {["canary", "rollout"].includes(job.state) ? (
-                    <ConfirmDialog
-                      title={m.upgrade_cancel()}
-                      note={m.upgrade_cancel_note()}
-                      destructive
-                      trigger={
-                        <Button
-                          variant="secondary"
-                          disabled={
-                            cancel.isPending || job.deliveries.some((d) => d.state === "running")
-                          }
-                        >
-                          {m.upgrade_cancel()}
-                        </Button>
-                      }
-                      onConfirm={async () => {
-                        await cancel.mutateAsync({ id: job.id });
-                      }}
-                    />
-                  ) : null}
-                </CardContent>
-              )}
-            </Card>
-          ))
+                    ) : null}
+                  </CollapsibleContent>
+                </Collapsible>
+              </Card>
+            );
+          })
         }
       </QueryView>
       <UpgradeDialog

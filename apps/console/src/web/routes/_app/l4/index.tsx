@@ -121,7 +121,10 @@ function L4AppsPage() {
                 {origins.length}
               </Badge>
               {first ? (
-                <span className="max-w-40 truncate font-mono text-xs text-muted-foreground">
+                <span
+                  className="max-w-40 truncate font-mono text-xs text-muted-foreground"
+                  data-row-ignore
+                >
                   {originLabel(first)}
                 </span>
               ) : null}

@@ -223,6 +223,12 @@ function SitesPage() {
               >
                 {row.original.name}
               </Link>
+              {/* Phone cards have no domains line: the main domain, when the name is not it. */}
+              {row.original.domains[0] && row.original.domains[0] !== row.original.name ? (
+                <span className="hidden max-w-56 truncate font-mono text-xs @max-[42rem]/main:block">
+                  {row.original.domains[0]}
+                </span>
+              ) : null}
               <span className="text-xs text-muted-foreground">
                 {timeAgo(row.original.createdAt)}
               </span>
@@ -273,7 +279,7 @@ function SitesPage() {
         : []),
       {
         id: "domains",
-        // Phone cards: the name is the main domain already.
+        // Phone cards: the name cell shows the main domain.
         stack: "hide",
         header: () => m.sites_col_domains(),
         cell: ({ row }) => (
@@ -290,7 +296,10 @@ function SitesPage() {
         stack: "hide",
         header: () => m.sites_col_origins(),
         cell: ({ row }) => (
-          <div className="flex flex-col font-mono text-xs leading-5 text-muted-foreground">
+          <div
+            className="flex flex-col font-mono text-xs leading-5 text-muted-foreground"
+            data-row-ignore
+          >
             {row.original.origins.map((o) => (
               <span key={o.id}>
                 {o.scheme}://{o.address}:{o.port}

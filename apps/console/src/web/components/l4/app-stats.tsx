@@ -232,7 +232,7 @@ function NodeShares({ nodes }: { nodes: NodeShare[] }) {
       },
       ...TILES.map<Columns<NodeShare>[number]>((tile) => ({
         id: tile.key,
-        header: () => <span className="whitespace-nowrap">{tile.title()}</span>,
+        header: () => tile.title(),
         cell: ({ row }) => (
           <span
             className="whitespace-nowrap tabular-nums"

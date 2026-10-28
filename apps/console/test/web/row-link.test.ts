@@ -5,6 +5,7 @@ const click = {
   inside: true,
   onControl: false,
   selecting: false,
+  repeat: false,
   button: 0,
   newTabKey: false,
   linkKind: "link" as const,
@@ -19,6 +20,7 @@ describe("whole-row activation", () => {
   it("opens a link in a new tab on a middle click or with Cmd/Ctrl", () => {
     expect(rowActivation({ ...click, button: 1 })).toBe("open-in-new-tab");
     expect(rowActivation({ ...click, newTabKey: true })).toBe("open-in-new-tab");
+    expect(rowActivation({ ...click, newTabKey: true, linkKind: "button" })).toBe("open");
   });
 
   it("leaves controls of their own, selections, portals and rows without a link alone", () => {
@@ -26,6 +28,8 @@ describe("whole-row activation", () => {
     expect(rowActivation({ ...click, onControl: true })).toBe("ignore");
     // The user is selecting text in the row.
     expect(rowActivation({ ...click, selecting: true })).toBe("ignore");
+    // The second click of a double click, which selects a word.
+    expect(rowActivation({ ...click, repeat: true })).toBe("ignore");
     // A dialog or menu opened from the row (a portal: React bubbles its clicks to the row).
     expect(rowActivation({ ...click, inside: false })).toBe("ignore");
     expect(rowActivation({ ...click, linkKind: null })).toBe("ignore");

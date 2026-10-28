@@ -2220,7 +2220,6 @@
   "dns_record_data": "Value",
   "dns_zone_file": "Zone file",
   "dns_download_zone": "Download",
-  "dns_open_cluster": "Open",
   "dns_cluster": "Cluster",
   "dns_tab_dns": "DNS",
   "dns_reason": "Reason",
@@ -3358,5 +3357,6 @@
   "nodes_col_load": "Load",
   "cluster_tab_releases": "Releases",
   "cluster_tab_settings": "Settings",
-  "batch_more": "More"
+  "batch_more": "More",
+  "upgrade_nodes": "Nodes"
 }

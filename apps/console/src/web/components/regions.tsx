@@ -150,6 +150,7 @@ function RegionsList({ onCreate }: { onCreate: () => void }) {
             {...rowLink}
           >
             {row.original.name}
+            <span className="sr-only">, {m.regions_edit()}</span>
           </button>
         ),
       },
