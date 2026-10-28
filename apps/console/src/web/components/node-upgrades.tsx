@@ -98,7 +98,7 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
           {m.upgrade_create()}
         </Button>
       </div>
-      <QueryView query={jobs} empty={<EmptyState title={m.upgrade_empty()} />}>
+      <QueryView query={jobs} empty={<EmptyState compact title={m.upgrade_empty()} />}>
         {(list) =>
           list.map((job, index) => (
             <Card key={job.id} data-testid={`upgrade-${job.version}`}>

@@ -290,7 +290,7 @@ function NodeLevelsCard({ siteId }: { siteId: string }) {
         <QueryView
           query={state}
           isEmpty={(data) => data.nodes.length === 0}
-          empty={<EmptyState title={m.security_no_nodes()} />}
+          empty={<EmptyState compact title={m.security_no_nodes()} />}
         >
           {({ nodes }) => (
             <ul className="divide-y rounded-2xl sunk-well" data-testid="security-nodes">
@@ -635,7 +635,7 @@ function EventsCard({ siteId, range }: { siteId: string; range: AnalyticsRange }
         <QueryView
           query={events}
           isEmpty={(data) => data.items.length === 0}
-          empty={<EmptyState title={m.security_events_empty()} />}
+          empty={<EmptyState compact title={m.security_events_empty()} />}
         >
           {({ items, total }) => (
             <>

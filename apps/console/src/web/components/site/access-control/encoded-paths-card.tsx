@@ -64,7 +64,7 @@ function EncodedPathFields({ draft, set, blocked, invalid }: PartFields<Draft>) 
     setRows([...rows, { key: nextDraftKey(), prefix: "", encodedSlash: true, semicolon: false }]);
   if (rows.length === 0)
     return (
-      <EmptyState title={m.access_encoded_empty()}>
+      <EmptyState compact title={m.access_encoded_empty()}>
         <Button
           type="button"
           disabled={blocked}

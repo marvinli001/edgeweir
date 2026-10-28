@@ -88,7 +88,7 @@ export function UsageGuardCard({ site }: { site: Site }) {
         isEmpty={(data) => data.settings === null}
         empty={
           <CardContent>
-            <EmptyState title={m.usage_guard_empty()} icon={Shield01Icon} art="checkpoint">
+            <EmptyState compact title={m.usage_guard_empty()} icon={Shield01Icon} art="checkpoint">
               <Button onClick={() => setEditing(true)} data-testid="usage-guard-setup">
                 {m.usage_guard_setup()}
               </Button>

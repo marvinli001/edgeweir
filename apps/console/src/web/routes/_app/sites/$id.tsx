@@ -9,9 +9,11 @@ import {
   Add01Icon,
   ArrowLeft01Icon,
   Copy01Icon,
+  DatabaseSync01Icon,
   Delete02Icon,
   Edit02Icon,
   Layers01Icon,
+  MoreHorizontalIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -21,9 +23,16 @@ import * as z from "zod";
 import { AnalyticsSection } from "@/components/analytics/analytics-section";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/arc/dropdown-menu/dropdown-menu";
 import { Input } from "@/components/arc/input/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/arc/tabs/tabs";
-import { ConfirmDialog } from "@/components/confirm-dialog";
+import { ConfirmDialog, ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { LinkButton } from "@/components/link-button";
 import { Page } from "@/components/page";
@@ -119,6 +128,7 @@ function SiteDetailPage() {
               onToggle={() => void stars.toggle(id)}
             />
           ) : null}
+          {site.data ? <SiteMenu site={site.data} /> : null}
           <LinkButton to="/sites" size="sm" variant="ghost" data-testid="back-link">
             <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
             {m.site_back()}
@@ -281,23 +291,112 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function OverviewTab({ site }: { site: Site }) {
-  const setEnabled = useMutation({
-    ...orpc.sites.setEnabled.mutationOptions(),
-    meta: { invalidates: [orpc.sites.key()] },
-  });
+/**
+ * The site's actions in the page header (every tab): copy its settings to other sites, clone it,
+ * purge its cache, delete it.
+ */
+function SiteMenu({ site }: { site: Site }) {
   const navigate = Route.useNavigate();
   const queryClient = useQueryClient();
-  // A draft: enabling the site or a refetch keeps a name being edited.
-  const { draft: name, setDraft: setName } = useDraft(site.name);
-  const { save, error, pending } = useSaveSite(site.id);
   const purge = useMutation({
     ...orpc.sites.purgeAll.mutationOptions(),
     meta: { invalidates: [orpc.cacheTasks.key()] },
   });
   const remove = useMutation(orpc.sites.delete.mutationOptions());
-  const [copying, setCopying] = React.useState(false);
-  const [cloning, setCloning] = React.useState(false);
+  const [open, setOpen] = React.useState<"copy" | "clone" | "purge" | "delete" | null>(null);
+  const close = (next: boolean) => {
+    if (!next) setOpen(null);
+  };
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              className="icon-button"
+              size="sm"
+              variant="ghost"
+              aria-label={m.common_actions()}
+              data-testid="site-actions"
+            />
+          }
+        >
+          <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => setOpen("copy")} data-testid="site-copy">
+            <HugeiconsIcon icon={Copy01Icon} strokeWidth={2} />
+            {m.copy_title()}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setOpen("clone")} data-testid="site-clone">
+            <HugeiconsIcon icon={Layers01Icon} strokeWidth={2} />
+            {m.clone_action()}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setOpen("purge")} data-testid="site-purge">
+            <HugeiconsIcon icon={DatabaseSync01Icon} strokeWidth={2} />
+            {m.sites_purge()}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            variant="destructive"
+            onClick={() => setOpen("delete")}
+            data-testid="site-delete"
+          >
+            <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+            {m.common_delete()}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {open === "copy" ? (
+        <CopySettingsDialog open onOpenChange={close} source={{ id: site.id, name: site.name }} />
+      ) : null}
+      {open === "clone" ? <CloneSiteDialog open onOpenChange={close} site={site} /> : null}
+      <ControlledConfirmDialog
+        open={open === "purge"}
+        onOpenChange={close}
+        destructive={false}
+        title={m.sites_purge()}
+        note={site.domains.map(displaySiteDomain).join(", ")}
+        onConfirm={async () => {
+          await purge.mutateAsync({ id: site.id });
+          toast.success(m.sites_purged(), {
+            action: {
+              label: m.purge_view_tasks(),
+              onClick: () => void navigate({ to: "/purge", search: { site: site.id } }),
+            },
+          });
+        }}
+      />
+      <ControlledConfirmDialog
+        open={open === "delete"}
+        onOpenChange={close}
+        title={m.sites_delete_confirm({ name: site.name })}
+        confirmLabel={m.common_delete()}
+        onConfirm={async () => {
+          const result = await remove.mutateAsync({ id: site.id });
+          toast.success(m.sites_deleted({ revision: result.revision.revision }));
+          // Leave first and drop what was read about the site: refreshing its queries while
+          // they are on screen fails (404, retried for seconds) and flashes an error.
+          await navigate({ to: "/sites" });
+          queryClient.removeQueries({
+            predicate: (query) => JSON.stringify(query.queryKey).includes(site.id),
+          });
+          await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
+        }}
+      />
+    </>
+  );
+}
+
+function OverviewTab({ site }: { site: Site }) {
+  const setEnabled = useMutation({
+    ...orpc.sites.setEnabled.mutationOptions(),
+    meta: { invalidates: [orpc.sites.key()] },
+  });
+  const queryClient = useQueryClient();
+  // A draft: enabling the site or a refetch keeps a name being edited.
+  const { draft: name, setDraft: setName } = useDraft(site.name);
+  const { save, error, pending } = useSaveSite(site.id);
 
   return (
     <div className="grid items-start gap-4 @4xl/main:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
@@ -390,63 +489,7 @@ function OverviewTab({ site }: { site: Site }) {
           </form>
         </Card>
         <UsageGuardCard site={site} />
-        <Card>
-          <CardContent className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={() => setCopying(true)} data-testid="site-copy">
-              <HugeiconsIcon icon={Copy01Icon} strokeWidth={2} />
-              {m.copy_title()}
-            </Button>
-            <Button variant="secondary" onClick={() => setCloning(true)} data-testid="site-clone">
-              <HugeiconsIcon icon={Layers01Icon} strokeWidth={2} />
-              {m.clone_action()}
-            </Button>
-            <ConfirmDialog
-              trigger={<Button variant="secondary">{m.sites_purge()}</Button>}
-              title={m.sites_purge()}
-              note={site.domains.map(displaySiteDomain).join(", ")}
-              onConfirm={async () => {
-                await purge.mutateAsync({ id: site.id });
-                toast.success(m.sites_purged(), {
-                  action: {
-                    label: m.purge_view_tasks(),
-                    onClick: () => void navigate({ to: "/purge", search: { site: site.id } }),
-                  },
-                });
-              }}
-            />
-            <ConfirmDialog
-              trigger={
-                <Button variant="danger" data-testid="site-delete">
-                  <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-                  {m.common_delete()}
-                </Button>
-              }
-              destructive
-              title={m.sites_delete_confirm({ name: site.name })}
-              confirmLabel={m.common_delete()}
-              onConfirm={async () => {
-                const result = await remove.mutateAsync({ id: site.id });
-                toast.success(m.sites_deleted({ revision: result.revision.revision }));
-                // Leave first and drop what was read about the site: refreshing its queries while
-                // they are on screen fails (404, retried for seconds) and flashes an error.
-                await navigate({ to: "/sites" });
-                queryClient.removeQueries({
-                  predicate: (query) => JSON.stringify(query.queryKey).includes(site.id),
-                });
-                await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
-              }}
-            />
-          </CardContent>
-        </Card>
       </div>
-      {copying ? (
-        <CopySettingsDialog
-          open
-          onOpenChange={setCopying}
-          source={{ id: site.id, name: site.name }}
-        />
-      ) : null}
-      {cloning ? <CloneSiteDialog open onOpenChange={setCloning} site={site} /> : null}
     </div>
   );
 }

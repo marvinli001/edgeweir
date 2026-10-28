@@ -38,15 +38,31 @@ export function EmptyState({
   title,
   icon,
   art = "route",
+  compact = false,
   children,
 }: {
   title: string;
   /** Without one, an inbox that settles when the state is hovered. */
   icon?: typeof InboxIcon;
   art?: EmptyArtKind;
+  /**
+   * One dashed line, the title and its action side by side, without art: an empty section inside
+   * a card. Without it (a page's or a tab's list) the art, the title and the action stack.
+   */
+  compact?: boolean;
   children?: React.ReactNode;
 }) {
   const { ref, trigger } = useIconPlay();
+  if (compact)
+    return (
+      <div
+        className="flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-dashed border-edge px-4 py-2.5 text-sm text-muted-foreground animate-enter"
+        data-slot="empty"
+      >
+        <span>{title}</span>
+        {children}
+      </div>
+    );
   return (
     <Empty
       className="border border-dashed border-edge bg-linear-to-b from-well/70 to-transparent animate-enter"

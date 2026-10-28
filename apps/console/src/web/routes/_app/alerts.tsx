@@ -202,7 +202,7 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
         </CardAction>
       </CardHeader>
       <CardContent>
-        <QueryView query={channels} empty={<EmptyState title={m.alert_no_channels()} />}>
+        <QueryView query={channels} empty={<EmptyState compact title={m.alert_no_channels()} />}>
           {(list) => (
             <ul className="divide-y">
               {list.map((channel, index) => (
@@ -345,6 +345,7 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
           query={subscriptions}
           empty={
             <EmptyState
+              compact
               title={channels.length ? m.alert_no_subscriptions() : m.alert_no_available_channels()}
             />
           }
@@ -462,7 +463,7 @@ function EventsCard() {
         <CardTitle>{m.alert_recent_events()}</CardTitle>
       </CardHeader>
       <CardContent>
-        <QueryView query={events} empty={<EmptyState title={m.alert_no_events()} />}>
+        <QueryView query={events} empty={<EmptyState compact title={m.alert_no_events()} />}>
           {(list) => (
             <ul className="divide-y">
               {list.map((event, index) => {

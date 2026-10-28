@@ -63,7 +63,7 @@ export function OriginQualityCard({
           isEmpty={(data) => data.items.every((item) => item.requests === 0)}
           empty={
             <div className="flex flex-col gap-3">
-              <EmptyState title={m.origin_quality_empty()} />
+              <EmptyState compact title={m.origin_quality_empty()} />
               {quality.data && quality.data.unsupportedNodes > 0 ? (
                 <SafetyNote data-testid="origin-quality-partial">
                   {m.origin_quality_partial()}

@@ -172,7 +172,7 @@ function KeysDialog({ account, open, onOpenChange }: { account: ServiceAccount }
           </Field>
         ) : null}
         {account.keys.length === 0 ? (
-          <EmptyState icon={Key01Icon} title={m.service_accounts_no_keys()} />
+          <EmptyState compact icon={Key01Icon} title={m.service_accounts_no_keys()} />
         ) : (
           <ul
             className="divide-y divide-edge rounded-2xl text-sm sunk-well"

@@ -43,7 +43,7 @@ function SiteListsFields({ draft, set, blocked }: PartFields<SiteListSettings>) 
     <QueryView
       query={lists}
       empty={
-        <EmptyState icon={ListViewIcon} art="checkpoint" title={m.ip_lists_empty()}>
+        <EmptyState compact icon={ListViewIcon} art="checkpoint" title={m.ip_lists_empty()}>
           <LinkButton to="/ip-lists" data-testid="site-lists-create">
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             {m.ip_lists_create()}

@@ -573,7 +573,7 @@ export function ProbeResults({
   return (
     <QueryView
       query={results}
-      empty={<EmptyState icon={Radar01Icon} title={m.probes_results_empty()} />}
+      empty={<EmptyState compact icon={Radar01Icon} title={m.probes_results_empty()} />}
     >
       {(list) => (
         <ResultsTable

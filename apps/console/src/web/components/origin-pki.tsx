@@ -586,7 +586,7 @@ export function OriginClientPanel() {
               </CardHeader>
               <CardContent>
                 {certificates.length === 0 ? (
-                  <EmptyState title={m.origin_client_certificates_empty()} />
+                  <EmptyState compact title={m.origin_client_certificates_empty()} />
                 ) : (
                   <ul className="flex flex-col divide-y" data-testid="origin-client-certificates">
                     {certificates.map((cert, index) => (

@@ -351,7 +351,7 @@ function AuthRulesForm({
             </SafetyNote>
           )}
           {rows.length === 0 ? (
-            <EmptyState title={m.auth_empty()}>
+            <EmptyState compact title={m.auth_empty()}>
               <Button
                 type="button"
                 disabled={blocked}

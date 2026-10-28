@@ -76,7 +76,12 @@ export function AutoMitigationCard({ siteId, siteName }: { siteId: string; siteN
         isEmpty={(value) => value.settings === null}
         empty={
           <CardContent>
-            <EmptyState title={m.attacks_mitigation_empty()} icon={Shield01Icon} art="checkpoint">
+            <EmptyState
+              compact
+              title={m.attacks_mitigation_empty()}
+              icon={Shield01Icon}
+              art="checkpoint"
+            >
               <Button onClick={() => setEditing(true)} data-testid="auto-mitigation-setup">
                 {m.attacks_mitigation_setup()}
               </Button>

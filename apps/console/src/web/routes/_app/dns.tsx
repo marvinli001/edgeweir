@@ -69,7 +69,7 @@ function DnsPage() {
                 </CardHeader>
                 <CardContent>
                   {!providerList.items.length ? (
-                    <EmptyState title={m.dns_accounts_empty()}>
+                    <EmptyState compact title={m.dns_accounts_empty()}>
                       <Button onClick={() => credential.show("new")}>
                         <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
                         {m.dns_add_account()}

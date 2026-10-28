@@ -74,7 +74,7 @@ function UserAgentFields({ draft, set, blocked, invalid }: PartFields<Draft>) {
   };
   if (rows.length === 0)
     return (
-      <EmptyState title={m.access_ua_empty()}>
+      <EmptyState compact title={m.access_ua_empty()}>
         <Button type="button" disabled={blocked} onClick={add} data-testid="ua-add-empty">
           <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
           {m.access_ua_add()}

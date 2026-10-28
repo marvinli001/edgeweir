@@ -246,7 +246,7 @@ function ApiKeysCard() {
         <QueryView
           query={keys}
           loadingClassName="min-h-24"
-          empty={<EmptyState title={m.settings_api_keys_empty()} />}
+          empty={<EmptyState compact title={m.settings_api_keys_empty()} />}
         >
           {(list) => (
             <ul

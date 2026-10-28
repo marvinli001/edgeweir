@@ -331,7 +331,7 @@ function PasskeysCard() {
         <QueryView
           query={passkeys}
           loadingClassName="min-h-24"
-          empty={<EmptyState icon={FingerPrintIcon} title={m.security_passkeys_empty()} />}
+          empty={<EmptyState compact icon={FingerPrintIcon} title={m.security_passkeys_empty()} />}
         >
           {(list) => (
             <ul

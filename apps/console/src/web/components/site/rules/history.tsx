@@ -279,7 +279,10 @@ export function RuleHistoryButton({ ruleId }: { ruleId: string }) {
               {m.rules_history_title({ name: current.name })}
             </DialogTitle>
           </DialogHeader>
-          <QueryView query={versions} empty={<EmptyState title={m.rules_history_empty()} />}>
+          <QueryView
+            query={versions}
+            empty={<EmptyState compact title={m.rules_history_empty()} />}
+          >
             {(list) => <VersionList versions={list} current={current} />}
           </QueryView>
         </DialogContent>
@@ -321,7 +324,7 @@ export function DeletedRules() {
             <DialogTitle>{m.rules_deleted()}</DialogTitle>
             {history.dirty ? <SafetyNote>{m.rules_restore_discards()}</SafetyNote> : null}
           </DialogHeader>
-          <QueryView query={deleted} empty={<EmptyState title={m.rules_deleted_empty()} />}>
+          <QueryView query={deleted} empty={<EmptyState compact title={m.rules_deleted_empty()} />}>
             {(list) => (
               <ul className="-mx-6 max-h-[60vh] overflow-y-auto border-t border-edge">
                 {list.map((version) => (

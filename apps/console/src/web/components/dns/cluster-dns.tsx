@@ -517,7 +517,7 @@ function RecordTable({
   if (!records.length)
     return (
       <CardContent className="pb-(--card-spacing)">
-        <EmptyState title={m.dns_no_records()} />
+        <EmptyState compact title={m.dns_no_records()} />
       </CardContent>
     );
   return (
@@ -688,7 +688,7 @@ function Revisions({ clusterId }: { clusterId: string }) {
         frame={RevisionsFrame}
         empty={
           <RevisionsFrame>
-            <EmptyState title={m.dns_no_revisions()} />
+            <EmptyState compact title={m.dns_no_revisions()} />
           </RevisionsFrame>
         }
       >

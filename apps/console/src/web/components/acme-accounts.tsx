@@ -26,7 +26,7 @@ export function AcmeAccountsCard() {
         <CardTitle>{m.cert_accounts_title()}</CardTitle>
       </CardHeader>
       <CardContent>
-        <QueryView query={accounts} empty={<EmptyState title={m.cert_accounts_empty()} />}>
+        <QueryView query={accounts} empty={<EmptyState compact title={m.cert_accounts_empty()} />}>
           {(list) =>
             list.map((account, index) => (
               <div

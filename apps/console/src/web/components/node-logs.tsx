@@ -169,13 +169,13 @@ export function NodeLogs({ node }: { node: Node }) {
           !supported && !filtered ? (
             <EmptyState art="checkpoint" title={m.node_logs_unsupported()} />
           ) : filtered ? (
-            <EmptyState title={m.node_logs_empty_filtered()}>
+            <EmptyState compact title={m.node_logs_empty_filtered()}>
               <Button size="sm" variant="secondary" onClick={clear} data-testid="node-logs-clear">
                 {m.node_logs_clear()}
               </Button>
             </EmptyState>
           ) : (
-            <EmptyState title={m.node_logs_empty()} />
+            <EmptyState compact title={m.node_logs_empty()} />
           )
         }
       >

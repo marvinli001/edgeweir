@@ -253,6 +253,7 @@ test("G16: the site goes", async ({ page }) => {
   await signedIn(page);
   await page.goto(`/sites/${siteId}`);
   await expect(page.getByTestId("page-title")).toHaveText(SITE);
+  await page.getByTestId("site-actions").click();
   await page.getByTestId("site-delete").click();
   await page.getByTestId("confirm-action").click();
   await expect(page).toHaveURL(/\/sites$/);

@@ -403,7 +403,7 @@ function DebugLogViewer({
                 </InputGroup>
               </div>
               {entries.length === 0 ? (
-                <EmptyState title={m.node_debug_empty()} />
+                <EmptyState compact title={m.node_debug_empty()} />
               ) : (
                 <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
                   <ol

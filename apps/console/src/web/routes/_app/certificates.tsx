@@ -257,7 +257,7 @@ function CertificatesPanel({
           <CardTitle>{m.cert_dns_title()}</CardTitle>
         </CardHeader>
         <CardContent>
-          <QueryView query={credentials} empty={<EmptyState title={m.cert_dns_empty()} />}>
+          <QueryView query={credentials} empty={<EmptyState compact title={m.cert_dns_empty()} />}>
             {(list) =>
               list.map((credential) => (
                 <div

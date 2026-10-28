@@ -119,6 +119,7 @@ test("G17: the copy dialog previews each target and copies to the others when on
   const pageErrors = errors(page);
   await signedIn(page);
   await page.goto(`/sites/${state?.src}`);
+  await page.getByTestId("site-actions").click();
   await page.getByTestId("site-copy").click();
   const pickTarget = async (name: string) => {
     await page.getByRole("searchbox", { name: "目标网站" }).fill(name);
@@ -144,6 +145,7 @@ test("G17: the copy dialog previews each target and copies to the others when on
   await page.getByTestId("copy-done").click();
 
   // The cache rules alone reach bad.
+  await page.getByTestId("site-actions").click();
   await page.getByTestId("site-copy").click();
   await pickTarget("g17-bad");
   await page.getByTestId("copy-part-cacheRules").click();
@@ -163,6 +165,7 @@ test("G17: a clone opens with the source's tags; batch actions turn sites off an
   await signedIn(page);
   const domain = `g17-ui-${RUN}.test`;
   await page.goto(`/sites/${state?.src}`);
+  await page.getByTestId("site-actions").click();
   await page.getByTestId("site-clone").click();
   await page.getByTestId("clone-domains").fill(domain);
   await expect(page.getByTestId("clone-tags").getByTestId("tag-chip")).toHaveText(["g17-source"]);

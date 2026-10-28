@@ -123,7 +123,7 @@ export function RevisionsSection({ cluster }: { cluster: Cluster }) {
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-sm font-medium">{m.revisions_title()}</h2>
-      <QueryView query={revisions} empty={<EmptyState title={m.revisions_empty()} />}>
+      <QueryView query={revisions} empty={<EmptyState compact title={m.revisions_empty()} />}>
         {(list) => (
           <DataTable
             data={list.slice(0, 20)}
