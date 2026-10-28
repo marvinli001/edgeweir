@@ -92,8 +92,10 @@ export function createAuth(opts: {
         rateLimit: schema.rateLimit,
       },
     }),
-    // Counters live in PostgreSQL so every instance shares them and a restart
-    // does not reset them.
+    // The /api/auth endpoints' limits (sign-in, second factor): counters live in
+    // PostgreSQL so every instance shares them and a restart does not reset
+    // them. AccessKey request limits are not these: the console counts them in
+    // its own process (AccessKeyRateLimiter, services/access-keys.ts).
     rateLimit: { enabled: opts.rateLimit, storage: "database", modelName: "rateLimit" },
     // Audit entries for two-factor changes; the rest comes from authAuditPlugin.
     databaseHooks: authAuditDatabaseHooks(opts.db),
@@ -115,14 +117,16 @@ export function createAuth(opts: {
       admin({ defaultRole: "user", adminRoles: ["admin"] }),
       twoFactor({ issuer: "Edgeweir" }),
       passkey({ rpID: url.hostname, rpName: "Edgeweir", origin: url.origin }),
+      // Creates AccessKeys only (`auth.api.createApiKey`). The console verifies them itself,
+      // with one lookup and an in-process request limit (authenticateAccessKey,
+      // services/access-keys.ts): the plugin wrote the key's row twice per request, so
+      // requests with one key waited for each other's commits. Its sessions for API keys stay
+      // off, and so does its verification.
       apiKey({
-        apiKeyHeaders: [API_KEY_HEADER],
         defaultPrefix: "ewk_",
         maximumNameLength: 64,
         permissions: { defaultPermissions: { edgeweir: ["read", "write"] } },
-        // API keys act as the account they belong to, so /api/v1 passes the same checks as /rpc.
-        enableSessionForAPIKeys: true,
-        // Defaults for a new key; each key keeps its own limit (services/access-keys.ts).
+        // Defaults for a new key's columns; each key keeps its own limit (services/access-keys.ts).
         rateLimit: {
           enabled: true,
           timeWindow: 60_000,

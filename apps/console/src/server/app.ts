@@ -25,6 +25,7 @@ import { normalizeIp, resolveClientIp, withClientIp } from "./lib/client-ip";
 import type { AppContext } from "./lib/context";
 import { withIdempotency } from "./lib/idempotency";
 import { type RequestContext, router } from "./rpc/router";
+import { findAccessKey } from "./services/access-keys";
 import { isDemoEnabled } from "./services/demo";
 import { loginAllowed, logLoginRefusal } from "./services/login-allow-list";
 import { nodeChannelWebSocketOpen } from "./services/node-channel-url";
@@ -174,6 +175,8 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
     try {
       if (key && isServiceAccountKey(key))
         return (await authenticateServiceAccountKey(ctx.db, key)) !== null;
+      // Not counted against the key's limit: `os` counts the request.
+      if (key) return (await findAccessKey(ctx.db, key, new Date())) !== null;
       const session = await ctx.auth.api.getSession({ headers });
       if (!session) return false;
       // A session outside the login allow list gets no further than `authed`.

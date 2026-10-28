@@ -15,6 +15,7 @@ import { assertMasterKey } from "./lib/master-key";
 import { setHeartbeatSeconds } from "./lib/node-online";
 import { CLOSE_GRACE_MS, type NodeChannel, startNodeChannel } from "./node-channel/server";
 import { loadOrCreateNodeCa } from "./pki/store";
+import { AccessKeyRateLimiter } from "./services/access-keys";
 import { resealEnvelopes } from "./services/envelope-rotation";
 import { upgradeLegacyEnvelopes } from "./services/envelope-upgrade";
 import { nodeChannelUrl } from "./services/node-channel-url";
@@ -178,7 +179,17 @@ export async function bootstrap(): Promise<Running> {
     publicUrl: env.EDGEWEIR_PUBLIC_URL,
   });
   const events = new ConfigEventBus(env.DATABASE_URL, log.child({ component: "events" }));
-  const ctx: AppContext = { env, db, pool, auth, masterKey, nodeCa, events, log };
+  const ctx: AppContext = {
+    env,
+    db,
+    pool,
+    auth,
+    masterKey,
+    nodeCa,
+    events,
+    log,
+    accessKeyLimits: new AccessKeyRateLimiter(),
+  };
 
   let nodeChannel: NodeChannel | undefined;
   let boss: PgBoss | undefined;

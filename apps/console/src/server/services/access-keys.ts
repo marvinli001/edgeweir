@@ -1,9 +1,20 @@
+import { createHash } from "node:crypto";
 import { ACCESS_KEY_MAX_REQUESTS_PER_MINUTE } from "@edgeweir/contract";
-import { schema } from "@edgeweir/db";
-import { and, eq } from "drizzle-orm";
+import { type Database, schema } from "@edgeweir/db";
+import { and, eq, isNull, lt, or } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
+
+/** AccessKeys as better-auth's apiKey plugin generates them: defaultPrefix and 64 letters. */
+const ACCESS_KEY_FORMAT = /^ewk_[A-Za-z]{64}$/;
+
+/** last_request (the key's last use) is written at most this often per key. */
+const LAST_USED_RESOLUTION_MS = 60_000;
+
+/** The stored form of a key: better-auth's defaultKeyHasher, SHA-256 in unpadded base64url. */
+export const hashAccessKey = (key: string) => createHash("sha256").update(key).digest("base64url");
+
 export function keyScope(permissions: string | null): "read" | "write" {
   // Null is the pre-M6 full-access format; malformed non-null permissions fail closed.
   if (permissions === null) return "write";
@@ -15,15 +26,131 @@ export function keyScope(permissions: string | null): "read" | "write" {
   }
 }
 type ApiKeyRow = typeof schema.apikey.$inferSelect;
+type UserRow = typeof schema.user.$inferSelect;
 
-/** better-auth's apiKey plugin counts each key's requests in a window of this length. */
+/** An /api/v1 request's AccessKey and the account it acts as. */
+export interface AccessKeyPrincipal {
+  key: ApiKeyRow;
+  user: UserRow;
+}
+
+interface RateWindow {
+  start: number;
+  count: number;
+  max: number;
+  length: number;
+}
+
+/**
+ * Requests per AccessKey in fixed windows, kept in this process: a window starts with the key's
+ * first request after the previous window ended and allows the key's maximum, so traffic under
+ * the limit is never refused however long it lasts. A restart starts every count over.
+ */
+export class AccessKeyRateLimiter {
+  private readonly windows = new Map<string, RateWindow>();
+  private swept = 0;
+
+  constructor(readonly now: () => number = Date.now) {}
+
+  /** Counts a request of the key; over its maximum: the milliseconds until its window ends. */
+  take(id: string, max: number, length: number): number | null {
+    const now = this.now();
+    let window = this.windows.get(id);
+    // A changed limit starts a fresh count.
+    if (
+      !window ||
+      now - window.start >= window.length ||
+      window.max !== max ||
+      window.length !== length
+    ) {
+      this.sweep(now);
+      window = { start: now, count: 0, max, length };
+      this.windows.set(id, window);
+    }
+    if (window.count >= max) return window.start + window.length - now;
+    window.count++;
+    return null;
+  }
+
+  /** Starts the key's count over (its limit changed). */
+  reset(id: string) {
+    this.windows.delete(id);
+  }
+
+  /** Drops ended windows, at most once a minute. */
+  private sweep(now: number) {
+    if (now - this.swept < 60_000) return;
+    this.swept = now;
+    for (const [id, window] of this.windows)
+      if (now - window.start >= window.length) this.windows.delete(id);
+  }
+}
+
+/**
+ * The enabled, unexpired AccessKey a request carries and its account, or null. Counts nothing:
+ * authenticateAccessKey does.
+ */
+export async function findAccessKey(
+  db: Database,
+  key: string,
+  now: Date,
+): Promise<AccessKeyPrincipal | null> {
+  if (!ACCESS_KEY_FORMAT.test(key)) return null;
+  const [row] = await db
+    .select({ key: schema.apikey, user: schema.user })
+    .from(schema.apikey)
+    .innerJoin(schema.user, eq(schema.user.id, schema.apikey.referenceId))
+    .where(eq(schema.apikey.key, hashAccessKey(key)));
+  if (row?.key.enabled !== true) return null;
+  if (row.key.expiresAt && row.key.expiresAt <= now) return null;
+  // Usage quotas (remaining, refills) are never set by Edgeweir: such a key fails closed.
+  if (row.key.remaining !== null) return null;
+  return row;
+}
+
+/**
+ * Authenticates an /api/v1 request's AccessKey: one lookup, the key's request limit (429
+ * API_KEY_RATE_LIMITED over it) and its last use, written at most once per
+ * LAST_USED_RESOLUTION_MS. Null: unknown, revoked or expired key, or no such account.
+ */
+export async function authenticateAccessKey(
+  app: AppContext,
+  key: string,
+): Promise<AccessKeyPrincipal | null> {
+  const limiter = app.accessKeyLimits;
+  const now = new Date(limiter.now());
+  const found = await findAccessKey(app.db, key, now);
+  if (!found) return null;
+  const row = found.key;
+  if (row.rateLimitEnabled !== false && row.rateLimitMax !== null && row.rateLimitTimeWindow) {
+    const wait = limiter.take(row.id, row.rateLimitMax, row.rateLimitTimeWindow);
+    if (wait !== null)
+      fail("API_KEY_RATE_LIMITED", "too many requests with this access key", {
+        retryAfterSeconds: Math.max(1, Math.ceil(wait / 1000)),
+      });
+  }
+  const stale = new Date(now.getTime() - LAST_USED_RESOLUTION_MS);
+  if (!row.lastRequest || row.lastRequest < stale)
+    await app.db
+      .update(schema.apikey)
+      .set({ lastRequest: now })
+      .where(
+        and(
+          eq(schema.apikey.id, row.id),
+          or(isNull(schema.apikey.lastRequest), lt(schema.apikey.lastRequest, stale)),
+        ),
+      );
+  return found;
+}
+
+/** A new key's request limit counts its requests in windows of this length. */
 const ACCESS_KEY_RATE_LIMIT_WINDOW_MS = 60_000;
 
 /** The key's request limit per minute from the plugin's columns; null: unlimited. */
 function requestsPerMinute(
   row: Pick<ApiKeyRow, "rateLimitEnabled" | "rateLimitMax" | "rateLimitTimeWindow">,
 ): number | null {
-  // The plugin skips a key whose limit is off or has no window or maximum.
+  // authenticateAccessKey skips a key whose limit is off or has no window or maximum.
   if (row.rateLimitEnabled === false || row.rateLimitMax === null || !row.rateLimitTimeWindow)
     return null;
   const perMinute = Math.round(
@@ -129,14 +256,13 @@ export async function updateAccessKey(
       .update(schema.apikey)
       .set({
         ...(input.name !== undefined ? { name: input.name } : {}),
-        ...(limitChanged
-          ? { ...rateLimitColumns(input.requestsPerMinute ?? null), requestCount: 0 }
-          : {}),
+        ...(limitChanged ? rateLimitColumns(input.requestsPerMinute ?? null) : {}),
         updatedAt: new Date(),
       })
       .where(where)
       .returning();
     if (!row) throw new Error("access key disappeared");
+    if (limitChanged) app.accessKeyLimits.reset(row.id);
     await recordAudit(tx, actor, {
       action: "api_key.update",
       targetType: "api_key",

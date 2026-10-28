@@ -4,14 +4,12 @@ import {
   oneTimeSecretProcedures,
   serviceAccountScopeFor,
 } from "@edgeweir/contract";
-import { schema } from "@edgeweir/db";
 import { implement, ORPCError } from "@orpc/server";
-import { and, eq } from "drizzle-orm";
 import { API_KEY_HEADER } from "../lib/auth";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { IDEMPOTENCY_HEADER } from "../lib/idempotency";
-import { keyScope } from "../services/access-keys";
+import { authenticateAccessKey, keyScope } from "../services/access-keys";
 import type { Actor } from "../services/audit";
 import { type LoginCaller, loginAllowed, logLoginRefusal } from "../services/login-allow-list";
 import {
@@ -27,7 +25,8 @@ export interface RequestContext {
   userAgent: string;
   /** Forwarding headers came from a peer outside EDGEWEIR_TRUSTED_PROXIES (and were ignored). */
   untrustedForwarding?: boolean;
-  apiSession?: SessionResult;
+  /** The account of the request's AccessKey (set by `os`). */
+  accessKeyUser?: SessionUser;
   /** Set when the request authenticated with a service account key. */
   serviceAccount?: ServicePrincipal;
 }
@@ -35,28 +34,14 @@ export interface RequestContext {
 const implementation = implement(contract).$context<RequestContext>();
 
 type SessionResult = NonNullable<Awaited<ReturnType<AppContext["auth"]["api"]["getSession"]>>>;
+type SessionUser = SessionResult["user"];
 
-async function readSession(context: RequestContext): Promise<SessionResult | null> {
-  if (context.apiSession) return context.apiSession;
+/** The signed-in account of a cookie session (/rpc; /api/v1 requests carry no cookie). */
+async function sessionUser(context: RequestContext): Promise<SessionUser | null> {
   try {
-    return await context.app.auth.api.getSession({ headers: context.headers });
+    return (await context.app.auth.api.getSession({ headers: context.headers }))?.user ?? null;
   } catch (error) {
-    // better-auth rejects invalid/expired API keys by throwing a 4xx APIError,
-    // and keys over their request limit with a 429 (retry time in ms).
-    const { statusCode = 500, body } = error as {
-      statusCode?: number;
-      body?: { details?: { tryAgainIn?: number } };
-    };
-    if (statusCode >= 500) throw error;
-    if (statusCode === 429) {
-      const retryAfterSeconds = Math.max(
-        1,
-        Math.ceil((body?.details?.tryAgainIn ?? 60_000) / 1000),
-      );
-      fail("API_KEY_RATE_LIMITED", "too many requests with this access key", {
-        retryAfterSeconds,
-      });
-    }
+    if (((error as { statusCode?: number }).statusCode ?? 500) >= 500) throw error;
     throw new ORPCError("UNAUTHORIZED", { message: "invalid credentials" });
   }
 }
@@ -97,20 +82,15 @@ export const os = implementation.use(async ({ context, next, procedure, path }) 
     refuseStoredSecret(context, path);
     return next({ context: { serviceAccount: principal } });
   }
-  const session = await readSession(context);
-  if (!session) throw new ORPCError("UNAUTHORIZED");
-  const [key] = await context.app.db
-    .select()
-    .from(schema.apikey)
-    .where(
-      and(eq(schema.apikey.id, session.session.id), eq(schema.apikey.referenceId, session.user.id)),
-    );
-  if (!key?.enabled) throw new ORPCError("UNAUTHORIZED");
+  // AccessKeys: one lookup of the key and its account, the key's request limit (429 over it).
+  const found = await authenticateAccessKey(context.app, apiKey);
+  if (!found) throw new ORPCError("UNAUTHORIZED", { message: "invalid credentials" });
   const method = procedure["~orpc"].route.method ?? "POST";
-  if (keyScope(key.permissions) === "read" && !readOnlyAllowed(method, path))
+  if (keyScope(found.key.permissions) === "read" && !readOnlyAllowed(method, path))
     fail("ACCESS_KEY_READ_ONLY", "access key is read only");
   refuseStoredSecret(context, path);
-  return next({ context: { apiSession: session } });
+  // The account's row, as better-auth's session carries it.
+  return next({ context: { accessKeyUser: found.user as SessionUser } });
 });
 
 /**
@@ -130,15 +110,14 @@ export const authed = os.use(async ({ context, next, procedure, path }) => {
     };
     return next({
       context: {
-        user: { id: account.id, name: account.name, email: "" } as SessionResult["user"],
+        user: { id: account.id, name: account.name, email: "" } as SessionUser,
         actor,
         demo: false,
       },
     });
   }
-  const result = await readSession(context);
-  if (!result) throw new ORPCError("UNAUTHORIZED", { message: "authentication required" });
-  const { user } = result;
+  const user = context.accessKeyUser ?? (await sessionUser(context));
+  if (!user) throw new ORPCError("UNAUTHORIZED", { message: "authentication required" });
   const demo = user.id === DEMO_USER_ID;
   // Sessions (the cookie; /rpc never carries a key) only from the login allow list, the demo
   // account's excepted. AccessKeys on /api/v1 are not limited (ADR-0047).

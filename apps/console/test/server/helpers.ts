@@ -22,6 +22,7 @@ import { MasterKey } from "../../src/server/lib/envelope";
 import { ConfigEventBus } from "../../src/server/lib/events";
 import { createLogger, setLogLevel } from "../../src/server/lib/logger";
 import { CertificateAuthority, generateCa } from "../../src/server/pki/ca";
+import { AccessKeyRateLimiter } from "../../src/server/services/access-keys";
 import { ensureSetupToken, runSetup } from "../../src/server/services/setup";
 
 export const TEST_MASTER_KEY = Buffer.alloc(32, 7).toString("base64");
@@ -120,6 +121,7 @@ export async function createTestContext(
     nodeCa: await CertificateAuthority.load(await generateCa("Test CA")),
     events: new ConfigEventBus("postgres://unused", log),
     log,
+    accessKeyLimits: new AccessKeyRateLimiter(),
   };
   return { ctx, client };
 }
