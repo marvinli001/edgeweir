@@ -103,7 +103,10 @@ export function RowMenu({ items, className }: { items: RowMenuItem[]; className?
           <Button
             size="sm"
             variant="ghost"
-            className={cn("icon-button -my-1 size-6 min-h-6 shrink-0", className)}
+            className={cn(
+              "icon-button -my-1 size-6 min-h-6 shrink-0 pointer-coarse:-my-2 pointer-coarse:size-11",
+              className,
+            )}
             aria-label={m.common_actions()}
             data-testid="row-actions"
           />

@@ -3359,5 +3359,6 @@
   "arc_toast_loading": "In progress",
   "nodes_col_load": "Load",
   "cluster_tab_releases": "Releases",
-  "cluster_tab_settings": "Settings"
+  "cluster_tab_settings": "Settings",
+  "batch_more": "More"
 }

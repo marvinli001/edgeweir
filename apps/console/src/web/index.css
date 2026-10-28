@@ -522,6 +522,9 @@
     & tbody {
       display: block;
     }
+    & thead {
+      display: block;
+    }
     & thead:not(:has([role="checkbox"])) {
       display: none;
     }
@@ -585,6 +588,20 @@
     & td:not([data-stack]):empty {
       display: none;
     }
+  }
+}
+
+/*
+ * Touch screens: tab triggers and sidebar items are 44px tall like every other control (the
+ * controls' heights come from foundation.css); a page's line tab bar grows with them.
+ */
+@media (pointer: coarse) {
+  [data-slot="tabs-trigger"],
+  [data-slot="sidebar-menu-button"] {
+    min-height: 2.75rem;
+  }
+  [data-slot="tabs-list"][data-variant="line"] {
+    height: auto;
   }
 }
 

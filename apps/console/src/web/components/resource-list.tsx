@@ -64,7 +64,7 @@ export function ResourceList({
 }
 
 const rowClass =
-  "group/row flex h-10 min-w-0 items-center gap-3 rounded-xl px-2 text-sm transition-colors outline-none";
+  "group/row flex h-10 min-w-0 items-center gap-3 rounded-xl px-2 text-sm transition-colors outline-none pointer-coarse:h-11";
 
 /** One linked row: leading icon, label, optional trailing marks, chevron. */
 export function ResourceRow({

@@ -4,6 +4,7 @@ import {
   Copy01Icon,
   DatabaseSync01Icon,
   Delete02Icon,
+  MoreHorizontalIcon,
   PauseIcon,
   PlayIcon,
   Tag01Icon,
@@ -13,6 +14,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import { Button } from "@/components/arc/button/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/arc/dropdown-menu/dropdown-menu";
 import { Input } from "@/components/arc/input/input";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
@@ -59,16 +67,27 @@ export function SitesBatchBar({
   const close = (next: boolean) => {
     if (!next) setDialog(null);
   };
-  const action = (
-    kind: Exclude<Dialog, null>,
-    icon: typeof PlayIcon,
-    label: string,
-    variant: "secondary" | "danger" = "secondary",
-  ) => (
-    <Button size="sm" variant={variant} onClick={() => open(kind)} data-testid={`batch-${kind}`}>
+  const action = (kind: Exclude<Dialog, null>, icon: typeof PlayIcon, label: string) => (
+    <Button size="sm" variant="secondary" onClick={() => open(kind)} data-testid={`batch-${kind}`}>
       <HugeiconsIcon icon={icon} strokeWidth={2} />
       {label}
     </Button>
+  );
+
+  const menuItem = (
+    kind: Exclude<Dialog, null>,
+    icon: typeof PlayIcon,
+    label: string,
+    destructive = false,
+  ) => (
+    <DropdownMenuItem
+      variant={destructive ? "destructive" : undefined}
+      onClick={() => open(kind)}
+      data-testid={`batch-${kind}`}
+    >
+      <HugeiconsIcon icon={icon} strokeWidth={2} />
+      {label}
+    </DropdownMenuItem>
   );
 
   return (
@@ -89,19 +108,32 @@ export function SitesBatchBar({
       {action("enable", PlayIcon, m.site_enable())}
       {action("disable", PauseIcon, m.site_disable())}
       {action("purge", DatabaseSync01Icon, m.sites_purge())}
-      {action("addTags", Tag01Icon, m.batch_add_tags())}
-      {action("removeTags", Tag01Icon, m.batch_remove_tags())}
-      {action("copy", Copy01Icon, m.copy_title())}
-      {action("delete", Delete02Icon, m.common_delete(), "danger")}
+      {/* Tags, copying settings and deleting: behind one button, so the bar stays one row. */}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={<Button size="sm" variant="secondary" data-testid="batch-more" />}
+        >
+          <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
+          {m.batch_more()}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          {menuItem("addTags", Tag01Icon, m.batch_add_tags())}
+          {menuItem("removeTags", Tag01Icon, m.batch_remove_tags())}
+          {menuItem("copy", Copy01Icon, m.copy_title())}
+          <DropdownMenuSeparator />
+          {menuItem("delete", Delete02Icon, m.common_delete(), true)}
+        </DropdownMenuContent>
+      </DropdownMenu>
       <Button
         size="sm"
         variant="ghost"
-        className="ms-auto"
+        className="ms-auto max-sm:icon-button"
         onClick={onClear}
+        aria-label={m.batch_clear()}
         data-testid="batch-clear"
       >
         <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
-        {m.batch_clear()}
+        <span className="max-sm:sr-only">{m.batch_clear()}</span>
       </Button>
 
       <ControlledConfirmDialog

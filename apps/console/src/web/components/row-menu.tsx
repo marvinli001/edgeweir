@@ -17,7 +17,7 @@ import { m } from "@/lib/i18n";
  * then Delete after a separator, confirmed in a dialog. The row's primary action is the row
  * itself (`rowLink`), so lists show no Edit / Delete button pairs.
  */
-export function RowMenu({
+export function ItemMenu({
   children,
   remove,
   testId,

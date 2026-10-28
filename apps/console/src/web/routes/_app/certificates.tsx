@@ -19,7 +19,7 @@ import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { OriginCaPanel, OriginClientPanel } from "@/components/origin-pki";
 import { enterDelay, Page } from "@/components/page";
-import { RowMenu } from "@/components/row-menu";
+import { ItemMenu } from "@/components/row-menu";
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
@@ -228,7 +228,7 @@ function CertificatesPanel({
                     ) : null}
                   </div>
                   <div className="col-start-2 row-start-1 flex justify-end @3xl/main:col-start-3">
-                    <RowMenu
+                    <ItemMenu
                       testId="certificate-actions"
                       remove={{
                         title: m.cert_delete_confirm({ name: cert.name }),
@@ -244,7 +244,7 @@ function CertificatesPanel({
                           {m.cert_renew()}
                         </DropdownMenuItem>
                       ) : null}
-                    </RowMenu>
+                    </ItemMenu>
                   </div>
                 </li>
               );
@@ -279,7 +279,7 @@ function CertificatesPanel({
                   <Badge size="sm" tone="neutral">
                     {providerLabel(credential.provider)}
                   </Badge>
-                  <RowMenu
+                  <ItemMenu
                     testId="dns-credential-actions"
                     remove={{
                       title: m.cert_delete_confirm({ name: credential.name }),

@@ -9,7 +9,7 @@ import { Input } from "@/components/arc/input/input";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
 import { OptionSelect } from "@/components/form-select";
-import { RowMenu } from "@/components/row-menu";
+import { ItemMenu } from "@/components/row-menu";
 import { SwitchField } from "@/components/site/fields";
 import { QueryView } from "@/components/states";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -98,7 +98,7 @@ function NodeGroupMenu({ group }: { group: NodeGroup }) {
     meta: { invalidates: "all" },
   });
   return (
-    <RowMenu
+    <ItemMenu
       testId="node-group-actions"
       remove={{
         title: m.node_groups_delete_confirm({ name: group.name }),

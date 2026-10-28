@@ -7,6 +7,7 @@ import {
 } from "@edgeweir/contract";
 import {
   Add01Icon,
+  ArrowLeft01Icon,
   Copy01Icon,
   Delete02Icon,
   Edit02Icon,
@@ -14,7 +15,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useLocation } from "@tanstack/react-router";
+import { createFileRoute, useLocation } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
 import { AnalyticsSection } from "@/components/analytics/analytics-section";
@@ -24,6 +25,7 @@ import { Input } from "@/components/arc/input/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/arc/tabs/tabs";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
+import { LinkButton } from "@/components/link-button";
 import { Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { AccessTab } from "@/components/site/access-tab";
@@ -117,9 +119,10 @@ function SiteDetailPage() {
               onToggle={() => void stars.toggle(id)}
             />
           ) : null}
-          <Link to="/sites" className="text-sm text-muted-foreground hover:text-foreground">
+          <LinkButton to="/sites" size="sm" variant="ghost" data-testid="back-link">
+            <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
             {m.site_back()}
-          </Link>
+          </LinkButton>
         </>
       }
     >

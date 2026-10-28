@@ -1,5 +1,10 @@
 import type { L4App } from "@edgeweir/contract";
-import { ArrowRight01Icon, Delete02Icon, PencilEdit01Icon } from "@hugeicons/core-free-icons";
+import {
+  ArrowLeft01Icon,
+  ArrowRight01Icon,
+  Delete02Icon,
+  PencilEdit01Icon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useLocation } from "@tanstack/react-router";
@@ -13,6 +18,7 @@ import { DeleteL4AppDialog, L4EnabledSwitch } from "@/components/l4/app-actions"
 import { L4AppDialog } from "@/components/l4/app-dialog";
 import { L4AppStats } from "@/components/l4/app-stats";
 import { DnsTarget, L4NodesWarning, ProtocolBadge } from "@/components/l4/common";
+import { LinkButton } from "@/components/link-button";
 import { Page } from "@/components/page";
 import { CnamePrefixActions } from "@/components/site/cname-prefix";
 import { QueryView } from "@/components/states";
@@ -51,9 +57,10 @@ function L4AppPage() {
     <Page
       title={app.data?.name ?? m.l4_title()}
       actions={
-        <Link to="/l4" className="text-sm text-muted-foreground hover:text-foreground">
+        <LinkButton to="/l4" size="sm" variant="ghost" data-testid="back-link">
+          <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
           {m.l4_back()}
-        </Link>
+        </LinkButton>
       }
     >
       <QueryView query={app} notFound={<NotFoundPage path={href} surface="inline" />}>

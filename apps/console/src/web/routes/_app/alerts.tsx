@@ -26,7 +26,7 @@ import { Input } from "@/components/arc/input/input";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { enterDelay, Page } from "@/components/page";
-import { RowMenu } from "@/components/row-menu";
+import { ItemMenu } from "@/components/row-menu";
 import { SettingsCard } from "@/components/settings-card";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SiteMultiSelect } from "@/components/site-multi-select";
@@ -262,7 +262,7 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
                       ) : null}
                     </div>
                   </div>
-                  <RowMenu
+                  <ItemMenu
                     testId="alert-channel-actions"
                     remove={{
                       title: m.common_delete(),
@@ -283,7 +283,7 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
                     >
                       {channel.enabled ? m.alert_disable() : m.alert_enable()}
                     </DropdownMenuItem>
-                  </RowMenu>
+                  </ItemMenu>
                 </li>
               ))}
             </ul>
@@ -416,7 +416,7 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
                     </div>
                   </div>
                   <div className="self-start">
-                    <RowMenu
+                    <ItemMenu
                       testId="alert-subscription-actions"
                       remove={{
                         label: m.alert_unsubscribe(),

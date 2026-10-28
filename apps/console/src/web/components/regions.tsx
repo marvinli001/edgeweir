@@ -8,7 +8,7 @@ import { Button } from "@/components/arc/button/button";
 import { Input } from "@/components/arc/input/input";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
-import { RowMenu } from "@/components/row-menu";
+import { ItemMenu } from "@/components/row-menu";
 import { EmptyState, QueryView } from "@/components/states";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { useDialogState } from "@/hooks/use-dialog-state";
@@ -103,7 +103,7 @@ function RegionMenu({ region }: { region: Region }) {
     meta: { invalidates: "all" },
   });
   return (
-    <RowMenu
+    <ItemMenu
       testId="region-actions"
       remove={{
         title: m.regions_delete_confirm({ name: region.name }),

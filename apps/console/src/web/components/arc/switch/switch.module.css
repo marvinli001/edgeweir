@@ -44,11 +44,14 @@
     opacity: 0;
     transition: opacity var(--arc-duration-standard) var(--arc-ease-standard);
   }
-  /* A wider hit area than the drawn track. */
+  /* A wider hit area than the drawn track: 44px tall on touch screens. */
   .switch::after {
     content: "";
     position: absolute;
     inset: -8px -12px;
+    @media (pointer: coarse) {
+      inset: calc((44px - var(--switch-height)) / -2) -12px;
+    }
   }
   .switch[data-checked] {
     box-shadow: none;

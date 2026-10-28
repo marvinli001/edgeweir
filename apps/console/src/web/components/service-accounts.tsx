@@ -24,7 +24,7 @@ import { CodeBlock } from "@/components/copy-button";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
 import { enterDelay } from "@/components/page";
-import { RowMenu } from "@/components/row-menu";
+import { ItemMenu } from "@/components/row-menu";
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
@@ -248,7 +248,7 @@ function AccountMenu({ account, onEdit }: { account: ServiceAccount; onEdit: () 
     meta: { invalidates: [orpc.serviceAccounts.key()], success: m.service_accounts_deleted },
   });
   return (
-    <RowMenu
+    <ItemMenu
       testId="service-account-actions"
       remove={{
         title: m.service_accounts_delete_confirm({ name: account.name }),
@@ -257,7 +257,7 @@ function AccountMenu({ account, onEdit }: { account: ServiceAccount; onEdit: () 
       }}
     >
       <DropdownMenuItem onClick={onEdit}>{m.service_accounts_edit()}</DropdownMenuItem>
-    </RowMenu>
+    </ItemMenu>
   );
 }
 

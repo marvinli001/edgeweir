@@ -17,7 +17,7 @@ import {
 import { modeLabel, providerLabel, revisionError, statusLabel } from "@/components/dns/labels";
 import { DnsProtectionCard } from "@/components/dns-protection";
 import { enterDelay, Page } from "@/components/page";
-import { RowMenu } from "@/components/row-menu";
+import { ItemMenu } from "@/components/row-menu";
 import { combineQueries, EmptyState, QueryView } from "@/components/states";
 import { StatusDot, type StatusTone } from "@/components/status-dot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -283,7 +283,7 @@ function AccountMenu({
     onSuccess: (result) => toast.success(m.dns_test_ok({ records: result.records })),
   });
   return (
-    <RowMenu
+    <ItemMenu
       testId="dns-account-actions"
       remove={{ title: m.common_delete(), note: zone, onConfirm: onDelete }}
     >
@@ -294,6 +294,6 @@ function AccountMenu({
       >
         {m.dns_test_connection()}
       </DropdownMenuItem>
-    </RowMenu>
+    </ItemMenu>
   );
 }

@@ -186,10 +186,12 @@ test("G17: a clone opens with the source's tags; batch actions turn sites off an
 
   // A tag on both, then off both.
   const batchTag = `g17-batch-${RUN}`;
+  await page.getByTestId("batch-more").click();
   await page.getByTestId("batch-addTags").click();
   await page.getByTestId("batch-tags-input").fill(batchTag);
   await page.getByTestId("batch-tags-submit").click();
   await expect(page.getByTestId("site-tag").filter({ hasText: batchTag })).toHaveCount(2);
+  await page.getByTestId("batch-more").click();
   await page.getByTestId("batch-removeTags").click();
   await page.getByTestId("batch-tags-input").fill(batchTag);
   await page.getByTestId("batch-tags-input").press("Enter");
@@ -203,6 +205,7 @@ test("G17: a clone opens with the source's tags; batch actions turn sites off an
   await page.getByRole("searchbox", { name: "搜索名称、域名或标签" }).fill(domain);
   await expect.poll(() => rowNames(page)).toEqual([domain]);
   await page.getByTestId("select-site").first().click();
+  await page.getByTestId("batch-more").click();
   await page.getByTestId("batch-delete").click();
   await expect(page.getByTestId("confirm-action")).toBeDisabled();
   await page.getByTestId("batch-delete-confirm").fill("2");

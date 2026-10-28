@@ -3153,5 +3153,6 @@
   "arc_toast_loading": "进行中",
   "nodes_col_load": "负载",
   "cluster_tab_releases": "发布",
-  "cluster_tab_settings": "设置"
+  "cluster_tab_settings": "设置",
+  "batch_more": "更多"
 }

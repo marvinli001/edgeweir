@@ -13,7 +13,7 @@ import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { IpCheckDialog } from "@/components/ip-check";
 import { enterDelay, Page } from "@/components/page";
-import { RowMenu } from "@/components/row-menu";
+import { ItemMenu } from "@/components/row-menu";
 import { EmptyState, QueryView } from "@/components/states";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -156,7 +156,7 @@ function IpListCard({
           {m.ip_lists_count({ count: formatNumber(list.entries.length) })}
         </p>
         <CardAction>
-          <RowMenu
+          <ItemMenu
             testId="ip-list-actions"
             remove={{ title: m.common_delete(), note: `$${list.name}`, onConfirm: onDelete }}
           />

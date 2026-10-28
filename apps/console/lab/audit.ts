@@ -4,8 +4,9 @@
  *   node lab/audit.ts [--pages a,b] [--width 375] [--base http://localhost:5180/] [--targets]
  *
  * For every page: whether the document scrolls sideways (and the widest elements that stick out
- * of the viewport), and with --targets the visible controls smaller than 44 × 44 px. Exits 1 when
- * a page scrolls sideways.
+ * of the viewport), and with --targets the visible controls smaller than 44 × 44 px on a touch
+ * screen (row links, whose target is the row, and checkboxes and switches, whose hit area is
+ * larger than what they draw, aside). Exits 1 when a page scrolls sideways.
  */
 import { chromium } from "@playwright/test";
 import { PAGES } from "./pages.ts";
@@ -74,7 +75,16 @@ try {
             'button, a[href], [role="checkbox"], [role="switch"], [role="tab"], input, select',
           )) {
             const rect = element.getBoundingClientRect();
-            if (rect.width === 0 || rect.height === 0) continue;
+            if (rect.width <= 1 || rect.height <= 1) continue;
+            // A row link's target is its whole row; checkboxes and switches draw a 44px hit area
+            // around themselves; an input group's field is as tall as the group.
+            if (
+              element.closest("[data-row-link]") ||
+              element.getAttribute("data-slot") === "checkbox" ||
+              element.getAttribute("data-slot") === "switch" ||
+              element.getAttribute("data-slot") === "input-group-control"
+            )
+              continue;
             if (rect.height < 44 || rect.width < 44) {
               small.push(
                 `${describe(element)} ${Math.round(rect.width)}×${Math.round(rect.height)}`,
