@@ -1,7 +1,7 @@
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
 import type { Cluster, Revision, RollbackPreview } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import { and, asc, count, eq, gt, ne, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ne, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import { siteChanges } from "./config-changes";
@@ -51,25 +51,41 @@ async function toClusterDto(
   const since = sql`now() - make_interval(secs => ${onlineWindowSeconds()})`;
   // Sequential on purpose: `db` may be a transaction, i.e. a single connection.
   const [nodes] = await db
-    .select({ n: count() })
+    .select({
+      n: count(),
+      online: sql<number>`count(*) filter (where ${schema.node.lastSeenAt} > ${since})`.mapWith(
+        Number,
+      ),
+    })
     .from(schema.node)
     .where(eq(schema.node.clusterId, row.id));
-  const [online] = await db
-    .select({ n: count() })
-    .from(schema.node)
-    .where(and(eq(schema.node.clusterId, row.id), gt(schema.node.lastSeenAt, since)));
   const [sites] = await db
     .select({ n: count() })
     .from(schema.site)
     .where(eq(schema.site.clusterId, row.id));
-  const latest = await latestRevision(db, row.id);
+  // The newest revision's summary: its configuration (`ir`) can be large and is never shown.
+  const [latest] = await db
+    .select({
+      clusterId: schema.configRevision.clusterId,
+      revision: schema.configRevision.revision,
+      contentHash: schema.configRevision.contentHash,
+      siteCount: schema.configRevision.siteCount,
+      reason: schema.configRevision.reason,
+      reasonCode: schema.configRevision.reasonCode,
+      reasonParams: schema.configRevision.reasonParams,
+      createdAt: schema.configRevision.createdAt,
+    })
+    .from(schema.configRevision)
+    .where(eq(schema.configRevision.clusterId, row.id))
+    .orderBy(desc(schema.configRevision.revision))
+    .limit(1);
   const delivery = await clusterDelivery(db, row.id);
   return {
     id: row.id,
     name: row.name,
     description: row.description,
     nodeCount: nodes?.n ?? 0,
-    onlineNodeCount: online?.n ?? 0,
+    onlineNodeCount: nodes?.online ?? 0,
     liveNodeCount: delivery.live,
     appliedNodeCount: delivery.applied,
     siteCount: sites?.n ?? 0,

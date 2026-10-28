@@ -47,7 +47,20 @@ const REVISION_RETENTION = 200;
 
 type RevisionRow = typeof schema.configRevision.$inferSelect;
 
-export function toRevisionDto(row: RevisionRow): Revision {
+/** The columns a Revision is made of: never the configuration (`ir`). */
+export type RevisionSummary = Pick<
+  RevisionRow,
+  | "clusterId"
+  | "revision"
+  | "contentHash"
+  | "siteCount"
+  | "reason"
+  | "reasonCode"
+  | "reasonParams"
+  | "createdAt"
+>;
+
+export function toRevisionDto(row: RevisionSummary): Revision {
   return {
     clusterId: row.clusterId,
     revision: row.revision,
