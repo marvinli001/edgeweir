@@ -273,6 +273,8 @@ function SitesPage() {
         : []),
       {
         id: "domains",
+        // Phone cards: the name is the main domain already.
+        stack: "hide",
         header: () => m.sites_col_domains(),
         cell: ({ row }) => (
           <div className="flex flex-col font-mono text-xs leading-5">
@@ -302,6 +304,7 @@ function SitesPage() {
         ? ([
             {
               id: "cluster",
+              stack: "hide",
               header: () => m.sites_col_cluster(),
               cell: ({ row }) => (
                 <Badge size="sm" tone="neutral">
