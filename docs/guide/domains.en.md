@@ -79,7 +79,7 @@ Purges find sites by Host as nodes do: among each cluster's enabled sites, with 
 
 ## Unknown hosts and node IP access
 
-1. Open **Clusters & nodes**, pick the cluster and switch to the **Network** tab.
+1. Open **Clusters & nodes**, pick the cluster and switch to the **Settings** tab.
 2. In the **Unknown hosts** card, choose the handling of **Unknown domains** and of **Node IP or no Host**.
 3. With **Hand to the default site**, choose an enabled site of this cluster in **Default site**; turn on **Default site's certificate for unknown SNI** if needed.
 4. Click **Save**. The console publishes a configuration revision of the cluster (reason "Unknown host settings updated").

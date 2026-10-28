@@ -22,11 +22,11 @@ Group sites with tags, act on several sites at once from the site list, copy one
 ## Batch actions
 
 1. Tick sites in the **Sites** list (the box in the header selects the whole page). The selection stays across pages; changing the search or a filter clears it.
-2. Choose an action in the bar at the bottom of the page:
+2. Choose an action in the bar at the bottom of the page: "Enable", "Disable", and "Purge cache" sit in the bar, "Add tags", "Remove tags", "Copy settings", and "Delete" under "More".
 
 | Action | Effect |
 | --- | --- |
-| Turn on / Turn off | Each site whose state changes gets an audit entry (the same as turning one site on or off); each cluster publishes one new revision, reason "N sites enabled" or "N sites disabled" (the site's own reason when only one site of the cluster changes). Sites already in that state stay as they are. |
+| Enable / Disable | Each site whose state changes gets an audit entry (the same as enabling or disabling one site); each cluster publishes one new revision, reason "N sites enabled" or "N sites disabled" (the site's own reason when only one site of the cluster changes). Sites already in that state stay as they are. |
 | Purge cache | Creates one whole-site purge task for the selected sites; see each node's result under **Purge & prefetch**. |
 | Add tags / Remove tags | Adds or removes tags on the selected sites. If a site would get more than 10 tags the whole action fails, naming the site. |
 | Copy settings | Choose the source site and the parts, and copy them to the selected sites; see the next section. |
@@ -36,7 +36,7 @@ A batch action completes for every site or changes none (for example when one of
 
 ## Copying settings
 
-1. On a site's **Overview** click "Copy settings" and choose the target sites; or select the target sites in the site list, click "Copy settings" in the bar and choose the source site.
+1. Click "Copy settings" under **⋯** in the site page's header and choose the target sites; or select the target sites in the site list, click "Copy settings" under "More" in the bar and choose the source site.
 2. Tick the parts to copy and click "Preview".
 3. The preview lists, for each target, how each part changes (list parts show "items before → items after", other parts the number of settings that change), and the targets that would fail with the reason. Previewing saves nothing.
 4. Click "Copy to N sites". The result lists the parts each site got, or why it failed.
@@ -81,7 +81,7 @@ A target that lacks something the settings use fails:
 
 ## Cloning a site
 
-1. On a site's **Overview** click "Clone".
+1. Click "Clone" under **⋯** in the site page's header.
 2. Enter a name (empty: the first domain) and the domains, change the tags if needed (the source's by default) and click "Clone".
 
 The new site is in the source's cluster with the source's origins (S3 credentials encrypted again for it), every part that can be copied, X-Cache, the PURGE method and key (encrypted again), charset, the request body limit and maintenance mode. Certificates cover the source's domains and are not copied, so the clone has force HTTPS, HSTS and client certificates off and keeps only 443 of the HTTPS ports (80 when the source has no HTTP port). If the source's access authentication domains or bulk redirect sources name the source's domains, the clone fails with the reason. A clone gets the audit entry "Site cloned".

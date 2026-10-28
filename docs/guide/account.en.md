@@ -115,6 +115,8 @@ For using and revoking AccessKeys, see [Access logs and access keys](access-logs
 | **System** | **Audit log** | `/audit` | See [Audit log](system.en.md#audit-log) |
 | **System** | **System settings** | `/system` | Tabs **General**, **Monitoring** (`/system?tab=probes`: regional probes and probe settings, see [Regional probes](scheduling.en.md#regional-probes)), and **Service accounts** (`/system?tab=service-accounts`, see [Service accounts](system.en.md#service-accounts)); see [System settings](system.en.md#system-settings) |
 
+Clicking anywhere in a list row or card opens it; a row that links to a page opens in a new tab with a middle click or ⌘ / Ctrl+click. A row's other actions are under **⋯** at its end.
+
 ### User menu
 
 The bottom of the sidebar shows the account's name and email; click it to open the user menu.

@@ -119,7 +119,7 @@ deb、rpm 由包脚本创建 `edgeweir` 用户与目录；tar.gz 由 `install.sh
 | 80/TCP | HTTP、ACME HTTP-01 | 始终 |
 | 443/TCP | HTTPS | 集群中有选择了证书的网站绑定 443 |
 | 443/UDP | HTTP/3 | 绑定 443 的网站开启 HTTP/3，见 [监听端口](../guide/https.md#监听端口) |
-| 集群的附加 HTTP / HTTPS 端口（TCP） | HTTP、HTTPS | 集群「网络」页签设置了这些端口，见 [集群的监听端口](../guide/https.md#集群的监听端口) |
+| 集群的附加 HTTP / HTTPS 端口（TCP） | HTTP、HTTPS | 集群「设置」页签设置了这些端口，见 [集群的监听端口](../guide/https.md#集群的监听端口) |
 | 附加 HTTPS 端口的同号 UDP | HTTP/3 | 绑定该端口的网站开启 HTTP/3 |
 | 集群的端口池 | [L4 转发](../guide/l4.md) | TCP 端口池放行 TCP，UDP 端口池放行 UDP，TCP + UDP 两者都放行；也可以只放行已有 L4 应用使用的端口 |
 
@@ -133,7 +133,7 @@ deb、rpm 由包脚本创建 `edgeweir` 用户与目录；tar.gz 由 `install.sh
 
 ## 访客 IP
 
-集群「网络」页签的「访客 IP」决定节点 HTTP / HTTPS 监听的访客地址：规则的 `ip.src`、封禁、CC、访问日志、错误页的 `{{client_ip}}`、维护模式的放行地址、PURGE 按访客地址的限频与回源的 `X-Real-IP` 都使用它。修改后发布配置版本，节点 reload。
+集群「设置」页签的「访客 IP」决定节点 HTTP / HTTPS 监听的访客地址：规则的 `ip.src`、封禁、CC、访问日志、错误页的 `{{client_ip}}`、维护模式的放行地址、PURGE 按访客地址的限频与回源的 `X-Real-IP` 都使用它。修改后发布配置版本，节点 reload。
 
 | 来源 | 行为 | 适用 |
 | --- | --- | --- |

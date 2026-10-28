@@ -119,7 +119,7 @@ Nodes accept user traffic on these ports; open them in the host firewall and the
 | 80/TCP | HTTP, ACME HTTP-01 | Always |
 | 443/TCP | HTTPS | A site of the cluster with a certificate is bound to 443 |
 | 443/UDP | HTTP/3 | A site bound to 443 has HTTP/3 on, see [Listening ports](../guide/https.en.md#listening-ports) |
-| The cluster's extra HTTP / HTTPS ports (TCP) | HTTP, HTTPS | Set on the cluster's **Network** tab, see [The cluster's listener ports](../guide/https.en.md#the-clusters-listener-ports) |
+| The cluster's extra HTTP / HTTPS ports (TCP) | HTTP, HTTPS | Set on the cluster's **Settings** tab, see [The cluster's listener ports](../guide/https.en.md#the-clusters-listener-ports) |
 | UDP of the same number as an extra HTTPS port | HTTP/3 | A site bound to that port has HTTP/3 on |
 | The cluster's port pools | [L4 forwarding](../guide/l4.en.md) | TCP for TCP pools, UDP for UDP pools, both for TCP + UDP; opening only the ports L4 apps use is enough |
 
@@ -133,7 +133,7 @@ Nodes accept user traffic on these ports; open them in the host firewall and the
 
 ## Client IP
 
-**Client IP** on a cluster's **Network** tab decides the visitor address of the nodes' HTTP and HTTPS listeners: rules' `ip.src`, bans, CC, access logs, `{{client_ip}}` of error pages, the allowed addresses of maintenance mode, the PURGE limit per client address and `X-Real-IP` towards the origins all use it. Saving publishes a configuration revision; nodes reload.
+**Client IP** on a cluster's **Settings** tab decides the visitor address of the nodes' HTTP and HTTPS listeners: rules' `ip.src`, bans, CC, access logs, `{{client_ip}}` of error pages, the allowed addresses of maintenance mode, the PURGE limit per client address and `X-Real-IP` towards the origins all use it. Saving publishes a configuration revision; nodes reload.
 
 | Source | Behavior | For |
 | --- | --- | --- |

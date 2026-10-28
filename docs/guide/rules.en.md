@@ -471,8 +471,8 @@ A site's table of exact-match redirects: each entry redirects one source to one 
 | Name | All lists share one namespace and names are unique; a name cannot change after creation; saving rules binds names to list IDs |
 | References | Any site rule, global rule, or cache rule condition can reference any list, block and allow lists included; the **Allow lists** and **Block lists** of [L4 apps](l4.en.md#ip-lists-and-connection-limits) and the [site lists](access-control.en.md#site-lists) of sites can use any list as well |
 | L4 apps | The **Block** and **Allow** actions apply to sites only; L4 apps check only the lists they selected |
-| Changes | Entries and **Action** can change at any time; creating, changing, or deleting a list publishes a new revision to every cluster ("Rules and IP lists updated"); nodes apply it without reload |
-| Deletion | A list referenced by a rule, a cache rule condition, an L4 app or chosen by a site as a site list cannot be deleted ("The IP list is used by …", naming the first 5 users: rule names, site rules with their site; sites whose cache rules use it or that chose it; L4 app names) |
+| Changes | A click on the list's row opens the edit dialog; entries and **Action** can change at any time; creating, changing, or deleting a list publishes a new revision to every cluster ("Rules and IP lists updated"); nodes apply it without reload |
+| Deletion | **Delete** under **⋯** at the end of the list's row, confirmed; a list referenced by a rule, a cache rule condition, an L4 app or chosen by a site as a site list cannot be deleted ("The IP list is used by …", naming the first 5 users: rule names, site rules with their site; sites whose cache rules use it or that chose it; L4 app names) |
 | Entries | IPv4 / IPv6 addresses or CIDRs; host bits cleared, deduplicated, sorted; leading zeros and zone IDs refused |
 | Quota | Up to 128 lists and 50,000 entries in total; up to 10,000 entries per list; a change that does not add entries always saves |
 | Rollback | Site configuration rollbacks keep the current lists and global rules; a rollback that references a deleted list is refused |

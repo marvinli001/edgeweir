@@ -28,7 +28,7 @@ DNS steering writes steering records for each cluster; the CNAME targets of site
 4. Click **Test connection**. Verify: **Connected: N records in the zone** appears.
 5. Click **Create**. Saving first runs the same test as **Test connection**; when it fails, the dialog shows the error and the button becomes **Save anyway**.
 
-An account is one set of credentials and one zone; for several zones under the same credentials, add one account per zone. **Test connection** in the account list reads the zone with the saved credentials. **Edit** renames the account; turn on **Replace credentials** and fill in every field again to rotate secrets, which are tested before saving too. A rename alone is not tested. After a failed test, changing any field makes the next save test again. The provider and zone cannot change after creation. Credentials are envelope-encrypted with the master key and are write-only.
+An account is one set of credentials and one zone; for several zones under the same credentials, add one account per zone. A click on the account's row opens the edit dialog, which renames the account; **⋯** at the end of the row holds **Test connection** (reads the zone with the saved credentials) and **Delete**. When editing, turn on **Replace credentials** and fill in every field again to rotate secrets, which are tested before saving too. A rename alone is not tested. After a failed test, changing any field makes the next save test again. The provider and zone cannot change after creation. Credentials are envelope-encrypted with the master key and are write-only.
 
 ### Bind a cluster
 
@@ -47,7 +47,7 @@ An account is one set of credentials and one zone; for several zones under the s
    The first prints `all.<cluster domain>.`, the second the addresses of the cluster's healthy nodes.
 7. In each site domain's DNS, CNAME the domain to the **CNAME target**. Below it the card lists where each domain resolves (**Points here**, **Points elsewhere**, **Not resolved**, **Not checked**); the **Launch check** on the site's **Overview** tab sums it up as **DNS pointed N/M**.
 
-Clusters may use different provider accounts and cluster domains. The **Cluster bindings** table on the **DNS steering** page lists each cluster's mode, cluster domain, and publication state; **Open** goes to the cluster's **DNS** tab.
+Clusters may use different provider accounts and cluster domains. The **Cluster bindings** table on the **DNS steering** page lists **Cluster**, **Cluster domain** (shown when a binding has one), and **Status** for each cluster: the publication state when the mode is **Automatic** and a revision was published, otherwise the mode (**Not managed**, **Manual**, **Automatic**); a click on the cluster's row opens its **DNS** tab.
 
 ### Binding fields
 
@@ -327,7 +327,7 @@ Alerts are configured on the **Alerts** page, which has five cards:
 3. Select **Notification language**.
 4. Turn on **Receive every alert** as needed.
 5. Click **Create**.
-6. Verify: click **Send test**; the target receives a test notification and the channel row does not show **Notification delivery failed**.
+6. Verify: click **Send test** under **⋯** at the end of the channel row; the target receives a test notification and the channel row does not show **Notification delivery failed**.
 
 Email channels use the server in the **SMTP** card, see [SMTP](#smtp).
 
@@ -349,7 +349,7 @@ Email channels use the server in the **SMTP** card, see [SMTP](#smtp).
 
 Channels without this switch receive only the site alerts subscribed to them, see [Subscribe to alerts](#subscribe-to-alerts).
 
-At most 32 channels. When editing a channel, turn on **Replace channel credentials** to re-enter the type and fields; otherwise the stored credentials are kept. A disabled channel sends no notifications and cannot be chosen for new subscriptions.
+At most 32 channels. A click on a channel's row opens the edit dialog; **⋯** at the end of the row holds **Send test**, **Enable** or **Disable**, and **Delete**. When editing a channel, turn on **Replace channel credentials** to re-enter the type and fields; otherwise the stored credentials are kept. A disabled channel sends no notifications and cannot be chosen for new subscriptions.
 
 ### SMS channels
 
@@ -449,9 +449,9 @@ Deleting a cluster resolves its cluster alerts that are still firing.
 | Channels | One subscription per channel; **Subscribe** lists only enabled channels without a subscription and is unavailable when there is none |
 | Sites | **All sites** includes sites created later; otherwise tick at least one site |
 | Alert kinds | Node offline, Node clock skewed, Certificate expiring, Origin unavailable, High server error ratio, CC mitigation raised, Usage near its limit, Usage limit reached |
-| Changes | Click **Edit** on the subscription row to change its sites, alert kinds, or **Enable**; a subscription with **Enable** off sends nothing and its row shows **Off** |
+| Changes | Click the subscription's row to change its sites, alert kinds, or **Enable**; a subscription with **Enable** off sends nothing and its row shows **Off** |
 | Deleted sites | The site leaves the subscription; a subscription left without sites is deleted with it |
-| Removal | Click **Unsubscribe** on the subscription row and confirm |
+| Removal | **Unsubscribe** under **⋯** at the end of the subscription row, confirmed |
 | API | `POST /api/v1/alerts/subscriptions` (`channelId`, `kinds`, `allSites` or `siteIds`) creates the channel's subscription, replacing the one it has; `PUT /api/v1/alerts/subscriptions/{id}` changes it; both return `allSites` and `sites` (`id`, `name`). The former `siteId` field is gone |
 | Upgrades | A subscription used to cover one site; on upgrade, the subscriptions of a channel merge into one. If any of them is enabled, the result is enabled with the sites and alert kinds of the enabled ones; if all are paused, it stays paused with all their sites and alert kinds |
 
@@ -502,4 +502,4 @@ Deleting a cluster resolves its cluster alerts that are still firing.
 | "SMTP is not configured" | An email channel was tested or delivered before the SMTP settings were saved | Fill in and save the **SMTP** card, then **Send test** |
 | "Enter a new password when changing the SMTP server or account" | The SMTP destination changed without a password | Enter the password and save |
 | "The CA bundle must contain PEM certificates only" | The CA field contains something other than certificates | Paste PEM certificates only |
-| **Subscribe** is unavailable | No channel is enabled, or every enabled channel has a subscription | Add or enable a channel; click **Edit** to change an existing subscription |
+| **Subscribe** is unavailable | No channel is enabled, or every enabled channel has a subscription | Add or enable a channel; click an existing subscription's row to change it |

@@ -46,7 +46,7 @@ DNS-01 validation needs a credential first.
 5. Click **Create**. Saving first runs the same test as **Test connection**; when it fails, the dialog shows the error and the button becomes **Save anyway**.
 6. Verify: the credential appears in the **DNS credentials** card with its zone and provider.
 
-The fields and least permissions of every provider are in [Providers and credentials](dns-and-alerts.en.md#providers-and-credentials); DNS steering uses the same provider catalog. Credentials are envelope-encrypted with the master key and are write-only; **Edit** renames the credential or rotates the secrets with **Replace credentials**; new secrets are tested before saving too, a rename alone is not, and after a failed test changing any field makes the next save test again. After a rotation, certificates using the credential that show **Issuance failed** and TXT records still to clean up are retried at once.
+The fields and least permissions of every provider are in [Providers and credentials](dns-and-alerts.en.md#providers-and-credentials); DNS steering uses the same provider catalog. Credentials are envelope-encrypted with the master key and are write-only; a click on the credential's row opens the edit dialog, which renames the credential or rotates the secrets with **Replace credentials**; new secrets are tested before saving too, a rename alone is not, and after a failed test changing any field makes the next save test again. After a rotation, certificates using the credential that show **Issuance failed** and TXT records still to clean up are retried at once.
 
 ## Request an ACME certificate
 
@@ -111,12 +111,12 @@ The **ACME accounts** card of the **Certificates** page lists the accounts the c
 | Effect | After issuance or renewal, a new revision is published for the clusters of the sites that use the certificate |
 | Failure | Status changes to **Issuance failed**, the card shows the reason, and the current certificate is kept; the next attempt waits a tenth of the certificate's remaining validity (10 minutes to 12 hours), 1 hour for a first issuance, see [Troubleshooting](#troubleshooting). An HTTP-01 certificate that failed because names did not resolve to the nodes ("A domain does not resolve to the nodes") has its names looked up again every 5 minutes and is retried as soon as they all point to the nodes |
 | Expiry | When renewals keep failing until the certificate expires, its status shows **Expired** and the card still shows the reason; while a retry runs the status is **Pending** or **Issuing** and the card shows "Expired …" |
-| Manual | ACME certificates have **Renew now**, which runs at the next check; unavailable while **Issuing** |
+| Manual | **Renew now** under **⋯** on an ACME certificate's card, which runs at the next check; unavailable while **Issuing** |
 | Interruption | **Issuing** for more than 10 minutes counts as interrupted and runs again at the next check; one issuance run is limited to 8 minutes |
 
 ### Deletion
 
-Deleting a certificate used by sites returns "The certificate is used by sites: …" (up to 5 sites); while it is **Issuing**, "Certificate operation is already in progress". A certificate with DNS-01 TXT records still to clean up is deleted, and those records are no longer cleaned up: `leftDnsRecords` of the `certificate.delete` audit entry lists them for removal at the DNS provider. A DNS credential referenced by any certificate cannot be deleted ("The DNS credential is used by certificates: …").
+**Delete** sits under **⋯** on a certificate's card and at the end of a DNS credential's row, confirmed. Deleting a certificate used by sites returns "The certificate is used by sites: …" (up to 5 sites); while it is **Issuing**, "Certificate operation is already in progress". A certificate with DNS-01 TXT records still to clean up is deleted, and those records are no longer cleaned up: `leftDnsRecords` of the `certificate.delete` audit entry lists them for removal at the DNS provider. A DNS credential referenced by any certificate cannot be deleted ("The DNS credential is used by certificates: …").
 
 ## Enable HTTPS with one click
 
@@ -336,7 +336,7 @@ The SNI of an HTTPS request must equal its `Host`; otherwise the node returns 42
 
 ### The cluster's listener ports
 
-1. Open **Clusters & nodes**, select the cluster and switch to the **Network** tab (`/clusters?tab=network`).
+1. Open **Clusters & nodes**, select the cluster and switch to the **Settings** tab (`/clusters?tab=network`).
 2. In the **Listener ports** card fill in **Extra HTTP ports** and **Extra HTTPS ports**, separated by commas or spaces.
 3. Click **Save**. The console shows **Saved** and publishes a new configuration revision.
 4. Open the ports in the node hosts' firewalls and cloud security groups (UDP too for an HTTPS port with HTTP/3 sites), see [Ports and firewalls](../deploy/nodes.en.md#ports-and-firewalls).

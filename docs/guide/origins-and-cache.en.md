@@ -527,7 +527,7 @@ Applies to `text/*`, `application/javascript`, `application/json`, and `applicat
 
 ## Cache zone
 
-The **Cache zone** card on the **Overview** of the **Clusters** page sets every node's cache zone of the cluster; **Cache** in the node details overrides the size for that node.
+The **Cache zone** card on the **Settings** tab of the **Clusters & nodes** page sets every node's cache zone of the cluster; **Cache** in the node details overrides the size for that node.
 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
@@ -605,7 +605,7 @@ The origin lists tags, comma separated, in the `Cache-Tag` response header, e.g.
 
 ### Purge a site's cache
 
-On the site's **Overview** tab, click **Purge cache** and confirm (or search the site in ⌘K / Ctrl+K and pick **Purge cache: (site)**). This is the same as **Purge sites** under **Purge & prefetch**: the console creates a whole-site purge task for every enabled node of the site's cluster and publishes no revision. **View tasks** in the notification opens `/purge?site=<site ID>`, which lists only that site's tasks and preselects the site in the form. A disabled site cannot be purged.
+Click **Purge cache** under **⋯** in the site page's header and confirm (or search the site in ⌘K / Ctrl+K and pick **Purge cache: (site)**). This is the same as **Purge sites** under **Purge & prefetch**: the console creates a whole-site purge task for every enabled node of the site's cluster and publishes no revision. **View tasks** in the notification opens `/purge?site=<site ID>`, which lists only that site's tasks and preselects the site in the form. A disabled site cannot be purged.
 
 ### Task limits
 

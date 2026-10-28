@@ -25,13 +25,13 @@ Nodes that do not meet the supervisor conditions do not report `self-upgrade-v1`
 
 ## Upgrade nodes
 
-1. Open **Clusters & nodes** and select the cluster.
+1. Open **Clusters & nodes**, select the cluster, and switch to the **Releases** tab (`/clusters?tab=releases`).
 2. In **Node upgrades**, click **New upgrade**.
 3. Enter **Target version**, for example `0.1.0` (the tag `v0.1.0` works too), and select **Canary node group**.
 4. Click **Start upgrade**. While the dialog lists **Nodes not ready**, it cannot start: deal with those nodes first (see below).
 5. Wait until the canary nodes show **Succeeded** and stay healthy for 30 seconds.
 6. Click **Promote remaining nodes**. The rest are upgraded in batches: at most a quarter of them at a time (at least one, by node name); when a node succeeds the next one is released.
-7. Verify: the upgrade shows **Succeeded**; **Agent / engine** on the **Nodes** cards shows the target version.
+7. Verify: the upgrade shows **Succeeded**; **Agent / engine** of the nodes on the **Nodes** tab shows the target version.
 
 An upgrade restarts the node's agent. OpenResty runs under the supervisor (node images and packages of this version and later): it keeps serving during an upgrade and reloads the configuration, and bans, CC state and rate-limit counters survive; a rollback to an older version restarts it. An upgrade is not guaranteed to be hitless; choose a canary group whose traffic other nodes can absorb.
 
@@ -57,7 +57,7 @@ An upgrade restarts the node's agent. OpenResty runs under the supervisor (node 
 | --- | --- |
 | Canary | The canary group is upgrading or under observation |
 | Rollout | The remaining nodes are upgraded in batches |
-| Succeeded / Failed / Cancelled | Final result |
+| Succeeded / Failed / Cancelled | Final result. The newest upgrade lists its nodes; earlier finished upgrades are one line each: version, outcome, and time |
 
 | Node state | Meaning |
 | --- | --- |

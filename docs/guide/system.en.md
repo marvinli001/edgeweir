@@ -6,15 +6,13 @@ For **Global rules** and **IP lists**, see [Rules, IP lists, and GeoIP](rules.en
 
 ## Clusters and nodes
 
-Page: **Clusters & nodes** (`/clusters`); the **Clusters | Regions** switch at the top moves between clusters and [regions](#regions) (`/clusters?view=regions`). The clusters view has the page actions **New cluster** and **Add node**, then a summary of the current cluster. With several clusters, **Select cluster** switches between them. A cluster without nodes shows only its node section (with **Add node**); the summary and the tabs appear once it has a node. The **Overview** tab holds node groups, nodes, configuration canary, cache zone, node upgrades, and revisions; the **DNS** tab holds the cluster's DNS binding, see [Bind a cluster](dns-and-alerts.en.md#bind-a-cluster); the **Scheduling** tab holds the cluster's scheduling rules and their preview, see [Scheduling rules](scheduling.en.md#scheduling-rules); the **Port pools** tab (`/clusters?tab=ports`) holds the port ranges the cluster's L4 apps may use, see [Set up port pools](l4.en.md#set-up-port-pools).
+Page: **Clusters & nodes** (`/clusters`); the **Clusters | Regions** switch at the top moves between clusters and [regions](#regions) (`/clusters?view=regions`), and with several clusters **Select cluster** beside it switches between them. The clusters view has the page actions **New cluster** and **Add node**, then a summary of the current cluster. A cluster without nodes shows only its node section (with **Add node**); the summary and the tabs appear once it has a node. The **Nodes** tab (the default) holds the node table and node groups; the **Releases** tab (`/clusters?tab=releases`) holds revisions, configuration canary, and node upgrades; the **DNS** tab holds the cluster's DNS binding, see [Bind a cluster](dns-and-alerts.en.md#bind-a-cluster); the **Scheduling** tab holds the cluster's scheduling rules and their preview, see [Scheduling rules](scheduling.en.md#scheduling-rules); the **Settings** tab (`/clusters?tab=network`) holds [listener ports](https.en.md#the-clusters-listener-ports), [client IP](../deploy/nodes.en.md#client-ip), [unknown hosts](domains.en.md#unknown-hosts-and-node-ip-access), and the cache zone; the **Port pools** tab (`/clusters?tab=ports`) holds the port ranges the cluster's L4 apps may use, see [Set up port pools](l4.en.md#set-up-port-pools).
 
 | Summary | Content |
 | --- | --- |
 | **Nodes online** | Online nodes / all nodes |
 | **Sites** | The cluster's sites |
 | **Latest revision** | The cluster's latest revision, such as `#12 · 7/8 applied`: 8 online enabled nodes, 7 of which run their target revision. While a canary runs, the canary nodes' target is the candidate and the other nodes' the stable revision, see [Configuration canary](#configuration-canary) |
-
-Below the summary, a diagram links the cluster to its first 8 nodes (the node cards list them all): online nodes on solid lines, offline or disabled ones on dashed lines; each node shows its applied revision and egress, and every state but **In sync** in words (**Apply failed**, **Awaiting configuration**, **Data plane unhealthy**, **Behind**, **Offline**, **Disabled**).
 
 ### Clusters
 
@@ -30,15 +28,15 @@ A cluster is a set of nodes plus the sites assigned to them; each cluster has it
 | --- | --- |
 | Cluster of a site | With several clusters, the new-site form has a **Cluster** field (default: the oldest cluster); through `/api/v1`, `clusterId`. A site cannot change clusters later |
 | Capacity | A cluster publishes at most 512 enabled sites and has at most 256 [L4 apps](l4.en.md) |
-| Cache zone | The **Cache zone** card on the **Overview** sets the size and idle removal time of every node's cache zone, see [Cache zone](origins-and-cache.en.md#cache-zone) |
+| Cache zone | The **Cache zone** card on the **Settings** tab sets the size and idle removal time of every node's cache zone, see [Cache zone](origins-and-cache.en.md#cache-zone) |
 
 ### Node groups
 
 | Action | Description |
 | --- | --- |
 | **New node group** | **Node group**: name, at most 64 characters, unique within the cluster; **Region**: optional, see [Regions](#regions); **Canary group**: see [Configuration canary](#configuration-canary) |
-| **Edit node group** | Change name, region, and **Canary group** |
-| Delete | The default node group (marked **Default**) cannot be deleted; deleting another group moves its nodes back to the default group |
+| **Edit node group** | Opens from a click on the node group's row; change name, region, and **Canary group** |
+| Delete | **Delete** under **⋯** at the end of the row; the default node group (marked **Default**) cannot be deleted; deleting another group moves its nodes back to the default group |
 
 Node groups serve as the lines and backup node groups of **DNS steering**, as canary groups for node upgrades, and as canary groups for the configuration canary. A node group's region is also the region its nodes probe from when they **Also probe**.
 
@@ -56,20 +54,24 @@ The dialog shows the **Install command** (with a countdown, shown once), address
 
 ### Nodes
 
-| Item | Content |
+The node table on the **Nodes** tab has one row per node; the **Egress**, **Agent / engine**, and **Heartbeat** columns show on wide screens only.
+
+| Column | Content |
 | --- | --- |
-| **Node** | Name and host name |
-| **Status** | **Online** (heartbeat within 45 seconds), **Offline**, **Disabled**; an enrolled node that has not connected to the node channel since shows **Awaiting heartbeat** (grey); an online node that reports an unhealthy data plane is also marked **Data plane unhealthy**; an offline node whose certificate the node channel refuses is marked **Certificate expired** or **Certificate refused** |
+| **Node** | Name and first IP (hover for the host name); a node that also probes is marked **Also probes** |
+| **Status** | **Online** (heartbeat within 45 seconds), **Offline**, **Disabled**; an enrolled node that has not connected to the node channel since shows **Awaiting heartbeat** (grey); an online node that reports an unhealthy data plane is also marked **Data plane unhealthy**; an offline node whose certificate the node channel refuses is marked **Certificate expired** or **Certificate refused**; marked **No public address** when DNS has no address for the node, see [Nodes without a public address](scheduling.en.md#nodes-without-a-public-address) |
 | **Node group** | Node group and region |
-| **IP** | Unicast addresses in the node's latest heartbeat (replaced on every heartbeat, at most 64); for the addresses DNS and probes use, see [Scheduling addresses and backup IPs](scheduling.en.md#scheduling-addresses-and-backup-ips); marked **No public address** when DNS has no address for the node, see [Nodes without a public address](scheduling.en.md#nodes-without-a-public-address) |
-| **Metrics** | Gauges of the CPU and memory usage reported by the node (`metrics-v1`), in the warning color from 75% and the error color from 90%; also egress, active connections, and the 1-minute load; **No metrics** without metrics |
+| **Load** | CPU and memory usage reported by the node (`metrics-v1`), with a dot in the warning color from 75% and in the error color from 90%; "—" when offline or without metrics |
+| **Egress** | Egress reported by the node |
 | **Applied** | The revision the node has applied; badge **In sync** (the node's target revision reached), **Behind**, **Apply failed** (hover for the reason), or **Upgrade required**; an online node without any configuration yet shows **Awaiting configuration** |
-| **Agent / engine** | Agent version, engine, and engine version; a node not on the current [node channel URL](#node-channel) yet is also marked **Not switched**, **Cannot switch** (hover for the reason), **On fallback**, or **Upgrade to switch** (nodes before v1.2.0) |
+| **Agent / engine** | Agent version, marked **Upgrade recommended** when due; a node not on the current [node channel URL](#node-channel) yet is also marked **Not switched**, **Cannot switch** (hover for the reason), **On fallback**, or **Upgrade to switch** (nodes before v1.2.0) |
 | **Heartbeat** | How long ago the last heartbeat came; hover for the time |
+
+**⋯** at the end of a row holds the actions below.
 
 | Action | Description |
 | --- | --- |
-| **Details** | Also by clicking the node's name (`/clusters?node=<node ID>`): **Metrics**, **Data plane** (Healthy / Data plane unhealthy), **Connects from**, **Node channel** (the URL in use, the mark above, why the node cannot switch or runs on its fallback, and the fallback it keeps), **Certificate expires** (the client certificate; marked **Expires soon** with less than 10 days left, by when nodes normally renewed it already, and **Certificate expired** or **Certificate refused** once past or refused by the node channel), **Also probes**, **Scheduling addresses** (**Edit addresses**), and **Probe results**, see [Regional probes and scheduling](scheduling.en.md); **Cache** shows the cache usage and sets this node's own size, see [Cache zone](origins-and-cache.en.md#cache-zone) |
+| **Details** | Also by clicking anywhere in the node's row (`/clusters?node=<node ID>`): **Node group** (with region), **Applied** (marked **Apply failed** when applying failed), **Agent / engine** (agent version, engine, and engine version), **IP** (every unicast address in the node's latest heartbeat, replaced on every heartbeat, at most 64; for the addresses DNS and probes use, see [Scheduling addresses and backup IPs](scheduling.en.md#scheduling-addresses-and-backup-ips)), **Metrics** (gauges of CPU and memory usage, in the warning color from 75% and the error color from 90%, plus the 1 / 5 / 15 min load, egress, and connections; **No metrics** without metrics), **Data plane** (Healthy / Data plane unhealthy), **Connects from**, **Node channel** (the URL in use, the mark above, why the node cannot switch or runs on its fallback, and the fallback it keeps), **Certificate expires** (the client certificate; marked **Expires soon** with less than 10 days left, by when nodes normally renewed it already, and **Certificate expired** or **Certificate refused** once past or refused by the node channel), **Also probes**, **Scheduling addresses** (**Edit addresses**), and **Probe results**, see [Regional probes and scheduling](scheduling.en.md); **Cache** shows the cache usage and sets this node's own size, see [Cache zone](origins-and-cache.en.md#cache-zone) |
 | **Rename** | At most 64 characters |
 | **Move to group** | Node groups of the same cluster only |
 | **Disable** / **Enable** | A disabled node is refused by the node channel (except for certificate renewal, so its certificate is still valid when enabled) and keeps serving its last successfully applied configuration; its unfinished purge & prefetch deliveries are marked **Skipped**. Once the node is enabled and pulls tasks again, it gets one whole-site purge for every site those purges touched |
@@ -77,11 +79,11 @@ The dialog shows the **Install command** (with a countdown, shown once), address
 
 ### Node upgrades
 
-The **Node upgrades** section runs signed upgrades with a canary node group and explicit promotion; see [Node upgrades](node-upgrades.en.md).
+The **Node upgrades** section on the **Releases** tab runs signed upgrades with a canary node group and explicit promotion; see [Node upgrades](node-upgrades.en.md).
 
 ### Configuration canary
 
-The **Configuration canary** card sets the cluster's policy and shows the current rollout. Off by default.
+The **Configuration canary** card on the **Releases** tab sets the cluster's policy and shows the current rollout. Off by default.
 
 | Policy field | Values | Default |
 | --- | --- | --- |
@@ -128,7 +130,7 @@ While a rollout runs, the card also shows:
 
 ### Revisions
 
-Every change that affects node configuration publishes a new revision in the cluster. The **Revisions** table lists the latest 20: **Revision**, **Content hash**, **Sites**, **Reason**, **Time**. Each cluster keeps its latest 200 revisions; the stable and candidate revisions of the canary are never pruned. Revisions published only for ACME HTTP-01 challenges do not count and are deleted after an hour.
+Every change that affects node configuration publishes a new revision in the cluster. The **Revisions** table on the **Releases** tab lists the latest 20: **Revision**, **Content hash**, **Sites**, **Reason**, **Time**. Each cluster keeps its latest 200 revisions; the stable and candidate revisions of the canary are never pruned. Revisions published only for ACME HTTP-01 challenges do not count and are deleted after an hour.
 
 | Reason | Trigger |
 | --- | --- |
@@ -204,8 +206,8 @@ A dot map above the list marks the regions, placed by the city their code or nam
 | Action | Description |
 | --- | --- |
 | **New region** | **Name**: at most 64 characters; **Code**: lowercase letters, digits, and `-`, starting with a letter or digit, at most 32 characters, unique |
-| **Edit region** | Change name and code |
-| Delete | Refused while probes belong to the region (**N probes still belong to this region**); node groups that reference the region stay, without a region, and their nodes that also probe stop probing |
+| **Edit region** | Opens from a click on the region's row; change name and code |
+| Delete | **Delete** under **⋯** at the end of the row; refused while probes belong to the region (**N probes still belong to this region**); node groups that reference the region stay, without a region, and their nodes that also probe stop probing |
 
 ## Service accounts
 
@@ -214,9 +216,9 @@ Page: the **Service accounts** tab of **System settings** (`/system?tab=service-
 | Action | Description |
 | --- | --- |
 | **New service account** | **Name** (at most 64 characters, unique), **Scopes**, **Enabled** |
-| Edit | Change name, scopes, and enabled state; keys of a disabled service account are refused |
-| **Keys** | **New key** (optional **Key name**; the key is shown once); **Revoke** needs confirmation. The list shows **Revoked** and **Last used** |
-| Delete | Needs confirmation; all of its keys stop working |
+| **Edit service account** | Under **⋯** at the end of the row; change name, scopes, and enabled state; keys of a disabled service account are refused |
+| **Keys** | Opens from a click on the service account's row; **New key** (optional **Key name**; the key is shown once); **Revoke** needs confirmation. The list shows **Revoked** and **Last used** |
+| Delete | **Delete** under **⋯** at the end of the row, confirmed; all of its keys stop working |
 
 | Scope | Callable procedures |
 | --- | --- |
