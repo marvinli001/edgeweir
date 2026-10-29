@@ -1,4 +1,4 @@
-import type { InboxIcon } from "@hugeicons/core-free-icons";
+import { type InboxIcon, Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type * as React from "react";
 import { Alert } from "@/components/arc/alert/alert";
@@ -61,6 +61,30 @@ export function EmptyState({
         action={children}
       />
     </div>
+  );
+}
+
+/**
+ * A filtered list that matches nothing, as opposed to one with nothing in it yet: the search icon,
+ * one line and the way back to the whole list. `compact` inside a panel, like EmptyState.
+ */
+export function NoMatch({
+  title,
+  onClear,
+  compact = false,
+  testId = "clear-filters",
+}: {
+  title: string;
+  onClear: () => void;
+  compact?: boolean;
+  testId?: string;
+}) {
+  return (
+    <EmptyState title={title} icon={Search01Icon} compact={compact}>
+      <Button size="sm" variant="secondary" onClick={onClear} data-testid={testId}>
+        {m.common_clear_filters()}
+      </Button>
+    </EmptyState>
   );
 }
 

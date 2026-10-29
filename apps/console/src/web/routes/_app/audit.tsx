@@ -17,7 +17,7 @@ import { type Columns, DataTable, FilterBar } from "@/components/data-table";
 import { FilterSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
-import { EmptyState, QueryView } from "@/components/states";
+import { EmptyState, NoMatch, QueryView } from "@/components/states";
 import { auditActionLabel, auditTargetLabel } from "@/lib/audit";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
@@ -294,7 +294,16 @@ function AuditPage() {
       <QueryView
         query={entries}
         isEmpty={(data) => data.total === 0}
-        empty={<EmptyState icon={Audit01Icon} title={m.audit_empty()} />}
+        empty={
+          search.action || search.target || search.range ? (
+            <NoMatch
+              title={m.audit_no_match()}
+              onClear={() => setFilter({ action: undefined, target: undefined, range: undefined })}
+            />
+          ) : (
+            <EmptyState icon={Audit01Icon} title={m.audit_empty()} />
+          )
+        }
       >
         {({ items, total }) => (
           <DataTable

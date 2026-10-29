@@ -13,7 +13,7 @@ import { FilterSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
 import { SafetyNote } from "@/components/safety-note";
-import { EmptyState, QueryView } from "@/components/states";
+import { EmptyState, NoMatch, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, formatNumber, m } from "@/lib/i18n";
@@ -141,27 +141,44 @@ function UnbanAction({ ban }: { ban: Ban }) {
   );
 }
 
+/** The bans list's filters and page, kept in the URL (`/bans`). */
+export interface BansSearch {
+  /** The bans of one site (the site's security tab links here). */
+  site?: string;
+  /** The bans of an address, and the ban dialog opened with it (and the site). */
+  ip?: string;
+  source?: BanSource;
+  scope?: BanScope;
+  page?: number;
+}
+
 /**
- * Dynamic IP bans of one site or of every site (platform bans). With `initialAddress` (a link
- * from a log row or an event) the list shows the bans of that address and the ban dialog opens
- * with it and the site.
+ * Dynamic IP bans of one site or of every site (platform bans), filtered by `search` (the URL).
+ * An address arriving in it (a link from a log row or an event) filters the list by that address
+ * and opens the ban dialog with it and the site.
  */
 export function BansPage({
-  initialSiteId,
-  initialAddress,
+  search,
+  onSearch,
 }: {
-  initialSiteId?: string;
-  initialAddress?: string;
+  search: BansSearch;
+  onSearch: (patch: Partial<BansSearch>) => void;
 }) {
-  const [page, setPage] = React.useState(1);
-  const [siteId, setSiteId] = React.useState<string | undefined>(initialSiteId);
-  const [address, setAddress] = React.useState<string | undefined>(initialAddress);
-  const [source, setSource] = React.useState<BanSource | undefined>();
-  const [scope, setScope] = React.useState<BanScope | undefined>();
-  // The dialog and what it starts with; a link with an address opens it once.
+  const { site: siteId, ip: address, source, scope } = search;
+  const page = search.page ?? 1;
+  const setPage = (next: number) => onSearch({ page: next > 1 ? next : undefined });
+  // A filter change starts again on the first page.
+  const setFilter = (patch: Partial<BansSearch>) => onSearch({ ...patch, page: undefined });
+  // The dialog and what it starts with; a link with an address opens it.
   const dialog = useDialogState<{ address?: string; siteId?: string }>(
-    initialAddress ? { address: initialAddress, siteId: initialSiteId } : undefined,
+    address ? { address, siteId } : undefined,
   );
+  const linked = React.useRef(address);
+  React.useEffect(() => {
+    if (address === linked.current) return;
+    linked.current = address;
+    if (address) dialog.show({ address, siteId });
+  }, [address, siteId, dialog.show]);
   const bans = useQuery({
     ...orpc.bans.list.queryOptions({
       input: { scope, siteId, source, address, page, pageSize: PAGE_SIZE },
@@ -175,12 +192,6 @@ export function BansPage({
   const clusters = useQuery(orpc.clusters.list.queryOptions());
   const proxied = (clusters.data ?? []).filter((c) => c.clientIpMode !== "direct");
   const filtered = !!(siteId || source || scope || address);
-  const filter =
-    <T,>(set: (value: T) => void) =>
-    (value: T) => {
-      set(value);
-      setPage(1);
-    };
 
   const columns = React.useMemo<Columns<Ban>>(
     () => [
@@ -257,7 +268,7 @@ export function BansPage({
         <FilterBar className="grid w-full grid-flow-dense grid-cols-2 sm:flex @3xl/main:w-auto">
           <FilterSelect
             value={scope}
-            onChange={filter((value) => setScope(value as BanScope | undefined))}
+            onChange={(value) => setFilter({ scope: value as BanScope | undefined })}
             allLabel={m.bans_all_scopes()}
             options={(["platform", "site"] as const).map((value) => ({
               value,
@@ -268,7 +279,7 @@ export function BansPage({
           />
           <FilterSelect
             value={siteId}
-            onChange={filter(setSiteId)}
+            onChange={(value) => setFilter({ site: value })}
             allLabel={m.bans_all_sites()}
             options={(sites.data?.items ?? []).map((s) => ({ value: s.id, label: s.name }))}
             label={m.bans_filter_site()}
@@ -277,7 +288,7 @@ export function BansPage({
           />
           <FilterSelect
             value={source}
-            onChange={filter((value) => setSource(value as BanSource | undefined))}
+            onChange={(value) => setFilter({ source: value as BanSource | undefined })}
             allLabel={m.bans_all_sources()}
             options={(["manual", "auto", "rule"] as const).map((value) => ({
               value,
@@ -300,7 +311,7 @@ export function BansPage({
                 size="sm"
                 variant="ghost"
                 aria-label={m.bans_address_filter_clear()}
-                onClick={filter(() => setAddress(undefined))}
+                onClick={() => setFilter({ ip: undefined })}
               >
                 <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
               </Button>
@@ -317,14 +328,21 @@ export function BansPage({
         query={bans}
         isEmpty={(data) => data.total === 0}
         empty={
-          <EmptyState icon={BlockedIcon} title={filtered ? m.bans_no_match() : m.bans_empty()}>
-            {filtered ? null : (
+          filtered ? (
+            <NoMatch
+              title={m.bans_no_match()}
+              onClear={() =>
+                setFilter({ site: undefined, ip: undefined, source: undefined, scope: undefined })
+              }
+            />
+          ) : (
+            <EmptyState icon={BlockedIcon} title={m.bans_empty()}>
               <Button onClick={() => dialog.show({})}>
                 <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
                 {m.bans_create()}
               </Button>
-            )}
-          </EmptyState>
+            </EmptyState>
+          )
         }
       >
         {({ items, total }) => (

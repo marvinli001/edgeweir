@@ -31,7 +31,7 @@ import { Field, FieldLabel } from "@/components/layout/form";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
 import { SafetyNote } from "@/components/safety-note";
-import { EmptyState, QueryView } from "@/components/states";
+import { EmptyState, NoMatch, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, formatNumber, m } from "@/lib/i18n";
@@ -236,15 +236,28 @@ function GreylistDialog({ open, onOpenChange }: DialogProps) {
   );
 }
 
-/**
- * The greylist: addresses challenged or rate-limited on one site or every site. With
- * `initialAddress` (a link from the IP check) it shows the entries of that address.
- */
-export function GreylistPage({ initialAddress }: { initialAddress?: string }) {
-  const [page, setPage] = React.useState(1);
-  const [siteId, setSiteId] = React.useState<string | undefined>();
-  const [scope, setScope] = React.useState<Scope | undefined>();
-  const [address, setAddress] = React.useState<string | undefined>(initialAddress);
+/** The greylist's filters and page, kept in the URL (`/greylist`). */
+export interface GreylistSearch {
+  site?: string;
+  /** The entries of an address (a link from the IP check). */
+  ip?: string;
+  scope?: Scope;
+  page?: number;
+}
+
+/** The greylist: addresses challenged or rate-limited on one site or every site. */
+export function GreylistPage({
+  search,
+  onSearch,
+}: {
+  search: GreylistSearch;
+  onSearch: (patch: Partial<GreylistSearch>) => void;
+}) {
+  const { site: siteId, ip: address, scope } = search;
+  const page = search.page ?? 1;
+  const setPage = (next: number) => onSearch({ page: next > 1 ? next : undefined });
+  // A filter change starts again on the first page.
+  const setFilter = (patch: Partial<GreylistSearch>) => onSearch({ ...patch, page: undefined });
   const dialog = useDialogState<Record<string, never>>();
   const list = useQuery({
     ...orpc.greylist.list.queryOptions({
@@ -256,12 +269,6 @@ export function GreylistPage({ initialAddress }: { initialAddress?: string }) {
   });
   const sites = useQuery(orpc.sites.list.queryOptions({ input: { page: 1, pageSize: 100 } }));
   const filtered = !!(siteId || scope || address);
-  const filter =
-    <T,>(set: (value: T) => void) =>
-    (value: T) => {
-      set(value);
-      setPage(1);
-    };
 
   const columns = React.useMemo<Columns<GreylistEntry>>(
     () => [
@@ -346,7 +353,7 @@ export function GreylistPage({ initialAddress }: { initialAddress?: string }) {
         <FilterBar className="grid w-full grid-flow-dense grid-cols-2 sm:flex @3xl/main:w-auto">
           <FilterSelect
             value={scope}
-            onChange={filter((value) => setScope(value as Scope | undefined))}
+            onChange={(value) => setFilter({ scope: value as Scope | undefined })}
             allLabel={m.bans_all_scopes()}
             options={(["platform", "site"] as const).map((value) => ({
               value,
@@ -357,7 +364,7 @@ export function GreylistPage({ initialAddress }: { initialAddress?: string }) {
           />
           <FilterSelect
             value={siteId}
-            onChange={filter(setSiteId)}
+            onChange={(value) => setFilter({ site: value })}
             allLabel={m.bans_all_sites()}
             options={(sites.data?.items ?? []).map((s) => ({ value: s.id, label: s.name }))}
             label={m.bans_filter_site()}
@@ -373,7 +380,7 @@ export function GreylistPage({ initialAddress }: { initialAddress?: string }) {
                 size="sm"
                 variant="ghost"
                 aria-label={m.bans_address_filter_clear()}
-                onClick={filter(() => setAddress(undefined))}
+                onClick={() => setFilter({ ip: undefined })}
               >
                 <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
               </Button>
@@ -390,17 +397,19 @@ export function GreylistPage({ initialAddress }: { initialAddress?: string }) {
         query={list}
         isEmpty={(data) => data.total === 0}
         empty={
-          <EmptyState
-            icon={SecurityCheckIcon}
-            title={filtered ? m.greylist_no_match() : m.greylist_empty()}
-          >
-            {filtered ? null : (
+          filtered ? (
+            <NoMatch
+              title={m.greylist_no_match()}
+              onClear={() => setFilter({ site: undefined, ip: undefined, scope: undefined })}
+            />
+          ) : (
+            <EmptyState icon={SecurityCheckIcon} title={m.greylist_empty()}>
               <Button onClick={() => dialog.show({})}>
                 <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
                 {m.greylist_create()}
               </Button>
-            )}
-          </EmptyState>
+            </EmptyState>
+          )
         }
       >
         {({ items, total }) => (

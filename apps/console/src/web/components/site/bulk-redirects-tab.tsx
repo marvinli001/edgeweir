@@ -21,7 +21,7 @@ import { Pager } from "@/components/pager";
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
 import { nextDraftKey, SaveBar, serializeDrafts } from "@/components/site/save-site";
-import { combineQueries, EmptyState, QueryView } from "@/components/states";
+import { combineQueries, EmptyState, NoMatch, QueryView } from "@/components/states";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatNumber, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
@@ -231,9 +231,14 @@ function BulkRedirectsForm({
                 {actions}
               </div>
               {shown.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  {m.bulk_redirects_no_match()}
-                </p>
+                <NoMatch
+                  compact
+                  title={m.bulk_redirects_no_match()}
+                  onClear={() => {
+                    setFilter("");
+                    setPage(1);
+                  }}
+                />
               ) : (
                 <div className="flex flex-col overflow-hidden rounded-lg border">
                   <div

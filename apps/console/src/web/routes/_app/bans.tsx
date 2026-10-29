@@ -8,11 +8,20 @@ export const Route = createFileRoute("/_app/bans")({
     site: z.string().optional(),
     /** The bans of an address, and the ban dialog opened with it (and the site). */
     ip: z.string().optional(),
+    source: z.enum(["manual", "auto", "rule"]).optional(),
+    scope: z.enum(["platform", "site"]).optional(),
+    page: z.number().int().min(1).optional(),
   }),
   component: BansRoute,
 });
 
 function BansRoute() {
-  const { site, ip } = Route.useSearch();
-  return <BansPage key={`${site ?? ""}|${ip ?? ""}`} initialSiteId={site} initialAddress={ip} />;
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+  return (
+    <BansPage
+      search={search}
+      onSearch={(patch) => navigate({ search: (prev) => ({ ...prev, ...patch }), replace: true })}
+    />
+  );
 }

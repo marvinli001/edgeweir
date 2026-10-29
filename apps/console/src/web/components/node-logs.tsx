@@ -17,7 +17,7 @@ import { Button } from "@/components/arc/button/button";
 import { OptionSelect } from "@/components/form-select";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/layout/input-group";
 import { Spinner } from "@/components/layout/spinner";
-import { EmptyState, QueryView } from "@/components/states";
+import { EmptyState, NoMatch, QueryView } from "@/components/states";
 import { Dot, type StatusTone } from "@/components/status-dot";
 import { formatDateTime, formatNumber, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
@@ -169,11 +169,12 @@ export function NodeLogs({ node }: { node: Node }) {
           !supported && !filtered ? (
             <EmptyState title={m.node_logs_unsupported()} />
           ) : filtered ? (
-            <EmptyState compact title={m.node_logs_empty_filtered()}>
-              <Button size="sm" variant="secondary" onClick={clear} data-testid="node-logs-clear">
-                {m.node_logs_clear()}
-              </Button>
-            </EmptyState>
+            <NoMatch
+              compact
+              title={m.node_logs_empty_filtered()}
+              onClear={clear}
+              testId="node-logs-clear"
+            />
           ) : (
             <EmptyState compact title={m.node_logs_empty()} />
           )
