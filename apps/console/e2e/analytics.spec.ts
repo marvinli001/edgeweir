@@ -19,7 +19,7 @@ test("overview lists and charts, stars, site analytics with breakdowns", async (
     await expect(page.getByTestId("home-recents")).toBeVisible();
     const requests = page.getByTestId("metric-requests");
     await expect(requests.locator("[data-slot=metric-value]")).toHaveText(/[1-9]/);
-    await expect(requests.locator(".recharts-area")).toBeVisible();
+    await expect(requests.locator("[data-slot=chart-area]")).toBeVisible();
     await expect(page.getByTestId("status-codes")).toBeVisible();
     await expect(page.getByTestId("top-sites").getByTestId("top-item-name").first()).toBeVisible();
   });
@@ -62,10 +62,10 @@ test("overview lists and charts, stars, site analytics with breakdowns", async (
     await expect(dialog.getByRole("heading", { name: "请求总数", exact: true })).toBeVisible();
     // One site: no per-site view; nodes come first.
     await expect(dialog.getByTestId("detail-view-site")).toHaveCount(0);
-    await expect(dialog.getByTestId("detail-chart").locator(".recharts-line")).toBeVisible();
+    await expect(dialog.getByTestId("detail-chart").locator("[data-slot=chart-line]").first()).toBeVisible();
     await expect(dialog.getByTestId("detail-list")).toContainText(nodeName);
     await dialog.getByTestId("detail-view-status").click();
-    await expect(dialog.getByTestId("detail-chart").locator(".recharts-bar")).toBeVisible();
+    await expect(dialog.getByTestId("detail-chart").locator("[data-slot=chart-bar]").first()).toBeVisible();
     await expect(dialog.getByTestId("detail-list").getByTestId("ranked-item").first()).toHaveText(
       /^\d{3}/,
     );

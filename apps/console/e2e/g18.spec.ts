@@ -47,7 +47,7 @@ async function check(page: Page, name: string) {
     ).toBe(true);
     expect(
       await page.evaluate(
-        `[...document.querySelectorAll('[data-slot="card"], [role="dialog"]')].every((el) => el.getBoundingClientRect().right <= window.innerWidth + 1)`,
+        `[...document.querySelectorAll('[data-slot="panel"], [role="dialog"]')].every((el) => el.getBoundingClientRect().right <= window.innerWidth + 1)`,
       ),
       `${name}: a card or dialog wider than the page at 375 px (${scheme})`,
     ).toBe(true);

@@ -51,7 +51,7 @@ async function check(page: Page, name: string) {
     ).toBe(true);
     expect(
       await page.evaluate(
-        `[...document.querySelectorAll('[data-slot="card"], [role="dialog"], [data-testid="log-row"]')].every((el) => el.getBoundingClientRect().right <= window.innerWidth + 1)`,
+        `[...document.querySelectorAll('[data-slot="panel"], [role="dialog"], [data-testid="log-row"]')].every((el) => el.getBoundingClientRect().right <= window.innerWidth + 1)`,
       ),
       `${name}: a card, dialog or log row wider than the page at 375 px (${scheme})`,
     ).toBe(true);

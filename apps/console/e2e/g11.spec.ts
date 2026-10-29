@@ -42,7 +42,7 @@ async function check(page: Page, name: string) {
     // Clipping hides content wider than its card (a PEM's long lines): the page itself does not overflow.
     expect(
       await page.evaluate(
-        `[...document.querySelectorAll('[data-slot="card"]')].every((card) => card.getBoundingClientRect().right <= window.innerWidth + 1 && card.scrollWidth <= card.clientWidth + 1)`,
+        `[...document.querySelectorAll('[data-slot="panel"]')].every((card) => card.getBoundingClientRect().right <= window.innerWidth + 1 && card.scrollWidth <= card.clientWidth + 1)`,
       ),
       `${name}: a card's content is wider than the card at 375 px (${scheme})`,
     ).toBe(true);

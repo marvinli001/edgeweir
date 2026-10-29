@@ -226,6 +226,7 @@ export function StackedBarsChart({
                         height={height}
                         fill={s.color}
                         className="stroke-card"
+                        data-slot="chart-bar"
                         strokeWidth={1}
                       />
                     );

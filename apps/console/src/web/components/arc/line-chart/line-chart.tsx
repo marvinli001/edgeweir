@@ -4,7 +4,8 @@
  * the console's reduced-motion hook, Paraglide text, `--arc-` tokens (foundation.css), the series
  * palette from tokens.css; a null value leaves a gap in its line, `domain` fixes the value axis,
  * `axis={false}` drops the gridlines, tick gutter and date axis, the lines draw in on mount
- * rather than on first scroll into view, and loading keeps the dimmed lines without a placeholder.
+ * rather than on first scroll into view, loading keeps the dimmed lines without a placeholder, and
+ * the area and line paths carry `data-slot` hooks for the e2e specs.
  */
 import {
   type CSSProperties,
@@ -816,6 +817,7 @@ export function LineChart({
                         else areas.current.delete(line.key);
                       }}
                       className={styles.area}
+                      data-slot="chart-area"
                     />
                   )}
                   <path
@@ -824,6 +826,7 @@ export function LineChart({
                       else lines.current.delete(line.key);
                     }}
                     className={styles.line}
+                    data-slot="chart-line"
                     data-dashed={line.dashed || undefined}
                   />
                 </g>
