@@ -79,6 +79,7 @@ function SetupPage() {
                     name="setupToken"
                     required
                     autoComplete="off"
+                    autoFocus
                     spellCheck={false}
                     className="font-mono"
                     placeholder={m.setup_token_placeholder()}

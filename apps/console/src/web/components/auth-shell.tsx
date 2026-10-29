@@ -1,4 +1,5 @@
 import type * as React from "react";
+import { LanguageToggle } from "@/components/language-toggle";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { m } from "@/lib/i18n";
@@ -18,7 +19,10 @@ export function AuthShell({
 }) {
   return (
     <div className="relative isolate flex min-h-svh flex-col items-center justify-center bg-mesh p-4 md:p-10">
-      <ThemeToggle className="fixed top-4 right-4 z-10 md:top-6 md:right-6" />
+      <div className="fixed top-4 right-4 z-10 flex items-center gap-1 md:top-6 md:right-6">
+        <LanguageToggle />
+        <ThemeToggle />
+      </div>
       <div className={cn("relative flex w-full max-w-sm flex-col gap-6 animate-enter", className)}>
         <div className="flex items-center gap-2.5 self-center text-title font-medium">
           <span className="grid size-9 place-items-center rounded-lg bg-primary text-primary-foreground">

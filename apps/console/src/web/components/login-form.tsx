@@ -99,6 +99,7 @@ export function LoginForm({
                 name="email"
                 type="email"
                 autoComplete="username webauthn"
+                autoFocus
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required

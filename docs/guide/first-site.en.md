@@ -35,7 +35,7 @@ Node installation, DNS propagation, and certificate issuance each take time that
 
 2. Open `EDGEWEIR_PUBLIC_URL` in a browser. An uninitialized console redirects to `/setup` (**Create your account**).
 
-3. Fill in the form and click **Finish**.
+3. Fill in the form and click **Create and continue**.
 
    | Field | Description |
    | --- | --- |
