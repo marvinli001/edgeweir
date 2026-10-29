@@ -389,7 +389,7 @@ export function CommandPalette({
             aria-label={m.common_close()}
             onClick={onClose}
           >
-            Esc
+            {m.command_shortcut_esc()}
           </button>
         ) : null}
         <kbd className={styles.commandKey}>⌘ K</kbd>

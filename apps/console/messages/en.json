@@ -42,6 +42,8 @@
       }
     }
   ],
+  "command_shortcut_ctrl": "Ctrl K",
+  "command_shortcut_esc": "Esc",
   "command_group_navigation": "Navigation",
   "command_group_actions": "Actions",
   "command_group_sites": "Sites",

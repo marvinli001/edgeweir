@@ -58,7 +58,7 @@ function SearchTrigger() {
         <HugeiconsIcon icon={Search01Icon} strokeWidth={2} className="size-4" />
         <span className="flex-1 truncate text-left">{m.command_placeholder()}</span>
         <kbd className="rounded-sm border bg-card px-1.5 font-sans text-xs text-muted-foreground">
-          {mac ? "⌘ K" : "Ctrl K"}
+          {mac ? "⌘ K" : m.command_shortcut_ctrl()}
         </kbd>
       </button>
       <Button

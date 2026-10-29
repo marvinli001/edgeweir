@@ -275,9 +275,16 @@ describe("UI rules (ADR-0003)", () => {
       (file) => file.includes("components/arc/") && !file.endsWith("/foundation.css"),
     );
     expect(arc.length).toBeGreaterThan(8);
+    // A stylesheet may also read what its component sets in a style object ("--series": color).
+    const styled = (file: string) => {
+      const component = file.replace(/\.module\.css$/, ".tsx");
+      return component !== file && existsSync(resolve(root, component))
+        ? [...read(component).matchAll(/"(--[a-z0-9-]+)":/g)].map((m) => m[1] as string)
+        : [];
+    };
     const unmapped = arc.flatMap((file) => {
       const source = read(file).replace(/\/\*[\s\S]*?\*\//g, "");
-      const own = declared(source);
+      const own = new Set([...declared(source), ...styled(file)]);
       return [...source.matchAll(/var\((--[a-z0-9-]+)/g)]
         .map((m) => m[1] as string)
         .filter(

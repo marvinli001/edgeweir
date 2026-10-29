@@ -188,6 +188,19 @@ function parseColor(value: string, vars: Record<string, string>, seen: string[] 
       },
     };
   }
+  const rgb = /^rgba?\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*(?:\/\s*([\d.]+%?))?\s*\)$/.exec(text);
+  if (rgb) {
+    const channel = (i: number) => Number(rgb[i]) / 255;
+    return {
+      kind: "rgb",
+      value: {
+        r: channel(1),
+        g: channel(2),
+        b: channel(3),
+        alpha: rgb[4] === undefined ? 1 : parseNumber(rgb[4]),
+      },
+    };
+  }
   const oklch =
     /^oklch\(\s*([\d.]+%?)\s+([\d.]+%?)\s+([\d.]+|none)\s*(?:\/\s*([\d.]+%?))?\s*\)$/.exec(text);
   if (oklch) {
