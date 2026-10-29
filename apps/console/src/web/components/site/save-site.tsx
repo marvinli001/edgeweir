@@ -10,6 +10,7 @@ import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { toast } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 
 /** Saves part of a site; the toast follows the change onto the nodes (followSiteDelivery). */
 export function useSaveSite(siteId: string) {
@@ -52,6 +53,7 @@ export function SaveBar({
   sticky = false,
   testId,
   errorTestId = "site-save-error",
+  className,
 }: {
   dirty: boolean;
   pending: boolean;
@@ -62,10 +64,14 @@ export function SaveBar({
   sticky?: boolean;
   testId: string;
   errorTestId?: string;
+  className?: string;
 }) {
   useUnsavedChanges(dirty);
   return (
-    <PanelFooter sticky={sticky} className="@container/save-bar flex-wrap gap-x-4 gap-y-2 border-t">
+    <PanelFooter
+      sticky={sticky}
+      className={cn("@container/save-bar flex-wrap gap-x-4 gap-y-2 border-t", className)}
+    >
       <Button
         type="submit"
         disabled={!dirty || pending}

@@ -194,7 +194,15 @@ export function RulesEditor({
             );
           })}
         </SortableList>
-        <SaveBar sticky dirty={dirty} pending={save.isPending} error={error} testId="rules-save" />
+        {/* Below the phase cards, the bar is a card of its own (no panel around it). */}
+        <SaveBar
+          sticky
+          dirty={dirty}
+          pending={save.isPending}
+          error={error}
+          testId="rules-save"
+          className="rounded-lg border bg-card py-3 [--panel-pad:--spacing(5)] data-sticky:mb-0 max-sm:[--panel-pad:--spacing(4)]"
+        />
       </form>
     </RuleHistoryContext.Provider>
   );

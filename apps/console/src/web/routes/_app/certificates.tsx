@@ -34,7 +34,7 @@ import {
   certificateExpired,
   certificateState,
 } from "@/lib/certificate-status";
-import { formatDateTime, formatList, m } from "@/lib/i18n";
+import { formatDateTime, formatList, formatNumber, m } from "@/lib/i18n";
 import { splitList } from "@/lib/lists";
 import { orpc } from "@/lib/orpc";
 import { rowActivationHandlers, rowClickable, rowLink, rowLinkButton } from "@/lib/row-link";
@@ -178,76 +178,87 @@ function CertificatesPanel({
         {(list) => (
           // One card, a flat row per certificate: name and state, the names it covers, expiry and
           // renewal, then its actions.
-          <ul
-            className="flex flex-col divide-y rounded-lg border bg-card "
-            data-testid="certificate-list"
-          >
-            {list.map((cert, index) => {
-              return (
-                <li
-                  key={cert.id}
-                  className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-3 px-5 py-4 animate-enter @3xl/main:grid-cols-[minmax(0,1fr)_minmax(0,22rem)_auto]"
-                  style={enterDelay(index)}
-                  data-testid="certificate-card"
-                >
-                  <div className="flex min-w-0 flex-col gap-1.5">
-                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <span className="truncate font-medium">{cert.name}</span>
-                      <CertificateStatus state={certificateState(cert)} />
-                    </div>
-                    <p className="font-mono text-xs leading-5 break-all text-muted-foreground">
-                      {cert.names.join(", ")}
-                    </p>
-                    {cert.lastError ? (
-                      <SafetyNote className="text-destructive" data-testid="certificate-error">
-                        {certificateErrorText(cert.lastError)}
-                      </SafetyNote>
-                    ) : null}
-                    <NodeFailures failures={cert.nodeFailures} />
-                  </div>
-                  <div className="col-span-2 row-start-2 flex min-w-0 flex-col gap-1 text-sm @3xl/main:col-span-1 @3xl/main:row-start-1">
-                    {cert.notAfter ? (
-                      <span className="text-muted-foreground">
-                        {certificateExpired(cert.notAfter)
-                          ? m.cert_expired_at({ date: formatDateTime(cert.notAfter) })
-                          : m.cert_expires({
-                              date: formatDateTime(cert.notAfter),
-                              days: certificateDaysLeft(cert.notAfter),
-                            })}
-                      </span>
-                    ) : null}
-                    <span className="text-muted-foreground">
-                      {cert.autoRenew ? m.cert_auto_on() : m.cert_auto_off()}
-                    </span>
-                    {cert.renewAt && cert.autoRenew ? (
-                      <span className="text-xs text-muted-foreground">
-                        {m.cert_renew_at({ date: formatDateTime(cert.renewAt) })}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="col-start-2 row-start-1 flex justify-end @3xl/main:col-start-3">
-                    <ItemMenu
-                      testId="certificate-actions"
-                      remove={{
-                        title: m.cert_delete_confirm({ name: cert.name }),
-                        onConfirm: () => remove.mutateAsync({ id: cert.id }),
-                      }}
-                    >
-                      {cert.source === "acme" ? (
-                        <DropdownMenuItem
-                          disabled={renew.isPending || ["pending", "issuing"].includes(cert.status)}
-                          onClick={() => renew.mutate({ id: cert.id })}
-                          data-testid="certificate-renew"
-                        >
-                          {m.cert_renew()}
-                        </DropdownMenuItem>
+          <div className="overflow-clip rounded-lg border bg-card">
+            <ul className="flex flex-col divide-y" data-testid="certificate-list">
+              {list.map((cert, index) => {
+                return (
+                  <li
+                    key={cert.id}
+                    className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-3 px-5 py-4 animate-enter @3xl/main:grid-cols-[minmax(0,1fr)_22rem_auto]"
+                    style={enterDelay(index)}
+                    data-testid="certificate-card"
+                  >
+                    <div className="col-start-1 row-start-1 flex min-w-0 flex-col gap-1.5">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <span className="truncate font-medium" title={cert.name}>
+                          {cert.name}
+                        </span>
+                        <CertificateStatus state={certificateState(cert)} />
+                      </div>
+                      <p className="font-mono text-xs leading-5 [overflow-wrap:anywhere] text-muted-foreground">
+                        {cert.names.join(", ")}
+                      </p>
+                      {cert.lastError ? (
+                        <SafetyNote className="text-destructive" data-testid="certificate-error">
+                          {certificateErrorText(cert.lastError)}
+                        </SafetyNote>
                       ) : null}
-                    </ItemMenu>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                      <NodeFailures failures={cert.nodeFailures} />
+                    </div>
+                    <div className="col-span-2 row-start-2 flex min-w-0 flex-col gap-1 text-sm @3xl/main:col-span-1 @3xl/main:col-start-2 @3xl/main:row-start-1">
+                      {cert.notAfter ? (
+                        <span className="text-muted-foreground">
+                          {certificateExpired(cert.notAfter)
+                            ? m.cert_expired_at({ date: formatDateTime(cert.notAfter) })
+                            : m.cert_expires({
+                                date: formatDateTime(cert.notAfter),
+                                days: certificateDaysLeft(cert.notAfter),
+                              })}
+                        </span>
+                      ) : null}
+                      <span className="text-muted-foreground">
+                        {cert.autoRenew ? m.cert_auto_on() : m.cert_auto_off()}
+                      </span>
+                      {cert.renewAt && cert.autoRenew ? (
+                        <span className="text-xs text-muted-foreground">
+                          {m.cert_renew_at({ date: formatDateTime(cert.renewAt) })}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="col-start-2 row-start-1 flex justify-end @3xl/main:col-start-3">
+                      <ItemMenu
+                        testId="certificate-actions"
+                        remove={{
+                          title: m.cert_delete_confirm({ name: cert.name }),
+                          onConfirm: () => remove.mutateAsync({ id: cert.id }),
+                        }}
+                      >
+                        {cert.source === "acme" ? (
+                          <DropdownMenuItem
+                            disabled={
+                              renew.isPending || ["pending", "issuing"].includes(cert.status)
+                            }
+                            onClick={() => renew.mutate({ id: cert.id })}
+                            data-testid="certificate-renew"
+                          >
+                            {m.cert_renew()}
+                          </DropdownMenuItem>
+                        ) : null}
+                      </ItemMenu>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            <div
+              className="border-t px-4 py-2.5 text-dense text-muted-foreground"
+              data-slot="table-footer"
+            >
+              <span className="readout" data-testid="table-total">
+                {m.table_total({ count: formatNumber(list.length) })}
+              </span>
+            </div>
+          </div>
         )}
       </QueryView>
       <Panel>

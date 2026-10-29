@@ -51,7 +51,7 @@ export function RulesBodyLimitCard({ site }: { site: Site }) {
               {m.feature_unavailable_nodes()}
             </SafetyNote>
           ) : null}
-          <div className="w-full sm:w-56">
+          <div className="w-full sm:[&_input]:w-40">
             <NumberField
               id="rules-body-limit"
               label={m.rules_body_limit_value()}

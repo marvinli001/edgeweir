@@ -328,6 +328,11 @@
         color: var(--muted-foreground);
       }
     }
+    /* Numbers (ports, seconds, counts) take a number's width, not the whole control column. */
+    & input[type="number"]:not([data-slot="input-group"] *),
+    & [data-slot="input-group"]:has(input[type="number"]) {
+      max-width: 12rem;
+    }
     /* Rows without a label of their own (a switch, a hint, an add button) start at the controls. */
     & > :not([data-slot="field"], [data-slot="field-set"], :has([data-slot="field-label"])),
     &
