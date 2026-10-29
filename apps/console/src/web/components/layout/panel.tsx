@@ -4,7 +4,9 @@ import { cn } from "@/lib/utils";
 /*
  * Panel: the white content surface on the gray canvas (tokens.md): 1px hairline, 8px radius, no
  * shadow, 20px padding (16px in `size="sm"`). Header = title (16px medium) with actions at the
- * end; content; an optional footer (a top hairline when it holds the save actions).
+ * end; content; an optional footer (a top hairline when it holds the save actions). Content wider
+ * than the panel is clipped sideways (`clip`, not `hidden`, so a sticky save bar still follows the
+ * page) and never widens a phone page.
  */
 
 function Panel({
@@ -17,7 +19,7 @@ function Panel({
       data-slot="panel"
       data-size={size}
       className={cn(
-        "group/panel flex min-w-0 flex-col gap-(--panel-gap) rounded-lg border border-border bg-card py-(--panel-pad) text-sm text-card-foreground [--panel-gap:--spacing(4)] [--panel-pad:--spacing(5)] data-[size=sm]:[--panel-pad:--spacing(4)] max-sm:[--panel-pad:--spacing(4)]",
+        "group/panel flex min-w-0 flex-col gap-(--panel-gap) overflow-x-clip rounded-lg border border-border bg-card py-(--panel-pad) text-sm text-card-foreground [--panel-gap:--spacing(4)] [--panel-pad:--spacing(5)] data-[size=sm]:[--panel-pad:--spacing(4)] max-sm:[--panel-pad:--spacing(4)]",
         className,
       )}
       {...props}

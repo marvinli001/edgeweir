@@ -55,7 +55,7 @@ export function CodeBlock({
   wrap?: boolean;
 }) {
   return (
-    <div className="relative">
+    <div className="relative min-w-0">
       <pre
         data-testid={testId}
         className={cn(
