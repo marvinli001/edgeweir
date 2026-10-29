@@ -5,7 +5,10 @@ import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/componen
 import { splitList } from "@/lib/lists";
 import { cn } from "@/lib/utils";
 
-/** A switch with its label on the right, aligned with the inputs of the same grid row. */
+/**
+ * A switch with its label on the right, aligned with the inputs of the same grid row; a long label
+ * wraps in a narrow cell (phones) instead of pushing the page wider.
+ */
 export function SwitchField({
   id,
   label,
@@ -36,7 +39,7 @@ export function SwitchField({
         onCheckedChange={onCheckedChange}
         data-testid={testId}
       />
-      <FieldLabel htmlFor={id} className="whitespace-nowrap">
+      <FieldLabel htmlFor={id} className="min-w-0">
         {label}
       </FieldLabel>
     </Field>
