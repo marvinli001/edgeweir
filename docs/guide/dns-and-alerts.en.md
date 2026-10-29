@@ -317,7 +317,7 @@ Alerts are configured on the **Alerts** page, which has five cards:
 | Alert channels | Notification targets, which can be added, edited, tested, enabled or disabled, and deleted |
 | SMTP | The mail server of email channels, see [SMTP](#smtp) |
 | Subscriptions | The sites and alert kinds each channel receives |
-| Recent events | The latest 100 alert events, including cluster and DNS alerts |
+| Recent events | The latest 100 alert events (fired or resolved), including cluster and DNS alerts |
 | Alert rules | The thresholds that raise alerts |
 
 ## Configure alert channels

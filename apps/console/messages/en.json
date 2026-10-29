@@ -1545,6 +1545,8 @@
   "alert_recent_events": "Recent events",
   "alert_no_events": "No alert events",
   "alert_firing": "Active",
+  "alert_event_fired": "Fired",
+  "alert_event_resolved": "Resolved",
   "alert_site_search": "Search sites",
   "alert_all_sites": "All sites",
   "alert_channel_label": "Alert channel",

@@ -261,7 +261,7 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
                         <Badge
                           size="sm"
                           tone="danger"
-                          className="h-auto min-h-5 shrink whitespace-normal [overflow-wrap:anywhere]"
+                          className="h-auto min-h-5 max-w-full shrink whitespace-normal [overflow-wrap:anywhere]"
                         >
                           {channelError(channel.lastError)}
                         </Badge>
@@ -401,6 +401,7 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
                               key={site.id}
                               tone="neutral"
                               className="max-w-48 truncate"
+                              title={site.name}
                             >
                               {site.name}
                             </Badge>
@@ -409,6 +410,10 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
                             <Badge
                               size="sm"
                               tone="neutral"
+                              title={sub.sites
+                                .slice(SITE_BADGES)
+                                .map((site) => site.name)
+                                .join(", ")}
                             >{`+${sub.sites.length - SITE_BADGES}`}</Badge>
                           ) : null}
                         </>
@@ -483,7 +488,7 @@ function EventsCard() {
                     <span className="order-2 justify-self-end sm:order-none sm:justify-self-start">
                       <StatusDot tone={firing ? "bad" : "good"}>
                         <span className={firing ? "font-medium" : "text-muted-foreground"}>
-                          {firing ? m.alert_firing() : m.alert_recovered()}
+                          {firing ? m.alert_event_fired() : m.alert_event_resolved()}
                         </span>
                       </StatusDot>
                     </span>

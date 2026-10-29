@@ -245,6 +245,7 @@
     & tbody td {
       display: block;
       min-width: 0;
+      height: auto;
       padding: 0;
       white-space: normal;
       position: static;

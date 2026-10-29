@@ -244,6 +244,7 @@ function AuditPage() {
       },
       {
         id: "details",
+        stack: "end",
         header: () => <span className="sr-only">{m.audit_details()}</span>,
         cell: ({ row }) => (
           <div className="flex justify-end">
