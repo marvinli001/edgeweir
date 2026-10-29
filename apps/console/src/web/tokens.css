@@ -1,7 +1,6 @@
 /*
- * Edgeweir design tokens (2026-10-29 redesign; tokens.md documents values and usage). One file
- * for every Edgeweir web UI (console, Business, Cloud): copy it unchanged. Framework-neutral CSS
- * custom properties in three groups:
+ * Edgeweir design tokens (2026-10-29 redesign; tokens.md documents values and usage).
+ * Framework-neutral CSS custom properties in three groups:
  *
  *   1. --ew-*   the values (light under :root, dark under .dark).
  *   2. names    the semantic names the apps' Tailwind classes read (bg-card, text-muted-foreground…),

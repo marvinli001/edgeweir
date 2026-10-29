@@ -1,8 +1,8 @@
 /*
  * Arc foundation tokens, adapted from Arc's `arc-foundation` (MIT, Elia Kuratli;
  * THIRD-PARTY-NOTICES.md). Changes: every token is mapped onto the Edgeweir design tokens
- * (src/web/tokens.css, shared with Business and Cloud), so Arc brings no palette, fonts or radii
- * of its own, and the tokens carry an `--arc-` prefix.
+ * (src/web/tokens.css), so Arc brings no palette, fonts or radii of its own, and the tokens carry
+ * an `--arc-` prefix.
  *
  * Why the prefix: Arc's bare names collide with names that mean something else here. shadcn-era
  * `--accent` is the hover wash (Arc's is the brand color), `--series-*` are the chart series, and
