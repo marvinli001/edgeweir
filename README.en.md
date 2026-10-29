@@ -5,7 +5,8 @@
 [![CI](https://github.com/marvinli001/edgeweir/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/marvinli001/edgeweir/actions/workflows/ci.yml)
 [![Docs](https://github.com/marvinli001/edgeweir/actions/workflows/docs.yml/badge.svg?branch=master)](https://marvinli001.github.io/edgeweir/en/)
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg)](LICENSE)
-[![Telegram group](https://img.shields.io/badge/Telegram-group-26A5E4?logo=telegram&logoColor=white)](https://t.me/darkfiber_labs)
+
+[![Join the Telegram group](.github/assets/telegram-en.svg)](https://t.me/darkfiber_labs)
 
 Self-hosted CDN / WAF / edge scheduling control plane for personal use: one operator account manages edge nodes, origin pools, caching, HTTPS, layer-4 forwarding, access policy and DNS steering from one console. Edge nodes: [edgeweir-node](https://github.com/marvinli001/edgeweir-node).
 

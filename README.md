@@ -5,7 +5,8 @@
 [![CI](https://github.com/marvinli001/edgeweir/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/marvinli001/edgeweir/actions/workflows/ci.yml)
 [![Docs](https://github.com/marvinli001/edgeweir/actions/workflows/docs.yml/badge.svg?branch=master)](https://marvinli001.github.io/edgeweir/zh/)
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg)](LICENSE)
-[![Telegram 交流群](https://img.shields.io/badge/Telegram-%E4%BA%A4%E6%B5%81%E7%BE%A4-26A5E4?logo=telegram&logoColor=white)](https://t.me/darkfiber_labs)
+
+[![加入 Telegram 交流群](.github/assets/telegram-zh.svg)](https://t.me/darkfiber_labs)
 
 自托管的 CDN / WAF / 边缘调度控制平面，面向个人自用：一个运营者账户统一管理边缘节点、源站池、缓存、HTTPS、四层转发、访问策略与 DNS 调度。边缘节点见 [edgeweir-node](https://github.com/marvinli001/edgeweir-node)。
 
