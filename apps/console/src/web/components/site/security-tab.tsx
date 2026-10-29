@@ -284,7 +284,7 @@ function UnderAttackCard({ siteId, protection }: { siteId: string; protection: S
         <PanelTitle>{m.protection_under_attack()}</PanelTitle>
       </PanelHeader>
       <PanelContent className="grid gap-4 sm:grid-cols-2">
-        <Field orientation="horizontal" className="min-h-9 w-auto self-end">
+        <Field orientation="horizontal" className="min-h-9 w-auto flex-wrap self-end">
           <ConfirmDialog
             trigger={toggle}
             destructive={turningOn}
@@ -300,7 +300,12 @@ function UnderAttackCard({ siteId, protection }: { siteId: string; protection: S
             </Badge>
           ) : null}
           {automatic ? (
-            <Badge size="sm" tone="neutral" data-testid="protection-under-attack-auto">
+            <Badge
+              size="sm"
+              tone="neutral"
+              className="h-auto min-h-5 max-w-full whitespace-normal"
+              data-testid="protection-under-attack-auto"
+            >
               {m.protection_under_attack_auto({ time: formatDateMinutes(automatic.expiresAt) })}
             </Badge>
           ) : null}

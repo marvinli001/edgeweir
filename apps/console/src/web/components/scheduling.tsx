@@ -112,10 +112,13 @@ export function ClusterScheduling({ clusterId }: { clusterId: string }) {
         header: () => m.scheduling_action(),
         cell: ({ row }) => (
           <div className="flex flex-col gap-0.5">
-            <span className="whitespace-nowrap" data-testid="scheduling-rule-action">
+            <span
+              className="whitespace-nowrap @max-2xl/main:whitespace-normal"
+              data-testid="scheduling-rule-action"
+            >
               {actionLabel(row.original.action)}
             </span>
-            <span className="text-xs whitespace-nowrap text-muted-foreground">
+            <span className="text-xs whitespace-nowrap text-muted-foreground @max-2xl/main:whitespace-normal">
               {m.scheduling_hold_recover({
                 hold: row.original.holdSeconds,
                 recover: row.original.recoverSeconds,
@@ -231,7 +234,7 @@ function ConditionSummary({ rule }: { rule: SchedulingRule }) {
           <li
             // biome-ignore lint/suspicious/noArrayIndexKey: conditions are identified by their order
             key={index}
-            className="whitespace-nowrap"
+            className="whitespace-nowrap @max-2xl/main:whitespace-normal"
             data-testid="scheduling-rule-condition"
           >
             {conditionText(c, regionName)}

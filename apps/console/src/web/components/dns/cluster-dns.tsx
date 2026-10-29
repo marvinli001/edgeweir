@@ -379,6 +379,7 @@ function BindingEditor({
         </PanelContent>
         <SaveBar
           indent
+          sticky
           dirty={JSON.stringify(draft) !== JSON.stringify(initial)}
           pending={save.isPending}
           error={error}
@@ -693,63 +694,69 @@ function Revisions({ clusterId }: { clusterId: string }) {
           </RevisionsFrame>
         }
       >
-        {(list) => (
-          <CardTable pinFirstColumn>
-            <Table data-testid="dns-revisions">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="cell-pinned">{m.dns_version()}</TableHead>
-                  <TableHead>{m.dns_status()}</TableHead>
-                  <TableHead>{m.dns_reason()}</TableHead>
-                  <TableHead className="text-right">{m.dns_records()}</TableHead>
-                  <TableHead>{m.dns_time()}</TableHead>
-                  <TableHead>
-                    <span className="sr-only">{m.common_actions()}</span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {list.map((r) => (
-                  <TableRow key={r.revision}>
-                    <TableCell className="cell-pinned font-mono">{r.revision}</TableCell>
-                    <TableCell>
-                      <span className="flex items-center gap-2">
-                        <RevisionState status={r.status} />
-                        {r.lastError ? (
-                          <span className="text-xs text-muted-foreground">
-                            {revisionError(r.lastError, r.lastErrorParams)}
-                          </span>
-                        ) : null}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-sm" data-testid="dns-revision-reason">
-                      {dnsRevisionReason(r)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{r.recordCount}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatDateTime(r.createdAt)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <ConfirmDialog
-                        title={m.dns_rollback()}
-                        note={m.dns_rollback_note({ revision: r.revision })}
-                        trigger={
-                          <Button size="sm" variant="ghost">
-                            {m.dns_rollback()}
-                          </Button>
-                        }
-                        onConfirm={async () => {
-                          await client.dns.rollbackBinding({ clusterId, revision: r.revision });
-                          await queries.invalidateQueries({ queryKey: orpc.dns.key() });
-                        }}
-                      />
-                    </TableCell>
+        {(list) => {
+          const newest = Math.max(...list.map((r) => r.revision));
+          return (
+            <CardTable pinFirstColumn>
+              <Table data-testid="dns-revisions">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="cell-pinned">{m.dns_version()}</TableHead>
+                    <TableHead>{m.dns_status()}</TableHead>
+                    <TableHead>{m.dns_reason()}</TableHead>
+                    <TableHead className="text-right">{m.dns_records()}</TableHead>
+                    <TableHead>{m.dns_time()}</TableHead>
+                    <TableHead>
+                      <span className="sr-only">{m.common_actions()}</span>
+                    </TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardTable>
-        )}
+                </TableHeader>
+                <TableBody>
+                  {list.map((r) => (
+                    <TableRow key={r.revision}>
+                      <TableCell className="cell-pinned font-mono">{r.revision}</TableCell>
+                      <TableCell>
+                        <span className="flex items-center gap-2">
+                          <RevisionState status={r.status} />
+                          {r.lastError ? (
+                            <span className="text-xs text-muted-foreground">
+                              {revisionError(r.lastError, r.lastErrorParams)}
+                            </span>
+                          ) : null}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-sm" data-testid="dns-revision-reason">
+                        {dnsRevisionReason(r)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{r.recordCount}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {formatDateTime(r.createdAt)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {/* The newest version is what the cluster already has. */}
+                        {r.revision === newest ? null : (
+                          <ConfirmDialog
+                            title={m.dns_rollback()}
+                            note={m.dns_rollback_note({ revision: r.revision })}
+                            trigger={
+                              <Button size="sm" variant="ghost">
+                                {m.dns_rollback()}
+                              </Button>
+                            }
+                            onConfirm={async () => {
+                              await client.dns.rollbackBinding({ clusterId, revision: r.revision });
+                              await queries.invalidateQueries({ queryKey: orpc.dns.key() });
+                            }}
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardTable>
+          );
+        }}
       </QueryView>
     </Panel>
   );

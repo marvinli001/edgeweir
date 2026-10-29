@@ -90,7 +90,7 @@ function DnsPage() {
                           <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-sm @3xl/main:min-w-48">
                             <button
                               type="button"
-                              className={cn(rowLinkButton, "font-medium break-all")}
+                              className={cn(rowLinkButton, "font-medium [overflow-wrap:anywhere]")}
                               onClick={() => credential.show(p)}
                               {...rowLink}
                             >
@@ -173,6 +173,11 @@ function DnsPage() {
                                     applied={b.applied}
                                     status={b.revision.status}
                                   />
+                                  {b.blocked ? (
+                                    <span className="text-xs text-muted-foreground">
+                                      {m.dns_blocked_hint()}
+                                    </span>
+                                  ) : null}
                                   {b.revision.lastError && !b.blocked ? (
                                     <span className="text-xs text-muted-foreground">
                                       {revisionError(
@@ -227,7 +232,7 @@ function DnsPage() {
 /** A machine value (zone, cluster domain) in a small well. */
 function ValueWell({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex max-w-full rounded-md bg-well px-1.5 py-0.5 font-mono text-xs break-all text-foreground">
+    <span className="inline-flex max-w-full rounded-md bg-well px-1.5 py-0.5 font-mono text-xs [overflow-wrap:anywhere] text-foreground">
       {children}
     </span>
   );

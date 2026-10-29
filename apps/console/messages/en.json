@@ -1797,6 +1797,7 @@
   "node_groups_canary": "Canary",
   "node_groups_canary_label": "Canary group",
   "dns_blocked": "Held back",
+  "dns_blocked_hint": "Over the mass removal limit",
   "dns_held_back": [
     {
       "declarations": [
