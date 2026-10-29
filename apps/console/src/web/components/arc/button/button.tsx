@@ -1,8 +1,8 @@
 /*
  * Button: adapted from Arc's `button` (Copyright (c) 2026 Elia Kuratli, MIT License;
  * THIRD-PARTY-NOTICES.md). Changes: Motion's light components through components/effects/motion,
- * the console's reduced-motion hook, `--arc-` tokens (foundation.css), the primary face is the
- * console's lit action button, and the module sits in Tailwind's components layer so utility
+ * the console's reduced-motion hook, `--arc-` tokens (foundation.css), a flat brand-blue primary
+ * face, and the module sits in Tailwind's components layer so utility
  * classes passed in className win.
  */
 

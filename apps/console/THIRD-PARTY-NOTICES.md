@@ -13,7 +13,6 @@ Hugeicons). MIT license text below.
 
 | Code | From | Version | Copyright | License |
 | --- | --- | --- | --- | --- |
-| `animated-beam.tsx` | [Magic UI](https://github.com/magicuidesign/magicui) (`animated-beam`) | `cdb348cb4c72` (2026-10-06) | Copyright (c) Magic UI | MIT |
 | `origin-topology.tsx` (node, handle and animated edge) | [React Flow UI](https://reactflow.dev/ui) (`base-node`, `base-handle`, `animated-svg-edge`), in [xyflow](https://github.com/xyflow/xyflow) | `3d35b5731757` (2026-10-06) | Copyright (c) 2019-2025 webkid GmbH | MIT |
 | `world-dots.ts` (generated) | [dotted-map](https://github.com/NTag/dotted-map) 3.1.0 with its bundled Natural Earth land data (public domain) | 3.1.0 | Copyright (c) 2021 Basile Bruneau | MIT |
 

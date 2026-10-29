@@ -1004,13 +1004,8 @@
   "origin_cert_validity": "有效期",
   "origin_cert_years": [
     {
-      "declarations": [
-        "input count",
-        "local countPlural = count: plural"
-      ],
-      "selectors": [
-        "countPlural"
-      ],
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
       "match": {
         "countPlural=one": "{count} 年",
         "countPlural=other": "{count} 年"

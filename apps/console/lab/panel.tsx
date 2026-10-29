@@ -42,13 +42,12 @@ const panel: React.CSSProperties = {
   flexDirection: "column",
   gap: 6,
   padding: 8,
-  borderRadius: 12,
-  font: "500 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace",
+  borderRadius: 8,
+  font: "400 12px/1.2 var(--ew-font-sans)",
   color: "var(--popover-foreground)",
-  background: "color-mix(in oklch, var(--popover) 88%, transparent)",
-  backdropFilter: "blur(10px)",
-  boxShadow:
-    "0 0 0 1px color-mix(in oklch, var(--foreground) 12%, transparent), 0 8px 24px -8px color-mix(in oklch, var(--foreground) 30%, transparent)",
+  background: "var(--popover)",
+  border: "1px solid var(--border)",
+  boxShadow: "var(--elev-2)",
 };
 
 const row: React.CSSProperties = {
@@ -58,7 +57,7 @@ const row: React.CSSProperties = {
   flexWrap: "wrap",
 };
 
-const quiet = "color-mix(in oklch, var(--foreground) 7%, transparent)";
+const quiet = "var(--well)";
 
 function Chip({
   active,
@@ -77,8 +76,8 @@ function Chip({
       onClick={onClick}
       title={title}
       style={{
-        padding: "4px 7px",
-        borderRadius: 7,
+        padding: "4px 8px",
+        borderRadius: 4,
         border: 0,
         cursor: "pointer",
         font: "inherit",
@@ -178,7 +177,7 @@ export function LabPanel({ router, queryClient }: { router: AnyRouter; queryClie
             flex: 1,
             minWidth: 0,
             padding: "3px 4px",
-            borderRadius: 7,
+            borderRadius: 4,
             border: 0,
             font: "inherit",
             color: "inherit",

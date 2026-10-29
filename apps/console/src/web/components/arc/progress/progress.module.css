@@ -40,7 +40,7 @@
     display: grid;
     place-items: center;
     color: var(--arc-success);
-  } /* A shallow well (the console's seg-well) with the action blue filling it. */
+  } /* A pale track with the brand blue filling it. */
   .track {
     height: 8px;
     overflow: hidden;

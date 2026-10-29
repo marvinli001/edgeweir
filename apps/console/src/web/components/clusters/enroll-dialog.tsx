@@ -14,7 +14,6 @@ import {
 import { Input } from "@/components/arc/input/input";
 import { CodeBlock } from "@/components/copy-button";
 import { Countdown } from "@/components/countdown";
-import { AnimatedBeam } from "@/components/effects/animated-beam";
 import { OptionSelect } from "@/components/form-select";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/layout/form";
 import { Spinner } from "@/components/layout/spinner";
@@ -54,11 +53,9 @@ export function EnrollDialogHost({
 const TTL_OPTIONS = [15, 60, 24 * 60];
 
 /**
- * The cluster and the node being added: a dashed idle line while the token waits, a still line
- * once the node is online, with one signal pulse each time the node reaches the next step
- * (online, configuration applied, data plane healthy, address); nothing runs once it is done.
- * Reads the token status EnrollProgress polls (same query, no fetch of its own). Decorative: the
- * progress list says the same in words.
+ * The cluster and the node being added, joined by a dashed line while the token waits and a
+ * solid one once the node is online. Reads the token status EnrollProgress polls (same query, no
+ * fetch of its own). Decorative: the progress list says the same in words.
  */
 function EnrollLink({ cluster, tokenId }: { cluster: Cluster; tokenId: string }) {
   const status = useQuery({
@@ -67,59 +64,39 @@ function EnrollLink({ cluster, tokenId }: { cluster: Cluster; tokenId: string })
   });
   const node = status.data?.node ?? null;
   const online = !!node?.online;
-  const steps = node
-    ? [
-        node.applyState === "applied" && node.appliedRevision > 0,
-        node.dataPlaneHealthy,
-        node.schedulingAddresses.length > 0,
-      ].filter(Boolean).length
-    : 0;
-  const container = React.useRef<HTMLDivElement>(null);
-  const from = React.useRef<HTMLSpanElement>(null);
-  const to = React.useRef<HTMLSpanElement>(null);
   return (
     <div
-      ref={container}
       aria-hidden
-      className="relative flex items-center justify-between gap-16 overflow-hidden rounded-md px-5 py-4 faint-well animate-enter sm:px-10"
+      className="flex items-center gap-3 rounded-md px-5 py-4 faint-well animate-enter sm:px-10"
     >
-      <div className="relative z-[1] flex min-w-0 items-center gap-2 rounded-md bg-raised py-2 pr-3 pl-2 shadow-elev-2 ">
-        <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground [&_svg]:size-3.5">
+      <div className="flex min-w-0 items-center gap-2 rounded-md border bg-card py-2 pr-3 pl-2">
+        <span className="grid size-7 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground [&_svg]:size-3.5">
           <HugeiconsIcon icon={ServerStack01Icon} strokeWidth={2} />
         </span>
         <span className="truncate text-xs font-medium">{cluster.name}</span>
-        <span
-          ref={from}
-          className="absolute top-1/2 -right-1 size-2 -translate-y-1/2 rounded-full border border-transparent bg-signal"
-        />
       </div>
+      <span
+        className={cn(
+          "min-w-8 flex-1 transition-colors duration-300",
+          online ? "h-0.5 rounded-full bg-primary" : "border-t-2 border-dashed",
+        )}
+      />
       <div
         className={cn(
-          "relative z-[1] flex min-w-0 items-center gap-2 rounded-md p-2 transition-colors duration-300",
-          node ? "bg-raised pr-3 shadow-elev-1" : "border border-dashed border-muted-foreground/40",
+          "flex min-w-0 items-center gap-2 rounded-md p-2 transition-colors duration-300",
+          node ? "border bg-card pr-3" : "border border-dashed border-input-hover",
         )}
       >
         <span
-          ref={to}
           className={cn(
-            "absolute top-1/2 -left-1 size-2 -translate-y-1/2 rounded-full",
-            online ? "bg-signal" : "bg-muted-foreground/50",
+            "grid size-7 shrink-0 place-items-center rounded-md [&_svg]:size-3.5",
+            online ? "bg-primary/12 text-primary" : "bg-wash text-muted-foreground",
           )}
-        />
-        <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-wash text-muted-foreground [&_svg]:size-3.5">
+        >
           <HugeiconsIcon icon={CloudServerIcon} strokeWidth={2} />
         </span>
         {node ? <span className="truncate text-xs font-medium">{node.name}</span> : null}
       </div>
-      <AnimatedBeam
-        containerRef={container}
-        fromRef={from}
-        toRef={to}
-        dim={!online}
-        runs={1}
-        replayKey={steps}
-        className="z-0"
-      />
     </div>
   );
 }
