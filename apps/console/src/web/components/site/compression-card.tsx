@@ -9,12 +9,12 @@ import {
   ZSTD_LEVEL_RANGE,
 } from "@edgeweir/contract";
 import { useQuery } from "@tanstack/react-query";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { SafetyNote } from "@/components/safety-note";
 import { ListInput, NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, QueryView } from "@/components/states";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
@@ -120,17 +120,17 @@ function CompressionEditor({
   const settings = { ...server, ...draft } as TlsSettings;
   const setSettings = (next: TlsSettings) => set(compressionOf(next));
   return (
-    <Card
+    <Panel
       className="animate-enter"
       style={{ animationDelay: "120ms" }}
       data-testid="compression-card"
     >
-      <form className="flex flex-col gap-(--card-spacing)" onSubmit={submit}>
-        <CardHeader>
-          <CardTitle>{m.compression_title()}</CardTitle>
-        </CardHeader>
+      <form className="flex flex-col gap-(--panel-pad)" onSubmit={submit}>
+        <PanelHeader>
+          <PanelTitle>{m.compression_title()}</PanelTitle>
+        </PanelHeader>
         {/* One algorithm per row and the largest compressed response last, split by hairlines. */}
-        <CardContent className="flex flex-col divide-y divide-border [&>*]:py-4 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">
+        <PanelContent className="flex flex-col divide-y divide-border [&>*]:py-4 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">
           {/* Wrapped: a fieldset's legend would sit on the hairline. */}
           {(["zstd", "brotli", "gzip"] as const).map((algorithm) => (
             <div key={algorithm}>
@@ -161,10 +161,10 @@ function CompressionEditor({
               />
             </div>
           </div>
-        </CardContent>
+        </PanelContent>
         <SaveBar dirty={dirty} pending={pending} error={error} testId="compression-save" />
       </form>
-    </Card>
+    </Panel>
   );
 }
 

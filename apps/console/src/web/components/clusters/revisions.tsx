@@ -5,8 +5,8 @@ import { Button } from "@/components/arc/button/button";
 import { SiteChangeList } from "@/components/config-changes";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
+import { FieldError } from "@/components/layout/form";
 import { EmptyState, QueryView } from "@/components/states";
-import { FieldError } from "@/components/ui/field";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { revisionReason } from "@/lib/revisions";
@@ -53,7 +53,7 @@ function RollbackAction({ clusterId, revision }: { clusterId: string; revision: 
         )}
       >
         {({ sites, unchanged }) => (
-          <div className="animate-enter rounded-xl p-3 sunk-well">
+          <div className="animate-enter rounded-md p-3 faint-well">
             <SiteChangeList changes={sites} unchanged={unchanged} testId="rollback-preview" />
           </div>
         )}

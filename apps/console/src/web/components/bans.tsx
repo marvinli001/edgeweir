@@ -317,11 +317,7 @@ export function BansPage({
         query={bans}
         isEmpty={(data) => data.total === 0}
         empty={
-          <EmptyState
-            icon={BlockedIcon}
-            art="checkpoint"
-            title={filtered ? m.bans_no_match() : m.bans_empty()}
-          >
+          <EmptyState icon={BlockedIcon} title={filtered ? m.bans_no_match() : m.bans_empty()}>
             {filtered ? null : (
               <Button onClick={() => dialog.show({})}>
                 <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
@@ -332,16 +328,15 @@ export function BansPage({
         }
       >
         {({ items, total }) => (
-          <>
-            <DataTable
-              data={items}
-              columns={columns}
-              getRowId={(ban) => ban.id}
-              testId="bans-table"
-              pinFirstColumn
-            />
-            <Pager page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
-          </>
+          <DataTable
+            data={items}
+            columns={columns}
+            getRowId={(ban) => ban.id}
+            testId="bans-table"
+            pinFirstColumn
+            total={total}
+            footer={<Pager page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />}
+          />
         )}
       </QueryView>
       {dialog.value ? (

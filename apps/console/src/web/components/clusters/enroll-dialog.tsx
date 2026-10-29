@@ -3,7 +3,6 @@ import { ArrowDown01Icon, CloudServerIcon, ServerStack01Icon } from "@hugeicons/
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { Countdown } from "@/components/appica/countdown";
 import { Button } from "@/components/arc/button/button";
 import {
   Dialog,
@@ -14,8 +13,11 @@ import {
 } from "@/components/arc/dialog/dialog";
 import { Input } from "@/components/arc/input/input";
 import { CodeBlock } from "@/components/copy-button";
+import { Countdown } from "@/components/countdown";
 import { AnimatedBeam } from "@/components/effects/animated-beam";
 import { OptionSelect } from "@/components/form-select";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/layout/form";
+import { Spinner } from "@/components/layout/spinner";
 import {
   ConsoleUrlWarnings,
   EnrollProgress,
@@ -23,8 +25,6 @@ import {
 } from "@/components/node-enrollment";
 import { SafetyNote } from "@/components/safety-note";
 import { LoadingState } from "@/components/states";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import { useOpenKey } from "@/hooks/use-open-key";
 import { formatDateTime, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
@@ -81,21 +81,21 @@ function EnrollLink({ cluster, tokenId }: { cluster: Cluster; tokenId: string })
     <div
       ref={container}
       aria-hidden
-      className="relative flex items-center justify-between gap-16 overflow-hidden rounded-xl px-5 py-4 sunk-well animate-enter sm:px-10"
+      className="relative flex items-center justify-between gap-16 overflow-hidden rounded-md px-5 py-4 faint-well animate-enter sm:px-10"
     >
-      <div className="relative z-[1] flex min-w-0 items-center gap-2 rounded-xl bg-raised py-2 pr-3 pl-2 shadow-elev-2 edge-lit">
-        <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground btn-lit [&_svg]:size-3.5">
+      <div className="relative z-[1] flex min-w-0 items-center gap-2 rounded-md bg-raised py-2 pr-3 pl-2 shadow-elev-2 ">
+        <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground [&_svg]:size-3.5">
           <HugeiconsIcon icon={ServerStack01Icon} strokeWidth={2} />
         </span>
         <span className="truncate text-xs font-medium">{cluster.name}</span>
         <span
           ref={from}
-          className="lit-glow absolute top-1/2 -right-1 size-2 -translate-y-1/2 rounded-full border border-transparent bg-signal"
+          className="absolute top-1/2 -right-1 size-2 -translate-y-1/2 rounded-full border border-transparent bg-signal"
         />
       </div>
       <div
         className={cn(
-          "relative z-[1] flex min-w-0 items-center gap-2 rounded-xl p-2 transition-colors duration-300",
+          "relative z-[1] flex min-w-0 items-center gap-2 rounded-md p-2 transition-colors duration-300",
           node ? "bg-raised pr-3 shadow-elev-1" : "border border-dashed border-muted-foreground/40",
         )}
       >

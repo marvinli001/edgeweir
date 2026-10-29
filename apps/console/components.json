@@ -15,12 +15,10 @@
   "aliases": {
     "components": "@/components",
     "utils": "@/lib/utils",
-    "ui": "@/components/ui",
+    "ui": "@/components/arc",
     "lib": "@/lib",
     "hooks": "@/hooks"
   },
-  "menuColor": "inverted-translucent",
-  "menuAccent": "subtle",
   "registries": {
     "@uiarc": "https://uiarc.dev/r/{name}.json"
   }

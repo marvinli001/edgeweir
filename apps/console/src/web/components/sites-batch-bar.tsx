@@ -24,9 +24,9 @@ import {
 import { Input } from "@/components/arc/input/input";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
+import { Field, FieldLabel } from "@/components/layout/form";
 import { CopySettingsDialog } from "@/components/site/copy-settings-dialog";
 import { TagPicker } from "@/components/site-tags";
-import { Field, FieldLabel } from "@/components/ui/field";
 import { m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
 import { toast } from "@/lib/toast";
@@ -92,7 +92,7 @@ export function SitesBatchBar({
 
   return (
     <div
-      className="sticky bottom-3 z-10 flex flex-wrap items-center gap-2 rounded-2xl bg-overlay px-3 py-2 shadow-elev-2 edge-lit animate-enter"
+      className="sticky bottom-3 z-10 flex flex-wrap items-center gap-2 rounded-lg bg-overlay px-3 py-2 shadow-elev-2 animate-enter"
       role="toolbar"
       aria-label={m.sites_selected({ count })}
       data-testid="sites-batch-bar"

@@ -19,11 +19,11 @@ import {
   DialogTitle,
 } from "@/components/arc/dialog/dialog";
 import { OptionSelect } from "@/components/form-select";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/layout/form";
+import { Spinner } from "@/components/layout/spinner";
 import { enterDelay } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { SiteMultiSelect } from "@/components/site-multi-select";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import { useAction } from "@/hooks/use-action";
 import { m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
@@ -171,7 +171,7 @@ export function CopySettingsDialog({
               </div>
               <fieldset
                 aria-labelledby="copy-parts-label"
-                className="grid gap-x-4 rounded-2xl px-3 py-1.5 sunk-well sm:grid-cols-2"
+                className="grid gap-x-4 rounded-lg px-3 py-1.5 faint-well sm:grid-cols-2"
               >
                 {SITE_COPY_PARTS.map((part) => (
                   // biome-ignore lint/a11y/noLabelWithoutControl: the Base UI checkbox inside is the control
@@ -218,7 +218,7 @@ export function CopySettingsDialog({
               {step.preview.targets.map((target, index) => (
                 <li
                   key={target.id}
-                  className="rounded-2xl px-3 py-2.5 sunk-well animate-enter"
+                  className="rounded-lg px-3 py-2.5 faint-well animate-enter"
                   style={enterDelay(index)}
                   data-testid="copy-preview-target"
                 >
@@ -286,7 +286,7 @@ export function CopySettingsDialog({
               {step.result.targets.map((target, index) => (
                 <li
                   key={target.id}
-                  className="flex items-start gap-2 rounded-2xl px-3 py-2.5 text-sm sunk-well animate-enter"
+                  className="flex items-start gap-2 rounded-lg px-3 py-2.5 text-sm faint-well animate-enter"
                   style={enterDelay(index)}
                   data-testid="copy-result-target"
                   data-ok={target.ok}

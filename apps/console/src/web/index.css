@@ -1,41 +1,38 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
-/* Console Latin face: weight 200–900 and width 75–125% (headings and readouts widen). */
-@import "@fontsource-variable/mona-sans/standard.css";
-/* Status pages keep Geist: their readout's weight encodes the status (DESIGN.md). */
+/* Latin face (tokens.css --ew-font-sans): Inter, weights 100–900. */
+@import "@fontsource-variable/inter";
+/* Status pages keep Geist until their redesign (notes/edgeweir-node.md). */
 @import "@fontsource-variable/geist";
-/* Simplified Chinese in 101 unicode-range shards: a page downloads only the shards it shows. */
+/* Simplified Chinese fallback in unicode-range shards: loads only where no system CJK face exists. */
 @import "@fontsource-variable/noto-sans-sc";
-@import "./appica-bridge.css";
-/* Arc primitives (components/arc) read their tokens from here, mapped onto the ones below. */
+/* Design tokens shared by every Edgeweir web UI (tokens.md). */
+@import "./tokens.css";
+/* Arc primitives (components/arc) read their tokens from here, mapped onto tokens.css. */
 @import "./components/arc/foundation.css";
 /* The design lab (lab/) is development only: its class strings stay out of the console CSS. */
 @source not "../../lab";
 
 @custom-variant dark (&:is(.dark *));
 
-/* Entrance for pages, cards and rows; stagger with an inline animation-delay. */
+/* Entrance for pages and panels: a short fade. */
 @utility animate-enter {
-  @apply animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-500 ease-out;
+  @apply animate-in fade-in fill-mode-both duration-200 ease-out;
   @media (prefers-reduced-motion: reduce) {
     animation: none;
   }
 }
 
-/*
- * Auth card swap (AuthViews): the incoming card comes forward while the outgoing one sinks back
- * and away; the side comes from a slide-in-from-* / slide-out-to-* class.
- */
+/* Auth card swap (AuthViews): the incoming card fades in, the outgoing one fades out. */
 @utility animate-card-in {
-  @apply animate-in fade-in zoom-in-95 fill-mode-both duration-300 ease-out;
+  @apply animate-in fade-in fill-mode-both duration-200 ease-out;
   @media (prefers-reduced-motion: reduce) {
     animation: none;
   }
 }
 
 @utility animate-card-out {
-  @apply animate-out fade-out zoom-out-90 fill-mode-forwards duration-300 ease-in;
+  @apply animate-out fade-out fill-mode-forwards duration-150 ease-in;
   @media (prefers-reduced-motion: reduce) {
     animation: none;
   }
@@ -62,67 +59,6 @@
   }
 }
 
-/*
- * Lit Instrument utilities (tokens below). Components reference these classes and the surface
- * tokens; no component spells out a shadow or a color.
- */
-
-/* Easing of every lit control: quick out, no overshoot. */
-@theme {
-  --ease-lit: cubic-bezier(0.33, 1, 0.68, 1);
-}
-
-/*
- * Shadow composition. The lit utilities put their own shadows in Tailwind's --tw-shadow and paint
- * the same stack Tailwind's ring utilities paint, so a focus ring (focus-visible:ring-3) adds to
- * a well or a plate instead of replacing it, and shadow-none still removes them. Dark-mode
- * overrides use `:where(.dark *)` so they never outrank a variant such as
- * in-data-[slot=input-group]:shadow-none.
- */
-
-/*
- * The primary action: a lit face over a darker plate (Sentry-style). Hovering lifts the face a
- * pixel off the plate, pressing pushes it flat; the bottom edge never moves; disabled, it lies
- * flat. Primary buttons only (Button's default variant); forced colors drop the shadows and keep
- * the real border.
- */
-@utility btn-lit {
-  --tw-shadow: var(--lit-shadow);
-  background-image: var(--lit-face);
-  box-shadow:
-    var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
-    var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
-  transition-property: transform, box-shadow, background-color, opacity;
-  transition-duration: 160ms;
-  transition-timing-function: var(--ease-lit);
-  &:hover:not(:disabled, [data-disabled]) {
-    transform: translateY(-1px);
-    --tw-shadow: var(--lit-shadow-hover);
-  }
-  &:active:not(:disabled, [data-disabled]) {
-    transform: translateY(1px);
-    transition-duration: 60ms;
-    --tw-shadow: var(--lit-shadow-active);
-  }
-  /* Disabled sits flat as well as faded: no plate, no glow, no lit face. */
-  &:disabled,
-  &[data-disabled] {
-    --tw-shadow: 0 0 #0000;
-    background-image: none;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    transition-property: box-shadow, background-color, opacity;
-    &:hover:not(:disabled, [data-disabled]),
-    &:active:not(:disabled, [data-disabled]) {
-      transform: none;
-    }
-  }
-  @media (forced-colors: active) {
-    box-shadow: none;
-    background-image: none;
-  }
-}
-
 /* A square, icon-only Arc Button at its size's height: <Button size="sm" className="icon-button">. */
 @utility icon-button {
   aspect-ratio: 1;
@@ -130,252 +66,31 @@
 }
 
 /*
- * A sunken field: the well color, a soft inner shadow from the top and a hairline boundary.
- * Text inputs, textareas, select triggers, input groups and ⌘K's search; the element brings its
- * own transparent border (it shows in forced colors). Not for checkboxes or switches (toggle-well).
+ * Keyboard focus for controls without a border of their own (nav items, tab triggers, menu
+ * buttons, row links): the brand ring, keyboard only.
  */
-@utility input-well {
-  background-color: var(--well);
-  --tw-shadow:
-    inset 0 1px 2px oklch(0.2 0.03 258 / 8%),
-    inset 0 0 0 1px color-mix(in oklch, var(--foreground) 11%, transparent);
-  box-shadow:
-    var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
-    var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
-  &:where(.dark *) {
-    --tw-shadow: inset 0 1px 2px oklch(0 0 0 / 45%), inset 0 0 0 1px oklch(1 0 0 / 9%);
-  }
-}
-
-/*
- * The box of a checkbox and the unchecked track of a switch: a well with a stronger hairline
- * (--control-edge, 3:1 against the card in contrast.test.ts) so the control reads as a control.
- * Checked states replace it with the primary fill. Not for text fields (input-well).
- */
-@utility toggle-well {
-  background-color: var(--well);
-  --tw-shadow: inset 0 1px 2px oklch(0.2 0.03 258 / 10%), inset 0 0 0 1px var(--control-edge);
-  box-shadow:
-    var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
-    var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
-  &:where(.dark *) {
-    --tw-shadow: inset 0 1px 2px oklch(0 0 0 / 45%), inset 0 0 0 1px var(--control-edge);
-  }
-}
-
-/*
- * The track of a segmented control (tabs) and of a progress bar: a shallow well. Forced colors
- * give it a real border, since its hairline is a shadow.
- */
-@utility seg-well {
-  background-color: var(--well);
-  box-shadow:
-    inset 0 1px 2px oklch(0.2 0.03 258 / 7%),
-    inset 0 0 0 1px var(--edge);
-  &:where(.dark *) {
-    box-shadow:
-      inset 0 1px 2px oklch(0 0 0 / 40%),
-      inset 0 0 0 1px oklch(1 0 0 / 6%);
-  }
-  @media (forced-colors: active) {
-    border: 1px solid CanvasText;
-  }
-}
-
-/*
- * The raised thumb of a segmented control (Tabs' indicator) and of a switch, with the same plate
- * as btn-lit (neutral). Forced colors mark the active tab with a Highlight border instead.
- */
-@utility seg-thumb {
-  background-color: var(--raised);
-  box-shadow:
-    var(--elev-1),
-    0 1px 0 0 color-mix(in oklch, var(--foreground) 12%, transparent);
-  &:where(.dark *) {
-    box-shadow:
-      var(--elev-1),
-      0 1px 0 0 oklch(0 0 0 / 50%);
-  }
-  @media (forced-colors: active) {
-    border: 2px solid Highlight;
-  }
-}
-
-/*
- * Dark surfaces catch the light on their top edge (a gradient hairline over the border). Every
- * lifted container wears it (cards, list cards, menus, popovers, tooltips, dialogs, sheets); it
- * is invisible in light mode. Positioned elements (fixed, absolute) keep their position: those
- * utilities come later in the stylesheet. In forced colors it becomes the container's real border.
- * Not for table rows or list items (rows stay flat).
- */
-@utility edge-lit {
-  position: relative;
-  &::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    padding: 1px;
-    border-radius: inherit;
-    pointer-events: none;
-    background: linear-gradient(to bottom, var(--highlight-edge), transparent 42%);
-    mask:
-      linear-gradient(#000 0 0) content-box exclude,
-      linear-gradient(#000 0 0);
-  }
-  @media (forced-colors: active) {
-    border: 1px solid CanvasText;
-    &::after {
-      content: none;
-    }
-  }
-}
-
-/*
- * Frosted glass (--glass: the canvas, opaque enough for muted text over any content), for the
- * sticky header and bulk action bars only; never over polled tables or charts. The token turns
- * opaque under reduced transparency or without backdrop-filter (below the themes).
- */
-@utility glass {
-  background-color: var(--glass);
-  backdrop-filter: blur(14px) saturate(1.5);
-  @media (prefers-reduced-transparency: reduce) {
-    backdrop-filter: none;
-  }
-}
-
-/*
- * Glass over the overlay surface (--glass-overlay), for ⌘K (toasts draw the same glass in
- * components/arc/toast-stack). On an element that also has bg-popover, add bg-glass-overlay so
- * the fill wins the class merge.
- */
-@utility glass-overlay {
-  background-color: var(--glass-overlay);
-  backdrop-filter: blur(20px) saturate(1.6);
-  @media (prefers-reduced-transparency: reduce) {
-    backdrop-filter: none;
-  }
-}
-
-/*
- * Keyboard focus for controls without a border of their own (sidebar items, tab triggers, menu
- * buttons, links): a 1px ring plus the 3px ring/30 halo, painted as box-shadow so it follows the
- * radius and stacks on elev-1. Bordered controls use focus-visible:border-ring + ring-3
- * ring-ring/30 instead. Forced colors switch every focus to an outline (base rule below).
- */
-@utility focus-lit {
+@utility focus-ring {
   &:focus-visible {
-    --tw-ring-shadow:
-      0 0 0 1px var(--ring), 0 0 0 4px color-mix(in oklch, var(--ring) 30%, transparent);
-    box-shadow:
-      var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
-      var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
   }
 }
 
-/*
- * A running state's light: a ring of its own color (set --lit), plus a soft glow in dark mode.
- * Only for things that are live now (online, streaming, rolling out).
- */
-@utility lit-glow {
-  box-shadow: 0 0 0 3px color-mix(in oklch, var(--lit, var(--signal)) 22%, transparent);
-  &:where(.dark *) {
-    box-shadow:
-      0 0 0 3px color-mix(in oklch, var(--lit, var(--signal)) 24%, transparent),
-      0 0 12px color-mix(in oklch, var(--lit, var(--signal)) 55%, transparent);
-  }
+/* A faint well inside a panel or dialog: code blocks, logs, option lists, the QR code's frame. */
+@utility faint-well {
+  background-color: var(--well);
+  border: 1px solid var(--border);
 }
 
-/*
- * The hairline of a row whose task is running (purge and prefetch tasks waiting for nodes): the
- * signal at 40%, inside the row's radius, under its border beam; the still edge that stays under
- * reduced motion. Only while the task runs; not for finished rows or for focus.
- */
-@utility signal-hairline {
-  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--signal) 40%, transparent);
-}
-
-/*
- * The light under the overview globe, so the sphere sits in it rather than on the card: the
- * action blue in light mode, the signal in dark. Blur it with a filter utility (blur-2xl). The
- * globe only; not behind text or data.
- */
-@utility globe-halo {
-  background-image: radial-gradient(
-    closest-side,
-    color-mix(in oklch, var(--primary) 14%, transparent),
-    transparent
-  );
-  &:where(.dark *) {
-    background-image: radial-gradient(
-      closest-side,
-      color-mix(in oklch, var(--signal) 18%, transparent),
-      transparent
-    );
-  }
-}
-
-/* Film grain over large gradients (auth backdrop); breaks up banding. */
-@utility grain {
-  &::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    opacity: var(--grain-opacity, 0.05);
-    mix-blend-mode: soft-light;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    background-size: 160px;
-  }
-}
-
-/* Large readouts: tabular figures with slashed zeros. */
+/* Numbers that line up: KPIs, counters, table figures. */
 @utility readout {
-  font-variant-numeric: tabular-nums slashed-zero;
-  letter-spacing: -0.02em;
-}
-
-/*
- * The sticky page header lifts off the content once the page scrolls: a soft shadow below it
- * (elev-2's drop, no ring), driven by the root scroll position, so nothing listens to scrolling.
- * Without scroll timelines the header keeps its hairline only. SiteHeader only.
- */
-@utility header-lift {
-  @supports (animation-timeline: scroll()) {
-    animation: header-lift linear both;
-    animation-timeline: scroll(root block);
-    animation-range: 0 1.5rem;
-  }
-}
-
-@keyframes header-lift {
-  to {
-    box-shadow: var(--header-shadow);
-  }
-}
-
-/*
- * The top progress bar's sweep: the action blue running into its brighter ink (the dark preset
- * blue alone barely shows on the dark canvas), with a soft glow. TopProgress only.
- */
-@utility progress-glow {
-  background-image: linear-gradient(90deg, transparent, var(--primary) 35%, var(--primary-ink));
-  box-shadow:
-    0 0 10px color-mix(in oklch, var(--primary-ink) 65%, transparent),
-    0 0 3px color-mix(in oklch, var(--primary-ink) 80%, transparent);
-  @media (forced-colors: active) {
-    forced-color-adjust: none;
-    background: Highlight;
-    box-shadow: none;
-  }
+  font-variant-numeric: tabular-nums;
 }
 
 /*
  * The pulse of a status dot for work in progress (issuing, rolling out, awaiting a heartbeat): a
- * disc of the dot's own color grows and fades (transform and opacity of a pseudo-element; the
- * dot's lit-glow never animates). Only while the work runs, beside a word; steady live states
- * (online, live views) keep lit-glow alone. Off under reduced motion.
+ * disc of the dot's own color grows and fades. Only while the work runs, beside a word; off under
+ * reduced motion.
  */
 @utility dot-pulse {
   &::after {
@@ -401,25 +116,31 @@
 
 @keyframes dot-pulse {
   0% {
-    opacity: 0.55;
+    opacity: 0.5;
     transform: scale(1);
   }
   80%,
   100% {
     opacity: 0;
-    transform: scale(2.75);
+    transform: scale(2.5);
   }
 }
 
 /*
+ * The atmosphere mesh (tokens.css --ew-mesh): sign-in, setup and the overview welcome strip only;
+ * never behind tables, charts or forms.
+ */
+@utility bg-mesh {
+  background: var(--mesh);
+}
+
+/*
  * A sideways scroller that fades out at each edge that hides more of it ([data-fade] = start, end
- * or both, set from its scroll position), so a phone shows that it scrolls: the site's and the
- * cluster's tab bars (hooks/use-tab-bar.ts), the origin topology.
- * Its scroll padding is the fade, so an item scrolled into view (the active or focused tab) stops
- * clear of a faded edge instead of under it.
+ * or both, set from its scroll position), so a phone shows that it scrolls: page tab bars
+ * (hooks/use-tab-bar.ts), the origin topology. Its scroll padding is the fade, so an item
+ * scrolled into view stops clear of a faded edge instead of under it.
  */
 @utility scroll-fade {
-  /* The edge keeps a trace, so the next item still peeks in. */
   --fade: 3rem;
   --fade-edge: rgb(0 0 0 / 15%);
   scroll-padding-inline: var(--fade);
@@ -441,30 +162,9 @@
 }
 
 /*
- * A sunk panel inside a card or a dialog: code blocks, option lists, the QR code's frame. The well
- * color, an inner top shadow and a hairline; a real border in forced colors. Not for text fields
- * (input-well), toggles (toggle-well) or segmented tracks (seg-well).
- */
-@utility sunk-well {
-  background-color: var(--well);
-  box-shadow:
-    inset 0 1px 2px oklch(0.2 0.03 258 / 7%),
-    inset 0 0 0 1px var(--edge);
-  &:where(.dark *) {
-    box-shadow:
-      inset 0 1px 2px oklch(0 0 0 / 40%),
-      inset 0 0 0 1px oklch(1 0 0 / 7%);
-  }
-  @media (forced-colors: active) {
-    border: 1px solid CanvasText;
-  }
-}
-
-/*
  * A pinned first column while the table scrolls sideways ([data-overflow] on the table container,
- * set by DataTable or markOverflow: CardTable's pinFirstColumn, tables in wells): an opaque cell
- * (the card, or the header's or well's color via --cell-bg) that keeps the row's hover wash and
- * selection tint, with a hairline on its trailing edge.
+ * set by DataTable or markOverflow): an opaque cell that keeps the row's hover and selection tint,
+ * with a hairline on its trailing edge.
  */
 @utility cell-pinned {
   [data-overflow] & {
@@ -479,9 +179,8 @@
     --cell-tint: var(--wash);
   }
   tr[data-state="selected"] > & {
-    --cell-tint: color-mix(in oklch, var(--primary) 6%, transparent);
+    --cell-tint: var(--tint-primary);
   }
-  /* The sticky cell's opaque background covers the row's bottom rule; draw it on the cell. */
   [data-overflow] thead tr > &,
   [data-overflow] tbody tr:not(:last-child) > & {
     box-shadow:
@@ -592,12 +291,12 @@
 }
 
 /*
- * Touch screens: tab triggers and sidebar items are 44px tall like every other control (the
+ * Touch screens: tab triggers and nav items are 44px tall like every other control (the
  * controls' heights come from foundation.css); a page's line tab bar grows with them.
  */
 @media (pointer: coarse) {
   [data-slot="tabs-trigger"],
-  [data-slot="sidebar-menu-button"] {
+  [data-slot="nav-item"] {
     min-height: 2.75rem;
   }
   [data-slot="tabs-list"][data-variant="line"] {
@@ -607,7 +306,24 @@
 
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: var(--font-latin), "Noto Sans SC Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--ew-font-sans);
+  --font-mono: var(--ew-font-mono);
+  --text-xs: 12px;
+  --text-xs--line-height: 20px;
+  --text-dense: 13px;
+  --text-dense--line-height: 20px;
+  --text-sm: 14px;
+  --text-sm--line-height: 22px;
+  --text-base: 14px;
+  --text-base--line-height: 22px;
+  --text-section: 16px;
+  --text-section--line-height: 24px;
+  --text-title: 18px;
+  --text-title--line-height: 26px;
+  --text-display: 28px;
+  --text-display--line-height: 36px;
+  --text-hero: 36px;
+  --text-hero--line-height: 44px;
   --color-canvas: var(--canvas);
   --color-well: var(--well);
   --color-raised: var(--raised);
@@ -615,16 +331,28 @@
   --color-edge: var(--edge);
   --color-signal: var(--signal);
   --color-primary-ink: var(--primary-ink);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-active: var(--primary-active);
   --color-wash: var(--wash);
+  --color-placeholder: var(--placeholder);
   --color-tint-primary: var(--tint-primary);
+  --color-tint-primary-strong: var(--tint-primary-strong);
   --color-tint-destructive: var(--tint-destructive);
+  --color-success: var(--success);
+  --color-success-ink: var(--success-ink);
+  --color-tint-success: var(--tint-success);
+  --color-warning: var(--warning);
+  --color-warning-ink: var(--warning-ink);
+  --color-tint-warning: var(--tint-warning);
   --color-scrim: var(--scrim);
-  --color-glass: var(--glass);
-  --color-glass-overlay: var(--glass-overlay);
-  /* Hover tones of filled controls: their own surface with a little light or ink mixed in. */
-  --color-primary-hover: color-mix(in oklch, var(--primary), white 7%);
-  --color-raised-hover: color-mix(in oklch, var(--raised), var(--foreground) 4%);
-  --color-secondary-hover: color-mix(in oklch, var(--secondary), var(--foreground) 5%);
+  --color-tooltip: var(--tooltip);
+  --color-tooltip-foreground: var(--tooltip-foreground);
+  --color-input-hover: var(--input-hover);
+  --color-kpi-1: var(--kpi-1);
+  --color-kpi-2: var(--kpi-2);
+  --color-kpi-3: var(--kpi-3);
+  --color-grid: var(--grid);
+  --color-axis: var(--axis);
   --shadow-elev-1: var(--elev-1);
   --shadow-elev-2: var(--elev-2);
   --shadow-elev-3: var(--elev-3);
@@ -637,6 +365,12 @@
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
   --color-metric: var(--metric);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
+  --color-series-5: var(--series-5);
+  --color-series-other: var(--series-other);
   --color-status-2xx: var(--status-2xx);
   --color-status-3xx: var(--status-3xx);
   --color-status-4xx: var(--status-4xx);
@@ -669,246 +403,20 @@
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  /* Radius scale (tokens.css): sm = badge 4px, md = control 6px, lg = panel 8px, xl = dialog 12px. */
+  --radius-sm: var(--ew-radius-badge);
+  --radius-md: var(--ew-radius-control);
+  --radius-lg: var(--ew-radius-panel);
+  --radius-xl: var(--ew-radius-dialog);
+  --radius-2xl: var(--ew-radius-dialog);
+  --radius-3xl: var(--ew-radius-dialog);
+  --radius-4xl: var(--ew-radius-dialog);
 }
 
-/*
- * Lit Instrument surfaces. One light source from above: the canvas is the ground, wells sink
- * below it (inputs, logs, editors), cards, raised controls and overlays rise above it. Light mode
- * lifts with a hairline ring and layered soft shadows; dark mode lifts with brighter surfaces and a
- * top highlight (shadows barely show on dark). Neutrals lean cool (hue 258, chroma 0.004–0.014)
- * toward the blue action color. Components use the classes (bg-well, shadow-elev-2, btn-lit…),
- * never the values.
- */
+/* Layout values of the console shell (the rest of the tokens live in tokens.css). */
 :root {
-  --font-latin: "Mona Sans Variable";
-  /* The sticky page header's height (SiteHeader); focus scrolling keeps clear of it. */
-  --header-height: calc(var(--spacing) * 12);
-  /* Below the sticky header once the page scrolls (header-lift). */
-  --header-shadow: 0 10px 20px -14px oklch(0.3 0.03 258 / 24%);
-  --canvas: oklch(0.982 0.004 258);
-  --well: oklch(0.958 0.006 258);
-  --raised: oklch(1 0 0);
-  --overlay: oklch(1 0 0);
-  --edge: oklch(0.32 0.03 258 / 9%);
-  --elev-1:
-    0 0 0 1px var(--edge), 0 1px 2px oklch(0.3 0.03 258 / 6%),
-    0 2px 6px -2px oklch(0.3 0.03 258 / 5%);
-  --elev-2:
-    0 0 0 1px var(--edge), 0 1px 1px oklch(0 0 0 / 2%), 0 4px 8px -4px oklch(0.3 0.03 258 / 8%),
-    0 16px 24px -8px oklch(0.3 0.03 258 / 10%);
-  --elev-3:
-    0 0 0 1px var(--edge), 0 1px 1px oklch(0 0 0 / 2%), 0 8px 16px -4px oklch(0.3 0.03 258 / 8%),
-    0 24px 32px -8px oklch(0.3 0.03 258 / 14%);
-  --highlight: oklch(1 0 0 / 0%);
-  --highlight-edge: oklch(1 0 0 / 0%);
-  --spotlight: oklch(0.55 0.14 258 / 9%);
-  /* Live data and the wave motif only (realtime curves, beams, arcs, running lights). */
-  --signal: oklch(0.6 0.118 196);
-  --signal-glow: color-mix(in oklch, var(--signal) 40%, transparent);
-  /*
-   * Glass fills (glass, glass-overlay, toasts): opaque enough that muted text still reaches 4.5:1
-   * with foreground-colored content scrolling behind (contrast.test.ts, worst composite).
-   */
-  --glass: color-mix(in oklch, var(--canvas) 93%, transparent);
-  --glass-overlay: color-mix(in oklch, var(--overlay) 93%, transparent);
-  /* The action blue as text: links, link buttons, primary badges, the active nav icon. */
-  --primary-ink: var(--primary);
-  /* Hover and highlight wash (rows, menu items, ghost buttons) and neutral chips; on any surface. */
-  --wash: color-mix(in oklch, var(--foreground) 6%, transparent);
-  /* Tinted chips and callouts: primary badges; destructive buttons, badges and alerts. */
-  --tint-primary: color-mix(in oklch, var(--primary) 10%, transparent);
-  --tint-destructive: color-mix(in oklch, var(--destructive) 10%, transparent);
-  /* Behind dialogs and sheets: dims the canvas, no blur (polled content may sit behind). */
-  --scrim: oklch(0.2 0.02 258 / 30%);
-  /* The boundary of checkboxes and switch tracks (toggle-well): 3:1 on the card. */
-  --control-edge: color-mix(in oklch, var(--foreground) 45%, transparent);
-  /*
-   * The lit face of the primary action over its darker plate (btn-lit, Arc's primary button):
-   * resting, lifted (hover) and pressed flat.
-   */
-  --lit-plate: color-mix(in oklch, var(--primary), black 40%);
-  --lit-face: linear-gradient(oklch(1 0 0 / 16%), oklch(1 0 0 / 0%) 60%);
-  --lit-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 26%), inset 0 -1px 0 oklch(0 0 0 / 12%), 0 2px 0 0 var(--lit-plate),
-    0 4px 12px -4px color-mix(in oklch, var(--primary) 60%, transparent);
-  --lit-shadow-hover:
-    inset 0 1px 0 oklch(1 0 0 / 30%), inset 0 -1px 0 oklch(0 0 0 / 12%), 0 3px 0 0 var(--lit-plate),
-    0 8px 18px -6px color-mix(in oklch, var(--primary) 65%, transparent);
-  --lit-shadow-active: inset 0 1px 3px oklch(0 0 0 / 28%), 0 0 0 0 var(--lit-plate);
-
-  --background: var(--canvas);
-  --foreground: oklch(0.18 0.014 258);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.014 258);
-  --popover: var(--overlay);
-  --popover-foreground: oklch(0.18 0.014 258);
-  --primary: oklch(0.488 0.243 264.376);
-  --primary-foreground: oklch(0.97 0.014 254.604);
-  --secondary: oklch(0.955 0.006 258);
-  --secondary-foreground: oklch(0.22 0.014 258);
-  --muted: oklch(0.955 0.006 258);
-  --muted-foreground: oklch(0.52 0.016 258);
-  --accent: oklch(0.955 0.006 258);
-  --accent-foreground: oklch(0.22 0.014 258);
-  /* Darker than the preset's red so its text reaches 4.5:1 on its own 10% tint. */
-  --destructive: oklch(0.535 0.215 27.325);
-  --border: oklch(0.912 0.008 258);
-  --input: oklch(0.885 0.01 258);
-  /* Focus (the 1px ring border reaches 3:1 on canvas, card, well and overlay; the halo is ring/30). */
-  --ring: oklch(0.6 0.15 262);
-  --chart-1: oklch(0.845 0.143 164.978);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.596 0.145 163.225);
-  --chart-4: oklch(0.508 0.118 165.612);
-  --chart-5: oklch(0.432 0.095 166.913);
-  /*
-   * Analytics. The line and the status classes (2xx–5xx, stacked in that order) pass the dataviz
-   * palette checks (lightness band, CVD and normal-vision separation) on the card surface in each
-   * mode; 3xx/4xx sit below 3:1 in light mode, so their values are always labeled as text too.
-   */
-  --metric: #2a78d6;
-  --status-2xx: #2a78d6;
-  --status-3xx: #1baf7a;
-  --status-4xx: #eda100;
-  --status-5xx: #d03b3b;
-  /*
-   * Breakdown series in the metric dialogs, assigned in this order (dataviz categorical slots
-   * 1–5). Adjacent pairs pass the CVD and normal-vision checks on the card surface in each mode;
-   * slots 3–5 sit below 3:1 in light mode, so the legend and the list always print the values.
-   */
-  --series-1: #2a78d6;
-  --series-2: #eb6834;
-  --series-3: #1baf7a;
-  --series-4: #eda100;
-  --series-5: #e87ba4;
-  --series-other: #898781;
-  --delta-good: #006300;
-  --delta-bad: #c62f2f;
-  --star: #e2a400;
-  /* Node and cluster states; always shown with a text label. */
-  --state-good: #0ca30c;
-  --state-warn: #eda100;
-  --radius: 0.625rem;
-  --sidebar: oklch(0.962 0.006 258);
-  --sidebar-foreground: oklch(0.2 0.014 258);
-  --sidebar-primary: oklch(0.546 0.245 262.881);
-  --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
-  --sidebar-accent: var(--raised);
-  --sidebar-accent-foreground: oklch(0.18 0.014 258);
-  --sidebar-border: oklch(0.905 0.008 258);
-  --sidebar-ring: var(--ring);
-}
-
-.dark {
-  --canvas: oklch(0.168 0.011 258);
-  --well: oklch(0.142 0.01 258);
-  --raised: oklch(0.245 0.013 258);
-  --overlay: oklch(0.26 0.014 258);
-  --edge: oklch(1 0 0 / 8%);
-  --elev-1: inset 0 1px 0 oklch(1 0 0 / 5%), 0 0 0 1px var(--edge), 0 1px 2px oklch(0 0 0 / 40%);
-  --elev-2:
-    inset 0 1px 0 oklch(1 0 0 / 7%), 0 0 0 1px oklch(1 0 0 / 10%),
-    0 8px 24px -6px oklch(0 0 0 / 55%);
-  --elev-3:
-    inset 0 1px 0 oklch(1 0 0 / 9%), 0 0 0 1px oklch(1 0 0 / 12%),
-    0 24px 48px -12px oklch(0 0 0 / 70%);
-  --highlight: oklch(1 0 0 / 6%);
-  --highlight-edge: oklch(1 0 0 / 16%);
-  --spotlight: oklch(1 0 0 / 6%);
-  --header-shadow: 0 12px 24px -14px oklch(0 0 0 / 70%);
-  --signal: oklch(0.8 0.13 192);
-  --signal-glow: color-mix(in oklch, var(--signal) 45%, transparent);
-  --glass: color-mix(in oklch, var(--canvas) 86%, transparent);
-  --glass-overlay: color-mix(in oklch, var(--overlay) 90%, transparent);
-  /* The preset's dark --primary is a button fill, too dark for text on dark surfaces. */
-  --primary-ink: oklch(0.72 0.14 262);
-  --wash: color-mix(in oklch, var(--foreground) 8%, transparent);
-  --tint-primary: color-mix(in oklch, var(--primary) 20%, transparent);
-  --tint-destructive: color-mix(in oklch, var(--destructive) 20%, transparent);
-  --scrim: oklch(0 0 0 / 50%);
-  --control-edge: color-mix(in oklch, var(--foreground) 40%, transparent);
-
-  --background: var(--canvas);
-  --foreground: oklch(0.972 0.004 258);
-  --card: oklch(0.205 0.012 258);
-  --card-foreground: oklch(0.972 0.004 258);
-  --popover: var(--overlay);
-  --popover-foreground: oklch(0.972 0.004 258);
-  --primary: oklch(0.424 0.199 265.638);
-  --primary-foreground: oklch(0.97 0.014 254.604);
-  --secondary: oklch(0.255 0.012 258);
-  --secondary-foreground: oklch(0.972 0.004 258);
-  --muted: oklch(0.255 0.012 258);
-  --muted-foreground: oklch(0.72 0.014 258);
-  --accent: oklch(0.255 0.012 258);
-  --accent-foreground: oklch(0.972 0.004 258);
-  /* A touch lighter than the preset's, for 4.5:1 on a highlighted menu item. */
-  --destructive: oklch(0.72 0.18 22.216);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.62 0.15 262);
-  --chart-1: oklch(0.845 0.143 164.978);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.596 0.145 163.225);
-  --chart-4: oklch(0.508 0.118 165.612);
-  --chart-5: oklch(0.432 0.095 166.913);
-  --metric: #3987e5;
-  --status-2xx: #3987e5;
-  --status-3xx: #199e70;
-  --status-4xx: #c98500;
-  --status-5xx: #d03b3b;
-  --series-1: #3987e5;
-  --series-2: #d95926;
-  --series-3: #199e70;
-  --series-4: #c98500;
-  --series-5: #d55181;
-  --series-other: #898781;
-  --delta-good: #0ca30c;
-  --delta-bad: #e66767;
-  --star: #f0b429;
-  --state-good: #0ca30c;
-  --state-warn: #fab219;
-  --sidebar: oklch(0.142 0.01 258);
-  --sidebar-foreground: oklch(0.94 0.006 258);
-  --sidebar-primary: oklch(0.546 0.245 262.881);
-  --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
-  --sidebar-accent: oklch(0.225 0.013 258);
-  --sidebar-accent-foreground: oklch(0.972 0.004 258);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: var(--ring);
-}
-
-/* Wide-gamut screens get a little more chroma on the signal (the action color is the preset's). */
-@media (color-gamut: p3) {
-  :root {
-    --signal: oklch(0.6 0.14 196);
-  }
-  .dark {
-    --signal: oklch(0.8 0.155 192);
-  }
-}
-
-/* Glass turns opaque when the reader asks for less transparency or the browser cannot blur. */
-@media (prefers-reduced-transparency: reduce) {
-  :root,
-  .dark {
-    --glass: var(--canvas);
-    --glass-overlay: var(--overlay);
-  }
-}
-@supports not (backdrop-filter: blur(1px)) {
-  :root,
-  .dark {
-    --glass: var(--canvas);
-    --glass-overlay: var(--overlay);
-  }
+  /* The sticky top bar's height; sticky table headers and focus scrolling keep clear of it. */
+  --header-height: var(--ew-topbar-height);
 }
 
 /*
@@ -932,6 +440,10 @@
   }
   [data-slot="input-group-control"]:focus-visible {
     outline: none;
+  }
+  [data-slot="nav-item"][data-active]:not(:focus-visible) {
+    outline: 1px solid Highlight;
+    outline-offset: -1px;
   }
   /*
    * Checked toggles, and the fills of progress bars, meters, top-list bars and the status-class
@@ -961,8 +473,6 @@
   [data-slot="switch"][data-checked] [data-slot="switch-thumb"] {
     background-color: HighlightText;
   }
-  [data-slot="sidebar-menu-button"][data-active]:not(:focus-visible),
-  [data-slot="sidebar-menu-sub-button"][data-active]:not(:focus-visible),
   [data-slot="table-row"][data-state="selected"],
   [data-slot$="-item"][data-highlighted]:not(:focus-visible),
   [data-slot="command-item"][data-selected="true"] {
@@ -995,15 +505,15 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-size: var(--ew-text-body);
+    line-height: var(--ew-leading-body);
   }
   html {
     @apply font-sans;
     font-synthesis-weight: none;
-    /* Focus scrolling keeps rows clear of the sticky header (two rows below sm: actions wrap). */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     scroll-padding-top: calc(var(--header-height) + 0.75rem);
-    @media (width < 40rem) {
-      scroll-padding-top: calc(var(--header-height) * 2 + 0.75rem);
-    }
   }
   /* Chinese and Latin runs get their gap from the browser, not from typed spaces. */
   :lang(zh) {
@@ -1018,42 +528,6 @@
 }
 
 /*
- * shadcn chart: recharts draws grids, reference lines and dot or sector outlines in its default
- * #ccc / #fff; restyle exactly those with the theme tokens (moved here from the arbitrary variants
- * in components/ui/chart.tsx, which carries no color literals).
- */
-@layer components {
-  [data-slot="chart"] .recharts-cartesian-grid line[stroke="#ccc"] {
-    stroke: color-mix(in oklab, var(--border) 50%, transparent);
-  }
-  [data-slot="chart"] .recharts-polar-grid [stroke="#ccc"],
-  [data-slot="chart"] .recharts-reference-line [stroke="#ccc"] {
-    stroke: var(--border);
-  }
-  [data-slot="chart"] .recharts-dot[stroke="#fff"],
-  [data-slot="chart"] .recharts-sector[stroke="#fff"] {
-    stroke: transparent;
-  }
-  /* The hovered point sits in a ring of the card color, so it reads on top of the line. */
-  [data-slot="chart"] .recharts-active-dot .recharts-dot {
-    stroke: var(--card);
-    stroke-width: 2;
-  }
-  /* Crosshair: a dashed hairline in muted ink over lines and areas, a wash band over bars. */
-  [data-slot="chart"] .recharts-curve.recharts-tooltip-cursor {
-    stroke: color-mix(in oklch, var(--muted-foreground) 55%, transparent);
-    stroke-dasharray: 3 3;
-  }
-  [data-slot="chart"] .recharts-rectangle.recharts-tooltip-cursor {
-    fill: var(--wash);
-  }
-  /* Lit lines: in dark mode a series line glows softly in its own color. */
-  .dark [data-slot="chart"][data-glow] .recharts-area-curve {
-    filter: drop-shadow(0 0 5px color-mix(in oklch, var(--color-value) 60%, transparent));
-  }
-}
-
-/*
  * Effects (components/effects): the globe's canvas fades in once drawn; its labels pin to cobe's
  * marker anchors and fade out when the marker turns away. Without anchor positioning they stay off.
  */
@@ -1063,7 +537,7 @@
     width: 100%;
     height: 100%;
     opacity: 0;
-    transition: opacity 700ms var(--ease-lit);
+    transition: opacity 700ms var(--ew-ease-standard);
   }
   .globe-canvas[data-ready] {
     opacity: 1;
@@ -1084,7 +558,7 @@
     background: color-mix(in oklch, var(--overlay) 82%, transparent);
     box-shadow: var(--elev-1);
     opacity: var(--visible);
-    transition: opacity 300ms var(--ease-lit);
+    transition: opacity 300ms var(--ew-ease-standard);
   }
   @supports not (anchor-name: --a) {
     .globe-label {
@@ -1119,93 +593,6 @@
     .globe-label {
       transition: none;
     }
-  }
-}
-
-/*
- * Empty-state illustrations (components/empty-art.tsx): token strokes and one signal accent,
- * fading out toward the sides. The loop runs only without reduced motion and while the state is
- * on screen in a visible tab ([data-live] from useLive); otherwise it holds still.
- */
-@layer components {
-  .empty-art {
-    overflow: visible;
-    stroke-width: 1.25;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
-  }
-  .empty-art * {
-    vector-effect: non-scaling-stroke;
-  }
-  .empty-art [data-anim] {
-    transform-box: fill-box;
-    transform-origin: center;
-  }
-  @media (prefers-reduced-motion: no-preference) {
-    .empty-art [data-anim="travel"] {
-      animation: art-travel 3.6s var(--ease-lit) infinite;
-    }
-    .empty-art [data-anim="spin"] {
-      animation: art-spin 24s linear infinite;
-    }
-    .empty-art [data-anim="blink"] {
-      animation: art-blink 2.4s ease-in-out infinite;
-    }
-    .empty-art [data-anim="halo"] {
-      animation: art-halo 2.4s ease-out infinite;
-    }
-  }
-  /* After the shorthands above, which reset the play state: off screen or in a hidden tab, hold. */
-  .empty-art:not([data-live]) [data-anim] {
-    animation-play-state: paused;
-  }
-  @media (forced-colors: active) {
-    .empty-art {
-      mask-image: none;
-    }
-  }
-}
-
-@keyframes art-travel {
-  0% {
-    opacity: 0;
-    transform: translateX(0);
-  }
-  12% {
-    opacity: 1;
-  }
-  70% {
-    opacity: 1;
-    transform: translateX(var(--travel));
-  }
-  84%,
-  100% {
-    opacity: 0;
-    transform: translateX(var(--travel));
-  }
-}
-
-@keyframes art-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes art-blink {
-  50% {
-    opacity: 0.35;
-  }
-}
-
-@keyframes art-halo {
-  0% {
-    opacity: 0.6;
-    transform: scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(3.2);
   }
 }
 

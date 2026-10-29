@@ -25,16 +25,26 @@ import { Textarea } from "@/components/arc/textarea/textarea";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DnsCredentialDialog } from "@/components/dns/credential-dialog";
 import { FormSelect, OptionSelect } from "@/components/form-select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/layout/collapsible";
+import { Field, FieldError, FieldLabel } from "@/components/layout/form";
+import {
+  Panel,
+  PanelContent,
+  PanelFooter,
+  PanelHeader,
+  PanelTitle,
+} from "@/components/layout/panel";
+import { Spinner } from "@/components/layout/spinner";
 import { SafetyNote } from "@/components/safety-note";
 import { COMPRESSION_KEYS, compressionOf } from "@/components/site/compression-card";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { CheckboxList } from "@/components/site/ports-card";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, ErrorState, QueryView } from "@/components/states";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { certificateErrorText } from "@/lib/certificate-errors";
 import { httpsBlockerText } from "@/lib/https-blockers";
@@ -128,7 +138,7 @@ function CertificateState({ cert, actions }: { cert: CertificateDto; actions?: R
   const retry = cert.source === "acme";
   return (
     <div
-      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl sunk-well px-4 py-3 text-sm animate-enter"
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg faint-well px-4 py-3 text-sm animate-enter"
       data-testid="https-certificate-state"
     >
       {failed ? (
@@ -175,11 +185,11 @@ function RequestedCertificate({ cert }: { cert: CertificateDto }) {
   });
   const failed = cert.status === "error";
   return (
-    <Card className="animate-enter" data-testid="https-requested">
-      <CardHeader>
-        <CardTitle>{failed ? m.https_off() : m.https_requesting()}</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-3">
+    <Panel className="animate-enter" data-testid="https-requested">
+      <PanelHeader>
+        <PanelTitle>{failed ? m.https_off() : m.https_requesting()}</PanelTitle>
+      </PanelHeader>
+      <PanelContent className="grid gap-3">
         <p className="text-sm break-words text-muted-foreground">{cert.names.join(", ")}</p>
         <CertificateState
           cert={cert}
@@ -196,8 +206,8 @@ function RequestedCertificate({ cert }: { cert: CertificateDto }) {
             />
           }
         />
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }
 
@@ -261,16 +271,16 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
     );
   const chosen = existing ?? data?.certificates[0]?.id ?? "";
   return (
-    <Card className="animate-enter" data-testid="https-enable">
-      <CardHeader>
-        <CardTitle>{m.https_off()}</CardTitle>
-      </CardHeader>
+    <Panel className="animate-enter" data-testid="https-enable">
+      <PanelHeader>
+        <PanelTitle>{m.https_off()}</PanelTitle>
+      </PanelHeader>
       <Collapsible
         open={customize}
         onOpenChange={setCustomize}
-        className="flex flex-col gap-(--card-spacing)"
+        className="flex flex-col gap-(--panel-pad)"
       >
-        <CardContent className="grid gap-4">
+        <PanelContent className="grid gap-4">
           <p className="text-sm break-words text-muted-foreground">
             {site.domains.map(displaySiteDomain).join(", ")}
           </p>
@@ -362,8 +372,8 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
               </Button>
             </div>
           ) : null}
-        </CardContent>
-        <CardFooter className="flex-wrap justify-end gap-2">
+        </PanelContent>
+        <PanelFooter className="flex-wrap justify-end gap-2">
           {error ? (
             <FieldError className="mr-auto animate-in fade-in" data-testid="https-error">
               {error}
@@ -408,7 +418,7 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
             {pending || check.isFetching ? <Spinner /> : null}
             {m.https_enable()}
           </Button>
-        </CardFooter>
+        </PanelFooter>
       </Collapsible>
       <DnsCredentialDialog
         key={addCredential.key}
@@ -419,7 +429,7 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
           await client.invalidateQueries();
         }}
       />
-    </Card>
+    </Panel>
   );
 }
 
@@ -490,9 +500,9 @@ function HttpsEditor({
     ["ocspStapling", m.cert_ocsp()],
   ] as const;
   return (
-    <Card className="animate-enter" style={{ animationDelay: "60ms" }}>
+    <Panel className="animate-enter" style={{ animationDelay: "60ms" }}>
       <form
-        className="flex flex-col gap-(--card-spacing)"
+        className="flex flex-col gap-(--panel-pad)"
         onSubmit={async (event) => {
           event.preventDefault();
           // Compression as saved: the cache tab owns it.
@@ -509,10 +519,10 @@ function HttpsEditor({
           }
         }}
       >
-        <CardHeader>
-          <CardTitle>{m.site_tab_https()}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <PanelHeader>
+          <PanelTitle>{m.site_tab_https()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <FormSelect
             id="siteCertificate"
             label={m.cert_title()}
@@ -776,7 +786,7 @@ function HttpsEditor({
               </SafetyNote>
             ) : null}
           </div>
-        </CardContent>
+        </PanelContent>
         <SaveBar
           dirty={JSON.stringify(httpsOf(settings)) !== JSON.stringify(httpsOf(initial))}
           pending={mutation.isPending}
@@ -784,6 +794,6 @@ function HttpsEditor({
           testId="https-save"
         />
       </form>
-    </Card>
+    </Panel>
   );
 }

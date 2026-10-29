@@ -1,9 +1,8 @@
 import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/react-router";
 import * as React from "react";
-import { AppSidebar } from "@/components/app-sidebar";
 import { CommandMenu } from "@/components/command-menu";
 import { QuickActionsProvider } from "@/components/quick-actions";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { AppShell } from "@/components/shell/app-shell";
 import { UnsavedChangesGuard } from "@/components/unsaved-changes";
 import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/lib/orpc";
@@ -47,22 +46,12 @@ function AppLayout() {
     if (isRecentPath(pathname)) recordRecent(session.user.id, { kind: "page", path: pathname });
   }, [pathname, session.user.id]);
   return (
-    // The header's height (--header-height) lives on :root, where the document's scroll padding
-    // reads it too (index.css).
-    <SidebarProvider
-      style={{ "--sidebar-width": "calc(var(--spacing) * 64)" } as React.CSSProperties}
-    >
-      <QuickActionsProvider>
-        <AppSidebar
-          variant="inset"
-          user={{ name: session.user.name, email: session.user.email, demo: me.demo }}
-        />
-        <SidebarInset>
-          <Outlet />
-        </SidebarInset>
-        <CommandMenu />
-      </QuickActionsProvider>
+    <QuickActionsProvider>
+      <AppShell user={{ name: session.user.name, email: session.user.email, demo: me.demo }}>
+        <Outlet />
+      </AppShell>
+      <CommandMenu />
       <UnsavedChangesGuard />
-    </SidebarProvider>
+    </QuickActionsProvider>
   );
 }

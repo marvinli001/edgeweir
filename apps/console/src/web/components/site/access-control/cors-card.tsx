@@ -1,9 +1,9 @@
 import { CORS_MAX_AGE, type CorsSettings } from "@edgeweir/contract";
 import { FormSelect } from "@/components/form-select";
+import { Field, FieldLabel } from "@/components/layout/form";
 import { ListText } from "@/components/site/access-control/fields";
 import { AccessPartCard } from "@/components/site/access-control/part-card";
 import { ListInput, NumberField, SwitchField } from "@/components/site/fields";
-import { Field, FieldLabel } from "@/components/ui/field";
 import { m } from "@/lib/i18n";
 
 type Draft = Omit<CorsSettings, "maxAgeSeconds"> & { maxAgeSeconds: string };

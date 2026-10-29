@@ -75,7 +75,7 @@ function L4AppsPage() {
               <Link
                 to="/l4/$id"
                 params={{ id: row.original.id }}
-                className="truncate rounded-sm font-medium underline-offset-4 outline-none focus-lit hover:underline"
+                className="truncate rounded-sm font-medium underline-offset-4 outline-none focus-ring hover:underline"
                 title={row.original.name}
                 data-testid="l4-app-link"
                 {...rowLink}

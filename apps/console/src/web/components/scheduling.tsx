@@ -25,12 +25,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
-import { enterDelay } from "@/components/page";
-import { NumberField, SwitchField } from "@/components/site/fields";
-import { nextDraftKey } from "@/components/site/save-site";
-import { EmptyState, QueryView } from "@/components/states";
-import { Dot, type StatusTone } from "@/components/status-dot";
-import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/layout/form";
 import {
   Table,
   TableBody,
@@ -38,7 +33,12 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/layout/table";
+import { enterDelay } from "@/components/page";
+import { NumberField, SwitchField } from "@/components/site/fields";
+import { nextDraftKey } from "@/components/site/save-site";
+import { EmptyState, QueryView } from "@/components/states";
+import { Dot, type StatusTone } from "@/components/status-dot";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
@@ -731,7 +731,7 @@ function PreviewRuleBlock({ rule, index }: { rule: PreviewRule; index: number })
   const regionName = useRegionName();
   return (
     <div
-      className="overflow-hidden rounded-2xl bg-card shadow-elev-1 edge-lit animate-enter [--card-spacing:--spacing(4)]"
+      className="overflow-hidden rounded-lg border bg-card animate-enter [--panel-pad:--spacing(4)]"
       style={enterDelay(index, 40)}
       data-testid="scheduling-preview-rule"
       data-rule-id={rule.ruleId}

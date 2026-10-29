@@ -8,12 +8,11 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { Meter } from "@/components/appica/meter";
-import { Sparkline } from "@/components/appica/sparkline";
 import { FlowNumber, FlowScaled, NumberFlowGroup } from "@/components/effects/number-flow";
-import { Spotlight } from "@/components/effects/spotlight";
+import { Meter } from "@/components/meter";
 import { QueryView } from "@/components/states";
 import { LiveDot } from "@/components/status-dot";
+import { Sparkline } from "@/components/trend-line";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
@@ -45,6 +44,9 @@ function useArrival<T extends number>(value: T): T | 0 {
   return arrived ? value : 0;
 }
 
+/** The pale KPI fills (tokens.css --ew-kpi-*), in turn across the row. */
+const KPI_TINT = ["bg-kpi-1", "bg-kpi-2", "bg-kpi-3"];
+
 function Tile({
   icon,
   title,
@@ -63,19 +65,19 @@ function Tile({
 }) {
   return (
     <div
-      className="relative flex min-h-36 flex-col overflow-hidden rounded-2xl bg-card shadow-elev-1 edge-lit animate-enter"
+      className={cn(
+        "relative flex min-h-36 flex-col overflow-hidden rounded-lg animate-enter",
+        KPI_TINT[index % KPI_TINT.length],
+      )}
       style={{ animationDelay: `${index * 50}ms` }}
     >
-      <Spotlight />
-      <div className="relative z-[1] flex items-center gap-2 px-4 pt-3.5 text-[13px] text-muted-foreground">
+      <div className="flex items-center gap-2 px-4 pt-4 text-dense text-muted-foreground">
         <HugeiconsIcon icon={icon} strokeWidth={2} className="size-4" />
         <span className="truncate">{title}</span>
         {span ? <span className="ms-auto shrink-0 text-xs">{span}</span> : null}
       </div>
-      <div className="relative z-[1] truncate px-4 pt-1.5 text-[1.75rem] leading-tight font-semibold tracking-tight font-stretch-112%">
-        {children}
-      </div>
-      <div className="relative z-[1] mt-auto">{footer}</div>
+      <div className="truncate px-4 pt-2 text-display font-medium">{children}</div>
+      <div className="mt-auto">{footer}</div>
     </div>
   );
 }
@@ -114,7 +116,7 @@ export function LiveKpis({
   return (
     <section className="flex flex-col gap-3" aria-labelledby="live-title">
       <div className="flex items-center gap-3">
-        <h2 id="live-title" className="text-base font-semibold">
+        <h2 id="live-title" className="text-section font-medium">
           {m.overview_live_title()}
         </h2>
         {tiles.length > 0 && traffic.isSuccess ? <LiveDot label={m.overview_live()} /> : null}

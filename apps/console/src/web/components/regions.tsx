@@ -8,9 +8,9 @@ import { Button } from "@/components/arc/button/button";
 import { Input } from "@/components/arc/input/input";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
+import { Field, FieldLabel } from "@/components/layout/form";
 import { ItemMenu } from "@/components/row-menu";
 import { EmptyState, QueryView } from "@/components/states";
-import { Field, FieldLabel } from "@/components/ui/field";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { placeOf } from "@/lib/edge-map";
 import { m, timeAgo } from "@/lib/i18n";
@@ -25,7 +25,7 @@ function RegionMapCard({ regions }: { regions: Region[] }) {
   if (!regions.some((r) => placeOf(r.code, r.name))) return null;
   return (
     <section
-      className="overflow-hidden rounded-2xl bg-card px-3 py-5 shadow-elev-1 edge-lit animate-enter @3xl/main:px-8 @3xl/main:py-7"
+      className="overflow-hidden rounded-lg border bg-card px-3 py-5 animate-enter @3xl/main:px-8 @3xl/main:py-7"
       data-testid="regions-map"
     >
       <React.Suspense fallback={<div className="aspect-[173/66] w-full" />}>
@@ -195,7 +195,7 @@ function RegionsList({ onCreate }: { onCreate: () => void }) {
       <QueryView
         query={regions}
         empty={
-          <EmptyState icon={Location01Icon} art="node" title={m.regions_empty()}>
+          <EmptyState icon={Location01Icon} title={m.regions_empty()}>
             <Button onClick={onCreate}>
               <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
               {m.regions_create()}

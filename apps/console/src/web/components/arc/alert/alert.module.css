@@ -2,15 +2,15 @@
   .presence {
     min-width: 0;
   }
-  /* A sunk callout: it sits in a page or a card without becoming a card on a card. */
+  /* A notice: a tint fill (pale blue by default), no border; icon in the status color. */
   .alert {
     display: flex;
     align-items: start;
-    gap: var(--arc-space-3);
-    border: 1px solid var(--arc-border-subtle);
+    gap: var(--arc-space-2);
+    border: 0;
     border-radius: var(--arc-radius-control);
-    padding: var(--arc-space-3) var(--arc-space-4);
-    background: var(--arc-surface-sunken);
+    padding: 9px var(--arc-space-4);
+    background: var(--arc-info-subtle);
     color: var(--arc-foreground);
     font-size: var(--arc-text-sm);
   }
@@ -22,9 +22,9 @@
     place-items: center;
   }
   .icon {
-    width: 18px;
-    height: 18px;
-    margin-top: 1px;
+    width: 16px;
+    height: 16px;
+    margin-top: 3px;
   }
   .icon svg {
     display: block;
@@ -58,15 +58,20 @@
   .success .icon {
     color: var(--arc-success);
   }
+  .success {
+    background: var(--arc-success-subtle);
+  }
   .warning .icon {
     color: var(--arc-warning);
   }
+  .warning {
+    background: var(--arc-warning-subtle);
+  }
   .danger .icon {
-    color: var(--arc-danger);
+    color: var(--arc-danger-fill);
   }
   /* Red text on its own tint (4.5:1 on the canvas and the card, contrast.test.ts). */
   .danger {
-    border-color: color-mix(in oklab, var(--arc-danger) 20%, transparent);
     background: var(--arc-danger-subtle);
     color: var(--arc-danger);
   }
@@ -91,7 +96,8 @@
       color var(--arc-duration-fast) var(--arc-ease-standard);
   }
   .dismiss:focus-visible {
-    outline: 3px solid color-mix(in oklab, var(--arc-focus-ring) 30%, transparent);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--arc-focus-halo);
   }
   .dismiss:active {
     transform: scale(0.96);

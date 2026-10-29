@@ -8,7 +8,7 @@ const SHOW_AFTER_MS = 150;
 
 /**
  * 2px indeterminate bar at the top of the viewport while a route loads, a query fetches or a
- * mutation runs: a primary sweep with a glow (progress-glow), a still bar under reduced motion.
+ * mutation runs: a brand sweep, a still bar under reduced motion.
  * Background polling (`meta: { background: true }`) of already-loaded data is ignored.
  */
 export function TopProgress() {
@@ -35,12 +35,11 @@ export function TopProgress() {
       data-testid="top-progress"
       data-active={visible || undefined}
       className={cn(
-        // Taller than the bar, so its glow shows below it; the sweep stays clipped sideways.
-        "pointer-events-none fixed inset-x-0 top-0 z-60 h-2 overflow-hidden opacity-0 transition-opacity duration-300",
+        "pointer-events-none fixed inset-x-0 top-0 z-60 h-0.5 overflow-hidden opacity-0 transition-opacity duration-300",
         "data-active:opacity-100",
       )}
     >
-      <div className="h-0.5 w-full origin-left animate-progress-sweep rounded-full progress-glow" />
+      <div className="h-0.5 w-full origin-left animate-progress-sweep bg-primary forced-colors:bg-[Highlight]" />
     </div>
   );
 }

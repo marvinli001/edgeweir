@@ -13,52 +13,38 @@ Hugeicons). MIT license text below.
 
 | Code | From | Version | Copyright | License |
 | --- | --- | --- | --- | --- |
-| `spotlight.tsx`, `tilt.tsx` | [Motion Primitives](https://github.com/ibelick/motion-primitives) (`spotlight`, `tilt`) | `120f64f6ca60` (2026-10-06) | Copyright (c) 2024 ibelick | MIT |
 | `animated-beam.tsx` | [Magic UI](https://github.com/magicuidesign/magicui) (`animated-beam`) | `cdb348cb4c72` (2026-10-06) | Copyright (c) Magic UI | MIT |
-| `emboss-surface.tsx` | [Smooth UI](https://github.com/educlopez/smoothui) (`emboss-surface`) | `b6312bce2b6f` (2026-10-06) | Copyright (c) 2024 Eduardo Calvo | MIT |
 | `origin-topology.tsx` (node, handle and animated edge) | [React Flow UI](https://reactflow.dev/ui) (`base-node`, `base-handle`, `animated-svg-edge`), in [xyflow](https://github.com/xyflow/xyflow) | `3d35b5731757` (2026-10-06) | Copyright (c) 2019-2025 webkid GmbH | MIT |
-| `animated-icons.tsx` | [hugeicons-animated](https://github.com/enesgules/hugeicons-animated) (`dashboard-square-01`, `notification-03`, `sliders-horizontal`, `list-view`, `inbox`, `use-icon-animation`) | `5d3fcbef342d` (2026-10-06) | Copyright (c) 2026 Abdullah Enes Gules; glyphs from the Hugeicons free set (MIT) | MIT |
 | `world-dots.ts` (generated) | [dotted-map](https://github.com/NTag/dotted-map) 3.1.0 with its bundled Natural Earth land data (public domain) | 3.1.0 | Copyright (c) 2021 Basile Bruneau | MIT |
 
 Arc primitives: copied into `src/web/components/arc/` from Arc's public registry (free tier only)
 and changed as described in each file's header (`--arc-` tokens mapped onto the console's in
 `foundation.css`, Motion's light components, Hugeicons, Paraglide text). Arc builds its dialog,
-menu, select, tabs, switch, checkbox and tooltip on Radix; those are ported from Arc with the
-primitives switched to Base UI, keeping Arc's styling and motion. MIT license text below.
+menu, select, tabs, switch, checkbox, tooltip and drawer on Radix; those are ported from Arc with
+the primitives switched to Base UI, keeping Arc's styling and motion. MIT license text below.
 
 | Code | From | Version | Copyright | License |
 | --- | --- | --- | --- | --- |
 | `foundation.css`, `motion-tokens.ts`, `arc-provider.tsx`, `button.tsx`, `badge.tsx`, `alert.tsx`, `avatar.tsx`, `progress.tsx`, `toast-stack.tsx` | [Arc](https://github.com/kuratlielia/arc-library) (`arc-foundation`, `arc-motion-tokens`, `button`, `badge`, `alert`, `avatar`, `progress`, `toast-stack`) | registry (2026-10-25) | Copyright (c) 2026 Elia Kuratli | MIT |
 | `input.tsx`, `input.module.css`, `textarea.tsx`, `textarea.module.css`, `switch.tsx`, `switch.module.css`, `checkbox.tsx`, `checkbox.module.css`, `tabs.tsx`, `tabs.module.css`, `tooltip.tsx`, `tooltip.module.css`, `dropdown-menu.tsx`, `dropdown-menu.module.css`, `select.tsx`, `select.module.css`, `dialog.tsx`, `dialog.module.css` (ported from Arc, primitives switched to Base UI) | [Arc](https://github.com/kuratlielia/arc-library) (`input`, `textarea`, `switch`, `checkbox`, `tabs`, `tooltip`, `dropdown-menu`, `select`, `dialog`) | registry (2026-10-25) | Copyright (c) 2026 Elia Kuratli | MIT |
+| `animated-counter.tsx`, `animated-counter.module.css`, `command-palette.tsx`, `command-palette.module.css`, `drawer.tsx`, `drawer.module.css`, `empty-state.tsx`, `empty-state.module.css`, `line-chart.tsx`, `line-chart.module.css`, `metric-card.tsx`, `metric-card.module.css`, `otp-input.tsx`, `otp-input.module.css`, `pagination.tsx`, `pagination.module.css`, `scroll-area.tsx`, `scroll-area.module.css`, `sparkline.tsx`, `sparkline.module.css` (the drawer ported to Base UI Dialog) | [Arc](https://github.com/kuratlielia/arc-library) (`animated-counter`, `command-palette`, `drawer`, `empty-state`, `line-chart`, `metric-card`, `otp-input`, `pagination`, `scroll-area`, `sparkline`) | registry (2026-10-29) | Copyright (c) 2026 Elia Kuratli | MIT |
 
 ## Bundled packages
 
 | Package | Version | Copyright | License |
 | --- | --- | --- | --- |
-| [cobe](https://github.com/shuding/cobe) | 2.0.1 | Copyright (c) 2021 Shu Ding | MIT |
 | [@xyflow/react](https://github.com/xyflow/xyflow) | 12.12.0 | Copyright (c) 2019-2025 webkid GmbH | MIT |
 | [@dagrejs/dagre](https://github.com/dagrejs/dagre) | 3.1.1 | Copyright (c) 2012-2014 Chris Pettitt | MIT |
 | [uPlot](https://github.com/leeoniya/uPlot) | 1.6.32 | Copyright (c) 2022 Leon Sorokin | MIT |
 | [@number-flow/react](https://github.com/barvian/number-flow) | 0.6.2 | Copyright (c) 2024 Maxwell Barvian | MIT |
-| [motion](https://github.com/motiondivision/motion) | 13.5.1 (shared with appica-ui) | Copyright (c) 2024 Motion B.V. | MIT |
-| [@paper-design/shaders-react](https://github.com/paper-design/shaders) | 0.0.81 | Copyright 2026 Paper | Apache-2.0 (NOTICE below) |
-
-Paper Shaders `NOTICE`:
-
-```text
-Paper Shaders
-Copyright 2026 Paper
-
-Powered by Paper Shaders:
-https://shaders.paper.design
-```
+| [motion](https://github.com/motiondivision/motion) | 13.5.1 | Copyright (c) 2024 Motion B.V. | MIT |
 
 ## Fonts (self-hosted, SIL Open Font License 1.1)
 
 | Font | Package | Copyright |
 | --- | --- | --- |
 | Geist | `@fontsource-variable/geist` 5.3.0 | Copyright 2024 The Geist Project Authors |
-| Mona Sans | `@fontsource-variable/mona-sans` 5.3.0 | Copyright 2022 The Mona Sans Project Authors, Reserved Font Name "Mona" |
+| Inter | `@fontsource-variable/inter` 5.3.0 | Copyright 2020 The Inter Project Authors |
 | Noto Sans SC | `@fontsource-variable/noto-sans-sc` 5.3.0 (Google Fonts v40) | Google Inc. |
 
 The fonts are used unmodified (the packages' `unicode-range` shards).

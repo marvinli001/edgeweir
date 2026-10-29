@@ -10,12 +10,18 @@ import {
   followTasks,
   useExpandedTasks,
 } from "@/components/cache-tasks";
+import { Field, FieldError, FieldLabel } from "@/components/layout/form";
+import {
+  Panel,
+  PanelContent,
+  PanelFooter,
+  PanelHeader,
+  PanelTitle,
+} from "@/components/layout/panel";
+import { Spinner } from "@/components/layout/spinner";
 import { LinkButton } from "@/components/link-button";
 import { SafetyNote } from "@/components/safety-note";
 import { QueryView } from "@/components/states";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import { useAction } from "@/hooks/use-action";
 import { formatNumber, m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
@@ -80,18 +86,18 @@ export function CachePurgeCard({ site }: { site: Site }) {
   };
 
   return (
-    <Card className="animate-enter" data-testid="cache-purge-card">
+    <Panel className="animate-enter" data-testid="cache-purge-card">
       <form
-        className="flex flex-col gap-(--card-spacing)"
+        className="flex flex-col gap-(--panel-pad)"
         onSubmit={(event) => {
           event.preventDefault();
           void submit();
         }}
       >
-        <CardHeader>
-          <CardTitle>{m.cache_purge_title()}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+        <PanelHeader>
+          <PanelTitle>{m.cache_purge_title()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent className="flex flex-col gap-4">
           <Tabs
             value={type}
             onValueChange={(value) => {
@@ -145,8 +151,8 @@ export function CachePurgeCard({ site }: { site: Site }) {
               ) : null}
             </Field>
           )}
-        </CardContent>
-        <CardFooter className="flex-wrap justify-end gap-3">
+        </PanelContent>
+        <PanelFooter className="flex-wrap justify-end gap-3">
           {error ? (
             <FieldError className="mr-auto animate-in fade-in" data-testid="cache-purge-error">
               {error}
@@ -160,9 +166,9 @@ export function CachePurgeCard({ site }: { site: Site }) {
             {action.pending ? <Spinner /> : null}
             {m.purge_submit()}
           </Button>
-        </CardFooter>
+        </PanelFooter>
       </form>
-      <CardContent className="flex flex-col gap-3 border-t pt-(--card-spacing)">
+      <PanelContent className="flex flex-col gap-3 border-t pt-(--panel-pad)">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-medium text-muted-foreground">{m.purge_tasks()}</h3>
           <LinkButton
@@ -185,7 +191,7 @@ export function CachePurgeCard({ site }: { site: Site }) {
             <CacheTaskList tasks={items} expanded={expanded} onToggle={toggle} inset />
           )}
         </QueryView>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }

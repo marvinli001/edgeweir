@@ -68,7 +68,7 @@ type GraphEdge = Edge<{ label?: string; kind: TopologyEdge["kind"] }, "flow">;
 function BoxNode({ data }: NodeProps<GraphNode>) {
   return (
     <div
-      className="flex h-full w-full items-center gap-2.5 rounded-xl bg-raised px-3 text-left shadow-elev-1 edge-lit"
+      className="flex h-full w-full items-center gap-2.5 rounded-md bg-raised px-3 text-left shadow-elev-1 "
       data-tone={data.tone}
     >
       <Handle type="target" position={Position.Left} className="opacity-0" isConnectable={false} />
@@ -84,7 +84,7 @@ function BoxNode({ data }: NodeProps<GraphNode>) {
               className={cn(
                 "size-1.5 shrink-0 rounded-full",
                 TONE_DOT[data.tone],
-                data.tone !== "idle" && "lit-glow",
+                data.tone !== "idle" && "",
               )}
             />
           ) : null}

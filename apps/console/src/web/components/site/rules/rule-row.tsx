@@ -72,7 +72,7 @@ export function RuleRow({
       className={cn(
         "grid gap-4 border-t px-5 pt-4 pb-5 last:rounded-b-2xl",
         // Lifted only while it is carried.
-        isDragging && "relative z-10 rounded-2xl bg-card shadow-elev-2",
+        isDragging && "relative z-10 rounded-lg bg-card shadow-elev-2",
       )}
       data-testid="rule-row"
     >

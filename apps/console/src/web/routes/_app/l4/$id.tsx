@@ -18,13 +18,13 @@ import { DeleteL4AppDialog, L4EnabledSwitch } from "@/components/l4/app-actions"
 import { L4AppDialog } from "@/components/l4/app-dialog";
 import { L4AppStats } from "@/components/l4/app-stats";
 import { DnsTarget, L4NodesWarning, ProtocolBadge } from "@/components/l4/common";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { LinkButton } from "@/components/link-button";
 import { Page } from "@/components/page";
 import { CnamePrefixActions } from "@/components/site/cname-prefix";
 import { QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { NotFoundPage } from "@/components/status-page";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
 import {
   L4_STATS_RANGES,
@@ -179,9 +179,9 @@ function Overview({ app }: { app: L4App }) {
       {pools.data ? (
         <L4NodesWarning cluster={app.clusterName} nodes={pools.data.nodesWithoutL4} />
       ) : null}
-      <Card data-testid="l4-app-overview">
-        <CardHeader className="flex flex-row flex-wrap items-center gap-2">
-          <CardTitle className="flex-1">{m.site_tab_overview()}</CardTitle>
+      <Panel data-testid="l4-app-overview">
+        <PanelHeader className="flex flex-row flex-wrap items-center gap-2">
+          <PanelTitle className="flex-1">{m.site_tab_overview()}</PanelTitle>
           <Button
             size="sm"
             variant="secondary"
@@ -200,14 +200,12 @@ function Overview({ app }: { app: L4App }) {
             <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
             {m.common_delete()}
           </Button>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2">
-          <dl className="grid divide-y divide-edge overflow-hidden rounded-xl sunk-well @2xl/main:grid-cols-3 @2xl/main:divide-x @2xl/main:divide-y-0">
+        </PanelHeader>
+        <PanelContent className="flex flex-col gap-2">
+          <dl className="grid divide-y divide-edge overflow-hidden rounded-md faint-well @2xl/main:grid-cols-3 @2xl/main:divide-x @2xl/main:divide-y-0">
             <SummaryCell label={m.l4_port()} testId="l4-app-listen">
               <ProtocolBadge protocol={app.protocol} />
-              <span className="font-mono text-xl font-semibold tracking-tight readout">
-                {portsLabel(app)}
-              </span>
+              <span className="font-mono text-xl font-medium readout">{portsLabel(app)}</span>
             </SummaryCell>
             <SummaryCell label={m.sites_col_status()} testId="l4-app-state">
               <L4EnabledSwitch app={app} />
@@ -219,7 +217,7 @@ function Overview({ app }: { app: L4App }) {
               <Link
                 to="/clusters"
                 search={{ cluster: app.clusterId, tab: "ports" }}
-                className="inline-flex min-w-0 items-center gap-1 rounded-md font-medium text-primary-ink underline-offset-4 outline-none focus-lit hover:underline"
+                className="inline-flex min-w-0 items-center gap-1 rounded-md font-medium text-primary-ink underline-offset-4 outline-none focus-ring hover:underline"
               >
                 <span className="truncate">{app.clusterName}</span>
                 <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className="size-3.5" />
@@ -310,8 +308,8 @@ function Overview({ app }: { app: L4App }) {
               <span title={formatDateTime(app.updatedAt)}>{timeAgo(app.updatedAt)}</span>
             </InfoRow>
           </dl>
-        </CardContent>
-      </Card>
+        </PanelContent>
+      </Panel>
       <L4AppDialog
         open={editOpen}
         onOpenChange={setEditOpen}

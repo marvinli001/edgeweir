@@ -143,7 +143,7 @@ export function RulesEditor({
               // A card per phase; its rules are flat rows split by hairlines.
               <section
                 key={phase}
-                className="flex flex-col rounded-2xl bg-card shadow-elev-1 edge-lit animate-enter"
+                className="flex flex-col rounded-lg border bg-card animate-enter"
                 data-testid={`rules-phase-${phase}`}
               >
                 <div className="flex min-h-14 items-center justify-between gap-3 px-5 py-3">

@@ -3,7 +3,6 @@ import { Add01Icon, MoreHorizontalIcon, Radar01Icon } from "@hugeicons/core-free
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { Countdown } from "@/components/appica/countdown";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import {
@@ -23,19 +22,13 @@ import {
 import { Input } from "@/components/arc/input/input";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
+import { Countdown } from "@/components/countdown";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
-import { NodeChannelBadge } from "@/components/node-channel-state";
-import { enterDelay } from "@/components/page";
-import { SafetyNote } from "@/components/safety-note";
-import { SettingsCard } from "@/components/settings-card";
-import { NumberField } from "@/components/site/fields";
-import { EmptyState, QueryView } from "@/components/states";
-import { StatusDot } from "@/components/status-dot";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
+import { Spinner } from "@/components/layout/spinner";
 import {
   Table,
   TableBody,
@@ -43,7 +36,14 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/layout/table";
+import { NodeChannelBadge } from "@/components/node-channel-state";
+import { enterDelay } from "@/components/page";
+import { SafetyNote } from "@/components/safety-note";
+import { SettingsCard } from "@/components/settings-card";
+import { NumberField } from "@/components/site/fields";
+import { EmptyState, QueryView } from "@/components/states";
+import { StatusDot } from "@/components/status-dot";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { useOpenKey } from "@/hooks/use-open-key";
 import { formatDateTime, formatPercent, m, timeAgo } from "@/lib/i18n";
@@ -383,13 +383,13 @@ function AddProbeDialog({
               </Field>
               <Field>
                 <FieldLabel>{m.system_node_api_url()}</FieldLabel>
-                <code className="rounded-xl px-3 py-2 font-mono text-xs break-all sunk-well">
+                <code className="rounded-md px-3 py-2 font-mono text-xs break-all faint-well">
                   {result.serverUrl}
                 </code>
               </Field>
               <Field>
                 <FieldLabel>{m.enroll_ca_fingerprint()}</FieldLabel>
-                <code className="rounded-xl px-3 py-2 font-mono text-xs leading-relaxed break-all sunk-well">
+                <code className="rounded-md px-3 py-2 font-mono text-xs leading-relaxed break-all faint-well">
                   {result.caSha256}
                 </code>
               </Field>
@@ -602,7 +602,7 @@ function ResultsTable({
   testId: string;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-edge" data-testid={testId}>
+    <div className="overflow-hidden rounded-lg border border-edge" data-testid={testId}>
       <Table>
         <TableHeader>
           <TableRow>
@@ -784,22 +784,22 @@ function ProbeMatrixCard() {
   // Nothing measured yet: the probe list says so (its empty state or its pending rows).
   if (results.data?.length === 0) return null;
   return (
-    <Card className="animate-enter" style={{ animationDelay: "60ms" }} data-testid="probe-matrix">
-      <CardHeader>
-        <CardTitle>{m.probes_col_round()}</CardTitle>
-      </CardHeader>
-      <QueryView query={results} frame={CardContent}>
+    <Panel className="animate-enter" style={{ animationDelay: "60ms" }} data-testid="probe-matrix">
+      <PanelHeader>
+        <PanelTitle>{m.probes_col_round()}</PanelTitle>
+      </PanelHeader>
+      <QueryView query={results} frame={PanelContent}>
         {(rows) => <ProbeMatrix results={rows} />}
       </QueryView>
-    </Card>
+    </Panel>
   );
 }
 
 function ProbeMatrix({ results }: { results: ProbeResultDto[] }) {
   const { probers, nodes, cells } = React.useMemo(() => matrixOf(results), [results]);
   return (
-    <CardContent className="flex flex-col gap-4">
-      <div className="-mx-(--card-spacing) overflow-x-auto px-(--card-spacing) [scrollbar-width:thin]">
+    <PanelContent className="flex flex-col gap-4">
+      <div className="-mx-(--panel-pad) overflow-x-auto px-(--panel-pad) [scrollbar-width:thin]">
         <table className="w-max min-w-full border-separate border-spacing-0.5 text-xs">
           <caption className="sr-only">{m.probes_col_round()}</caption>
           <thead>
@@ -858,7 +858,7 @@ function ProbeMatrix({ results }: { results: ProbeResultDto[] }) {
         </table>
       </div>
       <MatrixLegend />
-    </CardContent>
+    </PanelContent>
   );
 }
 

@@ -17,10 +17,16 @@ import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect, type Option } from "@/components/form-select";
+import {
+  Panel,
+  PanelAction,
+  PanelContent,
+  PanelHeader,
+  PanelTitle,
+} from "@/components/layout/panel";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDateMinutes, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { levelLabel } from "@/lib/protection";
@@ -52,11 +58,11 @@ export function AutoMitigationCard({ siteId, siteName }: { siteId: string; siteN
   const [editing, setEditing] = React.useState(false);
   const data = query.data;
   return (
-    <Card className="animate-enter" data-testid="auto-mitigation-card">
-      <CardHeader>
-        <CardTitle>{m.attacks_mitigation_title()}</CardTitle>
+    <Panel className="animate-enter" data-testid="auto-mitigation-card">
+      <PanelHeader>
+        <PanelTitle>{m.attacks_mitigation_title()}</PanelTitle>
         {data?.settings ? (
-          <CardAction>
+          <PanelAction>
             <Button
               className="icon-button"
               size="sm"
@@ -67,26 +73,21 @@ export function AutoMitigationCard({ siteId, siteName }: { siteId: string; siteN
             >
               <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} />
             </Button>
-          </CardAction>
+          </PanelAction>
         ) : null}
-      </CardHeader>
+      </PanelHeader>
       <QueryView
         query={query}
-        frame={CardContent}
+        frame={PanelContent}
         isEmpty={(value) => value.settings === null}
         empty={
-          <CardContent>
-            <EmptyState
-              compact
-              title={m.attacks_mitigation_empty()}
-              icon={Shield01Icon}
-              art="checkpoint"
-            >
+          <PanelContent>
+            <EmptyState compact title={m.attacks_mitigation_empty()} icon={Shield01Icon}>
               <Button onClick={() => setEditing(true)} data-testid="auto-mitigation-setup">
                 {m.attacks_mitigation_setup()}
               </Button>
             </EmptyState>
-          </CardContent>
+          </PanelContent>
         }
       >
         {(value) => (
@@ -101,7 +102,7 @@ export function AutoMitigationCard({ siteId, siteName }: { siteId: string; siteN
       {editing && data ? (
         <MitigationDialog open onOpenChange={setEditing} siteId={siteId} mitigation={data} />
       ) : null}
-    </Card>
+    </Panel>
   );
 }
 
@@ -133,7 +134,7 @@ function MitigationBody({
         ? m.attacks_mitigation_unreachable({ max: levelLabel(cc.maxLevel) })
         : null;
   return (
-    <CardContent className="flex flex-col gap-4">
+    <PanelContent className="flex flex-col gap-4">
       {active ? (
         <Alert
           tone="danger"
@@ -209,7 +210,7 @@ function MitigationBody({
           </div>
         ))}
       </dl>
-    </CardContent>
+    </PanelContent>
   );
 }
 

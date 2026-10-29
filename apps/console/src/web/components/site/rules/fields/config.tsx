@@ -13,6 +13,7 @@ import * as React from "react";
 import { Button } from "@/components/arc/button/button";
 import { Input } from "@/components/arc/input/input";
 import { FormSelect, OptionSelect } from "@/components/form-select";
+import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/layout/form";
 import { NumberField } from "@/components/site/fields";
 import {
   type Coding,
@@ -22,7 +23,6 @@ import {
   LocksContext,
   UNCHANGED,
 } from "@/components/site/rules/labels";
-import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { m } from "@/lib/i18n";
 import { invalidHostHeader } from "@/lib/lists";
 import { challengeLabel, wafModeLabel } from "@/lib/protection";
@@ -321,7 +321,7 @@ export function CompressionFields({
             return (
               <li
                 key={coding}
-                className="flex min-h-10 items-center gap-1 rounded-xl sunk-well py-1 pr-1 pl-3 animate-enter"
+                className="flex min-h-10 items-center gap-1 rounded-md faint-well py-1 pr-1 pl-3 animate-enter"
                 data-testid="rule-compression-algorithm"
                 data-coding={coding}
               >

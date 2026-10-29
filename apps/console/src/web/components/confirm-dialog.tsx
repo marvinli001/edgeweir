@@ -9,9 +9,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/arc/dialog/dialog";
+import { FieldError } from "@/components/layout/form";
+import { Spinner } from "@/components/layout/spinner";
 import { SafetyNote } from "@/components/safety-note";
-import { FieldError } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import { useAction } from "@/hooks/use-action";
 import { m } from "@/lib/i18n";
 import { errorMessage } from "@/lib/orpc";
@@ -102,7 +102,7 @@ export function ControlledConfirmDialog({
         <div className="flex items-start gap-3 pr-8">
           {destructive ? (
             // A destructive confirmation carries its warning beside the title, in the red tint.
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-tint-destructive text-destructive">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-tint-destructive text-destructive">
               <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} className="size-4.5" />
             </span>
           ) : null}

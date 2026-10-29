@@ -8,11 +8,11 @@ import {
 } from "@edgeweir/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { enterDelay } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, QueryView } from "@/components/states";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { localizeError } from "@/lib/errors";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
@@ -164,11 +164,11 @@ export function AccessPartCard<P extends AccessControlPart, D>({
   // Bumped by every save, so the form starts over from what was saved.
   const [saves, setSaves] = React.useState(0);
   return (
-    <Card className="animate-enter" style={enterDelay(index + 1)} data-testid={`${testId}-card`}>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <QueryView query={combineQueries(settings, features)} frame={CardContent}>
+    <Panel className="animate-enter" style={enterDelay(index + 1)} data-testid={`${testId}-card`}>
+      <PanelHeader>
+        <PanelTitle>{title}</PanelTitle>
+      </PanelHeader>
+      <QueryView query={combineQueries(settings, features)} frame={PanelContent}>
         {([data, available]) => (
           <PartForm
             key={saves}
@@ -181,7 +181,7 @@ export function AccessPartCard<P extends AccessControlPart, D>({
           />
         )}
       </QueryView>
-    </Card>
+    </Panel>
   );
 }
 
@@ -222,7 +222,7 @@ function PartForm<P extends AccessControlPart, D>({
   };
   return (
     <form
-      className="flex flex-col gap-(--card-spacing)"
+      className="flex flex-col gap-(--panel-pad)"
       noValidate
       onSubmit={async (event) => {
         event.preventDefault();
@@ -262,14 +262,14 @@ function PartForm<P extends AccessControlPart, D>({
         }
       }}
     >
-      <CardContent className={cn("flex flex-col gap-5", contentClassName)}>
+      <PanelContent className={cn("flex flex-col gap-5", contentClassName)}>
         {availability.available ? null : (
           <SafetyNote className="animate-in fade-in" data-testid={`${testId}-unavailable`}>
             {m.feature_unavailable_nodes()}
           </SafetyNote>
         )}
         {children(fields)}
-      </CardContent>
+      </PanelContent>
       <SaveBar
         dirty={dirty && !blocked}
         pending={saving}

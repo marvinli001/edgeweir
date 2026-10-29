@@ -34,6 +34,8 @@ import { Input } from "@/components/arc/input/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/arc/tabs/tabs";
 import { ConfirmDialog, ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
+import { Field, FieldLabel } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { LinkButton } from "@/components/link-button";
 import { Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
@@ -62,8 +64,6 @@ import { SiteStatus, untilLive } from "@/components/site-status";
 import { TagBadges, TagPicker } from "@/components/site-tags";
 import { QueryView } from "@/components/states";
 import { NotFoundPage } from "@/components/status-page";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
 import { useDraft } from "@/hooks/use-draft";
 import { useTabBar } from "@/hooks/use-tab-bar";
 import { DEFAULT_RANGE } from "@/lib/analytics";
@@ -129,11 +129,19 @@ function SiteDetailPage() {
             />
           ) : null}
           {site.data ? <SiteMenu site={site.data} /> : null}
-          <LinkButton to="/sites" size="sm" variant="ghost" data-testid="back-link">
-            <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
-            {m.site_back()}
-          </LinkButton>
         </>
+      }
+      back={
+        <LinkButton
+          to="/sites"
+          size="sm"
+          variant="ghost"
+          className="icon-button"
+          aria-label={m.site_back()}
+          data-testid="back-link"
+        >
+          <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
+        </LinkButton>
       }
     >
       <QueryView query={site} notFound={<NotFoundPage path={href} surface="inline" />}>
@@ -163,13 +171,13 @@ function SiteDetailPage() {
             <TabsList
               ref={tabBar}
               variant="line"
-              className="h-11 w-full max-w-full justify-start gap-0.5 overflow-x-auto overflow-y-hidden border-b px-0 pt-1 pb-[5px] scroll-fade [scrollbar-width:none]"
+              className="w-full max-w-full justify-start overflow-x-auto overflow-y-hidden border-b scroll-fade [scrollbar-width:none]"
             >
               {SITE_TABS.map((value) => (
                 <TabsTrigger
                   key={value}
                   value={value}
-                  className="flex-none px-2.5"
+                  className="flex-none"
                   data-testid={`tab-${value}`}
                 >
                   {siteTabLabel(value)}
@@ -405,18 +413,18 @@ function OverviewTab({ site }: { site: Site }) {
         <LaunchCheck site={site} />
       </div>
       <div className="flex min-w-0 flex-col gap-4">
-        <Card className="@container/facts">
+        <Panel className="@container/facts">
           <form
-            className="flex flex-col gap-(--card-spacing)"
+            className="flex flex-col gap-(--panel-pad)"
             onSubmit={(event) => {
               event.preventDefault();
               void save({ name: name.trim() });
             }}
           >
-            <CardHeader>
-              <CardTitle>{m.site_tab_overview()}</CardTitle>
-            </CardHeader>
-            <CardContent>
+            <PanelHeader>
+              <PanelTitle>{m.site_tab_overview()}</PanelTitle>
+            </PanelHeader>
+            <PanelContent>
               <Field className="pb-2">
                 <FieldLabel htmlFor="site-name">{m.site_form_name()}</FieldLabel>
                 <Input
@@ -479,7 +487,7 @@ function OverviewTab({ site }: { site: Site }) {
                   <span title={formatDateTime(site.updatedAt)}>{timeAgo(site.updatedAt)}</span>
                 </InfoRow>
               </dl>
-            </CardContent>
+            </PanelContent>
             <SaveBar
               dirty={name.trim() !== site.name && name.trim() !== ""}
               pending={pending}
@@ -487,7 +495,7 @@ function OverviewTab({ site }: { site: Site }) {
               testId="site-name-save"
             />
           </form>
-        </Card>
+        </Panel>
         <UsageGuardCard site={site} />
       </div>
     </div>
@@ -587,9 +595,9 @@ function DomainsTab({ site }: { site: Site }) {
   return (
     <div className="flex flex-col gap-4">
       <DnsSetupCard siteId={site.id} />
-      <Card>
+      <Panel>
         <form
-          className="flex flex-col gap-(--card-spacing)"
+          className="flex flex-col gap-(--panel-pad)"
           onSubmit={async (event) => {
             event.preventDefault();
             const values = take(domains.filter((d) => !site.domains.includes(d)));
@@ -606,11 +614,11 @@ function DomainsTab({ site }: { site: Site }) {
               setDomains(stored.domains);
           }}
         >
-          <CardHeader>
-            <CardTitle>{m.site_tab_domains()}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <ul className="divide-y rounded-2xl sunk-well" data-testid="domain-list">
+          <PanelHeader>
+            <PanelTitle>{m.site_tab_domains()}</PanelTitle>
+          </PanelHeader>
+          <PanelContent className="flex flex-col gap-3">
+            <ul className="divide-y rounded-lg faint-well" data-testid="domain-list">
               {domains.map((domain, index) => (
                 <li
                   key={domain}
@@ -658,10 +666,10 @@ function DomainsTab({ site }: { site: Site }) {
             {formsAvailable || invalid === formsUnavailable ? null : (
               <SafetyNote data-testid="domain-forms-unavailable">{formsUnavailable}</SafetyNote>
             )}
-          </CardContent>
+          </PanelContent>
           <SaveBar dirty={dirty} pending={pending} error={invalid ?? error} testId="domains-save" />
         </form>
-      </Card>
+      </Panel>
       <SitePortsCard site={site} />
     </div>
   );

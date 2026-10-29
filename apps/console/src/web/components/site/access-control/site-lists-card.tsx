@@ -4,11 +4,11 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
 import { Checkbox } from "@/components/arc/checkbox/checkbox";
 import { IpListKind } from "@/components/ip-check";
+import { FieldLegend, FieldSet } from "@/components/layout/form";
 import { LinkButton } from "@/components/link-button";
 import { enterDelay } from "@/components/page";
 import { AccessPartCard, type PartFields } from "@/components/site/access-control/part-card";
 import { EmptyState, QueryView } from "@/components/states";
-import { FieldLegend, FieldSet } from "@/components/ui/field";
 import { formatNumber, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
@@ -43,7 +43,7 @@ function SiteListsFields({ draft, set, blocked }: PartFields<SiteListSettings>) 
     <QueryView
       query={lists}
       empty={
-        <EmptyState compact icon={ListViewIcon} art="checkpoint" title={m.ip_lists_empty()}>
+        <EmptyState compact icon={ListViewIcon} title={m.ip_lists_empty()}>
           <LinkButton to="/ip-lists" data-testid="site-lists-create">
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             {m.ip_lists_create()}
@@ -106,7 +106,7 @@ function ListPicker({
           {formatNumber(value.length)}
         </span>
       </FieldLegend>
-      <div className="max-h-72 min-w-0 divide-y divide-border/70 overflow-y-auto rounded-2xl sunk-well">
+      <div className="max-h-72 min-w-0 divide-y divide-border/70 overflow-y-auto rounded-lg faint-well">
         {lists.map((list, index) => {
           const off = disabled || taken.includes(list.id);
           const checked = value.includes(list.id);

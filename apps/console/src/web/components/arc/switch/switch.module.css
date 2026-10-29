@@ -6,9 +6,9 @@
 @layer components {
   /* Fixed box: the thumb moves inside it with transforms, so nothing around the switch shifts. The track crossfades between the two fills. */
   .switch {
-    --switch-width: 42px;
-    --switch-height: 24px;
-    --switch-thumb: 18px;
+    --switch-width: 36px;
+    --switch-height: 20px;
+    --switch-thumb: 16px;
     position: relative;
     box-sizing: border-box;
     display: inline-flex;
@@ -16,7 +16,7 @@
     width: var(--switch-width);
     height: var(--switch-height);
     align-items: center;
-    padding: 3px;
+    padding: 2px;
     border-radius: var(--arc-radius-pill);
     background: var(--arc-control-track);
     box-shadow: inset 0 0 0 1px var(--arc-control-edge);
@@ -65,8 +65,8 @@
     }
   }
   .switch:focus-visible {
-    box-shadow: inset 0 0 0 1px var(--arc-focus-ring);
-    outline: 3px solid color-mix(in oklab, var(--arc-focus-ring) 30%, transparent);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--arc-focus-halo);
   }
   .switch[aria-invalid="true"] {
     box-shadow: inset 0 0 0 1px var(--arc-danger);

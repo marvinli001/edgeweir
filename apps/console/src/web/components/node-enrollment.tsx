@@ -207,7 +207,7 @@ export function EnrollProgress({ result }: { result: EnrollmentTokenResult }) {
   ];
   return (
     <ol
-      className="flex flex-col gap-2 rounded-2xl p-3 text-sm sunk-well"
+      className="flex flex-col gap-2 rounded-lg p-3 text-sm faint-well"
       data-testid="enroll-progress"
     >
       {steps.map((step, index) => (

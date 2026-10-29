@@ -56,4 +56,4 @@ export const rowClickable =
 
 /** A row link that is a button (details open in place): text styling, the focus ring. */
 export const rowLinkButton =
-  "w-fit max-w-full rounded-md text-left outline-none focus-lit underline-offset-4 hover:underline";
+  "w-fit max-w-full rounded-md text-left outline-none focus-ring underline-offset-4 hover:underline";

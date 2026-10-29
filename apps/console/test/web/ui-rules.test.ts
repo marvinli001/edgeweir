@@ -79,17 +79,62 @@ describe("UI rules (ADR-0003)", () => {
     expect(found).toEqual([]);
   });
 
-  it("imports appica-ui only through src/web/components/appica", () => {
-    const outside = webSources.filter(
-      (file) => !file.includes("components/appica/") && read(file).includes("@appica/ui-react"),
+  it("builds on Arc's free components only: no shadcn/ui or appica parts, files or packages", () => {
+    // ADR-0064: Arc (free, MIT) for the primitives, components/layout for the console's own panels,
+    // forms and tables on the tokens. The shadcn/ui copies, appica-ui and their libraries are gone
+    // and stay gone.
+    for (const dir of ["src/web/components/ui", "src/web/components/appica"]) {
+      expect(existsSync(resolve(root, dir)), dir).toBe(false);
+    }
+    expect(existsSync(resolve(root, "src/web/appica-bridge.css"))).toBe(false);
+    const banned =
+      /^(?:@appica\/.+|shadcn|recharts|cmdk|class-variance-authority|vaul|sonner|input-otp|react-day-picker|embla-carousel-react|@radix-ui\/.+|radix-ui|lucide-react)$/;
+    const pkg = JSON.parse(read("package.json"));
+    const deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies });
+    expect(deps.filter((name) => banned.test(name))).toEqual([]);
+    const sources = [...allWeb, ...globSync("lab/**/*.{ts,tsx}", { cwd: root })];
+    const imported = sources.flatMap((file) =>
+      [...read(file).matchAll(/(?:from\s+|import\s+|import\(|@import\s+)\s*"([^"]+)"/g)]
+        .map((m) => m[1] as string)
+        .filter(
+          (spec) =>
+            /^@\/components\/(?:ui|appica)\//.test(spec) ||
+            /appica-bridge/.test(spec) ||
+            banned.test(
+              (spec.startsWith("@")
+                ? spec.split("/").slice(0, 2)
+                : spec.split("/").slice(0, 1)
+              ).join("/"),
+            ),
+        )
+        .map((spec) => `${file}: ${spec}`),
     );
-    expect(outside).toEqual([]);
+    expect(imported).toEqual([]);
+  });
+
+  it("keeps the console's own layout parts on Base UI, Arc and the tokens", () => {
+    // components/layout (Panel, Field, Table, InputGroup…) is the console's code: Base UI for any
+    // behaviour, Arc for controls, tokens for looks; no other UI library comes in through it.
+    const layout = webSources.filter((file) => file.includes("components/layout/"));
+    expect(layout.length).toBeGreaterThan(4);
+    const imports = layout.flatMap((file) =>
+      [...read(file).matchAll(/^\s*(?:import|export)\b[^;]*?\bfrom\s+"([^"]+)"/gms)]
+        .map((m) => m[1] as string)
+        .filter(
+          (spec) =>
+            !/^(?:react|@base-ui\/react\/[a-z-]+|@hugeicons\/(?:react|core-free-icons)|@\/components\/arc\/[a-z-]+\/[a-z-]+|@\/lib\/(?:i18n|row-link|utils)|\.{1,2}\/.+)$/.test(
+              spec,
+            ),
+        )
+        .map((spec) => `${file}: ${spec}`),
+    );
+    expect(imports).toEqual([]);
   });
 
   it("imports visual effect libraries only through src/web/components/effects", () => {
     // Canvas, WebGL, map, graph and animation libraries come in through components/effects, where
     // their colors are read from tokens and their loops follow reduced motion and visibility
-    // (ADR-0034). Side-effect imports (`import "uplot/dist/uPlot.min.css"`) count too.
+    // (ADR-0064). Side-effect imports (`import "uplot/dist/uPlot.min.css"`) count too.
     const effectLibraries =
       /(?:from\s+|import\s+|import\()\s*"(?:cobe|uplot|@xyflow\/[a-z-]+|@dagrejs\/[a-z-]+|@paper-design\/[a-z-]+|@number-flow\/[a-z-]+|motion|framer-motion|maplibre-gl|@vis\.gl\/[a-z-]+|d3-geo|topojson-client|world-atlas|dotted-map|react-activity-calendar)["/]/;
     const files = [...webSources, ...globSync("src/web/*.{ts,tsx}", { cwd: root })];
@@ -111,7 +156,7 @@ describe("UI rules (ADR-0003)", () => {
 
   it("uses none of the excluded visual libraries (license, runtime downloads or weight)", () => {
     // GSAP (non-OSI license), React Bits and Animate UI (Commons Clause), three.js renderers,
-    // Spline, Rive and dotLottie (runtime fetches from other hosts, WASM). ADR-0034.
+    // Spline, Rive and dotLottie (runtime fetches from other hosts, WASM). ADR-0064.
     const banned =
       /^(?:gsap|@gsap\/.+|react-bits|@react-bits\/.+|animate-ui|@animate-ui\/.+|@react-three\/.+|@splinetool\/.+|@rive-app\/.+|@lottiefiles\/dotlottie-.+)$/;
     const manifests = globSync("{package.json,apps/*/package.json,packages/*/package.json}", {
@@ -168,9 +213,7 @@ describe("UI rules (ADR-0003)", () => {
         }
       }
     }
-    expect([...heavy]).toEqual(
-      expect.arrayContaining(["edge-globe", "live-chart", "origin-topology", "auth-backdrop"]),
-    );
+    expect([...heavy]).toEqual(expect.arrayContaining(["live-chart", "origin-topology"]));
     const imports = webSources
       .filter((file) => !file.includes("components/effects/"))
       .flatMap((file) =>
@@ -186,12 +229,23 @@ describe("UI rules (ADR-0003)", () => {
     expect(imports).toEqual([]);
   });
 
-  it("never loads appica's global tokens, only the scoped bridge", () => {
-    const css = globSync("src/web/**/*.css", { cwd: root }).map(read).join("\n");
-    expect(css).not.toMatch(/@import[^;]*@appica\/ui-react/);
-    expect(read("src/web/index.css")).toContain('@import "./appica-bridge.css"');
-    const main = read("src/web/main.tsx");
-    expect(main).not.toContain("@appica/ui-react/providers");
+  it("loads the design tokens once, before the Arc bridge that reads them", () => {
+    // tokens.css holds every --ew- value (tokens.md); foundation.css maps Arc's names onto them.
+    const index = read("src/web/index.css");
+    const tokens = index.indexOf('@import "./tokens.css"');
+    const bridge = index.indexOf('@import "./components/arc/foundation.css"');
+    expect(tokens).toBeGreaterThan(-1);
+    expect(bridge).toBeGreaterThan(tokens);
+    const css = globSync("src/web/**/*.css", { cwd: root }).filter(
+      (file) => file !== "src/web/index.css",
+    );
+    const reimported = css.filter((file) => /@import\s+"[^"]*tokens\.css"/.test(read(file)));
+    expect(reimported).toEqual([]);
+    // Only tokens.css spells out --ew- values; everything else reads them.
+    const declared = allWeb
+      .filter((file) => file !== "src/web/tokens.css")
+      .filter((file) => /(?:^|[\s;{])--ew-[a-z0-9-]+\s*:/m.test(read(file)));
+    expect(declared).toEqual([]);
   });
 
   it("styles the Arc primitives with the console's tokens: --arc- names defined in foundation.css", () => {
@@ -264,36 +318,6 @@ describe("UI rules (ADR-0003)", () => {
     const deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies });
     expect(deps.filter((name) => name.startsWith("@radix-ui/"))).toEqual([]);
   });
-
-  it("scans every appica component it imports (and their internal deps), and nothing else", () => {
-    const dist = resolve(root, "node_modules/@appica/ui-react/dist/components");
-    const imported = new Set(
-      webSources
-        .filter((file) => file.includes("components/appica/"))
-        .flatMap((file) =>
-          [...read(file).matchAll(/@appica\/ui-react\/([a-z-]+)/g)].map((m) => m[1] as string),
-        ),
-    );
-    // Components that style themselves with another component's variants need that file scanned too.
-    const needed = new Set(imported);
-    for (const name of imported) {
-      for (const file of globSync("*.js", { cwd: resolve(dist, name) })) {
-        const source = readFileSync(resolve(dist, name, file), "utf8");
-        for (const m of source.matchAll(/from '\.\.\/([a-z-]+)\/[^']+'/g))
-          needed.add(m[1] as string);
-      }
-    }
-    const sources = [...read("src/web/appica-bridge.css").matchAll(/@source "([^"]+)";/g)].map(
-      (m) => m[1] as string,
-    );
-    for (const source of sources) {
-      expect(existsSync(resolve(root, "src/web", source)), source).toBe(true);
-    }
-    const scanned = new Set(
-      sources.map((source) => source.match(/dist\/components\/([a-z-]+)/)?.[1] ?? source),
-    );
-    expect([...scanned].sort()).toEqual([...needed].sort());
-  });
 });
 
 /** The `cell:` and `header:` templates of a file's column definitions, as source text. */
@@ -359,7 +383,7 @@ describe("UI behaviour", () => {
 
   it("opens list rows from anywhere in the row, not only from their title (lib/row-link)", () => {
     // Every table row runs the row activation: a row whose cells hold a row link opens it.
-    const table = read("src/web/components/ui/table.tsx");
+    const table = read("src/web/components/layout/table.tsx");
     expect(table).toMatch(/onClick=\{\(event\) => \{[^}]*activateRow\(event\)/);
     expect(table).toMatch(/onAuxClick=\{\(event\) => \{[^}]*activateRow\(event\)/);
     // A link to a detail page inside a table is that row's row link, or says it is another one.

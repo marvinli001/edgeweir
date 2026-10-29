@@ -10,6 +10,7 @@ import { Button } from "@/components/arc/button/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/arc/tabs/tabs";
 import { CopyButton } from "@/components/copy-button";
 import { DemoSettingsCard } from "@/components/demo-settings";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { LogRetentionCard } from "@/components/log-retention";
 import { LoginAllowListCard } from "@/components/login-allow-list";
 import { NodeChannelCard } from "@/components/node-channel";
@@ -22,7 +23,6 @@ import { ProbesPanel } from "@/components/probes";
 import { ReleaseSourceCard } from "@/components/release-source";
 import { ServiceAccountsPanel } from "@/components/service-accounts";
 import { QueryView } from "@/components/states";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UsageSettingsCard } from "@/components/usage-settings";
 import { formatDateTime, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
@@ -127,11 +127,11 @@ function GeneralSettings() {
   const settings = useQuery(orpc.settings.get.queryOptions());
   return (
     <>
-      <Card className="animate-enter">
-        <CardHeader>
-          <CardTitle>{m.system_info()}</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Panel className="animate-enter">
+        <PanelHeader>
+          <PanelTitle>{m.system_info()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent>
           <QueryView query={settings}>
             {(system) => (
               <dl className="divide-y">
@@ -144,7 +144,7 @@ function GeneralSettings() {
                 </Row>
                 <Row label={m.system_ca_fingerprint()}>
                   <code
-                    className="min-w-0 flex-1 rounded-xl px-2.5 py-1.5 font-mono text-xs leading-relaxed sunk-well"
+                    className="min-w-0 flex-1 rounded-md px-2.5 py-1.5 font-mono text-xs leading-relaxed faint-well"
                     data-testid="ca-fingerprint"
                   >
                     {system.nodeCaSha256}
@@ -167,7 +167,7 @@ function GeneralSettings() {
                 </Row>
                 <Row label={m.system_openapi()}>
                   <a
-                    className="rounded-sm font-mono text-[13px] text-primary-ink underline-offset-4 outline-none focus-lit hover:underline"
+                    className="rounded-sm font-mono text-[13px] text-primary-ink underline-offset-4 outline-none focus-ring hover:underline"
                     href="/api/v1/openapi.json"
                   >
                     /api/v1/openapi.json
@@ -176,8 +176,8 @@ function GeneralSettings() {
               </dl>
             )}
           </QueryView>
-        </CardContent>
-      </Card>
+        </PanelContent>
+      </Panel>
       <NodeChannelCard />
       <OriginAllowListCard />
       <ReleaseSourceCard />

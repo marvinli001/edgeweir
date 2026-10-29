@@ -19,6 +19,7 @@ import {
 } from "@/components/analytics/breakdown-charts";
 import { Badge } from "@/components/arc/badge/badge";
 import { FormSelect } from "@/components/form-select";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { LinkButton } from "@/components/link-button";
 import { Pager } from "@/components/pager";
 import { RowMenu, type RowMenuItem } from "@/components/quick-actions";
@@ -26,7 +27,6 @@ import { SafetyNote } from "@/components/safety-note";
 import { AutoMitigationCard } from "@/components/site/auto-mitigation-card";
 import { combineQueries, EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { blockReasonLabel, clientJump, type LogJump } from "@/lib/access-logs";
 import { ANALYTICS_RANGES, OTHER_COLOR, RANGE_HOURS, rangeLabel } from "@/lib/analytics";
 import { formatCompact, formatDateTime, formatNumber, formatPercent, m, timeAgo } from "@/lib/i18n";
@@ -136,15 +136,15 @@ function BlockReasonsCard({ siteId, range }: { siteId: string; range: AnalyticsR
   });
   const dimensions = useDimensions(siteId, range);
   return (
-    <Card
+    <Panel
       className="animate-enter"
       style={{ animationDelay: "60ms" }}
       data-testid="block-reasons-card"
     >
-      <CardHeader>
-        <CardTitle>{m.block_reasons_title()}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <PanelHeader>
+        <PanelTitle>{m.block_reasons_title()}</PanelTitle>
+      </PanelHeader>
+      <PanelContent className="flex flex-col gap-4">
         <QueryView query={combineQueries(over, dimensions)}>
           {([series, { blockReasons, unsupportedNodes }]) => (
             <>
@@ -180,8 +180,8 @@ function BlockReasonsCard({ siteId, range }: { siteId: string; range: AnalyticsR
             </>
           )}
         </QueryView>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }
 
@@ -216,7 +216,7 @@ function BlockReasonsChart({ data, range }: { data: TrafficBreakdown; range: Ana
     ...Object.fromEntries(series.map((s, i) => [s.key, group.values[i] ?? 0])),
   }));
   return (
-    <div className="rounded-2xl sunk-well pb-3" data-testid="block-reasons-chart">
+    <div className="rounded-lg faint-well pb-3" data-testid="block-reasons-chart">
       <SeriesLegend series={series} mark="bar" />
       <div className="px-4 pt-3">
         <StackedBarsChart data={rows} series={series} format={formatCompact} range={range} />
@@ -250,7 +250,7 @@ function TopList({
       {items.length === 0 ? (
         <p className="text-sm text-muted-foreground">{m.security_top_empty()}</p>
       ) : (
-        <ol className="divide-y rounded-2xl sunk-well">
+        <ol className="divide-y rounded-lg faint-well">
           {items.map((item) => (
             <li key={item.id ?? item.value} className="flex items-center gap-3 px-3 py-2 text-sm">
               <span className={`min-w-0 flex-1 break-all ${mono ? "font-mono text-xs" : ""}`}>
@@ -282,18 +282,18 @@ function NodeLevelsCard({ siteId }: { siteId: string }) {
     }),
   );
   return (
-    <Card id="attacks-nodes" className="scroll-mt-4 animate-enter">
-      <CardHeader>
-        <CardTitle>{m.security_nodes_title()}</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <Panel id="attacks-nodes" className="scroll-mt-4 animate-enter">
+      <PanelHeader>
+        <PanelTitle>{m.security_nodes_title()}</PanelTitle>
+      </PanelHeader>
+      <PanelContent>
         <QueryView
           query={state}
           isEmpty={(data) => data.nodes.length === 0}
           empty={<EmptyState compact title={m.security_no_nodes()} />}
         >
           {({ nodes }) => (
-            <ul className="divide-y rounded-2xl sunk-well" data-testid="security-nodes">
+            <ul className="divide-y rounded-lg faint-well" data-testid="security-nodes">
               {nodes.map((node, index) => (
                 <li
                   key={node.id}
@@ -324,8 +324,8 @@ function NodeLevelsCard({ siteId }: { siteId: string }) {
             </ul>
           )}
         </QueryView>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }
 
@@ -337,11 +337,11 @@ function TopCard({ siteId, range }: { siteId: string; range: AnalyticsRange }) {
     placeholderData: keepPreviousData,
   });
   return (
-    <Card className="animate-enter" style={{ animationDelay: "240ms" }}>
-      <CardHeader>
-        <CardTitle>{m.security_top_title()}</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <Panel className="animate-enter" style={{ animationDelay: "240ms" }}>
+      <PanelHeader>
+        <PanelTitle>{m.security_top_title()}</PanelTitle>
+      </PanelHeader>
+      <PanelContent>
         <QueryView query={state}>
           {({ topIps, topPaths }) => (
             <div className="grid gap-4 md:grid-cols-2">
@@ -383,8 +383,8 @@ function TopCard({ siteId, range }: { siteId: string; range: AnalyticsRange }) {
             </div>
           )}
         </QueryView>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }
 
@@ -395,11 +395,11 @@ function WafRulesCard({ siteId, range }: { siteId: string; range: AnalyticsRange
     placeholderData: keepPreviousData,
   });
   return (
-    <Card className="animate-enter" style={{ animationDelay: "270ms" }}>
-      <CardHeader>
-        <CardTitle>{m.waf_top_title()}</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <Panel className="animate-enter" style={{ animationDelay: "270ms" }}>
+      <PanelHeader>
+        <PanelTitle>{m.waf_top_title()}</PanelTitle>
+      </PanelHeader>
+      <PanelContent>
         <QueryView query={rules}>
           {({ items }) => (
             <TopList
@@ -426,8 +426,8 @@ function WafRulesCard({ siteId, range }: { siteId: string; range: AnalyticsRange
             />
           )}
         </QueryView>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }
 
@@ -438,11 +438,11 @@ function LoggedRulesCard({ siteId, range }: { siteId: string; range: AnalyticsRa
     placeholderData: keepPreviousData,
   });
   return (
-    <Card className="animate-enter" style={{ animationDelay: "285ms" }}>
-      <CardHeader>
-        <CardTitle>{m.rules_logged_title()}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+    <Panel className="animate-enter" style={{ animationDelay: "285ms" }}>
+      <PanelHeader>
+        <PanelTitle>{m.rules_logged_title()}</PanelTitle>
+      </PanelHeader>
+      <PanelContent className="flex flex-col gap-4">
         <QueryView query={logged}>
           {({ items, unsupportedNodes }) => (
             <>
@@ -468,8 +468,8 @@ function LoggedRulesCard({ siteId, range }: { siteId: string; range: AnalyticsRa
             </>
           )}
         </QueryView>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }
 
@@ -480,15 +480,15 @@ function AuthFailuresCard({ siteId, range }: { siteId: string; range: AnalyticsR
     placeholderData: keepPreviousData,
   });
   return (
-    <Card
+    <Panel
       className="animate-enter"
       style={{ animationDelay: "300ms" }}
       data-testid="auth-failures-card"
     >
-      <CardHeader>
-        <CardTitle>{m.auth_failures_title()}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <PanelHeader>
+        <PanelTitle>{m.auth_failures_title()}</PanelTitle>
+      </PanelHeader>
+      <PanelContent className="flex flex-col gap-4">
         <QueryView query={failures}>
           {({ requests, unsupportedNodes }) => (
             <>
@@ -506,8 +506,8 @@ function AuthFailuresCard({ siteId, range }: { siteId: string; range: AnalyticsR
             </>
           )}
         </QueryView>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }
 
@@ -515,15 +515,15 @@ function AuthFailuresCard({ siteId, range }: { siteId: string; range: AnalyticsR
 function ChallengesCard({ siteId, range }: { siteId: string; range: AnalyticsRange }) {
   const dimensions = useDimensions(siteId, range);
   return (
-    <Card
+    <Panel
       className="animate-enter"
       style={{ animationDelay: "330ms" }}
       data-testid="challenges-card"
     >
-      <CardHeader>
-        <CardTitle>{m.challenges_title()}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <PanelHeader>
+        <PanelTitle>{m.challenges_title()}</PanelTitle>
+      </PanelHeader>
+      <PanelContent className="flex flex-col gap-4">
         <QueryView query={dimensions}>
           {({ challenges, unsupportedNodes }) => (
             <>
@@ -573,8 +573,8 @@ function ChallengesCard({ siteId, range }: { siteId: string; range: AnalyticsRan
             </>
           )}
         </QueryView>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }
 
@@ -608,9 +608,9 @@ function EventsCard({ siteId, range }: { siteId: string; range: AnalyticsRange }
     meta: { background: true },
   });
   return (
-    <Card className="animate-enter" style={{ animationDelay: "360ms" }}>
-      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-        <CardTitle>{m.security_events_title()}</CardTitle>
+    <Panel className="animate-enter" style={{ animationDelay: "360ms" }}>
+      <PanelHeader className="flex flex-wrap items-center justify-between gap-3">
+        <PanelTitle>{m.security_events_title()}</PanelTitle>
         <div className="w-full sm:w-44">
           <FormSelect
             id="security-event-kind"
@@ -630,8 +630,8 @@ function EventsCard({ siteId, range }: { siteId: string; range: AnalyticsRange }
             }}
           />
         </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
+      </PanelHeader>
+      <PanelContent className="flex flex-col gap-3">
         <QueryView
           query={events}
           isEmpty={(data) => data.items.length === 0}
@@ -640,7 +640,7 @@ function EventsCard({ siteId, range }: { siteId: string; range: AnalyticsRange }
           {({ items, total }) => (
             <>
               <ol
-                className="flex flex-col divide-y rounded-2xl sunk-well"
+                className="flex flex-col divide-y rounded-lg faint-well"
                 data-testid="security-events"
               >
                 {items.map((event, index) => (
@@ -711,7 +711,7 @@ function EventsCard({ siteId, range }: { siteId: string; range: AnalyticsRange }
             </>
           )}
         </QueryView>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }

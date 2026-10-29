@@ -25,6 +25,14 @@ import { DropdownMenuItem } from "@/components/arc/dropdown-menu/dropdown-menu";
 import { Input } from "@/components/arc/input/input";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
+import { Field, FieldLabel } from "@/components/layout/form";
+import {
+  Panel,
+  PanelAction,
+  PanelContent,
+  PanelHeader,
+  PanelTitle,
+} from "@/components/layout/panel";
 import { enterDelay, Page } from "@/components/page";
 import { ItemMenu } from "@/components/row-menu";
 import { SettingsCard } from "@/components/settings-card";
@@ -33,8 +41,6 @@ import { SiteMultiSelect } from "@/components/site-multi-select";
 import { SmtpSettings } from "@/components/smtp-settings";
 import { EmptyState, type QueryResult, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, m } from "@/lib/i18n";
 import { splitList } from "@/lib/lists";
@@ -186,10 +192,10 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
   const act = (action: "toggle" | "test", id: string, enabled?: boolean) =>
     run(action, id, enabled).catch((e: unknown) => toast.error(errorMessage(e)));
   return (
-    <Card className="animate-enter">
-      <CardHeader>
-        <CardTitle>{m.alert_channels_title()}</CardTitle>
-        <CardAction>
+    <Panel className="animate-enter">
+      <PanelHeader>
+        <PanelTitle>{m.alert_channels_title()}</PanelTitle>
+        <PanelAction>
           <Button
             size="sm"
             variant="secondary"
@@ -199,9 +205,9 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             {m.alert_channel_add()}
           </Button>
-        </CardAction>
-      </CardHeader>
-      <CardContent>
+        </PanelAction>
+      </PanelHeader>
+      <PanelContent>
         <QueryView query={channels} empty={<EmptyState compact title={m.alert_no_channels()} />}>
           {(list) => (
             <ul className="divide-y">
@@ -209,14 +215,14 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
                 <li
                   key={channel.id}
                   className={cn(
-                    "-mx-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 rounded-xl px-3 py-3 animate-enter",
+                    "-mx-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 rounded-md px-3 py-3 animate-enter",
                     rowClickable,
                   )}
                   style={enterDelay(index)}
                   data-testid="alert-channel"
                   {...rowActivationHandlers}
                 >
-                  <span className="grid size-9 place-items-center rounded-xl text-muted-foreground sunk-well">
+                  <span className="grid size-9 place-items-center rounded-md text-muted-foreground faint-well">
                     <HugeiconsIcon
                       icon={KIND_ICON[channel.kind as AlertChannelConfig["kind"]] ?? WebhookIcon}
                       strokeWidth={2}
@@ -289,7 +295,7 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
             </ul>
           )}
         </QueryView>
-      </CardContent>
+      </PanelContent>
       {dialog.value ? (
         <ChannelDialog
           key={dialog.key}
@@ -298,7 +304,7 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
           onOpenChange={dialog.onOpenChange}
         />
       ) : null}
-    </Card>
+    </Panel>
   );
 }
 
@@ -324,10 +330,10 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
     (c) => !subscriptions.data?.some((sub) => sub.channelId === c.id),
   );
   return (
-    <Card className="animate-enter" style={{ animationDelay: "120ms" }}>
-      <CardHeader>
-        <CardTitle>{m.alert_subscriptions_title()}</CardTitle>
-        <CardAction>
+    <Panel className="animate-enter" style={{ animationDelay: "120ms" }}>
+      <PanelHeader>
+        <PanelTitle>{m.alert_subscriptions_title()}</PanelTitle>
+        <PanelAction>
           <Button
             size="sm"
             variant="secondary"
@@ -338,9 +344,9 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             {m.alert_subscribe()}
           </Button>
-        </CardAction>
-      </CardHeader>
-      <CardContent>
+        </PanelAction>
+      </PanelHeader>
+      <PanelContent>
         <QueryView
           query={subscriptions}
           empty={
@@ -356,7 +362,7 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
                 <li
                   key={sub.id}
                   className={cn(
-                    "-mx-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2.5 rounded-xl px-3 py-3 animate-enter",
+                    "-mx-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2.5 rounded-md px-3 py-3 animate-enter",
                     rowClickable,
                   )}
                   style={enterDelay(index)}
@@ -435,7 +441,7 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
             </ul>
           )}
         </QueryView>
-      </CardContent>
+      </PanelContent>
       {dialog.value ? (
         <SubscriptionDialog
           key={dialog.key}
@@ -445,7 +451,7 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
           onOpenChange={dialog.onOpenChange}
         />
       ) : null}
-    </Card>
+    </Panel>
   );
 }
 
@@ -458,11 +464,11 @@ function EventsCard() {
     }),
   );
   return (
-    <Card className="animate-enter" style={{ animationDelay: "180ms" }}>
-      <CardHeader>
-        <CardTitle>{m.alert_recent_events()}</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <Panel className="animate-enter" style={{ animationDelay: "180ms" }}>
+      <PanelHeader>
+        <PanelTitle>{m.alert_recent_events()}</PanelTitle>
+      </PanelHeader>
+      <PanelContent>
         <QueryView query={events} empty={<EmptyState compact title={m.alert_no_events()} />}>
           {(list) => (
             <ul className="divide-y">
@@ -509,8 +515,8 @@ function EventsCard() {
             </ul>
           )}
         </QueryView>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }
 

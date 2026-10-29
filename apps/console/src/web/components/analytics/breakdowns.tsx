@@ -35,7 +35,7 @@ export function StatusCodesCard({
       className={cn(
         "h-full",
         onOpen &&
-          "group/panel transition-shadow duration-200 ease-lit hover:shadow-elev-2 motion-reduce:transition-none",
+          "group/panel transition-colors duration-200 ease-out hover:border-primary/40 motion-reduce:transition-none",
       )}
     >
       {onOpen ? (
@@ -101,7 +101,7 @@ export function StatusCodesCard({
                       {formatPercent((totals[c.key] / total) * 100)}
                     </span>
                   </dt>
-                  <dd className="text-lg font-semibold tabular-nums">
+                  <dd className="text-lg font-medium tabular-nums">
                     {formatCompact(totals[c.key])}
                   </dd>
                 </div>
@@ -145,7 +145,7 @@ export function TopListCard({
             <li key={item.id}>
               {renderLink(item, {
                 className:
-                  "flex flex-col gap-1.5 rounded-xl px-2 py-2 outline-none transition-colors focus-lit hover:bg-wash focus-visible:bg-wash",
+                  "flex flex-col gap-1.5 rounded-md px-2 py-2 outline-none transition-colors focus-ring hover:bg-wash focus-visible:bg-wash",
                 children: (
                   <>
                     <span className="flex items-baseline gap-2 text-sm">

@@ -10,7 +10,7 @@ const allWeb = globSync("src/web/**/*.{ts,tsx,css}", {
   exclude: ["src/web/paraglide/**", "src/web/routeTree.gen.ts"],
 });
 
-/** Licenses third-party code in the web UI may carry (ADR-0034). */
+/** Licenses third-party code in the web UI may carry (ADR-0064). */
 const ALLOWED = new Set([
   "MIT",
   "Apache-2.0",
@@ -82,7 +82,7 @@ function findPackage(from: string, name: string): string | undefined {
 
 /**
  * Bare package names the web UI imports. A CSS `@import` brings in that package's stylesheet only
- * (shadcn's is inside its CLI package), so its dependencies are not followed (`leaf`).
+ * (tw-animate-css ships CSS only), so its dependencies are not followed (`leaf`).
  */
 function webPackages(): { name: string; leaf: boolean }[] {
   const names = new Map<string, boolean>();
@@ -137,7 +137,7 @@ function webClosure(): Map<string, { version: string; license: string; dir: stri
   return seen;
 }
 
-describe("third-party code in the web UI (ADR-0034)", () => {
+describe("third-party code in the web UI (ADR-0064)", () => {
   it("ships only packages under allowed licenses (MIT, Apache-2.0, ISC, BSD, OFL-1.1, Unlicense, 0BSD)", () => {
     const closure = webClosure();
     expect(closure.size).toBeGreaterThan(30);
@@ -159,7 +159,7 @@ describe("third-party code in the web UI (ADR-0034)", () => {
     expect(satisfiable("UNKNOWN")).toBe(false);
   });
 
-  it("bundles one copy of Motion, 13.5.x, shared with appica-ui", () => {
+  it("bundles one copy of Motion, 13.5.x", () => {
     const pkg = JSON.parse(read("package.json"));
     expect(pkg.dependencies.motion).toMatch(/^13\.5\.\d+$/);
     const lock = readFileSync(resolve(workspace, "pnpm-lock.yaml"), "utf8");

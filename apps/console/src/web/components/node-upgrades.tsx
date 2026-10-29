@@ -15,12 +15,16 @@ import { Progress } from "@/components/arc/progress/progress";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/layout/collapsible";
+import { Field, FieldError, FieldLabel } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot, type StatusTone } from "@/components/status-dot";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { taskErrorText } from "@/lib/node-errors";
@@ -107,12 +111,12 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
             // and errors open under it.
             const folded = index > 0 && !active;
             return (
-              <Card key={job.id} data-testid={`upgrade-${job.version}`}>
+              <Panel key={job.id} data-testid={`upgrade-${job.version}`}>
                 <Collapsible defaultOpen={!folded} className="contents">
-                  <CardHeader className="flex flex-row flex-wrap items-center gap-3">
-                    <CardTitle className="min-w-0 flex-1 break-all font-mono">
+                  <PanelHeader className="flex flex-row flex-wrap items-center gap-3">
+                    <PanelTitle className="min-w-0 flex-1 break-all font-mono">
                       {job.version}
-                    </CardTitle>
+                    </PanelTitle>
                     <StatusDot {...stateTone(job.state)}>{stateLabel(job.state)}</StatusDot>
                     <span
                       className="text-xs text-muted-foreground"
@@ -140,10 +144,10 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
                         />
                       </CollapsibleTrigger>
                     ) : null}
-                  </CardHeader>
-                  <CollapsibleContent render={<CardContent className="space-y-4" />}>
+                  </PanelHeader>
+                  <CollapsibleContent render={<PanelContent className="space-y-4" />}>
                     <UpgradeProgress job={job} />
-                    <div className="divide-y divide-edge overflow-hidden rounded-xl sunk-well">
+                    <div className="divide-y divide-edge overflow-hidden rounded-md faint-well">
                       {job.deliveries.map((d) => (
                         <Delivery
                           key={d.id}
@@ -195,7 +199,7 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
                     ) : null}
                   </CollapsibleContent>
                 </Collapsible>
-              </Card>
+              </Panel>
             );
           })
         }
@@ -308,7 +312,7 @@ function UpgradeDialog({
       {blocked.length ? (
         <Field data-testid="upgrade-blocked">
           <FieldLabel>{m.upgrade_blocked()}</FieldLabel>
-          <ul className="divide-y divide-edge overflow-hidden rounded-xl text-sm sunk-well">
+          <ul className="divide-y divide-edge overflow-hidden rounded-md text-sm faint-well">
             {blocked.map(({ node, reason }) => (
               <li
                 key={node.id}

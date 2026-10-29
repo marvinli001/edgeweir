@@ -211,7 +211,7 @@ export function AnalyticsSection({
   return (
     <section className="flex flex-col gap-3" aria-labelledby="analytics-title">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 id="analytics-title" className="mr-auto text-base font-semibold">
+        <h2 id="analytics-title" className="mr-auto text-section font-medium">
           {m.analytics_title()}
         </h2>
         <RangeSelect value={range} onChange={onRangeChange} />

@@ -5,7 +5,7 @@ import { Input } from "@/components/arc/input/input";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { OptionSelect } from "@/components/form-select";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldLabel } from "@/components/layout/form";
 import type { DialogProps } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";

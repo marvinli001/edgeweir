@@ -1,0 +1,154 @@
+/*
+ * Drawer: ported from Arc's drawer.module.css (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md): Base UI's data-starting-style and data-ending-style instead of Radix's
+ * data-state keyframes, on `--arc-` tokens; the panel is square on its outer edges and 12px on the
+ * inner one, the header and body paddings are the console's.
+ */
+@layer components {
+  .overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: var(--arc-scrim);
+    transition: opacity var(--arc-duration-standard) var(--arc-ease-enter);
+  }
+  .overlay[data-starting-style],
+  .overlay[data-ending-style] {
+    opacity: 0;
+  }
+  .content {
+    --drawer-size: min(34rem, calc(100vw - var(--arc-space-4)));
+    --drawer-from: translateX(100%);
+    position: fixed;
+    z-index: 51;
+    display: flex;
+    flex-direction: column;
+    width: var(--drawer-size);
+    max-width: 100vw;
+    max-height: 100dvh;
+    overflow: hidden;
+    background: var(--arc-surface-raised);
+    color: var(--arc-foreground);
+    box-shadow: var(--arc-shadow-floating);
+    outline: none;
+    transition:
+      transform var(--arc-duration-standard) var(--arc-ease-enter),
+      opacity var(--arc-duration-standard) var(--arc-ease-enter);
+  }
+  .content[data-side="right"] {
+    inset: 0 0 0 auto;
+    border-radius: var(--arc-radius-surface) 0 0 var(--arc-radius-surface);
+  }
+  .content[data-side="left"] {
+    --drawer-from: translateX(-100%);
+    inset: 0 auto 0 0;
+    border-radius: 0 var(--arc-radius-surface) var(--arc-radius-surface) 0;
+  }
+  .content[data-side="top"] {
+    --drawer-from: translateY(-100%);
+    inset: 0 0 auto;
+    width: 100%;
+    max-height: min(32rem, 100dvh);
+    border-radius: 0 0 var(--arc-radius-surface) var(--arc-radius-surface);
+  }
+  .content[data-side="bottom"] {
+    --drawer-from: translateY(100%);
+    inset: auto 0 0;
+    width: 100%;
+    max-height: min(32rem, 100dvh);
+    border-radius: var(--arc-radius-surface) var(--arc-radius-surface) 0 0;
+  }
+  .content[data-starting-style],
+  .content[data-ending-style] {
+    transform: var(--drawer-from);
+  }
+  .content[data-ending-style] {
+    transition-duration: var(--arc-duration-fast);
+    transition-timing-function: var(--arc-ease-standard);
+  }
+  .header {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--arc-space-4);
+    min-height: 56px;
+    padding: 0 var(--arc-space-4) 0 var(--arc-space-6);
+    border-bottom: 1px solid var(--arc-border-subtle);
+  }
+  .title {
+    margin: 0;
+    font-size: var(--arc-text-lg);
+    font-weight: var(--arc-weight-medium);
+    line-height: var(--arc-leading-body);
+  }
+  .close {
+    display: grid;
+    flex: 0 0 auto;
+    width: var(--arc-space-8);
+    height: var(--arc-space-8);
+    place-items: center;
+    border: 0;
+    border-radius: var(--arc-radius-control);
+    background: transparent;
+    color: var(--arc-text-secondary);
+    cursor: pointer;
+    transition:
+      background-color var(--arc-duration-fast) var(--arc-ease-standard),
+      color var(--arc-duration-fast) var(--arc-ease-standard);
+  }
+  .close svg {
+    width: 1rem;
+    height: 1rem;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .close:hover {
+      background: var(--arc-wash);
+      color: var(--arc-foreground);
+    }
+  }
+  .close:focus-visible {
+    outline: 2px solid var(--arc-focus-ring);
+    outline-offset: -2px;
+  }
+  .body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: var(--arc-space-6);
+    font-size: var(--arc-text-sm);
+    line-height: var(--arc-leading-body);
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+  .footer {
+    display: flex;
+    flex: 0 0 auto;
+    justify-content: flex-end;
+    gap: var(--arc-space-2);
+    padding: var(--arc-space-3) var(--arc-space-6);
+    border-top: 1px solid var(--arc-border-subtle);
+  }
+  @media (max-width: 40rem) {
+    .content {
+      --drawer-size: calc(100vw - var(--arc-space-8));
+    }
+    .header {
+      padding-left: var(--arc-space-4);
+    }
+    .body {
+      padding: var(--arc-space-4);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .overlay,
+    .content {
+      transition: opacity var(--arc-duration-instant) linear;
+    }
+    .content[data-starting-style],
+    .content[data-ending-style] {
+      transform: none;
+      opacity: 0;
+    }
+  }
+}

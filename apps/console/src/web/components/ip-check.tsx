@@ -12,13 +12,13 @@ import {
   SiteSelect,
 } from "@/components/ban-dialog";
 import { timeLeft } from "@/components/bans";
+import { Field, FieldError, FieldLabel } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
+import { Spinner } from "@/components/layout/spinner";
 import { enterDelay } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { QueryView } from "@/components/states";
 import { StatusDot, type StatusTone } from "@/components/status-dot";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import type { DialogProps } from "@/hooks/use-dialog-state";
 import { formatNumber, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
@@ -81,7 +81,7 @@ function Section({
           </span>
         )}
       </h3>
-      <ul className="min-w-0 divide-y divide-border/70 rounded-2xl sunk-well">
+      <ul className="min-w-0 divide-y divide-border/70 rounded-lg faint-well">
         {children.length ? (
           children
         ) : (
@@ -283,14 +283,14 @@ function IpCheckPanel({ siteId, pickSite }: { siteId?: string; pickSite?: boolea
 /** The site's IP check (access control tab). */
 export function IpCheckCard({ siteId, index }: { siteId: string; index: number }) {
   return (
-    <Card className="animate-enter" style={enterDelay(index + 1)} data-testid="ip-check-card">
-      <CardHeader>
-        <CardTitle>{m.ip_check_title()}</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <Panel className="animate-enter" style={enterDelay(index + 1)} data-testid="ip-check-card">
+      <PanelHeader>
+        <PanelTitle>{m.ip_check_title()}</PanelTitle>
+      </PanelHeader>
+      <PanelContent>
         <IpCheckPanel siteId={siteId} />
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }
 

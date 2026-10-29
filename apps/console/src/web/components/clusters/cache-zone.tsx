@@ -1,8 +1,8 @@
 import { CACHE_SIZE_GB_RANGE, type Cluster } from "@edgeweir/contract";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { formatNumber, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
@@ -32,18 +32,18 @@ export function ClusterCacheCard({ cluster }: { cluster: Cluster }) {
   const daysValid = whole(draft.days, 1, 90);
   const valid = sizeValid && daysValid;
   return (
-    <Card className="animate-enter" data-testid="cluster-cache">
+    <Panel className="animate-enter" data-testid="cluster-cache">
       <form
-        className="flex flex-col gap-(--card-spacing)"
+        className="flex flex-col gap-(--panel-pad)"
         onSubmit={(event) => {
           event.preventDefault();
           if (valid) void form.submit();
         }}
       >
-        <CardHeader>
-          <CardTitle>{m.cluster_cache_title()}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+        <PanelHeader>
+          <PanelTitle>{m.cluster_cache_title()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent className="flex flex-col gap-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:max-w-xl">
             <NumberField
               id="cluster-cache-size"
@@ -78,7 +78,7 @@ export function ClusterCacheCard({ cluster }: { cluster: Cluster }) {
             />
           </div>
           <SafetyNote>{m.cluster_cache_note()}</SafetyNote>
-        </CardContent>
+        </PanelContent>
         <SaveBar
           dirty={form.dirty && valid}
           pending={form.pending}
@@ -86,6 +86,6 @@ export function ClusterCacheCard({ cluster }: { cluster: Cluster }) {
           testId="cluster-cache-save"
         />
       </form>
-    </Card>
+    </Panel>
   );
 }

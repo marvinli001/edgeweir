@@ -5,8 +5,8 @@ import {
   utf8Bytes,
 } from "@edgeweir/contract";
 import { Textarea } from "@/components/arc/textarea/textarea";
+import { Field, FieldError, FieldLabel } from "@/components/layout/form";
 import { SafetyNote } from "@/components/safety-note";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { formatNumber, m } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 

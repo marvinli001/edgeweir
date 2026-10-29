@@ -33,7 +33,7 @@ export function ThemeToggle({ className }: { className?: string }) {
           key={resolvedTheme}
           icon={resolvedTheme === "dark" ? Moon02Icon : Sun03Icon}
           strokeWidth={2}
-          className="animate-in spin-in-45 fade-in duration-300 ease-lit"
+          className="animate-in spin-in-45 fade-in duration-300 ease-out"
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-36">

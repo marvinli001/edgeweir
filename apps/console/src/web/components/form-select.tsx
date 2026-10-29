@@ -6,7 +6,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/arc/select/select";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldLabel } from "@/components/layout/form";
 
 export interface Option<T extends string = string> {
   value: T;

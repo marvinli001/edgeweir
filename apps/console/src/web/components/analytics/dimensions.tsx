@@ -58,7 +58,7 @@ function RankCard({
           {items.map((item) => (
             <li
               key={item.key}
-              className="flex flex-col gap-1.5 rounded-xl px-2 py-2"
+              className="flex flex-col gap-1.5 rounded-md px-2 py-2"
               data-testid="stats-item"
               data-key={item.key}
             >

@@ -3,19 +3,25 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
-import { OtpField } from "@/components/appica/otp-field";
 import { Button } from "@/components/arc/button/button";
 import { Input } from "@/components/arc/input/input";
+import { OtpInput } from "@/components/arc/otp-input/otp-input";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/layout/form";
+import {
+  Panel,
+  PanelContent,
+  PanelFooter,
+  PanelHeader,
+  PanelTitle,
+} from "@/components/layout/panel";
+import { Spinner } from "@/components/layout/spinner";
 import { enterDelay, Page } from "@/components/page";
 import { QrCode } from "@/components/qr-code";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import { useAction } from "@/hooks/use-action";
 import { authClient } from "@/lib/auth-client";
 import { localizeError } from "@/lib/errors";
@@ -56,10 +62,10 @@ function PasswordCard() {
   const action = useAction();
   const [error, setError] = React.useState<string | null>(null);
   return (
-    <Card className="animate-enter">
+    <Panel className="animate-enter">
       {/* A settings card: the title, the fields, and the submit in a footer row. */}
       <form
-        className="flex flex-col gap-(--card-spacing)"
+        className="flex flex-col gap-(--panel-pad)"
         onSubmit={async (event) => {
           event.preventDefault();
           const form = event.currentTarget;
@@ -87,10 +93,10 @@ function PasswordCard() {
           }
         }}
       >
-        <CardHeader>
-          <CardTitle>{m.security_password()}</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <PanelHeader>
+          <PanelTitle>{m.security_password()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent>
           <FieldGroup className="max-w-sm">
             <Field>
               <FieldLabel htmlFor="currentPassword">{m.security_current_password()}</FieldLabel>
@@ -126,16 +132,16 @@ function PasswordCard() {
               />
             </Field>
           </FieldGroup>
-        </CardContent>
-        <CardFooter className="flex-wrap justify-end gap-3 border-t">
+        </PanelContent>
+        <PanelFooter className="flex-wrap justify-end gap-3 border-t">
           {error ? <FieldError className="mr-auto animate-in fade-in">{error}</FieldError> : null}
           <Button type="submit" disabled={action.pending}>
             {action.pending ? <Spinner /> : null}
             {m.security_change_password()}
           </Button>
-        </CardFooter>
+        </PanelFooter>
       </form>
-    </Card>
+    </Panel>
   );
 }
 
@@ -172,28 +178,28 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
     });
 
   return (
-    <Card className="animate-enter" style={{ animationDelay: "60ms" }}>
-      <CardHeader className="flex flex-row items-center gap-3">
-        <CardTitle className="flex-1">{m.security_2fa()}</CardTitle>
+    <Panel className="animate-enter" style={{ animationDelay: "60ms" }}>
+      <PanelHeader className="flex flex-row items-center gap-3">
+        <PanelTitle className="flex-1">{m.security_2fa()}</PanelTitle>
         <StatusDot tone={enabled ? "good" : "idle"} data-testid="two-factor-status">
           <span className={enabled ? "font-medium" : "text-muted-foreground"}>
             {enabled ? m.security_2fa_on() : m.security_2fa_off()}
           </span>
         </StatusDot>
-      </CardHeader>
+      </PanelHeader>
       {backupCodes ? (
-        <CardContent className="animate-enter">
+        <PanelContent className="animate-enter">
           <Field>
             <FieldLabel>{m.security_backup_codes()}</FieldLabel>
             <CodeBlock value={backupCodes.join("\n")} testId="backup-codes" />
             <SafetyNote>{m.enroll_shown_once()}</SafetyNote>
           </Field>
-        </CardContent>
+        </PanelContent>
       ) : null}
       {/* Each step ends in a footer row with its submit, like the other settings cards. */}
       {enrollment ? (
         <>
-          <CardContent className="flex flex-col items-center gap-5 animate-enter sm:flex-row sm:items-start">
+          <PanelContent className="flex flex-col items-center gap-5 animate-enter sm:flex-row sm:items-start">
             <QrCode value={enrollment.totpURI} label={m.security_2fa_qr()} />
             <FieldGroup className="min-w-0">
               <Field>
@@ -201,10 +207,9 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
                 <CodeBlock value={secret} testId="totp-secret" />
               </Field>
               <Field>
-                <FieldLabel>{m.security_2fa_code()}</FieldLabel>
-                <OtpField
+                <OtpInput
                   value={code}
-                  onValueChange={setCode}
+                  onChange={setCode}
                   onComplete={verify}
                   label={m.security_2fa_code()}
                   invalid={!!error}
@@ -212,8 +217,8 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
                 />
               </Field>
             </FieldGroup>
-          </CardContent>
-          <CardFooter className="flex-wrap justify-end gap-3 border-t">
+          </PanelContent>
+          <PanelFooter className="flex-wrap justify-end gap-3 border-t">
             {error ? <FieldError className="mr-auto animate-in fade-in">{error}</FieldError> : null}
             <Button
               disabled={pending || code.length < 6}
@@ -223,11 +228,11 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
               {pending ? <Spinner /> : null}
               {m.security_2fa_verify()}
             </Button>
-          </CardFooter>
+          </PanelFooter>
         </>
       ) : (
         <form
-          className="flex flex-col gap-(--card-spacing)"
+          className="flex flex-col gap-(--panel-pad)"
           onSubmit={(event) => {
             event.preventDefault();
             const password = String(new FormData(event.currentTarget).get("twoFactorPassword"));
@@ -247,7 +252,7 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
             });
           }}
         >
-          <CardContent>
+          <PanelContent>
             <Field className="max-w-sm">
               <FieldLabel htmlFor="twoFactorPassword">{m.security_current_password()}</FieldLabel>
               <Input
@@ -258,8 +263,8 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
                 required
               />
             </Field>
-          </CardContent>
-          <CardFooter className="flex-wrap justify-end gap-3 border-t">
+          </PanelContent>
+          <PanelFooter className="flex-wrap justify-end gap-3 border-t">
             {error ? <FieldError className="mr-auto animate-in fade-in">{error}</FieldError> : null}
             <Button
               type="submit"
@@ -270,10 +275,10 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
               {pending ? <Spinner /> : null}
               {enabled ? m.security_2fa_disable() : m.security_2fa_enable()}
             </Button>
-          </CardFooter>
+          </PanelFooter>
         </form>
       )}
-    </Card>
+    </Panel>
   );
 }
 
@@ -305,11 +310,11 @@ function PasskeysCard() {
   const supported = typeof window !== "undefined" && "PublicKeyCredential" in window;
 
   return (
-    <Card className="animate-enter" style={{ animationDelay: "120ms" }}>
-      <CardHeader>
-        <CardTitle>{m.security_passkeys()}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+    <Panel className="animate-enter" style={{ animationDelay: "120ms" }}>
+      <PanelHeader>
+        <PanelTitle>{m.security_passkeys()}</PanelTitle>
+      </PanelHeader>
+      <PanelContent className="flex flex-col gap-4">
         <form
           className="flex flex-wrap items-end gap-2"
           onSubmit={(event) => {
@@ -335,7 +340,7 @@ function PasskeysCard() {
         >
           {(list) => (
             <ul
-              className="divide-y divide-edge rounded-2xl text-sm sunk-well"
+              className="divide-y divide-edge rounded-lg text-sm faint-well"
               data-testid="passkeys"
             >
               {list.map((key, index) => (
@@ -382,7 +387,7 @@ function PasskeysCard() {
             </ul>
           )}
         </QueryView>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }

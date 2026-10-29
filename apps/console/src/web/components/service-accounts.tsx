@@ -23,14 +23,14 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/layout/form";
+import { Spinner } from "@/components/layout/spinner";
 import { enterDelay } from "@/components/page";
 import { ItemMenu } from "@/components/row-menu";
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
-import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { useOpenKey } from "@/hooks/use-open-key";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
@@ -82,7 +82,7 @@ function AccountDialog({
       </Field>
       <FieldSet>
         <FieldLegend variant="label">{m.service_accounts_scopes()}</FieldLegend>
-        <div className="grid gap-2.5 rounded-2xl p-3 sm:grid-cols-2 sunk-well">
+        <div className="grid gap-2.5 rounded-lg p-3 sm:grid-cols-2 faint-well">
           {SCOPES.map((scope) => (
             // biome-ignore lint/a11y/noLabelWithoutControl: the Base UI checkbox inside is the control
             <label
@@ -175,7 +175,7 @@ function KeysDialog({ account, open, onOpenChange }: { account: ServiceAccount }
           <EmptyState compact icon={Key01Icon} title={m.service_accounts_no_keys()} />
         ) : (
           <ul
-            className="divide-y divide-edge rounded-2xl text-sm sunk-well"
+            className="divide-y divide-edge rounded-lg text-sm faint-well"
             data-testid="service-account-keys"
           >
             {account.keys.map((k, index) => (

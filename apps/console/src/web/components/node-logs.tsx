@@ -15,10 +15,10 @@ import * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { OptionSelect } from "@/components/form-select";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/layout/input-group";
+import { Spinner } from "@/components/layout/spinner";
 import { EmptyState, QueryView } from "@/components/states";
 import { Dot, type StatusTone } from "@/components/status-dot";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
-import { Spinner } from "@/components/ui/spinner";
 import { formatDateTime, formatNumber, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
@@ -167,7 +167,7 @@ export function NodeLogs({ node }: { node: Node }) {
         isEmpty={(data) => data.pages.every((page) => page.entries.length === 0)}
         empty={
           !supported && !filtered ? (
-            <EmptyState art="checkpoint" title={m.node_logs_unsupported()} />
+            <EmptyState title={m.node_logs_unsupported()} />
           ) : filtered ? (
             <EmptyState compact title={m.node_logs_empty_filtered()}>
               <Button size="sm" variant="secondary" onClick={clear} data-testid="node-logs-clear">
@@ -182,7 +182,7 @@ export function NodeLogs({ node }: { node: Node }) {
         {(data) => (
           <div className="flex min-w-0 flex-col gap-3">
             <ol
-              className="min-w-0 divide-y divide-border/70 overflow-hidden rounded-xl border border-edge"
+              className="min-w-0 divide-y divide-border/70 overflow-hidden rounded-md border border-edge"
               data-testid="node-log-list"
             >
               {data.pages

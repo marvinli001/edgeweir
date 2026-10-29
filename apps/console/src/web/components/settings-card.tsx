@@ -2,9 +2,9 @@ import type { MutationOptions, QueryOptionsBase } from "@orpc/tanstack-query";
 import { type QueryKey, useQuery } from "@tanstack/react-query";
 import type * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { SaveBar } from "@/components/site/save-site";
 import { QueryView } from "@/components/states";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type SettingsFormOptions, useSettingsForm } from "@/hooks/use-settings-form";
 import { m } from "@/lib/i18n";
 
@@ -79,16 +79,16 @@ export function SettingsCard<T, D, I, O, E, C, QE>({
 }) {
   const result = useQuery(query);
   return (
-    <Card className={className} style={style} data-testid={testId}>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <QueryView query={result} frame={CardContent}>
+    <Panel className={className} style={style} data-testid={testId}>
+      <PanelHeader>
+        <PanelTitle>{title}</PanelTitle>
+      </PanelHeader>
+      <QueryView query={result} frame={PanelContent}>
         {(value) => (
           <SettingsForm {...form} value={value} refresh={form.refresh ?? query.queryKey} />
         )}
       </QueryView>
-    </Card>
+    </Panel>
   );
 }
 
@@ -110,11 +110,11 @@ function SettingsForm<T, D, I, O, E, C>({
   });
   return (
     <form
-      className="flex flex-col gap-(--card-spacing)"
+      className="flex flex-col gap-(--panel-pad)"
       noValidate={noValidate}
       onSubmit={form.submit}
     >
-      <CardContent className={contentClassName}>
+      <PanelContent className={contentClassName}>
         {children({
           value,
           draft: form.draft,
@@ -123,7 +123,7 @@ function SettingsForm<T, D, I, O, E, C>({
           pending: form.pending,
           apply: form.apply,
         })}
-      </CardContent>
+      </PanelContent>
       <SaveBar
         dirty={form.dirty}
         pending={form.pending}

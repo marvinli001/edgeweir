@@ -19,7 +19,7 @@ export function CardTable({
       ref={pinFirstColumn ? markOverflow : undefined}
       data-slot="card-table"
       className={cn(
-        "border-t border-edge [&_td:first-child]:pl-(--card-spacing) [&_td:last-child]:pr-(--card-spacing) [&_th:first-child]:pl-(--card-spacing) [&_th:last-child]:pr-(--card-spacing)",
+        "border-t border-edge [&_td:first-child]:pl-(--panel-pad) [&_td:last-child]:pr-(--panel-pad) [&_th:first-child]:pl-(--panel-pad) [&_th:last-child]:pr-(--panel-pad)",
         // A pinned header cell is as opaque as the well strip it sits in.
         pinFirstColumn && "[&_th]:[--cell-bg:var(--well)]",
         className,

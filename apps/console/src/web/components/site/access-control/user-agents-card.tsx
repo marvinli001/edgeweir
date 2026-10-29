@@ -84,11 +84,11 @@ function UserAgentFields({ draft, set, blocked, invalid }: PartFields<Draft>) {
   return (
     <>
       <div className="flex flex-col gap-3">
-        <ol className="-mx-(--card-spacing) flex flex-col border-y" data-testid="ua-rules">
+        <ol className="-mx-(--panel-pad) flex flex-col border-y" data-testid="ua-rules">
           {rows.map((row, index) => (
             <li
               key={row.key}
-              className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t px-(--card-spacing) py-3 first:border-t-0 animate-enter"
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t px-(--panel-pad) py-3 first:border-t-0 animate-enter"
               style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
               data-testid="ua-rule"
             >

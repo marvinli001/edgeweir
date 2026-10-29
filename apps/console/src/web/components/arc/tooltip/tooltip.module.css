@@ -15,11 +15,11 @@
     max-width: 15rem;
     align-items: center;
     gap: 6px;
-    padding: var(--arc-space-2) var(--arc-space-3);
-    border: 1px solid color-mix(in oklab, var(--arc-background) 14%, var(--arc-foreground));
-    border-radius: var(--arc-radius-control);
-    background: var(--arc-foreground);
-    color: var(--arc-background);
+    padding: 5px var(--arc-space-2);
+    border: 0;
+    border-radius: var(--arc-radius-badge);
+    background: var(--arc-tooltip);
+    color: var(--arc-tooltip-foreground);
     box-shadow: var(--arc-shadow-raised);
     font-size: var(--arc-text-xs);
     font-weight: 400;

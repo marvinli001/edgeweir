@@ -13,8 +13,8 @@ import {
 } from "@/components/arc/dropdown-menu/dropdown-menu";
 import { ClusterDialog } from "@/components/clusters/cluster-dialog";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { Dot } from "@/components/status-dot";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatNumber, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
@@ -24,7 +24,7 @@ function SummaryStat({ label, children }: { label: string; children: React.React
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-base leading-tight font-semibold tracking-tight [font-stretch:108%]">
+      <dd className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-base leading-tight font-medium">
         {children}
       </dd>
     </div>
@@ -53,14 +53,14 @@ export function ClusterSummary({
     meta: { invalidates: "all", success: m.common_deleted },
   });
   return (
-    <Card>
-      <CardHeader className="flex flex-row flex-wrap items-center gap-3">
-        <CardTitle
-          className="min-w-32 flex-1 truncate text-lg font-semibold tracking-tight [font-stretch:106%]"
+    <Panel>
+      <PanelHeader className="flex flex-row flex-wrap items-center gap-3">
+        <PanelTitle
+          className="min-w-32 flex-1 truncate text-lg font-medium"
           data-testid="cluster-name"
         >
           {selected.name}
-        </CardTitle>
+        </PanelTitle>
         <div className="flex items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -93,9 +93,9 @@ export function ClusterSummary({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </CardHeader>
+      </PanelHeader>
       {selected.nodeCount === 0 ? null : (
-        <CardContent>
+        <PanelContent>
           <dl className="flex flex-wrap gap-x-10 gap-y-3">
             <SummaryStat label={m.clusters_nodes_online()}>
               <Dot
@@ -120,7 +120,7 @@ export function ClusterSummary({
               </span>
               {selected.latestRevision && selected.liveNodeCount > 0 ? (
                 <span
-                  className="flex items-center gap-1.5 text-sm font-normal tracking-normal whitespace-nowrap text-muted-foreground [font-stretch:100%]"
+                  className="flex items-center gap-1.5 text-sm font-normal whitespace-nowrap text-muted-foreground"
                   data-testid="cluster-applied"
                 >
                   <Dot
@@ -135,7 +135,7 @@ export function ClusterSummary({
               ) : null}
             </SummaryStat>
           </dl>
-        </CardContent>
+        </PanelContent>
       )}
       <ClusterDialog
         key={selected.id}
@@ -153,6 +153,6 @@ export function ClusterSummary({
           if (next) onSelect(next.id);
         }}
       />
-    </Card>
+    </Panel>
   );
 }

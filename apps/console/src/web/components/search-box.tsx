@@ -1,7 +1,7 @@
 import { Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/layout/input-group";
 import { m } from "@/lib/i18n";
 
 /** Search input that updates the URL a moment after typing stops. */

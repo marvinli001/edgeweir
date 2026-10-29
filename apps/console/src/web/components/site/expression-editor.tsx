@@ -20,7 +20,7 @@ import * as React from "react";
 import { Button } from "@/components/arc/button/button";
 import { Input } from "@/components/arc/input/input";
 import { OptionSelect } from "@/components/form-select";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldLabel } from "@/components/layout/form";
 import {
   BOT_TEMPLATES,
   CONDITION_TEMPLATES,
@@ -322,7 +322,7 @@ export function ExpressionEditor({
       {/* A sunk editor: the highlighted source under a transparent textarea, in an input well. */}
       <div
         className={cn(
-          "relative rounded-2xl border border-transparent input-well font-mono text-sm leading-6 transition-[color,box-shadow] duration-200 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30 has-aria-invalid:border-destructive has-aria-invalid:ring-3 has-aria-invalid:ring-destructive/20 dark:has-aria-invalid:border-destructive/50 dark:has-aria-invalid:ring-destructive/40",
+          "relative rounded-lg border border-transparent bg-background border-input font-mono text-sm leading-6 transition-[color,box-shadow] duration-200 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30 has-aria-invalid:border-destructive has-aria-invalid:ring-3 has-aria-invalid:ring-destructive/20 dark:has-aria-invalid:border-destructive/50 dark:has-aria-invalid:ring-destructive/40",
           kind === "value" ? "min-h-16" : "min-h-24",
         )}
       >

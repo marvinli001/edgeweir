@@ -59,7 +59,7 @@ export function CodeBlock({
       <pre
         data-testid={testId}
         className={cn(
-          "max-h-48 overflow-auto rounded-2xl p-3 pr-12 font-mono text-xs leading-relaxed sunk-well",
+          "max-h-48 overflow-auto rounded-lg p-3 pr-12 font-mono text-xs leading-relaxed faint-well",
           wrap ? "break-all whitespace-pre-wrap" : "whitespace-pre",
         )}
       >

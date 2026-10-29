@@ -50,10 +50,7 @@
   },
   "overrides": [
     {
-      "includes": [
-        "apps/console/src/web/components/ui/**",
-        "apps/console/src/web/components/arc/**"
-      ],
+      "includes": ["apps/console/src/web/components/arc/**"],
       "linter": {
         "rules": {
           "a11y": {
@@ -75,6 +72,10 @@
             "noArrayIndexKey": "off",
             "noDocumentCookie": "off",
             "noDoubleEquals": "off"
+          },
+          "style": {
+            "noDescendingSpecificity": "off",
+            "noNonNullAssertion": "off"
           }
         }
       }

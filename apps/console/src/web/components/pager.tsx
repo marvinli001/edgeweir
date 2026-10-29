@@ -3,7 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@/components/arc/button/button";
 import { formatNumber, m } from "@/lib/i18n";
 
-/** "21–40 / 57" with previous/next buttons; hidden when everything fits on one page. */
+/** "21–40 / 57" with previous/next buttons, for a table's footer; hidden when everything fits on one page. */
 export function Pager({
   page,
   pageSize,
@@ -20,7 +20,7 @@ export function Pager({
   const from = Math.min(total, (page - 1) * pageSize + 1);
   const to = Math.min(total, page * pageSize);
   return (
-    <nav aria-label={m.pager_label()} className="flex items-center justify-end gap-2 text-sm">
+    <nav aria-label={m.pager_label()} className="flex items-center justify-end gap-3 text-dense">
       <span className="readout text-muted-foreground" data-testid="pager-range">
         {m.pager_range({
           from: formatNumber(from),
@@ -28,12 +28,11 @@ export function Pager({
           total: formatNumber(total),
         })}
       </span>
-      {/* Previous and next ride in one shallow track, like a segmented control. */}
-      <div className="flex items-center gap-0.5 rounded-full p-0.5 seg-well">
+      <div className="flex items-center gap-1">
         <Button
           size="sm"
-          variant="ghost"
-          className="icon-button rounded-full"
+          variant="secondary"
+          className="icon-button"
           aria-label={m.pager_previous()}
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
@@ -42,8 +41,8 @@ export function Pager({
         </Button>
         <Button
           size="sm"
-          variant="ghost"
-          className="icon-button rounded-full"
+          variant="secondary"
+          className="icon-button"
           aria-label={m.pager_next()}
           disabled={page >= pages}
           onClick={() => onPageChange(page + 1)}

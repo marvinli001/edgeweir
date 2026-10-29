@@ -1,3 +1,4 @@
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { displaySiteDomain } from "@edgeweir/contract";
 import {
   Activity01Icon,
@@ -14,26 +15,22 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMatch, useNavigate, useRouteContext } from "@tanstack/react-router";
-import { defaultFilter } from "cmdk";
 import * as React from "react";
+import { type CommandItem, CommandPalette } from "@/components/arc/command-palette/command-palette";
 import { accountNav, moreNav, navGroups } from "@/components/nav-items";
 import { useQuickActions } from "@/components/quick-actions";
 import { useSiteTags } from "@/components/site-tags";
 import { useTheme } from "@/components/theme-provider";
-import {
-  Command,
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator,
-  CommandShortcut,
-} from "@/components/ui/command";
 import { getLocale, m, setLocale } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { readRecents } from "@/lib/recents";
+
+const OPEN_EVENT = "edgeweir:command-menu";
+
+/** Opens the ⌘K palette from anywhere (the top bar's search field). */
+export function openCommandMenu() {
+  window.dispatchEvent(new Event(OPEN_EVENT));
+}
 
 /** Sites listed without a search (starred, then recent) and found by one. */
 const MAX_SITES = 6;
@@ -41,22 +38,12 @@ const MAX_SITES = 6;
 const MAX_SITE_ACTIONS = 3;
 /** Tags listed for a search (each opens the site list filtered by it). */
 const MAX_TAGS = 4;
-/** Items whose value is an id: only their keywords (names, domains) are matched. */
-const BY_KEYWORDS = "#";
-
-/** Matches the items keyed by id on their keywords only, everything else as cmdk does. */
-const filter = (value: string, search: string, keywords?: string[]) =>
-  value.startsWith(BY_KEYWORDS)
-    ? defaultFilter((keywords ?? []).join(" "), search)
-    : defaultFilter(value, search, keywords);
-
 type SiteEntry = { id: string; name: string; domains: string[] };
 
-/** Result rows: icons stay muted until the row is selected (the item's own style lights them). */
-const ITEM = "*:[svg]:text-muted-foreground";
+const icon = (glyph: typeof GlobeIcon) => <HugeiconsIcon icon={glyph} strokeWidth={2} />;
 
 /**
- * ⌘K / Ctrl+K command palette (shadcn command block): sites by name, domain or tag (starred and
+ * ⌘K / Ctrl+K command palette (Arc's command palette in a dialog): sites by name, domain or tag (starred and
  * recent ones before a search), tags (the site list filtered by one), the sites' Under Attack and
  * purge, pages, and console-wide actions.
  */
@@ -79,8 +66,13 @@ export function CommandMenu() {
         setOpen((o) => !o);
       }
     };
+    const onOpen = () => setOpen(true);
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener(OPEN_EVENT, onOpen);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener(OPEN_EVENT, onOpen);
+    };
   }, []);
   React.useEffect(() => {
     const timer = setTimeout(() => setQuery(search.trim()), 200);
@@ -113,10 +105,6 @@ export function CommandMenu() {
     setOpen(next);
     if (!next) setSearch("");
   };
-  const run = (fn: () => void) => () => {
-    setOpenState(false);
-    fn();
-  };
   // Unicode and Punycode forms of the domains both find the site.
   const keywords = (site: SiteEntry, ...extra: string[]) => [
     site.name,
@@ -125,174 +113,140 @@ export function CommandMenu() {
     ...extra,
   ];
 
+  const actions = new Map<string, () => void>();
+  const items: CommandItem[] = [];
+  const add = (item: CommandItem, run: () => void) => {
+    items.push(item);
+    actions.set(item.id, run);
+  };
+  for (const site of sites) {
+    const domain = site.domains[0] ? displaySiteDomain(site.domains[0]) : undefined;
+    add(
+      {
+        id: `site:${site.id}`,
+        label: site.name,
+        description: domain && domain !== site.name ? domain : undefined,
+        group: m.command_group_sites(),
+        keywords: keywords(site),
+        icon: icon(GlobeIcon),
+        testId: "command-site",
+      },
+      () => navigate({ to: "/sites/$id", params: { id: site.id } }),
+    );
+  }
+  for (const tag of foundTags)
+    add(
+      {
+        id: `tag:${tag.id}`,
+        label: m.command_tag({ name: tag.name }),
+        description: m.tags_sites_count({ count: tag.sites }),
+        group: m.command_group_tags(),
+        keywords: [tag.name],
+        icon: icon(Tag01Icon),
+        testId: "command-tag",
+      },
+      () => navigate({ to: "/sites", search: { tags: [tag.id] } }),
+    );
+  if (query)
+    for (const site of sites.slice(0, MAX_SITE_ACTIONS)) {
+      add(
+        {
+          id: `under-attack:${site.id}`,
+          label: m.command_site_under_attack({ name: site.name }),
+          group: m.command_group_site_actions(),
+          keywords: keywords(site, m.protection_under_attack()),
+          icon: icon(Shield01Icon),
+        },
+        () => runAction({ kind: "under-attack", siteId: site.id, siteName: site.name }),
+      );
+      add(
+        {
+          id: `purge:${site.id}`,
+          label: m.command_site_purge({ name: site.name }),
+          group: m.command_group_site_actions(),
+          keywords: keywords(site, m.sites_purge()),
+          icon: icon(DatabaseSync01Icon),
+        },
+        () => runAction({ kind: "purge-site", siteId: site.id, siteName: site.name }),
+      );
+    }
+  for (const item of [
+    ...navGroups().flatMap((group) => group.items),
+    ...moreNav(),
+    ...accountNav(),
+  ])
+    add(
+      {
+        id: `page:${String(item.to)}`,
+        label: item.title,
+        group: m.command_group_navigation(),
+        icon: item.icon,
+      },
+      () => navigate({ to: item.to }),
+    );
+  add(
+    {
+      id: "page:probes",
+      label: m.system_tab_probes(),
+      group: m.command_group_navigation(),
+      icon: icon(Activity01Icon),
+    },
+    () => navigate({ to: "/system", search: { tab: "probes" } }),
+  );
+  const group = m.command_group_actions();
+  add({ id: "new-site", label: m.nav_new_site(), group, icon: icon(Add01Icon) }, () =>
+    navigate({ to: "/sites", search: { create: true } }),
+  );
+  add({ id: "add-node", label: m.nav_add_node(), group, icon: icon(ServerStack01Icon) }, () =>
+    navigate({ to: "/clusters", search: { enroll: true } }),
+  );
+  add(
+    { id: "ban", label: m.command_ban_ip(), group, icon: icon(BlockedIcon), testId: "command-ban" },
+    () => runAction({ kind: "ban", siteId: currentSiteId }),
+  );
+  add(
+    { id: "purge-urls", label: m.command_purge_urls(), group, icon: icon(DatabaseSync01Icon) },
+    () => navigate({ to: "/purge", search: currentSiteId ? { site: currentSiteId } : {} }),
+  );
+  add(
+    {
+      id: "platform-under-attack",
+      label: m.command_platform_under_attack(),
+      group,
+      icon: icon(Shield01Icon),
+    },
+    () => runAction({ kind: "platform-under-attack" }),
+  );
+  add(
+    { id: "language", label: m.command_toggle_language(), group, icon: icon(LanguageSkillIcon) },
+    () => setLocale(getLocale() === "zh-CN" ? "en" : "zh-CN"),
+  );
+  add({ id: "theme", label: m.command_toggle_theme(), group, icon: icon(Moon02Icon) }, () =>
+    setTheme(resolvedTheme === "dark" ? "light" : "dark"),
+  );
+
   return (
-    <CommandDialog open={open} onOpenChange={setOpenState} className="sm:max-w-lg">
-      {/* cmdk items need their Command root inside the dialog. */}
-      <Command filter={filter}>
-        <CommandInput
-          placeholder={m.command_placeholder()}
-          value={search}
-          onValueChange={setSearch}
-        />
-        <CommandList>
-          <CommandEmpty>{m.command_empty()}</CommandEmpty>
-          {sites.length ? (
-            <CommandGroup heading={m.command_group_sites()}>
-              {sites.map((site) => (
-                <CommandItem
-                  className={ITEM}
-                  key={site.id}
-                  value={`${BY_KEYWORDS}site:${site.id}`}
-                  keywords={keywords(site)}
-                  onSelect={run(() => navigate({ to: "/sites/$id", params: { id: site.id } }))}
-                  data-testid="command-site"
-                >
-                  <HugeiconsIcon icon={GlobeIcon} strokeWidth={2} />
-                  <span className="truncate">{site.name}</span>
-                  {site.domains[0] && displaySiteDomain(site.domains[0]) !== site.name ? (
-                    <span className="ml-auto truncate font-mono text-xs text-muted-foreground">
-                      {displaySiteDomain(site.domains[0])}
-                    </span>
-                  ) : null}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          ) : null}
-          {foundTags.length ? (
-            <CommandGroup heading={m.command_group_tags()}>
-              {foundTags.map((tag) => (
-                <CommandItem
-                  className={ITEM}
-                  key={tag.id}
-                  value={`${BY_KEYWORDS}tag:${tag.id}`}
-                  keywords={[tag.name]}
-                  onSelect={run(() => navigate({ to: "/sites", search: { tags: [tag.id] } }))}
-                  data-testid="command-tag"
-                >
-                  <HugeiconsIcon icon={Tag01Icon} strokeWidth={2} />
-                  <span className="truncate">{m.command_tag({ name: tag.name })}</span>
-                  <CommandShortcut className="tracking-normal tabular-nums">
-                    {m.tags_sites_count({ count: tag.sites })}
-                  </CommandShortcut>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          ) : null}
-          {query && sites.length ? (
-            <CommandGroup heading={m.command_group_site_actions()}>
-              {sites.slice(0, MAX_SITE_ACTIONS).flatMap((site) => [
-                <CommandItem
-                  className={ITEM}
-                  key={`${site.id}:under-attack`}
-                  value={`${BY_KEYWORDS}under-attack:${site.id}`}
-                  keywords={keywords(site, m.protection_under_attack())}
-                  onSelect={run(() =>
-                    runAction({ kind: "under-attack", siteId: site.id, siteName: site.name }),
-                  )}
-                  data-testid="command-site-under-attack"
-                >
-                  <HugeiconsIcon icon={Shield01Icon} strokeWidth={2} />
-                  {m.command_site_under_attack({ name: site.name })}
-                </CommandItem>,
-                <CommandItem
-                  className={ITEM}
-                  key={`${site.id}:purge`}
-                  value={`${BY_KEYWORDS}purge:${site.id}`}
-                  keywords={keywords(site, m.sites_purge())}
-                  onSelect={run(() =>
-                    runAction({ kind: "purge-site", siteId: site.id, siteName: site.name }),
-                  )}
-                  data-testid="command-site-purge"
-                >
-                  <HugeiconsIcon icon={DatabaseSync01Icon} strokeWidth={2} />
-                  {m.command_site_purge({ name: site.name })}
-                </CommandItem>,
-              ])}
-            </CommandGroup>
-          ) : null}
-          <CommandGroup heading={m.command_group_navigation()}>
-            {[...navGroups().flatMap((group) => group.items), ...moreNav(), ...accountNav()].map(
-              (item) => (
-                <CommandItem
-                  key={String(item.to)}
-                  className={ITEM}
-                  onSelect={run(() => navigate({ to: item.to }))}
-                >
-                  {item.icon}
-                  {item.title}
-                </CommandItem>
-              ),
-            )}
-            <CommandItem
-              className={ITEM}
-              onSelect={run(() => navigate({ to: "/system", search: { tab: "probes" } }))}
-            >
-              <HugeiconsIcon icon={Activity01Icon} strokeWidth={2} />
-              {m.system_tab_probes()}
-            </CommandItem>
-          </CommandGroup>
-          <CommandSeparator />
-          <CommandGroup heading={m.command_group_actions()}>
-            <CommandItem
-              className={ITEM}
-              onSelect={run(() => navigate({ to: "/sites", search: { create: true } }))}
-            >
-              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-              {m.nav_new_site()}
-            </CommandItem>
-            <CommandItem
-              className={ITEM}
-              onSelect={run(() => navigate({ to: "/clusters", search: { enroll: true } }))}
-            >
-              <HugeiconsIcon icon={ServerStack01Icon} strokeWidth={2} />
-              {m.nav_add_node()}
-            </CommandItem>
-            <CommandItem
-              className={ITEM}
-              onSelect={run(() => runAction({ kind: "ban", siteId: currentSiteId }))}
-              data-testid="command-ban"
-            >
-              <HugeiconsIcon icon={BlockedIcon} strokeWidth={2} />
-              {m.command_ban_ip()}
-            </CommandItem>
-            <CommandItem
-              className={ITEM}
-              onSelect={run(() =>
-                navigate({
-                  to: "/purge",
-                  search: currentSiteId ? { site: currentSiteId } : {},
-                }),
-              )}
-              data-testid="command-purge"
-            >
-              <HugeiconsIcon icon={DatabaseSync01Icon} strokeWidth={2} />
-              {m.command_purge_urls()}
-            </CommandItem>
-            <CommandItem
-              className={ITEM}
-              onSelect={run(() => runAction({ kind: "platform-under-attack" }))}
-              data-testid="command-platform-under-attack"
-            >
-              <HugeiconsIcon icon={Shield01Icon} strokeWidth={2} />
-              {m.command_platform_under_attack()}
-            </CommandItem>
-            <CommandItem
-              className={ITEM}
-              onSelect={run(() => setLocale(getLocale() === "zh-CN" ? "en" : "zh-CN"))}
-            >
-              <HugeiconsIcon icon={LanguageSkillIcon} strokeWidth={2} />
-              {m.command_toggle_language()}
-            </CommandItem>
-            <CommandItem
-              className={ITEM}
-              onSelect={run(() => setTheme(resolvedTheme === "dark" ? "light" : "dark"))}
-            >
-              <HugeiconsIcon icon={Moon02Icon} strokeWidth={2} />
-              {m.command_toggle_theme()}
-            </CommandItem>
-          </CommandGroup>
-        </CommandList>
-      </Command>
-    </CommandDialog>
+    <DialogPrimitive.Root open={open} onOpenChange={setOpenState}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-scrim transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0" />
+        <DialogPrimitive.Popup
+          className="fixed top-[12vh] left-1/2 z-51 w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 outline-none"
+          data-testid="command-menu"
+        >
+          <DialogPrimitive.Title className="sr-only">{m.command_label()}</DialogPrimitive.Title>
+          <CommandPalette
+            items={items}
+            autoFocus
+            onQueryChange={setSearch}
+            onClose={() => setOpenState(false)}
+            onSelect={(item) => {
+              const run = actions.get(item.id);
+              setOpenState(false);
+              run?.();
+            }}
+          />
+        </DialogPrimitive.Popup>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }

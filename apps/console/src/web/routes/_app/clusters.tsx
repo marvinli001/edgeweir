@@ -129,7 +129,7 @@ function ClustersPage() {
         <QueryView
           query={clusters}
           empty={
-            <EmptyState icon={ServerStack01Icon} art="node" title={m.clusters_empty_title()}>
+            <EmptyState icon={ServerStack01Icon} title={m.clusters_empty_title()}>
               <Button onClick={() => setCreateOpen(true)}>
                 <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
                 {m.clusters_create()}

@@ -13,7 +13,7 @@ import type {
   TopologyNode,
   TopologyTone,
 } from "@/components/effects/origin-topology";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { formatPercent, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
@@ -104,15 +104,15 @@ export function OriginTopologyCard({ site }: { site: Site }) {
   });
   const graph = React.useMemo(() => graphOf(site, health.data ?? []), [site, health.data]);
   return (
-    <Card data-testid="origin-topology">
-      <CardHeader>
-        <CardTitle>{m.site_traffic_path()}</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <Panel data-testid="origin-topology">
+      <PanelHeader>
+        <PanelTitle>{m.site_traffic_path()}</PanelTitle>
+      </PanelHeader>
+      <PanelContent>
         <React.Suspense fallback={<div className="h-56" />}>
           <OriginTopology nodes={graph.nodes} edges={graph.edges} label={m.site_traffic_path()} />
         </React.Suspense>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }

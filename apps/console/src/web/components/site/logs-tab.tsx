@@ -18,15 +18,19 @@ import { Button } from "@/components/arc/button/button";
 import { Input } from "@/components/arc/input/input";
 import { Switch } from "@/components/arc/switch/switch";
 import { FormSelect, type Option, OptionSelect } from "@/components/form-select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/layout/collapsible";
+import { Field, FieldError, FieldLabel } from "@/components/layout/form";
+import { Panel, PanelContent } from "@/components/layout/panel";
+import { Spinner } from "@/components/layout/spinner";
 import { RowMenu } from "@/components/quick-actions";
 import { SafetyNote } from "@/components/safety-note";
 import { ListInput } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, EmptyState, ErrorState, QueryView } from "@/components/states";
-import { Card, CardContent } from "@/components/ui/card";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import { useAction } from "@/hooks/use-action";
 import { useDraft } from "@/hooks/use-draft";
 import {
@@ -62,8 +66,8 @@ export function LogsTab({ siteId, jump }: { siteId: string; jump?: LogJump }) {
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: siteId } }));
   return (
     <div className="min-w-0 space-y-5">
-      <Card>
-        <QueryView query={combineQueries(settings, features)} frame={CardContent}>
+      <Panel>
+        <QueryView query={combineQueries(settings, features)} frame={PanelContent}>
           {([saved, available]) => (
             <LogSettingsForm
               siteId={siteId}
@@ -72,7 +76,7 @@ export function LogsTab({ siteId, jump }: { siteId: string; jump?: LogJump }) {
             />
           )}
         </QueryView>
-      </Card>
+      </Panel>
       <LogSearch key={JSON.stringify(jump ?? null)} siteId={siteId} jump={jump} />
     </div>
   );
@@ -156,7 +160,7 @@ function LogSettingsForm({
   ] as const;
   return (
     <form
-      className="flex flex-col gap-(--card-spacing)"
+      className="flex flex-col gap-(--panel-pad)"
       onSubmit={async (event) => {
         event.preventDefault();
         if (headersError) return;
@@ -173,7 +177,7 @@ function LogSettingsForm({
         }
       }}
     >
-      <CardContent className="flex flex-col gap-5">
+      <PanelContent className="flex flex-col gap-5">
         <div className="w-full sm:w-56">
           <FormSelect
             id="logSampleRate"
@@ -229,7 +233,7 @@ function LogSettingsForm({
         <SafetyNote data-testid="logs-privacy">
           {m.logs_privacy({ days: settings.retentionDays })}
         </SafetyNote>
-      </CardContent>
+      </PanelContent>
       <SaveBar
         dirty={dirty}
         pending={options.isPending}
@@ -346,8 +350,8 @@ function LogSearch({ siteId, jump }: { siteId: string; jump?: LogJump }) {
   const plain = (values: readonly string[]) => values.map((value) => ({ value, label: value }));
 
   return (
-    <Card>
-      <CardContent className="space-y-5">
+    <Panel>
+      <PanelContent className="space-y-5">
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -481,8 +485,8 @@ function LogSearch({ siteId, jump }: { siteId: string; jump?: LogJump }) {
             </>
           )}
         </QueryView>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }
 
@@ -615,7 +619,7 @@ function LogTable({ entries, siteId }: { entries: LogEntry[]; siteId: string }) 
       // biome-ignore lint/a11y/noNoninteractiveTabindex: a scroll container must be focusable.
       tabIndex={0}
       aria-label={m.logs_request()}
-      className="@container/logs max-h-[min(70svh,42rem)] overflow-y-auto rounded-2xl sunk-well outline-none focus-lit"
+      className="@container/logs max-h-[min(70svh,42rem)] overflow-y-auto rounded-lg faint-well outline-none focus-ring"
       data-testid="logs-table"
     >
       <table className={cn("grid text-left text-sm", LOG_VARS)} aria-rowcount={entries.length + 1}>
@@ -886,7 +890,7 @@ function LogTable({ entries, siteId }: { entries: LogEntry[]; siteId: string }) 
                     data-testid="log-details"
                     data-row-ignore
                   >
-                    <dl className="grid gap-x-4 gap-y-1.5 rounded-xl bg-card/60 px-3 py-2.5 sm:grid-cols-[8rem_minmax(0,1fr)]">
+                    <dl className="grid gap-x-4 gap-y-1.5 rounded-md bg-card/60 px-3 py-2.5 sm:grid-cols-[8rem_minmax(0,1fr)]">
                       {more.map((entry) => (
                         <div key={entry.key} className="contents">
                           <dt className="font-sans text-muted-foreground max-sm:pt-1">

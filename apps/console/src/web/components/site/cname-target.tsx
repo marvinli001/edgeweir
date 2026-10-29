@@ -3,11 +3,11 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import type * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { CopyButton } from "@/components/copy-button";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { CnamePrefixActions } from "@/components/site/cname-prefix";
 import { DomainName } from "@/components/site/domain-name";
 import { PointingStatus, RecheckButton, useSiteLaunch } from "@/components/site/launch-check";
 import { type QueryResult, QueryView } from "@/components/states";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { m } from "@/lib/i18n";
 import { coversDomain, curlCheck } from "@/lib/launch";
 import { type client, orpc } from "@/lib/orpc";
@@ -60,14 +60,14 @@ function DnsSetup({
     meta: { invalidates: [orpc.dns.siteTarget.key(), orpc.sites.key()] },
   });
   return (
-    <Card data-testid={cname ? "cname-target" : "edge-addresses"}>
-      <CardHeader className="flex flex-row items-center gap-3">
-        <CardTitle className="flex-1">
+    <Panel data-testid={cname ? "cname-target" : "edge-addresses"}>
+      <PanelHeader className="flex flex-row items-center gap-3">
+        <PanelTitle className="flex-1">
           {cname ? m.dns_cname_target() : m.dns_edge_addresses()}
-        </CardTitle>
+        </PanelTitle>
         {recheck}
-      </CardHeader>
-      <CardContent className="grid gap-3">
+      </PanelHeader>
+      <PanelContent className="grid gap-3">
         {cname ? (
           <>
             <div className="flex items-center gap-2">
@@ -109,8 +109,8 @@ function DnsSetup({
             </>
           )}
         </QueryView>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }
 
@@ -143,7 +143,7 @@ function EdgeAddresses({ addresses, online }: { addresses: string[]; online: num
 function DomainPointing({ launch, checks }: { launch: SiteLaunch; checks: boolean }) {
   const address = launch.addresses[0];
   return (
-    <ul className="divide-y rounded-2xl sunk-well" data-testid="domain-pointing">
+    <ul className="divide-y rounded-lg faint-well" data-testid="domain-pointing">
       {launch.domains.map((domain, index) => {
         const command =
           checks && address && domain.pointing !== "unchecked"

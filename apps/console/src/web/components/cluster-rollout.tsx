@@ -6,16 +6,16 @@ import type {
 } from "@edgeweir/contract";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { Countdown } from "@/components/appica/countdown";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { SiteChangeList } from "@/components/config-changes";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { Countdown } from "@/components/countdown";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { QueryView } from "@/components/states";
 import { StatusDot, type StatusTone } from "@/components/status-dot";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDraft } from "@/hooks/use-draft";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
@@ -61,11 +61,11 @@ export function ClusterRolloutCard({ clusterId }: { clusterId: string }) {
     meta: { background: true },
   });
   return (
-    <Card className="animate-enter" data-testid="cluster-rollout">
-      <CardHeader>
-        <CardTitle>{m.rollout_title()}</CardTitle>
-      </CardHeader>
-      <QueryView query={query} frame={CardContent}>
+    <Panel className="animate-enter" data-testid="cluster-rollout">
+      <PanelHeader>
+        <PanelTitle>{m.rollout_title()}</PanelTitle>
+      </PanelHeader>
+      <QueryView query={query} frame={PanelContent}>
         {(rollout) => (
           <>
             <RolloutStatus rollout={rollout} />
@@ -73,7 +73,7 @@ export function ClusterRolloutCard({ clusterId }: { clusterId: string }) {
           </>
         )}
       </QueryView>
-    </Card>
+    </Panel>
   );
 }
 
@@ -92,7 +92,7 @@ function RolloutStatus({ rollout }: { rollout: ClusterRollout }) {
   // The server drops repeated reasons; two codes may still read the same.
   const reasons = [...new Set((rollout.candidateChanges?.reasons ?? []).map(revisionReason))];
   return (
-    <CardContent className="flex flex-col gap-3">
+    <PanelContent className="flex flex-col gap-3">
       <dl className="divide-y">
         <Row label={m.sites_col_status()}>
           <StatusDot
@@ -237,7 +237,7 @@ function RolloutStatus({ rollout }: { rollout: ClusterRollout }) {
           />
         </div>
       ) : null}
-    </CardContent>
+    </PanelContent>
   );
 }
 
@@ -271,7 +271,7 @@ function PolicyForm({ rollout }: { rollout: ClusterRollout }) {
   const set = (patch: Partial<Draft>) => setDraft({ ...draft, ...patch });
   return (
     <form
-      className="flex flex-col gap-(--card-spacing)"
+      className="flex flex-col gap-(--panel-pad)"
       onSubmit={async (event) => {
         event.preventDefault();
         setError(null);
@@ -291,7 +291,7 @@ function PolicyForm({ rollout }: { rollout: ClusterRollout }) {
         }
       }}
     >
-      <CardContent className="grid gap-4 border-t pt-4 sm:grid-cols-3">
+      <PanelContent className="grid gap-4 border-t pt-4 sm:grid-cols-3">
         <SwitchField
           id="rollout-enabled"
           label={m.rollout_enabled()}
@@ -347,7 +347,7 @@ function PolicyForm({ rollout }: { rollout: ClusterRollout }) {
           checked={draft.autoPromote}
           onCheckedChange={(autoPromote) => set({ autoPromote })}
         />
-      </CardContent>
+      </PanelContent>
       <SaveBar dirty={dirty} pending={save.isPending} error={error} testId="rollout-policy-save" />
     </form>
   );

@@ -64,7 +64,7 @@ export function AuthViews<V extends string>({
     const fields = [
       ...card.querySelectorAll<HTMLInputElement>("input:not([type=hidden]):not(:disabled)"),
     ];
-    const title = card.querySelector<HTMLElement>('[data-slot="card-title"]');
+    const title = card.querySelector<HTMLElement>('[data-slot="panel-title"]');
     const target = fields.find((field) => !field.value) ?? fields[0] ?? title;
     if (target && target === title) target.tabIndex = -1;
     target?.focus({ preventScroll: true });

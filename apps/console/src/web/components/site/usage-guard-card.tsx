@@ -13,16 +13,22 @@ import { Delete02Icon, Edit02Icon, Shield01Icon } from "@hugeicons/core-free-ico
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { Meter } from "@/components/appica/meter";
 import { Alert } from "@/components/arc/alert/alert";
 import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect, type Option } from "@/components/form-select";
+import {
+  Panel,
+  PanelAction,
+  PanelContent,
+  PanelHeader,
+  PanelTitle,
+} from "@/components/layout/panel";
+import { Meter } from "@/components/meter";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   formatBitRate,
   formatBytes,
@@ -59,15 +65,15 @@ export function UsageGuardCard({ site }: { site: Site }) {
   const [editing, setEditing] = React.useState(false);
   const guard = query.data;
   return (
-    <Card
+    <Panel
       className="animate-enter"
       style={{ animationDelay: "60ms" }}
       data-testid="usage-guard-card"
     >
-      <CardHeader>
-        <CardTitle>{m.usage_guard_title()}</CardTitle>
+      <PanelHeader>
+        <PanelTitle>{m.usage_guard_title()}</PanelTitle>
         {guard?.settings ? (
-          <CardAction className="flex gap-1">
+          <PanelAction className="flex gap-1">
             <Button
               className="icon-button"
               size="sm"
@@ -79,21 +85,21 @@ export function UsageGuardCard({ site }: { site: Site }) {
               <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} />
             </Button>
             <DeleteButton guard={guard} />
-          </CardAction>
+          </PanelAction>
         ) : null}
-      </CardHeader>
+      </PanelHeader>
       <QueryView
         query={query}
-        frame={CardContent}
+        frame={PanelContent}
         isEmpty={(data) => data.settings === null}
         empty={
-          <CardContent>
-            <EmptyState compact title={m.usage_guard_empty()} icon={Shield01Icon} art="checkpoint">
+          <PanelContent>
+            <EmptyState compact title={m.usage_guard_empty()} icon={Shield01Icon}>
               <Button onClick={() => setEditing(true)} data-testid="usage-guard-setup">
                 {m.usage_guard_setup()}
               </Button>
             </EmptyState>
-          </CardContent>
+          </PanelContent>
         }
       >
         {(data) => <UsageGuardBody site={site} guard={data} />}
@@ -101,7 +107,7 @@ export function UsageGuardCard({ site }: { site: Site }) {
       {editing && guard ? (
         <UsageGuardDialog open onOpenChange={setEditing} siteId={site.id} guard={guard} />
       ) : null}
-    </Card>
+    </Panel>
   );
 }
 
@@ -141,7 +147,7 @@ function UsageGuardBody({ site, guard }: { site: Site; guard: UsageGuard }) {
     });
   const warn = settings.warnPercent ?? 100 - 2 ** -46;
   return (
-    <CardContent className="flex flex-col gap-4">
+    <PanelContent className="flex flex-col gap-4">
       {guard.held ? <HeldAlert site={site} guard={guard} /> : null}
       {guard.pausedUntil ? (
         <SafetyNote data-testid="usage-guard-paused">
@@ -187,7 +193,7 @@ function UsageGuardBody({ site, guard }: { site: Site; guard: UsageGuard }) {
         {" · "}
         {actionLabel(settings.action)}
       </p>
-    </CardContent>
+    </PanelContent>
   );
 }
 

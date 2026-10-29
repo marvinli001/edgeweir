@@ -3,9 +3,9 @@ import { caLabel } from "@/components/acme-ca";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { enterDelay } from "@/components/page";
 import { EmptyState, QueryView } from "@/components/states";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDateTime, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
@@ -21,11 +21,11 @@ export function AcmeAccountsCard() {
     meta: { invalidates: [orpc.acmeAccounts.key()] },
   });
   return (
-    <Card data-testid="acme-accounts">
-      <CardHeader>
-        <CardTitle>{m.cert_accounts_title()}</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <Panel data-testid="acme-accounts">
+      <PanelHeader>
+        <PanelTitle>{m.cert_accounts_title()}</PanelTitle>
+      </PanelHeader>
+      <PanelContent>
         <QueryView query={accounts} empty={<EmptyState compact title={m.cert_accounts_empty()} />}>
           {(list) =>
             list.map((account, index) => (
@@ -80,7 +80,7 @@ export function AcmeAccountsCard() {
             ))
           }
         </QueryView>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }

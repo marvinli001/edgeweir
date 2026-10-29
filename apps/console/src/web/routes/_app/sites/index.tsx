@@ -11,7 +11,6 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
-import { Sparkline } from "@/components/appica/sparkline";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { Checkbox } from "@/components/arc/checkbox/checkbox";
@@ -27,6 +26,14 @@ import { Switch } from "@/components/arc/switch/switch";
 import { Textarea } from "@/components/arc/textarea/textarea";
 import { type Columns, DataTable, FilterBar } from "@/components/data-table";
 import { FilterSelect, FormSelect, OptionSelect } from "@/components/form-select";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldSeparator,
+} from "@/components/layout/form";
+import { Spinner } from "@/components/layout/spinner";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
 import { SafetyNote } from "@/components/safety-note";
@@ -39,8 +46,7 @@ import { TagBadges, TagFilter, TagManagerDialog, useSiteTags } from "@/component
 import { SitesBatchBar } from "@/components/sites-batch-bar";
 import { SitesTabs } from "@/components/sites-tabs";
 import { EmptyState, QueryView } from "@/components/states";
-import { Field, FieldError, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
+import { Sparkline } from "@/components/trend-line";
 import { useOpenKey } from "@/hooks/use-open-key";
 import { domainList, fillOrigin, replacesField } from "@/lib/address-input";
 import { formatCompact, m, timeAgo } from "@/lib/i18n";
@@ -217,7 +223,7 @@ function SitesPage() {
               <Link
                 to="/sites/$id"
                 params={{ id: row.original.id }}
-                className="max-w-56 truncate rounded-sm font-medium underline-offset-4 outline-none focus-lit hover:underline"
+                className="max-w-56 truncate rounded-sm font-medium underline-offset-4 outline-none focus-ring hover:underline"
                 data-testid="site-link"
                 {...rowLink}
               >
@@ -420,21 +426,22 @@ function SitesPage() {
         }
       >
         {({ items, total }) => (
-          <>
-            <DataTable
-              data={items}
-              columns={columns}
-              getRowId={(s) => s.id}
-              testId="sites-table"
-              pinFirstColumn
-            />
-            <Pager
-              page={page}
-              pageSize={PAGE_SIZE}
-              total={total}
-              onPageChange={(next) => navigate({ search: (prev) => ({ ...prev, page: next }) })}
-            />
-          </>
+          <DataTable
+            data={items}
+            columns={columns}
+            getRowId={(s) => s.id}
+            testId="sites-table"
+            pinFirstColumn
+            total={total}
+            footer={
+              <Pager
+                page={page}
+                pageSize={PAGE_SIZE}
+                total={total}
+                onPageChange={(next) => navigate({ search: (prev) => ({ ...prev, page: next }) })}
+              />
+            }
+          />
         )}
       </QueryView>
       {selected.size ? (

@@ -24,13 +24,13 @@ import { Button } from "@/components/arc/button/button";
 import { Input } from "@/components/arc/input/input";
 import { Textarea } from "@/components/arc/textarea/textarea";
 import { OptionSelect } from "@/components/form-select";
+import { Field, FieldError, FieldLabel } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
+import { Spinner } from "@/components/layout/spinner";
 import { SafetyNote } from "@/components/safety-note";
 import { ListInput, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { ErrorState, QueryView } from "@/components/states";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { defaultSiteChoices, loadedSites, nextSitePage, SITE_PAGE_SIZE } from "@/lib/default-site";
@@ -49,34 +49,34 @@ export function ClusterNetwork({ clusterId }: { clusterId: string }) {
   // Each card and its title stay while its setting loads or fails to.
   return (
     <div className="flex flex-col gap-4">
-      <Card className="animate-enter" data-testid="listen-ports">
-        <CardHeader>
-          <CardTitle>{m.listen_ports_title()}</CardTitle>
-        </CardHeader>
-        <QueryView query={ports} frame={CardContent}>
+      <Panel className="animate-enter" data-testid="listen-ports">
+        <PanelHeader>
+          <PanelTitle>{m.listen_ports_title()}</PanelTitle>
+        </PanelHeader>
+        <QueryView query={ports} frame={PanelContent}>
           {(data) => <ListenPortsForm key={JSON.stringify(data)} data={data} />}
         </QueryView>
-      </Card>
-      <Card className="animate-enter" style={{ animationDelay: "60ms" }} data-testid="client-ip">
-        <CardHeader>
-          <CardTitle>{m.client_ip_title()}</CardTitle>
-        </CardHeader>
-        <QueryView query={clientIp} frame={CardContent}>
+      </Panel>
+      <Panel className="animate-enter" style={{ animationDelay: "60ms" }} data-testid="client-ip">
+        <PanelHeader>
+          <PanelTitle>{m.client_ip_title()}</PanelTitle>
+        </PanelHeader>
+        <QueryView query={clientIp} frame={PanelContent}>
           {(data) => <ClientIpForm key={JSON.stringify(data.settings)} data={data} />}
         </QueryView>
-      </Card>
-      <Card
+      </Panel>
+      <Panel
         className="animate-enter"
         style={{ animationDelay: "120ms" }}
         data-testid="unknown-hosts"
       >
-        <CardHeader>
-          <CardTitle>{m.unknown_hosts_title()}</CardTitle>
-        </CardHeader>
-        <QueryView query={unknownHosts} frame={CardContent}>
+        <PanelHeader>
+          <PanelTitle>{m.unknown_hosts_title()}</PanelTitle>
+        </PanelHeader>
+        <QueryView query={unknownHosts} frame={PanelContent}>
           {(data) => <UnknownHostsForm key={JSON.stringify(data.settings)} data={data} />}
         </QueryView>
-      </Card>
+      </Panel>
     </div>
   );
 }
@@ -114,13 +114,13 @@ function ListenPortsForm({ data }: { data: ClusterListenPorts }) {
     draft.https.some((p) => !initial.https.includes(p));
   return (
     <form
-      className="flex flex-col gap-(--card-spacing)"
+      className="flex flex-col gap-(--panel-pad)"
       onSubmit={(event) => {
         event.preventDefault();
         if (parsed.success) void form.submit();
       }}
     >
-      <CardContent className="flex flex-col gap-4">
+      <PanelContent className="flex flex-col gap-4">
         <div
           className="flex flex-wrap items-center gap-2 text-sm"
           data-testid="listen-ports-always"
@@ -167,7 +167,7 @@ function ListenPortsForm({ data }: { data: ClusterListenPorts }) {
             {m.feature_unavailable_nodes()}
           </SafetyNote>
         ) : null}
-      </CardContent>
+      </PanelContent>
       {/* The save row of settings cards; the guard for unsaved changes stays on `dirty` above. */}
       <SaveBar
         dirty={dirty && parsed.success && !(locked && grows)}
@@ -220,7 +220,7 @@ function ClientIpForm({ data }: { data: ClusterClientIp }) {
   const headerError = !parsed.success && parsed.error.issues.some((i) => i.path[0] === "header");
   return (
     <form
-      className="flex flex-col gap-(--card-spacing)"
+      className="flex flex-col gap-(--panel-pad)"
       onSubmit={async (event) => {
         event.preventDefault();
         if (!normalized) return;
@@ -239,7 +239,7 @@ function ClientIpForm({ data }: { data: ClusterClientIp }) {
         }
       }}
     >
-      <CardContent className="flex flex-col gap-4">
+      <PanelContent className="flex flex-col gap-4">
         <Field className="sm:max-w-xs">
           <FieldLabel htmlFor="client-ip-mode">{m.client_ip_mode()}</FieldLabel>
           <OptionSelect
@@ -332,7 +332,7 @@ function ClientIpForm({ data }: { data: ClusterClientIp }) {
             {m.feature_unavailable_nodes()}
           </SafetyNote>
         ) : null}
-      </CardContent>
+      </PanelContent>
       <SaveBar
         dirty={dirty && !!normalized && !locked}
         pending={save.isPending}
@@ -437,7 +437,7 @@ function UnknownHostsForm({ data }: { data: ClusterUnknownHosts }) {
   const scanError = !parsed.success && parsed.error.issues.some((i) => i.path[0] === "scan");
   return (
     <form
-      className="flex flex-col gap-(--card-spacing)"
+      className="flex flex-col gap-(--panel-pad)"
       onSubmit={async (event) => {
         event.preventDefault();
         if (!normalized) return;
@@ -456,7 +456,7 @@ function UnknownHostsForm({ data }: { data: ClusterUnknownHosts }) {
         }
       }}
     >
-      <CardContent className="flex flex-col gap-4">
+      <PanelContent className="flex flex-col gap-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="unknown-hosts-unknown">{m.unknown_hosts_unknown()}</FieldLabel>
@@ -606,7 +606,7 @@ function UnknownHostsForm({ data }: { data: ClusterUnknownHosts }) {
             {m.feature_unavailable_nodes()}
           </SafetyNote>
         ) : null}
-      </CardContent>
+      </PanelContent>
       <SaveBar
         dirty={dirty && !!normalized && !locked}
         pending={save.isPending}

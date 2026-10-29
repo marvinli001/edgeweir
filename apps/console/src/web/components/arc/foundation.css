@@ -1,117 +1,137 @@
 /*
  * Arc foundation tokens, adapted from Arc's `arc-foundation` (MIT, Elia Kuratli;
- * THIRD-PARTY-NOTICES.md). Changes: every token is mapped onto the console's Lit Instrument tokens
- * (index.css), so Arc brings no palette, fonts or radii of its own, and the tokens carry an
- * `--arc-` prefix.
+ * THIRD-PARTY-NOTICES.md). Changes: every token is mapped onto the Edgeweir design tokens
+ * (src/web/tokens.css, shared with Business and Cloud), so Arc brings no palette, fonts or radii
+ * of its own, and the tokens carry an `--arc-` prefix.
  *
- * Why the prefix: Arc's bare names collide with names that mean something else here. shadcn's
- * `--accent` is the hover wash (Arc's is the brand color), `--series-*` are the console's chart
- * series, and Tailwind reads `--text-xl`, `--text-2xl` and `--ease-in-out` for its utilities. The
- * Arc sources under components/arc read `var(--arc-…)`; rename the token names in any newly added
- * Arc file the same way (ui-rules.test.ts checks that every token they read is defined here).
+ * Why the prefix: Arc's bare names collide with names that mean something else here. shadcn-era
+ * `--accent` is the hover wash (Arc's is the brand color), `--series-*` are the chart series, and
+ * Tailwind reads `--text-xl`, `--text-2xl` and `--ease-in-out` for its utilities. The Arc sources
+ * under components/arc read `var(--arc-…)`; rename the token names in any newly added Arc file the
+ * same way (ui-rules.test.ts checks that every token they read is defined here).
  *
- * Dark mode follows the console's tokens, which switch under `.dark`; ThemeProvider and
- * theme-init.js also set `data-theme` on <html> for Arc sources that read it. `data-accent` is not
- * used: the accent is the console's action blue. Arc's global focus outline is not taken over:
- * the Arc modules draw the console's focus ring on their own controls.
+ * Dark mode follows tokens.css, which switches under `.dark`; ThemeProvider and theme-init.js also
+ * set `data-theme` on <html> for Arc sources that read it. `data-accent` is not used: the accent is
+ * the brand blue. Arc's global focus outline is not taken over: the Arc modules draw the focus ring
+ * on their own controls (keyboard focus only).
  */
 :root {
-  /* Surfaces: the canvas, raised controls and overlays, the muted fill behind hovers. */
-  --arc-background: var(--background);
-  --arc-surface: var(--raised);
-  --arc-surface-raised: var(--overlay);
-  --arc-glass-overlay: var(--glass-overlay);
-  --arc-surface-muted: var(--muted);
-  --arc-surface-sunken: var(--well);
-  --arc-surface-hover: color-mix(in oklch, var(--raised), var(--foreground) 4%);
-  --arc-wash: var(--wash);
-  --arc-foreground: var(--foreground);
-  --arc-text-secondary: var(--muted-foreground);
-  --arc-text-muted: var(--muted-foreground);
-  --arc-border: var(--border);
-  --arc-border-subtle: var(--edge);
-  --arc-border-strong: var(--input);
+  /* Surfaces: the canvas, panels and overlays, the faint fill behind headers and wells. */
+  --arc-background: var(--ew-canvas);
+  --arc-surface: var(--ew-panel);
+  --arc-surface-raised: var(--ew-overlay);
+  --arc-surface-muted: var(--ew-faint);
+  --arc-surface-sunken: var(--ew-faint);
+  --arc-surface-hover: var(--ew-hover);
+  --arc-wash: var(--ew-hover);
+  --arc-pressed: var(--ew-pressed);
+  --arc-foreground: var(--ew-text);
+  --arc-text-secondary: var(--ew-text-secondary);
+  --arc-text-muted: var(--ew-text-secondary);
+  --arc-text-placeholder: var(--ew-text-placeholder);
+  --arc-text-disabled: var(--ew-text-disabled);
+  --arc-border: var(--ew-border);
+  --arc-border-subtle: var(--ew-hairline);
+  --arc-border-strong: var(--ew-border-strong);
 
-  /*
-   * The action blue: text-safe ink, the fill of primary buttons and bars (with the lit face and
-   * plate of btn-lit), the focus ring and the tint behind primary chips.
-   */
-  --arc-accent: var(--primary-ink);
-  --arc-accent-strong: var(--primary-ink);
-  --arc-accent-subtle: var(--tint-primary);
-  --arc-accent-foreground: var(--primary-foreground);
-  --arc-accent-fill: var(--primary);
-  --arc-accent-fill-hover: color-mix(in oklch, var(--primary), white 7%);
-  --arc-lit-face: var(--lit-face);
-  --arc-lit-shadow: var(--lit-shadow);
-  --arc-lit-shadow-hover: var(--lit-shadow-hover);
-  --arc-lit-shadow-active: var(--lit-shadow-active);
-  --arc-focus-ring: var(--ring);
-  /* Live data: a toast that follows a change still rolling out. */
-  --arc-signal: var(--signal);
+  /* The brand: text-safe ink, the fill of primary buttons and bars, the tint behind chips. */
+  --arc-accent: var(--ew-brand-ink);
+  --arc-accent-strong: var(--ew-brand-ink);
+  --arc-accent-subtle: var(--ew-brand-tint);
+  --arc-accent-subtle-strong: var(--ew-brand-tint-strong);
+  --arc-accent-foreground: var(--ew-brand-on);
+  --arc-accent-fill: var(--ew-brand-fill);
+  --arc-accent-fill-hover: var(--ew-brand-hover);
+  --arc-accent-fill-active: var(--ew-brand-active);
+  --arc-indicator: var(--ew-brand);
+  --arc-focus-ring: var(--ew-focus);
+  --arc-focus-halo: color-mix(in srgb, var(--ew-focus) 20%, transparent);
 
-  --arc-success: var(--state-good);
-  --arc-warning: var(--state-warn);
-  --arc-danger: var(--destructive);
-  --arc-danger-subtle: var(--tint-destructive);
+  --arc-success: var(--ew-success);
+  --arc-success-ink: var(--ew-success-ink);
+  --arc-success-subtle: var(--ew-success-tint);
+  --arc-warning: var(--ew-warning);
+  --arc-warning-ink: var(--ew-warning-ink);
+  --arc-warning-subtle: var(--ew-warning-tint);
+  --arc-danger: var(--ew-error-ink);
+  --arc-danger-fill: var(--ew-error);
+  --arc-danger-subtle: var(--ew-error-tint);
+  --arc-info-subtle: var(--ew-brand-tint);
 
-  /*
-   * Selection controls (switch, checkbox): the action blue fills a chosen control, the well holds
-   * an empty one, and --control-edge (3:1 in contrast.test.ts) draws the boundary of both.
-   */
-  --arc-control-on: var(--primary);
-  --arc-control-glyph: var(--primary-foreground);
-  --arc-control-track: var(--well);
-  --arc-control-track-hover: color-mix(in oklch, var(--well), var(--foreground) 6%);
-  --arc-control-edge: var(--control-edge);
-  --arc-control-thumb: var(--raised);
-  --arc-control-thumb-on: var(--primary-foreground);
-  --arc-control-thumb-shadow: var(--elev-1);
-  /* Behind dialogs: the console's dim, no blur (polled content may sit behind it). */
-  --arc-scrim: var(--scrim);
+  /* Selection controls (switch, checkbox, radio): brand when chosen, panel when empty. */
+  --arc-control-on: var(--ew-brand);
+  --arc-control-glyph: var(--ew-brand-on);
+  --arc-control-track: var(--ew-border);
+  --arc-control-track-hover: var(--ew-border-strong);
+  --arc-control-edge: var(--ew-control-edge);
+  --arc-control-thumb: #ffffff;
+  --arc-control-thumb-on: #ffffff;
+  --arc-control-thumb-shadow: 0 1px 2px rgb(0 0 0 / 20%);
+  --arc-scrim: var(--ew-scrim);
+  --arc-tooltip: var(--ew-tooltip);
+  --arc-tooltip-foreground: var(--ew-tooltip-text);
 
-  --arc-shadow-resting: var(--elev-1);
-  --arc-shadow-raised: var(--elev-2);
-  --arc-shadow-floating: var(--elev-3);
+  --arc-shadow-resting: var(--ew-shadow-1);
+  --arc-shadow-raised: var(--ew-shadow-2);
+  --arc-shadow-floating: var(--ew-shadow-3);
 
-  /* Tailwind's spacing step and the console's radius scale (rounded-2xl controls). */
-  --arc-space-1: calc(var(--spacing) * 1);
-  --arc-space-2: calc(var(--spacing) * 2);
-  --arc-space-3: calc(var(--spacing) * 3);
-  --arc-space-4: calc(var(--spacing) * 4);
-  --arc-space-5: calc(var(--spacing) * 5);
-  --arc-space-6: calc(var(--spacing) * 6);
-  --arc-space-8: calc(var(--spacing) * 8);
-  --arc-radius-control: calc(var(--radius) * 1.8);
-  --arc-radius-panel: calc(var(--radius) * 2.2);
-  --arc-radius-surface: calc(var(--radius) * 2.6);
-  --arc-radius-pill: 9999px;
-  /* h-7, h-8 and h-9: the console's control heights. */
-  --arc-control-height-sm: calc(var(--spacing) * 7);
-  --arc-control-height-md: calc(var(--spacing) * 8);
-  --arc-control-height-lg: calc(var(--spacing) * 9);
+  /* Data. */
+  --arc-series-1: var(--ew-series-1);
+  --arc-series-2: var(--ew-series-2);
+  --arc-series-3: var(--ew-series-3);
+  --arc-series-4: var(--ew-series-4);
+  --arc-series-5: var(--ew-series-5);
+  --arc-series-other: var(--ew-series-other);
+  --arc-grid: var(--ew-grid);
+  --arc-axis: var(--ew-axis);
+
+  --arc-space-1: var(--ew-space-1);
+  --arc-space-2: var(--ew-space-2);
+  --arc-space-3: var(--ew-space-3);
+  --arc-space-4: var(--ew-space-4);
+  --arc-space-5: var(--ew-space-5);
+  --arc-space-6: var(--ew-space-6);
+  --arc-space-8: var(--ew-space-8);
+  --arc-space-10: var(--ew-space-10);
+  --arc-space-12: var(--ew-space-12);
+  --arc-radius-badge: var(--ew-radius-badge);
+  --arc-radius-control: var(--ew-radius-control);
+  --arc-radius-panel: var(--ew-radius-panel);
+  --arc-radius-surface: var(--ew-radius-dialog);
+  --arc-radius-pill: var(--ew-radius-pill);
+  --arc-control-height-sm: var(--ew-control-sm);
+  --arc-control-height-md: var(--ew-control-md);
+  --arc-control-height-lg: var(--ew-control-lg);
   /* Touch screens: every control is at least 44px tall (icon buttons 44px square). */
   @media (pointer: coarse) {
-    --arc-control-height-sm: 2.75rem;
-    --arc-control-height-md: 2.75rem;
-    --arc-control-height-lg: 2.75rem;
+    --arc-control-height-sm: var(--ew-control-touch);
+    --arc-control-height-md: var(--ew-control-touch);
+    --arc-control-height-lg: var(--ew-control-touch);
   }
 
-  /* Type: the console's faces (Mona Sans, Noto Sans SC) at Tailwind's sizes. */
-  --arc-font-display: var(--font-heading);
-  --arc-font-body: var(--font-sans);
-  --arc-text-xs: 0.75rem;
-  --arc-text-sm: 0.875rem;
-  --arc-text-base: 1rem;
-  --arc-text-lg: 1.125rem;
-  --arc-text-xl: 1.25rem;
-  --arc-leading-body: 1.4;
+  /* Type. */
+  --arc-font-display: var(--ew-font-sans);
+  --arc-font-body: var(--ew-font-sans);
+  --arc-font-mono: var(--ew-font-mono);
+  --arc-text-xs: var(--ew-text-caption);
+  --arc-text-dense: var(--ew-text-dense);
+  --arc-text-sm: var(--ew-text-body);
+  --arc-text-base: var(--ew-text-body);
+  --arc-text-lg: var(--ew-text-section);
+  --arc-text-xl: var(--ew-text-title);
+  --arc-text-2xl: var(--ew-text-display);
+  --arc-text-3xl: var(--ew-text-hero);
+  --arc-leading-body: 1.5715;
+  --arc-leading-display: 1.3;
   --arc-tracking-body: normal;
+  --arc-tracking-display: normal;
+  --arc-weight-regular: var(--ew-weight-regular);
+  --arc-weight-medium: var(--ew-weight-medium);
 
   /* Motion: Arc's curves and durations. */
-  --arc-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
-  --arc-ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
-  --arc-ease-exit: cubic-bezier(0.7, 0, 0.84, 0);
+  --arc-ease-enter: var(--ew-ease-enter);
+  --arc-ease-standard: var(--ew-ease-standard);
+  --arc-ease-exit: var(--ew-ease-exit);
   --arc-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   /* Critically damped spring: fast start, smooth settle, never overshoots. */
   --arc-ease-spring: linear(
@@ -153,14 +173,9 @@
     0.9963,
     1
   );
-  --arc-duration-instant: 120ms;
-  --arc-duration-fast: 160ms;
-  --arc-duration-standard: 240ms;
+  --arc-duration-instant: var(--ew-duration-instant);
+  --arc-duration-fast: var(--ew-duration-fast);
+  --arc-duration-standard: var(--ew-duration-standard);
   --arc-duration-considered: 480ms;
   --arc-duration-spring: 580ms;
-}
-
-/* A dark thumb would sink into the dark well, so the empty switch shows a light one. */
-.dark {
-  --arc-control-thumb: var(--foreground);
 }

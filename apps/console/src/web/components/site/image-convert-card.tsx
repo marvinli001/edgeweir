@@ -11,12 +11,12 @@ import {
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { FormSelect } from "@/components/form-select";
+import { FieldLegend, FieldSet } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, QueryView } from "@/components/states";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FieldLegend, FieldSet } from "@/components/ui/field";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { ANALYTICS_RANGES, rangeLabel } from "@/lib/analytics";
 import { formatBytes, m } from "@/lib/i18n";
@@ -82,16 +82,16 @@ function ImageConvertEditor({
   const blocked = !availability.available && !server.enabled;
   const number = (value: string) => (value.trim() ? Number(value) : Number.NaN);
   return (
-    <Card
+    <Panel
       className="animate-enter"
       style={{ animationDelay: "160ms" }}
       data-testid="image-convert-card"
     >
-      <form className="flex flex-col gap-(--card-spacing)" onSubmit={submit}>
-        <CardHeader>
-          <CardTitle>{m.image_convert_title()}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col divide-y divide-border [&>*]:py-4 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">
+      <form className="flex flex-col gap-(--panel-pad)" onSubmit={submit}>
+        <PanelHeader>
+          <PanelTitle>{m.image_convert_title()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent className="flex flex-col divide-y divide-border [&>*]:py-4 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">
           <div className="flex flex-col gap-2">
             <SwitchField
               id="image-convert-enabled"
@@ -203,10 +203,10 @@ function ImageConvertEditor({
               </div>
             </FieldSet>
           </div>
-        </CardContent>
+        </PanelContent>
         <SaveBar dirty={dirty} pending={pending} error={error} testId="image-convert-save" />
       </form>
-    </Card>
+    </Panel>
   );
 }
 
@@ -218,13 +218,13 @@ export function ImageSavingsCard({ siteId }: { siteId: string }) {
     placeholderData: keepPreviousData,
   });
   return (
-    <Card
+    <Panel
       className="animate-enter"
       style={{ animationDelay: "200ms" }}
       data-testid="image-savings-card"
     >
-      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-        <CardTitle>{m.image_savings_title()}</CardTitle>
+      <PanelHeader className="flex flex-wrap items-center justify-between gap-3">
+        <PanelTitle>{m.image_savings_title()}</PanelTitle>
         <div className="w-full sm:w-44">
           <FormSelect
             id="image-savings-range"
@@ -235,8 +235,8 @@ export function ImageSavingsCard({ siteId }: { siteId: string }) {
             onChange={(value) => setRange(value as AnalyticsRange)}
           />
         </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      </PanelHeader>
+      <PanelContent className="flex flex-col gap-4">
         <QueryView query={savings}>
           {({ bytesSaved, unsupportedNodes }) => (
             <>
@@ -254,7 +254,7 @@ export function ImageSavingsCard({ siteId }: { siteId: string }) {
             </>
           )}
         </QueryView>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }

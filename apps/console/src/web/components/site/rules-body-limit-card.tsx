@@ -2,10 +2,10 @@ import type { Site } from "@edgeweir/contract";
 import { RULES_BODY_LIMIT } from "@edgeweir/rule-engine";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField } from "@/components/site/fields";
 import { SaveBar, useSaveSite } from "@/components/site/save-site";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
@@ -29,23 +29,23 @@ export function RulesBodyLimitCard({ site }: { site: Site }) {
   const blocked =
     features.data?.rulesBody.available === false && saved === RULES_BODY_LIMIT.default;
   return (
-    <Card
+    <Panel
       className="animate-enter"
       style={{ animationDelay: "60ms" }}
       data-testid="rules-body-limit-card"
     >
       <form
-        className="flex flex-col gap-(--card-spacing)"
+        className="flex flex-col gap-(--panel-pad)"
         onSubmit={(event) => {
           event.preventDefault();
           if (valid)
             void save({ contentSettings: { ...site.contentSettings, rulesBodyLimit: bytes } });
         }}
       >
-        <CardHeader>
-          <CardTitle>{m.rules_body_limit_title()}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <PanelHeader>
+          <PanelTitle>{m.rules_body_limit_title()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent className="flex flex-col gap-3">
           {blocked ? (
             <SafetyNote className="animate-in fade-in" data-testid="rules-body-limit-unavailable">
               {m.feature_unavailable_nodes()}
@@ -66,7 +66,7 @@ export function RulesBodyLimitCard({ site }: { site: Site }) {
               testId="rules-body-limit"
             />
           </div>
-        </CardContent>
+        </PanelContent>
         <SaveBar
           dirty={valid && bytes !== saved}
           pending={pending}
@@ -75,6 +75,6 @@ export function RulesBodyLimitCard({ site }: { site: Site }) {
           errorTestId="rules-body-limit-error"
         />
       </form>
-    </Card>
+    </Panel>
   );
 }

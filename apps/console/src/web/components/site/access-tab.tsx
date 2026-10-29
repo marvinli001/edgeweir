@@ -37,6 +37,8 @@ import { CopyButton } from "@/components/copy-button";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { IpCheckCard } from "@/components/ip-check";
+import { Field, FieldLabel } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { SafetyNote } from "@/components/safety-note";
 import { CorsCard } from "@/components/site/access-control/cors-card";
 import { EncodedPathsCard } from "@/components/site/access-control/encoded-paths-card";
@@ -50,8 +52,6 @@ import { NumberField, SwitchField } from "@/components/site/fields";
 import { CheckboxList } from "@/components/site/ports-card";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, EmptyState, QueryView } from "@/components/states";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { authKindLabel } from "@/lib/access-logs";
 import { localizeError } from "@/lib/errors";
@@ -262,8 +262,8 @@ export function AccessTab({ site }: { site: Site }) {
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      <Card className="animate-enter" data-testid="auth-rules-card">
-        <QueryView query={combineQueries(rules, features)} frame={CardContent}>
+      <Panel className="animate-enter" data-testid="auth-rules-card">
+        <QueryView query={combineQueries(rules, features)} frame={PanelContent}>
           {([saved, available]) => (
             <AuthRulesForm
               key={saved.updatedAt ?? "none"}
@@ -273,7 +273,7 @@ export function AccessTab({ site }: { site: Site }) {
             />
           )}
         </QueryView>
-      </Card>
+      </Panel>
       <SiteListsCard siteId={site.id} index={1} />
       <GeoCard siteId={site.id} index={2} />
       <HotlinkCard siteId={site.id} index={3} />
@@ -329,9 +329,9 @@ function AuthRulesForm({
   // portal into it.
   return (
     <>
-      <form className="flex flex-col gap-(--card-spacing)" onSubmit={form.submit}>
-        <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle>{m.auth_title()}</CardTitle>
+      <form className="flex flex-col gap-(--panel-pad)" onSubmit={form.submit}>
+        <PanelHeader className="flex flex-wrap items-center justify-between gap-3">
+          <PanelTitle>{m.auth_title()}</PanelTitle>
           <Button
             type="button"
             variant="secondary"
@@ -343,8 +343,8 @@ function AuthRulesForm({
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             {m.auth_add()}
           </Button>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+        </PanelHeader>
+        <PanelContent className="flex flex-col gap-4">
           {availability.available ? null : (
             <SafetyNote className="animate-in fade-in" data-testid="auth-unavailable">
               {m.feature_unavailable_nodes()}
@@ -362,11 +362,11 @@ function AuthRulesForm({
               </Button>
             </EmptyState>
           ) : (
-            <ol className="-mx-(--card-spacing) flex flex-col border-b" data-testid="auth-rules">
+            <ol className="-mx-(--panel-pad) flex flex-col border-b" data-testid="auth-rules">
               {rows.map((row, index) => (
                 <li
                   key={row.key}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t px-(--card-spacing) py-3 animate-enter"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t px-(--panel-pad) py-3 animate-enter"
                   style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
                   data-testid="auth-rule"
                 >
@@ -453,7 +453,7 @@ function AuthRulesForm({
               ))}
             </ol>
           )}
-        </CardContent>
+        </PanelContent>
         <SaveBar
           dirty={dirty && !blocked}
           pending={form.pending}
@@ -503,8 +503,8 @@ function FormerIdentityHeaders({
   const names = saved.formerIdentityHeaders;
   if (!names.length) return null;
   return (
-    <CardContent
-      className="flex flex-wrap items-center gap-2 border-t pt-(--card-spacing)"
+    <PanelContent
+      className="flex flex-wrap items-center gap-2 border-t pt-(--panel-pad)"
       data-testid="auth-former-headers"
     >
       <span className="text-sm text-muted-foreground">{m.auth_former_headers()}</span>
@@ -539,7 +539,7 @@ function FormerIdentityHeaders({
           queryClient.setQueryData(orpc.authRules.get.queryKey({ input: { id: siteId } }), result);
         }}
       />
-    </CardContent>
+    </PanelContent>
   );
 }
 

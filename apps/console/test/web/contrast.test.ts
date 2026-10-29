@@ -3,14 +3,14 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * WCAG AA contrast of the console's token pairs (ADR-0034 §7), computed from index.css itself:
+ * WCAG AA contrast of the console's token pairs (ADR-0064), computed from tokens.css itself:
  * the light (`:root`) and dark (`.dark`) declarations are parsed, `var()` references and
  * `color-mix(in oklch|oklab, …)` resolved, OKLCH converted to sRGB (per-channel clipping, as an
  * sRGB screen shows it), translucent layers composited over their backdrop in sRGB, then compared
  * with the WCAG 2 relative-luminance ratio. A token edit that breaks a pair fails here.
  */
 
-const css = readFileSync(resolve(import.meta.dirname, "../../src/web/index.css"), "utf8");
+const css = readFileSync(resolve(import.meta.dirname, "../../src/web/tokens.css"), "utf8");
 
 // ---------------------------------------------------------------------------------------------
 // Parsing
@@ -40,7 +40,7 @@ function declarations(selector: string): Record<string, string> {
       start = i + 1;
     }
   }
-  throw new Error(`no top-level rule ${selector} in index.css`);
+  throw new Error(`no top-level rule ${selector} in tokens.css`);
 }
 
 function parseBody(body: string): Record<string, string> {
@@ -335,7 +335,19 @@ function failures(theme: Theme, pairs: Pair[], min: number): string[] {
   });
 }
 
-const SURFACES = ["background", "card", "well", "raised", "popover", "sidebar", "muted"];
+const SURFACES = [
+  "background",
+  "canvas",
+  "card",
+  "well",
+  "raised",
+  "popover",
+  "sidebar",
+  "muted",
+  "kpi-1",
+  "kpi-2",
+  "kpi-3",
+];
 
 function textPairs(): Pair[] {
   return [
@@ -407,28 +419,11 @@ const DATA = [
 ];
 
 /**
- * Data colors index.css documents as below 3:1 on the card and always printed with a text label
- * or value (DESIGN.md, the Labelled Color Rule). Each entry quotes the comment that documents it;
- * the test checks that the comment is still there.
+ * Data colors tokens.css documents as below 3:1 on the panel and always printed with a text label
+ * or value. Each entry quotes the comment that documents it; the test checks that the comment is
+ * still there. Every series and status color of the redesign reaches 3:1, so there are none.
  */
-const LABELLED: { theme: Theme; tokens: string[]; comment: string }[] = [
-  {
-    theme: "light",
-    tokens: ["status-3xx", "status-4xx"],
-    comment: "3xx/4xx sit below 3:1 in light mode, so their values are always labeled as text too.",
-  },
-  {
-    theme: "light",
-    tokens: ["series-3", "series-4", "series-5"],
-    comment:
-      "slots 3–5 sit below 3:1 in light mode, so the legend and the list always print the values.",
-  },
-  {
-    theme: "light",
-    tokens: ["state-warn"],
-    comment: "Node and cluster states; always shown with a text label.",
-  },
-];
+const LABELLED: { theme: Theme; tokens: string[]; comment: string }[] = [];
 
 // ---------------------------------------------------------------------------------------------
 
@@ -488,8 +483,8 @@ describe("color math", () => {
         "--foreground",
         "--primary",
         "--ring",
-        "--glass",
-        "--glass-overlay",
+        "--card",
+        "--popover",
       ]) {
         expect(vars[name], `${theme} ${name}`).toBeDefined();
         expect(() => parseColor(vars[name] as string, vars)).not.toThrow();
@@ -517,16 +512,5 @@ describe.each(["light", "dark"] as const)("WCAG AA contrast, %s theme", (theme) 
       use: "chart strokes, status lights",
     }));
     expect(failures(theme, pairs, 3)).toEqual([]);
-  });
-
-  it("text on glass passes over the worst backdrop (foreground-colored content behind it)", () => {
-    const pairs = ["glass", "glass-overlay"].flatMap((glass) =>
-      ["foreground", "muted-foreground"].map((fg) => ({
-        fg,
-        bg: `foreground > ${glass}`,
-        use: glass === "glass" ? "sticky header" : "⌘K and toasts",
-      })),
-    );
-    expect(failures(theme, pairs, 4.5)).toEqual([]);
   });
 });

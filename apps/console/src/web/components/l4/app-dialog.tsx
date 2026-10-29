@@ -24,9 +24,6 @@ import {
 import { Input } from "@/components/arc/input/input";
 import { FormSelect, OptionSelect } from "@/components/form-select";
 import { L4NodesWarning } from "@/components/l4/common";
-import { SafetyNote } from "@/components/safety-note";
-import { NumberField, SettingsGroup, SwitchField } from "@/components/site/fields";
-import { nextDraftKey } from "@/components/site/save-site";
 import {
   Field,
   FieldError,
@@ -34,8 +31,11 @@ import {
   FieldLabel,
   FieldLegend,
   FieldSet,
-} from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
+} from "@/components/layout/form";
+import { Spinner } from "@/components/layout/spinner";
+import { SafetyNote } from "@/components/safety-note";
+import { NumberField, SettingsGroup, SwitchField } from "@/components/site/fields";
+import { nextDraftKey } from "@/components/site/save-site";
 import { m } from "@/lib/i18n";
 import {
   apiError,

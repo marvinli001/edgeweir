@@ -6,11 +6,10 @@ import * as React from "react";
 import { type ChartRow, LinesChart, SeriesLegend } from "@/components/analytics/breakdown-charts";
 import { Panel, PanelHeader } from "@/components/analytics/panel";
 import { RangeSelect } from "@/components/analytics/range-select";
-import { AnimatedValue } from "@/components/appica/effects";
-import { Sparkline } from "@/components/appica/sparkline";
 import { Button } from "@/components/arc/button/button";
 import { type Columns, DataTable } from "@/components/data-table";
 import { EmptyState, QueryView } from "@/components/states";
+import { Sparkline } from "@/components/trend-line";
 import { SERIES_COLORS } from "@/lib/analytics";
 import { formatBytes, formatCompact, formatNumber, m } from "@/lib/i18n";
 import { L4_STATS_RANGE_SECONDS, L4_STATS_RANGES, type L4StatsRange } from "@/lib/l4";
@@ -82,7 +81,7 @@ export function L4AppStats({
   return (
     <section className="flex flex-col gap-3" aria-labelledby="l4-stats-title">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 id="l4-stats-title" className="mr-auto text-base font-semibold">
+        <h2 id="l4-stats-title" className="mr-auto text-base font-medium">
           {m.analytics_title()}
         </h2>
         <RangeSelect
@@ -163,11 +162,11 @@ function StatsBody({
             <Panel className="gap-1 pt-3" data-testid={`l4-stat-${tile.key}`}>
               <h3 className="truncate px-4 text-[13px] text-muted-foreground">{tile.title()}</h3>
               <p
-                className="truncate px-4 text-2xl font-semibold tracking-tight readout [font-stretch:112%]"
+                className="truncate px-4 text-2xl font-medium readout"
                 data-slot="metric-value"
                 data-value={stats.totals[tile.key]}
               >
-                <AnimatedValue value={tile.format(stats.totals[tile.key])} />
+                {tile.format(stats.totals[tile.key])}
               </p>
               <Sparkline
                 data={trend(stats.points, tile.key)}

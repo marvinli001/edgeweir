@@ -3,9 +3,9 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import type { LivePoint } from "@/components/effects/live-chart";
 import { FlowNumber } from "@/components/effects/number-flow";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { QueryView } from "@/components/states";
 import { LiveDot } from "@/components/status-dot";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatClockTime, formatCompact, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
@@ -25,22 +25,22 @@ export function LiveRequests({ siteId }: { siteId: string }) {
     meta: { background: true },
   });
   return (
-    <Card size="sm" data-testid="live-requests">
+    <Panel size="sm" data-testid="live-requests">
       <QueryView query={traffic} frame={Pending} loadingClassName="min-h-42">
         {(data) => <LiveRequestsChart traffic={data} />}
       </QueryView>
-    </Card>
+    </Panel>
   );
 }
 
 function LiveHeader({ children }: { children?: React.ReactNode }) {
   return (
-    <CardHeader className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <CardTitle className="text-[13px] font-normal text-muted-foreground">
+    <PanelHeader className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <PanelTitle className="text-[13px] font-normal text-muted-foreground">
         {m.site_live_requests()}
-      </CardTitle>
+      </PanelTitle>
       {children}
-    </CardHeader>
+    </PanelHeader>
   );
 }
 
@@ -49,7 +49,7 @@ function Pending({ children }: { children?: React.ReactNode }) {
   return (
     <>
       <LiveHeader />
-      <CardContent>{children}</CardContent>
+      <PanelContent>{children}</PanelContent>
     </>
   );
 }
@@ -76,12 +76,12 @@ function LiveRequestsChart({ traffic }: { traffic: Traffic }) {
               {formatClockTime(new Date(reading.time * 1000).toISOString())}
             </span>
           ) : null}
-          <span className="text-xl font-semibold tracking-tight">
+          <span className="text-xl font-medium">
             <FlowNumber value={Math.round(shown?.value ?? 0)} suffix={m.overview_per_second()} />
           </span>
         </div>
       </LiveHeader>
-      <CardContent>
+      <PanelContent>
         <React.Suspense fallback={<div className="h-42" />}>
           <LiveChart
             points={points}
@@ -91,7 +91,7 @@ function LiveRequestsChart({ traffic }: { traffic: Traffic }) {
             onRead={setReading}
           />
         </React.Suspense>
-      </CardContent>
+      </PanelContent>
     </>
   );
 }

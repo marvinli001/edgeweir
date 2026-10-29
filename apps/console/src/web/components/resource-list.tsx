@@ -39,10 +39,7 @@ export function ResourceList({
   );
   return (
     <section
-      className={cn(
-        "flex min-w-0 flex-col rounded-2xl bg-card px-2 pb-1.5 shadow-elev-1 edge-lit",
-        className,
-      )}
+      className={cn("flex min-w-0 flex-col rounded-lg border bg-card px-2 pb-1.5 ", className)}
       style={style}
       data-testid={testId}
     >
@@ -50,7 +47,7 @@ export function ResourceList({
         {link ? (
           <Link
             {...link}
-            className="inline-flex items-center gap-1.5 rounded-md outline-none transition-colors focus-lit hover:text-foreground"
+            className="inline-flex items-center gap-1.5 rounded-md outline-none transition-colors focus-ring hover:text-foreground"
           >
             {heading}
           </Link>
@@ -64,7 +61,7 @@ export function ResourceList({
 }
 
 const rowClass =
-  "group/row flex h-10 min-w-0 items-center gap-3 rounded-xl px-2 text-sm transition-colors outline-none pointer-coarse:h-11";
+  "group/row flex h-10 min-w-0 items-center gap-3 rounded-md px-2 text-sm transition-colors outline-none pointer-coarse:h-11";
 
 /** One linked row: leading icon, label, optional trailing marks, chevron. */
 export function ResourceRow({
@@ -84,7 +81,7 @@ export function ResourceRow({
     <li>
       <Link
         {...link}
-        className={cn(rowClass, "focus-lit hover:bg-wash focus-visible:bg-wash")}
+        className={cn(rowClass, "focus-ring hover:bg-wash focus-visible:bg-wash")}
         data-testid={testId}
       >
         <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground [&_svg]:size-4">

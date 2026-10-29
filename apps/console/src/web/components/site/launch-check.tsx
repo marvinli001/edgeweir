@@ -4,11 +4,11 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
 import type { LinkProps } from "@tanstack/react-router";
 import { Button } from "@/components/arc/button/button";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { ResourceRow } from "@/components/resource-list";
 import { canaryLabel } from "@/components/site-status";
 import { QueryView } from "@/components/states";
 import { Dot, type StatusTone } from "@/components/status-dot";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAction } from "@/hooks/use-action";
 import { certificateErrorText } from "@/lib/certificate-errors";
 import { domainsDetail } from "@/lib/domain-list";
@@ -187,12 +187,12 @@ function LaunchRow({
 export function LaunchCheck({ site }: { site: Site }) {
   const launch = useSiteLaunch(site.id);
   return (
-    <Card data-testid="launch-check">
-      <CardHeader className="flex flex-row items-center gap-3">
-        <CardTitle className="flex-1">{m.site_launch_title()}</CardTitle>
+    <Panel data-testid="launch-check">
+      <PanelHeader className="flex flex-row items-center gap-3">
+        <PanelTitle className="flex-1">{m.site_launch_title()}</PanelTitle>
         <RecheckButton queries={[launch]} />
-      </CardHeader>
-      <CardContent>
+      </PanelHeader>
+      <PanelContent>
         <QueryView query={launch} loadingClassName="min-h-33">
           {(data) => (
             <ul className="flex flex-col animate-enter [&>li:last-child>a]:border-b-0">
@@ -215,7 +215,7 @@ export function LaunchCheck({ site }: { site: Site }) {
             </ul>
           )}
         </QueryView>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }

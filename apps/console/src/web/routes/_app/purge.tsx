@@ -31,15 +31,15 @@ import {
   useExpandedTasks,
 } from "@/components/cache-tasks";
 import { OptionSelect } from "@/components/form-select";
+import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/layout/form";
+import { Panel, PanelContent, PanelFooter } from "@/components/layout/panel";
+import { Spinner } from "@/components/layout/spinner";
 import { LinkButton } from "@/components/link-button";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField } from "@/components/site/fields";
 import { EmptyState, ErrorState, QueryView } from "@/components/states";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import { formatNumber, m } from "@/lib/i18n";
 import { splitList } from "@/lib/lists";
 import { errorMessage, orpc } from "@/lib/orpc";
@@ -350,15 +350,15 @@ function PurgeForm({
   );
 
   return (
-    <Card className="animate-enter" data-testid="purge-form">
+    <Panel className="animate-enter" data-testid="purge-form">
       <form
-        className="flex flex-col gap-(--card-spacing)"
+        className="flex flex-col gap-(--panel-pad)"
         onSubmit={(event) => {
           event.preventDefault();
           void submit();
         }}
       >
-        <CardContent>
+        <PanelContent>
           <Tabs
             value={type}
             onValueChange={(value) => {
@@ -367,12 +367,12 @@ function PurgeForm({
             }}
           >
             {/* Two per row on phones (the last one fills its row), wrapping pills from sm up. */}
-            <TabsList className="flex w-full max-w-full flex-wrap justify-start gap-1 rounded-2xl group-data-horizontal/tabs:h-auto sm:w-fit">
+            <TabsList className="flex w-full max-w-full flex-wrap justify-start gap-1 rounded-lg group-data-horizontal/tabs:h-auto sm:w-fit">
               {TYPES.map((t) => (
                 <TabsTrigger
                   key={t}
                   value={t}
-                  className="h-8 grow basis-[calc(50%-0.125rem)] rounded-xl sm:grow-0 sm:basis-auto sm:rounded-full"
+                  className="h-8 grow basis-[calc(50%-0.125rem)] rounded-md sm:grow-0 sm:basis-auto sm:rounded-full"
                   data-testid={`purge-type-${t}`}
                 >
                   {cacheTaskTypeLabel[t]()}
@@ -461,8 +461,8 @@ function PurgeForm({
               {variantsField}
             </TabsContent>
           </Tabs>
-        </CardContent>
-        <CardFooter className="flex-wrap justify-end gap-3 border-t">
+        </PanelContent>
+        <PanelFooter className="flex-wrap justify-end gap-3 border-t">
           {error ? (
             <FieldError className="mr-auto animate-in fade-in" data-testid="purge-error">
               {error}
@@ -472,9 +472,9 @@ function PurgeForm({
             {pending ? <Spinner /> : null}
             {m.purge_submit()}
           </Button>
-        </CardFooter>
+        </PanelFooter>
       </form>
-    </Card>
+    </Panel>
   );
 }
 
@@ -711,7 +711,7 @@ function SitePicker({
           ) : null}
           <fieldset
             aria-labelledby="purge-sites-label"
-            className="max-h-72 min-w-0 divide-y overflow-y-auto rounded-2xl sunk-well"
+            className="max-h-72 min-w-0 divide-y overflow-y-auto rounded-lg faint-well"
           >
             {list.isLoadingError ? (
               <div className="p-3">

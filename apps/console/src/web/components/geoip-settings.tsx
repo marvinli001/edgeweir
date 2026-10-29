@@ -1,10 +1,7 @@
 import { nodeSupportsFeature } from "@edgeweir/contract";
 import { useQuery } from "@tanstack/react-query";
 import type * as React from "react";
-import { enterDelay } from "@/components/page";
-import { EmptyState, QueryView } from "@/components/states";
-import { StatusDot } from "@/components/status-dot";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import {
   Table,
   TableBody,
@@ -12,7 +9,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/layout/table";
+import { enterDelay } from "@/components/page";
+import { EmptyState, QueryView } from "@/components/states";
+import { StatusDot } from "@/components/status-dot";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
@@ -26,7 +26,7 @@ const features = [
 ] as const;
 
 /** Edge cells line up with the card title. */
-const EDGE = "first:pl-(--card-spacing) last:pr-(--card-spacing)";
+const EDGE = "first:pl-(--panel-pad) last:pr-(--panel-pad)";
 
 /** Which GeoIP databases each node has: a node per row, a light and a word per database. */
 export function GeoIpSettings({
@@ -44,25 +44,25 @@ export function GeoIpSettings({
     }),
   );
   return (
-    <Card className={className} style={style}>
-      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-        <CardTitle>{m.geo_title()}</CardTitle>
+    <Panel className={className} style={style}>
+      <PanelHeader className="flex flex-wrap items-center justify-between gap-3">
+        <PanelTitle>{m.geo_title()}</PanelTitle>
         <a
-          className="rounded-md text-sm text-primary-ink underline-offset-4 outline-none focus-lit hover:underline"
+          className="rounded-md text-sm text-primary-ink underline-offset-4 outline-none focus-ring hover:underline"
           href="https://github.com/marvinli001/edgeweir/blob/master/docs/guide/rules.md"
           target="_blank"
           rel="noreferrer"
         >
           {m.geo_guide()}
         </a>
-      </CardHeader>
+      </PanelHeader>
       <QueryView
         query={nodes}
-        frame={CardContent}
+        frame={PanelContent}
         empty={
-          <CardContent>
-            <EmptyState art="checkpoint" title={m.geo_empty()} />
-          </CardContent>
+          <PanelContent>
+            <EmptyState title={m.geo_empty()} />
+          </PanelContent>
         }
       >
         {(list) => (
@@ -106,16 +106,16 @@ export function GeoIpSettings({
           </Table>
         )}
       </QueryView>
-      <CardContent>
+      <PanelContent>
         <a
-          className="rounded-sm text-xs text-muted-foreground underline-offset-4 outline-none focus-lit hover:text-foreground hover:underline"
+          className="rounded-sm text-xs text-muted-foreground underline-offset-4 outline-none focus-ring hover:text-foreground hover:underline"
           href="https://ipinfo.io"
           target="_blank"
           rel="noreferrer"
         >
           {m.geo_attribution()}
         </a>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }

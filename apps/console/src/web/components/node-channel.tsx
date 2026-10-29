@@ -2,11 +2,11 @@ import { type NodeChannel, nodeChannelInput } from "@edgeweir/contract";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/arc/button/button";
 import { Input } from "@/components/arc/input/input";
+import { Field, FieldLabel } from "@/components/layout/form";
+import { Spinner } from "@/components/layout/spinner";
 import { NodeChannelCheckStatus, UrlScopeBadge } from "@/components/node-enrollment";
 import { SafetyNote } from "@/components/safety-note";
 import { SettingSourceBadge, SettingsCard } from "@/components/settings-card";
-import { Field, FieldLabel } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 

@@ -12,11 +12,17 @@ import { Textarea } from "@/components/arc/textarea/textarea";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { IpCheckDialog } from "@/components/ip-check";
+import { Field, FieldLabel } from "@/components/layout/form";
+import {
+  Panel,
+  PanelAction,
+  PanelContent,
+  PanelHeader,
+  PanelTitle,
+} from "@/components/layout/panel";
 import { enterDelay, Page } from "@/components/page";
 import { ItemMenu } from "@/components/row-menu";
 import { EmptyState, QueryView } from "@/components/states";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatNumber, m } from "@/lib/i18n";
 import { splitList } from "@/lib/lists";
@@ -73,7 +79,7 @@ export function IpListsPage() {
       <QueryView
         query={query}
         empty={
-          <EmptyState icon={ListViewIcon} art="checkpoint" title={m.ip_lists_empty()}>
+          <EmptyState icon={ListViewIcon} title={m.ip_lists_empty()}>
             <Button onClick={() => edit.show("new")}>
               <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
               {m.ip_lists_create()}
@@ -130,15 +136,15 @@ function IpListCard({
   const shown = list.entries.length > PREVIEW ? list.entries.slice(0, PREVIEW - 1) : list.entries;
   const rest = list.entries.length - shown.length;
   return (
-    <Card
+    <Panel
       size="sm"
       className={cn("animate-enter", rowClickable)}
       style={enterDelay(index)}
       data-testid="ip-list-card"
       {...rowActivationHandlers}
     >
-      <CardHeader>
-        <CardTitle className="flex min-w-0 flex-wrap items-center gap-2">
+      <PanelHeader>
+        <PanelTitle className="flex min-w-0 flex-wrap items-center gap-2">
           <button
             type="button"
             className={cn(rowLinkButton, "font-mono text-sm break-all")}
@@ -151,19 +157,19 @@ function IpListCard({
               {list.kind === "allow" ? m.rules_allow() : m.rules_block()}
             </Badge>
           )}
-        </CardTitle>
+        </PanelTitle>
         <p className="text-xs text-muted-foreground tabular-nums">
           {m.ip_lists_count({ count: formatNumber(list.entries.length) })}
         </p>
-        <CardAction>
+        <PanelAction>
           <ItemMenu
             testId="ip-list-actions"
             remove={{ title: m.common_delete(), note: `$${list.name}`, onConfirm: onDelete }}
           />
-        </CardAction>
-      </CardHeader>
-      <CardContent className="flex flex-1 flex-col">
-        <ul className="flex flex-1 flex-wrap content-start gap-x-5 gap-y-1 rounded-xl px-3 py-2.5 font-mono text-xs sunk-well">
+        </PanelAction>
+      </PanelHeader>
+      <PanelContent className="flex flex-1 flex-col">
+        <ul className="flex flex-1 flex-wrap content-start gap-x-5 gap-y-1 rounded-md px-3 py-2.5 font-mono text-xs faint-well">
           {shown.map((entry) => (
             <li key={entry} className="max-w-full truncate" title={entry}>
               {entry}
@@ -174,8 +180,8 @@ function IpListCard({
           ) : null}
           {list.entries.length === 0 ? <li className="text-muted-foreground">—</li> : null}
         </ul>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }
 

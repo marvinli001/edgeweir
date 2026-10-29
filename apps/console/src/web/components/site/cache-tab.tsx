@@ -30,6 +30,13 @@ import { Button } from "@/components/arc/button/button";
 import { Input } from "@/components/arc/input/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/arc/tabs/tabs";
 import { type Option, OptionSelect } from "@/components/form-select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/layout/collapsible";
+import { Field, FieldLabel } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { SafetyNote } from "@/components/safety-note";
 import { CachePurgeCard } from "@/components/site/cache-purge-card";
 import { CompressionCard } from "@/components/site/compression-card";
@@ -39,9 +46,6 @@ import { NumberField, SwitchField } from "@/components/site/fields";
 import { ImageConvertCard, ImageSavingsCard } from "@/components/site/image-convert-card";
 import { nextDraftKey, SaveBar, serializeDrafts, useSaveSite } from "@/components/site/save-site";
 import { SortableList, useSortableRow } from "@/components/sortable-list";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Field, FieldLabel } from "@/components/ui/field";
 import { localizeError } from "@/lib/errors";
 import { m } from "@/lib/i18n";
 import { splitList } from "@/lib/lists";
@@ -274,9 +278,9 @@ function CacheRulesCard({ site }: { site: Site }) {
   };
 
   return (
-    <Card data-testid="cache-rules-card">
+    <Panel data-testid="cache-rules-card">
       <form
-        className="flex flex-col gap-(--card-spacing)"
+        className="flex flex-col gap-(--panel-pad)"
         onSubmit={(event) => {
           event.preventDefault();
           const cacheRules = rows.map((r, index) => ({
@@ -307,10 +311,10 @@ function CacheRulesCard({ site }: { site: Site }) {
           if (!problem) void save({ cacheRules });
         }}
       >
-        <CardHeader>
-          <CardTitle>{m.site_rules_title()}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <PanelHeader>
+          <PanelTitle>{m.site_rules_title()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent className="flex flex-col gap-3">
           <RulesV2Note availability={availability} />
           {rows.length === 0 ? (
             <p className="text-sm text-muted-foreground">{m.sites_no_cache_rules()}</p>
@@ -319,7 +323,7 @@ function CacheRulesCard({ site }: { site: Site }) {
             <SortableContext items={rows.map((r) => r.key)} strategy={verticalListSortingStrategy}>
               {/* Flat rows split by hairlines, edge to edge in the card. */}
               <ol
-                className="-mx-(--card-spacing) flex flex-col border-b"
+                className="-mx-(--panel-pad) flex flex-col border-b"
                 data-testid="cache-rule-list"
               >
                 {rows.map((row, index) => (
@@ -358,7 +362,7 @@ function CacheRulesCard({ site }: { site: Site }) {
               {m.site_rule_add_static()}
             </Button>
           </div>
-        </CardContent>
+        </PanelContent>
         <SaveBar
           dirty={dirty && !badExpression}
           pending={pending}
@@ -366,7 +370,7 @@ function CacheRulesCard({ site }: { site: Site }) {
           testId="cache-save"
         />
       </form>
-    </Card>
+    </Panel>
   );
 }
 
@@ -444,9 +448,9 @@ function SortableRule({
           open={open}
           onOpenChange={setOpen}
           className={cn(
-            "flex flex-col gap-3 border-t bg-card px-(--card-spacing) py-4 transition-shadow",
+            "flex flex-col gap-3 border-t bg-card px-(--panel-pad) py-4 transition-shadow",
             // Lifted only while it is carried.
-            isDragging && "rounded-2xl border-transparent shadow-elev-2",
+            isDragging && "rounded-lg border-transparent shadow-elev-2",
           )}
         >
           <div className="-mt-1 -ml-1 flex min-h-8 items-center gap-1">
@@ -740,9 +744,13 @@ function CacheKeyCard({ site }: { site: Site }) {
   const listed = draft.query === "include" || draft.query === "exclude";
 
   return (
-    <Card className="animate-enter" style={{ animationDelay: "80ms" }} data-testid="cache-key-card">
+    <Panel
+      className="animate-enter"
+      style={{ animationDelay: "80ms" }}
+      data-testid="cache-key-card"
+    >
       <form
-        className="flex flex-col gap-(--card-spacing)"
+        className="flex flex-col gap-(--panel-pad)"
         onSubmit={(event) => {
           event.preventDefault();
           // Every cache setting is sent (the update replaces them), Cache-Tag as saved.
@@ -764,10 +772,10 @@ function CacheKeyCard({ site }: { site: Site }) {
           if (checked.success) void save({ cacheSettings: settings });
         }}
       >
-        <CardHeader>
-          <CardTitle>{m.site_cache_key_title()}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+        <PanelHeader>
+          <PanelTitle>{m.site_cache_key_title()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent className="flex flex-col gap-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[12rem_1fr_auto]">
             <Field>
               <FieldLabel>{m.site_cache_key_query()}</FieldLabel>
@@ -844,10 +852,10 @@ function CacheKeyCard({ site }: { site: Site }) {
               testId="cache-range-slice"
             />
           </div>
-        </CardContent>
+        </PanelContent>
         <SaveBar dirty={dirty} pending={pending} error={invalid ?? error} testId="cache-key-save" />
       </form>
-    </Card>
+    </Panel>
   );
 }
 
@@ -860,22 +868,22 @@ function CacheTagCard({ site }: { site: Site }) {
   const [keep, setKeep] = React.useState(keepCacheTag);
   const { save, error, pending } = useSaveSite(site.id);
   return (
-    <Card
+    <Panel
       className="animate-enter"
       style={{ animationDelay: "160ms" }}
       data-testid="cache-tag-card"
     >
       <form
-        className="flex flex-col gap-(--card-spacing)"
+        className="flex flex-col gap-(--panel-pad)"
         onSubmit={(event) => {
           event.preventDefault();
           void save({ cacheSettings: { ...site.cacheSettings, keepCacheTag: keep } });
         }}
       >
-        <CardHeader>
-          <CardTitle>{m.site_cache_tag_title()}</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <PanelHeader>
+          <PanelTitle>{m.site_cache_tag_title()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent>
           <SwitchField
             id="cache-keep-cache-tag"
             label={m.site_cache_keep_cache_tag()}
@@ -883,7 +891,7 @@ function CacheTagCard({ site }: { site: Site }) {
             onCheckedChange={setKeep}
             testId="cache-keep-cache-tag"
           />
-        </CardContent>
+        </PanelContent>
         <SaveBar
           dirty={keep !== keepCacheTag}
           pending={pending}
@@ -891,6 +899,6 @@ function CacheTagCard({ site }: { site: Site }) {
           testId="cache-tag-save"
         />
       </form>
-    </Card>
+    </Panel>
   );
 }

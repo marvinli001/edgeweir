@@ -3,9 +3,9 @@ import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/arc/button/button";
 import { Input } from "@/components/arc/input/input";
 import { AuthFrame, AuthShell } from "@/components/auth-shell";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
+import { Spinner } from "@/components/layout/spinner";
 import { useAction } from "@/hooks/use-action";
 import { authClient } from "@/lib/auth-client";
 import { localizeError } from "@/lib/errors";
@@ -33,11 +33,11 @@ function SetupPage() {
   return (
     <AuthShell className="max-w-md">
       <AuthFrame>
-        <Card>
-          <CardHeader className="text-center">
-            <CardTitle className="text-xl">{m.setup_title()}</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <Panel>
+          <PanelHeader className="text-center">
+            <PanelTitle className="text-title">{m.setup_title()}</PanelTitle>
+          </PanelHeader>
+          <PanelContent>
             <form
               onSubmit={async (event) => {
                 event.preventDefault();
@@ -111,8 +111,8 @@ function SetupPage() {
                 </Button>
               </FieldGroup>
             </form>
-          </CardContent>
-        </Card>
+          </PanelContent>
+        </Panel>
       </AuthFrame>
     </AuthShell>
   );

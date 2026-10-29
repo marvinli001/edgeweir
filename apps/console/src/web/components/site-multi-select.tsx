@@ -3,9 +3,9 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Checkbox } from "@/components/arc/checkbox/checkbox";
 import { Input } from "@/components/arc/input/input";
+import { Field, FieldLabel } from "@/components/layout/form";
 import { enterDelay } from "@/components/page";
 import { ErrorState, QueryView } from "@/components/states";
-import { Field, FieldLabel } from "@/components/ui/field";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
@@ -87,7 +87,7 @@ export function SiteMultiSelect({
           />
           <fieldset
             aria-labelledby={`${id}-label`}
-            className="max-h-64 min-w-0 divide-y divide-border/70 overflow-y-auto rounded-2xl sunk-well"
+            className="max-h-64 min-w-0 divide-y divide-border/70 overflow-y-auto rounded-lg faint-well"
           >
             {list.isLoadingError ? (
               <div className="p-3">

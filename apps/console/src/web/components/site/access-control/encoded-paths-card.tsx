@@ -79,11 +79,11 @@ function EncodedPathFields({ draft, set, blocked, invalid }: PartFields<Draft>) 
   return (
     <div className="flex flex-col gap-3">
       <SafetyNote>{m.access_encoded_note()}</SafetyNote>
-      <ul className="-mx-(--card-spacing) flex flex-col border-y" data-testid="encoded-paths-rows">
+      <ul className="-mx-(--panel-pad) flex flex-col border-y" data-testid="encoded-paths-rows">
         {rows.map((row, index) => (
           <li
             key={row.key}
-            className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t px-(--card-spacing) py-3 first:border-t-0 animate-enter"
+            className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t px-(--panel-pad) py-3 first:border-t-0 animate-enter"
             style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
             data-testid="encoded-paths-row"
           >

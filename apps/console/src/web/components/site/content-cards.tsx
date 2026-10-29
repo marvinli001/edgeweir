@@ -11,11 +11,11 @@ import { Button } from "@/components/arc/button/button";
 import { Input } from "@/components/arc/input/input";
 import { CopyButton } from "@/components/copy-button";
 import { FormSelect, type Option } from "@/components/form-select";
+import { Field, FieldLabel } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar, useSaveSite } from "@/components/site/save-site";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
 import { localizeError } from "@/lib/errors";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
@@ -50,13 +50,13 @@ export function PurgeMethodCard({ site }: { site: Site }) {
   const blocked = !available && !saved.enabled;
   const dirty = enabled !== saved.enabled || key !== "";
   return (
-    <Card
+    <Panel
       className="animate-enter"
       style={{ animationDelay: "100ms" }}
       data-testid="purge-method-card"
     >
       <form
-        className="flex flex-col gap-(--card-spacing)"
+        className="flex flex-col gap-(--panel-pad)"
         onSubmit={async (event) => {
           event.preventDefault();
           const checked = key ? purgeKey.safeParse(key) : null;
@@ -74,10 +74,10 @@ export function PurgeMethodCard({ site }: { site: Site }) {
           }
         }}
       >
-        <CardHeader>
-          <CardTitle>{m.site_purge_method_title()}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+        <PanelHeader>
+          <PanelTitle>{m.site_purge_method_title()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent className="flex flex-col gap-4">
           {blocked ? (
             <SafetyNote data-testid="purge-method-unavailable">
               {m.feature_unavailable_nodes()}
@@ -130,7 +130,7 @@ export function PurgeMethodCard({ site }: { site: Site }) {
               {m.site_purge_method_generated()}
             </SafetyNote>
           ) : null}
-        </CardContent>
+        </PanelContent>
         <SaveBar
           dirty={dirty}
           pending={pending}
@@ -138,7 +138,7 @@ export function PurgeMethodCard({ site }: { site: Site }) {
           testId="purge-method-save"
         />
       </form>
-    </Card>
+    </Panel>
   );
 }
 
@@ -151,18 +151,18 @@ export function XCacheCard({ site }: { site: Site }) {
   // Hiding it waits for site-content-v1; sending it again never does.
   const blocked = !available && saved;
   return (
-    <Card className="animate-enter" style={{ animationDelay: "180ms" }} data-testid="x-cache-card">
+    <Panel className="animate-enter" style={{ animationDelay: "180ms" }} data-testid="x-cache-card">
       <form
-        className="flex flex-col gap-(--card-spacing)"
+        className="flex flex-col gap-(--panel-pad)"
         onSubmit={(event) => {
           event.preventDefault();
           void save({ cacheSettings: { ...site.cacheSettings, xCache: send } });
         }}
       >
-        <CardHeader>
-          <CardTitle>{m.site_x_cache_title()}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <PanelHeader>
+          <PanelTitle>{m.site_x_cache_title()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent className="flex flex-col gap-3">
           {blocked ? (
             <SafetyNote data-testid="x-cache-unavailable">
               {m.feature_unavailable_nodes()}
@@ -177,10 +177,10 @@ export function XCacheCard({ site }: { site: Site }) {
             className="self-start"
             testId="x-cache-send"
           />
-        </CardContent>
+        </PanelContent>
         <SaveBar dirty={send !== saved} pending={pending} error={error} testId="x-cache-save" />
       </form>
-    </Card>
+    </Panel>
   );
 }
 
@@ -199,18 +199,18 @@ export function CharsetCard({ site }: { site: Site }) {
     ...CHARSETS.map((name) => ({ value: name, label: name })),
   ];
   return (
-    <Card className="animate-enter" style={{ animationDelay: "220ms" }} data-testid="charset-card">
+    <Panel className="animate-enter" style={{ animationDelay: "220ms" }} data-testid="charset-card">
       <form
-        className="flex flex-col gap-(--card-spacing)"
+        className="flex flex-col gap-(--panel-pad)"
         onSubmit={(event) => {
           event.preventDefault();
           void save({ contentSettings: { ...site.contentSettings, charset } });
         }}
       >
-        <CardHeader>
-          <CardTitle>{m.site_charset_title()}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+        <PanelHeader>
+          <PanelTitle>{m.site_charset_title()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent className="flex flex-col gap-4">
           {blocked ? (
             <SafetyNote data-testid="charset-unavailable">
               {m.feature_unavailable_nodes()}
@@ -244,7 +244,7 @@ export function CharsetCard({ site }: { site: Site }) {
               testId="charset-uppercase"
             />
           </div>
-        </CardContent>
+        </PanelContent>
         <SaveBar
           dirty={JSON.stringify(charset) !== JSON.stringify(saved)}
           pending={pending}
@@ -252,7 +252,7 @@ export function CharsetCard({ site }: { site: Site }) {
           testId="charset-save"
         />
       </form>
-    </Card>
+    </Panel>
   );
 }
 
@@ -273,23 +273,23 @@ export function BodyLimitCard({ site }: { site: Site }) {
   // Another limit than the default waits for site-content-v1 (a saved one stays editable).
   const blocked = !available && saved === DEFAULT_LIMIT;
   return (
-    <Card
+    <Panel
       className="animate-enter"
       style={{ animationDelay: "160ms" }}
       data-testid="body-limit-card"
     >
       <form
-        className="flex flex-col gap-(--card-spacing)"
+        className="flex flex-col gap-(--panel-pad)"
         onSubmit={(event) => {
           event.preventDefault();
           if (valid)
             void save({ contentSettings: { ...site.contentSettings, requestBodyLimit: bytes } });
         }}
       >
-        <CardHeader>
-          <CardTitle>{m.site_body_limit_title()}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <PanelHeader>
+          <PanelTitle>{m.site_body_limit_title()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent className="flex flex-col gap-3">
           {blocked ? (
             <SafetyNote data-testid="body-limit-unavailable">
               {m.feature_unavailable_nodes()}
@@ -311,7 +311,7 @@ export function BodyLimitCard({ site }: { site: Site }) {
             />
           </div>
           <SafetyNote>{m.site_body_limit_note()}</SafetyNote>
-        </CardContent>
+        </PanelContent>
         <SaveBar
           dirty={valid && bytes !== saved}
           pending={pending}
@@ -319,6 +319,6 @@ export function BodyLimitCard({ site }: { site: Site }) {
           testId="body-limit-save"
         />
       </form>
-    </Card>
+    </Panel>
   );
 }

@@ -16,11 +16,7 @@ import {
 } from "@/components/dns/credential-dialog";
 import { modeLabel, providerLabel, revisionError, statusLabel } from "@/components/dns/labels";
 import { DnsProtectionCard } from "@/components/dns-protection";
-import { enterDelay, Page } from "@/components/page";
-import { ItemMenu } from "@/components/row-menu";
-import { combineQueries, EmptyState, QueryView } from "@/components/states";
-import { StatusDot, type StatusTone } from "@/components/status-dot";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import {
   Table,
   TableBody,
@@ -28,7 +24,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/layout/table";
+import { enterDelay, Page } from "@/components/page";
+import { ItemMenu } from "@/components/row-menu";
+import { combineQueries, EmptyState, QueryView } from "@/components/states";
+import { StatusDot, type StatusTone } from "@/components/status-dot";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
@@ -62,12 +62,12 @@ function DnsPage() {
           const anyDomain = bindingList.some((b) => b.domain);
           return (
             <>
-              <Card className="animate-enter">
-                <CardHeader className="flex flex-row items-center gap-2">
-                  <CardTitle>{m.dns_accounts()}</CardTitle>
+              <Panel className="animate-enter">
+                <PanelHeader className="flex flex-row items-center gap-2">
+                  <PanelTitle>{m.dns_accounts()}</PanelTitle>
                   {providerList.items.length ? <Count value={providerList.items.length} /> : null}
-                </CardHeader>
-                <CardContent>
+                </PanelHeader>
+                <PanelContent>
                   {!providerList.items.length ? (
                     <EmptyState compact title={m.dns_accounts_empty()}>
                       <Button onClick={() => credential.show("new")}>
@@ -81,7 +81,7 @@ function DnsPage() {
                         <li
                           key={p.id}
                           className={cn(
-                            "-mx-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl px-3 py-3 animate-enter",
+                            "-mx-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md px-3 py-3 animate-enter",
                             rowClickable,
                           )}
                           style={enterDelay(index, 40)}
@@ -118,17 +118,17 @@ function DnsPage() {
                       ))}
                     </ul>
                   )}
-                </CardContent>
-              </Card>
-              <Card className="pb-0 animate-enter" style={enterDelay(1, 60)}>
-                <CardHeader className="flex flex-row items-center gap-2">
-                  <CardTitle>{m.dns_bindings()}</CardTitle>
+                </PanelContent>
+              </Panel>
+              <Panel className="pb-0 animate-enter" style={enterDelay(1, 60)}>
+                <PanelHeader className="flex flex-row items-center gap-2">
+                  <PanelTitle>{m.dns_bindings()}</PanelTitle>
                   {bindingList.length ? <Count value={bindingList.length} /> : null}
-                </CardHeader>
+                </PanelHeader>
                 {!bindingList.length ? (
-                  <CardContent className="pb-(--card-spacing)">
-                    <EmptyState art="node" title={m.clusters_empty_title()} />
-                  </CardContent>
+                  <PanelContent className="pb-(--panel-pad)">
+                    <EmptyState title={m.clusters_empty_title()} />
+                  </PanelContent>
                 ) : (
                   <CardTable pinFirstColumn>
                     <Table data-testid="dns-bindings">
@@ -149,7 +149,7 @@ function DnsPage() {
                               <Link
                                 to="/clusters"
                                 search={{ cluster: b.clusterId, tab: "dns" }}
-                                className="rounded-sm underline-offset-4 outline-none focus-lit hover:underline"
+                                className="rounded-sm underline-offset-4 outline-none focus-ring hover:underline"
                                 data-testid="dns-binding-open"
                                 {...rowLink}
                               >
@@ -201,7 +201,7 @@ function DnsPage() {
                     </Table>
                   </CardTable>
                 )}
-              </Card>
+              </Panel>
               <DnsProtectionCard />
             </>
           );

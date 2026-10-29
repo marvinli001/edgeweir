@@ -10,13 +10,24 @@ import { Add01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { Meter } from "@/components/appica/meter";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
+import { Drawer, DrawerContent } from "@/components/arc/drawer/drawer";
 import { Input } from "@/components/arc/input/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/arc/tabs/tabs";
 import { markOverflow } from "@/components/data-table";
 import { OptionSelect } from "@/components/form-select";
+import { FieldError } from "@/components/layout/form";
+import { Spinner } from "@/components/layout/spinner";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/layout/table";
+import { Meter } from "@/components/meter";
 import { NodeChannelFact } from "@/components/node-channel-state";
 import { NodeDebugLogs } from "@/components/node-debug-logs";
 import { NodeLogs } from "@/components/node-logs";
@@ -25,17 +36,6 @@ import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { nextDraftKey } from "@/components/site/save-site";
 import { StatusDot } from "@/components/status-dot";
-import { FieldError } from "@/components/ui/field";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Spinner } from "@/components/ui/spinner";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   formatBitRate,
   formatBytes,
@@ -158,30 +158,32 @@ export function NodeDetailSheet({
   onClose: () => void;
 }) {
   return (
-    <Sheet open onOpenChange={(open) => !open && onClose()}>
-      <SheetContent
+    <Drawer open onOpenChange={(open) => !open && onClose()}>
+      <DrawerContent
         side="right"
-        className="gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-2xl"
+        className="w-[min(42rem,100vw)]! [&>div:nth-child(2)]:p-0"
         data-testid="node-detail"
-      >
-        <SheetHeader className="gap-1 border-b border-edge py-5 pr-16">
-          <SheetTitle className="flex flex-wrap items-center gap-x-3 gap-y-1 text-lg font-semibold tracking-tight [font-stretch:106%]">
+        title={
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
             <span className="min-w-0 break-all" data-testid="node-detail-name">
               {node.name}
             </span>
-            <span className="text-sm font-normal tracking-normal [font-stretch:100%]">
+            <span className="text-sm font-normal">
               <DetailState node={node} />
             </span>
-          </SheetTitle>
-          <span className="truncate font-mono text-xs text-muted-foreground">{node.hostname}</span>
-        </SheetHeader>
+            <span className="w-full truncate font-mono text-xs font-normal text-muted-foreground">
+              {node.hostname}
+            </span>
+          </span>
+        }
+      >
         <Tabs
           value={tab}
           onValueChange={(value) => onTabChange(value as NodeDetailTab)}
           className="min-h-0 flex-1 gap-0"
         >
-          <div className="border-b border-edge px-6 py-3">
-            <TabsList className="w-full sm:w-auto">
+          <div className="border-b px-6">
+            <TabsList variant="line">
               <TabsTrigger value="overview" data-testid="node-detail-tab-overview">
                 {m.node_detail_overview()}
               </TabsTrigger>
@@ -212,8 +214,8 @@ export function NodeDetailSheet({
             <NodeLogs node={node} />
           </TabsContent>
         </Tabs>
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   );
 }
 
@@ -232,12 +234,9 @@ function Metric({
   className?: string;
 }) {
   return (
-    <div className={cn("flex min-w-0 flex-col gap-1.5 rounded-xl bg-well px-3 py-2.5", className)}>
+    <div className={cn("flex min-w-0 flex-col gap-1.5 rounded-md bg-well px-3 py-2.5", className)}>
       <dt className="truncate text-xs text-muted-foreground">{label}</dt>
-      <dd
-        className="truncate text-lg leading-tight font-semibold tracking-tight readout [font-stretch:108%]"
-        data-testid={testId}
-      >
+      <dd className="truncate text-lg leading-tight font-medium readout" data-testid={testId}>
         {children}
       </dd>
       {meter ? <dd className="pt-0.5">{meter}</dd> : null}
@@ -312,7 +311,7 @@ function NodeMetrics({ node }: { node: Node }) {
         </dl>
       ) : (
         <p
-          className="rounded-xl bg-well px-3 py-2.5 text-sm text-muted-foreground"
+          className="rounded-md bg-well px-3 py-2.5 text-sm text-muted-foreground"
           data-testid="node-metrics-none"
         >
           {m.node_metrics_none()}
@@ -332,7 +331,7 @@ function Fact({
   testId: string;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-xl bg-well px-3 py-2.5">
+    <div className="flex min-w-0 flex-col gap-1 rounded-md bg-well px-3 py-2.5">
       <dt className="truncate text-xs text-muted-foreground">{label}</dt>
       <dd className="flex min-w-0 flex-wrap items-center gap-2 text-sm" data-testid={testId}>
         {children}
@@ -519,7 +518,7 @@ function NodeCache({ node }: { node: Node }) {
         ) : null}
       </div>
       {/* The last measured use as a tile with its gauge (a full cache is normal: one zone). */}
-      <div className="flex min-w-0 flex-col gap-2 rounded-xl bg-well px-3 py-2.5">
+      <div className="flex min-w-0 flex-col gap-2 rounded-md bg-well px-3 py-2.5">
         <p
           className={cn("text-sm tabular-nums", usage ? "font-medium" : "text-muted-foreground")}
           data-testid="node-cache-usage"
@@ -632,7 +631,7 @@ function NodeAddresses({ node }: { node: Node }) {
       ) : (
         <div
           ref={markOverflow}
-          className="overflow-hidden rounded-xl sunk-well [--cell-bg:var(--well)]"
+          className="overflow-hidden rounded-md faint-well [--cell-bg:var(--well)]"
           data-testid="node-addresses"
         >
           <Table>

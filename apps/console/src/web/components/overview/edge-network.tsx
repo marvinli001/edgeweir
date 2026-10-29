@@ -1,15 +1,10 @@
 import type { Cluster, Node } from "@edgeweir/contract";
 import { Link } from "@tanstack/react-router";
 import * as React from "react";
-import type { GlobeMarker, GlobeTone } from "@/components/effects/edge-globe";
 import { FlowScaled } from "@/components/effects/number-flow";
-import { Spotlight } from "@/components/effects/spotlight";
-import { Dot, LiveDot } from "@/components/status-dot";
-import { placeOf } from "@/lib/edge-map";
+import { Dot, LiveDot, type StatusTone } from "@/components/status-dot";
 import { formatBitRate, m } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-
-const EdgeGlobe = React.lazy(() => import("@/components/effects/edge-globe"));
 
 const BIT_UNITS = ["bps", "Kbps", "Mbps", "Gbps", "Tbps"] as const;
 
@@ -18,11 +13,10 @@ interface Location {
   region: string;
   clusterId: string;
   clusterName: string;
-  place: [number, number] | null;
   online: number;
   total: number;
   egress: number;
-  tone: GlobeTone;
+  tone: StatusTone;
   /** Why the light is not green, in words (the light never says it alone). */
   state: string | null;
 }
@@ -31,7 +25,7 @@ interface Location {
  * Where a location stands: all serving (good), some down or behind (warn), or none serving (bad),
  * with the word for the worst cause: offline, data plane unhealthy, behind.
  */
-function standingOf(nodes: Node[], latest: number): { tone: GlobeTone; state: string | null } {
+function standingOf(nodes: Node[], latest: number): { tone: StatusTone; state: string | null } {
   const online = nodes.filter((n) => n.online);
   const serving = online.filter((n) => n.dataPlaneHealthy);
   const unhealthy = online.length > serving.length;
@@ -59,7 +53,6 @@ function locationsOf(nodes: Node[], clusters: Cluster[]): Location[] {
       region: first.regionName ?? first.clusterName,
       clusterId: first.clusterId,
       clusterName: first.clusterName,
-      place: placeOf(first.regionName),
       online: list.filter((n) => n.online).length,
       total: list.length,
       egress: list.reduce((sum, n) => sum + (n.online ? (n.metrics?.egressBps ?? 0) : 0), 0),
@@ -85,42 +78,23 @@ export function EdgeNetworkCard({
 }) {
   const locations = React.useMemo(() => locationsOf(nodes, clusters), [nodes, clusters]);
   const totalEgress = locations.reduce((sum, l) => sum + l.egress, 0);
-  const maxNodes = Math.max(1, ...locations.map((l) => l.total));
-  const markers = React.useMemo<GlobeMarker[]>(
-    () =>
-      locations.flatMap((l) =>
-        l.place
-          ? [
-              {
-                id: l.id,
-                location: l.place,
-                tone: l.tone,
-                weight: l.total / maxNodes,
-                label: l.region,
-              },
-            ]
-          : [],
-      ),
-    [locations, maxNodes],
-  );
 
   return (
     <section
       className={cn(
-        "@container/edge relative flex min-w-0 flex-col overflow-hidden rounded-2xl bg-card shadow-elev-1 edge-lit",
+        "@container/edge relative flex min-w-0 flex-col overflow-hidden rounded-lg border bg-card ",
         className,
       )}
       aria-labelledby="edge-network-title"
       data-testid="edge-network"
     >
-      <Spotlight size={520} />
-      <div className="relative z-[1] flex items-start justify-between gap-3 px-4 pt-3.5">
+      <div className="flex items-start justify-between gap-3 px-4 pt-4">
         <div className="flex min-w-0 flex-col gap-1">
-          <h2 id="edge-network-title" className="truncate text-[13px] text-muted-foreground">
+          <h2 id="edge-network-title" className="truncate text-dense text-muted-foreground">
             {m.overview_edge_network()}
           </h2>
           <div className="flex items-baseline gap-2">
-            <span className="text-[1.75rem] leading-tight font-semibold tracking-tight font-stretch-112%">
+            <span className="text-display font-medium">
               <FlowScaled value={totalEgress} units={BIT_UNITS} />
             </span>
             <span className="text-xs text-muted-foreground">{m.overview_egress()}</span>
@@ -128,14 +102,7 @@ export function EdgeNetworkCard({
         </div>
         <LiveDot label={m.overview_live()} className="mt-0.5 shrink-0" />
       </div>
-      <div className="relative z-[1] grid flex-1 content-center items-center gap-2 p-3 @2xl/edge:grid-cols-[minmax(0,17rem)_minmax(0,1fr)]">
-        <div className="relative mx-auto w-full max-w-60" aria-hidden>
-          {/* Light under the globe, so the sphere sits in it rather than on the card. */}
-          <div className="absolute inset-[6%] rounded-full blur-2xl globe-halo" />
-          <React.Suspense fallback={<div className="aspect-square w-full" />}>
-            <EdgeGlobe markers={markers} />
-          </React.Suspense>
-        </div>
+      <div className="flex-1 p-2">
         <ul className="flex min-w-0 flex-col" data-testid="edge-locations">
           {locations.length === 0 ? (
             <li className="flex h-10 items-center px-2 text-sm text-muted-foreground">
@@ -147,9 +114,9 @@ export function EdgeNetworkCard({
               <Link
                 to="/clusters"
                 search={{ cluster: location.clusterId }}
-                className="grid min-h-10 pointer-coarse:min-h-11 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-3 rounded-xl px-2 py-1.5 text-sm outline-none transition-colors focus-lit hover:bg-wash focus-visible:bg-wash"
+                className="grid min-h-10 pointer-coarse:min-h-11 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-3 rounded-md px-2 py-1.5 text-sm outline-none transition-colors focus-ring hover:bg-wash focus-visible:bg-wash"
               >
-                <Dot tone={location.tone} glow={location.online > 0} />
+                <Dot tone={location.tone} />
                 <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
                   <span className="min-w-0 truncate font-medium">{location.region}</span>
                   {/*

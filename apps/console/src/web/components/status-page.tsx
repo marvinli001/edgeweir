@@ -5,7 +5,6 @@ import * as React from "react";
 import { Button } from "@/components/arc/button/button";
 import { CopyButton } from "@/components/copy-button";
 import { LinkButton } from "@/components/link-button";
-import { SiteHeader } from "@/components/site-header";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { formatDateTime, m } from "@/lib/i18n";
 import { errorMessage } from "@/lib/orpc";
@@ -277,7 +276,7 @@ function StatusPage({
           <div className="min-w-0">
             <Heading
               id={`${wave}-title`}
-              className="text-[1.75rem] leading-tight font-semibold tracking-tight text-balance"
+              className="text-[1.75rem] leading-tight font-medium text-balance"
             >
               {TITLES[kind]()}
             </Heading>
@@ -304,14 +303,6 @@ function StatusPage({
     return (
       <>
         <ThemeToggle className="fixed top-4 right-4 z-10 md:top-6 md:right-6" />
-        {instrument}
-      </>
-    );
-  }
-  if (surface === "shell") {
-    return (
-      <>
-        <SiteHeader />
         {instrument}
       </>
     );

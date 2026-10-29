@@ -5,12 +5,12 @@ import {
 } from "@edgeweir/contract";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { TemplateField, templateTooLarge } from "@/components/error-page-template";
+import { Field, FieldLabel } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { SafetyNote } from "@/components/safety-note";
 import { ListInput, NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, QueryView } from "@/components/states";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { localizeError } from "@/lib/errors";
 import { m } from "@/lib/i18n";
@@ -24,11 +24,11 @@ export function MaintenanceCard({ siteId }: { siteId: string }) {
   const maintenance = useQuery(orpc.maintenance.get.queryOptions({ input: { id: siteId } }));
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: siteId } }));
   return (
-    <Card className="animate-enter" data-testid="maintenance-card">
-      <CardHeader>
-        <CardTitle>{m.site_maintenance_title()}</CardTitle>
-      </CardHeader>
-      <QueryView query={combineQueries(maintenance, features)} frame={CardContent}>
+    <Panel className="animate-enter" data-testid="maintenance-card">
+      <PanelHeader>
+        <PanelTitle>{m.site_maintenance_title()}</PanelTitle>
+      </PanelHeader>
+      <QueryView query={combineQueries(maintenance, features)} frame={PanelContent}>
         {([saved, available]) => (
           <MaintenanceForm
             key={saved.updatedAt ?? "default"}
@@ -38,7 +38,7 @@ export function MaintenanceCard({ siteId }: { siteId: string }) {
           />
         )}
       </QueryView>
-    </Card>
+    </Panel>
   );
 }
 
@@ -81,8 +81,8 @@ function MaintenanceForm({
   // Turning it on waits for the cluster's nodes; turning it off never does.
   const blocked = !availability.available && !initial.enabled;
   return (
-    <form className="flex flex-col gap-(--card-spacing)" onSubmit={submit}>
-      <CardContent className="flex flex-col gap-5">
+    <form className="flex flex-col gap-(--panel-pad)" onSubmit={submit}>
+      <PanelContent className="flex flex-col gap-5">
         {blocked ? (
           <SafetyNote className="animate-in fade-in" data-testid="maintenance-unavailable">
             {m.feature_unavailable_nodes()}
@@ -142,7 +142,7 @@ function MaintenanceForm({
           onChange={(template) => set({ template })}
           testId="maintenance-page"
         />
-      </CardContent>
+      </PanelContent>
       <SaveBar
         dirty={dirty && !templateTooLarge(draft.template)}
         pending={pending}

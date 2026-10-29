@@ -54,17 +54,15 @@
     left: 0;
     transform-origin: 50% 0;
   }
-  /* Overlay glass at the top elevation with a 2px leading edge in the toast type's color (the console's toasts). */
+  /* The overlay surface at the raised elevation, with a 2px leading edge in the toast type's color. */
   .card {
     --toast-edge: var(--arc-border-subtle);
     position: absolute;
     inset: 0;
     overflow: hidden;
     border: 0;
-    border-radius: var(--arc-radius-control);
-    background: var(--arc-glass-overlay);
-    -webkit-backdrop-filter: blur(20px) saturate(1.6);
-    backdrop-filter: blur(20px) saturate(1.6);
+    border-radius: var(--arc-radius-panel);
+    background: var(--arc-surface-raised);
     color: var(--arc-foreground);
     box-shadow:
       inset 2px 0 0 0 var(--toast-edge),
@@ -80,7 +78,7 @@
   .item[data-expanded="true"] .card {
     box-shadow:
       inset 2px 0 0 0 var(--toast-edge),
-      var(--arc-shadow-floating);
+      var(--arc-shadow-raised);
   }
   .card[data-type="success"] {
     --toast-edge: var(--arc-success);
@@ -94,9 +92,9 @@
   .card[data-type="error"] {
     --toast-edge: var(--arc-danger);
   }
-  /* A change still rolling out is live: the signal edge until it settles. */
+  /* A change still rolling out: the brand edge until it settles. */
   .card[data-type="loading"] {
-    --toast-edge: var(--arc-signal);
+    --toast-edge: var(--arc-indicator);
   }
   /* Tucked toasts sit a step back in tone as well as scale. */
   .item[data-front="false"][data-expanded="false"] .card {
@@ -252,7 +250,8 @@
   }
   .action:focus-visible,
   .close:focus-visible {
-    outline: 3px solid color-mix(in oklab, var(--arc-focus-ring) 30%, transparent);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--arc-focus-halo);
   }
   @media (forced-colors: active) {
     .card {

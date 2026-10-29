@@ -15,14 +15,14 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect, OptionSelect } from "@/components/form-select";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
+import { Spinner } from "@/components/layout/spinner";
 import { enterDelay, Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
 import { useTheme } from "@/components/theme-provider";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import {
   formatDateTime,
@@ -46,11 +46,11 @@ function SettingsPage() {
     <Page title={m.settings_title()}>
       {/* Short forms keep a narrow column, at the start of the page column like the title. */}
       <div className="flex w-full max-w-[56rem] flex-col gap-6">
-        <Card className="animate-enter">
-          <CardHeader>
-            <CardTitle>{m.settings_preferences()}</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <Panel className="animate-enter">
+          <PanelHeader>
+            <PanelTitle>{m.settings_preferences()}</PanelTitle>
+          </PanelHeader>
+          <PanelContent>
             <FieldGroup className="sm:flex-row sm:gap-4">
               <Field className="sm:w-48">
                 <FieldLabel>{m.user_menu_language()}</FieldLabel>
@@ -76,8 +76,8 @@ function SettingsPage() {
                 />
               </Field>
             </FieldGroup>
-          </CardContent>
-        </Card>
+          </PanelContent>
+        </Panel>
 
         <ApiKeysCard />
       </div>
@@ -188,11 +188,11 @@ function ApiKeysCard() {
   });
 
   return (
-    <Card className="animate-enter" style={{ animationDelay: "60ms" }}>
-      <CardHeader>
-        <CardTitle>{m.settings_api_keys()}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+    <Panel className="animate-enter" style={{ animationDelay: "60ms" }}>
+      <PanelHeader>
+        <PanelTitle>{m.settings_api_keys()}</PanelTitle>
+      </PanelHeader>
+      <PanelContent className="flex flex-col gap-4">
         <form
           className="flex flex-wrap items-end gap-2"
           onSubmit={(event) => {
@@ -250,7 +250,7 @@ function ApiKeysCard() {
         >
           {(list) => (
             <ul
-              className="divide-y divide-edge rounded-2xl text-sm sunk-well"
+              className="divide-y divide-edge rounded-lg text-sm faint-well"
               data-testid="access-keys"
             >
               {list.map((k, index) => (
@@ -320,7 +320,7 @@ function ApiKeysCard() {
             onOpenChange={edit.onOpenChange}
           />
         ) : null}
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }

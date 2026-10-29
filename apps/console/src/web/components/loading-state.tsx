@@ -1,4 +1,4 @@
-import { Loader } from "@/components/appica/loader";
+import { Spinner } from "@/components/layout/spinner";
 import { m } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +16,10 @@ export function LoadingState({ className }: { className?: string }) {
         className,
       )}
     >
-      <Loader label={m.common_loading()} />
+      <span className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Spinner className="size-5 text-primary-ink" />
+        {m.common_loading()}
+      </span>
     </div>
   );
 }

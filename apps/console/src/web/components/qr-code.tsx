@@ -32,7 +32,7 @@ export function QrCode({
   }, [value]);
   const pixels = size * Math.max(2, Math.round(TARGET / size));
   return (
-    <div className="inline-flex shrink-0 rounded-2xl p-2 sunk-well">
+    <div className="inline-flex shrink-0 rounded-lg p-2 faint-well">
       <svg
         role="img"
         aria-label={label}

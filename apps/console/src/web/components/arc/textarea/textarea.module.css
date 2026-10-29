@@ -13,7 +13,7 @@
     min-height: 4rem;
     resize: vertical;
     padding: var(--arc-space-2) var(--arc-space-3);
-    border: 1px solid var(--arc-border-strong);
+    border: 1px solid var(--arc-border);
     border-radius: var(--arc-radius-control);
     background: var(--arc-surface);
     color: var(--arc-foreground);
@@ -27,22 +27,23 @@
       outline-color var(--arc-duration-standard) var(--arc-ease-standard);
   }
   .control::placeholder {
-    color: var(--arc-text-muted);
+    color: var(--arc-text-placeholder);
   }
   @media (hover: hover) and (pointer: fine) {
     .control:hover:not(:disabled, :focus-visible, [aria-invalid="true"]) {
-      border-color: var(--arc-control-edge);
+      border-color: var(--arc-border-strong);
     }
   }
   .control:focus-visible {
     border-color: var(--arc-focus-ring);
-    outline: 3px solid color-mix(in oklab, var(--arc-focus-ring) 30%, transparent);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--arc-focus-halo);
   }
   .control[aria-invalid="true"] {
     border-color: var(--arc-danger);
   }
   .control[aria-invalid="true"]:focus-visible {
-    outline-color: color-mix(in oklab, var(--arc-danger) 20%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--arc-danger-fill) 20%, transparent);
   }
   .control:disabled {
     cursor: not-allowed;

@@ -22,8 +22,8 @@
     min-height: var(--arc-control-height-md);
     align-items: stretch;
     gap: var(--arc-space-1);
-    padding: 3px;
-    border: 1px solid var(--arc-border);
+    padding: 2px;
+    border: 0;
     border-radius: var(--arc-radius-control);
     background: var(--arc-surface-muted);
   }
@@ -31,12 +31,21 @@
     flex-direction: column;
     align-items: stretch;
   }
+  /* Page tab bars: underline tabs on a hairline, 2px brand indicator under the active tab. */
   .list[data-variant="line"] {
-    gap: var(--arc-space-1);
+    gap: var(--arc-space-6);
+    min-height: 40px;
     padding: 0;
     border: 0;
     border-radius: 0;
     background: transparent;
+  }
+  .list[data-variant="line"] .trigger {
+    flex: 0 0 auto;
+    padding: 0;
+    border-radius: 0;
+    color: var(--arc-text-secondary);
+    font-weight: var(--arc-weight-regular);
   }
   /* Base UI measures the active tab; the selection follows on Arc's critically damped spring. */
   .selection {
@@ -46,8 +55,8 @@
     left: var(--active-tab-left);
     width: var(--active-tab-width);
     height: var(--active-tab-height);
-    border: 1px solid var(--arc-border);
-    border-radius: calc(var(--arc-radius-control) - 3px);
+    border: 0;
+    border-radius: calc(var(--arc-radius-control) - 2px);
     background: var(--arc-surface);
     box-shadow: var(--arc-shadow-resting);
     transition:
@@ -68,10 +77,10 @@
     border: 0;
     border-radius: calc(var(--arc-radius-control) - 3px);
     background: transparent;
-    color: var(--arc-text-muted);
+    color: var(--arc-text-secondary);
     font: inherit;
     font-size: var(--arc-text-sm);
-    font-weight: 500;
+    font-weight: var(--arc-weight-regular);
     white-space: nowrap;
     cursor: pointer;
     outline: none;
@@ -108,21 +117,22 @@
   .list[data-orientation="vertical"] .trigger {
     justify-content: flex-start;
   }
-  /* Page tab bars: no track, a bar under the active tab (Highlight in forced colors, index.css). */
+  /* The indicator (Highlight in forced colors, index.css). */
   .list[data-variant="line"] .trigger::after {
     content: "";
     position: absolute;
     right: 0;
-    bottom: -5px;
+    bottom: 0;
     left: 0;
     height: 2px;
-    border-radius: var(--arc-radius-pill);
-    background: var(--arc-accent-fill);
+    border-radius: 0;
+    background: var(--arc-indicator);
     opacity: 0;
     transition: opacity var(--arc-duration-fast) var(--arc-ease-standard);
   }
   .list[data-variant="line"] .trigger[data-active] {
-    color: var(--arc-foreground);
+    color: var(--arc-accent);
+    font-weight: var(--arc-weight-medium);
   }
   .list[data-variant="line"] .trigger[data-active]::after {
     opacity: 1;

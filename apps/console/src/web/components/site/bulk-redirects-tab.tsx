@@ -14,14 +14,14 @@ import { Switch } from "@/components/arc/switch/switch";
 import { Textarea } from "@/components/arc/textarea/textarea";
 import { FormDialog } from "@/components/form-dialog";
 import { OptionSelect } from "@/components/form-select";
+import { Field, FieldLabel } from "@/components/layout/form";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/layout/input-group";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { Pager } from "@/components/pager";
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
 import { nextDraftKey, SaveBar, serializeDrafts } from "@/components/site/save-site";
 import { combineQueries, EmptyState, QueryView } from "@/components/states";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatNumber, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
@@ -44,11 +44,11 @@ export function BulkRedirectsTab({ siteId }: { siteId: string }) {
   const redirects = useQuery(orpc.bulkRedirects.get.queryOptions({ input: { id: siteId } }));
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: siteId } }));
   return (
-    <Card className="animate-enter" data-testid="bulk-redirects-card">
-      <CardHeader>
-        <CardTitle>{m.bulk_redirects_title()}</CardTitle>
-      </CardHeader>
-      <QueryView query={combineQueries(redirects, features)} frame={CardContent}>
+    <Panel className="animate-enter" data-testid="bulk-redirects-card">
+      <PanelHeader>
+        <PanelTitle>{m.bulk_redirects_title()}</PanelTitle>
+      </PanelHeader>
+      <QueryView query={combineQueries(redirects, features)} frame={PanelContent}>
         {([list, available]) => (
           <BulkRedirectsForm
             key={redirects.dataUpdatedAt}
@@ -58,7 +58,7 @@ export function BulkRedirectsTab({ siteId }: { siteId: string }) {
           />
         )}
       </QueryView>
-    </Card>
+    </Panel>
   );
 }
 
@@ -166,7 +166,7 @@ function BulkRedirectsForm({
   return (
     <>
       <form
-        className="flex flex-col gap-(--card-spacing)"
+        className="flex flex-col gap-(--panel-pad)"
         onSubmit={async (event) => {
           event.preventDefault();
           setError(null);
@@ -191,7 +191,7 @@ function BulkRedirectsForm({
           }
         }}
       >
-        <CardContent className="flex flex-col gap-4">
+        <PanelContent className="flex flex-col gap-4">
           {availability.available ? null : (
             <SafetyNote className="animate-in fade-in" data-testid="bulk-redirects-unavailable">
               {m.rules_v2_unavailable()}
@@ -235,7 +235,7 @@ function BulkRedirectsForm({
                   {m.bulk_redirects_no_match()}
                 </p>
               ) : (
-                <div className="flex flex-col overflow-hidden rounded-2xl border">
+                <div className="flex flex-col overflow-hidden rounded-lg border">
                   <div
                     aria-hidden
                     className="hidden gap-2 border-b bg-well px-3 py-2 text-xs font-medium text-muted-foreground sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_6rem_5.5rem_2rem]"
@@ -268,7 +268,7 @@ function BulkRedirectsForm({
               />
             </>
           )}
-        </CardContent>
+        </PanelContent>
         <SaveBar
           dirty={dirty && editable}
           pending={mutation.isPending}

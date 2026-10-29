@@ -395,7 +395,7 @@ export function NodesSection({
       <QueryView
         query={nodes}
         empty={
-          <EmptyState icon={ServerStack01Icon} art="node" title={m.nodes_empty_title()}>
+          <EmptyState icon={ServerStack01Icon} title={m.nodes_empty_title()}>
             <Button onClick={onEnroll}>
               <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
               {m.nav_add_node()}

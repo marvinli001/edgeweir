@@ -7,16 +7,22 @@ export type {
   AnimationPlaybackControls,
   HTMLMotionProps,
   MotionProps,
+  MotionValue,
   TargetAndTransition,
   Transition,
+  ValueAnimationTransition,
   Variants,
 } from "motion/react";
 export {
   AnimatePresence,
   animate,
+  useAnimate,
+  useInView,
   useIsPresent,
   useMotionValue,
+  useMotionValueEvent,
   usePresence,
+  useSpring,
   useTransform,
 } from "motion/react";
 export * as motion from "motion/react-m";

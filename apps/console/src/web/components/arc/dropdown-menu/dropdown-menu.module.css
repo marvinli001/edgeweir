@@ -23,11 +23,11 @@
     max-height: var(--available-height);
     overflow: hidden auto;
     padding: 5px;
-    border: 1px solid var(--arc-border);
+    border: 1px solid var(--arc-border-subtle);
     border-radius: var(--arc-radius-panel);
     background: var(--arc-surface-raised);
     color: var(--arc-foreground);
-    box-shadow: var(--arc-shadow-floating);
+    box-shadow: var(--arc-shadow-raised);
     outline: none;
     transform-origin: var(--transform-origin);
     transition:

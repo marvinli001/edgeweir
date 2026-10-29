@@ -9,10 +9,10 @@
     gap: var(--arc-space-2);
     border: 1px solid transparent;
     border-radius: var(--arc-radius-control);
-    padding: 0 var(--arc-space-3);
+    padding: 0 var(--arc-space-4);
     font: inherit;
     font-size: var(--arc-text-sm);
-    font-weight: 500;
+    font-weight: var(--arc-weight-regular);
     line-height: var(--arc-leading-body);
     white-space: nowrap;
     cursor: pointer;
@@ -26,11 +26,10 @@
       opacity var(--arc-duration-fast) var(--arc-ease-standard),
       box-shadow var(--arc-duration-fast) var(--arc-ease-standard);
   }
-  /* Keyboard focus: the console's ring (focus-visible:ring-3 ring-ring/30). */
+  /* Keyboard focus: the brand ring with its halo. */
   .button:focus-visible {
-    border-color: var(--arc-focus-ring);
-    outline: 3px solid color-mix(in oklab, var(--arc-focus-ring) 30%, transparent);
-    outline-offset: 0;
+    outline: 2px solid var(--arc-focus-ring);
+    outline-offset: 1px;
   }
   .button:disabled {
     cursor: not-allowed;
@@ -77,83 +76,72 @@
     width: 1rem;
     height: 1rem;
   }
-  /* The lit face over its darker plate (--lit-* in index.css); Motion's press replaces btn-lit's lift. */
+  /* Primary: the brand fill, flat (no shadow, no gradient); hover lightens, press deepens. */
   .primary {
     color: var(--arc-accent-foreground);
     background-color: var(--arc-accent-fill);
-    background-image: var(--arc-lit-face);
-    box-shadow: var(--arc-lit-shadow);
   }
+  /* Default: the panel with a 1px border. */
   .secondary {
     color: var(--arc-foreground);
     background: var(--arc-surface);
-    box-shadow: var(--arc-shadow-resting);
+    border-color: var(--arc-border);
   }
   .ghost {
-    color: var(--arc-text-secondary);
+    color: var(--arc-foreground);
     background: transparent;
     border-color: transparent;
   }
   .danger {
-    color: var(--arc-danger);
-    background: var(--arc-danger-subtle);
+    color: var(--arc-accent-foreground);
+    background: var(--arc-danger-fill);
   }
-  /* Disabled lies flat: no plate, no lit face. An outlined button keeps its shape and fades only its label. */
-  .primary:disabled {
-    background-image: none;
-    box-shadow: none;
-  }
-  .secondary:disabled,
-  .danger:disabled {
+  .primary:disabled,
+  .danger:disabled,
+  .secondary:disabled {
     opacity: 1;
-    color: var(--arc-text-muted);
+    color: var(--arc-text-disabled);
     background: var(--arc-surface-muted);
-    box-shadow: none;
-  }
-  .danger:disabled {
-    color: color-mix(in oklab, var(--arc-danger) 55%, var(--arc-surface-muted));
+    border-color: var(--arc-border-subtle);
   }
   .ghost:disabled {
     opacity: 1;
-    color: var(--arc-text-muted);
+    color: var(--arc-text-disabled);
   }
   /* An open menu or popover keeps its trigger highlighted. */
   .secondary[aria-expanded="true"] {
-    background: var(--arc-surface-hover);
+    border-color: var(--arc-indicator);
+    color: var(--arc-accent);
   }
   .ghost[aria-expanded="true"] {
-    color: var(--arc-foreground);
     background: var(--arc-wash);
   }
   @media (hover: hover) and (pointer: fine) {
     .primary:hover:not(:disabled) {
       background-color: var(--arc-accent-fill-hover);
-      box-shadow: var(--arc-lit-shadow-hover);
     }
     .secondary:hover:not(:disabled) {
-      background: var(--arc-surface-hover);
+      color: var(--arc-accent);
+      border-color: var(--arc-indicator);
     }
     .ghost:hover:not(:disabled) {
-      color: var(--arc-foreground);
       background: var(--arc-wash);
     }
     .danger:hover:not(:disabled) {
-      background: color-mix(in oklab, var(--arc-danger) 20%, transparent);
+      background: color-mix(in srgb, var(--arc-danger-fill), white 12%);
     }
   }
-  /* Color feedback on press, so touch and menu triggers (which never scale) still answer the finger. */
   .primary:active:not(:disabled) {
-    box-shadow: var(--arc-lit-shadow-active);
+    background-color: var(--arc-accent-fill-active);
   }
   .secondary:active:not(:disabled) {
-    background: var(--arc-surface-hover);
+    background: var(--arc-pressed);
   }
   .ghost:active:not(:disabled) {
-    color: var(--arc-foreground);
-    background: var(--arc-wash);
+    background: var(--arc-pressed);
   }
   .danger:active:not(:disabled) {
-    background: color-mix(in oklab, var(--arc-danger) 20%, transparent);
+    background: color-mix(in srgb, var(--arc-danger-fill), black 12%);
   }
   .sm {
     min-height: var(--arc-control-height-sm);
@@ -199,8 +187,6 @@
   }
   @media (forced-colors: active) {
     .primary {
-      background-image: none;
-      box-shadow: none;
       border-color: ButtonText;
     }
   }

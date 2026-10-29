@@ -58,7 +58,8 @@
   }
   .box:focus-visible .visual {
     border-color: var(--arc-focus-ring);
-    outline: 3px solid color-mix(in oklab, var(--arc-focus-ring) 30%, transparent);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--arc-focus-halo);
   }
   .box[aria-invalid="true"] .visual {
     border-color: var(--arc-danger);

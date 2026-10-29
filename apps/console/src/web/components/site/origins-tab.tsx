@@ -23,6 +23,8 @@ import {
   SelectValue,
 } from "@/components/arc/select/select";
 import { FormSelect, OptionSelect } from "@/components/form-select";
+import { Field, FieldError, FieldLabel } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { SafetyNote } from "@/components/safety-note";
 import { BodyLimitCard } from "@/components/site/content-cards";
 import { NumberField, SettingsGroup, SwitchField } from "@/components/site/fields";
@@ -30,8 +32,6 @@ import { OriginHealthBadge, OriginHealthError } from "@/components/site/origin-h
 import { OriginQualityCard } from "@/components/site/origin-quality-card";
 import { OriginTopologyCard } from "@/components/site/origin-topology-card";
 import { nextDraftKey, SaveBar, serializeDrafts, useSaveSite } from "@/components/site/save-site";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { fillOrigin, replacesField } from "@/lib/address-input";
 import { m } from "@/lib/i18n";
 import { invalidHostHeader } from "@/lib/lists";
@@ -180,9 +180,9 @@ function OriginsCard({ site }: { site: Site }) {
     setRows(rows.map((r) => (r.key === key ? { ...r, ...change } : r)));
 
   return (
-    <Card data-testid="origins-card">
+    <Panel data-testid="origins-card">
       <form
-        className="flex flex-col gap-(--card-spacing)"
+        className="flex flex-col gap-(--panel-pad)"
         onSubmit={(event) => {
           event.preventDefault();
           // A URL typed without leaving the field fills the row now, visibly.
@@ -212,10 +212,10 @@ function OriginsCard({ site }: { site: Site }) {
           });
         }}
       >
-        <CardHeader>
-          <CardTitle>{m.site_tab_origins()}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <PanelHeader>
+          <PanelTitle>{m.site_tab_origins()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent className="flex flex-col gap-3">
           <Unavailable availability={groupsAvailability} testId="origins-groups-unavailable" />
           {rows.some((r) => !r.s3 && r.proxyProtocol === "0") ? (
             <Unavailable availability={proxyAvailability} testId="origins-proxy-unavailable" />
@@ -272,7 +272,7 @@ function OriginsCard({ site }: { site: Site }) {
               {m.site_origin_group_required()}
             </FieldError>
           ) : null}
-        </CardContent>
+        </PanelContent>
         <SaveBar
           dirty={dirty && !noDefaultGroup && !badHost}
           pending={pending}
@@ -280,7 +280,7 @@ function OriginsCard({ site }: { site: Site }) {
           testId="origins-save"
         />
       </form>
-    </Card>
+    </Panel>
   );
 }
 
@@ -716,9 +716,9 @@ function PoolSettingsCard({ site }: { site: Site }) {
   const interval = toInt(draft.healthInterval, health.intervalSeconds);
 
   return (
-    <Card className="animate-enter" style={{ animationDelay: "80ms" }} data-testid="pool-settings">
+    <Panel className="animate-enter" style={{ animationDelay: "80ms" }} data-testid="pool-settings">
       <form
-        className="flex flex-col gap-(--card-spacing)"
+        className="flex flex-col gap-(--panel-pad)"
         onSubmit={(event) => {
           event.preventDefault();
           void save({
@@ -764,10 +764,10 @@ function PoolSettingsCard({ site }: { site: Site }) {
           });
         }}
       >
-        <CardHeader>
-          <CardTitle>{m.site_pool_title()}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-6">
+        <PanelHeader>
+          <PanelTitle>{m.site_pool_title()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent className="flex flex-col gap-6">
           <div className="flex flex-col gap-2">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Field>
@@ -1182,10 +1182,10 @@ function PoolSettingsCard({ site }: { site: Site }) {
               onChange={(keepaliveMaxRequests) => set({ keepaliveMaxRequests })}
             />
           </SettingsGroup>
-        </CardContent>
+        </PanelContent>
         <SaveBar dirty={dirty} pending={pending} error={error} testId="pool-save" />
       </form>
-    </Card>
+    </Panel>
   );
 }
 

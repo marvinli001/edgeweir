@@ -18,7 +18,7 @@
     justify-content: space-between;
     gap: var(--arc-space-2);
     padding: 0 var(--arc-space-2) 0 var(--arc-space-3);
-    border: 1px solid var(--arc-border-strong);
+    border: 1px solid var(--arc-border-subtle);
     border-radius: var(--arc-radius-control);
     background: var(--arc-surface);
     color: var(--arc-foreground);
@@ -37,18 +37,18 @@
   }
   @media (hover: hover) and (pointer: fine) {
     .trigger:hover:not([data-disabled]) {
-      border-color: var(--arc-control-edge);
-      background: var(--arc-surface-hover);
+      border-color: var(--arc-border-strong);
     }
   }
   .trigger:active:not([data-disabled]),
   .trigger[data-popup-open] {
-    border-color: var(--arc-control-edge);
+    border-color: var(--arc-border-strong);
     background: var(--arc-surface-hover);
   }
   .trigger:focus-visible {
     border-color: var(--arc-focus-ring);
-    outline: 3px solid color-mix(in oklab, var(--arc-focus-ring) 30%, transparent);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--arc-focus-halo);
   }
   .trigger[aria-invalid="true"] {
     border-color: var(--arc-danger);
@@ -110,11 +110,11 @@
     max-height: min(320px, var(--available-height));
     overflow: hidden auto;
     padding: 6px;
-    border: 1px solid var(--arc-border);
+    border: 1px solid var(--arc-border-subtle);
     border-radius: calc(var(--arc-radius-control) + 2px);
     background: var(--arc-surface-raised);
     color: var(--arc-foreground);
-    box-shadow: var(--arc-shadow-floating);
+    box-shadow: var(--arc-shadow-raised);
     outline: none;
     transform-origin: var(--transform-origin);
     transition:

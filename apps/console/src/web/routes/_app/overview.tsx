@@ -15,8 +15,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
 import { AnalyticsSection } from "@/components/analytics/analytics-section";
-import { Countdown } from "@/components/appica/countdown";
 import type { CardGroup } from "@/components/cards-menu";
+import { Countdown } from "@/components/countdown";
 import { LinkButton } from "@/components/link-button";
 import { EdgeNetworkCard } from "@/components/overview/edge-network";
 import { LiveKpis } from "@/components/overview/live-kpis";
@@ -144,6 +144,7 @@ function OverviewPage() {
       <QueryView query={combineQueries(sites, starred, overview, clusters, nodes, cards.query)}>
         {([recent, starredSites, summary, clusterList, nodeList]) => (
           <>
+            <WelcomeStrip />
             <AttentionList items={summary.attention} />
             <LiveKpis online={summary.onlineNodes} total={summary.nodes} hidden={cards.hidden} />
             <AnalyticsSection
@@ -199,6 +200,31 @@ function OverviewPage() {
         )}
       </QueryView>
     </Page>
+  );
+}
+
+/** The page's one atmosphere: a greeting on the mesh with the two first steps of any setup. */
+function WelcomeStrip() {
+  const { session } = Route.useRouteContext();
+  return (
+    <section
+      className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-lg bg-mesh px-6 py-5 animate-enter"
+      data-testid="overview-welcome"
+    >
+      <h2 className="mr-auto text-title font-medium">
+        {m.overview_welcome({ name: session.user.name })}
+      </h2>
+      <div className="flex flex-wrap gap-2">
+        <LinkButton to="/sites" search={{ create: true }}>
+          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+          {m.nav_new_site()}
+        </LinkButton>
+        <LinkButton to="/clusters" search={{ enroll: true }} variant="secondary">
+          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+          {m.nav_add_node()}
+        </LinkButton>
+      </div>
+    </section>
   );
 }
 

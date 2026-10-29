@@ -1,8 +1,8 @@
 import { MAX_ORIGIN_ALLOWED_CIDRS, normalizeCidr } from "@edgeweir/contract";
 import { Textarea } from "@/components/arc/textarea/textarea";
+import { Field, FieldLabel } from "@/components/layout/form";
 import { SafetyNote } from "@/components/safety-note";
 import { SettingsCard } from "@/components/settings-card";
-import { Field, FieldLabel } from "@/components/ui/field";
 import { m } from "@/lib/i18n";
 import { splitList } from "@/lib/lists";
 import { orpc } from "@/lib/orpc";

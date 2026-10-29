@@ -33,7 +33,7 @@
     max-height: calc(100dvh - var(--arc-space-8));
     overflow-y: auto;
     padding: var(--arc-space-6);
-    border: 1px solid var(--arc-border);
+    border: 0;
     border-radius: var(--arc-radius-surface);
     background: var(--arc-surface-raised);
     color: var(--arc-foreground);
@@ -77,7 +77,8 @@
     margin: 0;
     font-family: var(--arc-font-body);
     font-size: var(--arc-text-lg);
-    font-weight: 500;
+    font-weight: var(--arc-weight-medium);
+    padding-right: var(--arc-space-8);
     line-height: var(--arc-leading-body);
     letter-spacing: var(--arc-tracking-body);
     overflow-wrap: anywhere;
@@ -88,16 +89,16 @@
   /* A compact icon button: quick press, spring release. */
   .close {
     position: absolute;
-    top: var(--arc-space-4);
-    right: var(--arc-space-4);
+    top: 18px;
+    right: 18px;
     display: grid;
     width: var(--arc-space-8);
     height: var(--arc-space-8);
     place-items: center;
     padding: 0;
-    border: 1px solid var(--arc-border);
+    border: 0;
     border-radius: var(--arc-radius-control);
-    background: color-mix(in oklab, var(--arc-surface-muted) 50%, transparent);
+    background: transparent;
     color: var(--arc-text-secondary);
     cursor: pointer;
     outline: none;
@@ -125,7 +126,8 @@
   }
   .close:focus-visible {
     border-color: var(--arc-focus-ring);
-    outline: 3px solid color-mix(in oklab, var(--arc-focus-ring) 30%, transparent);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--arc-focus-halo);
   }
   @media (prefers-reduced-motion: reduce) {
     .overlay,

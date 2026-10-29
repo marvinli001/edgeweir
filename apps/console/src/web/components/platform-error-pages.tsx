@@ -9,10 +9,10 @@ import {
   TemplateVariables,
   templateTooLarge,
 } from "@/components/error-page-template";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { SafetyNote } from "@/components/safety-note";
 import { SaveBar } from "@/components/site/save-site";
 import { QueryView } from "@/components/states";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
@@ -32,18 +32,18 @@ const PAGES: { key: PageKey; id: string; name: () => string }[] = [
 export function PlatformErrorPagesCard() {
   const query = useQuery(orpc.settings.errorPages.queryOptions());
   return (
-    <Card
+    <Panel
       className="animate-enter"
       style={{ animationDelay: "220ms" }}
       data-testid="platform-error-pages-card"
     >
-      <CardHeader>
-        <CardTitle>{m.platform_pages_title()}</CardTitle>
-      </CardHeader>
-      <QueryView query={query} frame={CardContent}>
+      <PanelHeader>
+        <PanelTitle>{m.platform_pages_title()}</PanelTitle>
+      </PanelHeader>
+      <QueryView query={query} frame={PanelContent}>
         {(pages) => <PlatformErrorPagesForm initial={pages} />}
       </QueryView>
-    </Card>
+    </Panel>
   );
 }
 
@@ -63,8 +63,8 @@ function PlatformErrorPagesForm({ initial }: { initial: PlatformErrorPages }) {
   const pages = form.draft;
   const tooLarge = PAGES.some(({ key }) => templateTooLarge(pages[key]));
   return (
-    <form className="flex flex-col gap-(--card-spacing)" onSubmit={form.submit}>
-      <CardContent className="flex flex-col gap-5">
+    <form className="flex flex-col gap-(--panel-pad)" onSubmit={form.submit}>
+      <PanelContent className="flex flex-col gap-5">
         {PAGES.map(({ key, id, name }) => (
           <TemplateField
             key={key}
@@ -82,7 +82,7 @@ function PlatformErrorPagesForm({ initial }: { initial: PlatformErrorPages }) {
             {m.error_pages_v3_note({ time: "{{time}}", path: "{{path}}" })}
           </SafetyNote>
         ) : null}
-      </CardContent>
+      </PanelContent>
       <SaveBar
         dirty={form.dirty && !tooLarge}
         pending={form.pending}

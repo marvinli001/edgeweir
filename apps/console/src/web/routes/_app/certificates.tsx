@@ -17,6 +17,8 @@ import { DnsCredentialDialog, type EditableCredential } from "@/components/dns/c
 import { providerLabel } from "@/components/dns/labels";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
+import { Field, FieldError, FieldLabel } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { OriginCaPanel, OriginClientPanel } from "@/components/origin-pki";
 import { enterDelay, Page } from "@/components/page";
 import { ItemMenu } from "@/components/row-menu";
@@ -24,8 +26,6 @@ import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
 import { Dot } from "@/components/status-dot";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { certificateErrorText } from "@/lib/certificate-errors";
 import {
@@ -181,7 +181,7 @@ function CertificatesPanel({
           // One card, a flat row per certificate: name and state, the names it covers, expiry and
           // renewal, then its actions.
           <ul
-            className="flex flex-col divide-y rounded-2xl bg-card shadow-elev-1 edge-lit"
+            className="flex flex-col divide-y rounded-lg border bg-card "
             data-testid="certificate-list"
           >
             {list.map((cert, index) => {
@@ -252,17 +252,17 @@ function CertificatesPanel({
           </ul>
         )}
       </QueryView>
-      <Card>
-        <CardHeader>
-          <CardTitle>{m.cert_dns_title()}</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Panel>
+        <PanelHeader>
+          <PanelTitle>{m.cert_dns_title()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent>
           <QueryView query={credentials} empty={<EmptyState compact title={m.cert_dns_empty()} />}>
             {(list) =>
               list.map((credential) => (
                 <div
                   key={credential.id}
-                  className={cn("-mx-3 flex items-center gap-2 rounded-xl px-3 py-3", rowClickable)}
+                  className={cn("-mx-3 flex items-center gap-2 rounded-md px-3 py-3", rowClickable)}
                   {...rowActivationHandlers}
                 >
                   <div className="min-w-0 flex-1">
@@ -290,8 +290,8 @@ function CertificatesPanel({
               ))
             }
           </QueryView>
-        </CardContent>
-      </Card>
+        </PanelContent>
+      </Panel>
       <AcmeAccountsCard />
       {dialog.value === "upload" ? (
         <UploadDialog key={dialog.key} open={dialog.open} onOpenChange={dialog.onOpenChange} />
@@ -360,7 +360,7 @@ function CertificateStatus({ state }: { state: CertificateState }) {
   return (
     <Badge size="sm" tone="neutral" data-testid="certificate-status">
       {state === "issuing" ? (
-        <span className="lit-glow dot-pulse relative inline-flex size-1.5 shrink-0 rounded-full border border-transparent bg-signal" />
+        <span className="dot-pulse relative inline-flex size-1.5 shrink-0 rounded-full border border-transparent bg-signal" />
       ) : (
         <Dot tone={state === "ready" ? "good" : "idle"} small />
       )}

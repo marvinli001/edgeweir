@@ -24,14 +24,9 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { DnsHeldBack } from "@/components/dns-protection";
 import { FormSelect, OptionSelect } from "@/components/form-select";
-import { SafetyNote } from "@/components/safety-note";
-import { NumberField, SwitchField } from "@/components/site/fields";
-import { SaveBar } from "@/components/site/save-site";
-import { combineQueries, EmptyState, QueryView } from "@/components/states";
-import { StatusDot, type StatusTone } from "@/components/status-dot";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
+import { Spinner } from "@/components/layout/spinner";
 import {
   Table,
   TableBody,
@@ -39,7 +34,12 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/layout/table";
+import { SafetyNote } from "@/components/safety-note";
+import { NumberField, SwitchField } from "@/components/site/fields";
+import { SaveBar } from "@/components/site/save-site";
+import { combineQueries, EmptyState, QueryView } from "@/components/states";
+import { StatusDot, type StatusTone } from "@/components/status-dot";
 import { formatDateTime, m } from "@/lib/i18n";
 import { splitList } from "@/lib/lists";
 import { client, errorMessage, orpc } from "@/lib/orpc";
@@ -129,7 +129,7 @@ function BindingEditor({
       lines: draft.lines.map((line, i) => (i === index ? { ...line, ...change } : line)),
     });
   return (
-    <Card>
+    <Panel>
       <form
         className="flex flex-col gap-4"
         onSubmit={async (event) => {
@@ -148,10 +148,10 @@ function BindingEditor({
           }
         }}
       >
-        <CardHeader>
-          <CardTitle>{m.dns_binding_title()}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-5">
+        <PanelHeader>
+          <PanelTitle>{m.dns_binding_title()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent className="grid gap-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <FormSelect
               id="dns-binding-mode"
@@ -198,7 +198,7 @@ function BindingEditor({
                   {/* The account's zone, a value rather than a field: shown in a well. */}
                   <output
                     id="dns-binding-zone"
-                    className="flex h-8 min-w-0 items-center truncate rounded-2xl px-2.5 font-mono text-sm sunk-well"
+                    className="flex h-8 min-w-0 items-center truncate rounded-lg px-2.5 font-mono text-sm faint-well"
                   >
                     {account?.zone ?? "—"}
                   </output>
@@ -376,7 +376,7 @@ function BindingEditor({
               ))}
             </>
           ) : null}
-        </CardContent>
+        </PanelContent>
         <SaveBar
           dirty={JSON.stringify(draft) !== JSON.stringify(initial)}
           pending={save.isPending}
@@ -384,7 +384,7 @@ function BindingEditor({
           testId="dns-binding-save"
         />
       </form>
-    </Card>
+    </Panel>
   );
 }
 
@@ -425,7 +425,7 @@ function BackupGroups({
             return (
               <li
                 key={id}
-                className="flex min-h-10 items-center gap-1 rounded-xl py-1 pr-1 pl-3 sunk-well animate-enter"
+                className="flex min-h-10 items-center gap-1 rounded-md py-1 pr-1 pl-3 faint-well animate-enter"
                 data-testid="dns-line-backup"
                 data-group={name}
               >
@@ -516,9 +516,9 @@ function RecordTable({
 }) {
   if (!records.length)
     return (
-      <CardContent className="pb-(--card-spacing)">
+      <PanelContent className="pb-(--panel-pad)">
         <EmptyState compact title={m.dns_no_records()} />
-      </CardContent>
+      </PanelContent>
     );
   return (
     <CardTable pinFirstColumn>
@@ -584,9 +584,9 @@ function CurrentRecords({ clusterId, state }: { clusterId: string; state: Bindin
   const queries = useQueryClient();
   const repair = useMutation(orpc.dns.reconcile.mutationOptions());
   return (
-    <Card className="pb-0">
-      <CardHeader className="flex flex-row flex-wrap items-center gap-3">
-        <CardTitle className="flex-1">{m.dns_current_records()}</CardTitle>
+    <Panel className="pb-0">
+      <PanelHeader className="flex flex-row flex-wrap items-center gap-3">
+        <PanelTitle className="flex-1">{m.dns_current_records()}</PanelTitle>
         {state.revision ? (
           <span data-testid="dns-binding-status">
             <RevisionState status={state.revision.status} applied={state.applied} />
@@ -611,16 +611,16 @@ function CurrentRecords({ clusterId, state }: { clusterId: string; state: Bindin
           {repair.isPending ? <Spinner /> : null}
           {m.dns_reconcile()}
         </Button>
-      </CardHeader>
+      </PanelHeader>
       {state.revision?.lastError ? (
-        <CardContent>
+        <PanelContent>
           <SafetyNote className="text-destructive">
             {revisionError(state.revision.lastError, state.revision.lastErrorParams)}
           </SafetyNote>
-        </CardContent>
+        </PanelContent>
       ) : null}
       <RecordTable records={state.records} testId="dns-current-records" />
-    </Card>
+    </Panel>
   );
 }
 
@@ -629,9 +629,9 @@ function ManualRecords({ clusterId, updatedAt }: { clusterId: string; updatedAt:
     orpc.dns.exportBinding.queryOptions({ input: { clusterId }, meta: { key: updatedAt } }),
   );
   return (
-    <Card className="pb-0">
-      <CardHeader className="flex flex-row flex-wrap items-center gap-3">
-        <CardTitle className="flex-1">{m.dns_manual_records()}</CardTitle>
+    <Panel className="pb-0">
+      <PanelHeader className="flex flex-row flex-wrap items-center gap-3">
+        <PanelTitle className="flex-1">{m.dns_manual_records()}</PanelTitle>
         {exported.data?.zoneFile ? (
           <Button
             size="sm"
@@ -651,21 +651,21 @@ function ManualRecords({ clusterId, updatedAt }: { clusterId: string; updatedAt:
             {m.dns_download_zone()}
           </Button>
         ) : null}
-      </CardHeader>
-      <QueryView query={exported} frame={CardContent}>
+      </PanelHeader>
+      <QueryView query={exported} frame={PanelContent}>
         {({ records, zoneFile }) => (
           <>
             <RecordTable records={records} testId="dns-manual-records" />
             {zoneFile ? (
-              <CardContent className="grid gap-2 border-t border-edge py-(--card-spacing)">
+              <PanelContent className="grid gap-2 border-t border-edge py-(--panel-pad)">
                 <h3 className="text-sm font-medium">{m.dns_zone_file()}</h3>
                 <CodeBlock value={zoneFile} testId="dns-zone-file" wrap={false} />
-              </CardContent>
+              </PanelContent>
             ) : null}
           </>
         )}
       </QueryView>
-    </Card>
+    </Panel>
   );
 }
 
@@ -679,10 +679,10 @@ function Revisions({ clusterId }: { clusterId: string }) {
     }),
   );
   return (
-    <Card className="pb-0">
-      <CardHeader>
-        <CardTitle>{m.dns_revisions()}</CardTitle>
-      </CardHeader>
+    <Panel className="pb-0">
+      <PanelHeader>
+        <PanelTitle>{m.dns_revisions()}</PanelTitle>
+      </PanelHeader>
       <QueryView
         query={history}
         frame={RevisionsFrame}
@@ -750,10 +750,10 @@ function Revisions({ clusterId }: { clusterId: string }) {
           </CardTable>
         )}
       </QueryView>
-    </Card>
+    </Panel>
   );
 }
 
 function RevisionsFrame({ children }: { children?: React.ReactNode }) {
-  return <CardContent className="pb-(--card-spacing)">{children}</CardContent>;
+  return <PanelContent className="pb-(--panel-pad)">{children}</PanelContent>;
 }

@@ -44,6 +44,8 @@ import {
 } from "@/components/cc-thresholds";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormSelect } from "@/components/form-select";
+import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { LinkButton } from "@/components/link-button";
 import { PresetSelect, presetLabel, usePreset } from "@/components/preset-select";
 import { SafetyNote } from "@/components/safety-note";
@@ -51,8 +53,6 @@ import { ExclusionDialog } from "@/components/site/exclusion-dialog";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, QueryView } from "@/components/states";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { useDraft } from "@/hooks/use-draft";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -279,11 +279,11 @@ function UnderAttackCard({ siteId, protection }: { siteId: string; protection: S
     />
   );
   return (
-    <Card id={CARD_IDS.underAttack} className="scroll-mt-4 animate-enter">
-      <CardHeader>
-        <CardTitle>{m.protection_under_attack()}</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-4 sm:grid-cols-2">
+    <Panel id={CARD_IDS.underAttack} className="scroll-mt-4 animate-enter">
+      <PanelHeader>
+        <PanelTitle>{m.protection_under_attack()}</PanelTitle>
+      </PanelHeader>
+      <PanelContent className="grid gap-4 sm:grid-cols-2">
         <Field orientation="horizontal" className="min-h-9 w-auto self-end">
           <ConfirmDialog
             trigger={toggle}
@@ -319,8 +319,8 @@ function UnderAttackCard({ siteId, protection }: { siteId: string; protection: S
             {m.protection_platform_on()}
           </SafetyNote>
         ) : null}
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }
 
@@ -376,13 +376,13 @@ function ChallengeSettingsCard({
   const failure = draft.failureBan;
   const textsSet = Object.values(protection.challengeText).some((text) => text !== "");
   return (
-    <Card
+    <Panel
       id={CARD_IDS.challenges}
       className="scroll-mt-4 animate-enter"
       style={{ animationDelay: "60ms" }}
     >
       <form
-        className="flex flex-col gap-(--card-spacing)"
+        className="flex flex-col gap-(--panel-pad)"
         onSubmit={(event) => {
           event.preventDefault();
           void save({
@@ -400,10 +400,10 @@ function ChallengeSettingsCard({
           });
         }}
       >
-        <CardHeader>
-          <CardTitle>{m.protection_challenge_title()}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-5">
+        <PanelHeader>
+          <PanelTitle>{m.protection_challenge_title()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent className="flex flex-col gap-5">
           {v2Locked ? (
             <SafetyNote
               className="animate-in fade-in"
@@ -551,10 +551,10 @@ function ChallengeSettingsCard({
               ))}
             </div>
           </FieldSet>
-        </CardContent>
+        </PanelContent>
         <SaveBar dirty={dirty} pending={pending} error={error} testId="protection-save" />
       </form>
-    </Card>
+    </Panel>
   );
 }
 
@@ -568,13 +568,13 @@ function CcPolicyCard({ siteId, protection }: { siteId: string; protection: Site
   // While following, the fields show the platform template.
   const shown: CcDraft = draft.followTemplate ? toCcDraft(protection.ccTemplate) : draft.thresholds;
   return (
-    <Card
+    <Panel
       id={CARD_IDS.cc}
       className="scroll-mt-4 animate-enter"
       style={{ animationDelay: "120ms" }}
     >
       <form
-        className="flex flex-col gap-(--card-spacing)"
+        className="flex flex-col gap-(--panel-pad)"
         onSubmit={(event) => {
           event.preventDefault();
           void save({
@@ -586,10 +586,10 @@ function CcPolicyCard({ siteId, protection }: { siteId: string; protection: Site
           });
         }}
       >
-        <CardHeader>
-          <CardTitle>{m.cc_title()}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+        <PanelHeader>
+          <PanelTitle>{m.cc_title()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent className="flex flex-col gap-4">
           <div className="flex flex-wrap gap-x-6 gap-y-3">
             <SwitchField
               id="cc-enabled"
@@ -620,10 +620,10 @@ function CcPolicyCard({ siteId, protection }: { siteId: string; protection: Site
             onChange={(thresholds) => setDraft({ ...draft, thresholds })}
           />
           <SafetyNote>{m.cc_per_node_note()}</SafetyNote>
-        </CardContent>
+        </PanelContent>
         <SaveBar dirty={dirty} pending={pending} error={error} testId="cc-save" />
       </form>
-    </Card>
+    </Panel>
   );
 }
 
@@ -632,14 +632,14 @@ function WafCard({ siteId }: { siteId: string }) {
   const waf = useQuery(orpc.waf.get.queryOptions({ input: { id: siteId } }));
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: siteId } }));
   return (
-    <Card
+    <Panel
       id={CARD_IDS.waf}
       className="scroll-mt-4 animate-enter"
       style={{ animationDelay: "150ms" }}
       data-testid="waf-card"
     >
-      <CardHeader className="flex flex-wrap items-center gap-2">
-        <CardTitle>{m.waf_title()}</CardTitle>
+      <PanelHeader className="flex flex-wrap items-center gap-2">
+        <PanelTitle>{m.waf_title()}</PanelTitle>
         {waf.data && waf.data.mode !== "off" ? (
           <Badge
             size="sm"
@@ -649,8 +649,8 @@ function WafCard({ siteId }: { siteId: string }) {
             {wafModeLabel(waf.data.mode)}
           </Badge>
         ) : null}
-      </CardHeader>
-      <QueryView query={combineQueries(waf, features)} frame={CardContent}>
+      </PanelHeader>
+      <QueryView query={combineQueries(waf, features)} frame={PanelContent}>
         {([saved, available]) => (
           <WafForm
             key={saved.updatedAt ?? "default"}
@@ -661,7 +661,7 @@ function WafCard({ siteId }: { siteId: string }) {
           />
         )}
       </QueryView>
-    </Card>
+    </Panel>
   );
 }
 
@@ -739,8 +739,8 @@ function WafForm({
     setDraft({ ...draft, exclusions: withSiteWideRuleIds(draft.exclusions, next) });
   };
   return (
-    <form className="flex flex-col gap-(--card-spacing)" onSubmit={form.submit}>
-      <CardContent className="flex flex-col gap-4">
+    <form className="flex flex-col gap-(--panel-pad)" onSubmit={form.submit}>
+      <PanelContent className="flex flex-col gap-4">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <FormSelect
             id="waf-mode"
@@ -869,7 +869,7 @@ function WafForm({
             {m.feature_unavailable_nodes()}
           </SafetyNote>
         )}
-      </CardContent>
+      </PanelContent>
       <SaveBar dirty={form.dirty} pending={form.pending} error={form.error} testId="waf-save" />
     </form>
   );
@@ -920,7 +920,7 @@ function ExclusionEntries({
         </Button>
       </div>
       {rows.length ? (
-        <ul className="divide-y divide-border/70 rounded-2xl sunk-well">
+        <ul className="divide-y divide-border/70 rounded-lg faint-well">
           {rows.map(({ entry, index }, i) => (
             <li
               key={`${index}-${entry.path}`}

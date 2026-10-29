@@ -1,0 +1,332 @@
+/*
+ * Edgeweir design tokens (2026-10-29 redesign; tokens.md documents values and usage). One file
+ * for every Edgeweir web UI (console, Business, Cloud): copy it unchanged. Framework-neutral CSS
+ * custom properties in three groups:
+ *
+ *   1. --ew-*   the values (light under :root, dark under .dark).
+ *   2. names    the semantic names the apps' Tailwind classes read (bg-card, text-muted-foreground…),
+ *               each one a var() onto group 1, so they switch with the theme on their own.
+ *   3. Arc      lives in components/arc/foundation.css (--arc-* onto group 2).
+ *
+ * Structure from Tencent Cloud's console (gray canvas, white hairline panels, 56px top bar), feel
+ * from Alibaba Cloud Model Studio (pale tints, generous space, one soft mesh gradient for
+ * atmosphere surfaces only). No glows, bevels or decorative shadows: surfaces separate by color
+ * and a 1px hairline; only floating layers (menus, popovers, dialogs, toasts) cast a shadow.
+ *
+ * The theme switch sets class="dark" and data-theme="dark" on <html> together (one ThemeProvider);
+ * these rules key off .dark.
+ */
+:root {
+  /* ---- 1. Values: light ------------------------------------------------------------------- */
+  color-scheme: light;
+
+  /* Brand blue. brand = fills, indicators, links; ink = brand text on any surface (4.5:1). */
+  --ew-brand: #0052d9;
+  --ew-brand-hover: #266fe8;
+  --ew-brand-active: #0034b5;
+  --ew-brand-ink: #0052d9;
+  --ew-brand-fill: #0052d9;
+  --ew-brand-on: #ffffff;
+  --ew-brand-tint: #ecf2fe;
+  --ew-brand-tint-strong: #d9e1ff;
+
+  /* Status. Base = dots, icons, fills; -ink = text (4.5:1 on panel, canvas and its tint). */
+  --ew-success: #2ba471;
+  --ew-success-ink: #008858;
+  --ew-success-tint: #e3f9e9;
+  --ew-warning: #e37318;
+  --ew-warning-ink: #be5a00;
+  --ew-warning-tint: #fff1e9;
+  --ew-error: #d54941;
+  --ew-error-ink: #c4342c;
+  --ew-error-tint: #fff0ed;
+  --ew-info: var(--ew-brand);
+  --ew-info-tint: var(--ew-brand-tint);
+
+  /* Neutrals: canvas (page ground), panel (content surfaces), faint (table headers, wells). */
+  --ew-canvas: #f3f4f7;
+  --ew-panel: #ffffff;
+  --ew-overlay: #ffffff;
+  --ew-faint: #f7f8fa;
+  --ew-hover: rgb(0 0 0 / 4%);
+  --ew-pressed: rgb(0 0 0 / 7%);
+  --ew-hairline: #e7e8eb;
+  --ew-border: #dcdcdc;
+  --ew-border-strong: #c5c5c5;
+  --ew-text: rgb(0 0 0 / 90%);
+  --ew-text-secondary: rgb(0 0 0 / 60%);
+  --ew-text-placeholder: rgb(0 0 0 / 40%);
+  --ew-text-disabled: rgb(0 0 0 / 26%);
+  --ew-scrim: rgb(0 0 0 / 40%);
+  --ew-tooltip: #242424;
+  --ew-tooltip-text: #ffffff;
+  /* Checkbox and switch boundaries: 3:1 on panel and canvas. */
+  --ew-control-edge: rgb(0 0 0 / 45%);
+  --ew-focus: #0052d9;
+
+  /*
+   * Charts. Series in this order; every one reaches 3:1 on the panel. Status classes follow the
+   * Tencent CDN donut (2xx green, 3xx blue, 4xx orange, 5xx red).
+   */
+  --ew-series-1: #0052d9;
+  --ew-series-2: #029cd4;
+  --ew-series-3: #2ba471;
+  --ew-series-4: #e37318;
+  --ew-series-5: #8e56dd;
+  --ew-series-other: #7a8599;
+  --ew-status-2xx: #2ba471;
+  --ew-status-3xx: #0052d9;
+  --ew-status-4xx: #e37318;
+  --ew-status-5xx: #d54941;
+  --ew-grid: #eeeff2;
+  --ew-axis: rgb(0 0 0 / 40%);
+  --ew-star: #e3a400;
+
+  /* Pale KPI card fills (百炼): brand, indigo, sky; text on them keeps the normal tokens. */
+  --ew-kpi-1: #edf3ff;
+  --ew-kpi-2: #eef0fb;
+  --ew-kpi-3: #eaf6fd;
+
+  /*
+   * Atmosphere mesh: sign-in, setup, the overview welcome strip, public landing and pricing
+   * pages, first-run empty states. Never behind tables, charts or forms.
+   */
+  --ew-mesh-base: #f5f8ff;
+  --ew-mesh-blue: rgb(61 123 255 / 55%);
+  --ew-mesh-cyan: rgb(92 225 230 / 45%);
+  --ew-mesh-violet: rgb(139 124 255 / 40%);
+  --ew-mesh:
+    radial-gradient(60% 80% at 12% 18%, var(--ew-mesh-violet), transparent 70%),
+    radial-gradient(55% 75% at 88% 12%, var(--ew-mesh-cyan), transparent 70%),
+    radial-gradient(70% 90% at 55% 100%, var(--ew-mesh-blue), transparent 72%), var(--ew-mesh-base);
+  /* Highlighted plan card (pricing) and the brand sweep. */
+  --ew-gradient-plan: linear-gradient(135deg, #3d7bff 0%, #6c8cff 45%, #a58bff 100%);
+
+  /* Shadows: floating layers only. */
+  --ew-shadow-1: 0 1px 2px rgb(0 0 0 / 4%);
+  --ew-shadow-2:
+    0 3px 14px 2px rgb(0 0 0 / 5%), 0 8px 10px 1px rgb(0 0 0 / 6%), 0 5px 5px -3px rgb(0 0 0 / 10%);
+  --ew-shadow-3:
+    0 6px 30px 5px rgb(0 0 0 / 5%), 0 16px 24px 2px rgb(0 0 0 / 4%), 0 8px 10px -5px rgb(0 0 0 / 8%);
+
+  /* Radius. */
+  --ew-radius-badge: 4px;
+  --ew-radius-control: 6px;
+  --ew-radius-panel: 8px;
+  --ew-radius-dialog: 12px;
+  --ew-radius-pill: 9999px;
+
+  /* Type. Latin face first, then the platform CJK faces, then the bundled fallback. */
+  --ew-font-sans:
+    "Inter Variable", "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei",
+    "Noto Sans SC Variable", ui-sans-serif, system-ui, sans-serif;
+  --ew-font-mono:
+    "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
+  --ew-text-caption: 12px;
+  --ew-text-dense: 13px;
+  --ew-text-body: 14px;
+  --ew-text-section: 16px;
+  --ew-text-title: 18px;
+  --ew-text-display: 28px;
+  --ew-text-hero: 36px;
+  --ew-leading-caption: 20px;
+  --ew-leading-dense: 20px;
+  --ew-leading-body: 22px;
+  --ew-leading-section: 24px;
+  --ew-leading-title: 26px;
+  --ew-leading-display: 36px;
+  --ew-leading-hero: 44px;
+  --ew-weight-regular: 400;
+  --ew-weight-medium: 500;
+
+  /* Spacing (4px grid) and layout. */
+  --ew-space-1: 4px;
+  --ew-space-2: 8px;
+  --ew-space-3: 12px;
+  --ew-space-4: 16px;
+  --ew-space-5: 20px;
+  --ew-space-6: 24px;
+  --ew-space-8: 32px;
+  --ew-space-10: 40px;
+  --ew-space-12: 48px;
+  --ew-topbar-height: 56px;
+  --ew-sidebar-width: 208px;
+  --ew-rail-width: 56px;
+  --ew-content-max: 1600px;
+  --ew-gutter: 24px;
+  --ew-gutter-phone: 16px;
+  --ew-control-sm: 28px;
+  --ew-control-md: 32px;
+  --ew-control-lg: 36px;
+  --ew-control-touch: 44px;
+  --ew-row-height: 44px;
+  --ew-form-label: 120px;
+
+  /* Motion (Arc's curves and durations): quiet, no loops. */
+  --ew-ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --ew-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ew-ease-exit: cubic-bezier(0.7, 0, 0.84, 0);
+  --ew-duration-instant: 120ms;
+  --ew-duration-fast: 160ms;
+  --ew-duration-standard: 240ms;
+
+  /* ---- 2. Semantic names (Tailwind classes read these) -------------------------------------- */
+  --background: var(--ew-canvas);
+  --foreground: var(--ew-text);
+  --canvas: var(--ew-canvas);
+  --card: var(--ew-panel);
+  --card-foreground: var(--ew-text);
+  --popover: var(--ew-overlay);
+  --popover-foreground: var(--ew-text);
+  --overlay: var(--ew-overlay);
+  --raised: var(--ew-panel);
+  --well: var(--ew-faint);
+  --primary: var(--ew-brand-fill);
+  --primary-foreground: var(--ew-brand-on);
+  --primary-hover: var(--ew-brand-hover);
+  --primary-active: var(--ew-brand-active);
+  --primary-ink: var(--ew-brand-ink);
+  --tint-primary: var(--ew-brand-tint);
+  --tint-primary-strong: var(--ew-brand-tint-strong);
+  --secondary: var(--ew-faint);
+  --secondary-foreground: var(--ew-text);
+  --muted: var(--ew-faint);
+  --muted-foreground: var(--ew-text-secondary);
+  --placeholder: var(--ew-text-placeholder);
+  --accent: var(--ew-faint);
+  --accent-foreground: var(--ew-text);
+  --wash: var(--ew-hover);
+  --destructive: var(--ew-error-ink);
+  --tint-destructive: var(--ew-error-tint);
+  --success: var(--ew-success);
+  --success-ink: var(--ew-success-ink);
+  --tint-success: var(--ew-success-tint);
+  --warning: var(--ew-warning);
+  --warning-ink: var(--ew-warning-ink);
+  --tint-warning: var(--ew-warning-tint);
+  --border: var(--ew-hairline);
+  --edge: var(--ew-hairline);
+  --input: var(--ew-border);
+  --input-hover: var(--ew-border-strong);
+  --ring: var(--ew-focus);
+  --scrim: var(--ew-scrim);
+  --tooltip: var(--ew-tooltip);
+  --tooltip-foreground: var(--ew-tooltip-text);
+  --control-edge: var(--ew-control-edge);
+  --sidebar: var(--ew-panel);
+  --sidebar-foreground: var(--ew-text);
+  --sidebar-primary: var(--ew-brand-fill);
+  --sidebar-primary-foreground: var(--ew-brand-on);
+  --sidebar-accent: var(--ew-brand-tint);
+  --sidebar-accent-foreground: var(--ew-brand-ink);
+  --sidebar-border: var(--ew-hairline);
+  --sidebar-ring: var(--ew-focus);
+  --signal: var(--ew-series-2);
+  --metric: var(--ew-series-1);
+  --series-1: var(--ew-series-1);
+  --series-2: var(--ew-series-2);
+  --series-3: var(--ew-series-3);
+  --series-4: var(--ew-series-4);
+  --series-5: var(--ew-series-5);
+  --series-other: var(--ew-series-other);
+  --status-2xx: var(--ew-status-2xx);
+  --status-3xx: var(--ew-status-3xx);
+  --status-4xx: var(--ew-status-4xx);
+  --status-5xx: var(--ew-status-5xx);
+  --chart-1: var(--ew-series-1);
+  --chart-2: var(--ew-series-2);
+  --chart-3: var(--ew-series-3);
+  --chart-4: var(--ew-series-4);
+  --chart-5: var(--ew-series-5);
+  --grid: var(--ew-grid);
+  --axis: var(--ew-axis);
+  --state-good: var(--ew-success);
+  --state-warn: var(--ew-warning);
+  --delta-good: var(--ew-success-ink);
+  --delta-bad: var(--ew-error-ink);
+  --star: var(--ew-star);
+  --kpi-1: var(--ew-kpi-1);
+  --kpi-2: var(--ew-kpi-2);
+  --kpi-3: var(--ew-kpi-3);
+  --mesh: var(--ew-mesh);
+  --elev-1: var(--ew-shadow-1);
+  --elev-2: var(--ew-shadow-2);
+  --elev-3: var(--ew-shadow-3);
+  --radius: var(--ew-radius-panel);
+  --font-sans: var(--ew-font-sans);
+  --font-mono: var(--ew-font-mono);
+}
+
+.dark {
+  /* ---- 1. Values: dark -------------------------------------------------------------------- */
+  color-scheme: dark;
+
+  --ew-brand: #4582e6;
+  --ew-brand-hover: #5c93ec;
+  --ew-brand-active: #3a6fd8;
+  --ew-brand-ink: #699ef5;
+  /* A touch deeper than the brand so white button text reaches 4.5:1. */
+  --ew-brand-fill: #3a6fd8;
+  --ew-brand-on: #ffffff;
+  --ew-brand-tint: #1b2f51;
+  --ew-brand-tint-strong: #22407a;
+
+  --ew-success: #56c08d;
+  --ew-success-ink: #56c08d;
+  --ew-success-tint: #193a2a;
+  --ew-warning: #f08a3c;
+  --ew-warning-ink: #f5a15b;
+  --ew-warning-tint: #4f2a1d;
+  --ew-error: #f36d64;
+  --ew-error-ink: #f36d64;
+  --ew-error-tint: #3a2422;
+
+  --ew-canvas: #181818;
+  --ew-panel: #242424;
+  --ew-overlay: #2c2c2c;
+  --ew-faint: #2c2c2c;
+  --ew-hover: rgb(255 255 255 / 6%);
+  --ew-pressed: rgb(255 255 255 / 10%);
+  --ew-hairline: #383838;
+  --ew-border: #4b4b4b;
+  --ew-border-strong: #5e5e5e;
+  --ew-text: rgb(255 255 255 / 90%);
+  --ew-text-secondary: rgb(255 255 255 / 60%);
+  --ew-text-placeholder: rgb(255 255 255 / 35%);
+  --ew-text-disabled: rgb(255 255 255 / 22%);
+  --ew-scrim: rgb(0 0 0 / 60%);
+  --ew-tooltip: #4b4b4b;
+  --ew-control-edge: rgb(255 255 255 / 45%);
+  --ew-focus: #699ef5;
+
+  --ew-series-1: #4582e6;
+  --ew-series-2: #3bb8e0;
+  --ew-series-3: #56c08d;
+  --ew-series-4: #f08a3c;
+  --ew-series-5: #a87fea;
+  --ew-series-other: #8b95a8;
+  --ew-status-2xx: #56c08d;
+  --ew-status-3xx: #4582e6;
+  --ew-status-4xx: #f08a3c;
+  --ew-status-5xx: #f36d64;
+  --ew-grid: #303030;
+  --ew-axis: rgb(255 255 255 / 40%);
+  --ew-star: #f5ba18;
+
+  --ew-kpi-1: #1d2738;
+  --ew-kpi-2: #23233a;
+  --ew-kpi-3: #1b2c36;
+
+  --ew-mesh-base: #10131c;
+  --ew-mesh-blue: rgb(40 92 214 / 55%);
+  --ew-mesh-cyan: rgb(32 150 170 / 35%);
+  --ew-mesh-violet: rgb(98 76 214 / 40%);
+
+  --ew-shadow-1: 0 1px 2px rgb(0 0 0 / 30%);
+  --ew-shadow-2:
+    0 3px 14px 2px rgb(0 0 0 / 30%), 0 8px 10px 1px rgb(0 0 0 / 30%),
+    0 5px 5px -3px rgb(0 0 0 / 40%);
+  --ew-shadow-3:
+    0 6px 30px 5px rgb(0 0 0 / 35%), 0 16px 24px 2px rgb(0 0 0 / 30%),
+    0 8px 10px -5px rgb(0 0 0 / 45%);
+}

@@ -20,12 +20,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/a
 import { Input } from "@/components/arc/input/input";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect, OptionSelect } from "@/components/form-select";
+import { Field, FieldError, FieldLabel } from "@/components/layout/form";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/layout/input-group";
+import { Spinner } from "@/components/layout/spinner";
 import { nodeLogSourceLabel } from "@/components/node-logs";
 import { EmptyState, QueryView } from "@/components/states";
 import { Dot, type StatusTone } from "@/components/status-dot";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
-import { Spinner } from "@/components/ui/spinner";
 import { downloadText } from "@/lib/browser";
 import { formatDateTime, formatNumber, m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
@@ -102,7 +102,7 @@ export function NodeDebugLogs({ node }: { node: Node }) {
       <QueryView query={pulls} isEmpty={(data) => data.pulls.length === 0} empty={null}>
         {(data) => (
           <ol
-            className="min-w-0 divide-y divide-border/70 overflow-hidden rounded-xl border border-edge"
+            className="min-w-0 divide-y divide-border/70 overflow-hidden rounded-md border border-edge"
             data-testid="node-debug-pulls"
           >
             {data.pulls.map((pull, i) => (
@@ -407,7 +407,7 @@ function DebugLogViewer({
               ) : (
                 <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
                   <ol
-                    className="min-w-0 divide-y divide-border/70 rounded-xl border border-edge"
+                    className="min-w-0 divide-y divide-border/70 rounded-md border border-edge"
                     data-testid="node-debug-entries"
                   >
                     {entries.slice(0, shown).map((entry, i) => (

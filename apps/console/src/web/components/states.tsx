@@ -3,14 +3,11 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import type * as React from "react";
 import { Alert } from "@/components/arc/alert/alert";
 import { Button } from "@/components/arc/button/button";
-import { InboxIcon as AnimatedInbox, useIconPlay } from "@/components/effects/animated-icons";
-import { EmptyArt, type EmptyArtKind } from "@/components/empty-art";
+import { EmptyState as ArcEmptyState } from "@/components/arc/empty-state/empty-state";
 import { LoadingState } from "@/components/loading-state";
-import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { m } from "@/lib/i18n";
 import { errorMessage, isNotFound } from "@/lib/orpc";
 
-export type { EmptyArtKind };
 export { LoadingState };
 
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
@@ -31,32 +28,25 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
 }
 
 /**
- * Nothing to show yet: the icon on a raised tile inside a small illustration (`art`, a request's
- * route by default; see EmptyArtKind), the title and an optional action. No description.
+ * Nothing to show yet (Arc's empty state): a small icon, one line and an optional action, centered
+ * (a table's or a tab's list). `compact` is an empty section inside a panel: the line and its
+ * action side by side. No description.
  */
 export function EmptyState({
   title,
   icon,
-  art = "route",
   compact = false,
   children,
 }: {
   title: string;
-  /** Without one, an inbox that settles when the state is hovered. */
   icon?: typeof InboxIcon;
-  art?: EmptyArtKind;
-  /**
-   * One dashed line, the title and its action side by side, without art: an empty section inside
-   * a card. Without it (a page's or a tab's list) the art, the title and the action stack.
-   */
   compact?: boolean;
   children?: React.ReactNode;
 }) {
-  const { ref, trigger } = useIconPlay();
   if (compact)
     return (
       <div
-        className="flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-dashed border-edge px-4 py-2.5 text-sm text-muted-foreground animate-enter"
+        className="flex min-h-12 flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-md bg-well px-4 py-2.5 text-sm text-muted-foreground"
         data-slot="empty"
       >
         <span>{title}</span>
@@ -64,21 +54,13 @@ export function EmptyState({
       </div>
     );
   return (
-    <Empty
-      className="border border-dashed border-edge bg-linear-to-b from-well/70 to-transparent animate-enter"
-      {...trigger}
-    >
-      <EmptyHeader>
-        <div className="relative mb-1 grid h-24 w-60 max-w-full place-items-center">
-          <EmptyArt kind={art} className="absolute inset-0 size-full" />
-          <EmptyMedia variant="icon" className="relative mb-0">
-            {icon ? <HugeiconsIcon icon={icon} strokeWidth={2} /> : <AnimatedInbox ref={ref} />}
-          </EmptyMedia>
-        </div>
-        <EmptyTitle>{title}</EmptyTitle>
-      </EmptyHeader>
-      {children ? <EmptyContent>{children}</EmptyContent> : null}
-    </Empty>
+    <div data-slot="empty">
+      <ArcEmptyState
+        title={title}
+        icon={icon ? <HugeiconsIcon icon={icon} size={24} strokeWidth={1.5} /> : undefined}
+        action={children}
+      />
+    </div>
   );
 }
 
@@ -97,7 +79,7 @@ const noItems = (data: unknown) => Array.isArray(data) && data.length === 0;
  * A query's first load (LoadingState), its first load failing (ErrorState with a retry), then its
  * data; `empty` instead when `isEmpty` says the data holds nothing (by default an array without
  * items). A failed background refetch keeps showing the data: that is `isError`, not
- * `isLoadingError`. `frame` wraps the loading and error states, e.g. CardContent in a card whose
+ * `isLoadingError`. `frame` wraps the loading and error states, e.g. PanelContent in a panel whose
  * loaded content brings its own; `error` replaces ErrorState where a failure is an answer rather
  * than a hiccup (a refused rollback), `notFound` where the record no longer exists (404).
  * `children` gets the data; it must not call hooks.

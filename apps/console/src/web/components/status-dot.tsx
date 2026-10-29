@@ -42,7 +42,7 @@ export function Dot({
         "relative inline-flex shrink-0 rounded-full border border-transparent",
         small ? "size-1.5" : "size-2",
         TONE[tone],
-        (pulse || glow) && cn("lit-glow", LIT[tone]),
+        (pulse || glow) && cn("", LIT[tone]),
         pulse && "dot-pulse",
       )}
     />
@@ -61,7 +61,7 @@ export function LiveDot({ label, className }: { label: string; className?: strin
         className,
       )}
     >
-      <span className="lit-glow relative inline-flex size-1.5 shrink-0 rounded-full border border-transparent bg-signal" />
+      <span className="relative inline-flex size-1.5 shrink-0 rounded-full border border-transparent bg-signal" />
       {label}
     </span>
   );

@@ -1,0 +1,82 @@
+/*
+ * Empty state: adapted from Arc's `empty-state` (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md). Changes: `--arc-` tokens (foundation.css), in Tailwind's components layer; smaller and quieter (a
+ * borderless icon, 14px title), as a table's or a panel's empty line.
+ */
+@layer components {
+  .root {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    align-items: center;
+    padding: var(--arc-space-10) var(--arc-space-5);
+    text-align: center;
+  }
+  .icon {
+    position: relative;
+    display: grid;
+    width: var(--arc-space-12);
+    height: var(--arc-space-12);
+    place-items: center;
+    border: 0;
+    border-radius: var(--arc-radius-panel);
+    background: var(--arc-surface-muted);
+    color: var(--arc-text-placeholder);
+    animation: empty-state-icon var(--arc-duration-considered) var(--arc-ease-enter) both;
+  }
+  .glyph {
+    display: grid;
+    place-items: center;
+  }
+  .frame {
+    width: 100%;
+    max-width: 100%;
+  }
+  .copy {
+    display: flow-root;
+  }
+  .root h3 {
+    position: relative;
+    margin: var(--arc-space-3) 0 0;
+    color: var(--arc-text-secondary);
+    font-size: var(--arc-text-sm);
+    font-weight: var(--arc-weight-regular);
+    line-height: var(--arc-leading-body);
+  }
+  .root p {
+    position: relative;
+    max-width: 18rem;
+    margin: var(--arc-space-2) auto 0;
+    color: var(--arc-text-secondary);
+    font-size: var(--arc-text-sm);
+    line-height: var(--arc-leading-body);
+  }
+  /* Centered copy wraps into even lines, so a new description never leaves a single word hanging. */
+  .line {
+    display: block;
+    text-wrap: balance;
+  }
+  .action {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--arc-space-3);
+    margin-top: var(--arc-space-4);
+  }
+  /* The icon settles in once when the state first appears; later changes crossfade in place. */
+  @keyframes empty-state-icon {
+    from {
+      opacity: 0;
+      transform: scale(0.92);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .icon {
+      animation: none;
+    }
+  }
+}

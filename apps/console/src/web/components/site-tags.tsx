@@ -25,10 +25,10 @@ import {
 } from "@/components/arc/dropdown-menu/dropdown-menu";
 import { Input } from "@/components/arc/input/input";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
+import { FieldError } from "@/components/layout/form";
+import { Spinner } from "@/components/layout/spinner";
 import { enterDelay } from "@/components/page";
 import { EmptyState, QueryView } from "@/components/states";
-import { FieldError } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
@@ -141,7 +141,7 @@ export function TagPicker({
   };
   return (
     <div className="flex flex-col gap-2" data-testid={testId}>
-      <div className="flex min-h-9 flex-wrap items-center gap-1.5 rounded-xl border border-input px-2 py-1.5 focus-within:ring-[3px] focus-within:ring-ring/50">
+      <div className="flex min-h-9 flex-wrap items-center gap-1.5 rounded-md border border-input px-2 py-1.5 focus-within:ring-[3px] focus-within:ring-ring/50">
         {value.map((name) => (
           <Badge
             size="sm"
@@ -323,7 +323,7 @@ export function TagManagerDialog({
           {(data) => (
             <ul
               // min-w-0: a long tag name must not widen the dialog's grid column (it truncates).
-              className="min-w-0 divide-y divide-border/70 rounded-2xl sunk-well"
+              className="min-w-0 divide-y divide-border/70 rounded-lg faint-well"
               data-testid="tag-manager"
             >
               {data.map((tag, index) => (

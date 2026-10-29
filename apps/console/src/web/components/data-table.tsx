@@ -8,7 +8,6 @@ import {
   useTable,
 } from "@tanstack/react-table";
 import * as React from "react";
-import { enterDelay } from "@/components/page";
 import {
   Table,
   TableBody,
@@ -16,7 +15,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/layout/table";
+import { enterDelay } from "@/components/page";
+import { formatNumber, m } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 const features = tableFeatures({
@@ -111,9 +112,9 @@ function headerText(header: unknown, props: object): string | undefined {
 }
 
 /**
- * Thin TanStack Table v9 wrapper rendered with the shadcn table primitives, in a card. The header
- * is a well strip that sticks under the page header while the table fits its card; rows enter
- * staggered. A row whose cells hold a row link (`rowLink`) opens it on a click anywhere in the row
+ * Thin TanStack Table v9 wrapper on the layout table parts, in a hairline panel. The header is a
+ * faint strip that sticks under the top bar while the table fits its panel; rows enter staggered;
+ * the footer counts the rows (`total`, else the rows shown) and holds the `footer` (a Pager). A row whose cells hold a row link (`rowLink`) opens it on a click anywhere in the row
  * (TableRow). `pinFirstColumn` keeps the first column in place while the table scrolls sideways,
  * for tables whose first column names the row; on phones every row is a card (columns say how
  * they show there: ColumnLayout), so the table never scrolls sideways there.
@@ -125,6 +126,8 @@ export function DataTable<T extends RowData>({
   testId,
   pinFirstColumn = false,
   stack = true,
+  total,
+  footer,
 }: {
   data: T[];
   columns: Columns<T>;
@@ -133,6 +136,9 @@ export function DataTable<T extends RowData>({
   pinFirstColumn?: boolean;
   /** Rows as cards on phones (the default); off for tables that read as a grid there too. */
   stack?: boolean;
+  /** Every row of the list when the table shows one page of it. */
+  total?: number;
+  footer?: React.ReactNode;
 }) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const table = useTable({
@@ -150,7 +156,7 @@ export function DataTable<T extends RowData>({
   return (
     <div
       // overflow-clip rounds the corners without becoming a scroll container (sticky header).
-      className="overflow-clip rounded-2xl bg-card shadow-elev-1 edge-lit"
+      className="overflow-clip rounded-lg border bg-card"
       data-slot="data-table"
       data-stack={stack ? "" : undefined}
       data-testid={testId}
@@ -217,6 +223,15 @@ export function DataTable<T extends RowData>({
           ))}
         </TableBody>
       </Table>
+      <div
+        className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t px-4 py-2.5 text-dense text-muted-foreground"
+        data-slot="table-footer"
+      >
+        <span className="readout" data-testid="table-total">
+          {m.table_total({ count: formatNumber(total ?? data.length) })}
+        </span>
+        {footer ? <div className="ml-auto">{footer}</div> : null}
+      </div>
     </div>
   );
 }

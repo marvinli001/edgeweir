@@ -11,9 +11,15 @@ import {
 } from "@/components/analytics/breakdown-charts";
 import { RangeSelect } from "@/components/analytics/range-select";
 import { Badge } from "@/components/arc/badge/badge";
+import {
+  Panel,
+  PanelAction,
+  PanelContent,
+  PanelHeader,
+  PanelTitle,
+} from "@/components/layout/panel";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, QueryView } from "@/components/states";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatNumber, formatPercent, m } from "@/lib/i18n";
 import { originLabel } from "@/lib/l4";
 import { orpc } from "@/lib/orpc";
@@ -50,14 +56,18 @@ export function OriginQualityCard({
     placeholderData: keepPreviousData,
   });
   return (
-    <Card className="animate-enter" style={{ animationDelay: "30ms" }} data-testid="origin-quality">
-      <CardHeader>
-        <CardTitle>{m.origin_quality_title()}</CardTitle>
-        <CardAction>
+    <Panel
+      className="animate-enter"
+      style={{ animationDelay: "30ms" }}
+      data-testid="origin-quality"
+    >
+      <PanelHeader>
+        <PanelTitle>{m.origin_quality_title()}</PanelTitle>
+        <PanelAction>
           <RangeSelect value={range} onChange={onRangeChange} />
-        </CardAction>
-      </CardHeader>
-      <CardContent className="flex min-w-0 flex-col gap-4">
+        </PanelAction>
+      </PanelHeader>
+      <PanelContent className="flex min-w-0 flex-col gap-4">
         <QueryView
           query={quality}
           isEmpty={(data) => data.items.every((item) => item.requests === 0)}
@@ -74,8 +84,8 @@ export function OriginQualityCard({
         >
           {(data) => <QualityView data={data} range={range} />}
         </QueryView>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }
 
@@ -103,7 +113,7 @@ function QualityView({ data, range }: { data: OriginQuality; range: AnalyticsRan
   }));
   return (
     <>
-      <div className="flex flex-col rounded-2xl sunk-well">
+      <div className="flex flex-col rounded-lg faint-well">
         <div
           aria-hidden
           className="hidden grid-cols-[minmax(0,1fr)_repeat(4,6rem)] gap-x-4 px-3 pt-2.5 pb-1 text-xs text-muted-foreground sm:grid"
@@ -121,7 +131,7 @@ function QualityView({ data, range }: { data: OriginQuality; range: AnalyticsRan
         </ul>
       </div>
       {series.length ? (
-        <div className="min-w-0 rounded-2xl sunk-well pb-3" data-testid="origin-quality-charts">
+        <div className="min-w-0 rounded-lg faint-well pb-3" data-testid="origin-quality-charts">
           <SeriesLegend series={series} mark="line" />
           <div className="grid min-w-0 gap-4 px-4 pt-3 xl:grid-cols-2">
             <div className="flex min-w-0 flex-col gap-2" data-testid="origin-quality-latency">

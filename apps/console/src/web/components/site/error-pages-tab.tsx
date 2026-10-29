@@ -19,13 +19,13 @@ import {
   TemplateVariables,
   templateTooLarge,
 } from "@/components/error-page-template";
+import { Field, FieldError, FieldLabel } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
 import { MaintenanceCard } from "@/components/site/maintenance-card";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, QueryView } from "@/components/states";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
@@ -104,15 +104,15 @@ export function ErrorPagesTab({ siteId }: { siteId: string }) {
   return (
     <div className="flex flex-col gap-4">
       <MaintenanceCard siteId={siteId} />
-      <Card
+      <Panel
         className="animate-enter"
         style={{ animationDelay: "60ms" }}
         data-testid="error-pages-card"
       >
-        <CardHeader>
-          <CardTitle>{m.error_pages_title()}</CardTitle>
-        </CardHeader>
-        <QueryView query={combineQueries(pages, features)} frame={CardContent}>
+        <PanelHeader>
+          <PanelTitle>{m.error_pages_title()}</PanelTitle>
+        </PanelHeader>
+        <QueryView query={combineQueries(pages, features)} frame={PanelContent}>
           {([saved, available]) => (
             <ErrorPagesForm
               key={saved.updatedAt ?? "default"}
@@ -124,7 +124,7 @@ export function ErrorPagesTab({ siteId }: { siteId: string }) {
             />
           )}
         </QueryView>
-      </Card>
+      </Panel>
     </div>
   );
 }
@@ -192,8 +192,8 @@ function ErrorPagesForm({
     !editable || (!availabilityContent.available && !V1.includes(status) && !isPage(saved[status]));
 
   return (
-    <form className="flex flex-col gap-(--card-spacing)" onSubmit={form.submit}>
-      <CardContent className="flex flex-col gap-5">
+    <form className="flex flex-col gap-(--panel-pad)" onSubmit={form.submit}>
+      <PanelContent className="flex flex-col gap-5">
         {availability.available ? null : (
           <SafetyNote className="animate-in fade-in" data-testid="error-pages-unavailable">
             {m.feature_unavailable_nodes()}
@@ -217,11 +217,11 @@ function ErrorPagesForm({
           </SafetyNote>
         ) : null}
         {/* One page per row, split by hairlines edge to edge in the card. */}
-        <ul className="-mx-(--card-spacing) flex flex-col border-b">
+        <ul className="-mx-(--panel-pad) flex flex-col border-b">
           {STATUSES.map((status, index) => (
             <li
               key={status}
-              className="border-t px-(--card-spacing) py-4 animate-enter"
+              className="border-t px-(--panel-pad) py-4 animate-enter"
               style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
             >
               <PageRow
@@ -245,7 +245,7 @@ function ErrorPagesForm({
           testId="error-pages-intercept"
         />
         <TemplateVariables hideRulesV3={!availabilityV3.available} />
-      </CardContent>
+      </PanelContent>
       <SaveBar
         dirty={form.dirty && editable && !tooLarge && !invalid}
         pending={form.pending}

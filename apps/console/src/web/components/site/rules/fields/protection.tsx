@@ -12,11 +12,11 @@ import { Input } from "@/components/arc/input/input";
 import { Textarea } from "@/components/arc/textarea/textarea";
 import { durationLabel } from "@/components/ban-dialog";
 import { FormSelect } from "@/components/form-select";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/layout/form";
 import { PresetSelect, usePreset } from "@/components/preset-select";
 import { IntegerField, NumberField, SwitchField } from "@/components/site/fields";
 import { StatusSelect } from "@/components/site/rules/fields/common";
 import { HEADER_KEY, keyChoice, LocksContext } from "@/components/site/rules/labels";
-import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { m } from "@/lib/i18n";
 import {
   type Action,

@@ -1,7 +1,7 @@
 import { releaseSourceInput } from "@edgeweir/contract";
 import { Input } from "@/components/arc/input/input";
+import { Field, FieldLabel } from "@/components/layout/form";
 import { SettingSourceBadge, SettingsCard } from "@/components/settings-card";
-import { Field, FieldLabel } from "@/components/ui/field";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 

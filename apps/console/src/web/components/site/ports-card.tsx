@@ -2,11 +2,11 @@ import type { Site } from "@edgeweir/contract";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Checkbox } from "@/components/arc/checkbox/checkbox";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { SafetyNote } from "@/components/safety-note";
 import { SaveBar, useSaveSite } from "@/components/site/save-site";
 import { combineQueries, QueryView } from "@/components/states";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
@@ -75,11 +75,11 @@ export function SitePortsCard({ site }: { site: Site }) {
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
   // The card and its title stay while the ports load or fail to.
   return (
-    <Card className="animate-enter" style={{ animationDelay: "60ms" }} data-testid="site-ports">
-      <CardHeader>
-        <CardTitle>{m.site_ports_title()}</CardTitle>
-      </CardHeader>
-      <QueryView query={combineQueries(ports, https, features)} frame={CardContent}>
+    <Panel className="animate-enter" style={{ animationDelay: "60ms" }} data-testid="site-ports">
+      <PanelHeader>
+        <PanelTitle>{m.site_ports_title()}</PanelTitle>
+      </PanelHeader>
+      <QueryView query={combineQueries(ports, https, features)} frame={PanelContent}>
         {([cluster, tls, available]) => (
           <PortsEditor
             key={JSON.stringify(site.ports)}
@@ -91,7 +91,7 @@ export function SitePortsCard({ site }: { site: Site }) {
           />
         )}
       </QueryView>
-    </Card>
+    </Panel>
   );
 }
 
@@ -121,13 +121,13 @@ function PortsEditor({
     !site.ports.http.concat(site.ports.https).includes(port);
   return (
     <form
-      className="flex flex-col gap-(--card-spacing)"
+      className="flex flex-col gap-(--panel-pad)"
       onSubmit={async (event) => {
         event.preventDefault();
         if (!empty) await save({ ports: next });
       }}
     >
-      <CardContent className="flex flex-col gap-4">
+      <PanelContent className="flex flex-col gap-4">
         {/* HTTP and HTTPS as rows split by a hairline (on wrappers: a legend sits on its fieldset's border). */}
         <div className="flex flex-col divide-y divide-border [&>*]:py-3 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">
           <div>
@@ -169,7 +169,7 @@ function PortsEditor({
             {m.feature_unavailable_nodes()}
           </SafetyNote>
         )}
-      </CardContent>
+      </PanelContent>
       <SaveBar
         dirty={dirty && !empty}
         pending={pending}

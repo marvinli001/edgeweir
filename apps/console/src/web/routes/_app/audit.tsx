@@ -137,7 +137,7 @@ function AuditDetails({ entry }: { entry: AuditLogEntry }) {
           <Field label={m.audit_field_metadata()}>
             {metadata ? (
               <pre
-                className="max-h-80 overflow-auto rounded-2xl p-3 font-mono text-xs leading-relaxed break-normal whitespace-pre sunk-well"
+                className="max-h-80 overflow-auto rounded-lg p-3 font-mono text-xs leading-relaxed break-normal whitespace-pre faint-well"
                 data-testid="audit-detail-metadata"
               >
                 {metadata}
@@ -297,21 +297,22 @@ function AuditPage() {
         empty={<EmptyState icon={Audit01Icon} title={m.audit_empty()} />}
       >
         {({ items, total }) => (
-          <>
-            <DataTable
-              data={items}
-              columns={columns}
-              getRowId={(e) => String(e.id)}
-              testId="audit-table"
-              pinFirstColumn
-            />
-            <Pager
-              page={page}
-              pageSize={PAGE_SIZE}
-              total={total}
-              onPageChange={(next) => navigate({ search: (prev) => ({ ...prev, page: next }) })}
-            />
-          </>
+          <DataTable
+            data={items}
+            columns={columns}
+            getRowId={(e) => String(e.id)}
+            testId="audit-table"
+            pinFirstColumn
+            total={total}
+            footer={
+              <Pager
+                page={page}
+                pageSize={PAGE_SIZE}
+                total={total}
+                onPageChange={(next) => navigate({ search: (prev) => ({ ...prev, page: next }) })}
+              />
+            }
+          />
         )}
       </QueryView>
     </Page>

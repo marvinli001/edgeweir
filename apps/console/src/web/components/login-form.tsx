@@ -1,13 +1,19 @@
 import { ArrowLeft01Icon, FingerPrintIcon, ViewIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
-import { OtpField } from "@/components/appica/otp-field";
 import { Button } from "@/components/arc/button/button";
 import { Input } from "@/components/arc/input/input";
+import { OtpInput } from "@/components/arc/otp-input/otp-input";
 import { AuthViews } from "@/components/auth-views";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldError, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldSeparator,
+} from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
+import { Spinner } from "@/components/layout/spinner";
 import { useAction } from "@/hooks/use-action";
 import { localizeError } from "@/lib/errors";
 import { m } from "@/lib/i18n";
@@ -15,7 +21,7 @@ import { m } from "@/lib/i18n";
 export type LoginResult = "done" | "two-factor" | string;
 
 type View = "password" | "totp" | "backup";
-/** Card order: moving right slides the cards one way, moving back the other. */
+/** Panel order: moving right slides the cards one way, moving back the other. */
 const VIEWS: readonly View[] = ["password", "totp", "backup"];
 
 /**
@@ -62,11 +68,11 @@ export function LoginForm({
     ) : null;
 
   const passwordCard = (
-    <Card>
-      <CardHeader className="text-center">
-        <CardTitle className="text-xl">{m.login_title()}</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <Panel>
+      <PanelHeader className="text-center">
+        <PanelTitle className="text-title">{m.login_title()}</PanelTitle>
+      </PanelHeader>
+      <PanelContent>
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -139,19 +145,19 @@ export function LoginForm({
             ) : null}
           </FieldGroup>
         </form>
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 
   const codeCard = (kind: "totp" | "backup") => {
     const code = codes[kind];
     const setCode = (value: string) => setCodes((all) => ({ ...all, [kind]: value }));
     return (
-      <Card>
-        <CardHeader className="text-center">
-          <CardTitle className="text-xl">{m.login_2fa_title()}</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Panel>
+        <PanelHeader className="text-center">
+          <PanelTitle className="text-title">{m.login_2fa_title()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent>
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -172,12 +178,14 @@ export function LoginForm({
                 </Field>
               ) : (
                 <Field className="items-center">
-                  <OtpField
+                  <OtpInput
                     value={code}
-                    onValueChange={setCode}
+                    onChange={setCode}
                     onComplete={(value) => void verify("totp", value)}
                     label={m.security_2fa_code()}
+                    hideLabel
                     invalid={error?.view === "totp"}
+                    autoFocus
                   />
                 </Field>
               )}
@@ -213,8 +221,8 @@ export function LoginForm({
               </div>
             </FieldGroup>
           </form>
-        </CardContent>
-      </Card>
+        </PanelContent>
+      </Panel>
     );
   };
 

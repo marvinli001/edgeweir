@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Input } from "@/components/arc/input/input";
 import { Switch } from "@/components/arc/switch/switch";
-import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/layout/form";
 import { splitList } from "@/lib/lists";
 import { cn } from "@/lib/utils";
 

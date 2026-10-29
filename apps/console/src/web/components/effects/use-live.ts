@@ -41,21 +41,3 @@ export function useLive(ref: React.RefObject<Element | null>): boolean {
   const inView = useInViewport(ref);
   return !reduced && visible && inView;
 }
-
-/** Device pixel ratio for canvases, capped (2 by default) so large screens stay cheap. */
-export function cappedDpr(max = 2): number {
-  return Math.min(max, Math.max(1, window.devicePixelRatio || 1));
-}
-
-/** Whether the device has a fine pointer that can hover (spotlight and tilt only run there). */
-export function useFinePointer(): boolean {
-  return React.useSyncExternalStore(
-    (onChange) => {
-      const query = window.matchMedia("(hover: hover) and (pointer: fine)");
-      query.addEventListener("change", onChange);
-      return () => query.removeEventListener("change", onChange);
-    },
-    () => window.matchMedia("(hover: hover) and (pointer: fine)").matches,
-    () => false,
-  );
-}

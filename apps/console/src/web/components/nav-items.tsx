@@ -18,19 +18,27 @@ import {
   UserSettings01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import {
-  BellIcon,
-  DashboardIcon,
-  ListIcon,
-  SlidersIcon,
-} from "@/components/effects/animated-icons";
-import type { NavItem } from "@/components/nav-main";
+import type { LinkProps } from "@tanstack/react-router";
+import type * as React from "react";
 import { m } from "@/lib/i18n";
+
+export interface NavItem {
+  title: string;
+  to: NonNullable<LinkProps["to"]>;
+  icon: React.ReactNode;
+  testId: string;
+  /** Match the path exactly instead of as a prefix (for area roots). */
+  exact?: boolean;
+  /** Other sections the entry also stands for (prefix match), reached from its page. */
+  also?: string[];
+  /** Shows how many things need the operator (the overview lists them). */
+  attention?: boolean;
+}
 
 const icon = (i: typeof GlobeIcon) => <HugeiconsIcon icon={i} strokeWidth={2} />;
 
 export interface NavGroup {
-  label?: string;
+  label: string;
   items: NavItem[];
 }
 
@@ -38,12 +46,12 @@ export interface NavGroup {
 export function navGroups(): NavGroup[] {
   return [
     {
+      label: m.nav_group_sites(),
       items: [
         {
           title: m.nav_overview(),
           to: "/overview",
           icon: icon(DashboardSquare01Icon),
-          animated: DashboardIcon,
           testId: "nav-overview",
           exact: true,
           attention: true,
@@ -83,7 +91,6 @@ export function navGroups(): NavGroup[] {
           title: m.nav_ip_lists_bans(),
           to: "/ip-lists",
           icon: icon(ListViewIcon),
-          animated: ListIcon,
           testId: "nav-ip-lists",
           // Bans and the greylist are tabs of the same section.
           also: ["/bans", "/greylist"],
@@ -117,7 +124,6 @@ export function navGroups(): NavGroup[] {
           title: m.alert_title(),
           to: "/alerts",
           icon: icon(Notification03Icon),
-          animated: BellIcon,
           testId: "nav-alerts",
         },
         { title: m.nav_audit(), to: "/audit", icon: icon(Audit01Icon), testId: "nav-audit" },
@@ -125,7 +131,6 @@ export function navGroups(): NavGroup[] {
           title: m.nav_system(),
           to: "/system",
           icon: icon(SlidersHorizontalIcon),
-          animated: SlidersIcon,
           testId: "nav-system",
           // Monitoring (probes) and service accounts are tabs of the system settings.
           also: ["/service-accounts"],

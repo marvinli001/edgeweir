@@ -1,16 +1,15 @@
 @layer components {
   .badge {
     display: inline-flex;
-    min-height: 26px;
+    min-height: 24px;
     align-items: center;
-    border: 1px solid var(--badge-border, var(--arc-border));
-    border-radius: var(--arc-radius-pill);
-    padding: 0 10px;
+    border: 1px solid var(--badge-border, transparent);
+    border-radius: var(--arc-radius-badge);
+    padding: 0 8px;
     color: var(--badge-foreground, var(--arc-foreground));
     background: var(--badge-background, var(--arc-surface));
     font-size: var(--arc-text-xs);
-    font-weight: 500;
-    letter-spacing: -0.01em;
+    font-weight: var(--arc-weight-regular);
     line-height: 1;
     white-space: nowrap;
     /* Clip keeps the inline baseline while the pill morphs around swapped text. */
@@ -21,24 +20,10 @@
       color var(--arc-duration-standard) var(--arc-ease-standard);
   }
 
-  @media (hover: hover) and (pointer: fine) {
-    .badge:hover {
-      border-color: color-mix(
-        in oklab,
-        var(--badge-color, var(--arc-foreground)) 32%,
-        var(--arc-border)
-      );
-      background: color-mix(
-        in oklab,
-        var(--badge-color, var(--arc-foreground)) 10%,
-        var(--arc-surface)
-      );
-    }
-  }
-  /* The console's chip height (h-5) at its text size. */
+  /* Dense rows: 20px. */
   .sm {
     min-height: 20px;
-    padding: 0 8px;
+    padding: 0 6px;
     font-size: var(--arc-text-xs);
   }
   .md {
@@ -89,33 +74,33 @@
 
   .neutral {
     --badge-color: var(--arc-text-secondary);
-    --badge-foreground: var(--arc-foreground);
-    --badge-background: var(--arc-wash);
-    --badge-border: var(--arc-border);
+    --badge-foreground: var(--arc-text-secondary);
+    --badge-background: var(--arc-surface-muted);
+    --badge-border: var(--arc-border-subtle);
   }
   .success {
     --badge-color: var(--arc-success);
-    --badge-foreground: var(--arc-success);
-    --badge-background: color-mix(in oklab, var(--arc-success) 10%, var(--arc-surface));
-    --badge-border: color-mix(in oklab, var(--arc-success) 25%, var(--arc-border));
+    --badge-foreground: var(--arc-success-ink);
+    --badge-background: var(--arc-success-subtle);
+    --badge-border: transparent;
   }
   .info {
     --badge-color: var(--arc-accent);
     --badge-foreground: var(--arc-accent-strong);
     --badge-background: var(--arc-accent-subtle);
-    --badge-border: color-mix(in oklab, var(--arc-accent) 24%, var(--arc-border));
+    --badge-border: transparent;
   }
   .warning {
     --badge-color: var(--arc-warning);
-    --badge-foreground: var(--arc-warning);
-    --badge-background: color-mix(in oklab, var(--arc-warning) 11%, var(--arc-surface));
-    --badge-border: color-mix(in oklab, var(--arc-warning) 27%, var(--arc-border));
+    --badge-foreground: var(--arc-warning-ink);
+    --badge-background: var(--arc-warning-subtle);
+    --badge-border: transparent;
   }
   .danger {
     --badge-color: var(--arc-danger);
     --badge-foreground: var(--arc-danger);
     --badge-background: var(--arc-danger-subtle);
-    --badge-border: color-mix(in oklab, var(--arc-danger) 26%, var(--arc-border));
+    --badge-border: transparent;
   }
 
   @media (prefers-reduced-motion: reduce) {

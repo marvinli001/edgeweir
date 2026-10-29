@@ -6,9 +6,9 @@ import {
 } from "@edgeweir/contract";
 import { Input } from "@/components/arc/input/input";
 import { OptionSelect } from "@/components/form-select";
+import { Field, FieldLabel } from "@/components/layout/form";
 import { PresetSelect, usePreset } from "@/components/preset-select";
 import { SwitchField } from "@/components/site/fields";
-import { Field, FieldLabel } from "@/components/ui/field";
 import { formatNumber, m } from "@/lib/i18n";
 import { challengeLabel } from "@/lib/protection";
 
@@ -106,7 +106,7 @@ function PresetReadout({ thresholds }: { thresholds: CcThresholds }) {
     </div>
   );
   return (
-    <dl className="col-span-full grid grid-cols-2 gap-x-6 gap-y-3 rounded-2xl px-4 py-3 sunk-well @2xl/cc:grid-cols-3 @4xl/cc:grid-cols-4">
+    <dl className="col-span-full grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg px-4 py-3 faint-well @2xl/cc:grid-cols-3 @4xl/cc:grid-cols-4">
       {item(m.cc_max_level(), challengeLabel(thresholds.maxLevel))}
       {NUMBERS.map(([key, label]) => item(label(), formatNumber(thresholds[key]), true))}
       {item(m.cc_high_pow(), thresholds.highPowInsteadOfCaptcha ? m.rules_on() : m.rules_off())}

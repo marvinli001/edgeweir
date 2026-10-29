@@ -13,12 +13,18 @@ import { Button } from "@/components/arc/button/button";
 import { Input } from "@/components/arc/input/input";
 import { OptionSelect } from "@/components/form-select";
 import { L4NodesWarning } from "@/components/l4/common";
+import { Field, FieldError, FieldLabel } from "@/components/layout/form";
+import {
+  Panel,
+  PanelContent,
+  PanelFooter,
+  PanelHeader,
+  PanelTitle,
+} from "@/components/layout/panel";
+import { Spinner } from "@/components/layout/spinner";
 import { LinkButton } from "@/components/link-button";
 import { nextDraftKey, serializeDrafts } from "@/components/site/save-site";
 import { EmptyState, QueryView } from "@/components/states";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { m } from "@/lib/i18n";
 import { apiError, POOL_PROTOCOLS } from "@/lib/l4";
@@ -111,9 +117,9 @@ function PortPoolsCard({ data }: { data: ClusterPortPools }) {
   const add = () => edit([...rows, { key: nextDraftKey(), protocol: "tcp", from: "", to: "" }]);
 
   return (
-    <Card data-testid="port-pools">
+    <Panel data-testid="port-pools">
       <form
-        className="flex flex-col gap-(--card-spacing)"
+        className="flex flex-col gap-(--panel-pad)"
         onSubmit={async (event) => {
           event.preventDefault();
           setRefusal(null);
@@ -135,8 +141,8 @@ function PortPoolsCard({ data }: { data: ClusterPortPools }) {
           }
         }}
       >
-        <CardHeader className="flex flex-row flex-wrap items-center gap-2">
-          <CardTitle className="flex-1">{m.l4_pools_title()}</CardTitle>
+        <PanelHeader className="flex flex-row flex-wrap items-center gap-2">
+          <PanelTitle className="flex-1">{m.l4_pools_title()}</PanelTitle>
           <LinkButton
             size="sm"
             variant="ghost"
@@ -147,8 +153,8 @@ function PortPoolsCard({ data }: { data: ClusterPortPools }) {
             {m.l4_title()}
             <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
           </LinkButton>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+        </PanelHeader>
+        <PanelContent className="flex flex-col gap-4">
           <div
             className="flex flex-wrap items-center gap-2 text-sm"
             data-testid="port-pools-reserved"
@@ -205,8 +211,8 @@ function PortPoolsCard({ data }: { data: ClusterPortPools }) {
               {refusal.message}
             </FieldError>
           ) : null}
-        </CardContent>
-        <CardFooter className="justify-end border-t">
+        </PanelContent>
+        <PanelFooter className="justify-end border-t">
           <Button
             type="submit"
             disabled={!dirty || reversed.length > 0 || save.isPending}
@@ -215,9 +221,9 @@ function PortPoolsCard({ data }: { data: ClusterPortPools }) {
             {save.isPending ? <Spinner /> : null}
             {m.common_save()}
           </Button>
-        </CardFooter>
+        </PanelFooter>
       </form>
-    </Card>
+    </Panel>
   );
 }
 

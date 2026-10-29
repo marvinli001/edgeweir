@@ -7,13 +7,16 @@ import type {
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
-import { BorderBeam } from "@/components/appica/effects";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { Progress } from "@/components/arc/progress/progress";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/layout/collapsible";
+import { Spinner } from "@/components/layout/spinner";
 import { Dot } from "@/components/status-dot";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Spinner } from "@/components/ui/spinner";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
 import { taskErrorText } from "@/lib/node-errors";
 import { cn } from "@/lib/utils";
@@ -73,8 +76,8 @@ export function CacheTaskList({
   return (
     <ul
       className={cn(
-        "divide-y overflow-hidden rounded-2xl",
-        inset ? "sunk-well" : "bg-card shadow-elev-1 edge-lit",
+        "divide-y overflow-hidden rounded-lg",
+        inset ? "faint-well" : "border bg-card ",
       )}
       data-testid="cache-tasks"
     >
@@ -183,16 +186,8 @@ function TaskRow({
       <Collapsible
         open={open}
         onOpenChange={onOpenChange}
-        className={cn("relative", active && "m-1 rounded-xl signal-hairline")}
+        className={cn("relative", active && "bg-tint-primary/40")}
       >
-        {active ? (
-          <BorderBeam
-            tone="signal"
-            speed={4}
-            className="pointer-events-none absolute inset-0 rounded-[inherit]"
-            data-testid="cache-task-beam"
-          />
-        ) : null}
         {/*
           One wrapping row, reordered by width: on phones the state and the toggle share the first
           line with the type so the target gets a full line; from sm up the target sits in between.

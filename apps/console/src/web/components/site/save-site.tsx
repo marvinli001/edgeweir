@@ -2,10 +2,10 @@ import type { SiteUpdateInput } from "@edgeweir/contract";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { Button } from "@/components/arc/button/button";
+import { FieldError } from "@/components/layout/form";
+import { PanelFooter } from "@/components/layout/panel";
+import { Spinner } from "@/components/layout/spinner";
 import { followSiteDelivery } from "@/components/site/delivery-toast";
-import { CardFooter } from "@/components/ui/card";
-import { FieldError } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
@@ -55,7 +55,7 @@ export function SaveBar({
 }) {
   useUnsavedChanges(dirty);
   return (
-    <CardFooter className="flex-wrap justify-end gap-3 border-t">
+    <PanelFooter className="flex-wrap justify-end gap-3 border-t">
       {error ? (
         <FieldError className="mr-auto animate-in fade-in" data-testid={errorTestId}>
           {error}
@@ -65,7 +65,7 @@ export function SaveBar({
         {pending ? <Spinner /> : null}
         {m.common_save()}
       </Button>
-    </CardFooter>
+    </PanelFooter>
   );
 }
 

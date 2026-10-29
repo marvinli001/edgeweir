@@ -7,8 +7,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/arc/dialog/dialog";
-import { FieldError, FieldGroup } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
+import { FieldError, FieldGroup } from "@/components/layout/form";
+import { Spinner } from "@/components/layout/spinner";
 import { useAction } from "@/hooks/use-action";
 import { errorMessage } from "@/lib/orpc";
 import { cn } from "@/lib/utils";

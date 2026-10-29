@@ -241,7 +241,7 @@ function PurgeConfirm({ action, open, onOpenChange }: DialogProps<"purge">) {
         <ErrorState error={site.error} onRetry={() => void site.refetch()} />
       ) : urls.length ? (
         <ul
-          className="flex max-h-48 flex-col gap-1 overflow-y-auto rounded-xl bg-muted/50 px-3 py-2 font-mono text-xs"
+          className="flex max-h-48 flex-col gap-1 overflow-y-auto rounded-md bg-muted/50 px-3 py-2 font-mono text-xs"
           data-testid="quick-purge-urls"
         >
           {urls.map((url) => (

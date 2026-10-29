@@ -1,0 +1,168 @@
+/*
+ * Sparkline: adapted from Arc's `sparkline` (Copyright (c) 2026 Elia Kuratli, MIT License;
+ * THIRD-PARTY-NOTICES.md). Changes: `--arc-` tokens (foundation.css), in Tailwind's components layer; a 1.5px line,
+ * and `data-bare` hides the caption visually.
+ */
+@layer components {
+  .figure {
+    display: grid;
+    min-width: 0;
+    gap: var(--arc-space-3);
+    margin: 0;
+    color: var(--arc-foreground);
+  }
+  .caption {
+    display: flex;
+    align-items: baseline;
+    gap: var(--arc-space-2);
+    min-width: 0;
+    color: var(--arc-text-secondary);
+    font-size: var(--arc-text-sm);
+  }
+  .label {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .caption strong {
+    margin-left: auto;
+    color: var(--arc-foreground);
+    font-size: var(--arc-text-lg);
+    font-weight: 500;
+    letter-spacing: var(--arc-tracking-body);
+    font-variant-numeric: tabular-nums;
+  }
+  .caption small {
+    flex: none;
+    font-size: var(--arc-text-xs);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    transition: color var(--arc-duration-standard) var(--arc-ease-standard);
+  }
+  .accent {
+    color: var(--arc-accent-strong);
+    stroke: var(--arc-accent);
+  }
+  .success {
+    color: var(--arc-success);
+    stroke: var(--arc-success);
+  }
+  .warning {
+    color: var(--arc-warning);
+    stroke: var(--arc-warning);
+  }
+  .danger {
+    color: var(--arc-danger);
+    stroke: var(--arc-danger);
+  }
+  /* The scrubbed date is context, not a change, so it stays neutral whatever the tone. */
+  .point {
+    color: var(--arc-text-secondary);
+  }
+  .figure[data-bare] {
+    gap: 0;
+  }
+  .figure[data-bare] .caption {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* Changing text rolls in place. Outgoing pieces are popped out of flow, so the wrapper never holds both widths; numbers stay anchored to their right edge. */
+  .roll {
+    position: relative;
+    display: inline-flex;
+    max-width: 100%;
+    overflow-x: clip;
+    white-space: pre;
+    vertical-align: top;
+  }
+  .roll[data-end] {
+    justify-content: flex-end;
+  }
+  .track,
+  .slot,
+  .glyph {
+    position: relative;
+    display: inline-block;
+    white-space: pre;
+  }
+  .roll[data-whole] .track,
+  .roll[data-whole] .slot,
+  .roll[data-whole] .glyph {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: top;
+  }
+  .sizer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    visibility: hidden;
+    white-space: pre;
+    pointer-events: none;
+  }
+
+  /* The plot is the scrubber: hover or drag across it, or focus it and use the arrow keys. Vertical swipes still scroll the page. */
+  .plot {
+    position: relative;
+    min-width: 0;
+    border-radius: calc(var(--arc-radius-control) / 2);
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .plot[data-interactive] {
+    touch-action: pan-y;
+    cursor: default;
+    user-select: none;
+  }
+  .plot:focus-visible {
+    --arc-focus-outline-offset: 8px;
+  }
+  .chart {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+  .baseline {
+    stroke: var(--arc-border);
+    stroke-width: 1;
+  }
+  /* The area under the line carries a faint wash of the line tone. */
+  .area.area {
+    fill: color-mix(in oklab, currentColor 9%, transparent);
+    stroke: none;
+  }
+  .line,
+  .trail {
+    fill: none;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .line {
+    transition: stroke var(--arc-duration-standard) var(--arc-ease-standard);
+  }
+  .trail {
+    stroke: var(--arc-border-strong);
+  }
+  .cursor {
+    stroke: var(--arc-border-strong);
+    stroke-width: 1;
+  }
+  .end {
+    transition: stroke var(--arc-duration-standard) var(--arc-ease-standard);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .line,
+    .end,
+    .caption small {
+      transition: none;
+    }
+  }
+}

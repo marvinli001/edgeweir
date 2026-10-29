@@ -27,12 +27,12 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable, FilterBar } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
 import { FilterSelect, FormSelect } from "@/components/form-select";
+import { Field, FieldLabel } from "@/components/layout/form";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
-import { Field, FieldLabel } from "@/components/ui/field";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, formatNumber, m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
@@ -392,7 +392,6 @@ export function GreylistPage({ initialAddress }: { initialAddress?: string }) {
         empty={
           <EmptyState
             icon={SecurityCheckIcon}
-            art="checkpoint"
             title={filtered ? m.greylist_no_match() : m.greylist_empty()}
           >
             {filtered ? null : (
@@ -405,16 +404,15 @@ export function GreylistPage({ initialAddress }: { initialAddress?: string }) {
         }
       >
         {({ items, total }) => (
-          <>
-            <DataTable
-              data={items}
-              columns={columns}
-              getRowId={(entry) => entry.id}
-              testId="greylist-table"
-              pinFirstColumn
-            />
-            <Pager page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
-          </>
+          <DataTable
+            data={items}
+            columns={columns}
+            getRowId={(entry) => entry.id}
+            testId="greylist-table"
+            pinFirstColumn
+            total={total}
+            footer={<Pager page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />}
+          />
         )}
       </QueryView>
       {dialog.value ? (

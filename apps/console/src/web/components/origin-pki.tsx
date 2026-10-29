@@ -15,12 +15,12 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
+import { Field, FieldLabel } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
+import { Spinner } from "@/components/layout/spinner";
 import { enterDelay } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, QueryView } from "@/components/states";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import { useAction } from "@/hooks/use-action";
 import type { DialogProps } from "@/hooks/use-dialog-state";
 import { downloadText } from "@/lib/browser";
@@ -60,9 +60,9 @@ function AuthorityCard({
   children?: React.ReactNode;
 }) {
   return (
-    <Card className="animate-enter" style={enterDelay(index)} data-testid={testId}>
-      <CardHeader className="flex flex-row flex-wrap items-center gap-3">
-        <CardTitle className="flex-1">{title}</CardTitle>
+    <Panel className="animate-enter" style={enterDelay(index)} data-testid={testId}>
+      <PanelHeader className="flex flex-row flex-wrap items-center gap-3">
+        <PanelTitle className="flex-1">{title}</PanelTitle>
         {actions}
         <Button
           size="sm"
@@ -72,8 +72,8 @@ function AuthorityCard({
         >
           {m.origin_ca_download()}
         </Button>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
+      </PanelHeader>
+      <PanelContent className="flex flex-col gap-3">
         <Field>
           <FieldLabel>{m.system_ca_fingerprint()}</FieldLabel>
           <CodeBlock value={authority.fingerprint} testId={`${testId}-fingerprint`} />
@@ -82,8 +82,8 @@ function AuthorityCard({
           {m.origin_ca_valid_until({ date: formatDateTime(authority.notAfter) })}
         </p>
         {children}
-      </CardContent>
-    </Card>
+      </PanelContent>
+    </Panel>
   );
 }
 
@@ -267,7 +267,7 @@ function OriginCertificates({ onIssue }: { onIssue: () => void }) {
     >
       {(list) => (
         <ul
-          className="flex flex-col divide-y rounded-2xl bg-card shadow-elev-1 edge-lit"
+          className="flex flex-col divide-y rounded-lg border bg-card "
           data-testid="origin-cert-list"
         >
           {list.map((cert, index) => (
@@ -580,11 +580,11 @@ export function OriginClientPanel() {
                 ) : null}
               </AuthorityCard>
             ) : null}
-            <Card className="animate-enter" style={enterDelay(next || previous ? 2 : 1)}>
-              <CardHeader>
-                <CardTitle>{m.origin_client_certificates_title()}</CardTitle>
-              </CardHeader>
-              <CardContent>
+            <Panel className="animate-enter" style={enterDelay(next || previous ? 2 : 1)}>
+              <PanelHeader>
+                <PanelTitle>{m.origin_client_certificates_title()}</PanelTitle>
+              </PanelHeader>
+              <PanelContent>
                 {certificates.length === 0 ? (
                   <EmptyState compact title={m.origin_client_certificates_empty()} />
                 ) : (
@@ -604,8 +604,8 @@ export function OriginClientPanel() {
                     ))}
                   </ul>
                 )}
-              </CardContent>
-            </Card>
+              </PanelContent>
+            </Panel>
           </div>
         ) : (
           <CreateAuthority
