@@ -18,7 +18,7 @@ Traffic analytics and statistics dimensions, access log sampling, forced logging
 
 | Location | Scope |
 | --- | --- |
-| **Overview** | All sites and nodes, including **Top sites** and **Top nodes** |
+| **Overview** | All sites and nodes, including **Top sites by requests** and **Top nodes by requests** |
 | **Sites** → **Analytics** tab | One site |
 
 1. Open a page from the table and select a range: **Last hour**, **Last 6 hours**, **Last 24 hours**, **Last 7 days**, or **Last 30 days**.

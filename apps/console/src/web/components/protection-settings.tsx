@@ -94,6 +94,7 @@ export function ProtectionSettingsCard({
 }) {
   return (
     <SettingsCard
+      indentSave={false}
       title={m.protection_settings_title()}
       className={cn(GRID_CARD, className)}
       style={style}

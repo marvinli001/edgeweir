@@ -16,7 +16,7 @@ import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, NoMatch, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { useDialogState } from "@/hooks/use-dialog-state";
-import { formatDateTime, formatNumber, m } from "@/lib/i18n";
+import { formatDateTime, formatList, formatNumber, m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
 import { metricLabel } from "@/lib/protection";
 
@@ -46,12 +46,16 @@ function triggerText(trigger: NonNullable<Ban["trigger"]>): string {
   return trigger.metric ? `${metricLabel(trigger.metric)} ${counted}` : counted;
 }
 
-/** The rule that banned: its name (a platform rule's marked), or its id once it is deleted. */
+/** The rule that banned: its name (a platform rule's marked); once deleted, its id on hover. */
 function BanRule({ rule }: { rule: NonNullable<Ban["rule"]> }) {
   return rule.name === null ? (
-    <span className="min-w-0 text-xs break-all" data-testid="ban-rule" data-rule-id={rule.id}>
-      <span className="text-muted-foreground">{m.bans_rule_deleted()}</span>{" "}
-      <span className="font-mono">{rule.id}</span>
+    <span
+      className="min-w-0 text-xs text-muted-foreground"
+      title={rule.id}
+      data-testid="ban-rule"
+      data-rule-id={rule.id}
+    >
+      {m.bans_rule_deleted()}
     </span>
   ) : (
     <span
@@ -321,7 +325,7 @@ export function BansPage({
       </div>
       {proxied.length ? (
         <SafetyNote className="animate-enter" data-testid="bans-kernel-peer-note">
-          {m.bans_kernel_peer_note({ clusters: proxied.map((c) => c.name).join(", ") })}
+          {m.bans_kernel_peer_note({ clusters: formatList(proxied.map((c) => c.name)) })}
         </SafetyNote>
       ) : null}
       <QueryView

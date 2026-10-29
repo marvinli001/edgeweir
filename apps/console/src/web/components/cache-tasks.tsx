@@ -126,6 +126,7 @@ function StateBadge({ state, testId }: { state: CacheTaskNodeState; testId: stri
     case "failed":
       return (
         <Badge size="sm" tone="danger" data-testid={testId}>
+          <Dot tone="bad" small />
           {m.purge_state_failed()}
         </Badge>
       );
@@ -193,12 +194,7 @@ function TaskRow({
           One wrapping row, reordered by width: on phones the state and the toggle share the first
           line with the type so the target gets a full line; from sm up the target sits in between.
         */}
-        <div
-          className={cn(
-            "flex flex-wrap items-center gap-x-2 gap-y-1.5",
-            active ? "px-3 py-2" : "px-4 py-3",
-          )}
-        >
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 px-4 py-3">
           <Badge size="sm" tone="neutral" className="order-1" data-testid="cache-task-type">
             {cacheTaskTypeLabel[task.type]()}
           </Badge>
@@ -268,12 +264,7 @@ function TaskRow({
           </div>
         </div>
         <CollapsibleContent className="animate-in fade-in duration-300 motion-reduce:animate-none">
-          <div
-            className={cn(
-              "grid gap-4 border-t bg-well px-4 py-3 md:grid-cols-2",
-              active && "rounded-b-xl px-3",
-            )}
-          >
+          <div className="grid gap-4 border-t bg-well px-4 py-3 md:grid-cols-2">
             <div className="flex min-w-0 flex-col gap-1.5">
               <h3 className="text-xs font-medium text-muted-foreground">{m.purge_targets()}</h3>
               <ul

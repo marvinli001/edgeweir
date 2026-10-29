@@ -212,7 +212,7 @@ function PortPoolsCard({ data }: { data: ClusterPortPools }) {
             </FieldError>
           ) : null}
         </PanelContent>
-        <PanelFooter className="justify-end border-t">
+        <PanelFooter className="border-t">
           <Button
             type="submit"
             disabled={!dirty || reversed.length > 0 || save.isPending}

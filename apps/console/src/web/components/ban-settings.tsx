@@ -21,6 +21,7 @@ export function BanSettingsCard({
 }) {
   return (
     <SettingsCard
+      indentSave={false}
       title={m.system_bans_title()}
       className={cn(GRID_CARD, className)}
       style={style}

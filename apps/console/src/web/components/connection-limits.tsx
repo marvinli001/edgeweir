@@ -77,6 +77,7 @@ export function ConnectionLimitsCard({
   const choices = (clusters.data ?? []).map((c) => ({ value: c.id, label: c.name }));
   return (
     <SettingsCard
+      indentSave={false}
       key={clusterId}
       title={m.connection_limits_title()}
       className={cn(GRID_CARD, className)}

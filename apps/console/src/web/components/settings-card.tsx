@@ -53,6 +53,8 @@ interface SettingsFormProps<T, D, I, O, E, C>
   refresh?: QueryKey;
   /** Leaves the checks to `check` instead of the browser's. */
   noValidate?: boolean;
+  /** Off for rows that put each control beside its label (SettingRows): no label column. */
+  indentSave?: boolean;
   contentClassName?: string;
   saveTestId: string;
   errorTestId?: string;
@@ -98,6 +100,7 @@ function SettingsForm<T, D, I, O, E, C>({
   mutation,
   refresh,
   noValidate,
+  indentSave = true,
   contentClassName,
   saveTestId,
   errorTestId,
@@ -126,7 +129,7 @@ function SettingsForm<T, D, I, O, E, C>({
         })}
       </PanelContent>
       <SaveBar
-        indent
+        indent={indentSave}
         dirty={form.dirty}
         pending={form.pending}
         error={form.error}

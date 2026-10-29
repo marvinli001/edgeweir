@@ -1,8 +1,7 @@
 import { DEMO_EMAIL, DEMO_PASSWORD } from "@edgeweir/contract";
-import { Switch } from "@/components/arc/switch/switch";
-import { SettingRow, SettingRows } from "@/components/protection-settings";
 import { SafetyNote } from "@/components/safety-note";
 import { SettingsCard } from "@/components/settings-card";
+import { SwitchField } from "@/components/site/fields";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
@@ -20,21 +19,21 @@ export function DemoSettingsCard() {
       saveTestId="demo-settings-save"
     >
       {({ value, draft, set }) => (
-        <SettingRows>
-          <SettingRow htmlFor="demo-enabled" label={m.system_demo_enabled()}>
-            <Switch
-              id="demo-enabled"
-              checked={draft.enabled}
-              onCheckedChange={(enabled) => set({ enabled })}
-              data-testid="demo-enabled"
-            />
-          </SettingRow>
+        <>
+          <SwitchField
+            id="demo-enabled"
+            label={m.system_demo_enabled()}
+            checked={draft.enabled}
+            onCheckedChange={(enabled) => set({ enabled })}
+            className="self-start"
+            testId="demo-enabled"
+          />
           {value.enabled ? (
-            <SafetyNote className="py-3 last:pb-0" data-testid="demo-credentials">
+            <SafetyNote data-testid="demo-credentials">
               {m.system_demo_credentials({ email: DEMO_EMAIL, password: DEMO_PASSWORD })}
             </SafetyNote>
           ) : null}
-        </SettingRows>
+        </>
       )}
     </SettingsCard>
   );

@@ -373,35 +373,38 @@ function SitesPage() {
             className="w-full sm:w-44"
           />
         ) : null}
-        {tags.data?.length || tagIds.length ? (
-          <TagFilter
-            tags={tags.data ?? []}
-            selected={tagIds}
-            match={search.match ?? "any"}
-            onChange={(next) =>
-              navigate({
-                search: (prev) => ({
-                  ...prev,
-                  tags: next.selected.length ? next.selected : undefined,
-                  match: next.match === "all" ? "all" : undefined,
-                  page: undefined,
-                }),
-                replace: true,
-              })
-            }
-          />
-        ) : null}
-        {tags.data?.length ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setManageTags(true)}
-            data-testid="manage-tags"
-          >
-            <HugeiconsIcon icon={Tag01Icon} strokeWidth={2} />
-            {m.tags_manage()}
-          </Button>
-        ) : null}
+        {/* Phones: the tag filter and the tag manager share a row. */}
+        <div className="flex w-full items-center gap-2 empty:hidden sm:contents [&>*:first-child]:flex-1 sm:[&>*:first-child]:flex-none">
+          {tags.data?.length || tagIds.length ? (
+            <TagFilter
+              tags={tags.data ?? []}
+              selected={tagIds}
+              match={search.match ?? "any"}
+              onChange={(next) =>
+                navigate({
+                  search: (prev) => ({
+                    ...prev,
+                    tags: next.selected.length ? next.selected : undefined,
+                    match: next.match === "all" ? "all" : undefined,
+                    page: undefined,
+                  }),
+                  replace: true,
+                })
+              }
+            />
+          ) : null}
+          {tags.data?.length ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setManageTags(true)}
+              data-testid="manage-tags"
+            >
+              <HugeiconsIcon icon={Tag01Icon} strokeWidth={2} />
+              {m.tags_manage()}
+            </Button>
+          ) : null}
+        </div>
       </FilterBar>
       <QueryView
         query={sites}
