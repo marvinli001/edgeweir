@@ -10,6 +10,7 @@ import {
 import { FieldError, FieldGroup } from "@/components/layout/form";
 import { Spinner } from "@/components/layout/spinner";
 import { useAction } from "@/hooks/use-action";
+import { m } from "@/lib/i18n";
 import { errorMessage } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
@@ -81,6 +82,9 @@ export function FormDialog({
             {/* A hairline footer row that stays in view while a long form scrolls (-bottom-6: sticky
                 insets count from inside the dialog's padding). */}
             <DialogFooter className="sticky -bottom-6 z-1 -mx-6 -mb-6 border-t border-edge bg-popover px-6 py-4">
+              <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+                {m.common_cancel()}
+              </Button>
               <Button
                 type="submit"
                 disabled={action.pending || submitDisabled}

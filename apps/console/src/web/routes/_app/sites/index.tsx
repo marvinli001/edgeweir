@@ -5,7 +5,7 @@ import {
   siteCreateInput,
 } from "@edgeweir/contract";
 import { MAX_HOST_HEADER_LENGTH, validHostHeader } from "@edgeweir/rule-engine";
-import { Add01Icon, GlobeIcon, Search01Icon, Tag01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, GlobeIcon, Tag01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -46,7 +46,7 @@ import { SiteStatus, untilLive } from "@/components/site-status";
 import { TagBadges, TagFilter, TagManagerDialog, useSiteTags } from "@/components/site-tags";
 import { SitesBatchBar } from "@/components/sites-batch-bar";
 import { SitesTabs } from "@/components/sites-tabs";
-import { EmptyState, QueryView } from "@/components/states";
+import { EmptyState, NoMatch, QueryView } from "@/components/states";
 import { Sparkline } from "@/components/trend-line";
 import { useOpenKey } from "@/hooks/use-open-key";
 import { domainList, fillOrigin, replacesField } from "@/lib/address-input";
@@ -255,19 +255,19 @@ function SitesPage() {
                 if (!trendById) return <div className="h-6 w-36" />;
                 const trend = trendById.get(row.original.id);
                 return (
-                  <div className="flex w-36 items-center gap-3">
+                  <div className="flex min-w-36 items-center gap-3">
                     {trend ? (
                       <Sparkline
                         data={trend.series}
                         tone="metric"
                         height={24}
                         fill={false}
-                        className="w-20"
+                        className="w-20 shrink-0"
                       />
                     ) : (
                       <span className="h-6 w-20 shrink-0" />
                     )}
-                    <span className="text-xs font-medium tabular-nums">
+                    <span className="text-xs font-medium whitespace-nowrap tabular-nums">
                       {formatCompact(trend?.total ?? 0)}
                     </span>
                   </div>
@@ -408,7 +408,21 @@ function SitesPage() {
         isEmpty={(data) => data.total === 0}
         empty={
           filtered ? (
-            <EmptyState icon={Search01Icon} title={m.sites_no_match()} />
+            <NoMatch
+              title={m.sites_no_match()}
+              onClear={() =>
+                navigate({
+                  search: (prev) => ({
+                    ...prev,
+                    q: undefined,
+                    cluster: undefined,
+                    tags: undefined,
+                    match: undefined,
+                    page: undefined,
+                  }),
+                })
+              }
+            />
           ) : (
             <EmptyState icon={GlobeIcon} title={m.sites_empty_title()}>
               <Button onClick={() => setCreateOpen(true)}>
@@ -722,6 +736,9 @@ function CreateSiteDialog({
               </FieldError>
             ) : null}
             <DialogFooter>
+              <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+                {m.common_cancel()}
+              </Button>
               <Button type="submit" disabled={pending} data-testid="create-site-submit">
                 {pending ? <Spinner /> : null}
                 {m.site_form_submit()}

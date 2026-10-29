@@ -211,6 +211,7 @@ export function L4AppDialog({
             onSaved?.(saved);
             onOpenChange(false);
           }}
+          onCancel={() => onOpenChange(false)}
         />
       </DialogContent>
     </Dialog>
@@ -222,11 +223,13 @@ function AppForm({
   clusters,
   initial,
   onDone,
+  onCancel,
 }: {
   app?: L4App;
   clusters: { id: string; name: string }[];
   initial: AppDraft;
   onDone: (app: L4App) => void;
+  onCancel: () => void;
 }) {
   const queryClient = useQueryClient();
   const uid = React.useId();
@@ -709,6 +712,9 @@ function AppForm({
         )}
         {errorFor("form")}
         <DialogFooter>
+          <Button type="button" variant="secondary" onClick={onCancel}>
+            {m.common_cancel()}
+          </Button>
           <Button
             type="submit"
             disabled={pending || noPrimary || !clusterId}

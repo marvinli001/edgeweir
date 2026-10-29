@@ -199,6 +199,9 @@ export function CopySettingsDialog({
               </FieldError>
             ) : null}
             <DialogFooter>
+              <Button type="button" variant="secondary" onClick={() => close(false)}>
+                {m.common_cancel()}
+              </Button>
               <Button
                 disabled={!sourceId || !targetIds.length || !parts.length || action.pending}
                 onClick={async () => {

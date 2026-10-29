@@ -458,6 +458,9 @@ function AddProbeDialog({
                   )}
                   {create.isError ? <FieldError>{errorMessage(create.error)}</FieldError> : null}
                   <DialogFooter>
+                    <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+                      {m.common_cancel()}
+                    </Button>
                     <Button
                       type="submit"
                       disabled={create.isPending || !selectedRegion}
