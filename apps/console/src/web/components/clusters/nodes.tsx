@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/arc/dropdown-menu/dropdown-menu";
 import { type NodeAction, NodeActionDialog } from "@/components/clusters/node-dialogs";
-import { type Columns, DataTable } from "@/components/data-table";
+import { type Columns, DataTable, type SortParam } from "@/components/data-table";
 import { NodeChannelBadge } from "@/components/node-channel-state";
 import {
   AuthErrorBadge,
@@ -28,7 +28,7 @@ import { EmptyState, QueryView } from "@/components/states";
 import { Dot, StatusDot } from "@/components/status-dot";
 import { TimeAgo } from "@/components/time-ago";
 import { useDialogState } from "@/hooks/use-dialog-state";
-import { formatBitRate, formatDateTime, formatPercent, m } from "@/lib/i18n";
+import { formatBitRate, formatPercent, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { rowLink, rowLinkButton } from "@/lib/row-link";
 import { cn } from "@/lib/utils";
@@ -242,6 +242,8 @@ export function NodesSection({
   detailTab,
   onDetail: showDetail,
   onDetailTab,
+  sort,
+  onSortChange,
 }: {
   cluster: Cluster;
   /** The section's heading with the node count (off where a tab names it). */
@@ -251,6 +253,9 @@ export function NodesSection({
   detailTab: NodeDetailTab | undefined;
   onDetail: (id: string | null) => void;
   onDetailTab: (tab: NodeDetailTab) => void;
+  /** The table's sort (the URL keeps it). */
+  sort: SortParam | undefined;
+  onSortChange: (sort: SortParam | undefined) => void;
 }) {
   const nodes = useQuery({
     ...orpc.nodes.list.queryOptions({ input: { clusterId: cluster.id } }),
@@ -266,6 +271,7 @@ export function NodesSection({
       {
         id: "name",
         stack: "lead",
+        accessorFn: (node) => node.name,
         header: () => m.nodes_col_name(),
         cell: ({ row }) => (
           <div className="flex min-w-0 flex-col">
@@ -312,6 +318,7 @@ export function NodesSection({
       },
       {
         id: "group",
+        accessorFn: (node) => node.nodeGroupName ?? "",
         header: () => m.nodes_col_group(),
         cell: ({ row }) => (
           <span className="flex min-w-0 flex-col text-xs">
@@ -332,6 +339,7 @@ export function NodesSection({
       {
         id: "egress",
         hideBelow: "lg",
+        accessorFn: (node) => (node.online && node.metrics ? node.metrics.egressBps : -1),
         header: () => m.node_metrics_egress(),
         cell: ({ row }) =>
           row.original.online && row.original.metrics ? (
@@ -344,6 +352,7 @@ export function NodesSection({
       },
       {
         id: "revision",
+        accessorFn: (node) => node.appliedRevision,
         header: () => m.nodes_col_revision(),
         cell: ({ row }) => <NodeRevision node={row.original} latest={latest} />,
       },
@@ -357,14 +366,10 @@ export function NodesSection({
         id: "seen",
         hideBelow: "xl",
         stack: "hide",
+        accessorFn: (node) => node.lastSeenAt ?? "",
         header: () => m.nodes_col_last_seen(),
         cell: ({ row }) => (
-          <span
-            className="text-xs text-muted-foreground"
-            title={row.original.lastSeenAt ? formatDateTime(row.original.lastSeenAt) : undefined}
-          >
-            <TimeAgo at={row.original.lastSeenAt} />
-          </span>
+          <TimeAgo at={row.original.lastSeenAt} className="text-xs text-muted-foreground" />
         ),
       },
       {
@@ -411,6 +416,8 @@ export function NodesSection({
             getRowId={(node) => node.id}
             testId="nodes-table"
             pinFirstColumn
+            sort={sort}
+            onSortChange={onSortChange}
           />
         )}
       </QueryView>

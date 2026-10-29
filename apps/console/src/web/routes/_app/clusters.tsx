@@ -40,6 +40,8 @@ export const Route = createFileRoute("/_app/clusters")({
     node: z.string().optional(),
     /** The tab of the node's details. */
     nodeTab: z.enum(["logs"]).optional(),
+    /** The node table's sort ("name", "-seen"). */
+    sort: z.string().optional(),
   }),
   component: ClustersPage,
 });
@@ -214,6 +216,8 @@ function ClusterView({
       detailTab={search.nodeTab}
       onDetail={showDetail}
       onDetailTab={showDetailTab}
+      sort={search.sort}
+      onSortChange={(sort) => navigate({ search: (prev) => ({ ...prev, sort }), replace: true })}
     />
   );
   return (

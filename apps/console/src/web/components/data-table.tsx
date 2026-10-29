@@ -1,3 +1,5 @@
+import { ArrowDown02Icon, ArrowUp02Icon, ArrowUpDownIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import {
   type ColumnDef,
   createSortedRowModel,
@@ -105,6 +107,53 @@ export function FilterBar({ className, ...props }: React.ComponentProps<"div">) 
   );
 }
 
+/**
+ * A sort as the URL keeps it: the column id, after a "-" when descending ("name", "-seen").
+ */
+export type SortParam = string;
+
+const toSorting = (sort: SortParam | undefined): SortingState =>
+  sort ? [{ id: sort.replace(/^-/, ""), desc: sort.startsWith("-") }] : [];
+
+const fromSorting = (sorting: SortingState): SortParam | undefined =>
+  sorting[0] ? `${sorting[0].desc ? "-" : ""}${sorting[0].id}` : undefined;
+
+/** A sortable column's header: its label and the direction, as one button. */
+function SortButton({
+  direction,
+  onClick,
+  children,
+}: {
+  direction: false | "asc" | "desc";
+  onClick?: (event: unknown) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "-mx-1 inline-flex items-center gap-1 rounded-sm px-1 transition-colors focus-ring hover:text-foreground",
+        direction && "text-foreground",
+      )}
+    >
+      {children}
+      <HugeiconsIcon
+        icon={
+          direction === "asc"
+            ? ArrowUp02Icon
+            : direction === "desc"
+              ? ArrowDown02Icon
+              : ArrowUpDownIcon
+        }
+        strokeWidth={2}
+        className={cn("size-3.5", !direction && "opacity-50")}
+        aria-hidden
+      />
+    </button>
+  );
+}
+
 /** A column header as plain text (the label of a stacked cell), when it is one. */
 function headerText(header: unknown, props: object): string | undefined {
   const value = typeof header === "function" ? header(props) : header;
@@ -128,6 +177,8 @@ export function DataTable<T extends RowData>({
   stack = true,
   total,
   footer,
+  sort,
+  onSortChange,
 }: {
   data: T[];
   columns: Columns<T>;
@@ -139,14 +190,33 @@ export function DataTable<T extends RowData>({
   /** Every row of the list when the table shows one page of it. */
   total?: number;
   footer?: React.ReactNode;
+  /**
+   * The sort, for a table that keeps it in the URL (with `onSortChange`); otherwise the table keeps
+   * its own. Columns with an `accessorFn` sort (a click on the header), others do not.
+   */
+  sort?: SortParam;
+  onSortChange?: (sort: SortParam | undefined) => void;
 }) {
-  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [ownSort, setOwnSort] = React.useState<SortParam>();
+  const current = onSortChange ? sort : ownSort;
+  // A sort the URL names for a column that does not sort (an old link) is left out.
+  const sorting = React.useMemo(
+    () =>
+      toSorting(current).filter((entry) =>
+        columns.some((column) => column.id === entry.id && "accessorFn" in column),
+      ),
+    [current, columns],
+  );
   const table = useTable({
     features,
     data,
     columns,
     state: { sorting },
-    onSortingChange: setSorting,
+    enableMultiSort: false,
+    onSortingChange: (updater) =>
+      (onSortChange ?? setOwnSort)(
+        fromSorting(typeof updater === "function" ? updater(sorting) : updater),
+      ),
     getRowId: (row) => getRowId(row),
   });
   const ref = React.useRef<HTMLTableElement>(null);
@@ -165,21 +235,44 @@ export function DataTable<T extends RowData>({
         <TableHeader>
           {table.getHeaderGroups().map((group) => (
             <TableRow key={group.id}>
-              {group.headers.map((header, index) => (
-                <TableHead
-                  key={header.id}
-                  colSpan={header.colSpan}
-                  className={cn(
-                    "bg-well [--cell-bg:var(--well)]",
-                    pinned(index),
-                    layoutClass(header.column.columnDef as ColumnLayout),
-                  )}
-                >
-                  {header.isPlaceholder
-                    ? null
-                    : renderTemplate(header.column.columnDef.header, header.getContext())}
-                </TableHead>
-              ))}
+              {group.headers.map((header, index) => {
+                const label = header.isPlaceholder
+                  ? null
+                  : renderTemplate(header.column.columnDef.header, header.getContext());
+                const sortable = !header.isPlaceholder && header.column.getCanSort();
+                const direction = header.column.getIsSorted();
+                return (
+                  <TableHead
+                    key={header.id}
+                    colSpan={header.colSpan}
+                    aria-sort={
+                      sortable
+                        ? direction === "asc"
+                          ? "ascending"
+                          : direction === "desc"
+                            ? "descending"
+                            : "none"
+                        : undefined
+                    }
+                    className={cn(
+                      "bg-well [--cell-bg:var(--well)]",
+                      pinned(index),
+                      layoutClass(header.column.columnDef as ColumnLayout),
+                    )}
+                  >
+                    {sortable ? (
+                      <SortButton
+                        direction={direction}
+                        onClick={header.column.getToggleSortingHandler()}
+                      >
+                        {label}
+                      </SortButton>
+                    ) : (
+                      label
+                    )}
+                  </TableHead>
+                );
+              })}
             </TableRow>
           ))}
         </TableHeader>

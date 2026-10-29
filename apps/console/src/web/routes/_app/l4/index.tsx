@@ -26,6 +26,8 @@ export const Route = createFileRoute("/_app/l4/")({
   validateSearch: z.object({
     cluster: z.string().optional(),
     create: z.boolean().optional(),
+    /** The table's sort ("name", "-port"). */
+    sort: z.string().optional(),
   }),
   component: L4AppsPage,
 });
@@ -65,6 +67,7 @@ function L4AppsPage() {
       {
         id: "name",
         stack: "lead",
+        accessorFn: (app) => app.name,
         header: () => m.site_form_name(),
         cell: ({ row }) => (
           <div className="flex max-w-56 min-w-0 items-start gap-2.5">
@@ -91,11 +94,13 @@ function L4AppsPage() {
       },
       {
         id: "protocol",
+        accessorFn: (app) => app.protocol,
         header: () => m.l4_protocol(),
         cell: ({ row }) => <ProtocolBadge protocol={row.original.protocol} />,
       },
       {
         id: "port",
+        accessorFn: (app) => app.port,
         header: () => m.l4_port(),
         cell: ({ row }) => (
           <span className="font-mono tabular-nums" data-testid="l4-app-port">
@@ -218,6 +223,10 @@ function L4AppsPage() {
             getRowId={(app) => app.id}
             testId="l4-apps-table"
             pinFirstColumn
+            sort={search.sort}
+            onSortChange={(sort) =>
+              navigate({ search: (prev) => ({ ...prev, sort }), replace: true })
+            }
           />
         )}
       </QueryView>
