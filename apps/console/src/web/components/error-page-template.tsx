@@ -123,11 +123,13 @@ export function TemplateInput({
         spellCheck={false}
         autoCapitalize="off"
         autoCorrect="off"
+        // HTML reads as code: lines scroll sideways instead of breaking inside tags.
+        wrap="off"
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         placeholder={m.error_pages_placeholder()}
         aria-invalid={over || undefined}
-        className="max-h-72 min-h-24 font-mono text-sm break-all"
+        className="max-h-72 min-h-24 font-mono text-sm"
         data-testid={testId}
       />
       {over ? (

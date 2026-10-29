@@ -24,10 +24,7 @@ export function ReleaseSourceCard() {
     >
       {({ value, draft, set, error }) => (
         <Field data-invalid={error ? true : undefined}>
-          <FieldLabel htmlFor="release-source" className="flex items-center gap-2">
-            {m.system_release_url()}
-            <SettingSourceBadge source={value.source} testId="release-source-origin" />
-          </FieldLabel>
+          <FieldLabel htmlFor="release-source">{m.system_release_url()}</FieldLabel>
           <Input
             id="release-source"
             type="url"
@@ -40,6 +37,11 @@ export function ReleaseSourceCard() {
             aria-invalid={error ? true : undefined}
             className="font-mono text-sm"
             data-testid="release-source"
+          />
+          <SettingSourceBadge
+            className="w-fit! justify-self-start"
+            source={value.source}
+            testId="release-source-origin"
           />
         </Field>
       )}

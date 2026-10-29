@@ -166,10 +166,7 @@ export function NodeChannelCard() {
     >
       {({ value, draft, set, error }) => (
         <Field data-invalid={error ? true : undefined}>
-          <FieldLabel htmlFor="node-channel-url" className="flex items-center gap-2">
-            {m.system_node_channel_url()}
-            <SettingSourceBadge source={value.source} testId="node-channel-source" />
-          </FieldLabel>
+          <FieldLabel htmlFor="node-channel-url">{m.system_node_channel_url()}</FieldLabel>
           <Input
             id="node-channel-url"
             type="url"
@@ -182,6 +179,11 @@ export function NodeChannelCard() {
             aria-invalid={error ? true : undefined}
             className="font-mono text-sm"
             data-testid="node-channel-url"
+          />
+          <SettingSourceBadge
+            className="w-fit! justify-self-start"
+            source={value.source}
+            testId="node-channel-source"
           />
           <div className="flex flex-wrap items-center gap-2">
             <UrlScopeBadge url={value.effectiveUrl} testId="node-api-url-scope" />

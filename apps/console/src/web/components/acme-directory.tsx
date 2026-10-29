@@ -39,10 +39,7 @@ export function AcmeDirectoryCard() {
       {({ value, draft, set, error }) => (
         <>
           <Field className="sm:col-span-2" data-invalid={error ? true : undefined}>
-            <FieldLabel htmlFor="acme-directory-url" className="flex items-center gap-2">
-              {m.system_acme_url()}
-              <SettingSourceBadge source={value.source} testId="acme-directory-origin" />
-            </FieldLabel>
+            <FieldLabel htmlFor="acme-directory-url">{m.system_acme_url()}</FieldLabel>
             <Input
               id="acme-directory-url"
               type="url"
@@ -55,6 +52,11 @@ export function AcmeDirectoryCard() {
               aria-invalid={error ? true : undefined}
               className="font-mono text-sm"
               data-testid="acme-directory-url"
+            />
+            <SettingSourceBadge
+              className="w-fit! justify-self-start"
+              source={value.source}
+              testId="acme-directory-origin"
             />
           </Field>
           <Field>
@@ -84,10 +86,7 @@ export function AcmeDirectoryCard() {
             />
           </Field>
           <Field className="sm:col-span-2">
-            <FieldLabel htmlFor="acme-directory-ca" className="flex items-center gap-2">
-              {m.system_acme_ca()}
-              <SettingSourceBadge source={value.caSource} testId="acme-directory-ca-origin" />
-            </FieldLabel>
+            <FieldLabel htmlFor="acme-directory-ca">{m.system_acme_ca()}</FieldLabel>
             <Textarea
               id="acme-directory-ca"
               rows={5}
@@ -97,6 +96,11 @@ export function AcmeDirectoryCard() {
               value={draft.caPem}
               onChange={(event) => set({ caPem: event.target.value })}
               data-testid="acme-directory-ca"
+            />
+            <SettingSourceBadge
+              className="w-fit! justify-self-start"
+              source={value.caSource}
+              testId="acme-directory-ca-origin"
             />
           </Field>
           {value.caaIdentities.length ? (

@@ -18,12 +18,14 @@ const SOURCE_LABEL = {
 export function SettingSourceBadge({
   source,
   testId,
+  className,
 }: {
   source: keyof typeof SOURCE_LABEL;
   testId: string;
+  className?: string;
 }) {
   return (
-    <Badge size="sm" tone="neutral" data-testid={testId}>
+    <Badge size="sm" tone="neutral" className={className} data-testid={testId}>
       {SOURCE_LABEL[source]()}
     </Badge>
   );
