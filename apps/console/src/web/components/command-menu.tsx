@@ -4,6 +4,7 @@ import {
   Activity01Icon,
   Add01Icon,
   BlockedIcon,
+  Certificate01Icon,
   DatabaseSync01Icon,
   GlobeIcon,
   LanguageSkillIcon,
@@ -199,6 +200,10 @@ export function CommandMenu() {
   );
   add({ id: "add-node", label: m.nav_add_node(), group, icon: icon(ServerStack01Icon) }, () =>
     navigate({ to: "/clusters", search: { enroll: true } }),
+  );
+  add(
+    { id: "request-certificate", label: m.cert_request(), group, icon: icon(Certificate01Icon) },
+    () => navigate({ to: "/certificates", search: { request: true } }),
   );
   add(
     { id: "ban", label: m.command_ban_ip(), group, icon: icon(BlockedIcon), testId: "command-ban" },

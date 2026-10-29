@@ -41,7 +41,11 @@ import { rowActivationHandlers, rowClickable, rowLink, rowLinkButton } from "@/l
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/certificates")({
-  validateSearch: z.object({ tab: z.enum(["origin-ca", "origin-client"]).optional() }),
+  validateSearch: z.object({
+    tab: z.enum(["origin-ca", "origin-client"]).optional(),
+    /** Opens the certificate request (the command menu's action). */
+    request: z.boolean().optional(),
+  }),
   component: CertificatesPage,
 });
 
@@ -55,6 +59,13 @@ function CertificatesPage() {
   // A DNS credential is edited in the dialog that adds one ("dns").
   const dialog = useDialogState<CertificateDialog>();
   const issue = useDialogState();
+  // A link with `request` opens the request dialog once and leaves the address clean.
+  const { show } = dialog;
+  React.useEffect(() => {
+    if (!search.request) return;
+    show("request");
+    void navigate({ search: (prev) => ({ ...prev, request: undefined }), replace: true });
+  }, [search.request, show, navigate]);
   return (
     <Page
       title={m.cert_title()}
