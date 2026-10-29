@@ -120,7 +120,7 @@ function ListenPortsForm({ data }: { data: ClusterListenPorts }) {
         if (parsed.success) void form.submit();
       }}
     >
-      <PanelContent className="flex flex-col gap-4">
+      <PanelContent form className="flex flex-col gap-4">
         <div
           className="flex flex-wrap items-center gap-2 text-sm"
           data-testid="listen-ports-always"
@@ -170,6 +170,7 @@ function ListenPortsForm({ data }: { data: ClusterListenPorts }) {
       </PanelContent>
       {/* The save row of settings cards; the guard for unsaved changes stays on `dirty` above. */}
       <SaveBar
+        indent
         dirty={dirty && parsed.success && !(locked && grows)}
         pending={form.pending}
         error={form.error}
@@ -239,7 +240,7 @@ function ClientIpForm({ data }: { data: ClusterClientIp }) {
         }
       }}
     >
-      <PanelContent className="flex flex-col gap-4">
+      <PanelContent form className="flex flex-col gap-4">
         <Field className="sm:max-w-xs">
           <FieldLabel htmlFor="client-ip-mode">{m.client_ip_mode()}</FieldLabel>
           <OptionSelect
@@ -334,6 +335,7 @@ function ClientIpForm({ data }: { data: ClusterClientIp }) {
         ) : null}
       </PanelContent>
       <SaveBar
+        indent
         dirty={dirty && !!normalized && !locked}
         pending={save.isPending}
         error={error}
@@ -456,7 +458,7 @@ function UnknownHostsForm({ data }: { data: ClusterUnknownHosts }) {
         }
       }}
     >
-      <PanelContent className="flex flex-col gap-4">
+      <PanelContent form className="flex flex-col gap-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="unknown-hosts-unknown">{m.unknown_hosts_unknown()}</FieldLabel>
@@ -608,6 +610,7 @@ function UnknownHostsForm({ data }: { data: ClusterUnknownHosts }) {
         ) : null}
       </PanelContent>
       <SaveBar
+        indent
         dirty={dirty && !!normalized && !locked}
         pending={save.isPending}
         error={error}

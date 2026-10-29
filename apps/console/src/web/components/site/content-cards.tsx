@@ -77,7 +77,7 @@ export function PurgeMethodCard({ site }: { site: Site }) {
         <PanelHeader>
           <PanelTitle>{m.site_purge_method_title()}</PanelTitle>
         </PanelHeader>
-        <PanelContent className="flex flex-col gap-4">
+        <PanelContent form className="flex flex-col gap-4">
           {blocked ? (
             <SafetyNote data-testid="purge-method-unavailable">
               {m.feature_unavailable_nodes()}
@@ -132,6 +132,7 @@ export function PurgeMethodCard({ site }: { site: Site }) {
           ) : null}
         </PanelContent>
         <SaveBar
+          indent
           dirty={dirty}
           pending={pending}
           error={invalid ?? error}
@@ -162,7 +163,7 @@ export function XCacheCard({ site }: { site: Site }) {
         <PanelHeader>
           <PanelTitle>{m.site_x_cache_title()}</PanelTitle>
         </PanelHeader>
-        <PanelContent className="flex flex-col gap-3">
+        <PanelContent form className="flex flex-col gap-3">
           {blocked ? (
             <SafetyNote data-testid="x-cache-unavailable">
               {m.feature_unavailable_nodes()}
@@ -178,7 +179,13 @@ export function XCacheCard({ site }: { site: Site }) {
             testId="x-cache-send"
           />
         </PanelContent>
-        <SaveBar dirty={send !== saved} pending={pending} error={error} testId="x-cache-save" />
+        <SaveBar
+          indent
+          dirty={send !== saved}
+          pending={pending}
+          error={error}
+          testId="x-cache-save"
+        />
       </form>
     </Panel>
   );
@@ -210,7 +217,7 @@ export function CharsetCard({ site }: { site: Site }) {
         <PanelHeader>
           <PanelTitle>{m.site_charset_title()}</PanelTitle>
         </PanelHeader>
-        <PanelContent className="flex flex-col gap-4">
+        <PanelContent form className="flex flex-col gap-4">
           {blocked ? (
             <SafetyNote data-testid="charset-unavailable">
               {m.feature_unavailable_nodes()}
@@ -246,6 +253,7 @@ export function CharsetCard({ site }: { site: Site }) {
           </div>
         </PanelContent>
         <SaveBar
+          indent
           dirty={JSON.stringify(charset) !== JSON.stringify(saved)}
           pending={pending}
           error={error}
@@ -289,7 +297,7 @@ export function BodyLimitCard({ site }: { site: Site }) {
         <PanelHeader>
           <PanelTitle>{m.site_body_limit_title()}</PanelTitle>
         </PanelHeader>
-        <PanelContent className="flex flex-col gap-3">
+        <PanelContent form className="flex flex-col gap-3">
           {blocked ? (
             <SafetyNote data-testid="body-limit-unavailable">
               {m.feature_unavailable_nodes()}
@@ -313,6 +321,7 @@ export function BodyLimitCard({ site }: { site: Site }) {
           <SafetyNote>{m.site_body_limit_note()}</SafetyNote>
         </PanelContent>
         <SaveBar
+          indent
           dirty={valid && bytes !== saved}
           pending={pending}
           error={error}

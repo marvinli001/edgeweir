@@ -151,7 +151,7 @@ function BindingEditor({
         <PanelHeader>
           <PanelTitle>{m.dns_binding_title()}</PanelTitle>
         </PanelHeader>
-        <PanelContent className="grid gap-5">
+        <PanelContent form className="grid gap-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <FormSelect
               id="dns-binding-mode"
@@ -378,6 +378,7 @@ function BindingEditor({
           ) : null}
         </PanelContent>
         <SaveBar
+          indent
           dirty={JSON.stringify(draft) !== JSON.stringify(initial)}
           pending={save.isPending}
           error={error}

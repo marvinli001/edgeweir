@@ -194,7 +194,7 @@ export function RulesEditor({
             );
           })}
         </SortableList>
-        <SaveBar dirty={dirty} pending={save.isPending} error={error} testId="rules-save" />
+        <SaveBar sticky dirty={dirty} pending={save.isPending} error={error} testId="rules-save" />
       </form>
     </RuleHistoryContext.Provider>
   );

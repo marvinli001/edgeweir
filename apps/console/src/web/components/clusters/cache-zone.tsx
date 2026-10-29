@@ -43,7 +43,7 @@ export function ClusterCacheCard({ cluster }: { cluster: Cluster }) {
         <PanelHeader>
           <PanelTitle>{m.cluster_cache_title()}</PanelTitle>
         </PanelHeader>
-        <PanelContent className="flex flex-col gap-4">
+        <PanelContent form className="flex flex-col gap-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:max-w-xl">
             <NumberField
               id="cluster-cache-size"
@@ -80,6 +80,7 @@ export function ClusterCacheCard({ cluster }: { cluster: Cluster }) {
           <SafetyNote>{m.cluster_cache_note()}</SafetyNote>
         </PanelContent>
         <SaveBar
+          indent
           dirty={form.dirty && valid}
           pending={form.pending}
           error={form.error}

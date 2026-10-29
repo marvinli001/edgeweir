@@ -522,7 +522,7 @@ function HttpsEditor({
         <PanelHeader>
           <PanelTitle>{m.site_tab_https()}</PanelTitle>
         </PanelHeader>
-        <PanelContent className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <PanelContent form className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <FormSelect
             id="siteCertificate"
             label={m.cert_title()}
@@ -788,6 +788,7 @@ function HttpsEditor({
           </div>
         </PanelContent>
         <SaveBar
+          indent
           dirty={JSON.stringify(httpsOf(settings)) !== JSON.stringify(httpsOf(initial))}
           pending={mutation.isPending}
           error={error}

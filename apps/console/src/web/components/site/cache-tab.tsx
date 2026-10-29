@@ -364,6 +364,7 @@ function CacheRulesCard({ site }: { site: Site }) {
           </div>
         </PanelContent>
         <SaveBar
+          sticky
           dirty={dirty && !badExpression}
           pending={pending}
           error={invalid ?? error}

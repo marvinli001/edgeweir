@@ -40,31 +40,48 @@ export function useSaveSite(siteId: string) {
   return { save, error, pending: update.isPending };
 }
 
+/**
+ * A form panel's save bar: the button on the left, lined up with the fields (tokens.md "Forms"),
+ * and the last error beside it.
+ */
 export function SaveBar({
   dirty,
   pending,
   error,
+  indent = false,
+  sticky = false,
   testId,
   errorTestId = "site-save-error",
 }: {
   dirty: boolean;
   pending: boolean;
   error: string | null;
+  /** Lines the button up with the controls of a label-left form (index.css [data-form]). */
+  indent?: boolean;
+  /** Keeps the bar at the bottom of the viewport while a long form scrolls. */
+  sticky?: boolean;
   testId: string;
   errorTestId?: string;
 }) {
   useUnsavedChanges(dirty);
   return (
-    <PanelFooter className="flex-wrap justify-end gap-3 border-t">
-      {error ? (
-        <FieldError className="mr-auto animate-in fade-in" data-testid={errorTestId}>
-          {error}
-        </FieldError>
-      ) : null}
-      <Button type="submit" disabled={!dirty || pending} data-testid={testId}>
+    <PanelFooter sticky={sticky} className="@container/save-bar flex-wrap gap-x-4 gap-y-2 border-t">
+      <Button
+        type="submit"
+        disabled={!dirty || pending}
+        className={
+          indent ? "@min-[42.5rem]/save-bar:ml-[calc(var(--ew-form-label)+1.5rem)]" : undefined
+        }
+        data-testid={testId}
+      >
         {pending ? <Spinner /> : null}
         {m.common_save()}
       </Button>
+      {error ? (
+        <FieldError className="animate-in fade-in" data-testid={errorTestId}>
+          {error}
+        </FieldError>
+      ) : null}
     </PanelFooter>
   );
 }

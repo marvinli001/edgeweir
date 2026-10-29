@@ -82,7 +82,7 @@ function MaintenanceForm({
   const blocked = !availability.available && !initial.enabled;
   return (
     <form className="flex flex-col gap-(--panel-pad)" onSubmit={submit}>
-      <PanelContent className="flex flex-col gap-5">
+      <PanelContent form className="flex flex-col gap-5">
         {blocked ? (
           <SafetyNote className="animate-in fade-in" data-testid="maintenance-unavailable">
             {m.feature_unavailable_nodes()}
@@ -144,6 +144,7 @@ function MaintenanceForm({
         />
       </PanelContent>
       <SaveBar
+        indent
         dirty={dirty && !templateTooLarge(draft.template)}
         pending={pending}
         error={error}

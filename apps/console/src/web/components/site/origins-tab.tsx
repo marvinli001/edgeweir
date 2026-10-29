@@ -274,6 +274,7 @@ function OriginsCard({ site }: { site: Site }) {
           ) : null}
         </PanelContent>
         <SaveBar
+          sticky
           dirty={dirty && !noDefaultGroup && !badHost}
           pending={pending}
           error={error}

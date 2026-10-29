@@ -177,7 +177,7 @@ function LogSettingsForm({
         }
       }}
     >
-      <PanelContent className="flex flex-col gap-5">
+      <PanelContent form className="flex flex-col gap-5">
         <div className="w-full sm:w-56">
           <FormSelect
             id="logSampleRate"
@@ -235,6 +235,7 @@ function LogSettingsForm({
         </SafetyNote>
       </PanelContent>
       <SaveBar
+        indent
         dirty={dirty}
         pending={options.isPending}
         error={error}

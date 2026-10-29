@@ -45,7 +45,7 @@ export function RulesBodyLimitCard({ site }: { site: Site }) {
         <PanelHeader>
           <PanelTitle>{m.rules_body_limit_title()}</PanelTitle>
         </PanelHeader>
-        <PanelContent className="flex flex-col gap-3">
+        <PanelContent form className="flex flex-col gap-3">
           {blocked ? (
             <SafetyNote className="animate-in fade-in" data-testid="rules-body-limit-unavailable">
               {m.feature_unavailable_nodes()}
@@ -68,6 +68,7 @@ export function RulesBodyLimitCard({ site }: { site: Site }) {
           </div>
         </PanelContent>
         <SaveBar
+          indent
           dirty={valid && bytes !== saved}
           pending={pending}
           error={error}

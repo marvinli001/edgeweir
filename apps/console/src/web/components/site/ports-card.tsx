@@ -127,7 +127,7 @@ function PortsEditor({
         if (!empty) await save({ ports: next });
       }}
     >
-      <PanelContent className="flex flex-col gap-4">
+      <PanelContent form className="flex flex-col gap-4">
         {/* HTTP and HTTPS as rows split by a hairline (on wrappers: a legend sits on its fieldset's border). */}
         <div className="flex flex-col divide-y divide-border [&>*]:py-3 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">
           <div>
@@ -171,6 +171,7 @@ function PortsEditor({
         )}
       </PanelContent>
       <SaveBar
+        indent
         dirty={dirty && !empty}
         pending={pending}
         error={empty ? m.site_ports_empty() : error}

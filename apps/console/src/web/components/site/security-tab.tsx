@@ -403,7 +403,7 @@ function ChallengeSettingsCard({
         <PanelHeader>
           <PanelTitle>{m.protection_challenge_title()}</PanelTitle>
         </PanelHeader>
-        <PanelContent className="flex flex-col gap-5">
+        <PanelContent form className="flex flex-col gap-5">
           {v2Locked ? (
             <SafetyNote
               className="animate-in fade-in"
@@ -552,7 +552,7 @@ function ChallengeSettingsCard({
             </div>
           </FieldSet>
         </PanelContent>
-        <SaveBar dirty={dirty} pending={pending} error={error} testId="protection-save" />
+        <SaveBar indent dirty={dirty} pending={pending} error={error} testId="protection-save" />
       </form>
     </Panel>
   );
@@ -589,7 +589,7 @@ function CcPolicyCard({ siteId, protection }: { siteId: string; protection: Site
         <PanelHeader>
           <PanelTitle>{m.cc_title()}</PanelTitle>
         </PanelHeader>
-        <PanelContent className="flex flex-col gap-4">
+        <PanelContent form className="flex flex-col gap-4">
           <div className="flex flex-wrap gap-x-6 gap-y-3">
             <SwitchField
               id="cc-enabled"
@@ -621,7 +621,7 @@ function CcPolicyCard({ siteId, protection }: { siteId: string; protection: Site
           />
           <SafetyNote>{m.cc_per_node_note()}</SafetyNote>
         </PanelContent>
-        <SaveBar dirty={dirty} pending={pending} error={error} testId="cc-save" />
+        <SaveBar indent dirty={dirty} pending={pending} error={error} testId="cc-save" />
       </form>
     </Panel>
   );
@@ -740,7 +740,7 @@ function WafForm({
   };
   return (
     <form className="flex flex-col gap-(--panel-pad)" onSubmit={form.submit}>
-      <PanelContent className="flex flex-col gap-4">
+      <PanelContent form className="flex flex-col gap-4">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <FormSelect
             id="waf-mode"
@@ -870,7 +870,13 @@ function WafForm({
           </SafetyNote>
         )}
       </PanelContent>
-      <SaveBar dirty={form.dirty} pending={form.pending} error={form.error} testId="waf-save" />
+      <SaveBar
+        indent
+        dirty={form.dirty}
+        pending={form.pending}
+        error={form.error}
+        testId="waf-save"
+      />
     </form>
   );
 }

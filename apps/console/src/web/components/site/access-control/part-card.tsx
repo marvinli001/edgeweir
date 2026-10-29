@@ -262,7 +262,7 @@ function PartForm<P extends AccessControlPart, D>({
         }
       }}
     >
-      <PanelContent className={cn("flex flex-col gap-5", contentClassName)}>
+      <PanelContent form className={cn("flex flex-col gap-5", contentClassName)}>
         {availability.available ? null : (
           <SafetyNote className="animate-in fade-in" data-testid={`${testId}-unavailable`}>
             {m.feature_unavailable_nodes()}
@@ -271,6 +271,7 @@ function PartForm<P extends AccessControlPart, D>({
         {children(fields)}
       </PanelContent>
       <SaveBar
+        indent
         dirty={dirty && !blocked}
         pending={saving}
         error={error?.message ?? null}

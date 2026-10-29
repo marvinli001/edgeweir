@@ -455,6 +455,7 @@ function AuthRulesForm({
           )}
         </PanelContent>
         <SaveBar
+          sticky
           dirty={dirty && !blocked}
           pending={form.pending}
           error={form.error}

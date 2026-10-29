@@ -62,13 +62,30 @@ function PanelAction({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-function PanelContent({ className, ...props }: React.ComponentProps<"div">) {
+/**
+ * The panel's body. With `form`, a settings form: its fields lay out label-left once the panel is
+ * 40rem wide (index.css [data-form]), and `className` styles the block that holds them.
+ */
+function PanelContent({
+  className,
+  form = false,
+  children,
+  ...props
+}: React.ComponentProps<"div"> & { form?: boolean }) {
   return (
     <div
       data-slot="panel-content"
-      className={cn("@container/panel min-w-0 px-(--panel-pad)", className)}
+      className={cn("@container/panel min-w-0 px-(--panel-pad)", !form && className)}
       {...props}
-    />
+    >
+      {form ? (
+        <div data-form="label-left" className={className}>
+          {children}
+        </div>
+      ) : (
+        children
+      )}
+    </div>
   );
 }
 

@@ -270,6 +270,7 @@ function BulkRedirectsForm({
           )}
         </PanelContent>
         <SaveBar
+          sticky
           dirty={dirty && editable}
           pending={mutation.isPending}
           error={error}

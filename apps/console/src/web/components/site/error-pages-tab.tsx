@@ -247,6 +247,7 @@ function ErrorPagesForm({
         <TemplateVariables hideRulesV3={!availabilityV3.available} />
       </PanelContent>
       <SaveBar
+        sticky
         dirty={form.dirty && editable && !tooLarge && !invalid}
         pending={form.pending}
         error={form.error}

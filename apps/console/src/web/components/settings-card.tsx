@@ -60,7 +60,8 @@ interface SettingsFormProps<T, D, I, O, E, C>
 }
 
 /**
- * A card that loads a setting, edits a draft of it and saves it (useSettingsForm).
+ * A card that loads a setting, edits a draft of it and saves it (useSettingsForm). Its fields lay
+ * out label-left (index.css [data-form]) above a sticky save bar.
  */
 export function SettingsCard<T, D, I, O, E, C, QE>({
   title,
@@ -114,7 +115,7 @@ function SettingsForm<T, D, I, O, E, C>({
       noValidate={noValidate}
       onSubmit={form.submit}
     >
-      <PanelContent className={contentClassName}>
+      <PanelContent form className={contentClassName}>
         {children({
           value,
           draft: form.draft,
@@ -125,6 +126,7 @@ function SettingsForm<T, D, I, O, E, C>({
         })}
       </PanelContent>
       <SaveBar
+        indent
         dirty={form.dirty}
         pending={form.pending}
         error={form.error}

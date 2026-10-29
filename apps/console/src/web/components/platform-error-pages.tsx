@@ -64,7 +64,7 @@ function PlatformErrorPagesForm({ initial }: { initial: PlatformErrorPages }) {
   const tooLarge = PAGES.some(({ key }) => templateTooLarge(pages[key]));
   return (
     <form className="flex flex-col gap-(--panel-pad)" onSubmit={form.submit}>
-      <PanelContent className="flex flex-col gap-5">
+      <PanelContent form className="flex flex-col gap-5">
         {PAGES.map(({ key, id, name }) => (
           <TemplateField
             key={key}
@@ -84,6 +84,7 @@ function PlatformErrorPagesForm({ initial }: { initial: PlatformErrorPages }) {
         ) : null}
       </PanelContent>
       <SaveBar
+        indent
         dirty={form.dirty && !tooLarge}
         pending={form.pending}
         error={form.error}

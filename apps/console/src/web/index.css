@@ -291,6 +291,52 @@
 }
 
 /*
+ * Label-left settings forms (tokens.md "Forms"): in a [data-form="label-left"] block of a panel
+ * at least 40rem wide, each labelled field puts its label in the --ew-form-label column and its
+ * control, hint and error beside it, grids of fields stack into one column 24px apart, and
+ * switches, hints and the save bar line up with the controls. Dialogs, narrow panels and phones
+ * keep labels on top. Unlayered, so it beats the grid utilities the forms carry.
+ */
+@container panel (width >= 40rem) {
+  [data-form="label-left"] {
+    --form-indent: calc(var(--ew-form-label) + 1.5rem);
+    &,
+    & .grid:has(> [data-slot="field"]) {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    &
+      [data-slot="field"][data-orientation="vertical"]:has(
+        > [data-slot="field-label"]:not(.sr-only)
+      ) {
+      display: grid;
+      grid-template-columns: var(--ew-form-label) minmax(0, 32rem);
+      column-gap: 1.5rem;
+      row-gap: 0.375rem;
+      align-items: start;
+      & > * {
+        grid-column: 2;
+      }
+      & > [data-slot="field-label"] {
+        grid-column: 1;
+        grid-row: 1;
+        min-height: var(--arc-control-height-md);
+        color: var(--muted-foreground);
+      }
+    }
+    /* Rows without a label of their own (a switch, a hint, an add button) start at the controls. */
+    & > :not([data-slot="field"], [data-slot="field-set"], :has([data-slot="field-label"])),
+    & .grid:has(> [data-slot="field"]) > :not([data-slot="field"], [data-slot="field-set"], :has([data-slot="field-label"])),
+    & [data-slot="field"][data-orientation="horizontal"] {
+      margin-left: var(--form-indent);
+      width: auto;
+      align-self: flex-start;
+    }
+  }
+}
+
+/*
  * Touch screens: tab triggers and nav items are 44px tall like every other control (the
  * controls' heights come from foundation.css); a page's line tab bar grows with them.
  */
@@ -421,8 +467,7 @@
 
 /*
  * Forced colors (Windows high contrast) drop box-shadows and background images, so the rings and
- * wells drawn with shadows disappear. Containers get real borders from edge-lit and seg-well,
- * controls from their own transparent borders; here every keyboard focus becomes an outline
+ * wells drawn with shadows disappear. Panels and controls keep their real hairline borders; here every keyboard focus becomes an outline
  * (unlayered, so it beats outline-none), and states that were only a fill get a system color.
  */
 @media (forced-colors: active) {
