@@ -92,6 +92,32 @@ function chartData(rows: ChartRow[], keys: string[], range: AnalyticsRange): Lin
   }));
 }
 
+/** An element's width, kept current (0 until measured). */
+function useWidth<T extends HTMLElement>(): [React.RefCallback<T>, number] {
+  const [width, setWidth] = React.useState(0);
+  const ref = React.useCallback((element: T | null) => {
+    if (!element) return;
+    setWidth(element.clientWidth);
+    const observer = new ResizeObserver(() => setWidth(element.clientWidth));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return [ref, width];
+}
+
+/**
+ * The axis labels that fit side by side (like the line chart's): one per slot as wide as the
+ * longest label, counted back from the latest so the newest always shows.
+ */
+function fittingLabels(points: LineChartDatum[], width: number): Set<number> {
+  const labeled = points.flatMap((point, index) => (point.axisLabel ? [index] : []));
+  if (!width) return new Set(labeled);
+  const longest = Math.max(0, ...labeled.map((index) => points[index]?.axisLabel?.length ?? 0));
+  const room = Math.max(2, Math.floor(width / Math.max(76, longest * 7 + 24)));
+  const stride = Math.ceil(labeled.length / room);
+  return new Set(labeled.reverse().filter((_, rank) => rank % stride === 0));
+}
+
 /** One thin line per series with a time axis, value ticks and hairlines. */
 export function LinesChart({
   data,
@@ -169,6 +195,8 @@ export function StackedBarsChart({
   );
   const width = 100 / Math.max(1, data.length);
   const row = active === null ? null : data[active];
+  const [axisRef, axisWidth] = useWidth<HTMLDivElement>();
+  const shown = React.useMemo(() => fittingLabels(points, axisWidth), [points, axisWidth]);
   return (
     <figure className="relative m-0 grid min-w-0 gap-2 px-4" aria-label={label}>
       <div className="grid grid-cols-[minmax(0,1fr)_48px]">
@@ -271,9 +299,9 @@ export function StackedBarsChart({
             </span>
           ))}
         </div>
-        <div className="relative h-6" aria-hidden="true">
+        <div ref={axisRef} className="relative h-6" aria-hidden="true">
           {points.map((point, index) =>
-            point.axisLabel ? (
+            point.axisLabel && shown.has(index) ? (
               <span
                 key={point.key}
                 className="readout absolute top-2 -translate-x-1/2 text-xs leading-none whitespace-nowrap text-muted-foreground"

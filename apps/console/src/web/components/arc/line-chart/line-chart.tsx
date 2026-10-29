@@ -295,11 +295,17 @@ function TickLabel({
   );
 }
 
-/** Axis labels that fit: at most one per 76 pixels, counted back from the latest so the newest date always shows. */
+/**
+ * Axis labels that fit: at most one per 76 pixels, or per the longest label's width when that is
+ * wider (a date with a time), counted back from the latest so the newest date always shows.
+ */
 function axisPicks(data: LineChartDatum[], width: number) {
   const labeled = data.flatMap((item, index) => (item.axisLabel ? [index] : []));
   if (!width || !labeled.length) return [];
-  const room = Math.max(2, Math.floor(width / 76));
+  const longest = Math.max(...labeled.map((index) => data[index]?.axisLabel?.length ?? 0));
+  // About 7px per character of the 12px axis text, plus a gap.
+  const slot = Math.max(76, longest * 7 + 24);
+  const room = Math.max(2, Math.floor(width / slot));
   const stride = Math.ceil(labeled.length / room);
   return labeled
     .reverse()
