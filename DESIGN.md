@@ -282,6 +282,7 @@ Arc `Button`（`components/arc/button/button.tsx`）；路由链接用 `LinkButt
 - 控件宽度贴合内容：端口窄，域名宽。
 - 输入框：面板底，1px `--ew-border`，悬停 `--ew-border-strong`，聚焦边框 `--ew-brand` + 品牌色 20% 光环，错误边框 `--ew-error`。
 - 校验：字段错误用 `FieldError`（`role="alert"`，12px `text-destructive`）紧贴字段显示；保存失败的错误显示在保存按钮旁；字段错误优先于通知。
+- 设置的来源徽标（「已保存 / 环境变量 / 默认」，`SettingSourceBadge`）放在控件下方，不挤占标签列。
 - 保存条：`SaveBar`（`components/site/save-site.tsx`）。按钮在前，与控件列对齐（`indent`）；未修改时禁用，保存中显示转圈；长编辑器传 `sticky`，保存条吸附在视口底部（面板底色 + 顶部细线）。
 - 有未保存修改时，离开页面或切换页签先确认（`useUnsavedChanges` + `UnsavedChangesGuard`）；同页的筛选与翻页不拦截。
 
@@ -306,7 +307,9 @@ Arc `Button`（`components/arc/button/button.tsx`）；路由链接用 `LinkButt
 | 批量 | 首列复选框；选中后底部浮出操作条（`bg-overlay` + `shadow-elev-2`，吸附在视口底部） |
 | 表尾 | 顶部细线，13px 次要色：左侧 `共 N 项`（`table_total`），右侧 `Pager`（`21–40 / 57` + 上一页 / 下一页，只有一页时不显示） |
 | 空 | 列表为空：`EmptyState`，小图标 + 一行标题 + 主操作 |
-| 无结果 | 筛选后为空：搜索图标 + 「没有匹配的…」，与「还没有…」区分 |
+| 排序 | 可排序的列在表头文字后放箭头按钮（`DataTable` 的 `sort`，列有 `accessorFn` 即可排序），一次一列，`aria-sort` 标明方向；排序写入 URL（`sort=name` / `sort=-port`）。分页由服务端完成的列表不在页内排序 |
+| 时间 | 相对时间用 `TimeAgo`（`components/time-ago.tsx`），悬停显示完整日期时间 |
+| 无结果 | 筛选后为空：`NoMatch`（`components/states.tsx`），搜索图标 + 「没有匹配的…」+ 次要按钮「清除筛选」，与「还没有…」区分 |
 
 手机上的卡片见 [4.17](#417-手机卡片)。
 
@@ -327,7 +330,7 @@ Arc `Button`（`components/arc/button/button.tsx`）；路由链接用 `LinkButt
 
 - 监控卡片是细线面板：13px 次要色标题，下方是数值与环比（`↗ 39.6%`，好坏用 `--delta-good` / `--delta-bad`，并带读屏文字），再下方是图表。整张卡片可点击打开明细对话框，悬停时右上角出现展开图标。
 - 卡片按内容列宽度排成 2–4 列网格；一行小卡片都没有数据时只显示数值，不画空图。
-- 折线图：Arc `LineChart`；空值留缺口；比例用 `domain`；卡片里的小图用 `axis={false}`。网格线 `--ew-grid`，坐标轴文字 `--ew-axis`。
+- 折线图：Arc `LineChart`；空值留缺口；比例用 `domain`；卡片里的小图用 `axis={false}`。横轴标签按可用宽度隔项显示，最新一项总在，标签不重叠（堆叠条同样）。网格线 `--ew-grid`，坐标轴文字 `--ew-axis`。
 - 堆叠条与状态码条：`breakdown-charts.tsx` 的 SVG，状态码用 `--ew-status-*`，片段之间留间隙。
 - 表格单元格里的趋势：`Sparkline`，单系列品牌蓝。
 - 时间范围：区域标题行末尾的次要按钮（日历图标 + 当前范围），点开为单选菜单（`RangeSelect`）；旁边是刷新等图标按钮。
@@ -348,7 +351,7 @@ Arc `Alert`（`components/arc/alert/alert.tsx`）
 Arc `Dialog`、`Drawer`；`FormDialog`（`components/form-dialog.tsx`）、`ConfirmDialog` / `ControlledConfirmDialog`（`components/confirm-dialog.tsx`）。
 
 - 对话框：`bg-popover`，12px 圆角，`--ew-shadow-3`，遮罩 `--ew-scrim`（不模糊），默认最宽 28rem，手机上左右各留 16px。标题（16px 500）+ 关闭按钮，内容，页脚。
-- 表单对话框：标签在上；页脚有顶部细线，提交按钮在右，长表单滚动时页脚保持可见；错误显示在字段下方，对话框不关闭；Esc 与关闭按钮关闭。
+- 表单对话框：标签在上；页脚有顶部细线，右侧依次是「取消」（`secondary`）与提交按钮，长表单滚动时页脚保持可见；错误显示在字段下方，对话框不关闭；Esc 与关闭按钮关闭。
 - 确认对话框：标题写明对象（「删除网站 shop.example.com？」这类）；可选一行 `SafetyNote` 说明会影响什么；破坏性确认在标题旁放红色浅底警告图标，确认按钮为 `danger`；失败时错误留在对话框里。
 - 抽屉：用于手机导航与需要保留页面上下文的长内容；内侧边 12px 圆角，`--ew-shadow-3`。
 
@@ -411,6 +414,7 @@ Arc `Badge`（`components/arc/badge/badge.tsx`）
 
 - 页头的次要操作收进「…」菜单（Arc `DropdownMenu`），破坏性项为 `destructive` 变体，排在最后。
 - 提示（Arc `Tooltip`）：反色底，12px 白字，4px 圆角，无箭头；用于图标按钮、截断文字、禁用原因。
+- 禁用原因：因条件不满足而禁用的控件包在 `DisabledHint`（`components/disabled-hint.tsx`）里，悬停或聚焦时用一句话说明原因（「先创建集群」「最多 64 条规则」）；提交中、未修改这类显而易见的禁用不加。
 
 ### 4.15 一行安全提示
 
