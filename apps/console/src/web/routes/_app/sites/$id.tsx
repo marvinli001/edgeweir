@@ -144,7 +144,16 @@ function SiteDetailPage() {
         </LinkButton>
       }
     >
-      <QueryView query={site} notFound={<NotFoundPage path={href} surface="inline" />}>
+      <QueryView
+        query={site}
+        notFound={
+          <NotFoundPage
+            path={href}
+            surface="inline"
+            record={{ title: m.status_site_missing(), to: "/sites", label: m.status_back_sites() }}
+          />
+        }
+      >
         {(data) => (
           <Tabs
             key={data.id}

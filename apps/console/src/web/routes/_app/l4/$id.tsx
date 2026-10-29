@@ -63,7 +63,16 @@ function L4AppPage() {
         </LinkButton>
       }
     >
-      <QueryView query={app} notFound={<NotFoundPage path={href} surface="inline" />}>
+      <QueryView
+        query={app}
+        notFound={
+          <NotFoundPage
+            path={href}
+            surface="inline"
+            record={{ title: m.status_l4_missing(), to: "/l4", label: m.status_back_l4() }}
+          />
+        }
+      >
         {(data) => (
           <Tabs
             key={data.id}

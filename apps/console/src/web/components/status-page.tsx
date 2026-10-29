@@ -173,12 +173,16 @@ function StatusPage({
   facts,
   actions,
   surface,
+  title = TITLES[kind](),
+  hint = HINTS[kind](),
 }: {
   kind: StatusKind;
   code: string;
   facts: StatusFact[];
   actions: React.ReactNode;
   surface: "screen" | "shell" | "inline";
+  title?: string;
+  hint?: string;
 }) {
   // Inside a page the page header holds the h1.
   const Heading = surface === "inline" ? "h2" : "h1";
@@ -218,11 +222,9 @@ function StatusPage({
           </span>
         </div>
         <Heading id={titleId} className="mt-4 text-xl leading-7 font-medium text-balance">
-          {TITLES[kind]()}
+          {title}
         </Heading>
-        <p className="mt-2 max-w-[34em] text-sm leading-[1.375rem] text-muted-foreground">
-          {HINTS[kind]()}
-        </p>
+        <p className="mt-2 max-w-[34em] text-sm leading-[1.375rem] text-muted-foreground">{hint}</p>
         <HopTrace at={FAILED_AT[kind]} stamp={stamp} />
         <dl className="mt-7 grid gap-2 rounded-lg bg-well p-4">
           {facts.map((fact) => (
@@ -278,13 +280,25 @@ function useShownAt(): string {
   return formatDateTime(at);
 }
 
-/** A path no page serves, or a record that no longer exists (the requested path is shown). */
+/** The list a missing record belongs to: the page says what is missing and leads back there. */
+export interface MissingRecord {
+  title: string;
+  to: "/sites" | "/l4";
+  label: string;
+}
+
+/**
+ * A path no page serves, or a record that no longer exists (`record`: a deleted site's old link
+ * leads back to the sites list); the requested path is shown.
+ */
 export function NotFoundPage({
   path,
   surface,
+  record,
 }: {
   path: string;
   surface: "screen" | "shell" | "inline";
+  record?: MissingRecord;
 }) {
   const shownAt = useShownAt();
   return (
@@ -292,13 +306,15 @@ export function NotFoundPage({
       kind="not-found"
       code="404"
       surface={surface}
+      title={record?.title}
+      hint={record ? m.status_record_hint() : undefined}
       facts={[
         { label: m.status_path(), value: path },
         { label: m.status_time(), value: shownAt },
       ]}
       actions={
         <>
-          <OverviewButton />
+          {record ? <LinkButton to={record.to}>{record.label}</LinkButton> : <OverviewButton />}
           <BackButton />
         </>
       }
