@@ -1,10 +1,15 @@
 import type { Cluster, Node } from "@edgeweir/contract";
 import { Link } from "@tanstack/react-router";
 import * as React from "react";
+import type { GlobeMarker, GlobeTone } from "@/components/effects/edge-globe";
 import { FlowScaled } from "@/components/effects/number-flow";
 import { Dot, LiveDot, type StatusTone } from "@/components/status-dot";
+import { countryName } from "@/lib/access-logs";
+import { nodePlaceOf } from "@/lib/edge-map";
 import { formatBitRate, m } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+
+const EdgeGlobe = React.lazy(() => import("@/components/effects/edge-globe"));
 
 const BIT_UNITS = ["bps", "Kbps", "Mbps", "Gbps", "Tbps"] as const;
 
@@ -25,11 +30,14 @@ interface Location {
  * Where a location stands: all serving (good), some down or behind (warn), or none serving (bad),
  * with the word for the worst cause: offline, data plane unhealthy, behind.
  */
-function standingOf(nodes: Node[], latest: number): { tone: StatusTone; state: string | null } {
+function standingOf(
+  nodes: Node[],
+  latest: (node: Node) => number,
+): { tone: GlobeTone; state: string | null } {
   const online = nodes.filter((n) => n.online);
   const serving = online.filter((n) => n.dataPlaneHealthy);
   const unhealthy = online.length > serving.length;
-  const lagging = online.some((n) => n.appliedRevision < (n.targetRevision ?? latest));
+  const lagging = online.some((n) => n.appliedRevision < (n.targetRevision ?? latest(n)));
   if (serving.length === 0)
     return { tone: "bad", state: unhealthy ? m.nodes_unhealthy() : m.nodes_offline() };
   if (unhealthy) return { tone: "warn", state: m.nodes_unhealthy() };
@@ -38,8 +46,14 @@ function standingOf(nodes: Node[], latest: number): { tone: StatusTone; state: s
   return { tone: "good", state: null };
 }
 
-function locationsOf(nodes: Node[], clusters: Cluster[]): Location[] {
+/** The latest revision of a node's cluster. */
+function latestOf(clusters: Cluster[]): (node: Node) => number {
   const latest = new Map(clusters.map((c) => [c.id, c.latestRevision?.revision ?? 0]));
+  return (node) => latest.get(node.clusterId) ?? 0;
+}
+
+function locationsOf(nodes: Node[], clusters: Cluster[]): Location[] {
+  const latest = latestOf(clusters);
   const groups = new Map<string, Node[]>();
   for (const node of nodes) {
     if (node.status !== "active") continue;
@@ -56,15 +70,48 @@ function locationsOf(nodes: Node[], clusters: Cluster[]): Location[] {
       online: list.filter((n) => n.online).length,
       total: list.length,
       egress: list.reduce((sum, n) => sum + (n.online ? (n.metrics?.egressBps ?? 0) : 0), 0),
-      ...standingOf(list, latest.get(first.clusterId) ?? 0),
+      ...standingOf(list, latest),
     };
   });
 }
 
 /**
- * The edge network at a glance: every edge location on a globe, colored by its health, and the
- * locations listed with their health in words, nodes and egress (the list is the globe's text
- * alternative). Side by side where the card is wide (it spans the row), stacked where it is narrow
+ * A marker per place the nodes' public addresses are at (their GeoIP location, reported by the
+ * nodes), colored by the worst standing there and sized by its share of the nodes. Nodes whose
+ * address no database knows are left off the globe.
+ */
+function markersOf(nodes: Node[], clusters: Cluster[]): GlobeMarker[] {
+  const latest = latestOf(clusters);
+  const places = new Map<string, { location: [number, number]; country: string; nodes: Node[] }>();
+  for (const node of nodes) {
+    if (node.status !== "active") continue;
+    const place = nodePlaceOf(node.location);
+    if (!place || !node.location) continue;
+    const key = `${place[0].toFixed(1)}_${place[1].toFixed(1)}`;
+    const entry = places.get(key) ?? { location: place, country: node.location.country, nodes: [] };
+    entry.nodes.push(node);
+    places.set(key, entry);
+  }
+  const most = Math.max(1, ...[...places.values()].map((p) => p.nodes.length));
+  return [...places.entries()].map(([key, place]) => {
+    const country = countryName(place.country);
+    const only = place.nodes.length === 1 ? place.nodes[0] : undefined;
+    return {
+      id: `node-${key.replace(/[^0-9_]/g, (c) => (c === "-" ? "m" : "d"))}`,
+      location: place.location,
+      tone: standingOf(place.nodes, latest).tone,
+      weight: place.nodes.length / most,
+      label: only
+        ? `${only.name} · ${country}`
+        : m.overview_globe_place({ place: country, count: place.nodes.length }),
+    };
+  });
+}
+
+/**
+ * The edge network at a glance: the nodes on a globe where their public addresses are, colored
+ * by their health, and the locations listed with their health in words, nodes and egress (the
+ * list is the globe's text alternative). Side by side where the card is wide (it spans the row), stacked where it is narrow
  * (a column of the bento).
  */
 export function EdgeNetworkCard({
@@ -78,6 +125,7 @@ export function EdgeNetworkCard({
 }) {
   const locations = React.useMemo(() => locationsOf(nodes, clusters), [nodes, clusters]);
   const totalEgress = locations.reduce((sum, l) => sum + l.egress, 0);
+  const markers = React.useMemo(() => markersOf(nodes, clusters), [nodes, clusters]);
 
   return (
     <section
@@ -102,7 +150,12 @@ export function EdgeNetworkCard({
         </div>
         <LiveDot label={m.overview_live()} className="mt-0.5 shrink-0" />
       </div>
-      <div className="flex-1 p-2">
+      <div className="grid flex-1 content-start items-center gap-2 p-2 @2xl/edge:grid-cols-[minmax(0,17rem)_minmax(0,1fr)] @2xl/edge:content-center">
+        <div className="relative mx-auto w-full max-w-60 py-2" aria-hidden>
+          <React.Suspense fallback={<div className="aspect-square w-full" />}>
+            <EdgeGlobe markers={markers} />
+          </React.Suspense>
+        </div>
         <ul className="flex min-w-0 flex-col" data-testid="edge-locations">
           {locations.length === 0 ? (
             <li className="flex h-10 items-center px-2 text-sm text-muted-foreground">

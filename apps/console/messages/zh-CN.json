@@ -116,6 +116,7 @@
   "overview_egress": "出口带宽",
   "overview_per_second": "/秒",
   "overview_edge_network": "边缘网络",
+  "overview_globe_place": "{place} · {count} 个节点",
   "cards_customize": "自定义卡片",
   "cards_reset": "恢复默认",
   "cards_group_lists": "列表",

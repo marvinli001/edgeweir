@@ -187,6 +187,23 @@ interface NodeSeed {
   cacheGb?: number;
 }
 
+/**
+ * Where a node's address is: Tokyo and Singapore with a City MMDB (coordinates), the rest with
+ * IPinfo Lite only (country), one node not reported yet.
+ */
+function locationOf(seed: NodeSeed): Node["location"] {
+  const prefix = seed.name.slice(0, 3);
+  if (seed.name === "iad-edge-03") return null;
+  const place: Record<string, [string, string, number | null, number | null]> = {
+    tyo: ["JP", "13", 35.69, 139.69],
+    sin: ["SG", "", 1.29, 103.85],
+    fra: ["DE", "", null, null],
+    iad: ["US", "", null, null],
+  };
+  const [country, subdivision, latitude, longitude] = place[prefix] ?? ["", "", null, null];
+  return { address: seed.v4, country, subdivision, latitude, longitude };
+}
+
 const nodeSeeds: NodeSeed[] = [
   {
     name: "tyo-edge-01",
@@ -440,6 +457,7 @@ export const nodes: Node[] = nodeSeeds.map((seed, index) => {
       measuredAt: lastSeen,
       skewed: index === 3,
     },
+    location: locationOf(seed),
   };
 });
 

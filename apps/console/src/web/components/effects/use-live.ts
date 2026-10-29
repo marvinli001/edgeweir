@@ -41,3 +41,8 @@ export function useLive(ref: React.RefObject<Element | null>): boolean {
   const inView = useInViewport(ref);
   return !reduced && visible && inView;
 }
+
+/** Device pixel ratio for canvases, capped (2 by default) so large screens stay cheap. */
+export function cappedDpr(max = 2): number {
+  return Math.min(max, Math.max(1, window.devicePixelRatio || 1));
+}

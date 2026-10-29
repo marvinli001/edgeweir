@@ -125,6 +125,7 @@
   "overview_egress": "Egress",
   "overview_per_second": "/s",
   "overview_edge_network": "Edge network",
+  "overview_globe_place": "{place} · {count} nodes",
   "cards_customize": "Customize cards",
   "cards_reset": "Reset to default",
   "cards_group_lists": "Lists",

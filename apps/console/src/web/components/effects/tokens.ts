@@ -34,6 +34,12 @@ function readToken(name: `--${string}`): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
+/** A token as 0–1 RGB, the form WebGL libraries take. */
+export function tokenVec3(name: `--${string}`): [number, number, number] {
+  const [r, g, b] = cssColorToRgba(readToken(name));
+  return [r / 255, g / 255, b / 255];
+}
+
 /**
  * A token as an `rgba(r, g, b, a)` string (legacy comma syntax), for libraries that parse only
  * that form.
