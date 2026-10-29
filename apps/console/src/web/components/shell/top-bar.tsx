@@ -88,7 +88,7 @@ function AlertsLink() {
         render={
           <Link
             to="/alerts"
-            className="relative grid size-8 place-items-center rounded-md text-muted-foreground transition-colors focus-ring hover:bg-wash hover:text-foreground"
+            className="relative grid size-8 place-items-center rounded-md text-muted-foreground transition-colors focus-ring hover:bg-wash hover:text-foreground pointer-coarse:size-11"
             aria-label={count ? m.attention_count({ count }) : m.alert_title()}
           />
         }

@@ -13,6 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/arc/dialog/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/arc/tooltip/tooltip";
 import { type Columns, DataTable, FilterBar } from "@/components/data-table";
 import { FilterSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
@@ -88,19 +89,26 @@ function AuditDetails({ entry }: { entry: AuditLogEntry }) {
     : "";
   return (
     <Dialog>
-      <DialogTrigger
-        render={
-          <Button
-            className="icon-button"
-            size="sm"
-            variant="ghost"
-            aria-label={m.audit_details()}
-            data-testid="audit-details"
-          />
-        }
-      >
-        <HugeiconsIcon icon={InformationCircleIcon} strokeWidth={2} />
-      </DialogTrigger>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <DialogTrigger
+              render={
+                <Button
+                  className="icon-button"
+                  size="sm"
+                  variant="ghost"
+                  aria-label={m.audit_details()}
+                  data-testid="audit-details"
+                />
+              }
+            />
+          }
+        >
+          <HugeiconsIcon icon={InformationCircleIcon} strokeWidth={2} />
+        </TooltipTrigger>
+        <TooltipContent>{m.audit_details()}</TooltipContent>
+      </Tooltip>
       <DialogContent
         className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-2xl"
         data-testid="audit-detail"

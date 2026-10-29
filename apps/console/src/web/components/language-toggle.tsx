@@ -8,6 +8,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/arc/dropdown-menu/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/arc/tooltip/tooltip";
 import { getLocale, type Locale, localeLabels, locales, m, setLocale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -15,19 +16,26 @@ import { cn } from "@/lib/utils";
 export function LanguageToggle({ className }: { className?: string }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn("icon-button", className)}
-            aria-label={m.user_menu_language()}
-            data-testid="language-toggle"
-          />
-        }
-      >
-        <HugeiconsIcon icon={LanguageSkillIcon} strokeWidth={2} />
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={cn("icon-button", className)}
+                  aria-label={m.user_menu_language()}
+                  data-testid="language-toggle"
+                />
+              }
+            />
+          }
+        >
+          <HugeiconsIcon icon={LanguageSkillIcon} strokeWidth={2} />
+        </TooltipTrigger>
+        <TooltipContent>{m.user_menu_language()}</TooltipContent>
+      </Tooltip>
       <DropdownMenuContent align="end" className="min-w-32">
         <DropdownMenuRadioGroup
           value={getLocale()}

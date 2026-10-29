@@ -8,6 +8,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/arc/dropdown-menu/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/arc/tooltip/tooltip";
 import { useTheme } from "@/components/theme-provider";
 import { m } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -17,25 +18,32 @@ export function ThemeToggle({ className }: { className?: string }) {
   const { theme, resolvedTheme, setTheme } = useTheme();
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn("icon-button", className)}
-            aria-label={m.user_menu_theme()}
-            data-testid="theme-toggle"
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={cn("icon-button", className)}
+                  aria-label={m.user_menu_theme()}
+                  data-testid="theme-toggle"
+                />
+              }
+            />
+          }
+        >
+          {/* The glyph turns in when the scheme changes (it only fades under reduced motion). */}
+          <HugeiconsIcon
+            key={resolvedTheme}
+            icon={resolvedTheme === "dark" ? Moon02Icon : Sun03Icon}
+            strokeWidth={2}
+            className="animate-in spin-in-45 fade-in duration-300 ease-out"
           />
-        }
-      >
-        {/* The glyph turns in when the scheme changes (it only fades under reduced motion). */}
-        <HugeiconsIcon
-          key={resolvedTheme}
-          icon={resolvedTheme === "dark" ? Moon02Icon : Sun03Icon}
-          strokeWidth={2}
-          className="animate-in spin-in-45 fade-in duration-300 ease-out"
-        />
-      </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>{m.user_menu_theme()}</TooltipContent>
+      </Tooltip>
       <DropdownMenuContent align="end" className="min-w-36">
         <DropdownMenuRadioGroup
           value={theme}

@@ -48,7 +48,13 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
       </div>
       <Drawer open={menu} onOpenChange={setMenu}>
         <DrawerContent title={m.app_name()} side="left" className="w-72! md:hidden">
-          <div className="-m-4 flex h-full flex-col">
+          {/* A tap on the current page's entry closes the drawer too (no navigation follows). */}
+          <div
+            className="-m-4 flex h-full flex-col"
+            onClickCapture={(event) => {
+              if ((event.target as HTMLElement).closest("a")) setMenu(false);
+            }}
+          >
             <NavList />
           </div>
         </DrawerContent>
