@@ -62,10 +62,14 @@ test("overview lists and charts, stars, site analytics with breakdowns", async (
     await expect(dialog.getByRole("heading", { name: "请求总数", exact: true })).toBeVisible();
     // One site: no per-site view; nodes come first.
     await expect(dialog.getByTestId("detail-view-site")).toHaveCount(0);
-    await expect(dialog.getByTestId("detail-chart").locator("[data-slot=chart-line]").first()).toBeVisible();
+    await expect(
+      dialog.getByTestId("detail-chart").locator("[data-slot=chart-line]").first(),
+    ).toBeVisible();
     await expect(dialog.getByTestId("detail-list")).toContainText(nodeName);
     await dialog.getByTestId("detail-view-status").click();
-    await expect(dialog.getByTestId("detail-chart").locator("[data-slot=chart-bar]").first()).toBeVisible();
+    await expect(
+      dialog.getByTestId("detail-chart").locator("[data-slot=chart-bar]").first(),
+    ).toBeVisible();
     await expect(dialog.getByTestId("detail-list").getByTestId("ranked-item").first()).toHaveText(
       /^\d{3}/,
     );
