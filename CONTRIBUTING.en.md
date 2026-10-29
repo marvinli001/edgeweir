@@ -210,15 +210,16 @@ feat(console)!: drop the public landing page from the open core
 
 ## UI rules
 
+The UI baseline is [DESIGN.md](DESIGN.md) (Chinese): tokens, layout, components and copy rules follow it, and a UI change either follows it or updates it in the same change. The table lists the points tests enforce.
+
 | Area | Rule |
 | --- | --- |
-| Components | shadcn components live in `components/ui` and use the Base UI `render` prop, not `asChild`; one ThemeProvider for the app |
+| Components | Arc free-tier components only (`components/arc/`, Base UI `render` prop, not `asChild`); panels, forms and tables come from `components/layout/`; no shadcn/ui or appica; one ThemeProvider for the app |
 | States | Every page has loading, empty, and error states |
 | Copy | Short and user-facing; no page subtitles; no description paragraphs in dialogs or cards; empty states are a title plus an action; only one-line safety notes (e.g., "Shown once"), rendered with `SafetyNote` |
 | Loading | No skeletons or `animate-pulse`; `TopProgress` (2px top bar) covers route loads, fetches, and mutations; first loads render `LoadingState`; submit buttons show `Spinner` and are disabled; polling queries set `meta: { background: true }` |
 | Colors | No color literals in TS/TSX; colors come from CSS tokens |
 | External links | No links to other sites, except the allow list in `ui-rules.test.ts` |
-| appica-ui | Only through `src/web/components/appica/` and `appica-bridge.css` (scoped tokens, one `@source` per component) |
 | Motion | Entrances use `animate-enter` with a staggered `animationDelay`; reduced motion is respected |
 | Page scope | No marketing pages in the open core |
 

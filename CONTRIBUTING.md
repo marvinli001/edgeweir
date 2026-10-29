@@ -210,15 +210,16 @@ feat(console)!: drop the public landing page from the open core
 
 ## 界面规则
 
+界面基准是 [DESIGN.md](DESIGN.md)：token、布局、组件与文案规则都以它为准，界面改动遵循它或在同一次改动里修改它。下表是其中由测试强制的要点。
+
 | 范围 | 规则 |
 | --- | --- |
-| 组件 | shadcn 组件位于 `components/ui`，使用 Base UI 的 `render` prop，不用 `asChild`；全局只有一个 ThemeProvider |
+| 组件 | 只用 Arc 免费层组件（`components/arc/`，Base UI 的 `render` prop，不用 `asChild`）；面板、表单、表格来自 `components/layout/`；不用 shadcn/ui 与 appica；全局只有一个 ThemeProvider |
 | 状态 | 每个页面都有加载、空、错误状态 |
 | 文案 | 面向用户、简短；无页面副标题；对话框与卡片无说明段落；空状态只有标题与操作；只保留一行安全提示（如“仅显示一次”），用 `SafetyNote` |
 | 加载 | 不用骨架屏与 `animate-pulse`；`TopProgress`（2px 顶部进度条）覆盖路由加载、请求与提交；首次加载显示 `LoadingState`；提交按钮显示 `Spinner` 并禁用；轮询查询设置 `meta: { background: true }` |
 | 颜色 | TS/TSX 中不写颜色字面量，颜色来自 CSS token |
 | 外部链接 | 不链接其他站点，`ui-rules.test.ts` 的允许清单除外 |
-| appica-ui | 只经 `src/web/components/appica/` 与 `appica-bridge.css`（作用域 token，每个组件一条 `@source`）使用 |
 | 动效 | 入场用 `animate-enter` 加递增的 `animationDelay`；遵循减少动态效果设置 |
 | 页面范围 | 开源核心不含营销页面 |
 
