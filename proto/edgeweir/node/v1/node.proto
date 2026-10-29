@@ -286,6 +286,23 @@ message ReportStatusRequest {
   // console's time against the middle of the node's send and receive times.
   // Unset until a response carried console_time, and on nodes before v1.5.0.
   optional sint64 clock_offset_millis = 17;
+  // Where the last ReportStatusResponse.locate_address is, from the node's
+  // GeoIP databases (the console has none). Unset until a response carried
+  // an address, and on nodes before v1.6.2.
+  NodeLocation location = 18;
+}
+
+// NodeLocation places a node's address on the console's map.
+message NodeLocation {
+  // The address looked up (ReportStatusResponse.locate_address).
+  string address = 1;
+  // ISO 3166-1 alpha-2, "" when no database knows the address.
+  string country = 2;
+  // From a City MMDB that agrees on the country, else "".
+  string subdivision = 3;
+  // From a City MMDB that agrees on the country; unset without one.
+  optional double latitude = 4;
+  optional double longitude = 5;
 }
 
 // CertificateFailure is an entry of NodeConfig.certificates a node could not
@@ -427,6 +444,11 @@ message ReportStatusResponse {
   // The console's clock when it answered (the node's clock offset is
   // measured against it; ReportStatusRequest.clock_offset_millis).
   google.protobuf.Timestamp console_time = 7;
+  // The public address the node is placed by on the console's map: its
+  // first scheduling address, else the address its connection came from.
+  // Empty when it has no public address. The node reports where it is in
+  // the next ReportStatusRequest.location.
+  string locate_address = 8;
 }
 
 // MinuteStats is traffic of one site during one minute on one node.
