@@ -37,7 +37,7 @@ import { FormDialog } from "@/components/form-dialog";
 import { Field, FieldLabel } from "@/components/layout/form";
 import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { LinkButton } from "@/components/link-button";
-import { Page } from "@/components/page";
+import { Page, PageTabs } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { AccessTab } from "@/components/site/access-tab";
 import { AttacksTab } from "@/components/site/attacks-tab";
@@ -167,23 +167,25 @@ function SiteDetailPage() {
               })
             }
           >
-            {/* The page's tab bar: line tabs over a hairline, scrolling sideways on phones. */}
-            <TabsList
-              ref={tabBar}
-              variant="line"
-              className="w-full max-w-full justify-start overflow-x-auto overflow-y-hidden border-b scroll-fade [scrollbar-width:none]"
-            >
-              {SITE_TABS.map((value) => (
-                <TabsTrigger
-                  key={value}
-                  value={value}
-                  className="flex-none"
-                  data-testid={`tab-${value}`}
-                >
-                  {siteTabLabel(value)}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            {/* The page's tab bar, in the header band. */}
+            <PageTabs>
+              <TabsList
+                ref={tabBar}
+                variant="line"
+                className="w-full max-w-full justify-start overflow-x-auto overflow-y-hidden scroll-fade [scrollbar-width:none]"
+              >
+                {SITE_TABS.map((value) => (
+                  <TabsTrigger
+                    key={value}
+                    value={value}
+                    className="flex-none"
+                    data-testid={`tab-${value}`}
+                  >
+                    {siteTabLabel(value)}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </PageTabs>
             <TabsContent value="overview" className="animate-enter">
               <OverviewTab site={data} />
             </TabsContent>

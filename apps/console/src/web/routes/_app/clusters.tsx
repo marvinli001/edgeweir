@@ -22,7 +22,7 @@ import { OptionSelect } from "@/components/form-select";
 import { PortPoolsSection } from "@/components/l4/port-pools";
 import type { NodeDetailTab } from "@/components/node-detail";
 import { NodeUpgrades } from "@/components/node-upgrades";
-import { Page } from "@/components/page";
+import { Page, PageTabs } from "@/components/page";
 import { RegionsPanel } from "@/components/regions";
 import { ClusterScheduling } from "@/components/scheduling";
 import { EmptyState, QueryView } from "@/components/states";
@@ -245,47 +245,45 @@ function ClusterView({
             })
           }
         >
-          {/* The cluster's tab bar: line tabs over a hairline, scrolling sideways on phones. */}
-          <TabsList
-            ref={tabBar}
-            variant="line"
-            className="h-11 w-full max-w-full justify-start gap-0.5 overflow-x-auto overflow-y-hidden border-b px-0 pt-1 pb-[5px] scroll-fade [scrollbar-width:none]"
-          >
-            <TabsTrigger
-              value="overview"
-              className="flex-none px-2.5"
-              data-testid="cluster-tab-overview"
+          {/* The page's tab bar, in the header band. */}
+          <PageTabs>
+            <TabsList
+              ref={tabBar}
+              variant="line"
+              className="w-full max-w-full justify-start overflow-x-auto overflow-y-hidden scroll-fade [scrollbar-width:none]"
             >
-              {m.nodes_title()}
-            </TabsTrigger>
-            <TabsTrigger
-              value="releases"
-              className="flex-none px-2.5"
-              data-testid="cluster-tab-releases"
-            >
-              {m.cluster_tab_releases()}
-            </TabsTrigger>
-            <TabsTrigger value="dns" className="flex-none px-2.5" data-testid="cluster-tab-dns">
-              {m.dns_tab_dns()}
-            </TabsTrigger>
-            <TabsTrigger
-              value="scheduling"
-              className="flex-none px-2.5"
-              data-testid="cluster-tab-scheduling"
-            >
-              {m.scheduling_tab()}
-            </TabsTrigger>
-            <TabsTrigger
-              value="network"
-              className="flex-none px-2.5"
-              data-testid="cluster-tab-network"
-            >
-              {m.cluster_tab_settings()}
-            </TabsTrigger>
-            <TabsTrigger value="ports" className="flex-none px-2.5" data-testid="cluster-tab-ports">
-              {m.l4_pools_title()}
-            </TabsTrigger>
-          </TabsList>
+              <TabsTrigger
+                value="overview"
+                className="flex-none"
+                data-testid="cluster-tab-overview"
+              >
+                {m.nodes_title()}
+              </TabsTrigger>
+              <TabsTrigger
+                value="releases"
+                className="flex-none"
+                data-testid="cluster-tab-releases"
+              >
+                {m.cluster_tab_releases()}
+              </TabsTrigger>
+              <TabsTrigger value="dns" className="flex-none" data-testid="cluster-tab-dns">
+                {m.dns_tab_dns()}
+              </TabsTrigger>
+              <TabsTrigger
+                value="scheduling"
+                className="flex-none"
+                data-testid="cluster-tab-scheduling"
+              >
+                {m.scheduling_tab()}
+              </TabsTrigger>
+              <TabsTrigger value="network" className="flex-none" data-testid="cluster-tab-network">
+                {m.cluster_tab_settings()}
+              </TabsTrigger>
+              <TabsTrigger value="ports" className="flex-none" data-testid="cluster-tab-ports">
+                {m.l4_pools_title()}
+              </TabsTrigger>
+            </TabsList>
+          </PageTabs>
           <TabsContent value="overview" className="flex flex-col gap-6 animate-enter">
             {nodes}
             <NodeGroupsSection cluster={selected} />

@@ -34,6 +34,7 @@ import {
   FieldSeparator,
 } from "@/components/layout/form";
 import { Spinner } from "@/components/layout/spinner";
+import { MoreList } from "@/components/more-list";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
 import { SafetyNote } from "@/components/safety-note";
@@ -205,9 +206,8 @@ function SitesPage() {
           </span>
         ),
         cell: ({ row }) => (
-          <div className="flex items-start gap-2">
+          <div className="flex items-center gap-2">
             <Checkbox
-              className="mt-0.5"
               checked={selected.has(row.original.id)}
               onCheckedChange={(checked) => selectRows([row.original], checked)}
               aria-label={m.sites_select_site({ name: row.original.name })}
@@ -219,23 +219,22 @@ function SitesPage() {
               onToggle={() => void toggle(row.original.id)}
               className="-my-1 -ml-1.5 shrink-0"
             />
-            <div className="flex min-w-0 flex-col">
+            {/* Tags follow the name on its line; on phone cards they wrap under it. */}
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               <Link
                 to="/sites/$id"
                 params={{ id: row.original.id }}
                 className="max-w-56 truncate rounded-sm font-medium underline-offset-4 outline-none focus-ring hover:underline"
+                title={m.sites_created({ ago: timeAgo(row.original.createdAt) })}
                 data-testid="site-link"
                 {...rowLink}
               >
                 {row.original.name}
               </Link>
-              <span className="text-xs text-muted-foreground">
-                {timeAgo(row.original.createdAt)}
-              </span>
               <TagBadges
                 tags={row.original.tags}
                 onSelect={(tag) => void filterTag(tag.id)}
-                className="mt-1 max-w-56"
+                className="max-w-56 flex-nowrap @max-[42rem]/main:flex-wrap"
               />
             </div>
           </div>
@@ -280,17 +279,15 @@ function SitesPage() {
       {
         id: "domains",
         header: () => m.sites_col_domains(),
-        // Phone cards keep the main domain only.
+        // The main domain, the others behind "+N".
         cell: ({ row }) => (
-          <div className="flex flex-col font-mono text-xs leading-5">
-            {row.original.domains.map((d, i) => (
-              <DomainName
-                key={d}
-                domain={d}
-                className={i > 0 ? "@max-[42rem]/main:hidden" : undefined}
-              />
-            ))}
-          </div>
+          <MoreList
+            items={row.original.domains}
+            getKey={(d) => d}
+            render={(d) => <DomainName domain={d} />}
+            className="max-w-64 font-mono text-xs leading-5"
+            testId="site-domains-more"
+          />
         ),
       },
       {
@@ -299,16 +296,13 @@ function SitesPage() {
         stack: "hide",
         header: () => m.sites_col_origins(),
         cell: ({ row }) => (
-          <div
-            className="flex flex-col font-mono text-xs leading-5 text-muted-foreground"
-            data-row-ignore
-          >
-            {row.original.origins.map((o) => (
-              <span key={o.id}>
-                {o.scheme}://{o.address}:{o.port}
-              </span>
-            ))}
-          </div>
+          <MoreList
+            items={row.original.origins}
+            getKey={(o) => o.id}
+            render={(o) => `${o.scheme}://${o.address}:${o.port}`}
+            className="max-w-72 font-mono text-xs leading-5 text-muted-foreground"
+            testId="site-origins-more"
+          />
         ),
       },
       // With one cluster every site is on it: the column says nothing.

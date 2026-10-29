@@ -207,7 +207,7 @@ export function DataTable<T extends RowData>({
                 return (
                   <TableCell
                     key={cell.id}
-                    className={cn("align-top", pinned(cellIndex), layoutClass(def))}
+                    className={cn("align-middle", pinned(cellIndex), layoutClass(def))}
                     data-stack={stack ? place : undefined}
                     data-label={
                       stack && !place

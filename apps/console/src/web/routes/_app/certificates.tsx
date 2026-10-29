@@ -20,7 +20,7 @@ import { FormSelect } from "@/components/form-select";
 import { Field, FieldError, FieldLabel } from "@/components/layout/form";
 import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { OriginCaPanel, OriginClientPanel } from "@/components/origin-pki";
-import { enterDelay, Page } from "@/components/page";
+import { enterDelay, Page, PageTabs } from "@/components/page";
 import { ItemMenu } from "@/components/row-menu";
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
@@ -93,40 +93,38 @@ function CertificatesPage() {
           })
         }
       >
-        {/* The page's tab bar: line tabs over a hairline, scrolling sideways on phones. */}
-        <TabsList
-          variant="line"
-          className="h-11 w-full max-w-full justify-start gap-0.5 overflow-x-auto overflow-y-hidden border-b px-0 pt-1 pb-[5px] [scrollbar-width:none]"
-        >
-          <TabsTrigger
-            value="certificates"
-            className="flex-none px-2.5"
-            data-testid="cert-tab-certificates"
+        {/* The page's tab bar, in the header band. */}
+        <PageTabs>
+          <TabsList
+            variant="line"
+            className="w-full max-w-full justify-start overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
           >
-            {m.cert_tab_certificates()}
-          </TabsTrigger>
-          <TabsTrigger
-            value="origin-ca"
-            className="flex-none px-2.5"
-            data-testid="cert-tab-origin-ca"
-          >
-            {m.cert_tab_origin_ca()}
-          </TabsTrigger>
-          <TabsTrigger
-            value="origin-client"
-            className="flex-none px-2.5"
-            data-testid="cert-tab-origin-client"
-          >
-            {m.cert_tab_origin_client()}
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="certificates" className="flex flex-col gap-6 pt-4 animate-enter">
+            <TabsTrigger
+              value="certificates"
+              className="flex-none"
+              data-testid="cert-tab-certificates"
+            >
+              {m.cert_tab_certificates()}
+            </TabsTrigger>
+            <TabsTrigger value="origin-ca" className="flex-none" data-testid="cert-tab-origin-ca">
+              {m.cert_tab_origin_ca()}
+            </TabsTrigger>
+            <TabsTrigger
+              value="origin-client"
+              className="flex-none"
+              data-testid="cert-tab-origin-client"
+            >
+              {m.cert_tab_origin_client()}
+            </TabsTrigger>
+          </TabsList>
+        </PageTabs>
+        <TabsContent value="certificates" className="flex flex-col gap-6 animate-enter">
           <CertificatesPanel dialog={dialog} />
         </TabsContent>
-        <TabsContent value="origin-ca" className="pt-4 animate-enter">
+        <TabsContent value="origin-ca" className=" animate-enter">
           <OriginCaPanel issue={issue} />
         </TabsContent>
-        <TabsContent value="origin-client" className="pt-4 animate-enter">
+        <TabsContent value="origin-client" className=" animate-enter">
           <OriginClientPanel />
         </TabsContent>
       </Tabs>

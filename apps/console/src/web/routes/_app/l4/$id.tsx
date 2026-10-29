@@ -20,7 +20,7 @@ import { L4AppStats } from "@/components/l4/app-stats";
 import { DnsTarget, L4NodesWarning, ProtocolBadge } from "@/components/l4/common";
 import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { LinkButton } from "@/components/link-button";
-import { Page } from "@/components/page";
+import { Page, PageTabs } from "@/components/page";
 import { CnamePrefixActions } from "@/components/site/cname-prefix";
 import { QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
@@ -75,22 +75,20 @@ function L4AppPage() {
               })
             }
           >
-            {/* The application's tab bar: line tabs over a hairline. */}
-            <TabsList
-              variant="line"
-              className="h-11 w-full max-w-full justify-start gap-0.5 overflow-x-auto overflow-y-hidden border-b px-0 pt-1 pb-[5px] [scrollbar-width:none]"
-            >
-              <TabsTrigger
-                value="overview"
-                className="flex-none px-2.5"
-                data-testid="l4-tab-overview"
+            {/* The page's tab bar, in the header band. */}
+            <PageTabs>
+              <TabsList
+                variant="line"
+                className="w-full max-w-full justify-start overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
               >
-                {m.site_tab_overview()}
-              </TabsTrigger>
-              <TabsTrigger value="stats" className="flex-none px-2.5" data-testid="l4-tab-stats">
-                {m.analytics_title()}
-              </TabsTrigger>
-            </TabsList>
+                <TabsTrigger value="overview" className="flex-none" data-testid="l4-tab-overview">
+                  {m.site_tab_overview()}
+                </TabsTrigger>
+                <TabsTrigger value="stats" className="flex-none" data-testid="l4-tab-stats">
+                  {m.analytics_title()}
+                </TabsTrigger>
+              </TabsList>
+            </PageTabs>
             <TabsContent value="overview" className="animate-enter">
               <Overview app={data} />
             </TabsContent>

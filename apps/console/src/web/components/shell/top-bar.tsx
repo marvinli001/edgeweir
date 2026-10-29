@@ -52,7 +52,7 @@ function SearchTrigger() {
       <button
         type="button"
         onClick={openCommandMenu}
-        className="hidden h-8 w-full max-w-90 items-center gap-2 rounded-md border border-input bg-well px-3 text-sm text-placeholder transition-colors focus-ring hover:border-input-hover md:flex"
+        className="mr-2 hidden h-8 w-[min(20rem,28vw)] items-center gap-2 rounded-md border border-input bg-well px-3 text-sm text-placeholder transition-colors focus-ring hover:border-input-hover md:flex"
         data-testid="command-trigger"
       >
         <HugeiconsIcon icon={Search01Icon} strokeWidth={2} className="size-4" />
@@ -103,6 +103,49 @@ function AlertsLink() {
   );
 }
 
+/** The top bar's language switch (the account menu keeps one too, the only one on phones). */
+function LanguageMenu() {
+  return (
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  className="hidden size-8 place-items-center rounded-md text-muted-foreground transition-colors focus-ring hover:bg-wash hover:text-foreground aria-expanded:bg-wash sm:grid"
+                  aria-label={m.user_menu_language()}
+                  data-testid="topbar-language"
+                />
+              }
+            />
+          }
+        >
+          <HugeiconsIcon icon={LanguageSkillIcon} strokeWidth={2} className="size-4.5" />
+        </TooltipTrigger>
+        <TooltipContent>{m.user_menu_language()}</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="end" sideOffset={6}>
+        <DropdownMenuRadioGroup
+          value={getLocale()}
+          onValueChange={(value) => setLocale(value as Locale)}
+        >
+          {locales.map((locale) => (
+            <DropdownMenuRadioItem
+              key={locale}
+              value={locale}
+              data-testid={`topbar-locale-${locale}`}
+            >
+              {localeLabels[locale]()}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 /** The account menu: account pages, language, theme and sign out. */
 function UserMenu({ user }: { user: ShellUser }) {
   const subtitle = user.demo ? m.user_menu_demo() : user.email;
@@ -116,14 +159,19 @@ function UserMenu({ user }: { user: ShellUser }) {
         render={
           <button
             type="button"
-            className="flex h-9 items-center gap-2 rounded-md px-1.5 text-sm transition-colors focus-ring hover:bg-wash aria-expanded:bg-wash"
+            className="ml-1 flex h-10 max-w-56 items-center gap-2 rounded-md pr-2 pl-1 text-left transition-colors focus-ring hover:bg-wash aria-expanded:bg-wash"
             data-testid="user-menu"
             aria-label={user.name}
           />
         }
       >
         <Avatar name={user.name} className="size-7" aria-hidden="true" />
-        <span className="hidden max-w-40 truncate lg:inline">{user.name}</span>
+        <span className="hidden min-w-0 leading-tight lg:grid">
+          <span className="truncate text-dense">{user.name}</span>
+          <span className="truncate text-[11px] text-muted-foreground">
+            {user.demo ? m.user_menu_demo() : m.user_menu_role_admin()}
+          </span>
+        </span>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="min-w-56" align="end" sideOffset={6}>
         <DropdownMenuGroup>
@@ -221,8 +269,10 @@ function UserMenu({ user }: { user: ShellUser }) {
 }
 
 /**
- * The 56px top bar (white, bottom hairline): the logo and product name, the ⌘K search, alerts,
- * the theme and the account menu; on phones a menu button opens the navigation drawer.
+ * The 56px top bar (white, bottom hairline), the order every Edgeweir product shares (tokens.md):
+ * the logo and product name at the start; at the end the ⌘K search, the environment badge (none
+ * in the console), language, theme, notifications (alerts) and the account (avatar, name, role).
+ * On phones a menu button opens the navigation drawer.
  */
 export function TopBar({ user, onMenu }: { user?: ShellUser; onMenu?: () => void }) {
   return (
@@ -251,12 +301,12 @@ export function TopBar({ user, onMenu }: { user?: ShellUser; onMenu?: () => void
         </span>
         <span className="text-section font-medium">{m.app_name()}</span>
       </Link>
-      <div className="flex min-w-0 flex-1 justify-end md:justify-start">
-        {user ? <SearchTrigger /> : null}
-      </div>
+      <div className="min-w-0 flex-1" />
       <div className="flex shrink-0 items-center gap-1">
-        {user ? <AlertsLink /> : null}
+        {user ? <SearchTrigger /> : null}
+        <LanguageMenu />
         <ThemeToggle />
+        {user ? <AlertsLink /> : null}
         {user ? <UserMenu user={user} /> : null}
       </div>
     </header>

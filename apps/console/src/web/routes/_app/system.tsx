@@ -17,7 +17,7 @@ import { NodeChannelCard } from "@/components/node-channel";
 import { UrlScopeBadge } from "@/components/node-enrollment";
 import { NodeLogRetentionCard } from "@/components/node-log-retention";
 import { OriginAllowListCard } from "@/components/origin-allow-list";
-import { Page } from "@/components/page";
+import { Page, PageTabs } from "@/components/page";
 import { PlatformErrorPagesCard } from "@/components/platform-error-pages";
 import { ProbesPanel } from "@/components/probes";
 import { ReleaseSourceCard } from "@/components/release-source";
@@ -86,36 +86,34 @@ function SystemSettingsPage() {
           })
         }
       >
-        {/* The page's tab bar: line tabs over a hairline, scrolling sideways on phones. */}
-        <TabsList
-          variant="line"
-          className="h-11 w-full max-w-full justify-start gap-0.5 overflow-x-auto overflow-y-hidden border-b px-0 pt-1 pb-[5px] [scrollbar-width:none]"
-        >
-          <TabsTrigger
-            value="general"
-            className="flex-none px-2.5"
-            data-testid="system-tab-general"
+        {/* The page's tab bar, in the header band. */}
+        <PageTabs>
+          <TabsList
+            variant="line"
+            className="w-full max-w-full justify-start overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
           >
-            {m.system_tab_general()}
-          </TabsTrigger>
-          <TabsTrigger value="probes" className="flex-none px-2.5" data-testid="system-tab-probes">
-            {m.system_tab_probes()}
-          </TabsTrigger>
-          <TabsTrigger
-            value="service-accounts"
-            className="flex-none px-2.5"
-            data-testid="system-tab-service-accounts"
-          >
-            {m.nav_service_accounts()}
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="general" className="flex flex-col gap-6 pt-4 animate-enter">
+            <TabsTrigger value="general" className="flex-none" data-testid="system-tab-general">
+              {m.system_tab_general()}
+            </TabsTrigger>
+            <TabsTrigger value="probes" className="flex-none" data-testid="system-tab-probes">
+              {m.system_tab_probes()}
+            </TabsTrigger>
+            <TabsTrigger
+              value="service-accounts"
+              className="flex-none"
+              data-testid="system-tab-service-accounts"
+            >
+              {m.nav_service_accounts()}
+            </TabsTrigger>
+          </TabsList>
+        </PageTabs>
+        <TabsContent value="general" className="flex flex-col gap-6 animate-enter">
           <GeneralSettings />
         </TabsContent>
-        <TabsContent value="probes" className="pt-4 animate-enter">
+        <TabsContent value="probes" className=" animate-enter">
           <ProbesPanel addOpen={search.addProbe === true} onAddOpenChange={setAddProbe} />
         </TabsContent>
-        <TabsContent value="service-accounts" className="pt-4 animate-enter">
+        <TabsContent value="service-accounts" className=" animate-enter">
           <ServiceAccountsPanel createOpen={createAccount} onCreateOpenChange={setCreateAccount} />
         </TabsContent>
       </Tabs>
