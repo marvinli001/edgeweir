@@ -36,6 +36,7 @@ import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { nextDraftKey } from "@/components/site/save-site";
 import { StatusDot } from "@/components/status-dot";
+import { TimeAgo } from "@/components/time-ago";
 import {
   formatBitRate,
   formatBytes,
@@ -403,7 +404,7 @@ function NodeFacts({ node }: { node: Node }) {
       </Fact>
       <Fact label={m.nodes_col_last_seen()} testId="node-fact-last-seen">
         <span title={node.lastSeenAt ? formatDateTime(node.lastSeenAt) : undefined}>
-          {timeAgo(node.lastSeenAt)}
+          <TimeAgo at={node.lastSeenAt} />
         </span>
       </Fact>
       <Fact label={m.nodes_col_ips()} testId="node-fact-ips">

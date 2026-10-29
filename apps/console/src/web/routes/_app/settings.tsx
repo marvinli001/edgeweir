@@ -23,6 +23,7 @@ import { SafetyNote } from "@/components/safety-note";
 import { NumberField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
 import { useTheme } from "@/components/theme-provider";
+import { TimeAgo } from "@/components/time-ago";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import {
   formatDateTime,
@@ -280,7 +281,7 @@ function ApiKeysCard() {
                         })}
                       </span>
                       <span title={formatDateTime(new Date(k.createdAt).toISOString())}>
-                        {timeAgo(new Date(k.createdAt).toISOString())}
+                        <TimeAgo at={new Date(k.createdAt).toISOString()} />
                       </span>
                     </span>
                   </div>

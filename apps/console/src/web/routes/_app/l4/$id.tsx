@@ -25,7 +25,8 @@ import { CnamePrefixActions } from "@/components/site/cname-prefix";
 import { QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { NotFoundPage } from "@/components/status-page";
-import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
+import { TimeAgo } from "@/components/time-ago";
+import { formatNumber, m } from "@/lib/i18n";
 import {
   L4_STATS_RANGES,
   type L4StatsRange,
@@ -312,7 +313,7 @@ function Overview({ app }: { app: L4App }) {
               })}
             </InfoRow>
             <InfoRow label={m.site_updated_at()}>
-              <span title={formatDateTime(app.updatedAt)}>{timeAgo(app.updatedAt)}</span>
+              <TimeAgo at={app.updatedAt} />
             </InfoRow>
           </dl>
         </PanelContent>

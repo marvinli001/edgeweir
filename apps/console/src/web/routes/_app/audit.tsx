@@ -18,8 +18,9 @@ import { FilterSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
 import { EmptyState, NoMatch, QueryView } from "@/components/states";
+import { TimeAgo } from "@/components/time-ago";
 import { auditActionLabel, auditTargetLabel } from "@/lib/audit";
-import { formatDateTime, m, timeAgo } from "@/lib/i18n";
+import { formatDateTime, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
@@ -189,7 +190,7 @@ function AuditPage() {
             className="text-xs whitespace-nowrap text-muted-foreground tabular-nums"
             title={formatDateTime(row.original.occurredAt)}
           >
-            {timeAgo(row.original.occurredAt)}
+            <TimeAgo at={row.original.occurredAt} />
           </time>
         ),
       },

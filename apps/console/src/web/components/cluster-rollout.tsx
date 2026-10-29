@@ -16,8 +16,9 @@ import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { QueryView } from "@/components/states";
 import { StatusDot, type StatusTone } from "@/components/status-dot";
+import { TimeAgo } from "@/components/time-ago";
 import { useDraft } from "@/hooks/use-draft";
-import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
+import { formatDateTime, formatNumber, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { revisionReason } from "@/lib/revisions";
 
@@ -150,7 +151,7 @@ function RolloutStatus({ rollout }: { rollout: ClusterRollout }) {
                 className="text-xs text-muted-foreground"
                 title={formatDateTime(rollout.finishedAt)}
               >
-                {timeAgo(rollout.finishedAt)}
+                <TimeAgo at={rollout.finishedAt} />
               </span>
             ) : null}
           </Row>

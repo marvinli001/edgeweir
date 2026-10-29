@@ -11,9 +11,10 @@ import { FormDialog } from "@/components/form-dialog";
 import { Field, FieldLabel } from "@/components/layout/form";
 import { ItemMenu } from "@/components/row-menu";
 import { EmptyState, QueryView } from "@/components/states";
+import { TimeAgo } from "@/components/time-ago";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { placeOf } from "@/lib/edge-map";
-import { m, timeAgo } from "@/lib/i18n";
+import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { rowLink, rowLinkButton } from "@/lib/row-link";
 import { cn } from "@/lib/utils";
@@ -173,7 +174,7 @@ function RegionsList({ onCreate }: { onCreate: () => void }) {
         hideBelow: "lg",
         header: () => m.revisions_col_time(),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">{timeAgo(row.original.createdAt)}</span>
+          <TimeAgo at={row.original.createdAt} className="text-xs text-muted-foreground" />
         ),
       },
       {

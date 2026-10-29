@@ -64,10 +64,11 @@ import { SiteStatus, untilLive } from "@/components/site-status";
 import { TagBadges, TagPicker } from "@/components/site-tags";
 import { QueryView } from "@/components/states";
 import { NotFoundPage } from "@/components/status-page";
+import { TimeAgo } from "@/components/time-ago";
 import { useDraft } from "@/hooks/use-draft";
 import { useTabBar } from "@/hooks/use-tab-bar";
 import { DEFAULT_RANGE } from "@/lib/analytics";
-import { formatDateTime, m, timeAgo } from "@/lib/i18n";
+import { m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
 import { recordRecent } from "@/lib/recents";
 import { needsDomainForms, newDomains } from "@/lib/site-domains";
@@ -495,7 +496,7 @@ function OverviewTab({ site }: { site: Site }) {
                   <SiteTagsRow site={site} />
                 </InfoRow>
                 <InfoRow label={m.site_updated_at()}>
-                  <span title={formatDateTime(site.updatedAt)}>{timeAgo(site.updatedAt)}</span>
+                  <TimeAgo at={site.updatedAt} />
                 </InfoRow>
               </dl>
             </PanelContent>

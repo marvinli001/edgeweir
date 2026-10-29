@@ -25,9 +25,10 @@ import { ResourceEmpty, ResourceList, ResourceRow } from "@/components/resource-
 import { StarMark, useSiteStars } from "@/components/site-star";
 import { combineQueries, QueryView } from "@/components/states";
 import { Dot, type StatusTone } from "@/components/status-dot";
+import { TimeAgo } from "@/components/time-ago";
 import { useHiddenCards } from "@/hooks/use-hidden-cards";
 import { DEFAULT_RANGE } from "@/lib/analytics";
-import { formatNumber, m, timeAgo } from "@/lib/i18n";
+import { formatNumber, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { RECENT_PAGES, readRecents } from "@/lib/recents";
 import { revisionReason } from "@/lib/revisions";
@@ -311,7 +312,7 @@ function AttentionList({ items }: { items: AttentionItem[] }) {
           {item.kind === "canary_running" && item.at ? (
             <Countdown target={item.at} className="shrink-0 text-xs text-muted-foreground" />
           ) : item.kind === "canary_rolled_back" && item.at ? (
-            <span className="shrink-0 text-xs text-muted-foreground">{timeAgo(item.at)}</span>
+            <TimeAgo at={item.at} className="shrink-0 text-xs text-muted-foreground" />
           ) : null}
         </ResourceRow>
       ))}
@@ -465,7 +466,7 @@ function RevisionsList({ revisions, clusters }: { revisions: Revision[]; cluster
             icon={<HugeiconsIcon icon={GitCommitIcon} strokeWidth={2} />}
             link={{ to: "/clusters", search: { cluster: r.clusterId, tab: "releases" } }}
             trailing={
-              <span className="shrink-0 text-xs text-muted-foreground">{timeAgo(r.createdAt)}</span>
+              <TimeAgo at={r.createdAt} className="shrink-0 text-xs text-muted-foreground" />
             }
           >
             <span className="shrink-0 font-mono text-xs text-muted-foreground">#{r.revision}</span>

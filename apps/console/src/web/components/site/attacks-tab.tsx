@@ -27,9 +27,10 @@ import { SafetyNote } from "@/components/safety-note";
 import { AutoMitigationCard } from "@/components/site/auto-mitigation-card";
 import { combineQueries, EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
+import { TimeAgo } from "@/components/time-ago";
 import { blockReasonLabel, clientJump, type LogJump } from "@/lib/access-logs";
 import { ANALYTICS_RANGES, OTHER_COLOR, RANGE_HOURS, rangeLabel } from "@/lib/analytics";
-import { formatCompact, formatDateTime, formatNumber, formatPercent, m, timeAgo } from "@/lib/i18n";
+import { formatCompact, formatDateTime, formatNumber, formatPercent, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { eventKindLabel, levelLabel, metricLabel } from "@/lib/protection";
 import { groupBuckets } from "@/lib/time-buckets";
@@ -672,7 +673,7 @@ function EventsCard({ siteId, range }: { siteId: string; range: AnalyticsRange }
                         className="ml-auto text-xs text-muted-foreground"
                         title={formatDateTime(event.occurredAt)}
                       >
-                        {timeAgo(event.occurredAt)}
+                        <TimeAgo at={event.occurredAt} />
                       </span>
                       <LogsLink siteId={siteId} jump={eventJump(event)} testId="event-logs" />
                       {event.kind === "ip_banned" && event.address ? (

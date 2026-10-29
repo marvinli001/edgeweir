@@ -39,8 +39,9 @@ import { NumberField, SwitchField } from "@/components/site/fields";
 import { nextDraftKey } from "@/components/site/save-site";
 import { EmptyState, QueryView } from "@/components/states";
 import { Dot, type StatusTone } from "@/components/status-dot";
+import { TimeAgo } from "@/components/time-ago";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
-import { formatDateTime, m, timeAgo } from "@/lib/i18n";
+import { formatDateTime, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import {
   actionLabel,
@@ -702,7 +703,7 @@ function SchedulingPreviewSection({ clusterId }: { clusterId: string }) {
             className="text-xs text-muted-foreground"
             title={formatDateTime(preview.data.evaluatedAt)}
           >
-            {timeAgo(preview.data.evaluatedAt)}
+            <TimeAgo at={preview.data.evaluatedAt} />
           </span>
         ) : null}
       </div>

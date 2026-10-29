@@ -26,8 +26,9 @@ import {
 } from "@/components/node-detail";
 import { EmptyState, QueryView } from "@/components/states";
 import { Dot, StatusDot } from "@/components/status-dot";
+import { TimeAgo } from "@/components/time-ago";
 import { useDialogState } from "@/hooks/use-dialog-state";
-import { formatBitRate, formatDateTime, formatPercent, m, timeAgo } from "@/lib/i18n";
+import { formatBitRate, formatDateTime, formatPercent, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { rowLink, rowLinkButton } from "@/lib/row-link";
 import { cn } from "@/lib/utils";
@@ -362,7 +363,7 @@ export function NodesSection({
             className="text-xs text-muted-foreground"
             title={row.original.lastSeenAt ? formatDateTime(row.original.lastSeenAt) : undefined}
           >
-            {timeAgo(row.original.lastSeenAt)}
+            <TimeAgo at={row.original.lastSeenAt} />
           </span>
         ),
       },

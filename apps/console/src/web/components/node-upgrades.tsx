@@ -25,8 +25,9 @@ import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layou
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot, type StatusTone } from "@/components/status-dot";
+import { TimeAgo } from "@/components/time-ago";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
-import { formatDateTime, m, timeAgo } from "@/lib/i18n";
+import { formatDateTime, m } from "@/lib/i18n";
 import { taskErrorText } from "@/lib/node-errors";
 import { upgradeBlocker } from "@/lib/node-upgrades";
 import { orpc } from "@/lib/orpc";
@@ -122,7 +123,7 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
                       className="text-xs text-muted-foreground"
                       title={formatDateTime(job.createdAt)}
                     >
-                      {timeAgo(job.createdAt)}
+                      <TimeAgo at={job.createdAt} />
                     </span>
                     {folded ? (
                       <CollapsibleTrigger

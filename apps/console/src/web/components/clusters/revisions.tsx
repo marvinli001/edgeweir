@@ -7,7 +7,8 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FieldError } from "@/components/layout/form";
 import { EmptyState, QueryView } from "@/components/states";
-import { formatDateTime, m, timeAgo } from "@/lib/i18n";
+import { TimeAgo } from "@/components/time-ago";
+import { formatDateTime, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { revisionReason } from "@/lib/revisions";
 import { toast } from "@/lib/toast";
@@ -104,7 +105,7 @@ export function RevisionsSection({ cluster }: { cluster: Cluster }) {
             className="text-xs text-muted-foreground"
             title={formatDateTime(row.original.createdAt)}
           >
-            {timeAgo(row.original.createdAt)}
+            <TimeAgo at={row.original.createdAt} />
           </span>
         ),
       },

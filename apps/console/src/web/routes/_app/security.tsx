@@ -22,10 +22,11 @@ import { QrCode } from "@/components/qr-code";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
+import { TimeAgo } from "@/components/time-ago";
 import { useAction } from "@/hooks/use-action";
 import { authClient } from "@/lib/auth-client";
 import { localizeError } from "@/lib/errors";
-import { formatDateTime, m, timeAgo } from "@/lib/i18n";
+import { formatDateTime, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { toast } from "@/lib/toast";
 
@@ -360,7 +361,7 @@ function PasskeysCard() {
                       className="shrink-0 text-xs text-muted-foreground tabular-nums"
                       title={formatDateTime(new Date(key.createdAt).toISOString())}
                     >
-                      {timeAgo(new Date(key.createdAt).toISOString())}
+                      <TimeAgo at={new Date(key.createdAt).toISOString()} />
                     </span>
                   ) : null}
                   <ConfirmDialog

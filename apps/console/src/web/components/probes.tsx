@@ -44,6 +44,7 @@ import { SettingsCard } from "@/components/settings-card";
 import { NumberField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
+import { TimeAgo } from "@/components/time-ago";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { useOpenKey } from "@/hooks/use-open-key";
 import { formatDateTime, formatPercent, m, timeAgo } from "@/lib/i18n";
@@ -207,7 +208,7 @@ export function ProbesPanel({
             className="text-xs whitespace-nowrap text-muted-foreground"
             title={row.original.lastSeenAt ? formatDateTime(row.original.lastSeenAt) : undefined}
           >
-            {timeAgo(row.original.lastSeenAt)}
+            <TimeAgo at={row.original.lastSeenAt} />
           </span>
         ),
       },
@@ -258,7 +259,7 @@ export function ProbesPanel({
                 </span>
               ) : (
                 <span className="text-muted-foreground" title={formatDateTime(round.checkedAt)}>
-                  {timeAgo(round.checkedAt)}
+                  <TimeAgo at={round.checkedAt} />
                 </span>
               )}
             </div>
@@ -689,7 +690,7 @@ function ResultRow({
         {probeErrorLabel(r.error) || "—"}
       </TableCell>
       <TableCell className="align-top text-xs whitespace-nowrap text-muted-foreground">
-        <span title={formatDateTime(r.checkedAt)}>{timeAgo(r.checkedAt)}</span>
+        <TimeAgo at={r.checkedAt} />
       </TableCell>
     </TableRow>
   );

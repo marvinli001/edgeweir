@@ -31,9 +31,10 @@ import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
+import { TimeAgo } from "@/components/time-ago";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { useOpenKey } from "@/hooks/use-open-key";
-import { formatDateTime, m, timeAgo } from "@/lib/i18n";
+import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { rowLink, rowLinkButton } from "@/lib/row-link";
 import { cn } from "@/lib/utils";
@@ -197,7 +198,7 @@ function KeysDialog({ account, open, onOpenChange }: { account: ServiceAccount }
                   <span className="text-xs text-muted-foreground tabular-nums">
                     {m.service_accounts_key_last_used()}{" "}
                     {k.lastUsedAt ? (
-                      <span title={formatDateTime(k.lastUsedAt)}>{timeAgo(k.lastUsedAt)}</span>
+                      <TimeAgo at={k.lastUsedAt} />
                     ) : (
                       m.service_accounts_key_never_used()
                     )}

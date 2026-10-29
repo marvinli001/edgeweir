@@ -17,7 +17,8 @@ import {
 } from "@/components/layout/collapsible";
 import { Spinner } from "@/components/layout/spinner";
 import { Dot } from "@/components/status-dot";
-import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
+import { TimeAgo } from "@/components/time-ago";
+import { formatDateTime, formatNumber, m } from "@/lib/i18n";
 import { taskErrorText } from "@/lib/node-errors";
 import { cn } from "@/lib/utils";
 
@@ -247,7 +248,7 @@ function TaskRow({
                   ? m.purge_source_purge_method({ node: task.createdByName })
                   : task.createdByName || "—"}
             </span>
-            <span title={formatDateTime(task.createdAt)}>{timeAgo(task.createdAt)}</span>
+            <TimeAgo at={task.createdAt} />
             {task.type === "tag" ? (
               <span className="min-w-0 break-all" data-testid="cache-task-sites">
                 {task.sites.map((s) => s.name).join(", ")}
@@ -324,7 +325,7 @@ function TaskRow({
                             className="ml-auto text-xs text-muted-foreground"
                             title={formatDateTime(node.finishedAt)}
                           >
-                            {timeAgo(node.finishedAt)}
+                            <TimeAgo at={node.finishedAt} />
                           </span>
                         ) : null}
                         {outcome ? (
