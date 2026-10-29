@@ -59,7 +59,7 @@
 | 状态 | 基色 浅 / 深 | `-ink` 浅 / 深 | `-tint` 浅 / 深 |
 | --- | --- | --- | --- |
 | success `--ew-success` | `#2BA471` / `#56C08D` | `#008858` / `#56C08D` | `#E3F9E9` / `#193A2A` |
-| warning `--ew-warning` | `#E37318` / `#F08A3C` | `#BE5A00` / `#F5A15B` | `#FFF1E9` / `#4F2A1D` |
+| warning `--ew-warning` | `#E37318` / `#F08A3C` | `#AD5200` / `#F5A15B` | `#FFF1E9` / `#4F2A1D` |
 | error `--ew-error` | `#D54941` / `#F36D64` | `#C4342C` / `#F7857D` | `#FFF0ED` / `#3A2422` |
 | info `--ew-info` | = brand | = brand-ink | = brand-tint |
 
