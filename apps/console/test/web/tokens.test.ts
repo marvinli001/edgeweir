@@ -60,12 +60,11 @@ describe("design tokens (ADR-0064)", () => {
     expect(colorOnly).toEqual([]);
   });
 
-  it("keeps the status pages on Geist and their own neutral tokens", () => {
+  it("draws the status pages from the console tokens and fonts (notes/edgeweir-node.md)", () => {
     const css = read("src/web/index.css");
-    const status = css.slice(css.indexOf(".status-surface {"));
-    expect(status).toMatch(/^\.status-surface \{[^}]*font-family:\s*"Geist Variable", sans-serif;/);
-    expect(status).toMatch(/^\.status-surface \{[^}]*--background:\s*oklch\(1 0 0\);/);
-    expect(status).toMatch(/\.dark \.status-surface \{[^}]*--background:\s*oklch\(0\.145 0 0\);/);
+    expect(css).not.toMatch(/Geist|\.status-surface/);
+    const pkg = JSON.parse(read("package.json"));
+    expect(pkg.dependencies["@fontsource-variable/geist"]).toBeUndefined();
   });
 
   it("keeps a single ThemeProvider in the app", () => {

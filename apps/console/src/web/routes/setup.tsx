@@ -12,6 +12,7 @@ import { localizeError } from "@/lib/errors";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { toast } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/setup")({
   beforeLoad: async ({ context }) => {
@@ -34,7 +35,8 @@ function SetupPage() {
     <AuthShell className="max-w-md">
       <AuthFrame>
         <Panel>
-          <PanelHeader className="text-center">
+          <PanelHeader className="flex-col items-stretch gap-5">
+            <SetupSteps />
             <PanelTitle className="text-title">{m.setup_title()}</PanelTitle>
           </PanelHeader>
           <PanelContent>
@@ -115,5 +117,51 @@ function SetupPage() {
         </Panel>
       </AuthFrame>
     </AuthShell>
+  );
+}
+
+const STEPS = [m.setup_step_account, m.setup_step_node, m.setup_step_site];
+
+/** Where setup is on the way to a working console: this account, then a node, then a site. */
+function SetupSteps() {
+  return (
+    <ol
+      aria-label={m.setup_steps_label()}
+      className="flex items-center gap-2 text-dense"
+      data-testid="setup-steps"
+    >
+      {STEPS.map((label, index) => {
+        const current = index === 0;
+        return (
+          <li
+            key={label()}
+            aria-current={current ? "step" : undefined}
+            className="flex min-w-0 flex-1 items-center gap-2 last:flex-none"
+          >
+            <span
+              className={cn(
+                "grid size-5 shrink-0 place-items-center rounded-full text-xs tabular-nums",
+                current
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-input-hover text-muted-foreground",
+              )}
+            >
+              {index + 1}
+            </span>
+            <span
+              className={cn(
+                "truncate",
+                current ? "font-medium text-foreground" : "text-muted-foreground",
+              )}
+            >
+              {label()}
+            </span>
+            {index < STEPS.length - 1 ? (
+              <span aria-hidden="true" className="h-px min-w-3 flex-1 bg-border" />
+            ) : null}
+          </li>
+        );
+      })}
+    </ol>
   );
 }

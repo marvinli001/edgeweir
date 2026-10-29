@@ -75,4 +75,7 @@ export const PAGES: LabPage[] = [
   { name: "system-service-accounts", group: "system", path: "/system?tab=service-accounts" },
   { name: "security", group: "account", path: "/security" },
   { name: "settings", group: "account", path: "/settings" },
+
+  { name: "status-not-found", group: "status", path: "/no-such-page" },
+  { name: "status-site-missing", group: "status", path: `/sites/${id(5, 999)}` },
 ];

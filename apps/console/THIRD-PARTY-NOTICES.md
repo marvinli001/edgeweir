@@ -43,7 +43,6 @@ the primitives switched to Base UI, keeping Arc's styling and motion. MIT licens
 
 | Font | Package | Copyright |
 | --- | --- | --- |
-| Geist | `@fontsource-variable/geist` 5.3.0 | Copyright 2024 The Geist Project Authors |
 | Inter | `@fontsource-variable/inter` 5.3.0 | Copyright 2020 The Inter Project Authors |
 | Noto Sans SC | `@fontsource-variable/noto-sans-sc` 5.3.0 (Google Fonts v40) | Google Inc. |
 

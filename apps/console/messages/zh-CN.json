@@ -104,6 +104,10 @@
   "setup_password_placeholder": "至少 12 位",
   "setup_submit": "完成",
   "setup_done": "初始化完成",
+  "setup_steps_label": "初始化步骤",
+  "setup_step_account": "创建账户",
+  "setup_step_node": "添加节点",
+  "setup_step_site": "添加网站",
   "overview_title": "概览",
   "overview_live_title": "此刻",
   "overview_live": "实时",
@@ -1000,8 +1004,13 @@
   "origin_cert_validity": "有效期",
   "origin_cert_years": [
     {
-      "declarations": ["input count", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
       "match": {
         "countPlural=one": "{count} 年",
         "countPlural=other": "{count} 年"
@@ -2416,11 +2425,14 @@
   "status_forbidden_title": "无权访问",
   "status_error_title": "页面出错",
   "status_unreachable_title": "无法连接控制台",
+  "status_not_found_hint": "检查地址是否正确，或返回概览。",
+  "status_forbidden_hint": "当前账号无权打开这个页面。",
+  "status_error_hint": "请重试。如果一直出错，复制下方的错误信息用于反馈。",
+  "status_unreachable_hint": "检查网络连接和控制台服务是否在运行，然后重试。",
   "status_hop_you": "你",
   "status_hop_console": "控制台",
   "status_hop_page": "页面",
   "status_hop_ok": "正常",
-  "status_hop_unreached": "未到达",
   "status_stamp_not_found": "不存在",
   "status_stamp_forbidden": "无权限",
   "status_stamp_error": "出错",
