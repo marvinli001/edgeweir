@@ -22,6 +22,7 @@ import { Input } from "@/components/arc/input/input";
 import { CardTable } from "@/components/clusters/card-table";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
+import { DisabledHint } from "@/components/disabled-hint";
 import { DnsHeldBack } from "@/components/dns-protection";
 import { FormSelect, OptionSelect } from "@/components/form-select";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/layout/form";
@@ -236,37 +237,45 @@ function BindingEditor({
             <>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-sm font-medium">{m.dns_lines()}</h3>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={
-                    groups.every((g) => draft.lines.some((line) => line.nodeGroupId === g.id)) ||
-                    draft.lines.length >= 128
+                <DisabledHint
+                  reason={
+                    groups.every((g) => draft.lines.some((line) => line.nodeGroupId === g.id))
+                      ? m.dns_lines_all_used()
+                      : draft.lines.length >= 128 && m.dns_lines_limit({ max: 128 })
                   }
-                  onClick={() =>
-                    setDraft({
-                      ...draft,
-                      lines: [
-                        ...draft.lines,
-                        {
-                          name: `line-${draft.lines.length + 1}`,
-                          nodeGroupId:
-                            groups.find((g) => !draft.lines.some((l) => l.nodeGroupId === g.id))
-                              ?.id ?? "",
-                          overrides: [],
-                          resolutionLine: "default",
-                          backupNodeGroupIds: [],
-                          minHealthyIps: 1,
-                        },
-                      ],
-                    })
-                  }
-                  data-testid="dns-line-add"
                 >
-                  <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-                  {m.dns_add_line()}
-                </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={
+                      groups.every((g) => draft.lines.some((line) => line.nodeGroupId === g.id)) ||
+                      draft.lines.length >= 128
+                    }
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        lines: [
+                          ...draft.lines,
+                          {
+                            name: `line-${draft.lines.length + 1}`,
+                            nodeGroupId:
+                              groups.find((g) => !draft.lines.some((l) => l.nodeGroupId === g.id))
+                                ?.id ?? "",
+                            overrides: [],
+                            resolutionLine: "default",
+                            backupNodeGroupIds: [],
+                            minHealthyIps: 1,
+                          },
+                        ],
+                      })
+                    }
+                    data-testid="dns-line-add"
+                  >
+                    <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+                    {m.dns_add_line()}
+                  </Button>
+                </DisabledHint>
               </div>
               {defaultOnly && draft.lines.length ? (
                 <SafetyNote data-testid="dns-resolution-default-only">

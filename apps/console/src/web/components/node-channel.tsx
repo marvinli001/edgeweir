@@ -2,6 +2,7 @@ import { type NodeChannel, nodeChannelInput } from "@edgeweir/contract";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/arc/button/button";
 import { Input } from "@/components/arc/input/input";
+import { DisabledHint } from "@/components/disabled-hint";
 import { Field, FieldLabel } from "@/components/layout/form";
 import { Spinner } from "@/components/layout/spinner";
 import { NodeChannelCheckStatus, UrlScopeBadge } from "@/components/node-enrollment";
@@ -90,18 +91,20 @@ function NodeChannelMigration({ value: saved }: { value: NodeChannel }) {
                 >
                   <span className="min-w-0 font-mono break-all">{entry.name}</span>
                   <Usage nodes={entry.nodes} probes={entry.probes} />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="ml-auto"
-                    disabled={used || remove.isPending}
-                    onClick={() => remove.mutate({ name: entry.name })}
-                    data-testid="node-channel-remove-name"
-                  >
-                    {busy ? <Spinner /> : null}
-                    {m.common_remove()}
-                  </Button>
+                  <DisabledHint reason={used && m.system_node_channel_in_use()} className="ml-auto">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="ml-auto"
+                      disabled={used || remove.isPending}
+                      onClick={() => remove.mutate({ name: entry.name })}
+                      data-testid="node-channel-remove-name"
+                    >
+                      {busy ? <Spinner /> : null}
+                      {m.common_remove()}
+                    </Button>
+                  </DisabledHint>
                 </li>
               );
             })}
@@ -115,18 +118,23 @@ function NodeChannelMigration({ value: saved }: { value: NodeChannel }) {
         >
           <span>{m.system_node_channel_websocket()}</span>
           <Usage nodes={webSocket.nodes} probes={webSocket.probes} />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
+          <DisabledHint
+            reason={webSocket.nodes + webSocket.probes > 0 && m.system_node_channel_in_use()}
             className="ml-auto"
-            disabled={webSocket.nodes + webSocket.probes > 0 || close.isPending}
-            onClick={() => close.mutate({})}
-            data-testid="node-channel-close-websocket"
           >
-            {close.isPending ? <Spinner /> : null}
-            {m.common_close()}
-          </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="ml-auto"
+              disabled={webSocket.nodes + webSocket.probes > 0 || close.isPending}
+              onClick={() => close.mutate({})}
+              data-testid="node-channel-close-websocket"
+            >
+              {close.isPending ? <Spinner /> : null}
+              {m.common_close()}
+            </Button>
+          </DisabledHint>
         </div>
       ) : null}
     </div>

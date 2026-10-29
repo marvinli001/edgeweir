@@ -8,6 +8,7 @@ import * as z from "zod";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { type Columns, DataTable, FilterBar } from "@/components/data-table";
+import { DisabledHint } from "@/components/disabled-hint";
 import { FilterSelect } from "@/components/form-select";
 import { L4AppActions, L4EnabledSwitch } from "@/components/l4/app-actions";
 import { L4AppDialog } from "@/components/l4/app-dialog";
@@ -165,16 +166,19 @@ function L4AppsPage() {
     [edit.show],
   );
 
+  const noCluster = clusters.data?.length === 0 && m.l4_needs_cluster();
   const create = (
-    <Button
-      size="sm"
-      onClick={() => setCreateOpen(true)}
-      disabled={!clusters.data?.length}
-      data-testid="l4-create"
-    >
-      <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-      {m.l4_create()}
-    </Button>
+    <DisabledHint reason={noCluster}>
+      <Button
+        size="sm"
+        onClick={() => setCreateOpen(true)}
+        disabled={!clusters.data?.length}
+        data-testid="l4-create"
+      >
+        <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+        {m.l4_create()}
+      </Button>
+    </DisabledHint>
   );
 
   return (
@@ -209,10 +213,12 @@ function L4AppsPage() {
         query={apps}
         empty={
           <EmptyState icon={ArrowDataTransferHorizontalIcon} title={m.l4_empty_title()}>
-            <Button onClick={() => setCreateOpen(true)} disabled={!clusters.data?.length}>
-              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-              {m.l4_create()}
-            </Button>
+            <DisabledHint reason={noCluster}>
+              <Button onClick={() => setCreateOpen(true)} disabled={!clusters.data?.length}>
+                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+                {m.l4_create()}
+              </Button>
+            </DisabledHint>
           </EmptyState>
         }
       >

@@ -6,6 +6,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation } from "@tanstack/react-query";
 import * as React from "react";
 import { Button } from "@/components/arc/button/button";
+import { DisabledHint } from "@/components/disabled-hint";
 import { SafetyNote } from "@/components/safety-note";
 import { DeletedRules, RuleHistoryContext } from "@/components/site/rules/history";
 import {
@@ -148,31 +149,39 @@ export function RulesEditor({
               >
                 <div className="flex min-h-14 items-center justify-between gap-3 px-5 py-3">
                   <h3 className="font-heading text-base font-medium">{phaseLabel(phase)}</h3>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    disabled={rows.length >= (siteId ? 64 : 32) || (locked && v2Kinds.has(first))}
-                    data-testid={`rule-add-${phase}`}
-                    onClick={() =>
-                      setRows([
-                        ...rows,
-                        {
-                          id: randomUuid(),
-                          name: m.rules_new(),
-                          phase,
-                          expression: "true",
-                          // Saved with an edit elsewhere, an enabled `true` rule would redirect or
-                          // block every request.
-                          enabled: false,
-                          action: defaultAction(first),
-                        },
-                      ])
+                  <DisabledHint
+                    reason={
+                      rows.length >= (siteId ? 64 : 32)
+                        ? m.rules_limit_reached({ max: siteId ? 64 : 32 })
+                        : locked && v2Kinds.has(first) && m.rules_v2_unavailable()
                     }
                   >
-                    <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-                    {m.rules_add()}
-                  </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={rows.length >= (siteId ? 64 : 32) || (locked && v2Kinds.has(first))}
+                      data-testid={`rule-add-${phase}`}
+                      onClick={() =>
+                        setRows([
+                          ...rows,
+                          {
+                            id: randomUuid(),
+                            name: m.rules_new(),
+                            phase,
+                            expression: "true",
+                            // Saved with an edit elsewhere, an enabled `true` rule would redirect or
+                            // block every request.
+                            enabled: false,
+                            action: defaultAction(first),
+                          },
+                        ])
+                      }
+                    >
+                      <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+                      {m.rules_add()}
+                    </Button>
+                  </DisabledHint>
                 </div>
                 <SortableContext
                   items={group.map((r) => r.id)}
