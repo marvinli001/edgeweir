@@ -15,8 +15,9 @@
 //      the API's answers or in node_debug_log; the pull is audited
 //   c. retention 1 day and 1,000 entries per node: backdated rows and rows
 //      over the limit, inserted into the database, are deleted by the prune
-//      the console runs at its start (the console restarts); the newest stay;
-//      the setting is restored
+//      the console runs at its start (the console restarts while the node is
+//      stopped); the newest stay; the setting is restored, the node is back
+//      online and logs the warning of b again (its debug buffer is new)
 // The site stays for apps/console/e2e/node-logs.spec.ts
 // (.e2e/node-logs-state.json); `node scripts/e2e-node-logs.mjs --cleanup`
 // deletes it.
@@ -266,6 +267,9 @@ assert.equal(
   400,
 );
 await admin.ok("PUT", "/settings/node-log-retention", { days: 1, perNode: 1000 });
+// The node stays stopped until the checks are done: entries it sends after
+// the one prune at the console's start would push the count back over 1,000.
+await run([...compose, "stop", "node"]);
 // 1,100 rows from an hour ago and two from two days ago, in batches no node uses.
 await psql(`
   insert into node_log_entry (node_id, sequence, idx, time, level, source, message)
@@ -319,4 +323,25 @@ const audit = await psql(
 );
 assert.ok(Number(audit) >= 1, "retention change audited");
 await admin.ok("PUT", "/settings/node-log-retention", saved);
+await run([...compose, "start", "node"]);
+await waitFor(`${NODE} back on #${latest}`, async () => {
+  const n = await admin.ok("GET", `/nodes/${node.id}`);
+  return n.online && n.applyState === "applied" && n.appliedRevision >= latest;
+});
+// The restart emptied the node's debug log buffer: the warning of b again for
+// apps/console/e2e/node-logs.spec.ts.
+// OpenResty may still be starting after the agent reports the revision applied.
+for (let i = 0; i < 6; i++)
+  await waitFor("the node answers again", async () => {
+    try {
+      return (await get(`/probe/${i}?token=${SECRET}&X-Amz-Signature=${SIGNATURE}`)) >= 500;
+    } catch {
+      return false;
+    }
+  });
+await waitFor("the origin's warning after the node's restart", async () =>
+  (await logs("&source=lua&minLevel=warn")).entries.some(
+    (e) => e.id !== warning.id && e.message.includes(`of site ${site.id} marked down`),
+  ),
+);
 pass("retention: backdated rows and rows over 1,000 per node deleted at the console's start");

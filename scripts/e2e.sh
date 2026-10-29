@@ -367,9 +367,10 @@ SECTIONS=(
 #     revision numbers or that no revision was published;
 #   m3, m4, g5 and g7 assert that nginx did not reload, which any change of
 #     nginx.conf elsewhere breaks (h2's gRPC site, g9's ports, g15's cache zone);
-#   node-logs restarts the console, m5, p0 and dns stop nodes, lifecycle
-#     deletes the core node, m6-upgrades upgrades both nodes, g6 blocks the
-#     edge node's ports, channel and wss move every node to other channel URLs;
+#   node-logs restarts the console and stops the core node, m5, p0 and dns
+#     stop nodes, lifecycle deletes the core node, m6-upgrades upgrades both
+#     nodes, g6 blocks the edge node's ports, channel and wss move every node
+#     to other channel URLs;
 #   m4 blocks every site (0.0.0.0/0), g1 and g2 clear every ban and count
 #     them, g10's scan protection and g13's IP check need client-b alone,
 #     allowlist locks the host out of the console;
