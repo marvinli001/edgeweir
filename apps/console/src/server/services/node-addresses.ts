@@ -54,6 +54,19 @@ export function schedulingAddressesOf(rows: readonly NodeIpRow[]): SchedulingAdd
 }
 
 /**
+ * The public address a node is placed by on the map
+ * (ReportStatusResponse.locate_address): its first public scheduling
+ * address, else the public address its connection came from, else "".
+ */
+export function locateAddressOf(rows: readonly NodeIpRow[], remoteAddress: string | null): string {
+  const isPublic = (address: string) => forbiddenOriginRange(address, []) === null;
+  const scheduling = schedulingAddressesOf(rows).find((a) => isPublic(a.address));
+  if (scheduling) return scheduling.address;
+  const remote = remoteAddress ? parseIp(remoteAddress) : null;
+  return remote && isPublic(formatIp(remote)) ? formatIp(remote) : "";
+}
+
+/**
  * The addresses a node answers with: the reachable addresses (not down by
  * the probes) of its lowest level that has any, or of the lowest such level
  * at or above `forcedLevel` (a backup_ip scheduling action) when there is

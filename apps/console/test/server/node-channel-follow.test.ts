@@ -217,14 +217,14 @@ describe("enrolled nodes and probes follow the node channel URL", async () => {
       channel: status(OLD, {
         failed: { url: NEW },
         errorCode: "unreachable",
-        error: "dial tcp 203.0.113.9:9443: i/o timeout",
+        error: "dial tcp 9.9.9.9:9443: i/o timeout",
         failedAt: { seconds: 1_800_000_000n, nanos: 0 },
       }),
     });
     const node = await getNode(ctx.db, follower.id);
     expect(node.channel?.error).toEqual({
       code: "unreachable",
-      message: "dial tcp 203.0.113.9:9443: i/o timeout",
+      message: "dial tcp 9.9.9.9:9443: i/o timeout",
       url: NEW,
       serverName: "",
       at: new Date(1_800_000_000_000).toISOString(),
@@ -278,6 +278,48 @@ describe("enrolled nodes and probes follow the node channel URL", async () => {
     expect((await getNode(ctx.db, follower.id)).clock).toMatchObject({
       offsetMs: 12,
       skewed: false,
+    });
+  });
+
+  it("names the public address to locate and keeps where the node placed it", async () => {
+    const client = nodeAt("new.example.test", follower.cert);
+    // The connection comes from loopback: without a public address there is nothing to locate.
+    expect((await client.reportStatus({ info: { ipAddresses: ["10.0.0.5"] } })).locateAddress).toBe(
+      "",
+    );
+    const answer = await client.reportStatus({
+      info: { ipAddresses: ["10.0.0.5", "9.9.9.9"] },
+    });
+    expect(answer.locateAddress).toBe("9.9.9.9");
+    expect((await getNode(ctx.db, follower.id)).location).toBeNull();
+    await client.reportStatus({
+      location: {
+        address: "9.9.9.9",
+        country: "NZ",
+        subdivision: "AUK",
+        latitude: -36.85,
+        longitude: 174.76,
+      },
+    });
+    expect((await getNode(ctx.db, follower.id)).location).toEqual({
+      address: "9.9.9.9",
+      country: "NZ",
+      subdivision: "AUK",
+      latitude: -36.85,
+      longitude: 174.76,
+    });
+    // A heartbeat without one keeps it; nonsense is dropped field by field.
+    await client.reportStatus({});
+    expect((await getNode(ctx.db, follower.id)).location?.country).toBe("NZ");
+    await client.reportStatus({
+      location: { address: "9.9.9.9", country: "nz", subdivision: "AUK", latitude: 120 },
+    });
+    expect((await getNode(ctx.db, follower.id)).location).toEqual({
+      address: "9.9.9.9",
+      country: "",
+      subdivision: "",
+      latitude: null,
+      longitude: null,
     });
   });
 

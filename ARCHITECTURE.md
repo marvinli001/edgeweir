@@ -302,7 +302,7 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 | `RenewCertificate` | 轮换节点证书 |
 | `WatchConfig` | 服务端流：revision 通知、任务通知、封禁通知（`bans-v1`）、keepalive |
 | `GetConfig` | 快照或相对 `base_revision` 的 diff，附 revision 回执 |
-| `ReportStatus` | 心跳、应用回执、源站健康状态与错误码（被动检查与主动检查分别上报）、封禁状态、主机指标（`metrics-v1`）、缓存区用量（`cache-zone-v1`，存入 `node.cache_usage`）、在用的节点通道地址（`channel-follow-v1`，与本次连接的 TLS 服务器名一起存入 `node.channel`）、节点时钟相对控制台的偏差（`clock_offset_millis`，存入 `node.clock_offset_ms`）；响应的 `probe` 告诉节点是否兼任探针，`channel` 给出当前的节点通道地址（`channel-follow-v1`），`console_time` 是控制台应答时的时间，节点以它与本次请求往返的中点之差作为下次上报的时钟偏差 |
+| `ReportStatus` | 心跳、应用回执、源站健康状态与错误码（被动检查与主动检查分别上报）、封禁状态、主机指标（`metrics-v1`）、缓存区用量（`cache-zone-v1`，存入 `node.cache_usage`）、在用的节点通道地址（`channel-follow-v1`，与本次连接的 TLS 服务器名一起存入 `node.channel`）、节点时钟相对控制台的偏差（`clock_offset_millis`，存入 `node.clock_offset_ms`）、`locate_address` 的位置（`location`，存入 `node.location`）；响应的 `probe` 告诉节点是否兼任探针，`channel` 给出当前的节点通道地址（`channel-follow-v1`），`console_time` 是控制台应答时的时间，节点以它与本次请求往返的中点之差作为下次上报的时钟偏差，`locate_address` 是节点在概览地球上的定位地址（第一个公网调度地址，否则连接来源的公网地址） |
 | `CheckChannel` | 无副作用：返回证书对应的节点 ID、当前的节点通道地址与控制台时间，停用的节点也可调用；节点切换地址前、`edgeweir-node set-server` 用它检查新地址，`edgeweir-node diagnose` 用它检查连通性与时钟 |
 | `ReportStats`、`ReportStatsV2` | 按分钟预聚合的流量统计（`ReportStatsV2` 另含 L4 应用的分钟统计，`l4-v1`）；按批次序号去重 |
 | `ReportLogs` | 采样访问日志；按批次序号去重 |
@@ -685,6 +685,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0078_greylist_connection_limits` | `ip_ban.action`、`challenge`、`rate_limit_requests`、`rate_limit_window_seconds`（灰名单条目，唯一索引按封禁 / 灰名单分开）；`cluster.connection_limits`（内核连接数限制） |
 | `0079_origin_proxy_protocol` | `origin.proxy_protocol_version`（回源连接发送的 PROXY protocol 版本，0 为不发送） |
 | `0080_origin_ca_rotation` | `pki_authority.kind`、`status`、`generation`（CA 轮换；`(kind, status)` 唯一，已有行的 kind 取 ID）；`origin_certificate.authority_id`、`origin_client_certificate.authority_id`（签发它的 CA） |
+| `0081_node_location` | `node.location`（节点用自己的 GeoIP 库查出的公网地址位置：国家、一级行政区、City MMDB 的经纬度） |
 
 ## 构建产物
 

@@ -1,6 +1,6 @@
 {
-  "id": "8edf027c-6640-4208-86d9-9dff88a1a2f3",
-  "prevId": "01d47fa1-97f7-42a5-9182-68105b0c1bb5",
+  "id": "cfdac98e-1810-497a-80c8-7260be109967",
+  "prevId": "8edf027c-6640-4208-86d9-9dff88a1a2f3",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -4699,6 +4699,12 @@
         "clock_measured_at": {
           "name": "clock_measured_at",
           "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "location": {
+          "name": "location",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },

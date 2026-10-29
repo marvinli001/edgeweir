@@ -44,6 +44,7 @@ const ready: Node = {
   certificateFailures: [],
   channel: null,
   clock: null,
+  location: null,
 };
 
 describe("nodes that stop an upgrade from starting", () => {

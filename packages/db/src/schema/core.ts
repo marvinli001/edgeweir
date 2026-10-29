@@ -201,6 +201,16 @@ export interface NodeMetricsData {
   reportedAt: string;
 }
 
+/** Where a node's public address is (ReportStatusRequest.location). */
+export interface NodeLocationData {
+  address: string;
+  country: string;
+  subdivision: string;
+  latitude: number | null;
+  longitude: number | null;
+  reportedAt: string;
+}
+
 /**
  * CC mitigation level of one site on a node (ReportStatus.security): sites
  * above normal, or at normal with escalated paths.
@@ -275,6 +285,12 @@ export const node = pgTable(
      */
     clockOffsetMs: integer("clock_offset_ms"),
     clockMeasuredAt: timestamp("clock_measured_at", { withTimezone: true }),
+    /**
+     * Where the node placed ReportStatusResponse.locate_address with its
+     * GeoIP databases, as last reported; null before a node since v1.6.2
+     * reports it.
+     */
+    location: jsonb("location").$type<NodeLocationData>(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

@@ -36,6 +36,7 @@ import {
   type CacheZoneUsage,
   DeviceVariant,
   GetConfigResponseSchema,
+  type NodeLocation,
   type NodeMetrics,
   type NodeService,
   NodeTaskSchema,
@@ -75,6 +76,7 @@ import { nodeCertificates } from "../services/certificates";
 import { challengeKeySecrets } from "../services/challenge-keys";
 import { mirrorMinuteStats } from "../services/clickhouse";
 import { claimEnrollmentToken } from "../services/enrollment";
+import { locateAddressOf, nodeIpRows } from "../services/node-addresses";
 import {
   hasDebugLogTasks,
   pullDebugLogTask,
@@ -158,6 +160,26 @@ function toNodeBanStatus(status: BanStatus, now: Date): schema.NodeBanStatus {
 function clockOffset(millis: bigint): number {
   const limit = 2n ** 31n - 1n;
   return Number(millis > limit ? limit : millis < -limit ? -limit : millis);
+}
+
+/**
+ * ReportStatusRequest.location as stored on the node row: an uppercase
+ * two-letter country or "", a short subdivision, coordinates only as a
+ * finite pair within range.
+ */
+function toNodeLocation(l: NodeLocation, now: Date): schema.NodeLocationData {
+  const country = /^[A-Z]{2}$/.test(l.country) ? l.country : "";
+  const latitude = l.latitude ?? Number.NaN;
+  const longitude = l.longitude ?? Number.NaN;
+  const placed = country !== "" && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180;
+  return {
+    address: l.address.slice(0, 64),
+    country,
+    subdivision: country ? l.subdivision.slice(0, 64) : "",
+    latitude: placed ? latitude : null,
+    longitude: placed ? longitude : null,
+    reportedAt: now.toISOString(),
+  };
 }
 
 /** ReportStatusRequest.metrics as stored on the node row: finite, non-negative, CPU 0-100. */
@@ -852,6 +874,8 @@ export function createNodeService(
               ? { clockOffsetMs: clockOffset(req.clockOffsetMillis), clockMeasuredAt: now }
               : {}),
             ...(info ? { ...nodeInfoColumns(info), hostname: info.hostname || node.hostname } : {}),
+            // Nodes since v1.6.2, for the previous response's locate_address.
+            ...(req.location ? { location: toNodeLocation(req.location, now) } : {}),
           })
           .where(eq(schema.node.id, node.id));
         // Certificates of the applied revision the node could not load
@@ -910,6 +934,10 @@ export function createNodeService(
         );
       });
       const latest = await currentTarget(node.id);
+      const locateAddress = locateAddressOf(
+        (await nodeIpRows(app.db, [node.id])).get(node.id) ?? [],
+        normalizeRemoteAddress(peer.remoteAddress) ?? node.remoteAddress,
+      );
       await evaluateAfterHeartbeat(app, node);
       const tasksPending =
         (await hasDeliverableTasks(app.db, node.id)) ||
@@ -932,6 +960,8 @@ export function createNodeService(
         // Nodes with channel-follow-v1 check this address and move to it.
         channel: await channelAddressFor(app, info?.supportedFeatures ?? node.supportedFeatures),
         consoleTime: timestampFromDate(new Date()),
+        // The node answers with where this is in its next heartbeat (location).
+        locateAddress,
       };
     },
 

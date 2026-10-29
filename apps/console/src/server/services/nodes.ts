@@ -155,6 +155,15 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
               skewed: Math.abs(r.clockOffsetMs) >= clockSkewSeconds * 1000,
             }
           : null,
+      location: r.location
+        ? {
+            address: r.location.address,
+            country: r.location.country,
+            subdivision: r.location.subdivision,
+            latitude: r.location.latitude,
+            longitude: r.location.longitude,
+          }
+        : null,
     };
   });
 }

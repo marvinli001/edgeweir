@@ -1126,6 +1126,20 @@ export const node = z.object({
   clock: z
     .object({ offsetMs: z.number().int(), measuredAt: isoDateTime, skewed: z.boolean() })
     .nullable(),
+  /**
+   * Where the node's public address is, from the node's GeoIP databases:
+   * country (ISO 3166-1 alpha-2, "" unknown), subdivision and, with a City
+   * MMDB, coordinates. Null before a node since v1.6.2 reports it.
+   */
+  location: z
+    .object({
+      address: z.string(),
+      country: z.string(),
+      subdivision: z.string(),
+      latitude: z.number().nullable(),
+      longitude: z.number().nullable(),
+    })
+    .nullable(),
 });
 
 export const nodeUpdateInput = z.object({
