@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { revokeAccessKey, signInWithAccessKey } from "./e2e-auth.mjs";
-import { base, pass, sleep } from "./e2e-lib.mjs";
+import { base, pass, sleep, waitFor } from "./e2e-lib.mjs";
 
 const execute = promisify(execFile);
 const compose = ["compose", "-f", "compose.e2e.yml"];
@@ -63,7 +63,20 @@ assert.ok(
 );
 pass(`a. ${NODE} reports a clock offset of ${node.clock.offsetMs} ms, not skewed`);
 
-// b. diagnose, as the image's user (the agent's).
+// b. diagnose, as the image's user (the agent's). Its configuration check
+//    compares the applied revision with the console's latest, and the
+//    previous section's cleanup has just published one: start once the node
+//    has applied the cluster's latest revision.
+const { latestRevision } = await api(`/clusters/${node.clusterId}`);
+const latest = latestRevision?.revision ?? 0;
+node = await waitFor(
+  `${NODE} applies revision ${latest}`,
+  async () => {
+    const current = (await api("/nodes")).find((n) => n.name === NODE);
+    return current && current.appliedRevision >= latest ? current : null;
+  },
+  60,
+);
 const text = await inNode("edgeweir-node", "diagnose");
 assert.equal(text.code, 0, `diagnose exited ${text.code}:\n${text.stdout}${text.stderr}`);
 const lines = text.stdout.trim().split("\n");
