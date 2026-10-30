@@ -671,7 +671,8 @@ installing() {
 # Whether the installed edgeweir-node writes its own enroll result line and
 # knows `enroll --if-not-enrolled` (1.7.0 and later).
 node_results() {
-  { /usr/bin/edgeweir-node enroll -h 2>&1 || true; } | grep -q -- '--if-not-enrolled'
+  # Go's flag package lists it with one dash: `-if-not-enrolled`.
+  { /usr/bin/edgeweir-node enroll -h 2>&1 || true; } | grep -q -- '-if-not-enrolled'
 }
 
 # An enrolled host: edgeweir-node 1.7.0 and later confirm the identity is

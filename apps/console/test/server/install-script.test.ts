@@ -844,7 +844,7 @@ describe("install.sh", () => {
       [
         "#!/bin/sh",
         `echo "edgeweir-node $*" >> "${calls}"`,
-        'if [ "$1" = enroll ] && [ "$2" = -h ]; then echo "  --if-not-enrolled  ..."; exit 0; fi',
+        'if [ "$1" = enroll ] && [ "$2" = -h ]; then printf "Usage of enroll:\\n  -if-not-enrolled\\n    \\tsucceed without a token ...\\n" >&2; exit 0; fi',
         'if [ "$1" = enroll ]; then',
         '  [ "${ENROLL_EXIT:-0}" = 0 ] && s=already_enrolled || s=enrolled_elsewhere',
         '  echo "EDGEWEIR_RESULT {\\"v\\":1,\\"step\\":\\"enroll\\",\\"status\\":\\"$s\\",\\"exit\\":${ENROLL_EXIT:-0},\\"node_id\\":\\"n-1\\"}"',
