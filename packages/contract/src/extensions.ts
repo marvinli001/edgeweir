@@ -88,25 +88,6 @@ function parseSemver(value: string): SemVer | null {
   };
 }
 
-/** Semantic Versioning 2.0.0 precedence: negative, zero or positive. */
-function compareSemver(a: SemVer, b: SemVer): number {
-  for (const key of ["major", "minor", "patch"] as const) {
-    if (a[key] !== b[key]) return a[key] - b[key];
-  }
-  if (a.pre.length === 0 || b.pre.length === 0) return b.pre.length - a.pre.length;
-  for (let i = 0; i < Math.min(a.pre.length, b.pre.length); i++) {
-    const x = a.pre[i] as string;
-    const y = b.pre[i] as string;
-    if (x === y) continue;
-    const xn = /^\d+$/.test(x);
-    const yn = /^\d+$/.test(y);
-    if (xn && yn) return Number(x) - Number(y);
-    if (xn !== yn) return xn ? -1 : 1;
-    return x < y ? -1 : 1;
-  }
-  return a.pre.length - b.pre.length;
-}
-
 const COMPARATOR_RE = /^(>=|<=|>|<|=)?(\S+)$/;
 
 /** Parses "op version" comparators separated by spaces; null when malformed. */
@@ -671,4 +652,3 @@ export type ExtensionKeyView = z.infer<typeof extensionKeyView>;
 export type VerifiedExtensionPackage = z.infer<typeof verifiedPackage>;
 export type SiteExtensionView = z.infer<typeof siteExtensionView>;
 export type NodeExtensionState = z.infer<typeof nodeExtensionState>;
-
