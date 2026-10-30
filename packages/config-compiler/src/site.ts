@@ -34,6 +34,7 @@ import {
   GeoAccessSchema,
   HotlinkSchema,
   ImageConvertSchema,
+  InterstitialRuleSchema,
   LoadBalancePolicy,
   MaintenanceSchema,
   OriginCacheControl,
@@ -49,6 +50,7 @@ import {
   S3AuthSchema,
   SecurityHeadersSchema,
   SessionAffinitySchema,
+  SessionDetectionSchema,
   type Site,
   SiteErrorPagesSchema,
   SiteProtectionSchema,
@@ -77,6 +79,7 @@ import {
   DEFAULT_SITE_PROTECTION,
   type EdgeModel,
   type ImageConvertModel,
+  type SessionDetectionModel,
   type SiteModel,
   type SitePortsModel,
   type SiteProtectionModel,
@@ -285,6 +288,9 @@ export function compileSite(
     logHeaders: sortedByteSet(model.logHeaders ?? []),
     logPeer: model.logPeer ?? false,
     ...(model.imageConvert ? { imageConvert: compileImageConvert(model.imageConvert) } : {}),
+    ...(model.sessionDetection
+      ? { sessionDetection: compileSessionDetection(model.sessionDetection) }
+      : {}),
     domains: model.domains.map((d) =>
       create(DomainSchema, {
         name: d.name,
@@ -652,5 +658,19 @@ function compileImageConvert(m: ImageConvertModel) {
     minSize: BigInt(m.minSize),
     maxSize: BigInt(m.maxSize),
     maxPixels: BigInt(m.maxPixels),
+  });
+}
+
+function compileSessionDetection(m: SessionDetectionModel) {
+  return create(SessionDetectionSchema, {
+    mode: m.mode,
+    interstitial: m.interstitial,
+    interstitialRules: m.interstitialRules.map((r) =>
+      create(InterstitialRuleSchema, {
+        host: r.host,
+        pathPrefix: r.pathPrefix,
+        interstitial: r.interstitial,
+      }),
+    ),
   });
 }

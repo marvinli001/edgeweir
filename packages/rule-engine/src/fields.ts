@@ -55,6 +55,9 @@ export const fields: Record<string, ValueType> = {
   // challenge-v2: a search engine crawler the node verified by reverse and forward DNS.
   "http.request.bot.verified": "boolean",
   "http.request.bot.name": "string",
+  // session-detection-v1: the request's bot score, 1 (automated) to 99, and score below 30.
+  "http.request.bot.score": "number",
+  "http.request.bot.automated": "boolean",
 };
 /** Fields of one request cookie and one query parameter by name (rules-v3), besides headers. */
 export const COOKIE_FIELD = "http.request.cookies";
@@ -149,9 +152,16 @@ export const botFields: ReadonlySet<string> = new Set([
   "http.request.bot.verified",
   "http.request.bot.name",
 ]);
+/** Fields only nodes with session-detection-v1 provide (the bot score, ADR-0068). */
+export const botScoreFields: ReadonlySet<string> = new Set([
+  "http.request.bot.score",
+  "http.request.bot.automated",
+]);
 /** Whether a field or function is only available in the request phases. */
 export const requestOnly = (op: string, name: string) =>
-  op === "call" ? bodyFunctions.has(name) : bodyFields.has(name) || botFields.has(name);
+  op === "call"
+    ? bodyFunctions.has(name)
+    : bodyFields.has(name) || botFields.has(name) || botScoreFields.has(name);
 /** Whether the expression reads the request body (rules-body-v1). */
 export function needsRulesBody(expression: Expression): boolean {
   return (
@@ -165,5 +175,12 @@ export function needsBotFields(expression: Expression): boolean {
   return (
     (expression.op !== "call" && botFields.has(expression.field)) ||
     expression.children.some(needsBotFields)
+  );
+}
+/** Whether the expression reads the bot score fields (session-detection-v1). */
+export function needsBotScore(expression: Expression): boolean {
+  return (
+    (expression.op !== "call" && botScoreFields.has(expression.field)) ||
+    expression.children.some(needsBotScore)
   );
 }

@@ -216,6 +216,17 @@ export interface AuthRuleModel {
 }
 
 /**
+ * A site's session detection (config.proto SessionDetection, ADR-0068), only
+ * while it is not off: a site without it compiles as before.
+ */
+export interface SessionDetectionModel {
+  mode: "monitor" | "enforce";
+  interstitial: boolean;
+  /** In the site's order; the first that matches a request applies. */
+  interstitialRules: readonly { host: string; pathPrefix: string; interstitial: boolean }[];
+}
+
+/**
  * A site's WebP / AVIF conversion (config.proto ImageConvert), only while it
  * is on: a site without it compiles as before. The quality of a format the
  * site does not offer is not sent.
@@ -376,6 +387,8 @@ export interface SiteModel {
   logPeer?: boolean;
   /** WebP / AVIF conversion (feature image-convert-v1); absent while off. */
   imageConvert?: ImageConvertModel;
+  /** Session detection and the bot score (feature session-detection-v1); absent while off. */
+  sessionDetection?: SessionDetectionModel;
   /**
    * `tlsPending`: the site's certificate does not cover the domain yet; it
    * is served over HTTP only (feature tls-pending-domains-v1). Ignored on a

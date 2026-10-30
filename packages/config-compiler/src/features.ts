@@ -27,6 +27,7 @@ import {
 import {
   type Expression,
   needsBotFields,
+  needsBotScore,
   needsClientCertificate,
   needsClientIp,
   needsRulesBody,
@@ -132,6 +133,11 @@ export const CHALLENGE_V2_FEATURE = "challenge-v2";
 export const ACCESS_LOGS_V2_FEATURE = "access-logs-v2";
 /** A site's WebP / AVIF conversion (proto v0.31.0, Site.image_convert; ADR-0043). */
 export const IMAGE_CONVERT_FEATURE = "image-convert-v1";
+/**
+ * A site's session detection and the bot score fields (proto vNEXT,
+ * Site.session_detection, http.request.bot.score / automated; ADR-0068).
+ */
+export const SESSION_DETECTION_FEATURE = "session-detection-v1";
 
 /** Whether a compiled action uses fields or kinds only rules-v2 nodes know. */
 function actionNeedsRulesV2(action: RuleAction | undefined): boolean {
@@ -281,13 +287,16 @@ export function usesChallenges(input: CompileInput): boolean {
 /**
  * Whether the cluster's configuration carries challenge keys: it uses
  * challenges, greylist entries challenge (they travel outside revisions),
- * or a served site's pool has session affinity (the keys sign its cookies). Keys bring challenge-v1 with them (protectionFeatures).
+ * a served site's pool has session affinity or the site detects sessions
+ * (the keys sign their cookies). Keys bring challenge-v1 with them (protectionFeatures).
  */
 export function usesChallengeKeys(input: CompileInput): boolean {
   return (
     usesChallenges(input) ||
     !!input.greylistChallenges ||
-    input.sites.some((site) => site.enabled && !!site.originPool.sessionAffinity)
+    input.sites.some(
+      (site) => site.enabled && (!!site.originPool.sessionAffinity || !!site.sessionDetection),
+    )
   );
 }
 
@@ -482,6 +491,10 @@ export function derivedFeatures(config: NodeConfig): string[] {
     ...accessControlFeatures(config),
     ...g14Features(config),
     ...(config.sites.some((site) => site.imageConvert) ? [IMAGE_CONVERT_FEATURE] : []),
+    ...(config.sites.some((site) => site.sessionDetection) ||
+    configExpressions(config).map(expressionOf).some(needsBotScore)
+      ? [SESSION_DETECTION_FEATURE]
+      : []),
   ];
 }
 

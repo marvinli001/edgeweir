@@ -1,0 +1,133 @@
+{
+  "description": "proto vNEXT (session-detection-v1): site a enforces with the interstitial off and two interstitial rules in their order (on for www.a.test/checkout, off for api.a.test), site b monitors with the interstitial on, site c without session detection; the cluster's current challenge key. Canonical encoding with revision and content_hash cleared.",
+  "config": {
+    "revision": "15",
+    "contentHash": "a28fb7a8bed058a9f041e2dae07b0b3be93a16ddc79cee5dbb69de42b5c02516",
+    "clusterId": "c1",
+    "listeners": [
+      {
+        "port": 80,
+        "protocol": "LISTENER_PROTOCOL_HTTP"
+      }
+    ],
+    "cacheZones": [
+      {
+        "name": "default",
+        "maxSizeMb": "10240",
+        "keysZoneMb": 64,
+        "inactiveSeconds": 604800
+      }
+    ],
+    "sites": [
+      {
+        "id": "a",
+        "name": "a",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "a.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-a",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-a",
+              "address": "origin.test",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ]
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "tls": {
+          "minimumVersion": "1.2",
+          "http2": true,
+          "gzip": true,
+          "gzipMinLength": 256,
+          "gzipTypes": ["text/html"],
+          "cipherProfile": "modern"
+        },
+        "sessionDetection": {
+          "mode": "enforce",
+          "interstitialRules": [
+            {
+              "host": "www.a.test",
+              "pathPrefix": "/checkout",
+              "interstitial": true
+            },
+            {
+              "host": "api.a.test"
+            }
+          ]
+        }
+      },
+      {
+        "id": "b",
+        "name": "b",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "b.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-b",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-b",
+              "address": "origin.test",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ]
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "sessionDetection": {
+          "mode": "monitor",
+          "interstitial": true
+        }
+      },
+      {
+        "id": "c",
+        "name": "c",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "c.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-c",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-c",
+              "address": "origin.test",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ]
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1"
+      }
+    ],
+    "requiredFeatures": ["challenge-v1", "session-detection-v1", "tls-v1"],
+    "challengeKeys": [
+      {
+        "id": "k1",
+        "role": "current"
+      }
+    ]
+  },
+  "canonical_hex": "1a0263312204085010012a120a0764656661756c7410805018402080f5243296010a0161120161180122080a06612e746573742a210a03702d6110011a180a036f2d61120b6f726967696e2e746573741850200128013a0764656661756c7440016a1f2a03312e32300138014080024a09746578742f68746d6c5a066d6f6465726eca02320a07656e666f7263651a190a0a7777772e612e7465737412092f636865636b6f757418011a0c0a0a6170692e612e74657374324e0a0162120162180122080a06622e746573742a210a03702d6210011a180a036f2d62120b6f726967696e2e746573741850200128013a0764656661756c744001ca020b0a076d6f6e69746f72100132400a0163120163180122080a06632e746573742a210a03702d6310011a180a036f2d63120b6f726967696e2e746573741850200128013a0764656661756c7440014a0c6368616c6c656e67652d76314a1473657373696f6e2d646574656374696f6e2d76314a06746c732d7631720d0a026b31120763757272656e74",
+  "content_hash": "a28fb7a8bed058a9f041e2dae07b0b3be93a16ddc79cee5dbb69de42b5c02516"
+}
