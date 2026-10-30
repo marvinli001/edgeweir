@@ -453,6 +453,7 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, skewed node clocks (
 | --- | --- | --- |
 | `alerts.sweep` | Every minute | Alert detection and delivery |
 | `mitigation.evaluate` | Every minute (one job at start) | Evaluates every site's automatic mitigation: turns on the site's Under Attack when a node's CC level reaches the threshold, and turns it off once the level has stayed below it for the configured time; the state and the expiry are in `site_auto_mitigation`, so a restart or a repeated job only evaluates again |
+| `development-mode.expire` | Every minute (one job at start) | Turns off development modes whose deadline (`site.development_mode_until`) passed: clears it, publishes and audits as the system; nodes resumed caching at the deadline already, so a restart or a repeated job only checks again |
 | `rollouts.evaluate` | Every minute | Evaluates running configuration canaries: promote, await promotion, or roll back (canary node heartbeats trigger an evaluation too) |
 | `dns.reconcile` | Every minute | Deletes expired old CNAME prefixes and publishes the DNS of their clusters; DNS steering publishing and external record maintenance |
 | `traffic.rollup` | Every minute | Traffic rollup and cleanup (L4 app minute statistics included), usage rollup and retention (then every site's usage protection, with an immediate alert sweep when its alerts change), access log partition maintenance, upgrade expiry; one failing part does not stop the others |
@@ -515,7 +516,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 
 | Table | Contents |
 | --- | --- |
-| `site` | Sites: cluster, enabled state, cache key, slicing, Cache-Tag forwarding, WebSocket, certificate, TLS settings, cache generation, log sample rate, whether error pages replace origin errors and when they were saved |
+| `site` | Sites: cluster, enabled state, cache key, slicing, Cache-Tag forwarding, WebSocket, certificate, TLS settings, cache generation, log sample rate, whether error pages replace origin errors and when they were saved, when development mode ends |
 | `site_domain` | Site domains: name and form (`kind`: exact, wildcard, suffix, pattern); a name in one form is unique across the console |
 | `site_star` | Per-user stars |
 | `tag` | Site tags: a name (1–32 characters) and a `key` (NFC, lower case, unique: names differing only in case are one tag); console only, never sent to nodes |
@@ -683,6 +684,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0078_greylist_connection_limits` | `ip_ban.action`, `challenge`, `rate_limit_requests`, `rate_limit_window_seconds` (greylist entries; unique indexes split between bans and greylist entries); `cluster.connection_limits` (kernel connection limits) |
 | `0079_origin_proxy_protocol` | `origin.proxy_protocol_version` (PROXY protocol to the origin: 0 off, 1, 2) |
 | `0080_origin_ca_rotation` | `pki_authority.kind`, `status`, `generation` (CA rotation; `(kind, status)` unique, existing rows take their id as kind); `origin_certificate.authority_id`, `origin_client_certificate.authority_id` (the issuing CA) |
+| `0082_site_development_mode` | `site.development_mode_until` (when development mode ends; null while off) |
 
 ## Build output
 
