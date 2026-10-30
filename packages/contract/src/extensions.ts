@@ -12,8 +12,6 @@ export const EXTENSION_FORMAT = "edgeweir-node-extension-v1";
 export const EXTENSIONS_FEATURE = "extensions-v1";
 /** Nodes that run Lua API 2 packages (extension version 1.1). */
 export const EXTENSIONS_V2_FEATURE = "extensions-v2";
-/** Lua API versions this console can deliver. */
-const EXTENSION_LUA_APIS = [1, 2] as const;
 /** Declared names per Lua API: log fields and counters. */
 const API_LIMITS = {
   1: { logFields: 8, counters: 8 },
@@ -66,17 +64,8 @@ const EXTENSION_CAPABILITIES = [
   "http_client",
   "timers",
 ] as const;
-type ExtensionCapability = (typeof EXTENSION_CAPABILITIES)[number];
-const EXTENSION_ENDPOINT_METHODS = [
-  "GET",
-  "HEAD",
-  "POST",
-  "PUT",
-  "DELETE",
-  "OPTIONS",
-] as const;
+const EXTENSION_ENDPOINT_METHODS = ["GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"] as const;
 const EXTENSION_FIELD_TYPES = ["string", "number", "boolean"] as const;
-type ExtensionFieldType = (typeof EXTENSION_FIELD_TYPES)[number];
 
 // ---------------------------------------------------------------------------
 // Semantic versions and ranges
@@ -132,28 +121,6 @@ function parseSemverRange(range: string): { op: string; version: SemVer }[] | nu
     out.push({ op: match[1] ?? "=", version });
   }
   return out;
-}
-
-/** Whether `version` ("v" prefix allowed) satisfies the range; an unparsable version does not. */
-function satisfiesSemverRange(version: string, range: string): boolean {
-  const parsed = parseSemver(version.replace(/^v/, ""));
-  const comparators = parseSemverRange(range);
-  if (!parsed || !comparators) return false;
-  return comparators.every(({ op, version: bound }) => {
-    const c = compareSemver(parsed, bound);
-    switch (op) {
-      case ">=":
-        return c >= 0;
-      case "<=":
-        return c <= 0;
-      case ">":
-        return c > 0;
-      case "<":
-        return c < 0;
-      default:
-        return c === 0;
-    }
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -705,5 +672,3 @@ export type VerifiedExtensionPackage = z.infer<typeof verifiedPackage>;
 export type SiteExtensionView = z.infer<typeof siteExtensionView>;
 export type NodeExtensionState = z.infer<typeof nodeExtensionState>;
 
-/** Rule field of an extension: `ext.<id>.<name>`. */
-const EXTENSION_FIELD_RE = /^ext\.([a-z][a-z0-9-]{1,38}[a-z0-9])\.([a-z][a-z0-9_]{0,31})$/;
