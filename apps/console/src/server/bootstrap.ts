@@ -20,6 +20,7 @@ import { resealEnvelopes } from "./services/envelope-rotation";
 import { upgradeLegacyEnvelopes } from "./services/envelope-upgrade";
 import { nodeChannelUrl } from "./services/node-channel-url";
 import { announceSetupToken, ensureSetupToken } from "./services/setup";
+import { SshInstallRuns } from "./services/ssh-install";
 
 /**
  * Node.js codes of a server certificate that failed verification (tls docs, "X509 certificate
@@ -189,6 +190,7 @@ export async function bootstrap(): Promise<Running> {
     events,
     log,
     accessKeyLimits: new AccessKeyRateLimiter(),
+    sshInstalls: new SshInstallRuns(),
   };
 
   let nodeChannel: NodeChannel | undefined;
@@ -215,6 +217,8 @@ export async function bootstrap(): Promise<Running> {
     if (closing) return;
     closing = true;
     log.info("shutting down");
+    // SSH installs end with the process: their credentials go with them (ADR-0066).
+    ctx.sshInstalls.shutdown();
     // Requests in flight get CLOSE_GRACE_MS; the listeners, the watch streams
     // of connected nodes and pg-boss stop at the same time.
     await Promise.all([

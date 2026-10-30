@@ -60,6 +60,7 @@ import {
   siteTagsContract,
   siteTagsInput,
 } from "./site-tags";
+import { sshInstallsContract } from "./ssh-install";
 import { cnamePrefixInput, cnamePrefixState, unknownHostProcedures } from "./unknown-hosts";
 import { usageContract, usageSettings } from "./usage";
 import { usageGuardContract } from "./usage-guard";
@@ -164,6 +165,8 @@ export const contract = {
   originCertificates: originCertificatesContract,
   /** Regional probes and their latest results. */
   probes: probesContract,
+  /** One-shot SSH install of nodes, one host or many (ADR-0066). */
+  sshInstalls: sshInstallsContract,
   /** Scheduling rules of a cluster: conditions on node and probe metrics, DNS actions. */
   scheduling: schedulingContract,
   /** Layer-4 (TCP / UDP) applications: ports of a cluster forwarded to origins. */
@@ -701,5 +704,6 @@ export * from "./l4";
 export * from "./login-allow-list";
 export * from "./probes";
 export * from "./service-accounts";
+export * from "./ssh-install";
 export * from "./usage";
 export * from "./usage-guard";

@@ -1,5 +1,7 @@
 import { schema } from "@edgeweir/db";
 import { desc, eq } from "drizzle-orm";
+import type { AppContext } from "../../lib/context";
+import type { Actor } from "../../services/audit";
 import {
   createCluster,
   deleteCluster,
@@ -58,6 +60,7 @@ import {
   previewScheduling,
   updateSchedulingRule,
 } from "../../services/scheduling";
+import type { InstallContext } from "../../services/ssh-install";
 import {
   cancelUpgrade,
   createUpgrade,
@@ -69,7 +72,36 @@ import {
 import { authed, ok } from "../base";
 
 /** Clusters, node groups, regions, nodes, upgrades, probes and scheduling. */
+/** What an SSH install run needs from the request: the caller and the install command's URLs. */
+async function installContext(context: { app: AppContext; actor: Actor }): Promise<InstallContext> {
+  return {
+    db: context.app.db,
+    log: context.app.log.child({ component: "ssh-install" }),
+    actor: context.actor,
+    consoleUrl: context.app.env.EDGEWEIR_PUBLIC_URL,
+    serverUrl: await nodeChannelUrl(context.app),
+    caSha256: context.app.nodeCa.fingerprintSha256,
+  };
+}
+
 export const clustersRouter = {
+  sshInstalls: {
+    scanHostKeys: authed.sshInstalls.scanHostKeys.handler(async ({ input, context }) => ({
+      hosts: await context.app.sshInstalls.scanHostKeys(input.hosts),
+    })),
+    start: authed.sshInstalls.start.handler(async ({ input, context }) =>
+      context.app.sshInstalls.start(input, await installContext(context)),
+    ),
+    get: authed.sshInstalls.get.handler(({ input, context }) =>
+      context.app.sshInstalls.get(input.id),
+    ),
+    cancel: authed.sshInstalls.cancel.handler(({ input, context }) =>
+      context.app.sshInstalls.cancel(input.id, context.actor),
+    ),
+    retry: authed.sshInstalls.retry.handler(async ({ input, context }) =>
+      context.app.sshInstalls.retry(input, await installContext(context)),
+    ),
+  },
   probes: {
     list: authed.probes.list.handler(({ context }) => listProbes(context.app.db)),
     createToken: authed.probes.createToken.handler(async ({ input, context }) =>

@@ -3206,5 +3206,15 @@
   "cluster_tab_releases": "发布",
   "cluster_tab_settings": "设置",
   "batch_more": "更多",
-  "upgrade_nodes": "节点"
+  "upgrade_nodes": "节点",
+  "error_ssh_install_not_found": "安装任务不存在（已过期，或控制台已重启）",
+  "error_ssh_install_too_many_runs": "最多同时进行 {limit} 个 SSH 安装",
+  "error_ssh_install_duplicate_host": "{host} 重复",
+  "error_ssh_install_busy": "任务还在进行，结束后再重试",
+  "error_ssh_install_nothing_to_retry": "没有可重试的主机",
+  "error_ssh_private_key_invalid": "无法读取私钥",
+  "error_ssh_private_key_passphrase": "私钥口令缺失或不正确",
+  "audit_action_ssh_install_start": "开始 SSH 安装",
+  "audit_action_ssh_install_host": "SSH 安装主机",
+  "audit_action_ssh_install_cancel": "取消 SSH 安装"
 }

@@ -3421,5 +3421,15 @@
   "cluster_tab_releases": "Releases",
   "cluster_tab_settings": "Settings",
   "batch_more": "More",
-  "upgrade_nodes": "Nodes"
+  "upgrade_nodes": "Nodes",
+  "error_ssh_install_not_found": "Install run not found (expired, or the console restarted)",
+  "error_ssh_install_too_many_runs": "At most {limit} SSH installs can run at once",
+  "error_ssh_install_duplicate_host": "{host} is listed twice",
+  "error_ssh_install_busy": "The run is still going; retry once it ends",
+  "error_ssh_install_nothing_to_retry": "No host to retry",
+  "error_ssh_private_key_invalid": "The private key cannot be read",
+  "error_ssh_private_key_passphrase": "The private key's passphrase is missing or wrong",
+  "audit_action_ssh_install_start": "SSH install started",
+  "audit_action_ssh_install_host": "SSH install of a host",
+  "audit_action_ssh_install_cancel": "SSH install canceled"
 }

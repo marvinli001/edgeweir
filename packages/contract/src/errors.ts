@@ -187,6 +187,20 @@ export const errorDefs = {
   /** The entry stays open: EDGEWEIR_NODE_API_WEBSOCKET or the current URL needs it. */
   NODE_CHANNEL_WEBSOCKET_REQUIRED: { status: 409, params: [] },
   ENROLLMENT_TOKEN_NOT_FOUND: { status: 404, params: [] },
+  /** The SSH install run does not exist: never started, expired, or lost with a console restart. */
+  SSH_INSTALL_NOT_FOUND: { status: 404, params: [] },
+  /** Too many SSH install runs have not finished yet. */
+  SSH_INSTALL_TOO_MANY_RUNS: { status: 409, params: ["limit"] },
+  /** The same host and port appear twice in one run. */
+  SSH_INSTALL_DUPLICATE_HOST: { status: 400, params: ["host"] },
+  /** The run is still running: retry once it ended. */
+  SSH_INSTALL_BUSY: { status: 409, params: [] },
+  /** No failed or canceled host to retry. */
+  SSH_INSTALL_NOTHING_TO_RETRY: { status: 409, params: [] },
+  /** The private key could not be read (not OpenSSH, PEM or PPK). */
+  SSH_PRIVATE_KEY_INVALID: { status: 400, params: [] },
+  /** The private key is encrypted and the passphrase is missing or wrong. */
+  SSH_PRIVATE_KEY_PASSPHRASE: { status: 400, params: [] },
   SITE_NOT_FOUND: { status: 404, params: [] },
   CACHE_RULE_PRIORITY_DUPLICATE: { status: 400, params: ["priority"] },
   SITE_DISABLED: { status: 409, params: [] },
