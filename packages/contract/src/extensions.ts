@@ -15,7 +15,10 @@ export const EXTENSIONS_V2_FEATURE = "extensions-v2";
 /** Lua API versions this console can deliver. */
 export const EXTENSION_LUA_APIS = [1, 2] as const;
 /** Declared names per Lua API: log fields and counters. */
-const API_LIMITS = { 1: { logFields: 8, counters: 8 }, 2: { logFields: 16, counters: 32 } } as const;
+const API_LIMITS = {
+  1: { logFields: 8, counters: 8 },
+  2: { logFields: 16, counters: 32 },
+} as const;
 
 export const EXTENSION_LIMITS = {
   archiveBytes: 4 * 1024 * 1024,

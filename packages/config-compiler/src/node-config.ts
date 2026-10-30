@@ -217,6 +217,7 @@ function compileExtensions(config: NodeConfig, input: CompileInput): void {
       sharedDicts: extension.sharedDicts.map((dict) =>
         create(ExtensionSharedDictSchema, { name: dict.name, sizeKb: dict.sizeKb }),
       ),
+      luaApi: extension.luaApi ?? 1,
     }),
   );
   config.extensionsDisabled = input.extensionsDisabled ?? false;

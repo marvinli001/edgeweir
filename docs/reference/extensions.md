@@ -275,7 +275,7 @@ edgeweir-node 仓库里的 `examples/extensions/hello-header` 就是这个扩展
 
 | 调用 | 说明 |
 | --- | --- |
-| `ew.site_name` | 网站的主域名（第一个域名）；节点级钩子中为 `nil` |
+| `ew.site_name` | 网站的主域名（第一个域名）；与 `ew.site_id` 一样，节点级扩展的 `log` 钩子中也是请求所属网站，`listen`、`init` 与定时器中为 `nil` |
 | `ew.req.http_version()` | `"1.0"`、`"1.1"`、`"2"`、`"3"` |
 | `ew.req.request_length()`、`ew.req.request_time()` | 收到的字节数（请求行、请求头、请求体）与自第一个字节起的秒数；`log` |
 | `ew.resp.bytes_sent()` | 发给客户端的字节数；`log` |
@@ -297,7 +297,7 @@ edgeweir-node 仓库里的 `examples/extensions/hello-header` 就是这个扩展
 
 节点监听器是节点为 `scope: "node"` 扩展开设的 HTTP 服务，与所有网站无关：不查 Host、不走规则、挑战、CC、缓存与访问日志。
 
-- 运营者在控制台开启监听器（扩展设置 `listeners.<name>`）：`port`（1024–65535；不能是 80、443、集群的边缘或四层端口、8443）、`bind`（节点上的地址，默认 `0.0.0.0` 与 `[::]`）与 `allow`（1–64 个 CIDR，必填）。节点把 `allow` / `deny all` 写进监听器，名单之外的客户端到不了 Lua。没有设置的监听器不开启。
+- 运营者在控制台开启监听器（`PATCH /extensions/{id}`，`{"listeners": {"<name>": {"port": 9145, "bind": "0.0.0.0", "allow": ["10.0.0.0/8"]}}, "clusterIds": [...]}`；`null` 关闭，省略 `clusterIds` 表示所有集群）：`port`（1024–65535；不能是 80、443、集群的边缘或四层端口、8443）、`bind`（节点上的地址，默认 `0.0.0.0` 与 `[::]`）与 `allow`（1–64 个 CIDR，必填）。节点把 `allow` / `deny all` 写进监听器，名单之外的客户端到不了 Lua。没有设置的监听器不开启。
 - 节点对声明方法的每个请求调用 `listen(ew, name, path)`，`path` 为请求路径。钩子返回 `ew.respond(...)`，其他返回值得到 500。预算 1000 ms。`ew.req.*` 读取请求，`ew.req.body()`（需 `request_body`）最多 64 KiB。
 - 地址名单之外的认证（扩展配置里的 Bearer 令牌，用 `ew.equal` 比较）由扩展负责。1.1 不提供 TLS 与客户端证书：把监听器放在私有网络上或依靠地址名单。
 - 节点绑定不了的端口记在扩展的节点状态里（`failed` 与消息），其余配置照常生效。
@@ -387,7 +387,7 @@ edgeweir-node 仓库里的 `examples/extensions/hello-header` 就是这个扩展
 
 ### 节点状态详情
 
-每个扩展的节点状态带 `details`（JSON，≤ 4 KiB）：`sidecar`（状态、重启次数、最近一次退出、起始时间）、`listeners`（`{name: {port, state, message}}`），以及边车套接字上 `GET /status` 的返回，放在 `sidecar.status` 下（≤ 2 KiB，每 30 秒轮询）。
+每个扩展的节点状态带 `details`（JSON，≤ 4 KiB）：`sidecar`（状态、重启次数、最近一次退出、起始时间）、`listeners`（`{name: {port, state: "listening" | "failed", message}}`），以及边车套接字上 `GET /status` 的返回，放在 `sidecar.status` 下（≤ 2 KiB，每 30 秒轮询）。
 
 ### 1.1 版的分发变化
 

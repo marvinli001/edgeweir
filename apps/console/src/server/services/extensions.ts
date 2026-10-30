@@ -54,7 +54,9 @@ const manifestOf = (row: Pick<VersionRow, "manifest">): ExtensionManifest =>
 
 /** The node features an extension needs (Lua API 2: extensions-v2). */
 const extensionFeatures = (manifest: ExtensionManifest) =>
-  manifest.requires.lua_api >= 2 ? [EXTENSIONS_FEATURE, EXTENSIONS_V2_FEATURE] : [EXTENSIONS_FEATURE];
+  manifest.requires.lua_api >= 2
+    ? [EXTENSIONS_FEATURE, EXTENSIONS_V2_FEATURE]
+    : [EXTENSIONS_FEATURE];
 
 const schemaOf = (manifest: ExtensionManifest, scope: "global" | "site") =>
   manifest.config[scope] as ExtensionConfigSchema | undefined;

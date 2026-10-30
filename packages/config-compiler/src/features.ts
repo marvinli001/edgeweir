@@ -491,7 +491,7 @@ export function derivedFeatures(config: NodeConfig): string[] {
     configExpressions(config).map(expressionOf).some(needsExtensionFields)
       ? [EXTENSIONS_FEATURE]
       : []),
-    ...(config.extensions.some((extension) => (extension.luaApi ?? 1) >= 2)
+    ...(config.extensions.some((extension) => extension.luaApi >= 2)
       ? [EXTENSIONS_V2_FEATURE]
       : []),
   ];

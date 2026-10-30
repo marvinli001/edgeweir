@@ -381,16 +381,12 @@ describe("node extensions", async () => {
     const api1 = exampleVersion("1.2.0", (m) => {
       m.counters = counters;
     });
-    expect((await rpcError(admin.extensions.install(api1))).code).toBe(
-      "EXTENSION_PACKAGE_INVALID",
-    );
+    expect((await rpcError(admin.extensions.install(api1))).code).toBe("EXTENSION_PACKAGE_INVALID");
     const api2 = exampleVersion("1.2.0", (m) => {
       m.requires = { lua_api: 2 };
       m.counters = counters;
     });
-    expect((await rpcError(admin.extensions.install(api2))).code).toBe(
-      "NODE_CAPABILITY_REQUIRED",
-    );
+    expect((await rpcError(admin.extensions.install(api2))).code).toBe("NODE_CAPABILITY_REQUIRED");
     await ctx.db
       .update(schema.node)
       .set({ supportedFeatures: ["tls-v1", "rules-v1", EXTENSIONS_FEATURE, EXTENSIONS_V2_FEATURE] })

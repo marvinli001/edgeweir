@@ -275,7 +275,7 @@ Hooks gain `listen`; capabilities gain `sidecar`. A package with a sidecar may b
 
 | Call | Notes |
 | --- | --- |
-| `ew.site_name` | The site's primary domain (its first domain); `nil` in node-level hooks |
+| `ew.site_name` | The site's primary domain (its first domain); with `ew.site_id`, the request's site also in a node-scope `log` hook, `nil` in `listen`, `init` and timers |
 | `ew.req.http_version()` | `"1.0"`, `"1.1"`, `"2"`, `"3"` |
 | `ew.req.request_length()`, `ew.req.request_time()` | Bytes received (request line, headers, body) and seconds since the first byte; `log` |
 | `ew.resp.bytes_sent()` | Bytes sent to the client; `log` |
@@ -297,7 +297,7 @@ Clarifications for both API versions: `ew.req.pass_level()` is 0 (none), 1 `cook
 
 A node listener is an HTTP server the node opens for a `scope: "node"` extension, outside every site: no Host lookup, rules, challenges, CC, cache or access logs.
 
-- The operator turns a listener on in the console (extension settings, `listeners.<name>`): `port` (1024–65535; not 80, 443, the cluster's edge or layer-4 ports or 8443), `bind` (an address of the node, default `0.0.0.0` and `[::]`) and `allow` (1–64 CIDRs, required). The node renders `allow` / `deny all` into the listener, so clients outside the list never reach Lua. A listener without settings is off.
+- The operator turns a listener on in the console (`PATCH /extensions/{id}` with `{"listeners": {"<name>": {"port": 9145, "bind": "0.0.0.0", "allow": ["10.0.0.0/8"]}}, "clusterIds": [...]}`; `null` turns one off, no `clusterIds` means every cluster): `port` (1024–65535; not 80, 443, the cluster's edge or layer-4 ports or 8443), `bind` (an address of the node, default `0.0.0.0` and `[::]`) and `allow` (1–64 CIDRs, required). The node renders `allow` / `deny all` into the listener, so clients outside the list never reach Lua. A listener without settings is off.
 - The node calls `listen(ew, name, path)` for each request on a declared method; `path` is the request path. The hook returns `ew.respond(...)`; anything else is a 500. Budget: 1000 ms. `ew.req.*` reads the request, `ew.req.body()` (with `request_body`) up to 64 KiB.
 - Authentication beyond the address list (bearer tokens in the extension's configuration, compared with `ew.equal`) is the extension's. TLS and client certificates are not offered in 1.1: put the listener on a private network or behind the allow list.
 - A port the node cannot bind is reported in the extension's node state (`failed`, message), the rest of the configuration applies.
@@ -387,7 +387,7 @@ Only sites that turn the extension on appear. Site configuration is visible to L
 
 ### Node state details
 
-Each extension's node state carries `details` (JSON, ≤ 4 KiB): `sidecar` (state, restarts, last exit, since), `listeners` (`{name: {port, state, message}}`), and whatever the sidecar returns from `GET /status` on its socket under `sidecar.status` (≤ 2 KiB, polled every 30 s).
+Each extension's node state carries `details` (JSON, ≤ 4 KiB): `sidecar` (state, restarts, last exit, since), `listeners` (`{name: {port, state: "listening" | "failed", message}}`), and whatever the sidecar returns from `GET /status` on its socket under `sidecar.status` (≤ 2 KiB, polled every 30 s).
 
 ### Distribution changes in 1.1
 

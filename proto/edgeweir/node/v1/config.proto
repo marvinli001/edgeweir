@@ -1742,6 +1742,9 @@ message Extension {
   // Shared dicts of the manifest (name, size in KiB), so nodes can render
   // nginx.conf before unpacking.
   repeated ExtensionSharedDict shared_dicts = 11;
+  // Lua API the package requires (0 or 1: version 1; 2: extension version
+  // 1.1, nodes with extensions-v2).
+  uint32 lua_api = 12;
 }
 
 // ExtensionSharedDict is one lua_shared_dict of an extension.
