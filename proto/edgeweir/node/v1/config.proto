@@ -520,6 +520,21 @@ message Site {
   // Added in v1.6.0; nodes without feature encoded-path-exemptions-v1 keep
   // treating every such path as ambiguous (no feature required).
   repeated EncodedPathExemption encoded_path_exemptions = 38;
+  // Development mode; unset means off. Added in proto/vX.Y.Z-dev-mode
+  // (feature development-mode-v1).
+  DevelopmentMode development_mode = 39;
+}
+
+// DevelopmentMode bypasses the edge cache of a site until expires_at, on
+// the node's clock: requests are neither served from the cache nor stored,
+// so they go to the origin (X-Cache: BYPASS); what is cached stays and is
+// served again afterwards. WebP / AVIF conversion, which only applies to
+// cached responses, is off with it, and so are cache rules (edge and
+// browser TTLs, stale serving). Purges, PURGE requests and prefetches work
+// as usual. The node stops on its own at expires_at, whether or not a new
+// configuration arrives; an expires_at in the past is off.
+message DevelopmentMode {
+  google.protobuf.Timestamp expires_at = 1;
 }
 
 // EncodedPathExemption lets raw paths that start with prefix carry an
