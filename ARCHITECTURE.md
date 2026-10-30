@@ -454,6 +454,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | --- | --- | --- |
 | `alerts.sweep` | 每分钟 | 告警检测与投递 |
 | `mitigation.evaluate` | 每分钟（启动时先投递一次） | 评估各网站的自动缓解：节点的 CC 级别达到阈值时开启该站的 Under Attack，级别持续低于阈值满设定时间后关闭；状态与到期时间都在 `site_auto_mitigation`，重启或重复投递只会重新评估 |
+| `development-mode.expire` | 每分钟（启动时先投递一次） | 关闭截止时间已过的开发模式（`site.development_mode_until`）：清空、发布并以系统身份审计；节点在截止时刻已自行恢复缓存，重启或重复投递只会再检查一次 |
 | `rollouts.evaluate` | 每分钟 | 求值进行中的配置金丝雀：推进、等待推进或回滚（金丝雀节点的心跳也触发求值） |
 | `dns.reconcile` | 每分钟 | 删除到期的旧 CNAME 前缀并发布受影响集群的 DNS；DNS 调度发布与外部记录维护 |
 | `traffic.rollup` | 每分钟 | 流量汇总与清理（含 L4 应用的分钟统计）、用量汇总与保留期清理（随后评估各网站的用量保护，告警有变化时立即触发一次告警扫描）、访问日志分区维护、升级任务到期；一项失败不影响其他各项 |
@@ -516,7 +517,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 
 | 表 | 内容 |
 | --- | --- |
-| `site` | 网站：所属集群、启用状态、缓存键、分片、Cache-Tag 转发、WebSocket、证书、TLS 设置、缓存代际号、日志采样率、错误页是否拦截源站错误与保存时间 |
+| `site` | 网站：所属集群、启用状态、缓存键、分片、Cache-Tag 转发、WebSocket、证书、TLS 设置、缓存代际号、日志采样率、错误页是否拦截源站错误与保存时间、开发模式截止时间 |
 | `site_domain` | 网站域名：名称与写法（`kind`：精确、泛域名、后缀、正则），同一写法的同一名称全局唯一 |
 | `site_star` | 用户星标 |
 | `hidden_cards` | 用户在概览与网站统计中隐藏的卡片 |
@@ -687,6 +688,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0080_origin_ca_rotation` | `pki_authority.kind`、`status`、`generation`（CA 轮换；`(kind, status)` 唯一，已有行的 kind 取 ID）；`origin_certificate.authority_id`、`origin_client_certificate.authority_id`（签发它的 CA） |
 | `0081_node_location` | `node.location`（节点用自己的 GeoIP 库查出的公网地址位置：国家、一级行政区、City MMDB 的经纬度） |
 | `0082_node_key_decommission` | `node.key_sha256`（证书公钥 SPKI 的 SHA-256，唯一；同一密钥再次注册得到同一节点）、`machine_id`（主机 machine-id 摘要，只作提示）、`decommission_requested_at`、`decommission_task_id`、`decommission_error`（无 SSH 退役，ADR-0067） |
+| `0083_site_development_mode` | `site.development_mode_until`（开发模式的截止时间，关闭时为空） |
 
 ## 构建产物
 

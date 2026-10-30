@@ -410,6 +410,12 @@ export const site = pgTable(
     maintenance: jsonb("maintenance").$type<Record<string, unknown>>().notNull().default({}),
     /** When the maintenance settings were last saved; null until then. */
     maintenanceUpdatedAt: timestamp("maintenance_updated_at", { withTimezone: true }),
+    /**
+     * When development mode ends (Site.development_mode, nodes honour it on
+     * their own clock); null while off. The worker clears it once it has
+     * passed (`development-mode.expire`).
+     */
+    developmentModeUntil: timestamp("development_mode_until", { withTimezone: true }),
     /** When the access authentication rules were last saved; null until then. */
     authUpdatedAt: timestamp("auth_updated_at", { withTimezone: true }),
     /**

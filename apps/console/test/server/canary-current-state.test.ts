@@ -1,4 +1,4 @@
-import { decodeNodeConfig } from "@edgeweir/config-compiler";
+import { DEVELOPMENT_MODE_FEATURE, decodeNodeConfig } from "@edgeweir/config-compiler";
 import { tlsSettings } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { and, eq, sql } from "drizzle-orm";
@@ -10,6 +10,7 @@ import {
   inspectCertificate,
   nodeCertificates,
 } from "../../src/server/services/certificates";
+import { expireDevelopmentModes } from "../../src/server/services/development-mode";
 import { latestRevision, nodeTarget, publishRevision } from "../../src/server/services/revisions";
 import { evaluateRollout } from "../../src/server/services/rollout";
 import { type ApiClient, createTestContext, rpcClient, setupPlatform, signIn } from "./helpers";
@@ -108,7 +109,14 @@ describe("configuration canary and current state", async () => {
           nodeGroupId,
           name,
           lastSeenAt: new Date(),
-          supportedFeatures: ["tls-v1", "http01-v1", "rules-v1", "challenge-v1", "http3-v1"],
+          supportedFeatures: [
+            "tls-v1",
+            "http01-v1",
+            "rules-v1",
+            "challenge-v1",
+            "http3-v1",
+            DEVELOPMENT_MODE_FEATURE,
+          ],
         })),
       )
       .returning();
@@ -308,6 +316,34 @@ describe("configuration canary and current state", async () => {
     expect(after.sites[0]?.protection?.underAttack ?? false).toBe(false);
     expect(after.platformProtection?.underAttack ?? false).toBe(false);
     expect(after.sites[0]?.name).not.toBe(renamed);
+  });
+
+  it("gives development mode, its end and its expiry to every node at once while a candidate waits", async () => {
+    await settle();
+    await change();
+    const renamed = `site-${renames}`;
+    const started = (await rollout()).windowStartedAt;
+    const site = async (node: TestNode) => (await config(node)).sites.find((s) => s.id === siteId);
+    const on = async () => {
+      await admin.developmentMode.set({ id: siteId, enabled: true });
+      for (const node of [stable, canary]) {
+        expect((await site(node))?.developmentMode?.expiresAt).toBeDefined();
+        expect((await config(node)).requiredFeatures).toContain(DEVELOPMENT_MODE_FEATURE);
+      }
+    };
+    await on();
+    // The rename still waits for the canary, whose window kept its start.
+    expect((await site(stable))?.name).not.toBe(renamed);
+    expect(await rollout()).toMatchObject({ state: "canary", windowStartedAt: started });
+    await admin.developmentMode.set({ id: siteId, enabled: false });
+    for (const node of [stable, canary])
+      expect((await site(node))?.developmentMode).toBeUndefined();
+    // The worker's expiry is just as immediate.
+    await on();
+    expect(await expireDevelopmentModes(ctx, new Date(Date.now() + 4 * 3_600_000))).toBe(1);
+    for (const node of [stable, canary])
+      expect((await site(node))?.developmentMode).toBeUndefined();
+    expect((await site(stable))?.name).not.toBe(renamed);
   });
 
   it("decides a window replaced by later changes when the first candidate's window ends", async () => {

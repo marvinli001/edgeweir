@@ -14,22 +14,38 @@ export function canaryLabel(delivery: SiteDelivery): string | null {
 
 /**
  * Whether the site runs on its cluster's online nodes: disabled, pending, rolling out or live;
- * and a badge while its usage protection holds maintenance mode or the site disabled.
+ * and badges while its usage protection holds maintenance mode or the site disabled, and while
+ * its development mode bypasses the cache.
  */
 export function SiteStatus({
   site,
 }: {
-  site: Pick<Site, "enabled" | "delivery"> & Partial<Pick<Site, "usageGuardHeld">>;
+  site: Pick<Site, "enabled" | "delivery"> &
+    Partial<Pick<Site, "usageGuardHeld" | "developmentModeUntil">>;
 }) {
   const dot = <SiteStatusDot site={site} />;
-  if (!site.usageGuardHeld) return dot;
+  if (!site.usageGuardHeld && !site.developmentModeUntil) return dot;
   return (
     <span className="inline-flex flex-wrap items-center gap-2">
       {dot}
-      <Badge size="sm" tone="neutral" data-testid="site-usage-guard">
-        {m.usage_guard_badge()}
-      </Badge>
+      {site.usageGuardHeld ? (
+        <Badge size="sm" tone="neutral" data-testid="site-usage-guard">
+          {m.usage_guard_badge()}
+        </Badge>
+      ) : null}
+      {site.developmentModeUntil ? (
+        <DevelopmentModeBadge until={site.developmentModeUntil} testId="site-dev-mode" />
+      ) : null}
     </span>
+  );
+}
+
+/** "Development mode", with the time it ends as its tooltip. */
+export function DevelopmentModeBadge({ until, testId }: { until: string; testId: string }) {
+  return (
+    <Badge size="sm" tone="warning" title={formatClockTime(until)} data-testid={testId}>
+      {m.site_dev_mode_badge()}
+    </Badge>
   );
 }
 

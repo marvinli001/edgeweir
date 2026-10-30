@@ -668,6 +668,8 @@ export const site = z.object({
   enabled: z.boolean(),
   /** The action the site's usage protection applied and holds (maintenance mode or disabled). */
   usageGuardHeld: z.enum(["maintenance", "disable"]).nullable(),
+  /** When the site's development mode ends; null while off. */
+  developmentModeUntil: isoDateTime.nullable(),
   clusterId: uuid,
   clusterName: z.string(),
   /** In ASCII (Punycode) form: `a.com`, `*.a.com`, `.a.com`, `~pattern`. */

@@ -88,6 +88,12 @@ type SiteRow = typeof schema.site.$inferSelect;
 const usageGuardHeld = (held: string | null | undefined) =>
   held === "maintenance" || held === "disable" ? held : null;
 
+/** When the site's development mode ends, null while off or once the deadline passed. */
+export const developmentModeUntil = (site: SiteRow, now = Date.now()) =>
+  site.developmentModeUntil && site.developmentModeUntil.getTime() > now
+    ? site.developmentModeUntil.toISOString()
+    : null;
+
 async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
@@ -147,6 +153,7 @@ async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
       name: r.name,
       enabled: r.enabled,
       usageGuardHeld: usageGuardHeld(heldOf.get(r.id)),
+      developmentModeUntil: developmentModeUntil(r),
       clusterId: r.clusterId,
       clusterName: clusters.find((c) => c.id === r.clusterId)?.name ?? "",
       delivery: deliveries.get(r.id) ?? {

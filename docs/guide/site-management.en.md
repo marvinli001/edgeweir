@@ -185,7 +185,7 @@ Enabling, disabling, tags and deleting complete for every site or change none (f
 | Log settings | The access log sample rate, logging blocked requests, the query string, request headers, the peer address and JA4 | |
 | Image format conversion | On or off, formats and qualities, source types, the size range and the most pixels | |
 
-Domains, origins, certificates, ports, X-Cache, the PURGE method and key, charset, the request body limit, maintenance mode, usage protection, automatic mitigation and tags belong to no part and are never copied.
+Domains, origins, certificates, ports, X-Cache, the PURGE method and key, charset, the request body limit, maintenance mode, development mode, usage protection, automatic mitigation and tags belong to no part and are never copied.
 
 ### Why a copy fails
 
@@ -211,6 +211,7 @@ A target that lacks something the settings use fails:
 | Taken from the source | The origins (S3 credentials encrypted again for it), every [part that can be copied](#parts-that-can-be-copied), X-Cache, the PURGE method and key (encrypted again), charset, the request body limit and maintenance mode |
 | Certificates | Not copied (they cover the source's domains); force HTTPS, HSTS and client certificates are off, no domains are left out of the redirect |
 | Ports | The source's HTTP ports (80 when the source has none); 443 as HTTPS port when the source has 443, otherwise none |
+| Development mode | Off |
 | CNAME prefix | A new random prefix |
 | Revision and audit | Its cluster publishes a new revision (reason "Site {site} cloned from {source}"); audit entry "Site cloned" |
 

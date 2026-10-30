@@ -41,6 +41,7 @@ import { SafetyNote } from "@/components/safety-note";
 import { CachePurgeCard } from "@/components/site/cache-purge-card";
 import { CompressionCard } from "@/components/site/compression-card";
 import { CharsetCard, PurgeMethodCard, XCacheCard } from "@/components/site/content-cards";
+import { DevelopmentModeCard } from "@/components/site/development-mode-card";
 import { ExpressionEditor, expressionFailure } from "@/components/site/expression-editor";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { ImageConvertCard, ImageSavingsCard } from "@/components/site/image-convert-card";
@@ -53,7 +54,7 @@ import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
 /**
- * Cache tab: purges, ordered cache rules, how cache keys are built, whether the
+ * Cache tab: development mode, purges, ordered cache rules, how cache keys are built, whether the
  * origin's Cache-Tag reaches clients, compression, WebP / AVIF conversion and
  * charsets. Each card saves on its own.
  */
@@ -61,6 +62,7 @@ export function CacheTab({ site }: { site: Site }) {
   const { cacheKey, rangeSlice, keepCacheTag, xCache, purgeMethod } = site.cacheSettings;
   return (
     <div className="flex flex-col gap-4">
+      <DevelopmentModeCard site={site} />
       <CachePurgeCard site={site} />
       {/* Keyed by their own data, so saving one card keeps unsaved edits in the others. */}
       {/* Each key starts with the card's name: sibling keys must differ ("true" twice duplicates a card). */}

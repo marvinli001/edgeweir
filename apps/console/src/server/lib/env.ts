@@ -176,6 +176,14 @@ const schema = z.object({
     (value) => (value === "" ? undefined : value),
     z.coerce.number().int().min(1).max(15).optional(),
   ),
+  /**
+   * End-to-end tests only: development mode lasts this many seconds instead
+   * of three hours. Unset in deployments.
+   */
+  EDGEWEIR_E2E_DEVELOPMENT_MODE_SECONDS: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.coerce.number().int().min(10).max(10800).optional(),
+  ),
 });
 
 /**

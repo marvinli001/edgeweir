@@ -38,10 +38,12 @@ services:
     image: edgeweir:${E2E_TAG:-e2e}
     environment:
       # Test-only timings (lib/env.ts): the every-minute jobs every 5 s, heartbeats
-      # every 5 s (online window 15 s); E2E_TICK_SECONDS= / E2E_HEARTBEAT_SECONDS=
+      # every 5 s (online window 15 s), development mode for 60 s;
+      # E2E_TICK_SECONDS= / E2E_HEARTBEAT_SECONDS= / E2E_DEVELOPMENT_MODE_SECONDS=
       # (empty) runs with the production timings.
       EDGEWEIR_E2E_TICK_SECONDS: ${E2E_TICK_SECONDS-5}
       EDGEWEIR_E2E_HEARTBEAT_SECONDS: ${E2E_HEARTBEAT_SECONDS-5}
+      EDGEWEIR_E2E_DEVELOPMENT_MODE_SECONDS: ${E2E_DEVELOPMENT_MODE_SECONDS-60}
       ROLE: all
       DATABASE_URL: postgres://edgeweir:e2e-only-password@postgres:5432/edgeweir
       EDGEWEIR_MASTER_KEY: ZTJlLW9ubHktbWFzdGVyLWtleS1kby1ub3QtcmV1c2UhIQ==

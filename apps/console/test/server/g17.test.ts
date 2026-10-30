@@ -780,6 +780,8 @@ describe("site tags, batch operations, copying settings and cloning (G17)", asyn
         "cnamePrefix",
         // The site's own history: the authRules part adds the rules it replaces.
         "authIdentityHeaders",
+        // A time-limited switch of the site itself (development mode).
+        "developmentModeUntil",
         "createdAt",
         "updatedAt",
       ];

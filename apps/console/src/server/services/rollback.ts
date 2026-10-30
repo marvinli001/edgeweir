@@ -1,6 +1,7 @@
 import { clone, create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import {
+  compileDevelopmentMode,
   compileOfflineHosts,
   compilePlatformErrorPages,
   compileRules,
@@ -65,7 +66,8 @@ const hostKey = (host: { name: string; wildcard: boolean; match: DomainMatch }) 
 /**
  * The sites of an earlier configuration as they may be published now.
  * Sites that are disabled now are dropped; cache
- * generations are the current ones (a purge is never undone), certificate
+ * generations are the current ones (a purge is never undone), so is
+ * development mode (a time-limited switch, not content), certificate
  * references carry the current certificate (one renewed in place exists in
  * its current version only) and the log sampling rate never exceeds the
  * current one. A site or domain removed since: `strict` (the operator's
@@ -219,6 +221,9 @@ async function restoreSites(
         names.has(d),
       );
     }
+    // Development mode is the current state: never revived or ended by
+    // republishing older content.
+    site.developmentMode = compileDevelopmentMode(current.developmentModeUntil);
     sites.push(site);
   }
   out.sites = sites;
@@ -245,7 +250,7 @@ async function restoreSites(
  * current state of sites (restoreSites: sites taken offline and removed
  * domains are gone, renewed certificates apply), the current
  * ACME challenges (`challenges`, else loaded), challenge keys and Under
- * Attack of sites and the platform. Every publication refreshes the stable
+ * Attack of sites and the platform, and sites' development mode. Every publication refreshes the stable
  * revision with it and the automatic rollback publishes it.
  */
 export async function currentStable(

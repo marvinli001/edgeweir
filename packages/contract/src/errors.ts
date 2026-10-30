@@ -409,6 +409,9 @@ export const revisionReasonDefs = {
     params: ["site"],
     en: "automatic mitigation turned on Under Attack for {site}",
   },
+  development_mode_on: { params: ["site"], en: "development mode of {site} on" },
+  development_mode_off: { params: ["site"], en: "development mode of {site} off" },
+  development_mode_expired: { params: ["site"], en: "development mode of {site} ended" },
   auto_mitigation_ended: {
     params: ["site"],
     en: "automatic mitigation turned off Under Attack for {site}",

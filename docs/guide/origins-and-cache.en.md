@@ -582,6 +582,26 @@ answers `202 {"task_id":"…"}`: the console creates a URL purge task for that U
 | Audit | `cache.purge`, the node as actor, metadata `method: PURGE` |
 | Node requirement | `site-content-v1`; while an active node of the cluster lacks it, a disabled card is unavailable |
 
+## Development mode
+
+With **Bypass the cache for 3 hours** on in the **Development mode** card at the top of a site's **Cache** tab, edge nodes neither answer the site's requests from the cache nor store them for three hours: every request goes to the origin, `X-Cache` is `BYPASS`, and changes show at once. The card shows the time left and turns it off early; the site header and the site list show a **Development mode** badge while it is on.
+
+| Item | Details |
+| --- | --- |
+| Duration | Three hours, fixed; turning it on while on does not extend it (turn it off and on again) |
+| Expiry | Nodes resume caching at the deadline on their own clock, without the console; the console turns it off, publishes and audits within a minute (after a console outage, once it is back) |
+| Cached content | Kept. Afterwards nodes serve what they cached before; [purge](#purge-and-prefetch) for new versions |
+| Purges and PURGE | Work as usual; prefetches go to the origin too and store nothing |
+| Cache rules | Do not apply: no edge TTL, browser TTL or stale content (stale-while-revalidate / stale-if-error); an origin error is not answered from the cache |
+| WebP / AVIF conversion | Only applies to cached responses, so none while it is on |
+| Other | Access control, rules, the WAF, compression and error pages as usual |
+| Publishing | Turning it on, off and its expiry go to every node at once, without the canary; a rollback neither revives nor ends it |
+| Audit | `site.development_mode_on` / `_off` (the operator), `site.development_mode_expire` (the system) |
+| API | `GET` / `PUT /api/v1/sites/{id}/development-mode`, `{ "enabled": true }` |
+| Node requirement | `development-mode-v1`; it cannot be turned on while a node of the cluster lacks it |
+
+To bypass the cache for longer, use a cache rule that does not cache.
+
 ## X-Cache
 
 With **Send X-Cache to visitors** (`cacheSettings.xCache`, on by default) off in the **X-Cache** card, the site's responses carry no `X-Cache` (cache hits included); caching is unchanged. Turning it off needs `site-content-v1`; turning it on again does not.

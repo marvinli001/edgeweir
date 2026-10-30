@@ -17,6 +17,7 @@ export {
   BROTLI_FEATURE,
   CHALLENGE_V2_FEATURE,
   CLIENT_CERT_FEATURE,
+  DEVELOPMENT_MODE_FEATURE,
   ERROR_PAGES_FEATURE,
   g14Features,
   geoFeatures,
@@ -91,4 +92,9 @@ export {
   siteBytes,
 } from "./node-config";
 export { compileRules, expressionOf, ruleModelOf } from "./rules";
-export { compileSitePorts, parseDomain, splitWafExclusions } from "./site";
+export {
+  compileDevelopmentMode,
+  compileSitePorts,
+  parseDomain,
+  splitWafExclusions,
+} from "./site";

@@ -1,4 +1,5 @@
 import { create } from "@bufbuild/protobuf";
+import { timestampFromMs } from "@bufbuild/protobuf/wkt";
 import {
   type AuthKind as AuthRuleKind,
   CACHE_EXPRESSION_MAX_LENGTH,
@@ -25,6 +26,8 @@ import {
   ClientCertificateMode,
   ClientCertificateSchema,
   CorsSchema,
+  type DevelopmentMode,
+  DevelopmentModeSchema,
   DomainMatch,
   DomainSchema,
   type EdgeRule,
@@ -526,6 +529,21 @@ export function compileSite(
           semicolon: e.semicolon,
         }),
       ),
+    developmentMode: compileDevelopmentMode(model.developmentModeUntil),
+  });
+}
+
+/**
+ * Site.development_mode of a site whose development mode ends at `until`
+ * (whole seconds), undefined while off: configurations without it encode
+ * as before development-mode-v1.
+ */
+export function compileDevelopmentMode(
+  until: Date | null | undefined,
+): DevelopmentMode | undefined {
+  if (!until) return undefined;
+  return create(DevelopmentModeSchema, {
+    expiresAt: timestampFromMs(Math.floor(until.getTime() / 1000) * 1000),
   });
 }
 
