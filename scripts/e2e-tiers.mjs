@@ -110,7 +110,10 @@ async function originHits(path) {
     { target: "g4-origin-a", port: 8080, host: "g4-origin-a", path: "/control/hits" },
   ]);
   assert.equal(r.status, 200, `origin hits: ${summary(r)}`);
-  return JSON.parse(r.body).hits[`${HOST} ${path} d`] ?? 0;
+  const { hits } = JSON.parse(r.body);
+  // Every key, so that a request under another Host shows in the output.
+  console.log(`origin hits for ${path}: ${JSON.stringify(hits)}`);
+  return hits[`${HOST} ${path} d`] ?? 0;
 }
 
 // ---------------------------------------------------------------- setup
