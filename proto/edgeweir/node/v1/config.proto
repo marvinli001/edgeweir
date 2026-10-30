@@ -118,6 +118,14 @@ message NodeConfig {
   // origin_ca. Changing it is a structural change. Added in v1.6.0
   // (feature origin-ca-rotation-v1).
   OriginCa origin_ca_previous = 24;
+  // Tiered cache (ADR-0073): the nodes the plans name and the plans the
+  // sites use (Site.tier_plan_id). Unset: no site uses one. Changing which
+  // nodes listen for lower tiers (TieredCache.port and whether this node is
+  // an upper tier of some plan) is a structural change. Added in PROTO_NEXT
+  // (feature tiered-cache-v1; no feature required: a node without it
+  // fetches from the origins, the console names it as an upper tier only
+  // with tier-upper-v1).
+  TieredCache tiered_cache = 80;
 }
 
 // ConnectionLimits limits each client's TCP connections to ports in the
@@ -281,6 +289,8 @@ message NodeConfigDiff {
   ConnectionLimits connection_limits = 25;
   // Always sent in full (NodeConfig field 24). Added in v1.6.0.
   OriginCa origin_ca_previous = 26;
+  // Always sent in full (NodeConfig field 80). Added in PROTO_NEXT.
+  TieredCache tiered_cache = 80;
 }
 
 // L4Protocol is the transport of a layer-4 application.
@@ -520,6 +530,10 @@ message Site {
   // Added in v1.6.0; nodes without feature encoded-path-exemptions-v1 keep
   // treating every such path as ambiguous (no feature required).
   repeated EncodedPathExemption encoded_path_exemptions = 38;
+  // The tiered cache plan of the site (TieredCache.plans); "" fetches from
+  // the origins. Only requests the edge may cache go through upper tiers.
+  // Added in PROTO_NEXT (feature tiered-cache-v1).
+  string tier_plan_id = 80;
 }
 
 // EncodedPathExemption lets raw paths that start with prefix carry an
@@ -1699,4 +1713,60 @@ message CertificateRef {
   repeated string names = 2;
   string sha256_fingerprint = 3;
   google.protobuf.Timestamp not_after = 4;
+}
+
+// TieredCache: lower tiers fetch cacheable requests from upper tier nodes
+// over mutual TLS (both sides present their node certificate, O=Edgeweir
+// Node, and verify the other's against the node CA), upper tiers from the
+// origins. A node that is an upper tier of some plan listens on port for
+// the lower tiers the plans name; a lower tier falls back to the origins
+// when none of its upper tiers answers. Added in PROTO_NEXT (feature
+// tiered-cache-v1).
+message TieredCache {
+  // TLS port of the upper tiers' listener, 1-65535, not a listener's.
+  uint32 port = 1;
+  // Every node a plan names, sorted by id and unique.
+  repeated TierNode nodes = 2;
+  // Sorted by id and unique, at most 4096.
+  repeated TierPlan plans = 3;
+  // Origins every node measures the round trip time to
+  // (ReportStatusRequest.tier_latencies), sorted by id, at most 1024.
+  repeated TierLatencyTarget latency_targets = 4;
+}
+
+// TierNode is a node lower tiers may fetch from, or that may fetch from an
+// upper tier.
+message TierNode {
+  string id = 1;
+  // IP literal lower tiers connect to (the node's scheduling address);
+  // "" for a node that is only a lower tier.
+  string address = 2;
+}
+
+// TierPlan says, per node, which upper tiers it fetches from.
+message TierPlan {
+  // [A-Za-z0-9_-]{1,64}.
+  string id = 1;
+  // Sorted by node_id and unique; a node without a hop fetches from the
+  // origins (it is an upper tier, or outside the plan).
+  repeated TierHop hops = 2;
+}
+
+// TierHop names the upper tiers of one node, in the order it tries them.
+// Plans never form a cycle and are at most two hops deep (lower, regional
+// tier, upper tier); a node refuses deeper chains and CDN-Loop catches the
+// rest.
+message TierHop {
+  string node_id = 1;
+  // 1-3 node ids, unique, never node_id; each with an address.
+  repeated string upper_node_ids = 2;
+}
+
+// TierLatencyTarget is an origin address and port the nodes measure.
+message TierLatencyTarget {
+  // [A-Za-z0-9_-]{1,64}.
+  string id = 1;
+  // Host name or IP literal (the origin's address).
+  string host = 2;
+  uint32 port = 3;
 }
