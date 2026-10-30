@@ -101,7 +101,7 @@ Schema 为 JSON Schema 2020-12，限于控制台能渲染和校验的部分：
 
 ```bash
 edgeweir-node extension keygen --out publisher.jwk          # 私钥 JWK，0600；打印公钥 JWK 与 kid
-edgeweir-node extension pack ./hello-header -o hello-header-1.0.0.ewx
+edgeweir-node extension pack --out hello-header-1.0.0.ewx ./hello-header   # 参数在前
 edgeweir-node extension sign --key publisher.jwk --publisher example.org hello-header-1.0.0.ewx   # 写出 .ewx.sig
 edgeweir-node extension verify --pubkey publisher.pub.jwk --publisher example.org hello-header-1.0.0.ewx
 ```
@@ -127,7 +127,7 @@ edgeweir-node extension verify --pubkey publisher.pub.jwk --publisher example.or
 
 ## 分发
 
-1. 配置带有每个已安装扩展（当前版本、摘要、大小、签名、签名公钥、启用、失败模式、全局配置）、各网站开启的扩展及网站配置，以及总开关。
+1. 配置带有集群中有网站开启的每个已安装扩展（当前版本、摘要、大小、签名、签名公钥、启用、失败模式、全局配置）、各网站开启的扩展及网站配置，以及总开关。
 2. 节点声明 `extensions-v1`。下发了任何扩展的配置要求 `extensions-v1`；若会收到该扩展的集群里有不支持的活动节点，控制台拒绝启用扩展或在网站上开启（`NODE_CAPABILITY_REQUIRED`）。
 3. 节点按摘要取回缺少的扩展包（`GetExtensionPackage`，mTLS），检查大小与 SHA-256，用下发的公钥验证 JWS（若 `--extension-keys` 指定了本地 JWK 文件，还要求公钥在其中），解包并按与控制台相同的规则校验 manifest，检查 `requires`。失败的扩展包不加载并上报；配置的其余部分照常应用。
 4. 加载的扩展包集合变化（安装、升级、卸载、共享字典大小）时重新渲染 `nginx.conf` 并平滑 reload。启用 / 停用、配置、网站设置与总开关为热更新。
@@ -143,15 +143,15 @@ edgeweir-node extension verify --pubkey publisher.pub.jwk --publisher example.or
 
 | 钩子 | 时机 | 可以 |
 | --- | --- | --- |
-| `init(ew)` | 每个 worker（重新）加载后一次 | 准备状态；有 `timers` 时可用 `ew.timer` |
+| `init(ew)` | 每个 worker（重新）加载后，扩展首次使用时一次 | 准备状态；有 `timers` 时可用 `ew.timer` |
 | `access(ew)` | 主机查找、封禁与保留路径之后，访问控制、规则与挑战之前 | 设置字段、读取请求、返回裁决 |
-| `access_late(ew)` | 规则、挑战与 WAF 通过之后，缓存与回源之前 | 返回裁决、设置回源请求头 |
+| `access_late(ew)` | 规则与挑战通过之后，CRS、缓存与回源之前 | 返回裁决、设置回源请求头 |
 | `header_filter(ew)` | 开启该扩展的网站的每个响应的响应头（含节点自己的页面，不含保留路径） | 读取 / 修改响应头、排队 HTML 注入 |
 | `body_filter(ew, chunk, eof)` | 每个响应体分块，仅限 `body_rewrite` | 返回替换的分块（`nil` 为不变） |
 | `log(ew)` | 日志阶段，写访问日志之前 | 设置日志字段、计数 |
 | `endpoint(ew, path)` | `endpoints` 声明的 `/.edgeweir/ext/<id>/<path>` 请求 | 返回 `ew.respond(...)` |
 
-钩子只在开启该扩展的网站上运行，按扩展的安装顺序。对未开启的网站请求 `/.edgeweir/ext/<id>/…` 得到 404。端点请求跳过规则与挑战，但不跳过封禁与 IP 名单，并计入 CC。
+钩子只在开启该扩展的网站上运行，按扩展的安装顺序。对未开启的网站请求 `/.edgeweir/ext/<id>/…` 得到 404。与节点的其他保留路径一样，静态资源与端点受封禁和 CC 约束（并计入 CC），不经过访问控制、规则与挑战。
 
 ### 裁决
 
@@ -159,7 +159,7 @@ edgeweir-node extension verify --pubkey publisher.pub.jwk --publisher example.or
 
 | 裁决 | 效果 |
 | --- | --- |
-| `ew.deny(status?)` | 节点错误页，状态 `status`（400–499，默认 403），原因 `extension`，规则 id `ext:<id>` |
+| `ew.deny(status?)` | 节点错误页，状态 `status`（400–499，默认 403），`X-Edgeweir-Error: extension-denied`，原因 `extension`，规则 id `ext:<id>` |
 | `ew.challenge(level)` | 核心挑战，级别 `cookie302`、`js`、`pow` 或 `captcha`；有该级别的凭证则继续 |
 | `ew.allow()` | 仅 `access`：本请求跳过 Under Attack 与 CC 挑战（规则与 WAF 照常） |
 | `ew.respond(status, body?, headers?)` | 直接应答（不回源） |
@@ -171,23 +171,23 @@ edgeweir-node extension verify --pubkey publisher.pub.jwk --publisher example.or
 | 调用 | 说明 |
 | --- | --- |
 | `ew.id`、`ew.version`、`ew.api`（`1`） | |
-| `ew.site_id`、`ew.global_config`、`ew.site_config` | 配置表，只读 |
+| `ew.site_id`、`ew.global_config`、`ew.site_config` | 配置表（扩展自己的副本，不要修改） |
 | `ew.ctx` | 本请求、本扩展在各钩子间共享的表 |
 | `ew.req.method()`、`host()`、`path()`、`query()`、`uri()`、`scheme()`、`header(name)`、`headers()`、`cookie(name)`、`arg(name)`、`client_ip()`、`country()`、`asn()`、`ja4()`、`request_id()`、`pass_level()` | 请求视图（副本） |
-| `ew.req.body()` | `request_body`；不超过网站规则请求体上限的请求体，超出为 `nil, "truncated"` |
+| `ew.req.body()` | `request_body`；`access`、`access_late`、`endpoint`：带 `Content-Length` 且不超过 64 KiB（端点为其 `max_body`）的请求体，否则为 `nil, "truncated"` |
 | `ew.req.set_header(name, value)`、`ew.req.clear_header(name)` | `request_headers`；发往源站的请求头 |
 | `ew.resp.status()`、`header(name)`、`content_type()`、`cache_status()` | 响应视图（`header_filter`、`body_filter`、`log`） |
 | `ew.resp.set_header(name, value)`、`add_header`、`clear_header` | `response_headers`；仅 `header_filter` |
 | `ew.html.inject(position, html)` | `html_inject`；位置 `head_end` 或 `body_end`；每个扩展每个响应 ≤ 8 KiB |
 | `ew.html.script({src=, inline=, defer=, async=, type=})` | `html_inject`；在 `head_end` 排队一个 `<script>`，nonce 规则见下 |
 | `ew.field(name, value)` | 已声明的规则字段；仅 `access`；检查类型 |
-| `ew.log_field(name, value)` | 已声明的日志字段；字符串 ≤ 256 字节 |
+| `ew.log_field(name, value)` | 已声明的日志字段；字符串（数字与布尔值会转换），超过 256 字节截断 |
 | `ew.count(name, n?)` | 已声明的计数 |
 | `ew.shared(name)` | 已声明的共享字典（`ngx.shared` 对象） |
 | `ew.log(level, ...)` | `"err"`、`"warn"`、`"info"`；前缀 `[ext <id>]`，限频 |
 | `ew.now()`、`ew.sha256(s)`、`ew.hmac_sha256(key, s)`、`ew.random_bytes(n)`、`ew.b64url_encode(s)`、`ew.b64url_decode(s)`、`ew.json_encode(v)`、`ew.json_decode(s)` | 辅助函数 |
 | `ew.tcp()` | `http_client`；`ngx.socket.tcp` 协程套接字（`access`、`access_late`、`endpoint`、定时器） |
-| `ew.timer(delay, fn)` | `timers`；仅 `init`；`fn(ew)` 在定时器里以同样的隔离运行 |
+| `ew.timer(delay, fn)` | `timers`；`init` 与定时器中；`fn(ew)` 在定时器里以同样的隔离与预算运行 |
 
 ### 能力
 
@@ -206,7 +206,7 @@ edgeweir-node extension verify --pubkey publisher.pub.jwk --publisher example.or
 
 ### HTML 注入
 
-节点在 body filter 中每个响应注入一次排队的片段，只针对：`GET`、状态 200、`Content-Type: text/html`、无 `Content-Encoding`、无 `Content-Range`、无 `Cache-Control: no-transform` 的响应。`head_end` 插在前 64 KiB 内第一个 `</head>` 之前（否则在 `</body>` 之前，再否则追加在末尾）；`body_end` 插在最后一个 `</body>` 之前（否则追加）。节点去掉 `Content-Length`，并把强 `ETag` 改为弱 ETag。缓存里始终是源站的原文；注入发生在出口，命中与未命中都注入，边缘压缩在其后进行。
+节点在 body filter 中每个响应注入一次排队的片段，只针对：`GET`、状态 200、`Content-Type: text/html`、无 `Content-Encoding`、无 `Content-Range`、无 `Cache-Control: no-transform` 的响应。`head_end` 插在前 64 KiB 内第一个 `</head>` 之前（否则在 `</body>` 之前，再否则追加在末尾）；`body_end` 插在响应最后 512 字节内的最后一个 `</body>` 之前（否则追加）。节点去掉 `Content-Length`，并把强 `ETag` 改为弱 ETag。缓存里始终是源站的原文；注入发生在出口，命中与未命中都注入，边缘压缩在其后进行。
 
 CSP：响应带 `Content-Security-Policy` 头时，`ew.html.script` 取有效的 `script-src`（无则 `default-src`）：含 `'nonce-…'` 时脚本带同一个 nonce；含 `'self'`（且 `src` 同源）而无 `'strict-dynamic'` 时直接注入；否则不注入（调用结果为 `false`）。内联脚本需要 nonce。`ew.html.inject`（原样 HTML）不做 CSP 处理。页面内 `<meta>` 声明的策略不解析。
 
@@ -252,7 +252,7 @@ end
 return M
 ```
 
-仓库里的 `examples/extensions/hello-header` 就是这个扩展；端到端测试对它签名、安装并运行。
+edgeweir-node 仓库里的 `examples/extensions/hello-header` 就是这个扩展；节点的 Lua 测试加载它，端到端测试对它签名、安装并运行。
 
 ## 兼容性
 

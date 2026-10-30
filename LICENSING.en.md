@@ -32,6 +32,7 @@ Edgeweir follows the design principle of **"no gates on the open core, a clear b
 | --- | --- |
 | The operator account (password, two-factor, passkeys), AccessKeys, service accounts, audit log | Open core |
 | Console, node management, public API | Open core |
+| The node extension mechanism (signed packages, trusted publisher keys, installation and distribution, loading on nodes) | Open core |
 | Multi-tenancy: organizations, members, invitations, roles and permissions, organization isolation and per-organization quotas | Separate commercial operations product |
 | Customer-facing portal, self-service sign-up and purchase, plans and billing, balances and finance, reselling and settlement | Separate commercial operations product |
 | L2 origin aggregation nodes and Tiered Cache (with Topologies and latency-based parent selection), cache sharing within a group (consistent-hash sharding, cache index nodes), automatic node removal when a lease or server term expires, access log push to custom sinks and Logpush, Prometheus metrics, GeoIP hot reload, OIDC SSO, 103 Early Hints, Speculation-Rules, 0-RTT, Tunnels, edge compute with approval of tenant scripts, self-hosted authoritative DNS / GTM, XDP / eBPF, cross-cluster attack and origin-quality dashboards, adaptive layer-7 DDoS mitigation with learned baselines, bot scoring | Separate commercial product |
@@ -49,10 +50,21 @@ Edgeweir follows the design principle of **"no gates on the open core, a clear b
 - Independently authored code in future commercial products may be licensed under separate proprietary terms, stated explicitly on delivery.
 - A private repository, a separate container, or a separate process does not by itself waive the AGPL. Copying core code, creating derivative or combined works, and using third-party dependencies remain subject to the applicable licenses.
 - Integration method and code ownership must be verified before a closed-source plugin is released.
-- This document grants no general plugin exception and adds no commercial dual license to the existing core.
+- Apart from the node extension exception below, this document grants no plugin exception and adds no commercial dual license to the existing core.
+
+## Node extension exception
+
+As an additional permission under section 7 of the GNU AGPL version 3, the copyright holder of `edgeweir` and `edgeweir-node` grants the following:
+
+- A **node extension** is a package in the documented format `edgeweir-node-extension-v1` ([Node extensions](docs/reference/extensions.en.md)) that interacts with Edgeweir only through the documented interfaces: the manifest, the Lua API (the `ew` object and the hooks) and the libraries the runtime lets it load.
+- You may write, convey and run node extensions under terms of your choice, including proprietary terms. The console installing and distributing a package, and the node loading it and running it in the request path, do not make the extension itself subject to the AGPL.
+- The permission does not cover an extension that contains or is derived from Edgeweir code; the interface names and the examples under `examples/extensions` in the `edgeweir-node` repository, offered under MIT-0, may be used freely.
+- Changes to the console or the node themselves, the extension runtime included, are not extensions and stay AGPL-3.0-only.
+- As section 7 allows, anyone conveying a modified Edgeweir may remove this additional permission from their copy.
+- The permission concerns copyright only: whether to trust a publisher and run its code is the operator's decision (see [SECURITY.en.md](SECURITY.en.md)).
 
 ## Contributions
 
-- Contributions to the two open-source repositories are provided under AGPL-3.0-only.
+- Contributions to the two open-source repositories are provided under AGPL-3.0-only with the node extension exception above.
 - The existence of commercial products does not automatically grant the project a right to relicense contributions under proprietary terms.
 - A future dual license, linking exception, or commercial reuse of code requires prior verification of copyright ownership, contributor authorization, and third-party licenses, and a separate explicit agreement.

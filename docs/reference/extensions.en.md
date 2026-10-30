@@ -101,7 +101,7 @@ Publishers create an Ed25519 key pair and publish the public key as a JWK (`{"kt
 
 ```bash
 edgeweir-node extension keygen --out publisher.jwk          # private JWK, 0600; prints the public JWK and kid
-edgeweir-node extension pack ./hello-header -o hello-header-1.0.0.ewx
+edgeweir-node extension pack --out hello-header-1.0.0.ewx ./hello-header   # flags go first
 edgeweir-node extension sign --key publisher.jwk --publisher example.org hello-header-1.0.0.ewx   # writes .ewx.sig
 edgeweir-node extension verify --pubkey publisher.pub.jwk --publisher example.org hello-header-1.0.0.ewx
 ```
@@ -127,7 +127,7 @@ Packages are sent as base64 in JSON (`{"package": "<base64>", "signature": "<jws
 
 ## Distribution
 
-1. The configuration carries each installed extension (active version, digest, size, signature, signing key, enabled, failure mode, global configuration) and each site's enabled extensions with their site configuration, plus the kill switch.
+1. The configuration carries each installed extension that a site of the cluster turns on (active version, digest, size, signature, signing key, enabled, failure mode, global configuration) and each site's enabled extensions with their site configuration, plus the kill switch.
 2. Nodes advertise `extensions-v1`. A configuration that delivers any extension requires `extensions-v1`; the console refuses with `NODE_CAPABILITY_REQUIRED` to enable an extension, or enable it on a site, while a cluster that would receive it has an active node without the feature.
 3. The node fetches each missing package by digest (`GetExtensionPackage`, mTLS), checks size and SHA-256, verifies the JWS with the delivered key (and, when `--extension-keys` names a local file of JWKs, also requires the key to be in it), unpacks and validates the manifest exactly as the console did, and checks `requires`. A package that fails is not loaded and is reported; the rest of the configuration applies normally.
 4. A change in the set of loaded packages (install, upgrade, uninstall, shared dict sizes) re-renders `nginx.conf` and reloads gracefully. Enable / disable, configuration, per-site settings and the kill switch are hot updates.
@@ -143,15 +143,15 @@ Packages are sent as base64 in JSON (`{"package": "<base64>", "signature": "<jws
 
 | Hook | When | May |
 | --- | --- | --- |
-| `init(ew)` | Once per worker after (re)load | Prepare state; `ew.timer` when `timers` |
+| `init(ew)` | Once per worker, on the extension's first use after (re)load | Prepare state; `ew.timer` when `timers` |
 | `access(ew)` | After host lookup, bans and reserved paths, before access control, rules and challenges | Set fields, read the request, return a verdict |
-| `access_late(ew)` | After rules, challenges and WAF passed, before cache and origin | Return a verdict, set origin request headers |
+| `access_late(ew)` | After rules and challenges passed, before the CRS, the cache and the origin | Return a verdict, set origin request headers |
 | `header_filter(ew)` | Response headers, every response of an enabled site (including the node's own pages, not reserved paths) | Read / change response headers, queue HTML injections |
 | `body_filter(ew, chunk, eof)` | Each body chunk, only with `body_rewrite` | Return a replacement chunk (or `nil` to keep it) |
 | `log(ew)` | Log phase, before the access log is written | Set log fields, count |
 | `endpoint(ew, path)` | Requests to `/.edgeweir/ext/<id>/<path>` declared in `endpoints` | Return `ew.respond(...)` |
 
-Hooks run only on sites that enable the extension, in the order the extensions were installed. A request to `/.edgeweir/ext/<id>/…` on a site that does not enable it gets 404. Endpoint requests skip rules and challenges but not bans or IP lists, and count towards CC.
+Hooks run only on sites that enable the extension, in the order the extensions were installed. A request to `/.edgeweir/ext/<id>/…` on a site that does not enable it gets 404. Like the node's other reserved paths, assets and endpoints get bans and CC (and count towards CC), not access control, rules or challenges.
 
 ### Verdicts
 
@@ -159,7 +159,7 @@ Hooks run only on sites that enable the extension, in the order the extensions w
 
 | Verdict | Effect |
 | --- | --- |
-| `ew.deny(status?)` | Node error page with `status` (400–499, default 403), reason `extension`, rule id `ext:<id>` |
+| `ew.deny(status?)` | Node error page with `status` (400–499, default 403), `X-Edgeweir-Error: extension-denied`, reason `extension`, rule id `ext:<id>` |
 | `ew.challenge(level)` | Core challenge at `cookie302`, `js`, `pow` or `captcha`; a pass of that level continues |
 | `ew.allow()` | `access` only: skip Under Attack and CC challenges for this request (rules and WAF still run) |
 | `ew.respond(status, body?, headers?)` | Answer directly (no origin) |
@@ -171,23 +171,23 @@ The first verdict wins; later extensions' hooks are not called. Verdicts need `v
 | Call | Notes |
 | --- | --- |
 | `ew.id`, `ew.version`, `ew.api` (`1`) | |
-| `ew.site_id`, `ew.global_config`, `ew.site_config` | Configuration tables, read-only |
+| `ew.site_id`, `ew.global_config`, `ew.site_config` | Configuration tables (the extension's own copies; do not change them) |
 | `ew.ctx` | Table kept for this request and extension across hooks |
 | `ew.req.method()`, `host()`, `path()`, `query()`, `uri()`, `scheme()`, `header(name)`, `headers()`, `cookie(name)`, `arg(name)`, `client_ip()`, `country()`, `asn()`, `ja4()`, `request_id()`, `pass_level()` | Request view (copies) |
-| `ew.req.body()` | `request_body`; the body up to the site's rules body limit, or `nil, "truncated"` |
+| `ew.req.body()` | `request_body`; `access`, `access_late`, `endpoint`: a body with `Content-Length` up to 64 KiB (endpoints: their `max_body`), else `nil, "truncated"` |
 | `ew.req.set_header(name, value)`, `ew.req.clear_header(name)` | `request_headers`; headers sent to the origin |
 | `ew.resp.status()`, `header(name)`, `content_type()`, `cache_status()` | Response view (`header_filter`, `body_filter`, `log`) |
 | `ew.resp.set_header(name, value)`, `add_header`, `clear_header` | `response_headers`; `header_filter` only |
 | `ew.html.inject(position, html)` | `html_inject`; position `head_end` or `body_end`; ≤ 8 KiB per extension and response |
 | `ew.html.script({src=, inline=, defer=, async=, type=})` | `html_inject`; queues a `<script>` at `head_end` with the nonce rules below |
 | `ew.field(name, value)` | Declared rule field; `access` only; type-checked |
-| `ew.log_field(name, value)` | Declared log field; string ≤ 256 bytes |
+| `ew.log_field(name, value)` | Declared log field; string (numbers and booleans are converted), cut at 256 bytes |
 | `ew.count(name, n?)` | Declared counter |
 | `ew.shared(name)` | Declared shared dict (`ngx.shared` object) |
 | `ew.log(level, ...)` | `"err"`, `"warn"`, `"info"`; prefixed `[ext <id>]`, rate-limited |
 | `ew.now()`, `ew.sha256(s)`, `ew.hmac_sha256(key, s)`, `ew.random_bytes(n)`, `ew.b64url_encode(s)`, `ew.b64url_decode(s)`, `ew.json_encode(v)`, `ew.json_decode(s)` | Helpers |
 | `ew.tcp()` | `http_client`; an `ngx.socket.tcp` cosocket (`access`, `access_late`, `endpoint`, timers) |
-| `ew.timer(delay, fn)` | `timers`; `init` only; `fn(ew)` runs in a timer with the same isolation |
+| `ew.timer(delay, fn)` | `timers`; `init` and timers; `fn(ew)` runs in a timer with the same isolation and budget |
 
 ### Capabilities
 
@@ -206,7 +206,7 @@ The console shows the capabilities when the package is verified and on the exten
 
 ### HTML injection
 
-The node injects queued snippets once per response, in the body filter, and only into responses that are: `GET`, status 200, `Content-Type: text/html`, without `Content-Encoding`, without `Content-Range`, without `Cache-Control: no-transform`. `head_end` goes before the first `</head>` found in the first 64 KiB (otherwise before `</body>`, otherwise appended); `body_end` before the last `</body>` (otherwise appended). The node removes `Content-Length` and turns a strong `ETag` into a weak one. The cache always stores the origin's bytes; injection happens on the way out, for hits and misses alike, and edge compression runs after it.
+The node injects queued snippets once per response, in the body filter, and only into responses that are: `GET`, status 200, `Content-Type: text/html`, without `Content-Encoding`, without `Content-Range`, without `Cache-Control: no-transform`. `head_end` goes before the first `</head>` found in the first 64 KiB (otherwise before `</body>`, otherwise appended); `body_end` before the last `</body>` within the response's final 512 bytes (otherwise appended). The node removes `Content-Length` and turns a strong `ETag` into a weak one. The cache always stores the origin's bytes; injection happens on the way out, for hits and misses alike, and edge compression runs after it.
 
 CSP: when the response has a `Content-Security-Policy` header, `ew.html.script` takes the effective `script-src` (else `default-src`): with a `'nonce-…'` source the script gets the same nonce; with `'self'` (and `src` same-origin) and no `'strict-dynamic'` it is injected as is; otherwise it is not injected (the call's result reports `false`). Inline scripts need a nonce. `ew.html.inject` (raw HTML) is never adjusted for CSP. `<meta>` policies inside the page are not parsed.
 
@@ -252,7 +252,7 @@ end
 return M
 ```
 
-The repository's `examples/extensions/hello-header` is this extension; the end-to-end tests sign, install and run it.
+`examples/extensions/hello-header` in the edgeweir-node repository is this extension; the node's Lua tests load it and the end-to-end tests sign, install and run it.
 
 ## Compatibility
 

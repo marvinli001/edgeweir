@@ -406,6 +406,17 @@ DNS steering is bound per cluster (`dns_binding`, mode Not managed, Manual, or A
 4. Concurrency, the memory total and the timeout are node flags (`--image-workers`, `--image-memory-mb`, `--image-timeout`); with `--image-workers 0` the agent does not listen on `image.sock` nor announce `image-convert-v1`, and configurations that convert are rejected, keeping the last-known-good one.
 5. Saved bytes are added up per minute in the edge layer's log phase (complete 200 GET responses), reported as `MinuteStats.image_bytes_saved`, and kept in minute, hour and day statistics and the view `traffic_hour_stats`. See [Image format conversion](docs/guide/image-convert.en.md).
 
+## Node extensions
+
+Generic, signed Lua extensions of the edge request path (format `edgeweir-node-extension-v1`, Lua API 1, ADR-0071; contract in [Node extensions](docs/reference/extensions.en.md)). The console and the node know no particular extension, check no licenses and contact nobody about them.
+
+1. Trust: the operator adds publisher keys (Ed25519 public JWKs, `extension_key`, kid = RFC 7638 thumbprint); there are none by default. Installing (`POST /extensions`, base64 package + compact JWS) verifies the archive (strict ustar, limits, no links / native code / bytecode), the manifest (strict schema) and the signature against a trusted key whose publisher matches, then stores the version (`extension_version`, bytes in the database). A new id starts disabled; installing a newer version of an installed id activates it.
+2. Settings: per extension enabled, failure mode and global configuration (`extension`), per site enabled and site configuration (`site_extension`), the kill switch (system setting `extensions`). Configuration is validated against the manifest's JSON Schema subset; `x-secret` values are masked in answers. Manifest rule fields register `ext.<id>.<name>` in the rule engine, which rules may use in request phases; removing an extension or version that rules still read is refused.
+3. Compilation (`packages/config-compiler`): `NodeConfig.extensions` lists, in install order, the active version of each enabled extension that an enabled site of the cluster turns on (digest, size, signature, signing key, failure mode, global configuration, shared dicts), with the kill switch; each site lists its extensions with their site configuration. Delivered extensions or rules reading `ext.*` require `extensions-v1`; enabling is refused while an active node of an affected cluster lacks it.
+4. Node: the agent fetches missing packages by digest (`GetExtensionPackage`, mTLS), verifies them again (and against `--extension-keys` when set), unpacks them to `<state>/extensions/<sha256>/` and lists the loadable ones in `nginx.conf` (init parameter `extensions`, one `lua_shared_dict ewx_<hex id>_<name>` per declared dict). A change of the loaded set reloads nginx; settings and site lists are hot. `--no-extensions` turns it off.
+5. Runtime (`lua/edgeweir/ext.lua`): each worker loads packages into an environment of their own, runs `init` on first use and calls `access` (before access control, rules and challenges), `access_late` (after them, before the CRS, cache and origin), `header_filter`, `body_filter` (with HTML injection) and `log`, and answers `/.edgeweir/ext/<id>/…` (assets, endpoints). Hooks run under `pcall` with time budgets; faults trip an extension per worker; failure mode `closed` answers 503 `X-Edgeweir-Error: extension`.
+6. Reporting: access logs carry `AccessLog.ext` (log fields, verdicts) and block reason `extension` with rule id `ext:<id>`; minute statistics carry `MinuteStats.ext_counters`; heartbeats carry `ExtensionStatus` per extension (state, faults, trips), shown per node in the console.
+
 ## Regional probes and scheduling
 
 1. Probers: regional probes (`probe`; `edgeweir-node probe` enrolls through `EnrollProbe` with a one-time `probe_token`), or nodes with `node.probe_enabled` whose node group has a region (`probe=true` in the `ReportStatus` response).
@@ -543,6 +554,10 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `config_revision` | Revisions per cluster: number, content hash, binary IR, reason code |
 | `node_config_status` | Node apply receipts and heartbeats, with the receipt verification flag |
 | `cluster_rollout` | Configuration canary of a cluster: policy (switch, observation window, auto promotion, 5xx thresholds) and the current rollout (stable and candidate revisions, window, outcome) |
+| `extension_key` | Trusted publisher keys of node extensions: kid (RFC 7638 thumbprint), publisher, public key `x`, label |
+| `extension` | Installed node extensions: active version, enabled, failure mode, global configuration |
+| `extension_version` | Uploaded versions of an extension: package bytes, SHA-256 (unique), size, signature, signing kid, manifest |
+| `site_extension` | A site's extensions: enabled and site configuration |
 
 ### Certificates, DNS, and domains
 
@@ -683,6 +698,8 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0078_greylist_connection_limits` | `ip_ban.action`, `challenge`, `rate_limit_requests`, `rate_limit_window_seconds` (greylist entries; unique indexes split between bans and greylist entries); `cluster.connection_limits` (kernel connection limits) |
 | `0079_origin_proxy_protocol` | `origin.proxy_protocol_version` (PROXY protocol to the origin: 0 off, 1, 2) |
 | `0080_origin_ca_rotation` | `pki_authority.kind`, `status`, `generation` (CA rotation; `(kind, status)` unique, existing rows take their id as kind); `origin_certificate.authority_id`, `origin_client_certificate.authority_id` (the issuing CA) |
+| `0081_node_location` | `node.location` (where the node's public address is, from its own GeoIP data: country, subdivision, City MMDB coordinates) |
+| `0082_node_extensions` | `extension_key`, `extension`, `extension_version`, `site_extension` (node extensions); `node.extension_status` (per extension state reported by the node) |
 
 ## Build output
 

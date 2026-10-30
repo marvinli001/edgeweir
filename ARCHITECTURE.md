@@ -407,6 +407,17 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 4. 并发数、内存总量与超时是节点参数（`--image-workers`、`--image-memory-mb`、`--image-timeout`）；`--image-workers 0` 时不监听 `image.sock`、不上报 `image-convert-v1`，开启转换的配置被拒绝并保留 last-known-good。
 5. 节省的字节数在边缘层 log 阶段按分钟累加（完整的 200 GET 响应），经 `MinuteStats.image_bytes_saved` 上报，进入分钟、小时、天统计与视图 `traffic_hour_stats`。详见 [图片格式转换](docs/guide/image-convert.md)。
 
+## 节点扩展
+
+边缘请求路径上通用的签名 Lua 扩展（格式 `edgeweir-node-extension-v1`，Lua API 1，ADR-0071；契约见[节点扩展](docs/reference/extensions.md)）。控制台与节点不认识任何具体扩展，不检查许可证，也不为扩展联系任何人。
+
+1. 信任：运营者添加发布者密钥（Ed25519 公钥 JWK，`extension_key`，kid 为 RFC 7638 指纹），默认没有。安装（`POST /extensions`，base64 扩展包 + 紧凑 JWS）校验归档（严格 ustar、上限、不含链接 / 原生代码 / 字节码）、清单（严格模式）以及发布者一致的受信任密钥的签名，然后保存版本（`extension_version`，字节存在数据库里）。新的 id 默认关闭；为已安装的 id 安装更新版本即切换到该版本。
+2. 设置：每个扩展的启用、失败模式与全局配置（`extension`），每个网站的开启与网站配置（`site_extension`），总开关（系统设置 `extensions`）。配置按清单里的 JSON Schema 子集校验，`x-secret` 的值在应答中打码。清单里的规则字段以 `ext.<id>.<name>` 注册到规则引擎，可在请求阶段的规则中使用；仍被规则引用的扩展或版本不能移除。
+3. 编译（`packages/config-compiler`）：`NodeConfig.extensions` 按安装顺序列出集群中有启用网站开启的、已启用扩展的当前版本（摘要、大小、签名、签名公钥、失败模式、全局配置、共享字典），以及总开关；各网站列出自己的扩展与网站配置。下发了扩展或规则读取 `ext.*` 时要求 `extensions-v1`；受影响集群有不支持的活动节点时拒绝启用。
+4. 节点：agent 按摘要获取缺少的扩展包（`GetExtensionPackage`，mTLS），再次校验（设置了 `--extension-keys` 时还要求密钥在本地文件里），解包到 `<state>/extensions/<sha256>/`，并在 `nginx.conf` 中列出可加载的扩展（init 参数 `extensions`，每个声明的字典一个 `lua_shared_dict ewx_<hex id>_<name>`）。加载集合变化时重载 nginx，设置与网站列表热更新。`--no-extensions` 关闭整个机制。
+5. 运行时（`lua/edgeweir/ext.lua`）：每个 worker 把扩展包加载进各自的环境，首次使用时运行 `init`，调用 `access`（访问控制、规则与挑战之前）、`access_late`（之后，CRS、缓存与回源之前）、`header_filter`、`body_filter`（含 HTML 注入）与 `log`，并应答 `/.edgeweir/ext/<id>/…`（静态资源、端点）。钩子在 `pcall` 中按时间预算运行，故障在每个 worker 上熔断；失败模式 `closed` 返回 503 `X-Edgeweir-Error: extension`。
+6. 上报：访问日志带 `AccessLog.ext`（日志字段、裁决）以及拦截原因 `extension`、规则 id `ext:<id>`；分钟统计带 `MinuteStats.ext_counters`；心跳按扩展带 `ExtensionStatus`（状态、故障、熔断），控制台按节点显示。
+
 ## 区域探针与智能调度
 
 1. 探测方：区域探针（`probe`，`edgeweir-node probe` 以一次性 `probe_token` 经 `EnrollProbe` 注册），或 `node.probe_enabled` 且节点组有区域的节点（`ReportStatus` 响应 `probe=true`）。
@@ -545,6 +556,10 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `config_revision` | 每个集群的 revision：序号、内容哈希、二进制 IR、原因码 |
 | `node_config_status` | 节点应用回执与心跳，含回执验证标记 |
 | `cluster_rollout` | 集群的配置金丝雀：策略（开关、观察窗口、自动推进、5xx 阈值）与当前发布（稳定版本、候选版本、窗口、结果） |
+| `extension_key` | 节点扩展的受信任发布者密钥：kid（RFC 7638 指纹）、发布者、公钥 `x`、备注 |
+| `extension` | 已安装的节点扩展：当前版本、启用、失败模式、全局配置 |
+| `extension_version` | 扩展上传的各版本：扩展包字节、SHA-256（唯一）、大小、签名、签名 kid、清单 |
+| `site_extension` | 网站的扩展：开启与网站配置 |
 
 ### 证书、DNS 与域名
 
@@ -686,6 +701,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0079_origin_proxy_protocol` | `origin.proxy_protocol_version`（回源连接发送的 PROXY protocol 版本，0 为不发送） |
 | `0080_origin_ca_rotation` | `pki_authority.kind`、`status`、`generation`（CA 轮换；`(kind, status)` 唯一，已有行的 kind 取 ID）；`origin_certificate.authority_id`、`origin_client_certificate.authority_id`（签发它的 CA） |
 | `0081_node_location` | `node.location`（节点用自己的 GeoIP 库查出的公网地址位置：国家、一级行政区、City MMDB 的经纬度） |
+| `0082_node_extensions` | `extension_key`、`extension`、`extension_version`、`site_extension`（节点扩展）；`node.extension_status`（节点上报的各扩展状态） |
 
 ## 构建产物
 
