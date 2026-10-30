@@ -223,7 +223,7 @@ describe("compileTieredCache", () => {
   });
 
   it("is left out when a listener or a TCP application took the port", () => {
-    const config = compile({ port: 443 });
+    const config = compile({ port: 80 });
     expect(config.tieredCache).toBeUndefined();
     expect(config.sites.every((s) => s.tierPlanId === "")).toBe(true);
   });
