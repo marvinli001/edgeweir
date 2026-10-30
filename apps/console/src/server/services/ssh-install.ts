@@ -278,11 +278,21 @@ export class SshInstallRuns {
   private readonly connect: SshConnect;
   private readonly scan: typeof scanHostKey;
   private readonly now: () => Date;
+  /** Milliseconds per timeout minute (tests shorten it). */
+  private readonly minuteMs: number;
 
-  constructor(deps: { connect?: SshConnect; scan?: typeof scanHostKey; now?: () => Date } = {}) {
+  constructor(
+    deps: {
+      connect?: SshConnect;
+      scan?: typeof scanHostKey;
+      now?: () => Date;
+      minuteMs?: number;
+    } = {},
+  ) {
     this.connect = deps.connect ?? openSshSession;
     this.scan = deps.scan ?? scanHostKey;
     this.now = deps.now ?? (() => new Date());
+    this.minuteMs = deps.minuteMs ?? 60_000;
   }
 
   /** The host key each host presents; nothing is sent but the SSH handshake. */
@@ -507,7 +517,7 @@ export class SshInstallRuns {
     host.startedAt = this.now().toISOString();
     const abort = new AbortController();
     host.abort = abort;
-    const timeout = setTimeout(() => abort.abort("timeout"), run.timeoutMinutes * 60_000);
+    const timeout = setTimeout(() => abort.abort("timeout"), run.timeoutMinutes * this.minuteMs);
     const onRunAbort = () => abort.abort("canceled");
     run.abort.signal.addEventListener("abort", onRunAbort, { once: true });
     let session: SshSession | null = null;
@@ -543,7 +553,7 @@ export class SshInstallRuns {
           privateKey: secrets.privateKey,
           passphrase: secrets.passphrase,
           hostKeyFingerprint: host.hostKeyFingerprint,
-          readyTimeoutMs: Math.min(20_000, run.timeoutMinutes * 60_000),
+          readyTimeoutMs: Math.min(20_000, run.timeoutMinutes * this.minuteMs),
         },
         abort.signal,
       );
