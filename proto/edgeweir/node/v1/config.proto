@@ -118,6 +118,14 @@ message NodeConfig {
   // origin_ca. Changing it is a structural change. Added in v1.6.0
   // (feature origin-ca-rotation-v1).
   OriginCa origin_ca_previous = 24;
+  // Node extensions (docs/reference/extensions.md), sorted by install
+  // order then id: each installed extension's active package. Changing the
+  // set of packages (or their shared dicts) is a structural change; the rest
+  // is hot-updated. Added in PROTO_NEXT (feature extensions-v1).
+  repeated Extension extensions = 60;
+  // Kill switch: nodes load no extension code paths while set (packages stay
+  // on disk). Added in PROTO_NEXT.
+  bool extensions_disabled = 61;
 }
 
 // ConnectionLimits limits each client's TCP connections to ports in the
@@ -281,6 +289,9 @@ message NodeConfigDiff {
   ConnectionLimits connection_limits = 25;
   // Always sent in full (NodeConfig field 24). Added in v1.6.0.
   OriginCa origin_ca_previous = 26;
+  // Always sent in full (NodeConfig fields 60 and 61). Added in PROTO_NEXT.
+  repeated Extension extensions = 60;
+  bool extensions_disabled = 61;
 }
 
 // L4Protocol is the transport of a layer-4 application.
@@ -520,6 +531,10 @@ message Site {
   // Added in v1.6.0; nodes without feature encoded-path-exemptions-v1 keep
   // treating every such path as ambiguous (no feature required).
   repeated EncodedPathExemption encoded_path_exemptions = 38;
+  // Extensions the site turns on, in NodeConfig.extensions order, with the
+  // site's configuration. Only ids present in NodeConfig.extensions.
+  // Added in PROTO_NEXT (feature extensions-v1).
+  repeated SiteExtension extensions = 60;
 }
 
 // EncodedPathExemption lets raw paths that start with prefix carry an
@@ -1699,4 +1714,45 @@ message CertificateRef {
   repeated string names = 2;
   string sha256_fingerprint = 3;
   google.protobuf.Timestamp not_after = 4;
+}
+
+// Extension is one installed node extension (format
+// edgeweir-node-extension-v1): the active package, fetched by digest with
+// NodeService.GetExtensionPackage, verified against signature and
+// public_key, and its operator settings. Added in PROTO_NEXT.
+message Extension {
+  // Manifest id ([a-z][a-z0-9-]{1,38}[a-z0-9]).
+  string id = 1;
+  // Active version (semver) and its publisher.
+  string version = 2;
+  string publisher = 3;
+  // Lowercase hex SHA-256 and size of the .ewx package bytes.
+  string sha256 = 4;
+  uint64 size = 5;
+  // Compact JWS (EdDSA) over the package identity and digest.
+  string signature = 6;
+  // The signing key as an OKP / Ed25519 JWK (JSON).
+  string public_key = 7;
+  // Globally enabled; disabled extensions stay loaded but run no hook.
+  bool enabled = 8;
+  // "open" (default) or "closed".
+  string failure_mode = 9;
+  // Global configuration (JSON object, defaults filled in by the console).
+  string config_json = 10;
+  // Shared dicts of the manifest (name, size in KiB), so nodes can render
+  // nginx.conf before unpacking.
+  repeated ExtensionSharedDict shared_dicts = 11;
+}
+
+// ExtensionSharedDict is one lua_shared_dict of an extension.
+message ExtensionSharedDict {
+  string name = 1;
+  uint32 size_kb = 2;
+}
+
+// SiteExtension turns an extension on for one site.
+message SiteExtension {
+  string id = 1;
+  // Site configuration (JSON object, defaults filled in by the console).
+  string config_json = 2;
 }

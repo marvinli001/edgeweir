@@ -89,6 +89,10 @@ service NodeService {
   // buffer; ReportTaskResult follows. Added in v1.6.0 (feature
   // debug-logs-v1).
   rpc UploadDebugLogs(UploadDebugLogsRequest) returns (UploadDebugLogsResponse);
+  // GetExtensionPackage returns an extension package (.ewx) that the
+  // node's current configuration references, by digest. Added in PROTO_NEXT
+  // (feature extensions-v1).
+  rpc GetExtensionPackage(GetExtensionPackageRequest) returns (GetExtensionPackageResponse);
 }
 
 // CheckChannelRequest is empty: the client certificate names the node.
@@ -290,6 +294,9 @@ message ReportStatusRequest {
   // GeoIP databases (the console has none). Unset until a response carried
   // an address, and on nodes before v1.6.2.
   NodeLocation location = 18;
+  // State of each extension of the applied configuration (extensions-v1).
+  // Added in PROTO_NEXT.
+  repeated ExtensionStatus extensions = 60;
 }
 
 // NodeLocation places a node's address on the console's map.
@@ -511,6 +518,9 @@ message MinuteStats {
   // background and prefetch fetches included; active health checks and cache
   // hits not), at most 64 origins. Added in v1.4.0 (feature origin-stats-v1).
   repeated OriginCounter origins = 26;
+  // Extension counters and faults of the site by "<id>.<name>" (counters
+  // declared by the manifest, and "<id>.faults"). Added in PROTO_NEXT.
+  map<string, uint64> ext_counters = 60;
 }
 
 // OriginCounter is a minute of one origin's fetches on a node.
@@ -856,6 +866,9 @@ message AccessLog {
   string query = 32;
   map<string, string> headers = 33;
   string peer_ip = 34;
+  // Extension log fields by "<id>.<name>", and "<id>.verdict" when an
+  // extension decided the request. Added in PROTO_NEXT.
+  map<string, string> ext = 60;
 }
 // ReportLogsRequest is an immutable, ordered batch from the private node spool.
 message ReportLogsRequest {
@@ -1091,4 +1104,32 @@ message ReportSecurityEventsRequest {
 // ReportSecurityEventsResponse acknowledges the events.
 message ReportSecurityEventsResponse {
   uint32 accepted = 1;
+}
+
+// GetExtensionPackageRequest names a package by digest.
+message GetExtensionPackageRequest {
+  // Lowercase hex SHA-256 of the package.
+  string sha256 = 1;
+}
+
+// GetExtensionPackageResponse carries the package.
+message GetExtensionPackageResponse {
+  // The .ewx bytes (at most 4 MiB).
+  bytes package = 1;
+}
+
+// ExtensionStatus is one extension's state on the node. Added in PROTO_NEXT.
+message ExtensionStatus {
+  string id = 1;
+  string version = 2;
+  string sha256 = 3;
+  // "loaded", "failed" (download, verification or load error), "incompatible"
+  // (requires a newer node or Lua API) or "disabled" (kill switch, disabled
+  // extension or --no-extensions).
+  string state = 4;
+  string message = 5;
+  // Hook faults (errors and budget overruns) since the data plane started,
+  // and how often a worker tripped the extension.
+  uint64 faults = 6;
+  uint64 trips = 7;
 }
