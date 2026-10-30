@@ -417,7 +417,7 @@ Response: [Batch result](#batch-result).
 
 ## Copying settings and cloning
 
-- Values of `parts`: `cacheRules`, `cacheKey` (cache key and slicing), `cacheTag`, `compression`, `https` (the HTTPS options without the certificates and the domains the redirect leaves alone), `rules` (with `rulesBodyLimit`), `bulkRedirects`, `errorPages`, `waf`, `protection` (Under Attack, CC policy and challenge settings), `accessControl`, `authRules` (secrets sealed anew for the target), `originSettings` (origin pool settings without the origins), `logs` (sample rate, log options and JA4 logging), `imageConvert`. A copied part replaces the target's part as a whole; a part equal to the target's is not written.
+- Values of `parts`: `cacheRules`, `cacheKey` (cache key and slicing), `cacheTag`, `compression`, `https` (the HTTPS options without the certificates and the domains the redirect leaves alone), `rules` (with `rulesBodyLimit`), `bulkRedirects`, `errorPages`, `waf`, `protection` (Under Attack, CC policy and challenge settings), `accessControl`, `authRules` (secrets sealed anew for the target), `originSettings` (origin pool settings without the origins), `logs` (sample rate, log options and JA4 logging), `imageConvert`, `markdown` (Markdown for Agents), `aiCrawl` (AI crawl control: crawler actions, the managed robots.txt, pay per crawl). A copied part replaces the target's part as a whole; a part equal to the target's is not written.
 - The change of a list part (`cacheRules`, `rules`, `bulkRedirects`, `errorPages`, `authRules`) is told as item counts before and after, of any other part as the number of settings that change.
 - A target that lacks what the settings name fails, for example: an origin group a rule chooses `ORIGIN_GROUP_UNKNOWN`, the HTTPS redirect / HSTS / client certificates copied to a target without a certificate `HTTPS_REQUIRES_CERTIFICATE`, a redirect port that is not an HTTPS port of the target `HTTPS_REDIRECT_PORT_INVALID`, client certificates together with HTTP/3 `CLIENT_CERTIFICATE_HTTP3`, a bulk redirect source host that is not a domain of the target `BULK_REDIRECT_HOST_UNKNOWN`, an access authentication scope domain that is not a domain of the target `AUTH_DOMAIN_UNKNOWN`, a missing IP list `IP_LIST_NOT_FOUND`.
 - Behaviour: [Copying settings](../../guide/site-management.en.md#copying-settings) and [Cloning a site](../../guide/site-management.en.md#cloning-a-site).
@@ -1109,6 +1109,72 @@ Response: [Automatic mitigation](#automatic-mitigation-object).
 | `SITE_NOT_FOUND` | 404 | The site does not exist |
 | `AUTO_MITIGATION_NOT_ACTIVE` | 409 | The mitigation holds no Under Attack |
 
+## Development mode
+
+| Procedure | Endpoint | Description |
+| --- | --- | --- |
+| `developmentMode.get` | `GET /sites/{id}/development-mode` | `{ siteId, until, unsupportedNodes }`: `until` is when it ends (`null` while off or once passed), `unsupportedNodes` counts the cluster's active nodes without `development-mode-v1` |
+| `developmentMode.set` | `PUT /sites/{id}/development-mode` | `{ "enabled": true }` turns it on for three hours, `false` off now; unchanged, nothing is published or audited (turning it on while on does not extend it). A change publishes the site's cluster (to every node at once, no canary) and audits `site.development_mode_on` / `site.development_mode_off` (`until`). A disabled site cannot turn it on (409 `SITE_DISABLED`) |
+
+The worker checks for expired ones every minute, turns them off, publishes and audits `site.development_mode_expire` as the system; nodes resumed caching at the deadline already. Sites gain `developmentModeUntil`. Read-only AccessKeys can call `GET` only; service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`). Behavior: [Development mode](../../guide/origins-and-cache.en.md#development-mode).
+
+```bash
+curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"enabled":true}' https://cdn-admin.example.com/api/v1/sites/<site ID>/development-mode
+```
+
+## Markdown for Agents
+
+| Procedure | Endpoint | Notes |
+| --- | --- | --- |
+| `markdown.get` | `GET /sites/{id}/markdown` | The site's Markdown conversion settings; the defaults (off, every path) until saved |
+| `markdown.update` | `PUT /sites/{id}/markdown` | Replaces the settings and publishes the site's cluster (hot update; changes while it is off leave the nodes' configuration as it is and create no revision). Prefixes are stored sorted and unique. Audit `site.markdown_update` (`changed`, `enabled`) |
+| `markdown.stats` | `GET /sites/{id}/markdown/stats?range=` | `{ responses, unsupportedNodes }`: over the range (`1h`, `6h`, `24h` by default, `7d`, `30d`), the complete 200 GET responses served as Markdown (cache hits included); `unsupportedNodes` counts the cluster's active nodes without `markdown-v1` |
+
+Fields of the settings (all required by `update`, plus `id`):
+
+| Field | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `enabled` | boolean | `false` | |
+| `includePrefixes` | string array | `[]` | Path prefixes converted, empty for every path; ≤ 32, each ≤ 256 bytes, starting with `/`, visible ASCII only |
+| `excludePrefixes` | string array | `[]` | Path prefixes never converted, winning over `includePrefixes`; same limits |
+
+Anything else (also while it is off) is 400. A read-only AccessKey calls the `GET`s only; service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`). `sites.features` adds `markdown` (feature `markdown-v1`); settings that are on require node feature `markdown-v1`, settings that are off leave the configuration as it is. Copying settings takes the part `markdown`, and clones copy it. Behaviour: [Markdown for Agents](../../guide/markdown-agents.en.md).
+
+```bash
+curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"enabled":true,"includePrefixes":["/docs/"],"excludePrefixes":["/docs/private/"]}' \
+  https://cdn-admin.example.com/api/v1/sites/<site id>/markdown
+curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
+  "https://cdn-admin.example.com/api/v1/sites/<site id>/markdown/stats?range=7d"
+```
+
+## Tiered Cache
+
+| Procedure | Endpoint | Notes |
+| --- | --- | --- |
+| `tieredCache.get` | `GET /tiered-cache` | The console-wide setting `{ topology, port, upperNodeIds, upperNodeGroupIds }`; `off` and `8444` by default |
+| `tieredCache.update` | `PUT /tiered-cache` | Replaces the console-wide setting and publishes the clusters of the sites that follow it. `topology`: `off`, `smart`, `generic`, `regional`, `custom`; `port` 1–65535, not a listener port; `upperNodeIds` / `upperNodeGroupIds` at most 32 together, used by `custom` only. Audit `system.tiered_cache_update` |
+| `tieredCache.site.get` | `GET /sites/{id}/tiered-cache` | The site's setting `{ topology, upperNodeIds, upperNodeGroupIds }`; `topology` also takes `inherit` (the default: the console-wide one) |
+| `tieredCache.site.update` | `PUT /sites/{id}/tiered-cache` | Replaces the site's setting and publishes its cluster. Audit `site.tiered_cache_update` (`from`, `to`) |
+| `tieredCache.site.selection` | `GET /sites/{id}/tiered-cache/selection` | `{ topology, inherited, target, idleReason, chosenAt, nodes: [{ nodeId, nodeName, regionName, uppers: [{ nodeId, nodeName, reason, rttMs }] }], unsupportedNodes }`: each active node of the cluster with its upper tiers (none: it fetches from the origin) and why (`lowest_latency`, `fallback_region`, `region_upper`, `regional_tier`, `global_upper`, `custom`); `idleReason` is `no_latency`, `no_upper`, `single_node` or `no_custom` when the topology is on but there are no upper tiers |
+| `tieredCache.site.stats` | `GET /sites/{id}/tiered-cache/stats?range=` | `{ fetches, served, hitRatio, fallbacks }`: over the range, fetches of lower tiers from upper tiers by the upper tier's cache status (`origin`: fallbacks), requests answered to lower tiers, the upper tiers' hit ratio (0–1, null without fetches) and the fallbacks |
+
+## AI crawl control
+
+- Behavior: [AI crawlers](../../guide/ai-crawl-control.en.md). Site settings need the node capability `ai-crawlers-v1`; the crawler catalogue alone needs none. Audit `system.ai_crawl_update`, `site.ai_crawl_update`.
+
+| Procedure | Method and path | Access |
+| --- | --- | --- |
+| `aiCrawl.catalogue` | `GET /ai-crawlers` | read |
+| `aiCrawl.settings` | `GET /settings/ai-crawl` | read |
+| `aiCrawl.setSettings` | `PUT /settings/ai-crawl` | write |
+| `aiCrawl.get` | `GET /sites/{id}/ai-crawl` | read |
+| `aiCrawl.update` | `PUT /sites/{id}/ai-crawl` | write |
+| `aiCrawl.overview` | `GET /sites/{id}/ai-crawl/overview` | read |
+
+`GET /api/v1/openapi.json` has the request and response fields.
+
 ## Objects
 
 ### Site object
@@ -1425,6 +1491,9 @@ Each field is `{ available, reason }`: `available` is a boolean; when an active 
 | `challengeV2` | `challenge-v2` | Verified crawlers, challenge page texts and challenge failure bans |
 | `accessLogsV2` | `access-logs-v2` | Access log options: always logging blocked requests, the query string, request headers and the peer address |
 | `imageConvert` | `image-convert-v1` | Image format conversion |
+| `challengeV3` | `challenge-v3` | The managed challenge and third-party interactive challenges |
+| `markdown` | `markdown-v1` | Markdown for Agents |
+| `aiCrawl` | `ai-crawlers-v1` | AI crawl control: crawler actions, the managed robots.txt and pay per crawl |
 
 ### Batch result
 

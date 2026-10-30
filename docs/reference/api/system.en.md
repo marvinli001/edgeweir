@@ -830,6 +830,30 @@ Response: as [`settings.loginAllowList`](#settingsloginallowlist).
 | --- | --- | --- |
 | `LOGIN_ALLOW_LIST_EXCLUDES_CURRENT_IP` | 400 | The list is not empty and leaves out this request's client address (checked with an AccessKey too); `data.ip` |
 
+## Node extensions
+
+| Procedure | Endpoint |
+| --- | --- |
+| `extensionKeys.list`, `extensionKeys.add`, `extensionKeys.remove` | `GET`, `POST /extension-keys`, `DELETE /extension-keys/{kid}` |
+| `extensions.verify` | `POST /extensions/verify` |
+| `extensions.install` | `POST /extensions` |
+| `extensions.list`, `extensions.get`, `extensions.update`, `extensions.uninstall` | `GET /extensions`, `GET`, `PATCH`, `DELETE /extensions/{id}` |
+| `extensions.activate`, `extensions.deleteVersion` | `POST /extensions/{id}/activate`, `DELETE /extensions/{id}/versions/{version}` |
+| `extensions.settings`, `extensions.updateSettings` | `GET`, `PUT /extensions/settings` (kill switch) |
+| `extensions.forSite`, `extensions.updateSite` | `GET /sites/{siteId}/extensions`, `PUT /sites/{siteId}/extensions/{id}` |
+| `extensions.rotateSecret` | `POST /extensions/{id}/rotate-secret` (manifest `secret: true`): a new current secret, the old one kept as previous, `secretVersion` + 1; publishes the clusters that get the extension; audit `extension.rotate_secret` |
+| `extensions.listSiteData`, `extensions.putSiteData`, `extensions.deleteSiteData` | `GET /sites/{siteId}/extensions/{id}/data` → `[{ name, sha256, size, updatedAt }]`, `PUT`, `DELETE /sites/{siteId}/extensions/{id}/data/{name}` (manifest `data`); publish the site's cluster; audit `site.extension_data_put`, `site.extension_data_delete` |
+
+| Request | Fields |
+| --- | --- |
+| `POST /extension-keys` | `publisher`, `key` (public JWK JSON or its base64url `x`), `label` |
+| `POST /extensions/verify`, `POST /extensions` | `package` (the `.ewx` bytes, base64), `signature` (the `.ewx.sig` compact JWS); requests up to 96 MiB (packages with a sidecar) |
+| `PATCH /extensions/{id}` | `enabled`, `failureMode` (`open`, `closed`), `config` (the manifest's global schema) |
+| `PUT /sites/{siteId}/extensions/{id}` | `enabled`, `config` (the manifest's site schema) |
+| `PUT /sites/{siteId}/extensions/{id}/data/{name}` | `content` (base64; requests up to 34 MiB). `name` `^[a-z0-9][a-z0-9._-]{0,63}$`; limits from the active manifest's `data` (`max_bytes` per item, `max_items` and `max_total_bytes` per site and extension) |
+
+Errors: `EXTENSION_PACKAGE_INVALID`, `EXTENSION_SIGNATURE_INVALID`, `EXTENSION_KEY_UNTRUSTED`, `EXTENSION_PUBLISHER_MISMATCH`, `EXTENSION_CONFIG_INVALID`, `EXTENSION_IN_USE` (rules read its fields), `EXTENSION_KEY_IN_USE`, `EXTENSION_VERSION_ACTIVE`, `EXTENSION_SECRET_NOT_SUPPORTED`, `EXTENSION_DATA_NOT_SUPPORTED` (the manifest has no `data`), `EXTENSION_DATA_TOO_LARGE` (`limit`: `max_bytes`, `max_items` or `max_total_bytes`; `max`), `EXTENSION_DATA_NOT_FOUND`, `NODE_CAPABILITY_REQUIRED` (`extensions-v1`, `extensions-v2`). `extensions.get` carries `secretVersion` (never the secret) and node states with `details` (what the node reports, such as `sidecar.state`); `extensions.forSite` carries `dataLimits`. Configuration values marked `x-secret` come back masked; sending the mask keeps the stored value. Access logs carry block reason `extension` with rule id `ext:<id>` and the field `ext` (the extensions' log fields and verdicts). Format and runtime: [Node extensions](extensions.en.md); usage: [Extensions](../../guide/extensions.en.md).
+
 ## Objects
 
 ### AccessKey object

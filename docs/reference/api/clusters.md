@@ -770,6 +770,18 @@
 | --- | --- | --- |
 | `NODE_NOT_FOUND` | 404 | 节点不存在 |
 
+## SSH 安装
+
+- 请求、状态、失败原因与凭据处理见 [SSH 安装](../../deploy/nodes.md#ssh-安装)。服务账号不能调用；只读 AccessKey 只能调用 `sshInstalls.get`。`start` 与 `retry` 不接受 `Idempotency-Key`。
+
+| 过程 | 方法与路径 | 权限 |
+| --- | --- | --- |
+| `sshInstalls.scanHostKeys` | `POST /ssh-installs/host-keys` | 写 |
+| `sshInstalls.start` | `POST /ssh-installs` | 写 |
+| `sshInstalls.get` | `GET /ssh-installs/{id}` | 读 |
+| `sshInstalls.cancel` | `POST /ssh-installs/{id}/cancel` | 写 |
+| `sshInstalls.retry` | `POST /ssh-installs/{id}/retry` | 写 |
+
 ## 节点日志
 
 - 节点日志需要节点能力 `node-logs-v1`，Debug 日志需要 `debug-logs-v1`；响应的 `supported` 表示节点是否具备。

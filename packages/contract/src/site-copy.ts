@@ -28,7 +28,7 @@ import { MAX_BATCH_SITES, queryList, siteTagNames } from "./site-tags";
  * - logs: the access log sample rate and options (blocked requests, the
  *   query string, request headers, the peer address) and JA4 logging;
  * - imageConvert: the WebP / AVIF conversion settings;
- * - markdown: the Markdown for Agents settings.
+ * - markdown: the Markdown for Agents settings;
  * - aiCrawl: AI crawl control (crawler actions, managed robots.txt, pay per crawl).
  */
 export const SITE_COPY_PARTS = [

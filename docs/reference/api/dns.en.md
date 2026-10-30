@@ -490,6 +490,27 @@ Response: [Probe result](#probe-result-object)[]: the newest at most 5000, sorte
 | `PROBE_NOT_FOUND` | 404 | `probeId` is neither a probe nor a node |
 | `NODE_NOT_FOUND` | 404 | No node with `nodeId` |
 
+## External probe sources
+
+- Behavior: [External probe sources](../../guide/scheduling.en.md#external-probe-sources).
+
+| Procedure | Method and path | Access |
+| --- | --- | --- |
+| `probeSources.list` | `GET /probe-sources` | read |
+| `probeSources.create` | `POST /probe-sources` | write |
+| `probeSources.update` | `PATCH /probe-sources/{id}` | write |
+| `probeSources.delete` | `DELETE /probe-sources/{id}` | write |
+| `probeSources.rotateWebhookSecret` | `POST /probe-sources/{id}/webhook-secret` | write |
+| `probeSources.check` | `POST /probe-sources/check` | write |
+| `probeSources.monitors` | `GET /probe-sources/{id}/monitors` | read |
+| `probeSources.mappings` | `GET /probe-sources/{id}/mappings` | read |
+| `probeSources.setMappings` | `PUT /probe-sources/{id}/mappings` | write |
+| `probeSources.results` | `GET /probe-sources/{id}/results` | read |
+| `probeSources.modes` | `GET /probe-modes` | read |
+| `probeSources.setClusterMode` | `PUT /clusters/{clusterId}/probe-mode` | write |
+
+`GET /api/v1/openapi.json` has the request and response fields.
+
 ## Scheduling rules
 
 - A rule belongs to a cluster and applies a DNS action to nodes based on conditions on node and probe metrics: `remove_node` (the node leaves the rule's line, or every line), `backup_group` (the rule's line answers with its backup node groups), `backup_ip` (the node answers with its next scheduling address level).

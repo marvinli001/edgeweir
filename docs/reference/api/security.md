@@ -612,6 +612,35 @@
 | --- | --- | --- |
 | `SITE_NOT_FOUND` | 404 | 网站不存在 |
 
+### 托管挑战与验证码服务商
+
+| 字段 | 说明 |
+| --- | --- |
+| `underAttackChallenge` | 网站与全局另可取 `managed`（托管挑战）；CC 级别与灰名单不接受 |
+| `interactiveProvider` | `PATCH /sites/{id}/protection`：`global`（默认，跟随全局）、`builtin`（内置图片验证码）、`site`（本站的 `provider`） |
+| `provider` | `PATCH /sites/{id}/protection` 为本站服务商，`PUT /settings/protection` 为全局服务商：`kind`（`builtin`、`turnstile`、`recaptcha_v2`、`recaptcha_v3`、`recaptcha_enterprise`、`tencent`、`aliyun`、`geetest`）、`siteKey`（1–128 个字母、数字、`_.-`，`builtin` 以外必填）、`minScore`（1–100，默认 50，`recaptcha_v3` 与 `recaptcha_enterprise`）、`projectId`（`recaptcha_enterprise` 必填）、`region`（`cn` / `sgp`）与 `prefix`（`aliyun`，`prefix` 必填）、`secret`（见下表；省略的字段保留同类服务商已保存的值） |
+| 响应 | `protection.*` 另有 `interactiveProvider`、`provider`、`globalProvider`，`settings.protection` 另有 `provider`：`{ kind, siteKey, minScore, projectId, region, prefix, secretSet, updatedAt }`，从不返回密钥 |
+
+| `kind` | `secret` 字段 |
+| --- | --- |
+| `turnstile`、`recaptcha_v2`、`recaptcha_v3` | `secret` |
+| `recaptcha_enterprise` | `apiKey` |
+| `tencent` | `secretId`、`secretKey`、`appSecretKey` |
+| `aliyun` | `accessKeyId`、`accessKeySecret` |
+| `geetest` | `captchaKey` |
+
+| 错误代码 | 状态 | 场景 |
+| --- | --- | --- |
+| `CHALLENGE_PROVIDER_SECRET_REQUIRED` | 400 | 新服务商或改用 `site` 时缺少密钥字段；`data.fields` 列出缺少的字段 |
+
+托管挑战、`interactiveProvider` 为 `site` 或全局服务商不是 `builtin` 时需要节点能力 `challenge-v3`。修改全局服务商发布有网站跟随全局的集群（`platform_protection_updated`），审计 `system.protection_update`，审计内容不含密钥。
+
+```bash
+curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"interactiveProvider":"site","provider":{"kind":"turnstile","siteKey":"<站点密钥>","secret":{"secret":"<密钥>"}}}' \
+  https://cdn-admin.example.com/api/v1/sites/<网站 ID>/protection
+```
+
 ## OWASP CRS
 
 - 修改发布网站所在集群的配置版本（原因 `site_waf_updated`），审计 `site.waf_update`（元数据 `from`、`to`、`revision`）。

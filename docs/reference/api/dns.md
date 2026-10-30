@@ -490,6 +490,27 @@ DNS 服务商账号、集群 DNS 绑定与记录、DNS 版本与对账、区域�
 | `PROBE_NOT_FOUND` | 404 | `probeId` 既不是探针也不是节点 |
 | `NODE_NOT_FOUND` | 404 | `nodeId` 对应的节点不存在 |
 
+## 外部探测源
+
+- 行为见 [外部探测源](../../guide/scheduling.md#外部探测源)。
+
+| 过程 | 方法与路径 | 权限 |
+| --- | --- | --- |
+| `probeSources.list` | `GET /probe-sources` | 读 |
+| `probeSources.create` | `POST /probe-sources` | 写 |
+| `probeSources.update` | `PATCH /probe-sources/{id}` | 写 |
+| `probeSources.delete` | `DELETE /probe-sources/{id}` | 写 |
+| `probeSources.rotateWebhookSecret` | `POST /probe-sources/{id}/webhook-secret` | 写 |
+| `probeSources.check` | `POST /probe-sources/check` | 写 |
+| `probeSources.monitors` | `GET /probe-sources/{id}/monitors` | 读 |
+| `probeSources.mappings` | `GET /probe-sources/{id}/mappings` | 读 |
+| `probeSources.setMappings` | `PUT /probe-sources/{id}/mappings` | 写 |
+| `probeSources.results` | `GET /probe-sources/{id}/results` | 读 |
+| `probeSources.modes` | `GET /probe-modes` | 读 |
+| `probeSources.setClusterMode` | `PUT /clusters/{clusterId}/probe-mode` | 写 |
+
+请求与响应的字段以 `GET /api/v1/openapi.json` 为准。
+
 ## 智能调度规则
 
 - 规则属于一个集群，按节点指标与探针指标的条件对节点执行 DNS 动作：`remove_node`（节点退出规则的线路，或全部线路）、`backup_group`（规则的线路改用其备用节点组）、`backup_ip`（节点改用下一级调度地址）。

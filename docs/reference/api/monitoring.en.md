@@ -735,7 +735,7 @@ Elements of `items`:
 | `httpVersions` | `array<object>` | `{ key, requests }`: HTTP versions |
 | `tlsVersions` | `array<object>` | `{ key, requests }`: TLS versions |
 | `blockReasons` | `array<object>` | `{ key, requests }`: block reasons |
-| `challenges` | object | `{ issued, passed }`: challenges issued and passed |
+| `challenges` | object | `{ issued, passed, byKind }`: challenges issued and passed; `byKind` holds, from `challenge-v3` nodes, `{ kind, issued, passed, failed, escalated, fallback }` per type (challenge type or provider) |
 | `unsupportedNodes` | integer | Enabled nodes without `stats-dims-v1` (those of the site's cluster with `siteId`, otherwise every node); above 0 the dimensions are partial |
 
 Arrays hold only keys with more than 0 requests, most requests first, then by key. Values of `key`:

@@ -735,7 +735,7 @@
 | `httpVersions` | `array<object>` | `{ key, requests }`，HTTP 版本 |
 | `tlsVersions` | `array<object>` | `{ key, requests }`，TLS 版本 |
 | `blockReasons` | `array<object>` | `{ key, requests }`，拦截原因 |
-| `challenges` | object | `{ issued, passed }`：发出与通过的挑战数 |
+| `challenges` | object | `{ issued, passed, byKind }`：发出与通过的挑战数；`byKind` 为 `challenge-v3` 节点按类型（挑战类型或服务商）的 `{ kind, issued, passed, failed, escalated, fallback }` |
 | `unsupportedNodes` | integer | 不支持 `stats-dims-v1` 的已启用节点数（给出 `siteId` 时为该网站所在集群的节点，否则为全部节点）；大于 0 时各维度不完整 |
 
 数组只含请求数大于 0 的键，按请求数从多到少，相同时按键排列。`key` 的取值：

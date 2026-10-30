@@ -612,6 +612,35 @@ Response: `{ items: [Security event](#security-event-object)[], total }`, newest
 | --- | --- | --- |
 | `SITE_NOT_FOUND` | 404 | The site does not exist |
 
+### Managed challenge and CAPTCHA providers
+
+| Field | Notes |
+| --- | --- |
+| `underAttackChallenge` | Site and global also accept `managed` (managed challenge); CC levels and the greylist do not |
+| `interactiveProvider` | `PATCH /sites/{id}/protection`: `global` (default, follows the global provider), `builtin` (built-in image captcha), `site` (the site's `provider`) |
+| `provider` | The site's provider in `PATCH /sites/{id}/protection`, the global one in `PUT /settings/protection`: `kind` (`builtin`, `turnstile`, `recaptcha_v2`, `recaptcha_v3`, `recaptcha_enterprise`, `tencent`, `aliyun`, `geetest`), `siteKey` (1–128 letters, digits, `_.-`; required except for `builtin`), `minScore` (1–100, default 50; `recaptcha_v3` and `recaptcha_enterprise`), `projectId` (required for `recaptcha_enterprise`), `region` (`cn` / `sgp`) and `prefix` (`aliyun`, `prefix` required), `secret` (see below; fields left out keep the saved values of the same kind) |
+| Responses | `protection.*` add `interactiveProvider`, `provider`, `globalProvider`; `settings.protection` adds `provider`: `{ kind, siteKey, minScore, projectId, region, prefix, secretSet, updatedAt }`, never the secrets |
+
+| `kind` | `secret` fields |
+| --- | --- |
+| `turnstile`, `recaptcha_v2`, `recaptcha_v3` | `secret` |
+| `recaptcha_enterprise` | `apiKey` |
+| `tencent` | `secretId`, `secretKey`, `appSecretKey` |
+| `aliyun` | `accessKeyId`, `accessKeySecret` |
+| `geetest` | `captchaKey` |
+
+| Error code | Status | When |
+| --- | --- | --- |
+| `CHALLENGE_PROVIDER_SECRET_REQUIRED` | 400 | A new provider, or a switch to `site`, without all secret fields; `data.fields` lists the missing ones |
+
+The managed challenge, `interactiveProvider` `site`, and a global provider other than `builtin` need the node capability `challenge-v3`. A change of the global provider publishes the clusters with sites that follow it (`platform_protection_updated`) and is audited as `system.protection_update` without the secrets.
+
+```bash
+curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"interactiveProvider":"site","provider":{"kind":"turnstile","siteKey":"<site key>","secret":{"secret":"<secret key>"}}}' \
+  https://cdn-admin.example.com/api/v1/sites/<site ID>/protection
+```
+
 ## OWASP CRS
 
 - A change publishes a configuration revision for the site's cluster (reason `site_waf_updated`) and audits `site.waf_update` (metadata `from`, `to`, `revision`).

@@ -770,6 +770,18 @@ Response: [Node](#node-object).
 | --- | --- | --- |
 | `NODE_NOT_FOUND` | 404 | The node does not exist |
 
+## SSH install
+
+- Requests, states, failure reasons and the handling of credentials: [SSH install](../../deploy/nodes.en.md#ssh-install). Service accounts cannot call these; read-only AccessKeys call `sshInstalls.get` only. `start` and `retry` do not take an `Idempotency-Key`.
+
+| Procedure | Method and path | Access |
+| --- | --- | --- |
+| `sshInstalls.scanHostKeys` | `POST /ssh-installs/host-keys` | write |
+| `sshInstalls.start` | `POST /ssh-installs` | write |
+| `sshInstalls.get` | `GET /ssh-installs/{id}` | read |
+| `sshInstalls.cancel` | `POST /ssh-installs/{id}/cancel` | write |
+| `sshInstalls.retry` | `POST /ssh-installs/{id}/retry` | write |
+
 ## Node logs
 
 - Node logs need the node capability `node-logs-v1`, debug logs `debug-logs-v1`; `supported` in responses tells whether the node has it.

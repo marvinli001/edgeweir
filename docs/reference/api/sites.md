@@ -417,7 +417,7 @@
 
 ## 复制设置与克隆
 
-- `parts` 的取值：`cacheRules`、`cacheKey`（缓存键与分片）、`cacheTag`、`compression`、`https`（HTTPS 选项，不含证书与不跳转的域名）、`rules`（含 `rulesBodyLimit`）、`bulkRedirects`、`errorPages`、`waf`、`protection`（Under Attack、CC 策略与挑战设置）、`accessControl`、`authRules`（密钥为目标重新加密）、`originSettings`（源站池设置，不含源站）、`logs`（采样率与日志选项、JA4 日志）、`imageConvert`。复制的部分整体替换目标的该部分；与目标相同的部分不写入。
+- `parts` 的取值：`cacheRules`、`cacheKey`（缓存键与分片）、`cacheTag`、`compression`、`https`（HTTPS 选项，不含证书与不跳转的域名）、`rules`（含 `rulesBodyLimit`）、`bulkRedirects`、`errorPages`、`waf`、`protection`（Under Attack、CC 策略与挑战设置）、`accessControl`、`authRules`（密钥为目标重新加密）、`originSettings`（源站池设置，不含源站）、`logs`（采样率与日志选项、JA4 日志）、`imageConvert`、`markdown`（面向代理的 Markdown）、`aiCrawl`（AI 爬虫管理：爬虫动作、托管 robots.txt、按抓取付费）。复制的部分整体替换目标的该部分；与目标相同的部分不写入。
 - 列表部分（`cacheRules`、`rules`、`bulkRedirects`、`errorPages`、`authRules`）的变化以前后条数表示，其他部分以变化的设置数表示。
 - 目标缺少设置用到的对象时该目标失败，例如：规则选择的源站组不存在 `ORIGIN_GROUP_UNKNOWN`、目标没有证书却复制 HTTPS 跳转 / HSTS / 客户端证书 `HTTPS_REQUIRES_CERTIFICATE`、跳转端口不是目标的 HTTPS 端口 `HTTPS_REDIRECT_PORT_INVALID`、客户端证书与 HTTP/3 同时开启 `CLIENT_CERTIFICATE_HTTP3`、批量重定向的来源主机不是目标的域名 `BULK_REDIRECT_HOST_UNKNOWN`、访问鉴权范围的域名不是目标的域名 `AUTH_DOMAIN_UNKNOWN`、IP 名单不存在 `IP_LIST_NOT_FOUND`。
 - 行为见[复制设置](../../guide/site-management.md#复制设置)与[克隆网站](../../guide/site-management.md#克隆网站)。
@@ -1109,6 +1109,72 @@
 | `SITE_NOT_FOUND` | 404 | 网站不存在 |
 | `AUTO_MITIGATION_NOT_ACTIVE` | 409 | 自动缓解没有保持 Under Attack |
 
+## 开发模式
+
+| 过程 | 端点 | 说明 |
+| --- | --- | --- |
+| `developmentMode.get` | `GET /sites/{id}/development-mode` | `{ siteId, until, unsupportedNodes }`：`until` 为结束时间（关闭或已过期时为 `null`），`unsupportedNodes` 为集群中不支持 `development-mode-v1` 的活动节点数 |
+| `developmentMode.set` | `PUT /sites/{id}/development-mode` | `{ "enabled": true }` 开启 3 小时，`false` 立即关闭；状态不变时不发布、不审计（开启期间再开不延长）。变化时发布所在集群（直接下发所有节点，不经金丝雀），审计 `site.development_mode_on` / `site.development_mode_off`（`until`）。停用的网站不能开启（409 `SITE_DISABLED`） |
+
+到期由 worker 每分钟检查，关闭、发布并以系统身份审计 `site.development_mode_expire`；节点在到期时刻已自行恢复缓存。网站对象增加 `developmentModeUntil`。只读 AccessKey 只能调用 `GET`；服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）。行为见[开发模式](../../guide/origins-and-cache.md#开发模式)。
+
+```bash
+curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"enabled":true}' https://cdn-admin.example.com/api/v1/sites/<网站 ID>/development-mode
+```
+
+## 面向代理的 Markdown
+
+| 过程 | 端点 | 说明 |
+| --- | --- | --- |
+| `markdown.get` | `GET /sites/{id}/markdown` | 网站的 Markdown 转换设置，从未保存时为默认值（关闭，全部路径） |
+| `markdown.update` | `PUT /sites/{id}/markdown` | 整体替换设置并发布所在集群（热更新；关闭期间的修改不改变节点配置，不产生新修订）。前缀排序去重后保存。审计 `site.markdown_update`（`changed`、`enabled`） |
+| `markdown.stats` | `GET /sites/{id}/markdown/stats?range=` | `{ responses, unsupportedNodes }`：时间范围（`1h`、`6h`、`24h` 默认、`7d`、`30d`）内以 Markdown 完整返回的 200 GET 响应数（含缓存命中）；`unsupportedNodes` 为集群中不支持 `markdown-v1` 的活动节点数 |
+
+设置的字段（`update` 全部必填，另加 `id`）：
+
+| 字段 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `enabled` | 布尔 | `false` | |
+| `includePrefixes` | 字符串数组 | `[]` | 转换的路径前缀，空为全部路径；≤ 32 个，每个 ≤ 256 字节，以 `/` 开头，只含 ASCII 可见字符 |
+| `excludePrefixes` | 字符串数组 | `[]` | 不转换的路径前缀，优先于 `includePrefixes`；限制同上 |
+
+不满足上述条件（含关闭时）返回 400。只读 AccessKey 只能调用 `GET`；服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）。`sites.features` 增加 `markdown`（能力 `markdown-v1`）；开启的设置要求节点能力 `markdown-v1`，关闭时配置不变。复制设置的 `parts` 增加 `markdown`，克隆一并复制。行为见[面向代理的 Markdown](../../guide/markdown-agents.md)。
+
+```bash
+curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"enabled":true,"includePrefixes":["/docs/"],"excludePrefixes":["/docs/private/"]}' \
+  https://cdn-admin.example.com/api/v1/sites/<网站 ID>/markdown
+curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
+  "https://cdn-admin.example.com/api/v1/sites/<网站 ID>/markdown/stats?range=7d"
+```
+
+## 分层缓存
+
+| 过程 | 端点 | 说明 |
+| --- | --- | --- |
+| `tieredCache.get` | `GET /tiered-cache` | 全局设置 `{ topology, port, upperNodeIds, upperNodeGroupIds }`；默认 `off`、`8444` |
+| `tieredCache.update` | `PUT /tiered-cache` | 替换全局设置并发布跟随全局的网站所在的集群。`topology`：`off`、`smart`、`generic`、`regional`、`custom`；`port` 1–65535，不能是监听端口；`upperNodeIds` / `upperNodeGroupIds` 合计 ≤ 32，只用于 `custom`。审计 `system.tiered_cache_update` |
+| `tieredCache.site.get` | `GET /sites/{id}/tiered-cache` | 网站设置 `{ topology, upperNodeIds, upperNodeGroupIds }`；`topology` 多一个 `inherit`（默认，跟随全局） |
+| `tieredCache.site.update` | `PUT /sites/{id}/tiered-cache` | 替换网站设置并发布其集群。审计 `site.tiered_cache_update`（`from`、`to`） |
+| `tieredCache.site.selection` | `GET /sites/{id}/tiered-cache/selection` | `{ topology, inherited, target, idleReason, chosenAt, nodes: [{ nodeId, nodeName, regionName, uppers: [{ nodeId, nodeName, reason, rttMs }] }], unsupportedNodes }`：集群每个活动节点的上层（空为直接回源）与原因（`lowest_latency`、`fallback_region`、`region_upper`、`regional_tier`、`global_upper`、`custom`）；开启但没有上层时 `idleReason` 为 `no_latency`、`no_upper`、`single_node` 或 `no_custom` |
+| `tieredCache.site.stats` | `GET /sites/{id}/tiered-cache/stats?range=` | `{ fetches, served, hitRatio, fallbacks }`：时间范围内下层向上层的请求按上层缓存状态计数（`origin` 为兜底回源）、作为上层回答下层的请求、上层命中率（0–1，没有请求时为 null）与兜底回源数 |
+
+## AI 爬虫管理
+
+- 行为见 [AI 爬虫](../../guide/ai-crawl-control.md)。网站设置要求节点能力 `ai-crawlers-v1`；爬虫目录本身不需要能力。审计 `system.ai_crawl_update`、`site.ai_crawl_update`。
+
+| 过程 | 方法与路径 | 权限 |
+| --- | --- | --- |
+| `aiCrawl.catalogue` | `GET /ai-crawlers` | 读 |
+| `aiCrawl.settings` | `GET /settings/ai-crawl` | 读 |
+| `aiCrawl.setSettings` | `PUT /settings/ai-crawl` | 写 |
+| `aiCrawl.get` | `GET /sites/{id}/ai-crawl` | 读 |
+| `aiCrawl.update` | `PUT /sites/{id}/ai-crawl` | 写 |
+| `aiCrawl.overview` | `GET /sites/{id}/ai-crawl/overview` | 读 |
+
+请求与响应的字段以 `GET /api/v1/openapi.json` 为准。
+
 ## 对象
 
 ### 网站对象
@@ -1425,6 +1491,9 @@
 | `challengeV2` | `challenge-v2` | 已验证爬虫、挑战页文字与挑战失败封禁 |
 | `accessLogsV2` | `access-logs-v2` | 访问日志选项：总记录被拦截的请求、查询串、请求头与对端地址 |
 | `imageConvert` | `image-convert-v1` | 图片格式转换 |
+| `challengeV3` | `challenge-v3` | 托管挑战与第三方交互式挑战 |
+| `markdown` | `markdown-v1` | 面向代理的 Markdown |
+| `aiCrawl` | `ai-crawlers-v1` | AI 爬虫管理：爬虫动作、托管 robots.txt 与按抓取付费 |
 
 ### 批量结果
 
