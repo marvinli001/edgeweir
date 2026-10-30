@@ -617,6 +617,22 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 
 Requirements, states, and node-side verification: [Node upgrades](../guide/node-upgrades.en.md).
 
+### Node decommission
+
+| Procedure | Endpoint |
+| --- | --- |
+| `nodes.decommission` | `POST /nodes/{id}/decommission` |
+| `nodes.cancelDecommission` | `DELETE /nodes/{id}/decommission` |
+
+Service accounts and read-only AccessKeys cannot call them.
+
+| Request | Notes |
+| --- | --- |
+| `POST /nodes/{id}/decommission` | The node stops serving and deletes its identity; the console then revokes its certificate and deletes the node (see [Decommissioning a node](../deploy/nodes.en.md#decommissioning-a-node)). 409 `NODE_CAPABILITY_REQUIRED` without `decommission-v1`, 409 `NODE_DECOMMISSION_DISABLED` for a disabled node, 409 `NODE_DECOMMISSION_PENDING` when a request waits. Returns the node (`decommissionRequestedAt` set); audited as `node.decommission` |
+| `DELETE /nodes/{id}/decommission` | Withdraws a request the node has not run, 409 `NODE_DECOMMISSION_NOT_PENDING` without one; audited as `node.decommission_cancel` |
+
+A node's `decommissionRequestedAt` is the time of the waiting request, `decommissionError` the reason of the last failure (`decommission_failed: …`); a failure the node reports is audited as `node.decommission_failed`.
+
 ### Regional probes, scheduling addresses, and scheduling
 
 | Procedure | Endpoint | Notes |

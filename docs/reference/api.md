@@ -617,6 +617,22 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 
 前提、状态与节点侧校验见[节点升级](../guide/node-upgrades.md)。
 
+### 节点退役
+
+| 过程 | 端点 |
+| --- | --- |
+| `nodes.decommission` | `POST /nodes/{id}/decommission` |
+| `nodes.cancelDecommission` | `DELETE /nodes/{id}/decommission` |
+
+服务账号不能调用；只读 AccessKey 不能调用。
+
+| 请求 | 说明 |
+| --- | --- |
+| `POST /nodes/{id}/decommission` | 让节点停止服务并删除身份，完成后控制台吊销证书并删除节点（见[退役节点](../deploy/nodes.md#退役节点)）。节点缺少 `decommission-v1` 时 409 `NODE_CAPABILITY_REQUIRED`，节点已停用时 409 `NODE_DECOMMISSION_DISABLED`，已有请求时 409 `NODE_DECOMMISSION_PENDING`。返回节点（`decommissionRequestedAt` 非空）；审计 `node.decommission` |
+| `DELETE /nodes/{id}/decommission` | 撤回尚未执行的请求，没有请求时 409 `NODE_DECOMMISSION_NOT_PENDING`；审计 `node.decommission_cancel` |
+
+节点的 `decommissionRequestedAt` 为等待执行的请求时间，`decommissionError` 为上次失败的原因（`decommission_failed: …`）；节点报告失败时审计 `node.decommission_failed`。
+
 ### 区域探针、调度地址与智能调度
 
 | 过程 | 端点 | 说明 |

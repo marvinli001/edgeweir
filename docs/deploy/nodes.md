@@ -82,7 +82,7 @@ journalctl -u edgeweir-node -f
 3. **认证**：**密码**，或 **私钥**（OpenSSH、PEM 或 PPK，加密的私钥填 **私钥口令**）。用户不是 root 时：填 **sudo 密码** 用 `sudo -S`；不填时要求免密 sudo（`sudo -n`）。
 4. **选项**：节点名称、预期的 **主机指纹**（单台）、节点组、**版本**（默认最新）、**包格式**、**下载镜像**、**只用镜像**、**安装 ModSecurity**、**并发**（批量，默认 5，最大 20）、**单台超时**（默认 15 分钟，1–60）。
 5. 点击 **读取主机指纹**：控制台只完成 SSH 握手、读取主机密钥后断开，不登录。逐台核对表中的 `SHA256:…` 指纹与主机上 `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` 的输出；填了预期指纹而不符的主机标「与填写的指纹不符」，不会安装。
-6. 点击 **安装 N 台**：每台主机依次显示排队、连接中、安装中、已注册或失败原因；点击主机看输出的最后几十行。单台安装成功后显示与手动命令相同的 **注册进度**。可以 **停止**、**重试** 失败的主机（使用表单里仍保留的凭据）、**复制结果**（制表符分隔：主机、端口、用户、状态、原因、节点 id）。
+6. 点击 **安装 N 台**：每台主机依次显示排队、连接中、安装中（及当前步骤：检查、下载、校验、安装软件包、注册、启动、健康检查）、已注册或失败原因；点击主机看输出的最后几十行。单台安装成功后显示与手动命令相同的 **注册进度**。可以 **停止**、**重试** 失败的主机（使用表单里仍保留的凭据）、**复制结果**（制表符分隔：主机、端口、用户、状态、原因、节点 id）。
 
 | 项目 | 行为 |
 | --- | --- |
@@ -106,8 +106,17 @@ journalctl -u edgeweir-node -f
 | 需要 sudo 密码 / sudo 密码错误 / 没有 sudo 权限 | 非 root 用户的 sudo |
 | sudo 要求终端（requiretty） | sudoers 设置了 `requiretty`，SSH 安装不支持，改用手动命令或去掉该设置 |
 | 下载 install.sh 失败 | 主机访问不到控制台地址 |
-| install.sh 失败 | 查看该主机的输出 |
-| 未注册（可能已注册过） | `install.sh` 正常结束却没有使用 token，通常是主机已注册过（要重新注册用手动命令加 `--force`） |
+| 系统不受支持 | 不是 Linux、没有 systemd、架构或 glibc 不支持（退出码 21） |
+| 主机连不上节点通道 | 节点通道地址不通、CA 指纹不符或 WebSocket 入口未开放（22，或注册时的 `unreachable`、`ca_mismatch`） |
+| 签名或校验和不符 | cosign 签名或 SHA-256 校验失败（24） |
+| 令牌被拒绝 | 控制台拒绝了本次的 token（26，节点的 `token_rejected`） |
+| 已注册到其他控制台或集群 | 主机的身份固定在另一个控制台的 CA 上（26，节点的 `enrolled_elsewhere`），或注册结果是本控制台另一个集群的节点 |
+| 主机上另有安装在进行 | 另一个 `install.sh` 或 `edgeweir-node enroll` 正在运行（29，或节点的 `busy`）；稍后重试 |
+| 服务启动失败 / 已启动，健康检查未通过 | 第 10 步（27）或第 11 步（28），查看该主机的输出与 `journalctl -u edgeweir-node -n 50` |
+| install.sh 失败 | 其他失败，查看该主机的输出 |
+| 未注册（主机已注册，但不是本控制台的节点） | `install.sh` 正常结束，既没有使用 token，也没有报告本控制台的节点：主机上的 edgeweir-node 早于 1.7.0、身份属于别处（要重新注册用手动命令加 `--force`） |
+
+重试与再次运行不会产生第二个节点：每次尝试用新的一次性 token；已注册的主机（edgeweir-node 1.7.0 起）经 `edgeweir-node enroll --if-not-enrolled` 报告原来的节点；SSH 断线时节点已经注册的，同一私钥再次注册得到同一个节点（[按密钥幂等](#重新注册与节点身份)）。
 
 API（`/api/v1`，AccessKey 须有写权限；服务账号不能调用；只读 AccessKey 只能查询）：
 
@@ -115,7 +124,7 @@ API（`/api/v1`，AccessKey 须有写权限；服务账号不能调用；只读 
 | --- | --- |
 | `POST /ssh-installs/host-keys` | `{ hosts: [{ host, port }] }`，返回每台的 `algorithm`、`fingerprint` 或 `error`（`unreachable`、`timeout`、`not_ssh`、`outbound_refused`） |
 | `POST /ssh-installs` | `{ clusterId, nodeGroupId?, credential: { username, password?, privateKey?, passphrase?, sudoPassword? }, hosts: [{ host, port, username?, nodeName?, hostKeyFingerprint }], options: { version, format, mirror, mirrorOnly, modsecurity, noStart }, concurrency, timeoutMinutes }`，返回任务 |
-| `GET /ssh-installs/{id}` | 任务与每台主机的 `state`、`error`、`exitCode`、`tokenId`、`nodeId`、`output`；任务不存在（过期或控制台重启）为 404 `SSH_INSTALL_NOT_FOUND` |
+| `GET /ssh-installs/{id}` | 任务与每台主机的 `state`、`step`（安装中的当前步骤：`check`、`download`、`verify`、`install`、`enroll`、`start`、`health`，其他时候为 `null`）、`error`、`exitCode`、`tokenId`、`nodeId`、`output`；任务不存在（过期或控制台重启）为 404 `SSH_INSTALL_NOT_FOUND` |
 | `POST /ssh-installs/{id}/cancel` | 停止 |
 | `POST /ssh-installs/{id}/retry` | `{ credential, hosts?: [{ id, hostKeyFingerprint? }] }`，默认重试全部失败与已停止的主机；任务仍在进行时 409 `SSH_INSTALL_BUSY` |
 
@@ -135,14 +144,48 @@ API（`/api/v1`，AccessKey 须有写权限；服务账号不能调用；只读 
 | 8 | 安装 deb、rpm 或 tar.gz | 退出 |
 | 9 | `edgeweir-node enroll`：核对 CA 指纹后提交 token，本机生成私钥，以 CSR 换取节点证书；此后仅经 mTLS 通信。已注册时跳过；加 `--force` 时先停止 `edgeweir-node.service`，以新 token 执行 `edgeweir-node enroll --force` 替换身份，第 10 步再启动 | 退出 |
 | 10 | 停用 `openresty.service`，启用并启动 `edgeweir-node.service`（`--no-start` 时跳过第 10、11 步）；tar.gz 安装与跳过安装的重新运行先重启运行中的服务（deb、rpm 由包脚本重启） | 退出 |
-| 11 | 每 3 秒执行一次 `edgeweir-node healthcheck`，最多 90 秒，直到数据面已应用配置；通过时输出 `done: edgeweir-node is healthy (revision N, M sites)` | 退出码 1，提示 `journalctl -u edgeweir-node -n 50` |
+| 11 | 每 3 秒执行一次 `edgeweir-node healthcheck`，最多 90 秒，直到数据面已应用配置；通过时输出 `done: edgeweir-node is healthy (revision N, M sites)` | 退出码 28，提示 `journalctl -u edgeweir-node -n 50` |
 
 - 第 5、6 步通过前不执行任何下载的程序。`--allow-unsigned` 跳过第 5 步，仅用于开发，仍校验 SHA-256。
 - 脚本全部由函数组成，最后一行才调用 `main`：下载中断时不执行任何内容。
-- 已注册的主机可以重新运行同一命令：不下载、不重装，启动服务（运行中则重启）并做健康检查；加 `--version <版本>` 时先安装该版本。主机上没有 `/usr/bin/edgeweir-node` 时安装最新版本。
+- 已注册的主机可以重新运行同一命令：不下载、不重装，启动服务（运行中则重启）并做健康检查；加 `--version <版本>` 时先安装该版本。主机上没有 `/usr/bin/edgeweir-node` 时安装最新版本。edgeweir-node 1.7.0 起先执行 `edgeweir-node enroll --if-not-enrolled` 核对身份：属于本控制台时报告原来的节点，属于另一个控制台时以退出码 26 失败，不重启服务。
 - 重新注册（例如证书已过期）：在控制台生成新的安装命令，在命令末尾加 `--force` 执行；之后删除控制台中原来的节点。
 - 节点通道地址改变后，节点 v1.2.0 起自动跟随新地址；旧地址已下线、节点失联时，在节点上执行 `sudo edgeweir-node set-server --server <新地址>`，不必重新注册，见 [更换节点通道地址](networking.md#更换节点通道地址)。
 - 控制台不保存 SSH 凭据（[SSH 安装](#ssh-安装) 只在该次安装期间用于内存中）；节点私钥不离开节点。
+
+### 结果行与退出码
+
+`install.sh` 的说明文字在 stderr；stdout 每步一行 `EDGEWEIR_RESULT {"v":1,"step":"…","status":"…"}`（JSON 在同一行，未知字段忽略），供 SSH 安装等自动化读取。步骤为 `args`、`check`、`download`、`verify`、`install`、`enroll`、`start`、`health`；`status` 为 `ok`、`skipped` 或 `failed`（失败行带英文 `message`），注册一步由 edgeweir-node 1.7.0 起自己写（`enrolled`、`already_enrolled`、`token_rejected`、`enrolled_elsewhere` …，带 `node_id`）。最后一行为 `{"step":"done","status":"ok|failed","failed_step":"…","exit":N}`。
+
+| 退出码 | 含义 |
+| --- | --- |
+| 0 | 完成 |
+| 1 | 其他错误 |
+| 20 | 参数错误 |
+| 21 | 系统不受支持（不是 Linux 或 root、缺少命令、架构、glibc） |
+| 22 | 节点通道不通、CA 指纹不符或 WebSocket 入口未开放 |
+| 23 | 下载失败 |
+| 24 | 签名或 SHA-256 校验失败 |
+| 25 | 安装软件包失败 |
+| 26 | 注册失败（原因见注册结果行），或已注册到另一个控制台 |
+| 27 | 服务启动失败 |
+| 28 | 健康检查超时 |
+| 29 | 主机上另有安装在运行（`/run/edgeweir-install.lock`） |
+
+## 重新注册与节点身份
+
+控制台按节点证书的公钥识别节点：同一私钥再次注册（例如注册成功但应答丢失后重试）得到同一个节点与新证书，不会产生第二个节点。token 须是该节点当初用掉的，或同一集群（及节点组）未用的新 token；其他集群的 token 被拒绝。edgeweir-node 1.7.0 起在注册成功前保留待用私钥，重试时自动沿用。
+
+节点报告主机的 machine-id 摘要；新注册的节点与已有节点在同一台机器上（重装了状态目录，或复制了镜像）时，审计 `node.enroll` 记下 `sameMachineAs`，控制台日志给出警告。这只是提示，不会合并节点。
+
+## 退役节点
+
+不登录主机就让节点停止服务（edgeweir-node 1.7.0 起，能力 `decommission-v1`）：在 **集群与节点** 的节点菜单或节点详情点击 **退役** 并确认。节点收到任务后停止 OpenResty，删除身份、最后可用配置与缓存，留下标记使服务（重启主机后也）不再提供服务，直到重新注册；控制台随后吊销其证书并删除节点（审计 `node.delete`，`decommissioned: true`）。
+
+- 节点离线时请求保留，上线后执行；完成前可以 **撤回**。
+- 节点报告失败时请求清除，详情显示「上次退役失败」与原因，可以再次退役。
+- 软件包仍留在主机上，卸载需要 root：`apt-get remove edgeweir-node edgeweir-openresty edgeweir-openresty-modsecurity`（rpm 用 `dnf remove`）。
+- 没有该能力的节点不显示 **退役**，用 **删除** 并在主机上停止服务。
 
 安装结果：
 
