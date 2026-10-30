@@ -1,6 +1,6 @@
 # Adding nodes
 
-Generate an install command for a cluster, then install and enroll an edge node on a Linux host; node ports and firewall; run regional probes.
+Have the console install an edge node over SSH, or generate an install command and install and enroll the node on a Linux host; node ports and firewall; run regional probes.
 
 ## Requirements
 
@@ -23,7 +23,7 @@ Both packages come as deb and rpm only (amd64, arm64). The openresty.org reposit
 
 ## 1. Generate the install command
 
-1. Open **Clusters & nodes**, select a cluster, and click **Add node**. The dialog shows the **Install command** at once: the cluster's default node group, valid for 1 hour, no node name.
+1. Open **Clusters & nodes**, select a cluster, click **Add node** and switch to **Manual command** (the default tab is [SSH install](#ssh-install)). The dialog shows the **Install command** at once: the cluster's default node group, valid for 1 hour, no node name.
 2. For a node name, another node group, or another lifetime, open **Options**: fill in **Node name**, choose a **Node group** (shown when the cluster has several) and **Valid for** (15 minutes, 1 hour, or 24 hours), and click **Regenerate**.
 3. Copy the **Install command**. Below it are the time left, **Shown once**, address warnings, and the [node channel connection check](#node-channel-connection-check); once the dialog is closed the command is not shown again, and opening it again generates a new token.
 4. Once the command runs on the node, the dialog's **Progress** refreshes every 3 seconds: waiting for the node (or token expired), enrolled (the node name links to its details), online, configuration applied, data plane healthy, has an address for DNS.
@@ -73,6 +73,54 @@ journalctl -u edgeweir-node -f
 
 Expected: `edgeweir-node.service` is `active (running)`; in **Clusters & nodes** the node is "Online" and **Applied** shows a revision number. After enrolling and before its first connection to the node channel the node shows "Awaiting heartbeat"; online without a configuration yet, **Applied** shows "Awaiting configuration".
 
+## SSH install
+
+Add nodes without signing in to each host: the console connects over SSH once, runs the same `install.sh` as the [install command](#2-run-the-install-command) (same signature checks and options), and disconnects; everything after that still goes through the node channel.
+
+1. The **Add node** dialog opens on **SSH install** (the other tab is **Manual command**; the last choice is remembered).
+2. **One host**: fill in **Host**, **Port** (default 22) and **User** (default root). **Batch**: in **Hosts**, one host per line as `host[:port] [user] [node name]` (IPv6 as `[2001:db8::1]:22`), or CSV `host,port,user,node name` (a header line is allowed, empty fields take the defaults); lines starting with `#` are ignored. Up to 200 hosts at once share one credential; a user on a line wins.
+3. **Authentication**: **Password**, or **Private key** (OpenSSH, PEM or PPK; with its **Passphrase** when encrypted). For a user other than root: a **sudo password** uses `sudo -S`; without one, passwordless sudo is required (`sudo -n`).
+4. **Options**: node name, the expected **Host key fingerprint** (one host), node group, **Version** (default latest), **Package format**, **Download mirror**, **Mirror only**, **Install ModSecurity**, **Concurrency** (batch, default 5, at most 20), **Timeout per host** (default 15 minutes, 1–60).
+5. Click **Read host keys**: the console completes the SSH handshake only, reads the host key and disconnects without signing in. Compare each `SHA256:…` fingerprint with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the host; a host whose key differs from the fingerprint entered is marked and not installed.
+6. Click **Install on N**: each host shows queued, connecting, installing, enrolled or why it failed; click a host for the last lines of its output. A single host shows the same **Progress** as the manual command once enrolled. **Stop**, **Retry** failed hosts (with the credential still in the form) and **Copy results** (tab-separated: host, port, user, state, reason, node id).
+
+| Item | Behavior |
+| --- | --- |
+| Host keys | Negotiated in ssh2's order (ssh-ed25519 first). The install accepts only the confirmed fingerprint; any other key ends the connection before signing in (`host_key_mismatch`), and no credential is sent |
+| Enrollment token | One single-use token per host and attempt (valid for the host timeout plus 5 minutes), expired at once after a failure, a stop or a timeout |
+| On the host | The login shell runs a fixed `sh` script: the token is the first line of stdin, the sudo password the second; `install.sh` is downloaded as the user into a `mktemp -d` directory, then runs as root with stdin from `/dev/null`, and the directory is removed. Command lines, environments and sudo logs carry only URLs and options |
+| Credentials | Held in the console's process memory for that install only and dropped when it ends (every host done or stopped); the console never stores SSH credentials and never writes them to the database, logs, job queue, audit log or error messages. A retry needs the credential again |
+| Output | At most the last 64 lines and 16 KiB per host, with passwords, passphrases, tokens and private key blocks removed |
+| Run state | In the console's process memory only: kept 1 hour after the run ends, lost when the console restarts (the dialog says so; check the node list). At most 4 runs at once |
+| Outbound policy | A host is resolved once and connected by that address; special-purpose addresses (private, loopback …) need `EDGEWEIR_OUTBOUND_ALLOW_CIDRS`, otherwise "The outbound policy does not allow this address" |
+| Audit | `ssh_install.start` (cluster, run id, host count), one `ssh_install.host` per host (host, port, user, host key fingerprint, outcome, node id, token id), `ssh_install.cancel` |
+| Network | The console must reach the hosts' SSH port; the hosts must reach the console URL (`install.sh`) and the node channel URL, as with the manual command |
+
+Reasons:
+
+| Reason | Meaning |
+| --- | --- |
+| Host key mismatch | The host presented a key other than the confirmed one: an interception, or the host was reinstalled |
+| Unreachable / Timed out | Address, port or firewall; or the host timeout ran out |
+| Authentication failed | Wrong user, password or key |
+| sudo needs a password / Wrong sudo password / No sudo rights | sudo of a user other than root |
+| sudo requires a terminal (requiretty) | sudoers sets `requiretty`, which SSH install does not support: use the manual command, or drop the setting |
+| Could not download install.sh | The host cannot reach the console URL |
+| install.sh failed | See the host's output |
+| Not enrolled (already enrolled?) | `install.sh` ended without using the token, usually because the host is already enrolled (to enroll again, run the manual command with `--force`) |
+
+API (`/api/v1`, an AccessKey with write scope; service accounts cannot call it; read-only AccessKeys can only read):
+
+| Request | Notes |
+| --- | --- |
+| `POST /ssh-installs/host-keys` | `{ hosts: [{ host, port }] }`; returns each host's `algorithm`, `fingerprint` or `error` (`unreachable`, `timeout`, `not_ssh`, `outbound_refused`) |
+| `POST /ssh-installs` | `{ clusterId, nodeGroupId?, credential: { username, password?, privateKey?, passphrase?, sudoPassword? }, hosts: [{ host, port, username?, nodeName?, hostKeyFingerprint }], options: { version, format, mirror, mirrorOnly, modsecurity, noStart }, concurrency, timeoutMinutes }`; returns the run |
+| `GET /ssh-installs/{id}` | The run and each host's `state`, `error`, `exitCode`, `tokenId`, `nodeId`, `output`; 404 `SSH_INSTALL_NOT_FOUND` once it expired or the console restarted |
+| `POST /ssh-installs/{id}/cancel` | Stops the run |
+| `POST /ssh-installs/{id}/retry` | `{ credential, hosts?: [{ id, hostKeyFingerprint? }] }`; by default every failed or stopped host; 409 `SSH_INSTALL_BUSY` while the run is going |
+
+`POST /ssh-installs` and `/retry` refuse an `Idempotency-Key` (the body carries credentials; see [API and endpoints](../reference/api.en.md)).
+
 ## install.sh flow
 
 | Step | Behavior | On failure |
@@ -94,7 +142,7 @@ Expected: `edgeweir-node.service` is `active (running)`; in **Clusters & nodes**
 - An enrolled host can run the same command again: nothing is downloaded or reinstalled, the service is started (restarted when running) and health-checked; with `--version <version>` that version is installed first. Without `/usr/bin/edgeweir-node` on the host, the latest version is installed.
 - To enroll again (for example after the certificate expired): generate a new install command in the console and run it with `--force` appended; then delete the old node in the console.
 - When the node channel URL changes, nodes from v1.2.0 follow it on their own; a node that lost the console because the old address went down first runs `sudo edgeweir-node set-server --server <new URL>` instead of enrolling again, see [Changing the node channel URL](networking.en.md#changing-the-node-channel-url).
-- The console never stores SSH credentials; the node private key never leaves the node.
+- The console never stores SSH credentials ([SSH install](#ssh-install) uses them in memory for that install only); the node private key never leaves the node.
 
 Installed files:
 

@@ -292,7 +292,7 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 
 安装命令与 `install.sh` 的校验见 [接入节点](docs/deploy/nodes.md)。
 
-控制台绝不保存 SSH 凭据；节点只经控制台生成的一次性安装命令接入，由节点主动注册。
+控制台绝不保存 SSH 凭据；节点只经控制台生成的一次性安装命令接入，由节点主动注册。SSH 安装（`sshInstalls.*`）由控制台登录主机一次、运行同一个命令：凭据与任务状态只在进程内存里，主机密钥须经确认（见 [接入节点](docs/deploy/nodes.md#ssh-安装)）。
 
 除 `Enroll`、`EnrollProbe` 外的 RPC 都要求经内部 CA 校验的客户端证书，且序列号等于库中记录的当前序列号：证书轮换后旧证书立即失效，删除节点或探针时序列号写入 `node_certificate_revocation`。停用或删除的节点每次 RPC 都被拒绝，打开的 `WatchConfig` 流随之关闭；停用的探针只能续期证书。
 
