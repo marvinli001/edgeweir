@@ -1730,7 +1730,8 @@ read -r C R B <<<"$(dm_get /dm/object)"
 read -r C R B <<<"$(dm_get /dm/new)"
 [[ "$C" == MISS ]] || fail "/dm/new was not stored while on, so it should MISS now: $C $R $B"
 [[ "$(api GET "/audit-logs?action=site.development_mode_off" | jq -r --arg id "$DM_SITE" \
-  '[.items[] | select(.targetId == $id)][0].actorType')" == user ]] || fail "turning it off is not audited as the operator"
+  '[.items[] | select(.targetId == $id)][0] | "\(.actorType)|\(.actorName)"')" == "api_key|E2E Admin" ]] ||
+  fail "turning it off is not audited as the operator (their API key)"
 pass "off: /dm/object HIT with the kept body from $B1, /dm/new MISS (nothing stored while on), audited"
 
 step "expiry with the console paused: the node resumes caching at the deadline on its own"
