@@ -61,6 +61,14 @@ import {
 } from "../../services/sites";
 import { statsDimensions } from "../../services/stats-dimensions";
 import {
+  getSiteTieredCache,
+  getTieredCache,
+  tierSelection,
+  tierStats,
+  updateSiteTieredCache,
+  updateTieredCache,
+} from "../../services/tiered-cache";
+import {
   deleteUsageGuard,
   getUsageGuard,
   restoreUsageGuard,
@@ -147,6 +155,26 @@ export const sitesRouter = {
     savings: authed.imageConvert.savings.handler(({ input, context }) =>
       imageSavings(context.app.db, input),
     ),
+  },
+  tieredCache: {
+    get: authed.tieredCache.get.handler(({ context }) => getTieredCache(context.app.db)),
+    update: authed.tieredCache.update.handler(({ input, context }) =>
+      updateTieredCache(context.app.db, input, context.actor),
+    ),
+    site: {
+      get: authed.tieredCache.site.get.handler(({ input, context }) =>
+        getSiteTieredCache(context.app.db, input.id),
+      ),
+      update: authed.tieredCache.site.update.handler(({ input, context }) =>
+        updateSiteTieredCache(context.app.db, input, { actor: context.actor }),
+      ),
+      selection: authed.tieredCache.site.selection.handler(({ input, context }) =>
+        tierSelection(context.app.db, input.id),
+      ),
+      stats: authed.tieredCache.site.stats.handler(({ input, context }) =>
+        tierStats(context.app.db, input),
+      ),
+    },
   },
   accessControl: {
     get: authed.accessControl.get.handler(({ input, context }) =>

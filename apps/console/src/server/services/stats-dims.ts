@@ -9,6 +9,7 @@ import {
   ORIGIN_HEADER_TIME_BUCKETS,
   STATS_HTTP_VERSIONS,
   STATS_TLS_VERSIONS,
+  TIER_STATUSES,
 } from "@edgeweir/contract";
 import { type SQL, sql } from "drizzle-orm";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
@@ -33,6 +34,9 @@ export interface ReportedDimensions {
   challengesPassed?: number;
   /** Each origin's fetches (MinuteStats.origins, origin-stats-v1, ADR-0052). */
   origins?: ReportedOrigin[];
+  /** The tiered cache (MinuteStats.tier_fetches / tier_served, ADR-0073). */
+  tierFetches?: Record<string, number>;
+  tierServed?: Record<string, number>;
 }
 
 /** An origin's minute as nodes report it (OriginCounter). */
@@ -64,6 +68,8 @@ export interface DimensionBucket {
   challenges_passed: number;
   /** `<origin id>:<field>` → count (ORIGIN_STATS_FIELDS), at most MAX_STATS_ORIGINS origins. */
   origin_stats: Record<string, number>;
+  /** `f:<status>` / `v:<status>` → count (TIER_STATUSES). */
+  tier_stats: Record<string, number>;
 }
 
 /** Map columns and how many keys a bucket keeps (null: the key list bounds them). */
@@ -82,6 +88,8 @@ export const DIMENSION_MAPS = [
   ["block_reasons", null],
   // Bounded by originsBounded (MAX_STATS_ORIGINS origins of 18 counters).
   ["origin_stats", null],
+  // Bounded by TIER_STATUSES (two kinds of nine statuses).
+  ["tier_stats", null],
 ] as const satisfies readonly (readonly [keyof DimensionBucket, number | null])[];
 export const DIMENSION_COUNTERS = ["challenges_issued", "challenges_passed"] as const;
 export const DIMENSION_COLUMNS = [
@@ -108,6 +116,8 @@ const cleanAsName = (name: string) =>
     .replace(/\p{Cc}/gu, "")
     .trim()
     .slice(0, 128);
+
+const TIER_STATUS_SET: ReadonlySet<string> = new Set(TIER_STATUSES);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -156,6 +166,7 @@ export function cleanDimensions(input: ReportedDimensions | undefined): Dimensio
     tls_versions: Object.create(null),
     block_reasons: Object.create(null),
     origin_stats: Object.create(null),
+    tier_stats: Object.create(null),
     challenges_issued:
       Number.isSafeInteger(d.challengesIssued) && (d.challengesIssued ?? 0) > 0
         ? (d.challengesIssued as number)
@@ -208,6 +219,12 @@ export function cleanDimensions(input: ReportedDimensions | undefined): Dimensio
     for (const [field, n] of counters)
       if (isCount(n)) add(out.origin_stats, `${o.originId}:${field}`, n);
   }
+  for (const [kind, values] of [
+    ["f", d.tierFetches],
+    ["v", d.tierServed],
+  ] as const)
+    for (const [status, n] of Object.entries(values ?? {}))
+      if (TIER_STATUS_SET.has(status) && isCount(n)) add(out.tier_stats, `${kind}:${status}`, n);
   for (const [column, limit] of DIMENSION_MAPS) out[column] = bounded(out[column], limit);
   out.origin_stats = originsBounded(out.origin_stats);
   out.country_requests = bounded(out.country_requests, MAX_STATS_COUNTRIES);

@@ -50,6 +50,7 @@ import {
 import { compileRules } from "./rules";
 import { compileSite, rulesReadBody } from "./site";
 import { byString, sortedSet } from "./sort";
+import { compileTieredCache } from "./tiers";
 
 const defaultCacheZones: CacheZoneModel[] = [
   {
@@ -141,6 +142,7 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
       ),
     }),
   );
+  const tieredCache = compileTieredCache(input.tieredCache, sites);
   const compiled = create(NodeConfigSchema, {
     revision,
     clusterId: input.clusterId,
@@ -174,6 +176,7 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
     l4Apps: compileL4Apps(input.l4Apps),
     clientAddress: compileClientAddress(input.edge?.clientIp),
     unknownHosts: compileUnknownHosts(input.edge?.unknownHosts, sites),
+    tieredCache,
   });
   compiled.connectionLimits = compileConnectionLimits(
     input.edge?.connectionLimits,
@@ -231,6 +234,7 @@ export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfig
     originCa: target.originCa,
     connectionLimits: target.connectionLimits,
     originCaPrevious: target.originCaPrevious,
+    tieredCache: target.tieredCache,
     upsertedSites: target.sites.filter((s) => baseSites.get(s.id) !== siteBytes(s)),
     removedSiteIds: base.sites
       .filter((s) => !targetIds.has(s.id))
@@ -273,6 +277,7 @@ export function applyNodeConfigDiff(base: NodeConfig, diff: NodeConfigDiff): Nod
       originCa: diff.originCa,
       connectionLimits: diff.connectionLimits,
       originCaPrevious: diff.originCaPrevious,
+      tieredCache: diff.tieredCache,
       sites,
     }),
   );

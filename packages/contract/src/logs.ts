@@ -165,6 +165,8 @@ export const logEntry = z.object({
   headers: z.record(z.string(), z.string()).default({}),
   /** The connection's peer when it differs from clientIp, while the site records it. */
   peerIp: z.string().default(""),
+  /** The upper tier and its cache status ("<node id> HIT") or "origin" for a fetch through the tiered cache; empty otherwise. */
+  tier: z.string().default(""),
 });
 export type LogEntry = z.infer<typeof logEntry>;
 

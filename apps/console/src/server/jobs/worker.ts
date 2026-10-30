@@ -25,6 +25,7 @@ import { SCHEDULING_INTERVAL_MS, schedulingTick } from "../services/scheduling";
 import { pruneSecurityEvents } from "../services/security";
 import { rotateSessionTicketKeys } from "../services/session-ticket-keys";
 import { maintainTraffic } from "../services/stats-rollup";
+import { selectTiers } from "../services/tiered-cache";
 import { expireUpgrades } from "../services/upgrades";
 import { maintainUsage } from "../services/usage";
 import { enforceUsageGuards } from "../services/usage-guard";
@@ -37,6 +38,7 @@ export const QUEUES = {
   recompile: "maintenance.recompile",
   traffic: "traffic.rollup",
   certificates: "certificates.sweep",
+  tiers: "tiers.select",
   checkCertificates: "maintenance.check-certificates",
   linkAcmeAccounts: "maintenance.link-acme-accounts",
   pruneRevisions: "maintenance.prune-revisions",
@@ -59,6 +61,7 @@ const MINUTE_QUEUES = [
   QUEUES.dns,
   QUEUES.traffic,
   QUEUES.certificates,
+  QUEUES.tiers,
 ] as const;
 
 /**
@@ -130,6 +133,12 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
     await sweepCertificates(ctx);
   });
   await boss.schedule(QUEUES.certificates, "* * * * *");
+  // Upper tiers of the tiered cache follow the nodes' latest round trip times.
+  await boss.work(QUEUES.tiers, async () => {
+    const published = await selectTiers(ctx.db);
+    if (published.length) log.info("upper tiers changed", { clusters: published });
+  });
+  await boss.schedule(QUEUES.tiers, "* * * * *");
   await boss.send(QUEUES.certificates, {}, { singletonKey: "certificate-sweep" });
   // Once per start: uploads stored before keys nodes cannot load were refused.
   await boss.work(QUEUES.checkCertificates, async () => {

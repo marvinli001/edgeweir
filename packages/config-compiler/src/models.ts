@@ -1,6 +1,7 @@
 import type { AuthKind as AuthRuleKind } from "@edgeweir/contract";
 import type { CertificateRef, EdgeRule, HttpChallenge, TlsOptions } from "@edgeweir/proto";
 import type { Expression } from "@edgeweir/rule-engine";
+import type { TieredCacheModel } from "./tiers";
 
 /** Matches the node's fixed 256 KiB site partitions (128 MiB at full capacity). */
 export const MAX_SITES_PER_CLUSTER = 512;
@@ -763,6 +764,8 @@ export interface CompileInput {
    * or of its sites): the configuration carries challenge keys.
    */
   greylistChallenges?: boolean;
+  /** Tiered cache (ADR-0073); omitted: every node fetches from the origins. */
+  tieredCache?: TieredCacheModel;
 }
 
 export const DEFAULT_CACHE_ZONE = "default";

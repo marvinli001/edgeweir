@@ -60,6 +60,7 @@ import {
   siteTagsContract,
   siteTagsInput,
 } from "./site-tags";
+import { tieredCacheContract } from "./tiered-cache";
 import { cnamePrefixInput, cnamePrefixState, unknownHostProcedures } from "./unknown-hosts";
 import { usageContract, usageSettings } from "./usage";
 import { usageGuardContract } from "./usage-guard";
@@ -91,6 +92,7 @@ export * from "./s3-presets";
 export * from "./schemas";
 export * from "./site-copy";
 export * from "./site-tags";
+export * from "./tiered-cache";
 export * from "./unknown-hosts";
 export * from "./waf";
 
@@ -152,6 +154,8 @@ export const contract = {
   accessControl: accessControlContract,
   /** A site's WebP / AVIF conversion of cached images and the bytes it saved. */
   imageConvert: imageConvertContract,
+  /** The tiered cache: the console-wide and each site's topology, the upper tiers chosen and their hit ratio. */
+  tieredCache: tieredCacheContract,
   /** What the console knows about an address: lists, bans and client address settings. */
   ipCheck: ipCheckContract,
   certificates: certificatesContract,

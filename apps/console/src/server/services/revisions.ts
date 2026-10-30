@@ -29,6 +29,7 @@ import { loadConfigInput } from "./config-input";
 import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
 import { currentStable } from "./rollback";
 import { ensureSessionTicketKeys } from "./session-ticket-keys";
+import { syncTierSelections } from "./tiered-cache";
 
 export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 export type Executor = Database | Tx;
@@ -237,6 +238,8 @@ export async function publishRevision(
   opts: PublishOptions & { clusterId: string },
 ): Promise<{ row: RevisionRow; created: boolean }> {
   await lockClusterPublish(tx, opts.clusterId);
+  // Upper tiers are chosen again with every revision of the cluster (ADR-0073).
+  await syncTierSelections(tx, opts.clusterId);
   const input = await loadConfigInput(tx, opts.clusterId, { site: opts.site });
   // A cluster gets its challenge keys the first time its configuration uses
   // challenges or session affinity.

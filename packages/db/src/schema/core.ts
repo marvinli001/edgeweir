@@ -415,6 +415,11 @@ export const site = pgTable(
     accessControlUpdatedAt: timestamp("access_control_updated_at", { withTimezone: true }),
     /** Charset of text responses (contract `charsetSettings`); `{}` means off. */
     charset: jsonb("charset").$type<Record<string, unknown>>().notNull().default({}),
+    /**
+     * The site's tiered cache (contract `siteTieredCache`, ADR-0073); null
+     * follows the console-wide setting (system_setting tiered_cache).
+     */
+    tieredCache: jsonb("tiered_cache").$type<Record<string, unknown>>(),
     /** Largest request body by Content-Length in bytes; 0 means no limit. */
     requestBodyLimit: bigint("request_body_limit", { mode: "number" })
       .notNull()
@@ -1115,3 +1120,46 @@ export const cacheTaskNode = pgTable(
       .where(sql`${t.recoveredAt} is null and ${t.state} in ('failed', 'skipped')`),
   ],
 );
+
+/**
+ * Round trip times from nodes to the tiered cache's latency targets (an
+ * origin address and port, `target_id` its hash; ReportStatusRequest
+ * .tier_latencies, ADR-0073): the latest measurement per node and target.
+ */
+export const tierLatency = pgTable(
+  "tier_latency",
+  {
+    nodeId: uuid("node_id")
+      .notNull()
+      .references(() => node.id, { onDelete: "cascade" }),
+    targetId: text("target_id").notNull(),
+    /** 0 when no attempt connected. */
+    rttMs: integer("rtt_ms").notNull(),
+    ok: boolean("ok").notNull(),
+    measuredAt: timestamp("measured_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.nodeId, t.targetId] })],
+);
+
+/** One node's upper tiers in a site's tiered cache plan, and why (ADR-0073). */
+export interface TierHopData {
+  nodeId: string;
+  uppers: { nodeId: string; reason: string; rttMs: number | null }[];
+}
+
+/**
+ * The tiered cache's current choice of upper tiers per site: compiled into
+ * NodeConfig.tiered_cache. Kept until a better choice clears the hysteresis
+ * (services/tiered-cache), so plans do not flap with every measurement.
+ */
+export const tierSelection = pgTable("tier_selection", {
+  siteId: uuid("site_id")
+    .primaryKey()
+    .references(() => site.id, { onDelete: "cascade" }),
+  /** off | smart | generic | regional | custom, as effective when chosen. */
+  topology: text("topology").notNull(),
+  hops: jsonb("hops").$type<TierHopData[]>().notNull().default([]),
+  /** The latency target the choice is for; "" for topologies without one. */
+  targetId: text("target_id").notNull().default(""),
+  chosenAt: timestamp("chosen_at", { withTimezone: true }).notNull().defaultNow(),
+});

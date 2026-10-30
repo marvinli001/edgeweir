@@ -399,6 +399,8 @@ export const revisionReasonDefs = {
   origin_ca_rotation_started: { params: [], en: "Origin CA rotation started" },
   origin_ca_rotation_cancelled: { params: [], en: "Origin CA rotation cancelled" },
   origin_ca_retired: { params: [], en: "previous Origin CA retired" },
+  tiered_cache_updated: { params: [], en: "tiered cache updated" },
+  tier_selection_changed: { params: ["count"], en: "upper tiers of {count} sites changed" },
 } as const satisfies Record<string, { params: readonly string[]; en: string }>;
 
 export type RevisionReasonCode = keyof typeof revisionReasonDefs;

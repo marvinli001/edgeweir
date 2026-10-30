@@ -68,6 +68,8 @@ export const accessLog = pgTable(
     query: text("query").notNull().default(""),
     headers: jsonb("headers").$type<Record<string, string>>().notNull().default({}),
     peerIp: text("peer_ip").notNull().default(""),
+    /** The upper tier and its cache status ("<node id> HIT"), "origin", or empty (ADR-0073). */
+    tier: text("tier").notNull().default(""),
   },
   (t) => [
     primaryKey({ columns: [t.time, t.id] }),
