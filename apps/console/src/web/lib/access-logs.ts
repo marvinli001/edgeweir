@@ -40,6 +40,7 @@ const BLOCK_REASON_LABELS: Record<BlockReason, Label> = {
   websocket_origin: m.block_reason_websocket_origin,
   client_cert: m.block_reason_client_cert,
   maintenance: m.block_reason_maintenance,
+  extension: m.block_reason_extension,
 };
 /** Why a node refused or challenged a request (ADR-0041 §3). */
 export const blockReasonLabel = lookup(BLOCK_REASON_LABELS);

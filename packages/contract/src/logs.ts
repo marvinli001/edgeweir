@@ -23,6 +23,7 @@ export const BLOCK_REASONS = [
   "websocket_origin",
   "client_cert",
   "maintenance",
+  "extension",
 ] as const;
 const blockReason = z.enum(BLOCK_REASONS);
 export type BlockReason = z.infer<typeof blockReason>;

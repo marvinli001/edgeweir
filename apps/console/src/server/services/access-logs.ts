@@ -30,6 +30,8 @@ const DAY = 86400000;
 /** a_b_c: protocol, version, SNI, counts and ALPN, then two truncated SHA-256 hashes. */
 const JA4_RE = /^[a-z][a-z0-9]{2}[di][0-9]{4}[a-zA-Z0-9]{2}_[0-9a-f]{12}_[0-9a-f]{12}$/;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** The block rule id of a node extension's deny verdict ("ext:<id>"). */
+const EXTENSION_RULE_ID = /^ext:[a-z][a-z0-9-]{1,38}[a-z0-9]$/;
 /** CRS rule ids kept per log entry (nodes send at most 16). */
 const MAX_WAF_RULE_IDS = 16;
 /** Log rules that wrote a line whatever the sample rate (waf-v2). */
@@ -251,7 +253,11 @@ export async function ingestLogs(
         tlsVersion: TLS.has(l.tlsVersion) ? l.tlsVersion : "",
         blockReason: REASONS.has(l.blockReason) ? l.blockReason : "",
         blockRuleId:
-          REASONS.has(l.blockReason) && uuid.test(l.blockRuleId) ? l.blockRuleId.toLowerCase() : "",
+          REASONS.has(l.blockReason) && uuid.test(l.blockRuleId)
+            ? l.blockRuleId.toLowerCase()
+            : l.blockReason === "extension" && EXTENSION_RULE_ID.test(l.blockRuleId)
+              ? l.blockRuleId
+              : "",
         query: policy.query ? clean(l.query, 2048) : "",
         headers,
         peerIp: policy.peer && isIP(l.peerIp) && l.peerIp !== l.clientIp ? l.peerIp : "",
