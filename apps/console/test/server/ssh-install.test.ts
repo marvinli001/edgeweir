@@ -14,7 +14,10 @@ import { hostKeyFingerprint } from "../../src/server/lib/ssh";
 import { claimEnrollmentToken } from "../../src/server/services/enrollment";
 import {
   buildRemoteCommand,
+  classifyExit,
   classifyFailure,
+  currentStep,
+  parseResultLine,
   REMOTE_SCRIPT,
   SshInstallRuns,
   scrubOutput,
@@ -547,6 +550,172 @@ describe("SSH install (ADR-0066)", async () => {
     } finally {
       server.close();
     }
+  });
+
+  it("follows install.sh's result lines: its step, the failed step's error, an enrolled host's node", async () => {
+    const line = (fields: Record<string, unknown>) =>
+      `EDGEWEIR_RESULT ${JSON.stringify({ v: 1, ...fields })}\n`;
+    const done = (failedStep: string, exit: number) =>
+      line({ step: "done", status: "failed", failed_step: failedStep, exit });
+    let behaviour = "";
+    let release = () => {};
+    let enrolledId = "";
+    const server = await sshServer({
+      exec: async ({ stdin, write }) => {
+        switch (behaviour) {
+          case "health": {
+            write(line({ step: "check", status: "ok" }) + line({ step: "download", status: "ok" }));
+            await new Promise<void>((r) => {
+              release = r;
+            });
+            await enroll(stdin);
+            write(
+              line({ step: "verify", status: "ok" }) +
+                line({ step: "install", status: "ok" }) +
+                line({ step: "enroll", status: "enrolled", exit: 0 }) +
+                line({ step: "start", status: "ok" }) +
+                "[edgeweir] error: not healthy after 90s\n" +
+                line({ step: "health", status: "failed", exit: 28, message: "not healthy" }) +
+                done("health", 28),
+            );
+            return 28;
+          }
+          case "unreachable":
+            write(line({ step: "check", status: "failed", exit: 22 }) + done("check", 22));
+            return 22;
+          case "rejected":
+            write(
+              line({ step: "enroll", status: "token_rejected", exit: 12, retry: false }) +
+                done("enroll", 26),
+            );
+            return 26;
+          case "busy":
+            write(done("check", 29));
+            return 29;
+          default:
+            // Enrolled before: edgeweir-node 1.7.0 confirms it and names its node.
+            write(
+              line({ step: "check", status: "ok" }) +
+                line({ step: "enroll", status: "already_enrolled", exit: 0, node_id: enrolledId }) +
+                line({ step: "start", status: "ok" }) +
+                line({ step: "health", status: "ok" }) +
+                line({ step: "done", status: "ok", exit: 0 }),
+            );
+            return 0;
+        }
+      },
+    });
+    const install = async () =>
+      (
+        await admin.sshInstalls.start({
+          clusterId,
+          credential: { password: PASSWORD },
+          hosts: [host(server.port)],
+        })
+      ).id;
+    try {
+      behaviour = "health";
+      const id = await install();
+      const running = await until(id, (r) => r.hosts[0]?.step === "verify");
+      expect(running.hosts[0]).toMatchObject({ state: "installing", step: "verify" });
+      // The result lines are not part of the output shown.
+      expect(running.hosts[0]?.output).not.toContain("EDGEWEIR_RESULT");
+      release();
+      const unhealthy = (await ended(id)).hosts[0];
+      // Enrolled but not healthy: failed at that step, with its node.
+      expect(unhealthy).toMatchObject({ state: "failed", error: "health_failed", step: "health" });
+      expect(unhealthy?.nodeId).toEqual(expect.any(String));
+      expect(unhealthy?.output).toBe("[edgeweir] error: not healthy after 90s");
+
+      for (const [b, error, step] of [
+        ["unreachable", "console_unreachable", "check"],
+        ["rejected", "token_rejected", "enroll"],
+        ["busy", "install_busy", "check"],
+      ] as const) {
+        behaviour = b;
+        expect((await ended(await install())).hosts[0], b).toMatchObject({
+          state: "failed",
+          error,
+          step,
+        });
+      }
+
+      // A retry on an enrolled host: its node, the new token unused and ended.
+      behaviour = "already";
+      enrolledId = unhealthy?.nodeId ?? "";
+      const confirmed = (await ended(await install())).hosts[0];
+      expect(confirmed).toMatchObject({ state: "succeeded", nodeId: enrolledId, step: null });
+      const [token] = await ctx.db
+        .select()
+        .from(schema.enrollmentToken)
+        .where(eq(schema.enrollmentToken.id, confirmed?.tokenId ?? ""));
+      expect(token?.usedAt).toBeNull();
+      expect(token?.expiresAt.getTime()).toBeLessThanOrEqual(Date.now());
+      // A node of another cluster, or none of this console.
+      const other = await admin.clusters.create({ name: "ssh-other" });
+      await ctx.db
+        .update(schema.node)
+        .set({ clusterId: other.id })
+        .where(eq(schema.node.id, enrolledId));
+      expect((await ended(await install())).hosts[0]).toMatchObject({
+        state: "failed",
+        error: "enrolled_elsewhere",
+      });
+      enrolledId = "00000000-0000-4000-8000-000000000000";
+      expect((await ended(await install())).hosts[0]).toMatchObject({
+        state: "failed",
+        error: "not_enrolled",
+      });
+    } finally {
+      release();
+      server.close();
+    }
+  });
+
+  it("reads result lines strictly and maps exit codes to errors", () => {
+    expect(parseResultLine('EDGEWEIR_RESULT {"v":1,"step":"enroll","status":"enrolled"}')).toEqual({
+      step: "enroll",
+      status: "enrolled",
+      exit: null,
+      failedStep: null,
+      nodeId: null,
+    });
+    for (const bad of [
+      'EDGEWEIR_RESULT {"v":2,"step":"enroll","status":"enrolled"}',
+      'EDGEWEIR_RESULT {"v":1,"step":"Enroll!","status":"enrolled"}',
+      "EDGEWEIR_RESULT not json",
+      '[edgeweir] EDGEWEIR_RESULT {"v":1,"step":"check","status":"ok"}',
+    ])
+      expect(parseResultLine(bad), bad).toBeNull();
+    // node_id only as a UUID.
+    expect(
+      parseResultLine('EDGEWEIR_RESULT {"v":1,"step":"enroll","status":"x","node_id":"../etc"}')
+        ?.nodeId,
+    ).toBeNull();
+    const r = (step: string, status: string, failedStep: string | null = null) => ({
+      step,
+      status,
+      exit: null,
+      failedStep,
+      nodeId: null,
+    });
+    expect(currentStep([])).toBeNull();
+    expect(currentStep([r("check", "ok"), r("download", "ok")])).toBe("verify");
+    expect(currentStep([r("check", "ok"), r("enroll", "already_enrolled")])).toBe("start");
+    expect(currentStep([r("check", "ok"), r("done", "failed", "download")])).toBe("download");
+    expect(currentStep([r("health", "ok"), r("done", "ok")])).toBeNull();
+    const finished = [r("done", "failed", "x")];
+    expect(classifyExit(21, finished, "")).toBe("system_unsupported");
+    expect(classifyExit(24, finished, "")).toBe("verify_failed");
+    expect(classifyExit(26, [r("enroll", "enrolled_elsewhere"), ...finished], "")).toBe(
+      "enrolled_elsewhere",
+    );
+    expect(classifyExit(26, [r("enroll", "unreachable"), ...finished], "")).toBe(
+      "console_unreachable",
+    );
+    expect(classifyExit(27, finished, "")).toBe("start_failed");
+    // Without install.sh's last line: sudo's (or the shell's) code, read from the text.
+    expect(classifyExit(1, [], "sudo: a password is required")).toBe("sudo_password_required");
   });
 
   it("cancels: running hosts are disconnected, queued ones never start; a host over its timeout fails", async () => {

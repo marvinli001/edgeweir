@@ -79,7 +79,26 @@ const sshErrorText = (error: SshInstallError) =>
     not_enrolled: m.ssh_install_error_not_enrolled,
     connection_lost: m.ssh_install_error_connection_lost,
     console_error: m.ssh_install_error_console_error,
+    system_unsupported: m.ssh_install_error_system_unsupported,
+    console_unreachable: m.ssh_install_error_console_unreachable,
+    verify_failed: m.ssh_install_error_verify_failed,
+    token_rejected: m.ssh_install_error_token_rejected,
+    enrolled_elsewhere: m.ssh_install_error_enrolled_elsewhere,
+    install_busy: m.ssh_install_error_install_busy,
+    start_failed: m.ssh_install_error_start_failed,
+    health_failed: m.ssh_install_error_health_failed,
   })[error]();
+
+const stepText = (step: NonNullable<SshInstallHost["step"]>) =>
+  ({
+    check: m.ssh_step_check,
+    download: m.ssh_step_download,
+    verify: m.ssh_step_verify,
+    install: m.ssh_step_install,
+    enroll: m.ssh_step_enroll,
+    start: m.ssh_step_start,
+    health: m.ssh_step_health,
+  })[step]();
 
 const scanErrorText = (error: NonNullable<HostKeyScan["error"]>) =>
   ({
@@ -712,6 +731,11 @@ function RunView({
                             <span className="flex items-center gap-1.5">
                               <Dot {...HOST_STATE[h.state]} small />
                               {h.error ? sshErrorText(h.error) : stateText(h.state)}
+                              {h.state === "installing" && h.step ? (
+                                <span className="text-muted-foreground" data-testid="ssh-run-step">
+                                  · {stepText(h.step)}
+                                </span>
+                              ) : null}
                             </span>
                           </TableCell>
                           <TableCell>

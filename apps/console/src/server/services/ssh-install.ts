@@ -3,11 +3,13 @@ import {
   type HostKeyScan,
   type retrySshInstallInput,
   SSH_INSTALL_LIMITS,
+  SSH_INSTALL_STEPS,
   type SshCredential,
   type SshInstallError,
   type SshInstallHost,
   type SshInstallOptions,
   type SshInstallRun,
+  type SshInstallStep,
   type startSshInstallInput,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
@@ -79,7 +81,7 @@ interface Secrets {
   sudoPassword?: Buffer;
 }
 
-interface HostState extends Omit<SshInstallHost, "output"> {
+interface HostState extends Omit<SshInstallHost, "output" | "step"> {
   output: OutputTail;
   /** The current attempt's token, kept only while it runs (to scrub the output). */
   token: string | null;
@@ -121,6 +123,126 @@ export function scrubOutput(text: string, secrets: readonly string[]): string {
 }
 
 /**
+ * One EDGEWEIR_RESULT line of install.sh (or edgeweir-node enroll): only the
+ * fields the run reads, each checked, so nothing else of the line is kept.
+ */
+export interface InstallResult {
+  step: string;
+  status: string;
+  exit: number | null;
+  failedStep: string | null;
+  nodeId: string | null;
+}
+
+const RESULT_PREFIX = "EDGEWEIR_RESULT ";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const WORD_RE = /^[a-z_]{1,32}$/;
+
+/** The result a line carries, null for any other line. */
+export function parseResultLine(line: string): InstallResult | null {
+  if (!line.startsWith(RESULT_PREFIX) || line.length > 4096) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(line.slice(RESULT_PREFIX.length));
+  } catch {
+    return null;
+  }
+  if (typeof value !== "object" || value === null) return null;
+  const v = value as Record<string, unknown>;
+  const word = (x: unknown) => (typeof x === "string" && WORD_RE.test(x) ? x : null);
+  const step = word(v.step);
+  const status = word(v.status);
+  if (v.v !== 1 || !step || !status) return null;
+  return {
+    step,
+    status,
+    exit: Number.isInteger(v.exit) ? (v.exit as number) : null,
+    failedStep: word(v.failed_step),
+    nodeId: typeof v.node_id === "string" && UUID_RE.test(v.node_id) ? v.node_id : null,
+  };
+}
+
+/** The node with this id and its cluster, if it still exists. */
+async function nodeCluster(db: Database, id: string) {
+  const [row] = await db
+    .select({ id: schema.node.id, clusterId: schema.node.clusterId })
+    .from(schema.node)
+    .where(eq(schema.node.id, id));
+  return row ?? null;
+}
+
+const isStep = (step: string | null): step is SshInstallStep =>
+  (SSH_INSTALL_STEPS as readonly string[]).includes(step ?? "");
+
+/**
+ * The step a host is in from its results: the one that failed, else the one
+ * after the last that passed (null: none reported yet, or all passed).
+ */
+export function currentStep(results: readonly InstallResult[]): SshInstallStep | null {
+  let next = -1;
+  for (const r of results) {
+    if (r.step === "done") {
+      if (r.status === "failed" && isStep(r.failedStep)) return r.failedStep;
+      if (r.status === "ok") return null;
+      continue;
+    }
+    if (!isStep(r.step)) continue;
+    if (r.status === "failed") return r.step;
+    next = Math.max(next, SSH_INSTALL_STEPS.indexOf(r.step) + 1);
+  }
+  return next < 0 ? null : (SSH_INSTALL_STEPS[next] ?? null);
+}
+
+/** The last enroll result (edgeweir-node's own since 1.7.0, else install.sh's). */
+const enrollResult = (results: readonly InstallResult[]) =>
+  results.findLast((r) => r.step === "enroll");
+
+/**
+ * Why install.sh failed: from its exit code (one per step, since its result
+ * lines) and, for the enroll step, edgeweir-node's status; else from its output.
+ */
+export function classifyExit(
+  exitCode: number,
+  results: readonly InstallResult[],
+  output: string,
+): SshInstallError {
+  // Without install.sh's last line the code is sudo's or the shell's.
+  if (!results.some((r) => r.step === "done")) return classifyFailure(exitCode, output);
+  switch (exitCode) {
+    case 21:
+      return "system_unsupported";
+    case 22:
+      return "console_unreachable";
+    case 23:
+      return "download_failed";
+    case 24:
+      return "verify_failed";
+    case 26:
+      switch (enrollResult(results)?.status) {
+        case "token_rejected":
+          return "token_rejected";
+        case "enrolled_elsewhere":
+          return "enrolled_elsewhere";
+        case "unreachable":
+        case "ca_mismatch":
+          return "console_unreachable";
+        case "busy":
+          return "install_busy";
+        default:
+          return "install_failed";
+      }
+    case 27:
+      return "start_failed";
+    case 28:
+      return "health_failed";
+    case 29:
+      return "install_busy";
+    default:
+      return "install_failed";
+  }
+}
+
+/**
  * The last lines of a host's output. Raw until the attempt ends (scrubbed
  * on every read), then scrubbed once with that attempt's secrets and kept
  * only so. Whole lines are dropped from the front, so a secret is never cut
@@ -130,6 +252,8 @@ class OutputTail {
   private lines: string[] = [];
   private partial = "";
   private sealed = false;
+  /** install.sh's result lines of this attempt (kept out of the output shown). */
+  results: InstallResult[] = [];
 
   push(chunk: Buffer) {
     if (this.sealed) return;
@@ -137,7 +261,12 @@ class OutputTail {
     this.partial = parts.pop() ?? "";
     // A line longer than the whole bound keeps its end.
     if (this.partial.length > SSH_INSTALL_LIMITS.outputBytes) this.partial = "";
-    this.lines.push(...parts.map((line) => line.slice(-SSH_INSTALL_LIMITS.outputBytes)));
+    for (const line of parts) {
+      const result = parseResultLine(line);
+      if (result) {
+        if (this.results.length < 64) this.results.push(result);
+      } else this.lines.push(line.slice(-SSH_INSTALL_LIMITS.outputBytes));
+    }
     this.trim();
   }
 
@@ -168,6 +297,7 @@ class OutputTail {
     this.lines = [];
     this.partial = "";
     this.sealed = false;
+    this.results = [];
   }
 }
 
@@ -569,6 +699,8 @@ export class SshInstallRuns {
       state: "failed",
       error: "console_error",
     };
+    // install.sh named the failed step: a late enrollment does not make it a success.
+    let reported = false;
     try {
       const minted = await createEnrollmentToken(
         ctx.db,
@@ -628,19 +760,31 @@ export class SshInstallRuns {
       }
       if (abort.signal.aborted) throw abort.signal.reason;
       host.exitCode = exitCode;
+      const results = host.output.results;
       if (exitCode === null) {
         outcome = { state: "failed", error: "connection_lost" };
       } else if (exitCode !== 0) {
         outcome = {
           state: "failed",
-          error: classifyFailure(exitCode, host.output.text(secretStrings(secrets, host.token))),
+          error: classifyExit(
+            exitCode,
+            results,
+            host.output.text(secretStrings(secrets, host.token)),
+          ),
         };
+        reported = results.some((r) => r.step === "done");
+        // Enrolled before a later step failed: the node is there (a retry confirms it).
+        host.nodeId = (await enrollmentTokenUse(ctx.db, minted.tokenId)).usedByNodeId;
       } else {
         const use = await enrollmentTokenUse(ctx.db, minted.tokenId);
-        host.nodeId = use.usedByNodeId;
-        outcome = use.usedByNodeId
-          ? { state: "succeeded", error: null }
-          : { state: "failed", error: "not_enrolled" };
+        // An enrolled host (a retry, or one installed before): edgeweir-node 1.7.0
+        // confirmed the identity is this console's and named its node.
+        const known = use.usedByNodeId ?? enrollResult(results)?.nodeId ?? null;
+        const node = known ? await nodeCluster(ctx.db, known) : null;
+        host.nodeId = node?.id ?? null;
+        if (node && node.clusterId === run.clusterId) outcome = { state: "succeeded", error: null };
+        else if (node) outcome = { state: "failed", error: "enrolled_elsewhere" };
+        else outcome = { state: "failed", error: "not_enrolled" };
       }
     } catch (error) {
       if (error === "canceled") outcome = { state: "canceled", error: null };
@@ -664,10 +808,11 @@ export class SshInstallRuns {
       session?.close();
     }
     try {
-      if (outcome.state !== "succeeded" && host.tokenId) {
-        // A late enrollment wins: the node exists, the install worked.
+      if (host.tokenId) {
+        // Unused (an enrolled host confirmed its node, or the attempt failed): ended now.
         const use = await expireUnusedEnrollmentToken(ctx.db, host.tokenId);
-        if (use.usedByNodeId) {
+        // A late enrollment wins (the answer was lost): the node exists, the install worked.
+        if (outcome.state !== "succeeded" && use.usedByNodeId && !reported) {
           host.nodeId = use.usedByNodeId;
           outcome = { state: "succeeded", error: null };
         }
@@ -708,7 +853,11 @@ export class SshInstallRuns {
       if (host.state === "connecting" || host.state === "installing") counts.running++;
       else counts[host.state]++;
       const { output, token, abort: _abort, ownUsername: _own, ...rest } = host;
-      return { ...rest, output: output.text(secretStrings(run.secrets, token)) };
+      return {
+        ...rest,
+        step: host.state === "succeeded" ? null : currentStep(output.results),
+        output: output.text(secretStrings(run.secrets, token)),
+      };
     });
     return {
       id: run.id,

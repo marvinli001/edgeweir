@@ -127,7 +127,7 @@ describe("install.sh", () => {
 
   it("refuses --token on the command line", () => {
     const res = run([...valid, "--token", TOKEN]);
-    expect(res.status).toBe(1);
+    expect(res.status).toBe(20);
     expect(res.stderr).toMatch(/--token is not accepted.*EDGEWEIR_TOKEN/);
     // stderr is not a terminal here (as in an SSH install): plain text, no colour codes.
     expect(res.stderr).toContain("[edgeweir] error: --token is not accepted");
@@ -137,7 +137,7 @@ describe("install.sh", () => {
 
   it("requires the token from EDGEWEIR_TOKEN or --token-file", () => {
     const missing = run(valid);
-    expect(missing.status).toBe(1);
+    expect(missing.status).toBe(20);
     expect(missing.stderr).toContain("no enrollment token");
     expect(run(valid, { EDGEWEIR_TOKEN: "not a token" }).stderr).toContain("malformed");
 
@@ -148,7 +148,7 @@ describe("install.sh", () => {
       run([...valid, "--token-file", file]),
       run(valid, { EDGEWEIR_TOKEN: TOKEN }),
     ]) {
-      expect(res.status).toBe(1);
+      expect(res.status).toBe(21);
       expect(res.stderr).toContain("run as root");
       expect(res.calls).toBe("");
     }
@@ -168,7 +168,7 @@ describe("install.sh", () => {
     ];
     for (const [args, message] of cases) {
       const res = run(args, { EDGEWEIR_TOKEN: TOKEN });
-      expect(res.status, args.join(" ")).toBe(1);
+      expect(res.status, args.join(" ")).toBe(20);
       expect(res.stderr, args.join(" ")).toMatch(message);
       expect(res.calls).toBe("");
     }
@@ -186,7 +186,7 @@ describe("install.sh", () => {
       const res = run([...valid, "--version", version], { EDGEWEIR_TOKEN: TOKEN });
       expect(res.stderr, version).not.toContain("semantic version");
     }
-    expect(run(["--help"]).status).toBe(2);
+    expect(run(["--help"]).status).toBe(0);
   });
 
   it("never adds the openresty.org repositories", () => {
@@ -351,7 +351,7 @@ describe("install.sh", () => {
       // Older C libraries cannot run the packages.
       stub("getconf", 'echo "glibc 2.31"');
       const old = pickFor("deb");
-      expect(old.status).toBe(1);
+      expect(old.status).toBe(21);
       expect(old.stderr).toContain("needs glibc 2.34 or later (this machine has 2.31)");
       // Without the module in the release, only --no-modsecurity goes on.
       stub("getconf", 'echo "glibc 2.34"');
@@ -384,7 +384,7 @@ describe("install.sh", () => {
     try {
       // Past the token, the root check stops the (stubbed) unprivileged run.
       const res = run(valid, {}, enrolled);
-      expect(res.status).toBe(1);
+      expect(res.status).toBe(21);
       expect(res.stderr).not.toContain("no enrollment token");
       expect(res.stderr).toContain("run as root");
       const given = run(valid, { EDGEWEIR_TOKEN: TOKEN }, enrolled);
@@ -446,6 +446,8 @@ describe("install.sh", () => {
       expect(forced.stdout).toContain("enrolled");
       // The running node is stopped first; start_service starts it again.
       expect(forced.calls.trim().split("\n")).toEqual([
+        // Whether it writes its own result line; never with the token.
+        "edgeweir-node enroll -h token=",
         "systemctl stop edgeweir-node.service",
         `edgeweir-node enroll --force --server https://console.example.com:8443 --ca-sha256 ${CA} --state-dir ${state} token=set`,
       ]);
@@ -454,7 +456,7 @@ describe("install.sh", () => {
       // Without --force nothing is enrolled or stopped.
       const kept = steps(valid, { EDGEWEIR_TOKEN: TOKEN });
       expect(kept.status).toBe(0);
-      expect(kept.calls).toBe("");
+      expect(kept.calls).toBe("edgeweir-node enroll -h token=\n");
     } finally {
       rmSync(state, { recursive: true, force: true });
       rmSync(bin, { recursive: true, force: true });
@@ -565,9 +567,9 @@ describe("install.sh", () => {
 
   it("lets apt's _apt user read the downloaded packages", () => {
     const main = script.slice(script.indexOf("main() {"));
-    expect(main).toMatch(
-      /\n {2}WORK="\$\(mktemp -d\)"\n {2}trap 'rm -rf "\$WORK"' EXIT\n(?: {2}#.*\n)* {2}chmod 0755 "\$WORK"\n/,
-    );
+    expect(main).toMatch(/\n {2}WORK="\$\(mktemp -d\)"\n(?: {2}#.*\n)* {2}chmod 0755 "\$WORK"\n/);
+    // Removed on every exit (on_exit), also after a failed step.
+    expect(main).toMatch(/^main\(\) \{\n {2}STEP="args"\n {2}trap on_exit EXIT\n/);
   });
 
   /** sha256sum with its check mode (coreutils; /sbin/sha256sum on macOS). */
@@ -650,6 +652,7 @@ describe("install.sh", () => {
     return {
       input,
       lock: join(root, "install.lock"),
+      state,
       env: {
         PATH: `${bin}${delimiter}${stubs}${delimiter}/usr/bin${delimiter}/bin`,
         HEALTH_FAILURES: "0",
@@ -697,7 +700,7 @@ describe("install.sh", () => {
           env: { ...host.env, EDGEWEIR_TOKEN: TOKEN },
         },
       );
-      expect(res.status).toBe(1);
+      expect(res.status).toBe(29);
       expect(res.stderr).toContain("[edgeweir] error: another install.sh is running on this host");
       expect(readFileSync(calls, "utf8")).not.toContain("curl");
     } finally {
@@ -707,14 +710,24 @@ describe("install.sh", () => {
 
   it("reports the healthcheck once the started node passes it", () => {
     const main = script.slice(script.indexOf("main() {"));
-    expect(main).toMatch(/\n {2}enroll\n {2}start_service\n {2}check_health\n\}/);
+    expect(main).toMatch(
+      /\n {2}enroll\n {2}STEP="start"\n {2}start_service\n {2}STEP="health"\n {2}check_health\n {2}result "done" ok '"exit":0'\n\}/,
+    );
     const host = fakeHost(true);
     try {
       const res = host.install(valid, { HEALTH_FAILURES: "2" });
       expect(res.status, res.stderr).toBe(0);
       // Every 3 seconds until it passes.
       const check = "edgeweir-node healthcheck";
-      expect(res.lines).toEqual([...started, check, "sleep 3", check, "sleep 3", check]);
+      expect(res.lines).toEqual([
+        "edgeweir-node enroll -h",
+        ...started,
+        check,
+        "sleep 3",
+        check,
+        "sleep 3",
+        check,
+      ]);
       expect(res.stderr).toContain(
         "waiting up to 90s for edgeweir-node to apply its configuration",
       );
@@ -731,7 +744,7 @@ describe("install.sh", () => {
         HEALTH_FAILURES: "-1",
         EDGEWEIR_HEALTHCHECK_TIMEOUT: "9",
       });
-      expect(short.status).toBe(1);
+      expect(short.status).toBe(28);
       expect(short.lines.filter((l) => l === "edgeweir-node healthcheck")).toHaveLength(3);
       expect(short.lines.filter((l) => l === "sleep 3")).toHaveLength(2);
       expect(short.stderr).toContain(
@@ -740,10 +753,134 @@ describe("install.sh", () => {
       expect(short.stderr).not.toContain("done:");
       // 90 seconds by default.
       const full = host.install(valid, { HEALTH_FAILURES: "-1" });
-      expect(full.status).toBe(1);
+      expect(full.status).toBe(28);
       expect(full.lines.filter((l) => l === "edgeweir-node healthcheck")).toHaveLength(30);
       expect(full.lines.filter((l) => l === "sleep 3")).toHaveLength(29);
       expect(full.stderr).toContain("not healthy after 90s");
+    } finally {
+      host.remove();
+    }
+  });
+
+  /** The EDGEWEIR_RESULT lines of a run's stdout, parsed. */
+  const results = (stdout: string) =>
+    stdout
+      .split("\n")
+      .filter((l) => l.startsWith("EDGEWEIR_RESULT "))
+      .map((l) => JSON.parse(l.slice("EDGEWEIR_RESULT ".length)) as Record<string, unknown>);
+
+  it.runIf(sha256sum)("writes a result line per step and exits with the failed step's code", () => {
+    const fresh = fakeHost(false);
+    // The node channel check has a test of its own.
+    const host = { ...fresh, input: fresh.input.replace("    check_server\n", "    :\n") };
+    const v030 = [...valid, "--version", "0.3.0"];
+    try {
+      const ok = host.install(v030, { EDGEWEIR_TOKEN: TOKEN }, host.input);
+      expect(ok.status, ok.stderr).toBe(0);
+      expect(results(ok.stdout).map((r) => [r.step, r.status])).toEqual([
+        ["check", "ok"],
+        ["download", "ok"],
+        ["verify", "ok"],
+        ["install", "ok"],
+        // An edgeweir-node before 1.7.0 writes none: install.sh does.
+        ["enroll", "enrolled"],
+        ["start", "ok"],
+        ["health", "ok"],
+        ["done", "ok"],
+      ]);
+      expect(results(ok.stdout).every((r) => r.v === 1)).toBe(true);
+      expect(ok.stdout).not.toContain(TOKEN);
+
+      const unhealthy = host.install(
+        v030,
+        { EDGEWEIR_TOKEN: TOKEN, HEALTH_FAILURES: "-1", EDGEWEIR_HEALTHCHECK_TIMEOUT: "3" },
+        host.input,
+      );
+      expect(unhealthy.status).toBe(28);
+      expect(results(unhealthy.stdout).slice(-2)).toEqual([
+        {
+          v: 1,
+          step: "health",
+          status: "failed",
+          exit: 28,
+          message: expect.stringContaining("not healthy after 3s (unhealthy: data plane"),
+        },
+        { v: 1, step: "done", status: "failed", failed_step: "health", exit: 28 },
+      ]);
+
+      // A command failing under set -e fails its step with the step's code.
+      const broken = host.install(
+        v030,
+        { EDGEWEIR_TOKEN: TOKEN },
+        host.input.replace("apt_install() {\n", "apt_install() {\n  false\n"),
+      );
+      expect(broken.status).toBe(25);
+      expect(results(broken.stdout).slice(-2)).toEqual([
+        { v: 1, step: "install", status: "failed", exit: 25, message: "a command failed (exit 1)" },
+        { v: 1, step: "done", status: "failed", failed_step: "install", exit: 25 },
+      ]);
+      // Options: 20, and --help is no failure.
+      const bad = run([...valid, "--format", "zip"]);
+      expect(bad.status).toBe(20);
+      expect(results(bad.stdout).at(-1)).toEqual({
+        v: 1,
+        step: "done",
+        status: "failed",
+        failed_step: "args",
+        exit: 20,
+      });
+      expect(run(["--help"]).stdout).toBe("");
+    } finally {
+      host.remove();
+    }
+  });
+
+  it("confirms the enrollment of an enrolled host with edgeweir-node 1.7.0 (--if-not-enrolled)", () => {
+    const host = fakeHost(true);
+    // An edgeweir-node that knows --if-not-enrolled and writes its own result line;
+    // ENROLL_EXIT 11: enrolled with another console.
+    writeFileSync(
+      host.node,
+      [
+        "#!/bin/sh",
+        `echo "edgeweir-node $*" >> "${calls}"`,
+        'if [ "$1" = enroll ] && [ "$2" = -h ]; then echo "  --if-not-enrolled  ..."; exit 0; fi',
+        'if [ "$1" = enroll ]; then',
+        '  [ "${ENROLL_EXIT:-0}" = 0 ] && s=already_enrolled || s=enrolled_elsewhere',
+        '  echo "EDGEWEIR_RESULT {\\"v\\":1,\\"step\\":\\"enroll\\",\\"status\\":\\"$s\\",\\"exit\\":${ENROLL_EXIT:-0},\\"node_id\\":\\"n-1\\"}"',
+        '  exit "${ENROLL_EXIT:-0}"',
+        "fi",
+        "exit 0",
+        "",
+      ].join("\n"),
+    );
+    chmodSync(host.node, 0o755);
+    try {
+      const same = host.install(valid);
+      expect(same.status, same.stderr).toBe(0);
+      expect(same.lines.slice(0, 2)).toEqual([
+        "edgeweir-node enroll -h",
+        `edgeweir-node enroll --if-not-enrolled --server https://console.example.com:8443 --ca-sha256 ${CA} --state-dir ${host.state}`,
+      ]);
+      expect(results(same.stdout).map((r) => [r.step, r.status])).toEqual([
+        ["check", "ok"],
+        ["enroll", "already_enrolled"],
+        ["start", "ok"],
+        ["health", "ok"],
+        ["done", "ok"],
+      ]);
+      expect(results(same.stdout)[1]?.node_id).toBe("n-1");
+
+      // Enrolled with another console: not restarted, exit 26, the node's line is the enroll line.
+      const elsewhere = host.install(valid, { ENROLL_EXIT: "11" });
+      expect(elsewhere.status).toBe(26);
+      expect(elsewhere.stderr).toContain("enrolled with another console");
+      expect(elsewhere.lines.some((l) => l.startsWith("systemctl"))).toBe(false);
+      expect(results(elsewhere.stdout).map((r) => [r.step, r.status])).toEqual([
+        ["check", "ok"],
+        ["enroll", "enrolled_elsewhere"],
+        ["done", "failed"],
+      ]);
     } finally {
       host.remove();
     }
@@ -754,7 +891,8 @@ describe("install.sh", () => {
     try {
       const res = host.install([...valid, "--no-start"], { HEALTH_FAILURES: "-1" });
       expect(res.status, res.stderr).toBe(0);
-      expect(res.lines).toEqual([]);
+      // Only whether edgeweir-node can confirm its enrollment (this stub cannot).
+      expect(res.lines).toEqual(["edgeweir-node enroll -h"]);
       expect(res.stderr).toContain("--no-start given, the service was not started");
       expect(res.stderr).not.toContain("waiting up to");
     } finally {
@@ -769,7 +907,11 @@ describe("install.sh", () => {
       const res = host.install(valid, { EDGEWEIR_TOKEN: TOKEN });
       expect(res.status, res.stderr).toBe(0);
       // No download (not even of the latest version), no package, no enrollment.
-      expect(res.lines).toEqual([...started, "edgeweir-node healthcheck"]);
+      expect(res.lines).toEqual([
+        "edgeweir-node enroll -h",
+        ...started,
+        "edgeweir-node healthcheck",
+      ]);
       expect(res.stderr).toContain("the token is not used");
       expect(res.stderr).toContain("already enrolled: nothing is downloaded or reinstalled");
       expect(res.stderr).toContain("done: edgeweir-node is healthy");
@@ -828,6 +970,7 @@ describe("install.sh", () => {
         // The package restarts a running service itself; the identity is kept.
         expect(res.lines).toEqual([
           ...installed,
+          "edgeweir-node enroll -h",
           ...started.filter((l) => !l.includes("try-restart")),
           "edgeweir-node healthcheck",
         ]);
@@ -838,7 +981,7 @@ describe("install.sh", () => {
         // With --no-start the packages are installed, nothing else.
         const quiet = host.install([...valid, "--version", "0.3.0", "--no-start"]);
         expect(quiet.status, quiet.stderr).toBe(0);
-        expect(quiet.lines).toEqual(installed);
+        expect(quiet.lines).toEqual([...installed, "edgeweir-node enroll -h"]);
       } finally {
         host.remove();
       }
@@ -873,7 +1016,7 @@ describe("install.sh", () => {
     // Checked once the version is known, only when enrolling.
     const main = script.slice(script.indexOf("main() {"));
     expect(main).toContain(
-      "resolve_version\n  if enrolling; then\n    check_websocket_version\n  fi",
+      'resolve_version\n  if enrolling; then\n    STEP="check"\n    check_websocket_version\n  fi',
     );
   });
 
@@ -972,7 +1115,7 @@ describe("install.sh", () => {
 
         // Another CA in front (a proxy or CDN terminating TLS) is refused before any download.
         const proxied = await check(server, "b".repeat(64));
-        expect(proxied.status).toBe(1);
+        expect(proxied.status).toBe(22);
         expect(proxied.stderr).toContain("does not present the console's node CA");
         expect(proxied.stderr).toContain("layer-4");
 
@@ -991,7 +1134,7 @@ describe("install.sh", () => {
         });
         link();
         const unreachable = await check(`https://127.0.0.1:${closed}`, pin);
-        expect(unreachable.status).toBe(1);
+        expect(unreachable.status).toBe(22);
         expect(unreachable.stderr).toContain("cannot reach the node channel");
         expect(unreachable.stderr).toContain(`127.0.0.1:${closed}`);
       } finally {
@@ -1040,12 +1183,12 @@ describe("install.sh", () => {
 
         open = false;
         const closed = await check(`ws://127.0.0.1:${port}`);
-        expect(closed.status).toBe(1);
+        expect(closed.status).toBe(22);
         expect(closed.stderr).toContain("WebSocket entry is closed");
 
         await new Promise<void>((resolve) => web.close(() => resolve()));
         const gone = await check(`ws://127.0.0.1:${port}`);
-        expect(gone.status).toBe(1);
+        expect(gone.status).toBe(22);
         expect(gone.stderr).toContain("cannot reach the node channel WebSocket entry");
       } finally {
         web.close();

@@ -1345,6 +1345,13 @@ function sshRunNow() {
       hostKeyFingerprint: h.hostKeyFingerprint,
       state,
       error: state === "failed" ? ("sudo_password_wrong" as const) : null,
+      // While installing, install.sh's step moves with the time.
+      step:
+        state === "installing"
+          ? ((["download", "verify", "install", "enroll"] as const)[
+              Math.min(3, Math.floor(((elapsed - index * 400) % SSH_STEP) / (SSH_STEP / 4)))
+            ] ?? null)
+          : null,
       exitCode: done ? (failed ? 1 : 0) : null,
       presentedFingerprint: null,
       tokenId: phase >= 0 ? id(36, 10 + index) : null,

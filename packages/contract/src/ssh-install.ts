@@ -292,12 +292,45 @@ const SSH_INSTALL_ERRORS = [
   "sudo_not_allowed",
   "download_failed",
   "install_failed",
-  /** install.sh exited 0 without using the token (most often: already enrolled). */
+  /**
+   * install.sh exited 0 without using the token: the host is enrolled but is
+   * no node of this console (deleted here), or its edgeweir-node cannot say.
+   */
   "not_enrolled",
   "connection_lost",
   "console_error",
+  /** install.sh exit 21: architecture, C library or init system unsupported. */
+  "system_unsupported",
+  /** The host cannot reach the node channel, or it is not the pinned CA (a TLS proxy). */
+  "console_unreachable",
+  /** The release's signature or a package's SHA-256 did not verify. */
+  "verify_failed",
+  /** The console refused the token. */
+  "token_rejected",
+  /** Enrolled with another console, or as a node of another cluster of this one. */
+  "enrolled_elsewhere",
+  /** Another install.sh or enrollment was running on the host. */
+  "install_busy",
+  "start_failed",
+  /** Installed and started, but not healthy in time (often: it cannot reach the console). */
+  "health_failed",
 ] as const;
 export type SshInstallError = (typeof SSH_INSTALL_ERRORS)[number];
+
+/**
+ * install.sh's steps (its EDGEWEIR_RESULT lines), in order: the step a host
+ * is in while it installs, the one it failed in.
+ */
+export const SSH_INSTALL_STEPS = [
+  "check",
+  "download",
+  "verify",
+  "install",
+  "enroll",
+  "start",
+  "health",
+] as const;
+export type SshInstallStep = (typeof SSH_INSTALL_STEPS)[number];
 
 const sshInstallHost = z.object({
   /** Stable within the run (its position), used to retry it. */
@@ -309,6 +342,12 @@ const sshInstallHost = z.object({
   hostKeyFingerprint: z.string(),
   state: z.enum(SSH_INSTALL_HOST_STATES),
   error: z.enum(SSH_INSTALL_ERRORS).nullable(),
+  /**
+   * install.sh's step from its result lines: the one running while it
+   * installs, the one that failed; null before install.sh reports one and
+   * after it succeeded.
+   */
+  step: z.enum(SSH_INSTALL_STEPS).nullable(),
   /** install.sh's exit status once it ended. */
   exitCode: z.number().int().nullable(),
   /** The host key presented when it did not match. */
