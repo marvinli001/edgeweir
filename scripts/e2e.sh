@@ -55,6 +55,11 @@
 #   throwing hook fails open or closed (503); the kill switch; off,
 #   uninstalled, and the node deletes the package. Publishes revisions and
 #   reloads nginx, and the kill switch is a platform setting: in the chain.
+#   Version 1.1 (scripts/e2e-extensions-v11.mjs) with the real Precursor and
+#   edge-compute packages when E2E_PRECURSOR_PACKAGE, E2E_EDGE_COMPUTE_PACKAGE
+#   and E2E_EDGE_COMPUTE_BUILD name them (edgeweir-cloud, private): console
+#   secret and its rotation, a sidecar as its own user with per-site data,
+#   the origin socket, fallthrough, fail closed and restarts.
 #   Core gaps P0 (scripts/e2e-p0.mjs): Idempotency-Key, service accounts with
 #   scopes disabling a site, usage and its completeness watermark,
 #   configuration canary with automatic promotion and rollback, DNS mass
@@ -1489,6 +1494,7 @@ pass "Node diagnostics checks passed"
 section_extensions() {
 step "Node extensions: sign, trust, install, load, per-site, failure modes, kill switch, removal"
 part checks node scripts/e2e-extensions.mjs || fail "extensions end-to-end checks failed"
+part checks node scripts/e2e-extensions-v11.mjs || fail "extensions 1.1 end-to-end checks failed"
 pass "Node extension checks passed"
 }
 
