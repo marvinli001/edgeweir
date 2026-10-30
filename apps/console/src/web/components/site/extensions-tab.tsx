@@ -25,8 +25,42 @@ import { LinkButton } from "@/components/link-button";
 import { enterDelay } from "@/components/page";
 import { SwitchField } from "@/components/site/fields";
 import { EmptyState, QueryView } from "@/components/states";
-import { m } from "@/lib/i18n";
+import { formatBytes, formatDateTime, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
+
+/** The site's data items of an extension that takes data (read-only; the API uploads them). */
+function SiteExtensionData({ siteId, id }: { siteId: string; id: string }) {
+  const items = useQuery(orpc.extensions.listSiteData.queryOptions({ input: { siteId, id } }));
+  return (
+    <section className="flex min-w-0 flex-col gap-2" data-testid="site-extension-data">
+      <h3 className="text-sm font-medium">{m.site_extension_data()}</h3>
+      <QueryView
+        query={items}
+        empty={<p className="text-sm text-muted-foreground">{m.site_extension_data_empty()}</p>}
+      >
+        {(list) => (
+          <ul className="divide-y divide-edge rounded-lg text-sm faint-well">
+            {list.map((item) => (
+              <li
+                key={item.name}
+                className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2"
+                data-testid="site-extension-data-item"
+              >
+                <span className="min-w-0 flex-1 truncate font-mono">{item.name}</span>
+                <code className="font-mono text-xs text-muted-foreground" title={item.sha256}>
+                  {item.sha256.slice(0, 12)}…
+                </code>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {formatBytes(item.size)} · {formatDateTime(item.updatedAt)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </QueryView>
+    </section>
+  );
+}
 
 /** One installed extension on the site: on or off here, and the site's configuration. */
 function SiteExtensionCard({
@@ -119,6 +153,11 @@ function SiteExtensionCard({
             </Button>
           </FieldGroup>
         </form>
+        {extension.dataLimits ? (
+          <div className="mt-6">
+            <SiteExtensionData siteId={siteId} id={extension.id} />
+          </div>
+        ) : null}
       </PanelContent>
     </Panel>
   );

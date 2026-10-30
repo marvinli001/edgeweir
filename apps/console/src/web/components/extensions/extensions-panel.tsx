@@ -491,7 +491,16 @@ function VersionRow({
   );
 }
 
+/** The sidecar's state a node reports (version 1.1), if any. */
+function sidecarState(node: NodeExtensionState): string | null {
+  const sidecar = node.details.sidecar;
+  if (typeof sidecar !== "object" || sidecar === null) return null;
+  const state = (sidecar as Record<string, unknown>).state;
+  return typeof state === "string" && state ? state : null;
+}
+
 function NodeRow({ node }: { node: NodeExtensionState }) {
+  const sidecar = sidecarState(node);
   return (
     <li
       className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2"
@@ -505,6 +514,11 @@ function NodeRow({ node }: { node: NodeExtensionState }) {
         <span className="text-xs text-muted-foreground tabular-nums">
           {m.extensions_node_faults({ faults: node.faults, trips: node.trips })}
         </span>
+      ) : null}
+      {sidecar ? (
+        <Badge size="sm" tone="neutral" data-testid="extension-node-sidecar">
+          {m.extensions_node_sidecar({ state: sidecar })}
+        </Badge>
       ) : null}
       <NodeState state={node.state} />
       {node.message ? (
@@ -572,6 +586,10 @@ function DetailBody({ detail, onClose }: { detail: ExtensionDetail; onClose: () 
     ...orpc.extensions.uninstall.mutationOptions(),
     meta: { invalidates: invalidates(), success: m.extensions_uninstalled },
   });
+  const rotate = useMutation({
+    ...orpc.extensions.rotateSecret.mutationOptions(),
+    meta: { invalidates: invalidates(), success: m.extensions_secret_rotated },
+  });
   const name = localizedText(detail.name, detail.id);
   return (
     <div className="flex min-w-0 flex-col gap-6">
@@ -610,6 +628,23 @@ function DetailBody({ detail, onClose }: { detail: ExtensionDetail; onClose: () 
             {detail.sha256.slice(0, 16)}…
           </code>
         </Fact>
+        {detail.manifest.secret ? (
+          <Fact label={m.extensions_secret()}>
+            <span className="tabular-nums" data-testid="extension-secret-version">
+              {m.extensions_secret_version({ version: detail.secretVersion })}
+            </span>
+            <ConfirmDialog
+              trigger={
+                <Button size="sm" variant="secondary" data-testid="extension-secret-rotate">
+                  {m.extensions_secret_rotate()}
+                </Button>
+              }
+              title={m.extensions_secret_rotate_confirm({ name })}
+              confirmLabel={m.extensions_secret_rotate()}
+              onConfirm={() => rotate.mutateAsync({ id: detail.id })}
+            />
+          </Fact>
+        ) : null}
       </Facts>
       <Section title={m.extensions_settings()}>
         <FieldGroup>
