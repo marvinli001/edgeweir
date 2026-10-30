@@ -1,6 +1,6 @@
 # 错误码
 
-API 错误响应格式、通用代码、全部 207 个接口错误码与配置版本原因码。
+API 错误响应格式、通用代码、全部 245 个接口错误码与配置版本原因码。
 
 ## 错误响应
 
@@ -154,6 +154,7 @@ oRPC 与 HTTP 层的代码，不在接口错误码表中。
 | `BAN_PLATFORM_LIMIT` | 409 | `limit` | 手动封禁已达上限（{limit} 条） | 有效的手动封禁达到 `maxTotal` |
 | `BAN_NOT_FOUND` | 404 | — | 封禁不存在或已失效 | 封禁或灰名单条目不存在、已到期或已解除 |
 | `PROTECTION_POW_DIFFICULTY` | 400 | `min` | 高难度计算验证的难度不能低于 {min} | 高难度计算验证的难度低于普通难度 |
+| `CHALLENGE_PROVIDER_SECRET_REQUIRED` | 400 | `fields` | 请填写服务商的密钥：{fields} | 请填写服务商的密钥：{fields} |
 
 ### 证书与 ACME
 
@@ -351,9 +352,66 @@ oRPC 与 HTTP 层的代码，不在接口错误码表中。
 | `L4_TLS_UNSUPPORTED` | 400 | — | TLS 卸载只用于 TCP 应用 | UDP 应用开启 TLS 卸载 |
 | `L4_CERTIFICATE_UNAVAILABLE` | 400 | — | 证书尚未签发或已过期 | 选择的证书尚未签发或已过期 |
 
+### 外部探测源
+
+| 代码 | 状态 | `data` | 文案 | 触发条件 |
+| --- | --- | --- | --- | --- |
+| `PROBE_SOURCE_NOT_FOUND` | 404 | — | 外部探测源不存在 | 外部探测源不存在 |
+| `PROBE_SOURCE_FIELD_INVALID` | 400 | `field` | 请检查字段 {field} | 请检查字段 {field} |
+| `PROBE_SOURCE_POLL_TOO_FAST` | 400 | `min` | 拉取间隔不能少于 {min} 秒 | 拉取间隔不能少于 {min} 秒 |
+| `PROBE_SOURCE_LIMIT` | 409 | `limit` | 最多 {limit} 个外部探测源 | 最多 {limit} 个外部探测源 |
+| `PROBE_SOURCE_UNAVAILABLE` | 502 | `reason` | 服务商接口失败：{reason} | 服务商接口失败：{reason} |
+| `PROBE_SOURCE_WEBHOOK_UNSUPPORTED` | 409 | — | 该服务商不支持此 Webhook 设置 | 该服务商不支持此 Webhook 设置 |
+| `PROBE_SOURCE_MAPPING_INVALID` | 400 | `monitor` | 映射无效：{monitor} | 映射无效：{monitor} |
+
+### 节点退役与 SSH 安装
+
+| 代码 | 状态 | `data` | 文案 | 触发条件 |
+| --- | --- | --- | --- | --- |
+| `NODE_DECOMMISSION_PENDING` | 409 | — | 该节点的退役已在等待执行 | 该节点的退役已在等待执行 |
+| `NODE_DECOMMISSION_DISABLED` | 409 | — | 已停用的节点不接收任务：先启用，或直接删除 | 已停用的节点不接收任务：先启用，或直接删除 |
+| `NODE_DECOMMISSION_NOT_PENDING` | 409 | — | 该节点没有等待中的退役 | 该节点没有等待中的退役 |
+| `SSH_INSTALL_NOT_FOUND` | 404 | — | 安装任务不存在（已过期，或控制台已重启） | 安装任务不存在（已过期，或控制台已重启） |
+| `SSH_INSTALL_TOO_MANY_RUNS` | 409 | `limit` | 最多同时进行 {limit} 个 SSH 安装 | 最多同时进行 {limit} 个 SSH 安装 |
+| `SSH_INSTALL_DUPLICATE_HOST` | 400 | `host` | {host} 重复 | {host} 重复 |
+| `SSH_INSTALL_BUSY` | 409 | — | 任务还在进行，结束后再重试 | 任务还在进行，结束后再重试 |
+| `SSH_INSTALL_NOTHING_TO_RETRY` | 409 | — | 没有可重试的主机 | 没有可重试的主机 |
+| `SSH_PRIVATE_KEY_INVALID` | 400 | — | 无法读取私钥 | 无法读取私钥 |
+| `SSH_PRIVATE_KEY_PASSPHRASE` | 400 | — | 私钥口令缺失或不正确 | 私钥口令缺失或不正确 |
+
+### 分层缓存
+
+| 代码 | 状态 | `data` | 文案 | 触发条件 |
+| --- | --- | --- | --- | --- |
+| `TIER_PORT_IN_USE` | 409 | `port`、`clusters` | 端口 {port} 已被集群 {clusters} 的监听端口或 TCP 应用占用 | 端口 {port} 已被集群 {clusters} 的监听端口或 TCP 应用占用 |
+
+### 节点扩展
+
+| 代码 | 状态 | `data` | 文案 | 触发条件 |
+| --- | --- | --- | --- | --- |
+| `EXTENSION_PACKAGE_INVALID` | 400 | `reason`、`detail` | 扩展包无效（{reason}）：{detail} | 扩展包无效（{reason}）：{detail} |
+| `EXTENSION_SIGNATURE_INVALID` | 400 | `reason` | 扩展包签名无效（{reason}） | 扩展包签名无效（{reason}） |
+| `EXTENSION_KEY_UNTRUSTED` | 400 | `kid` | 扩展包的签名密钥不受信任：{kid} | 扩展包的签名密钥不受信任：{kid} |
+| `EXTENSION_PUBLISHER_MISMATCH` | 400 | `publisher`、`keyPublisher` | 扩展包的发布者是 {publisher}，签名密钥属于 {keyPublisher} | 扩展包的发布者是 {publisher}，签名密钥属于 {keyPublisher} |
+| `EXTENSION_NOT_FOUND` | 404 | — | 扩展不存在 | 扩展不存在 |
+| `EXTENSION_VERSION_NOT_FOUND` | 404 | `version` | 版本 {version} 不存在 | 版本 {version} 不存在 |
+| `EXTENSION_VERSION_ACTIVE` | 409 | `version` | 版本 {version} 正在使用 | 版本 {version} 正在使用 |
+| `EXTENSION_VERSION_EXISTS` | 409 | `version` | 已存有内容不同的版本 {version} | 已存有内容不同的版本 {version} |
+| `EXTENSION_CONFIG_INVALID` | 400 | `scope`、`path`、`issue` | {scope} 配置无效：{path}（{issue}） | {scope} 配置无效：{path}（{issue}） |
+| `EXTENSION_IN_USE` | 409 | `rules` | 规则仍在读取该扩展的字段：{rules} | 规则仍在读取该扩展的字段：{rules} |
+| `EXTENSION_UNSUPPORTED` | 400 | `luaApi` | 扩展需要 Lua API {luaApi}，当前控制台不支持 | 扩展需要 Lua API {luaApi}，当前控制台不支持 |
+| `EXTENSION_KEY_INVALID` | 400 | — | 公钥无效 | 公钥无效 |
+| `EXTENSION_SECRET_NOT_SUPPORTED` | 400 | — | 该扩展没有密钥 | 该扩展没有密钥 |
+| `EXTENSION_DATA_NOT_SUPPORTED` | 400 | — | 该扩展不接受网站数据 | 该扩展不接受网站数据 |
+| `EXTENSION_DATA_TOO_LARGE` | 400 | `limit`、`max` | 超出扩展的数据上限 {limit}（{max}） | 超出扩展的数据上限 {limit}（{max}） |
+| `EXTENSION_DATA_NOT_FOUND` | 404 | — | 数据项不存在 | 数据项不存在 |
+| `EXTENSION_KEY_EXISTS` | 409 | `kid` | 该密钥已受信任：{kid} | 该密钥已受信任：{kid} |
+| `EXTENSION_KEY_NOT_FOUND` | 404 | — | 密钥不存在 | 密钥不存在 |
+| `EXTENSION_KEY_IN_USE` | 409 | `versions` | 已存储的版本由该密钥签名：{versions} | 已存储的版本由该密钥签名：{versions} |
+
 ## 版本原因码
 
-配置版本（`GET /clusters/{id}/revisions`）的发布原因，存为 `reason_code` 与参数。界面显示 `revision_reason_<代码>` 文案；API 另返回英文文本（`reasonText`）。共 49 个。
+配置版本（`GET /clusters/{id}/revisions`）的发布原因，存为 `reason_code` 与参数。界面显示 `revision_reason_<代码>` 文案；API 另返回英文文本（`reasonText`）。共 60 个。
 
 | 代码 | 参数 | 文案 | API 英文文本（`reasonText`） |
 | --- | --- | --- | --- |
@@ -406,3 +464,14 @@ oRPC 与 HTTP 层的代码，不在接口错误码表中。
 | `origin_ca_rotation_started` | — | 开始轮换 Origin CA | Origin CA rotation started |
 | `origin_ca_rotation_cancelled` | — | 取消轮换 Origin CA | Origin CA rotation cancelled |
 | `origin_ca_retired` | — | 退役旧 Origin CA | previous Origin CA retired |
+| `site_ai_crawl_updated` | `site` | 修改网站 {site} 的 AI 爬虫管控 | AI crawl control of {site} updated |
+| `ai_crawl_updated` | — | 修改全局 AI 爬虫管控 | global AI crawl control updated |
+| `development_mode_on` | `site` | {site} 开启开发模式 | development mode of {site} on |
+| `development_mode_off` | `site` | {site} 关闭开发模式 | development mode of {site} off |
+| `development_mode_expired` | `site` | {site} 的开发模式到期 | development mode of {site} ended |
+| `tiered_cache_updated` | — | 更新分层缓存 | tiered cache updated |
+| `tier_selection_changed` | `count` | {count} 个站点的上层节点变更 | upper tiers of {count} sites changed |
+| `extension_updated` | `extension` | 修改扩展 {extension} | extension {extension} updated |
+| `extension_removed` | `extension` | 卸载扩展 {extension} | extension {extension} uninstalled |
+| `site_extension_updated` | `extension`、`site` | 修改网站 {site} 的扩展 {extension} | extension {extension} of {site} updated |
+| `extensions_settings_updated` | — | 修改扩展总开关 | extension kill switch updated |

@@ -715,10 +715,14 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0078_greylist_connection_limits` | `ip_ban.action`, `challenge`, `rate_limit_requests`, `rate_limit_window_seconds` (greylist entries; unique indexes split between bans and greylist entries); `cluster.connection_limits` (kernel connection limits) |
 | `0079_origin_proxy_protocol` | `origin.proxy_protocol_version` (PROXY protocol to the origin: 0 off, 1, 2) |
 | `0080_origin_ca_rotation` | `pki_authority.kind`, `status`, `generation` (CA rotation; `(kind, status)` unique, existing rows take their id as kind); `origin_certificate.authority_id`, `origin_client_certificate.authority_id` (the issuing CA) |
-| `0083_site_development_mode` | `site.development_mode_until` (when development mode ends; null while off) |
-| `0085_markdown_agents` | `site.markdown` (Markdown for Agents); `markdown_responses` in minute, hour and day statistics and the view `traffic_hour_stats` |
-| `0088_tiered_cache` | `site.tiered_cache`; `tier_latency`, `tier_selection`; `access_log.tier`; `tier_stats` in minute, hour and day statistics and the view `traffic_hour_stats` |
 | `0081_node_location` | `node.location` (where the node's public address is, from its own GeoIP data: country, subdivision, City MMDB coordinates) |
+| `0082_node_key_decommission` | `node.key_sha256` (SHA-256 of the certificate key's SPKI, unique; the same key enrolling again gets the same node), `machine_id` (digest of the host's machine-id, a hint only), `decommission_requested_at`, `decommission_task_id`, `decommission_error` (decommission without SSH, ADR-0067) |
+| `0083_site_development_mode` | `site.development_mode_until` (when development mode ends; null while off) |
+| `0084_external_probe_sources` | `external_probe_source`, `external_probe_mapping`, `external_probe_observation` (external probe sources, monitors mapped to nodes, each location's latest result, ADR-0069); `cluster.probe_mode` (a cluster's own decision mode, null follows the global one) |
+| `0085_markdown_agents` | `site.markdown` (Markdown for Agents); `markdown_responses` in minute, hour and day statistics and the view `traffic_hour_stats` |
+| `0086_challenges_v3` | `challenge_provider` (the global and sites' third-party CAPTCHA providers, secrets envelope-encrypted); `site_protection.interactive_provider`; `challenge_outcomes` in minute, hour and day statistics and the view `traffic_hour_stats` |
+| `0087_ai_crawl_control` | `site_ai_crawl` (a site's AI crawler actions, managed robots.txt, pay per crawl, ADR-0070); `access_log.crawler`, `crawler_verification`, `crawler_charged_micros`; `crawler_stats`, `crawler_paths` in minute, hour and day statistics and the view `traffic_hour_stats` |
+| `0088_tiered_cache` | `site.tiered_cache`; `tier_latency`, `tier_selection`; `access_log.tier`; `tier_stats` in minute, hour and day statistics and the view `traffic_hour_stats` |
 | `0089_node_extensions` | `extension_key`, `extension`, `extension_version`, `site_extension` (node extensions); `node.extension_status` (per extension state reported by the node) |
 | `0090_extension_secrets_data` | `extension.secret_envelope`, `extension.secret_version` (console-generated extension secrets); `site_extension_data` (per-site data items of extensions) |
 

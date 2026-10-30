@@ -720,7 +720,10 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0081_node_location` | `node.location`（节点用自己的 GeoIP 库查出的公网地址位置：国家、一级行政区、City MMDB 的经纬度） |
 | `0082_node_key_decommission` | `node.key_sha256`（证书公钥 SPKI 的 SHA-256，唯一；同一密钥再次注册得到同一节点）、`machine_id`（主机 machine-id 摘要，只作提示）、`decommission_requested_at`、`decommission_task_id`、`decommission_error`（无 SSH 退役，ADR-0067） |
 | `0083_site_development_mode` | `site.development_mode_until`（开发模式的截止时间，关闭时为空） |
+| `0084_external_probe_sources` | `external_probe_source`、`external_probe_mapping`、`external_probe_observation`（外部探测源、监控项与节点的映射、各探测点的最近结果，ADR-0069）；`cluster.probe_mode`（集群自己的判定方式，空为跟随全局） |
 | `0085_markdown_agents` | `site.markdown`（面向代理的 Markdown）；分钟、小时、天统计与视图 `traffic_hour_stats` 的 `markdown_responses` |
+| `0086_challenges_v3` | `challenge_provider`（全局与网站的第三方验证码服务商，密钥信封加密）；`site_protection.interactive_provider`；分钟、小时、天统计与视图 `traffic_hour_stats` 的 `challenge_outcomes` |
+| `0087_ai_crawl_control` | `site_ai_crawl`（网站的 AI 爬虫动作、托管 robots.txt、按抓取付费，ADR-0070）；`access_log.crawler`、`crawler_verification`、`crawler_charged_micros`；分钟、小时、天统计与视图 `traffic_hour_stats` 的 `crawler_stats`、`crawler_paths` |
 | `0088_tiered_cache` | `site.tiered_cache`；`tier_latency`、`tier_selection`；`access_log.tier`；分钟、小时、天统计与视图 `traffic_hour_stats` 的 `tier_stats` |
 | `0089_node_extensions` | `extension_key`、`extension`、`extension_version`、`site_extension`（节点扩展）；`node.extension_status`（节点上报的各扩展状态） |
 | `0090_extension_secrets_data` | `extension.secret_envelope`、`extension.secret_version`（控制台生成的扩展密钥）；`site_extension_data`（扩展的网站数据项） |

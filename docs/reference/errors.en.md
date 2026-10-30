@@ -1,6 +1,6 @@
 # Error codes
 
-The API error format, generic codes, all 207 API error codes and the configuration revision reason codes.
+The API error format, generic codes, all 245 API error codes and the configuration revision reason codes.
 
 ## Error response
 
@@ -154,6 +154,7 @@ Defined in `packages/contract/src/errors.ts`; thrown by `fail(code, message, dat
 | `BAN_PLATFORM_LIMIT` | 409 | `limit` | At most {limit} manual bans can be active | Active manual bans reached `maxTotal` |
 | `BAN_NOT_FOUND` | 404 | — | Ban not found or no longer active | The ban or greylist entry does not exist, expired or was lifted |
 | `PROTECTION_POW_DIFFICULTY` | 400 | `min` | The high proof-of-work difficulty must be at least {min} | The high proof-of-work difficulty is below the normal difficulty |
+| `CHALLENGE_PROVIDER_SECRET_REQUIRED` | 400 | `fields` | Enter the provider's secret keys: {fields} | An interactive provider without all of its kind's secret fields (challenge-v3) |
 
 ### Certificates and ACME
 
@@ -351,9 +352,66 @@ Defined in `packages/contract/src/errors.ts`; thrown by `fail(code, message, dat
 | `L4_TLS_UNSUPPORTED` | 400 | — | TLS termination is for TCP apps only | TLS termination on a UDP app |
 | `L4_CERTIFICATE_UNAVAILABLE` | 400 | — | The certificate is not issued yet or has expired | The chosen certificate is not issued yet or has expired |
 
+### External probe sources
+
+| Code | Status | `data` | Message | Condition |
+| --- | --- | --- | --- | --- |
+| `PROBE_SOURCE_NOT_FOUND` | 404 | — | External probe source not found | External probe source not found |
+| `PROBE_SOURCE_FIELD_INVALID` | 400 | `field` | Check the field {field} | A field the provider's catalog entry does not have, misses or rejects |
+| `PROBE_SOURCE_POLL_TOO_FAST` | 400 | `min` | The poll interval must be at least {min} seconds | A poll interval below the provider's minimum (seconds) |
+| `PROBE_SOURCE_LIMIT` | 409 | `limit` | At most {limit} external probe sources | At most {limit} external probe sources |
+| `PROBE_SOURCE_UNAVAILABLE` | 502 | `reason` | The provider's API failed: {reason} | The provider's API failed (reason: auth_failed, rate_limited, unreachable, refused, …) |
+| `PROBE_SOURCE_WEBHOOK_UNSUPPORTED` | 409 | — | This provider does not take that webhook setting | The provider takes no webhook, or its secret is the provider's own (entered, not made) |
+| `PROBE_SOURCE_MAPPING_INVALID` | 400 | `monitor` | Invalid mapping: {monitor} | A mapping names a monitor twice, an unknown node, or an address that is not the node's |
+
+### Node decommission and SSH install
+
+| Code | Status | `data` | Message | Condition |
+| --- | --- | --- | --- | --- |
+| `NODE_DECOMMISSION_PENDING` | 409 | — | A decommission of this node is already waiting | A decommission of the node is already waiting for the node |
+| `NODE_DECOMMISSION_DISABLED` | 409 | — | A disabled node takes no tasks: enable it, or delete it | A disabled node pulls no tasks: enable it, or delete it |
+| `NODE_DECOMMISSION_NOT_PENDING` | 409 | — | No decommission of this node is waiting | No decommission of this node is waiting |
+| `SSH_INSTALL_NOT_FOUND` | 404 | — | Install run not found (expired, or the console restarted) | The SSH install run does not exist: never started, expired, or lost with a console restart |
+| `SSH_INSTALL_TOO_MANY_RUNS` | 409 | `limit` | At most {limit} SSH installs can run at once | Too many SSH install runs have not finished yet |
+| `SSH_INSTALL_DUPLICATE_HOST` | 400 | `host` | {host} is listed twice | The same host and port appear twice in one run |
+| `SSH_INSTALL_BUSY` | 409 | — | The run is still going; retry once it ends | The run is still running: retry once it ended |
+| `SSH_INSTALL_NOTHING_TO_RETRY` | 409 | — | No host to retry | No failed or canceled host to retry |
+| `SSH_PRIVATE_KEY_INVALID` | 400 | — | The private key cannot be read | The private key could not be read (not OpenSSH, PEM or PPK) |
+| `SSH_PRIVATE_KEY_PASSPHRASE` | 400 | — | The private key's passphrase is missing or wrong | The private key is encrypted and the passphrase is missing or wrong |
+
+### Tiered Cache
+
+| Code | Status | `data` | Message | Condition |
+| --- | --- | --- | --- | --- |
+| `TIER_PORT_IN_USE` | 409 | `port`, `clusters` | Port {port} is a listener or TCP application port of {clusters} | The tiered cache's port is a listener or TCP application port of these clusters (first 5 names) |
+
+### Node extensions
+
+| Code | Status | `data` | Message | Condition |
+| --- | --- | --- | --- | --- |
+| `EXTENSION_PACKAGE_INVALID` | 400 | `reason`, `detail` | Invalid extension package ({reason}): {detail} | `reason`: what is wrong with the package (archive, entry, manifest, size, ...), `detail` in English |
+| `EXTENSION_SIGNATURE_INVALID` | 400 | `reason` | Invalid package signature ({reason}) | `reason`: format | header | signature | digest | identity |
+| `EXTENSION_KEY_UNTRUSTED` | 400 | `kid` | The package is signed by an untrusted key: {kid} | The signing key (`kid`) is not in the trust store |
+| `EXTENSION_PUBLISHER_MISMATCH` | 400 | `publisher`, `keyPublisher` | The package names publisher {publisher}, the key belongs to {keyPublisher} | The package's publisher differs from the signing key's |
+| `EXTENSION_NOT_FOUND` | 404 | — | Extension not found | Extension not found |
+| `EXTENSION_VERSION_NOT_FOUND` | 404 | `version` | Version {version} not found | Version {version} not found |
+| `EXTENSION_VERSION_ACTIVE` | 409 | `version` | Version {version} is active | The active version cannot be deleted |
+| `EXTENSION_VERSION_EXISTS` | 409 | `version` | Version {version} is stored with different contents | The version is stored with a different digest |
+| `EXTENSION_CONFIG_INVALID` | 400 | `scope`, `path`, `issue` | Invalid {scope} configuration: {path} ({issue}) | `path` of the first issue and its `issue` code (required, type, enum, min, max, pattern, format, unknown, unique) |
+| `EXTENSION_IN_USE` | 409 | `rules` | Rules read the extension's fields: {rules} | Rules read the extension's fields (first 5 rule names) |
+| `EXTENSION_UNSUPPORTED` | 400 | `luaApi` | The extension needs Lua API {luaApi}, which this console does not support | The extension's version needs a Lua API this console does not deliver |
+| `EXTENSION_KEY_INVALID` | 400 | — | Invalid public key | Invalid public key |
+| `EXTENSION_SECRET_NOT_SUPPORTED` | 400 | — | The extension has no secret | The active version's manifest has no `secret: true` |
+| `EXTENSION_DATA_NOT_SUPPORTED` | 400 | — | The extension takes no site data | The active version's manifest has no `data` |
+| `EXTENSION_DATA_TOO_LARGE` | 400 | `limit`, `max` | Over the extension's data limit {limit} ({max}) | A data item over the manifest's `data` limits: `limit` max_bytes | max_items | max_total_bytes, `max` its value |
+| `EXTENSION_DATA_NOT_FOUND` | 404 | — | Data item not found | Data item not found |
+| `EXTENSION_KEY_EXISTS` | 409 | `kid` | The key is already trusted: {kid} | The key is already trusted: {kid} |
+| `EXTENSION_KEY_NOT_FOUND` | 404 | — | Key not found | Key not found |
+| `EXTENSION_KEY_IN_USE` | 409 | `versions` | Stored versions are signed by the key: {versions} | Stored versions are signed by the key |
+
 ## Revision reason codes
 
-Why a configuration revision (`GET /clusters/{id}/revisions`) was published, stored as `reason_code` with parameters. The console shows the `revision_reason_<code>` message; the API also returns the English text (`reasonText`). 49 codes.
+Why a configuration revision (`GET /clusters/{id}/revisions`) was published, stored as `reason_code` with parameters. The console shows the `revision_reason_<code>` message; the API also returns the English text (`reasonText`). 60 codes.
 
 | Code | Parameters | Message | API text (`reasonText`) |
 | --- | --- | --- | --- |
@@ -406,3 +464,14 @@ Why a configuration revision (`GET /clusters/{id}/revisions`) was published, sto
 | `origin_ca_rotation_started` | — | Origin CA rotation started | Origin CA rotation started |
 | `origin_ca_rotation_cancelled` | — | Origin CA rotation cancelled | Origin CA rotation cancelled |
 | `origin_ca_retired` | — | Previous Origin CA retired | previous Origin CA retired |
+| `site_ai_crawl_updated` | `site` | AI crawl control of {site} updated | AI crawl control of {site} updated |
+| `ai_crawl_updated` | — | Global AI crawl control updated | global AI crawl control updated |
+| `development_mode_on` | `site` | Development mode of {site} turned on | development mode of {site} on |
+| `development_mode_off` | `site` | Development mode of {site} turned off | development mode of {site} off |
+| `development_mode_expired` | `site` | Development mode of {site} ended | development mode of {site} ended |
+| `tiered_cache_updated` | — | Tiered Cache updated | tiered cache updated |
+| `tier_selection_changed` | `count` | Upper tiers of {count} site changed | upper tiers of {count} sites changed |
+| `extension_updated` | `extension` | Extension {extension} updated | extension {extension} updated |
+| `extension_removed` | `extension` | Extension {extension} uninstalled | extension {extension} uninstalled |
+| `site_extension_updated` | `extension`, `site` | Extension {extension} of {site} updated | extension {extension} of {site} updated |
+| `extensions_settings_updated` | — | Extension kill switch updated | extension kill switch updated |
