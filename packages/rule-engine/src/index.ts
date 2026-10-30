@@ -68,8 +68,6 @@ export {
   botFields,
   COOKIE_FIELD,
   COOKIE_NAME_RE,
-  EXTENSION_FIELD_PREFIX,
-  extensionFieldType,
   fields,
   isRulesV3Field,
   needsBotFields,

@@ -13,7 +13,7 @@ export const EXTENSIONS_FEATURE = "extensions-v1";
 /** Nodes that run Lua API 2 packages (extension version 1.1). */
 export const EXTENSIONS_V2_FEATURE = "extensions-v2";
 /** Lua API versions this console can deliver. */
-export const EXTENSION_LUA_APIS = [1, 2] as const;
+const EXTENSION_LUA_APIS = [1, 2] as const;
 /** Declared names per Lua API: log fields and counters. */
 const API_LIMITS = {
   1: { logFields: 8, counters: 8 },
@@ -29,7 +29,7 @@ export const EXTENSION_LIMITS = {
   pathBytes: 200,
 } as const;
 
-export const EXTENSION_ID_RE = /^[a-z][a-z0-9-]{1,38}[a-z0-9]$/;
+const EXTENSION_ID_RE = /^[a-z][a-z0-9-]{1,38}[a-z0-9]$/;
 const RESERVED_IDS = new Set([
   "edgeweir",
   "core",
@@ -47,7 +47,7 @@ const NAME_RE = /^[a-z][a-z0-9_]{0,31}$/;
 const SHORT_NAME_RE = /^[a-z][a-z0-9_]{0,15}$/;
 const ENDPOINT_PATH_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 
-export const EXTENSION_HOOKS = [
+const EXTENSION_HOOKS = [
   "init",
   "access",
   "access_late",
@@ -56,7 +56,7 @@ export const EXTENSION_HOOKS = [
   "log",
   "endpoint",
 ] as const;
-export const EXTENSION_CAPABILITIES = [
+const EXTENSION_CAPABILITIES = [
   "verdicts",
   "request_headers",
   "request_body",
@@ -66,8 +66,8 @@ export const EXTENSION_CAPABILITIES = [
   "http_client",
   "timers",
 ] as const;
-export type ExtensionCapability = (typeof EXTENSION_CAPABILITIES)[number];
-export const EXTENSION_ENDPOINT_METHODS = [
+type ExtensionCapability = (typeof EXTENSION_CAPABILITIES)[number];
+const EXTENSION_ENDPOINT_METHODS = [
   "GET",
   "HEAD",
   "POST",
@@ -75,8 +75,8 @@ export const EXTENSION_ENDPOINT_METHODS = [
   "DELETE",
   "OPTIONS",
 ] as const;
-export const EXTENSION_FIELD_TYPES = ["string", "number", "boolean"] as const;
-export type ExtensionFieldType = (typeof EXTENSION_FIELD_TYPES)[number];
+const EXTENSION_FIELD_TYPES = ["string", "number", "boolean"] as const;
+type ExtensionFieldType = (typeof EXTENSION_FIELD_TYPES)[number];
 
 // ---------------------------------------------------------------------------
 // Semantic versions and ranges
@@ -88,7 +88,7 @@ export interface SemVer {
   pre: string[];
 }
 
-export function parseSemver(value: string): SemVer | null {
+function parseSemver(value: string): SemVer | null {
   const match = SEMVER_RE.exec(value);
   if (!match) return null;
   return {
@@ -100,7 +100,7 @@ export function parseSemver(value: string): SemVer | null {
 }
 
 /** Semantic Versioning 2.0.0 precedence: negative, zero or positive. */
-export function compareSemver(a: SemVer, b: SemVer): number {
+function compareSemver(a: SemVer, b: SemVer): number {
   for (const key of ["major", "minor", "patch"] as const) {
     if (a[key] !== b[key]) return a[key] - b[key];
   }
@@ -121,7 +121,7 @@ export function compareSemver(a: SemVer, b: SemVer): number {
 const COMPARATOR_RE = /^(>=|<=|>|<|=)?(\S+)$/;
 
 /** Parses "op version" comparators separated by spaces; null when malformed. */
-export function parseSemverRange(range: string): { op: string; version: SemVer }[] | null {
+function parseSemverRange(range: string): { op: string; version: SemVer }[] | null {
   const parts = range.trim().split(/\s+/);
   if (parts.length === 0 || parts.length > 4 || parts[0] === "") return null;
   const out: { op: string; version: SemVer }[] = [];
@@ -135,7 +135,7 @@ export function parseSemverRange(range: string): { op: string; version: SemVer }
 }
 
 /** Whether `version` ("v" prefix allowed) satisfies the range; an unparsable version does not. */
-export function satisfiesSemverRange(version: string, range: string): boolean {
+function satisfiesSemverRange(version: string, range: string): boolean {
   const parsed = parseSemver(version.replace(/^v/, ""));
   const comparators = parseSemverRange(range);
   if (!parsed || !comparators) return false;
@@ -222,7 +222,7 @@ const arrayProperty = z.strictObject({
   maxItems: z.number().int().min(0).max(256).optional(),
   uniqueItems: z.boolean().optional(),
 });
-export const extensionConfigProperty = z.union([
+const extensionConfigProperty = z.union([
   stringProperty,
   numberProperty,
   booleanProperty,
@@ -230,7 +230,7 @@ export const extensionConfigProperty = z.union([
 ]);
 export type ExtensionConfigProperty = z.infer<typeof extensionConfigProperty>;
 
-export const extensionConfigSchema = z
+const extensionConfigSchema = z
   .strictObject({
     $schema: z.string().optional(),
     type: z.literal("object"),
@@ -513,7 +513,7 @@ export type ExtensionManifest = z.infer<typeof extensionManifest>;
 
 const extensionId = z.string().regex(EXTENSION_ID_RE);
 const version = z.string().regex(SEMVER_RE);
-export const extensionFailureMode = z.enum(["open", "closed"]);
+const extensionFailureMode = z.enum(["open", "closed"]);
 const configObject = z.record(z.string(), z.unknown());
 
 const packageInput = z.object({
@@ -706,4 +706,4 @@ export type SiteExtensionView = z.infer<typeof siteExtensionView>;
 export type NodeExtensionState = z.infer<typeof nodeExtensionState>;
 
 /** Rule field of an extension: `ext.<id>.<name>`. */
-export const EXTENSION_FIELD_RE = /^ext\.([a-z][a-z0-9-]{1,38}[a-z0-9])\.([a-z][a-z0-9_]{0,31})$/;
+const EXTENSION_FIELD_RE = /^ext\.([a-z][a-z0-9-]{1,38}[a-z0-9])\.([a-z][a-z0-9_]{0,31})$/;

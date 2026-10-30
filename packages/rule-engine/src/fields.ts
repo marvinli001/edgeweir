@@ -155,7 +155,7 @@ export const botFields: ReadonlySet<string> = new Set([
  * installed extensions; an unregistered `ext.` field is unknown.
  */
 const extensionFields = new Map<string, ValueType>();
-export const EXTENSION_FIELD_PREFIX = "ext.";
+const EXTENSION_FIELD_PREFIX = "ext.";
 /** Replaces the registered extension fields. */
 export function registerExtensionFields(entries: Iterable<[string, ValueType]>): void {
   extensionFields.clear();

@@ -151,7 +151,7 @@ export function readArchive(archive: Uint8Array): PackageFile[] {
 }
 
 /** Validates the files of a package and returns its manifest. */
-export function readManifest(files: PackageFile[]): ExtensionManifest {
+function readManifest(files: PackageFile[]): ExtensionManifest {
   const file = files.find((f) => f.path === "manifest.json");
   if (!file) return invalid("manifest", "manifest.json missing");
   if (file.data.length > EXTENSION_LIMITS.manifestBytes)
@@ -209,7 +209,7 @@ export function parsePublicKey(input: string): Jwk {
   return { kty: "OKP", crv: "Ed25519", x };
 }
 
-export interface SignaturePayload {
+interface SignaturePayload {
   format: string;
   id: string;
   version: string;
@@ -223,7 +223,7 @@ const badSignature = (reason: string): never =>
   fail("EXTENSION_SIGNATURE_INVALID", `invalid extension signature: ${reason}`, { reason });
 
 /** Splits the JWS and checks its header; returns the kid and the payload (not yet verified). */
-export function parseSignature(jws: string): {
+function parseSignature(jws: string): {
   kid: string;
   payload: SignaturePayload;
   signingInput: string;
@@ -268,7 +268,7 @@ export function parseSignature(jws: string): {
 }
 
 /** Verifies an Ed25519 signature with a JWK x. */
-export function verifyEd25519(x: string, data: string, signature: Buffer): boolean {
+function verifyEd25519(x: string, data: string, signature: Buffer): boolean {
   if (signature.length !== 64) return false;
   const key = createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x }, format: "jwk" });
   return verify(null, Buffer.from(data), key, signature);
