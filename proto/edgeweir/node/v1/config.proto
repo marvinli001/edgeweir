@@ -1745,6 +1745,10 @@ message Extension {
   // Lua API the package requires (0 or 1: version 1; 2: extension version
   // 1.1, nodes with extensions-v2).
   uint32 lua_api = 12;
+  // Version of the extension's console-generated secret (manifest
+  // `secret: true`, extension version 1.1); 0: none. Nodes fetch the secret
+  // itself with NodeService.GetExtensionSecrets when it changes.
+  uint32 secret_version = 13;
 }
 
 // ExtensionSharedDict is one lua_shared_dict of an extension.
@@ -1758,4 +1762,16 @@ message SiteExtension {
   string id = 1;
   // Site configuration (JSON object, defaults filled in by the console).
   string config_json = 2;
+  // The site's data items for the extension (manifest `data`, extension
+  // version 1.1), fetched with NodeService.GetExtensionData by digest.
+  repeated ExtensionDataItem data = 3;
+}
+
+// ExtensionDataItem is one opaque per-site data item of an extension.
+message ExtensionDataItem {
+  // ^[a-z0-9][a-z0-9._-]{0,63}$
+  string name = 1;
+  // Lowercase hex SHA-256 and size of the content.
+  string sha256 = 2;
+  uint64 size = 3;
 }

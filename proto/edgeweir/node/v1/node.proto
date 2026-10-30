@@ -93,6 +93,13 @@ service NodeService {
   // node's current configuration references, by digest. Added in PROTO_NEXT
   // (feature extensions-v1).
   rpc GetExtensionPackage(GetExtensionPackageRequest) returns (GetExtensionPackageResponse);
+  // GetExtensionSecrets returns the current and previous secret of the
+  // extensions with `secret: true` that the node's configuration delivers
+  // (extension version 1.1, feature extensions-v2).
+  rpc GetExtensionSecrets(GetExtensionSecretsRequest) returns (GetExtensionSecretsResponse);
+  // GetExtensionData returns a part of a per-site data item that the node's
+  // configuration references, by digest (extension version 1.1).
+  rpc GetExtensionData(GetExtensionDataRequest) returns (GetExtensionDataResponse);
 }
 
 // CheckChannelRequest is empty: the client certificate names the node.
@@ -1110,12 +1117,51 @@ message ReportSecurityEventsResponse {
 message GetExtensionPackageRequest {
   // Lowercase hex SHA-256 of the package.
   string sha256 = 1;
+  // Where the answer starts (extension version 1.1: packages over 4 MiB
+  // come in parts).
+  uint64 offset = 2;
 }
 
-// GetExtensionPackageResponse carries the package.
+// GetExtensionPackageResponse carries the package from offset, at most
+// 4 MiB of it.
 message GetExtensionPackageResponse {
-  // The .ewx bytes (at most 4 MiB).
   bytes package = 1;
+  // The package's whole size.
+  uint64 total = 2;
+}
+
+// GetExtensionSecretsRequest names the extensions; empty: all the node's.
+message GetExtensionSecretsRequest {
+  repeated string ids = 1;
+}
+
+message GetExtensionSecretsResponse {
+  repeated ExtensionSecret secrets = 1;
+}
+
+// ExtensionSecret is an extension's console-generated secret.
+message ExtensionSecret {
+  string id = 1;
+  // Extension.secret_version of this secret.
+  uint32 version = 2;
+  // 32 random bytes; previous is empty before the first rotation.
+  bytes current = 3;
+  bytes previous = 4;
+}
+
+// GetExtensionDataRequest names a data item part.
+message GetExtensionDataRequest {
+  string extension_id = 1;
+  string site_id = 2;
+  // Lowercase hex SHA-256 of the item.
+  string sha256 = 3;
+  uint64 offset = 4;
+}
+
+// GetExtensionDataResponse carries the item from offset, at most 4 MiB.
+message GetExtensionDataResponse {
+  bytes data = 1;
+  uint64 total = 2;
 }
 
 // ExtensionStatus is one extension's state on the node. Added in PROTO_NEXT.
@@ -1132,4 +1178,7 @@ message ExtensionStatus {
   // and how often a worker tripped the extension.
   uint64 faults = 6;
   uint64 trips = 7;
+  // JSON object, at most 4 KiB: "sidecar" {state, restarts, last_exit,
+  // since, status} and "listeners" (extension version 1.1).
+  string details_json = 8;
 }
