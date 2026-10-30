@@ -22,6 +22,10 @@
 #   sees 1 MiB slices (CP-M2); S3 origins never receive the client's x-amz-*
 #   headers (N-L); install.sh installs goreleaser snapshot packages in a clean
 #   Debian container and enrolls the node (N-H1, --no-start: no systemd).
+#   SSH install (ADR-0066): the console scans a systemd + sshd container's
+#   host key, refuses a wrong one, names a wrong sudo password and installs
+#   the latest signed release from GitHub as a sudo user; nothing secret is
+#   left on the host, in the console's logs or in its database.
 #   WebSocket entry (scripts/e2e-wss.mjs, profile wss): the node channel URL
 #   wss://wss.e2e.test saved in the system settings opens the console's
 #   WebSocket entry behind wss-proxy, nginx terminating TLS with a test CA's
@@ -319,6 +323,8 @@ NODE_CONTEXT="${EDGEWEIR_NODE_CONTEXT:-../edgeweir-node}"
 # Clean machine for install.sh (a throwaway container on the e2e network).
 INSTALL_IMAGE="${E2E_INSTALL_IMAGE:-debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251}"
 INSTALL_CONTAINER="${COMPOSE_PROJECT_NAME:-edgeweir-e2e}-install"
+# A fresh systemd + sshd host the console installs a node on over SSH (section ssh-install).
+SSH_CONTAINER="${COMPOSE_PROJECT_NAME:-edgeweir-e2e}-sshd"
 UP=false
 DOWN=false
 SKIP_UI=false
@@ -348,7 +354,7 @@ done
 # (.e2e/*-state.json, or clusters and nodes they create). Every section needs
 # core, which only runs on a fresh stack.
 SECTIONS=(
-  "core:" "m1:" "analytics:" "m2:" "install:" "wss:" "channel:" "node-logs:" "diagnostics:" "m3:" "m4:" "m5:" "m6-logs:m5" "m6-upgrades:m5"
+  "core:" "m1:" "analytics:" "m2:" "install:" "ssh-install:" "wss:" "channel:" "node-logs:" "diagnostics:" "m3:" "m4:" "m5:" "m6-logs:m5" "m6-upgrades:m5"
   "p0:m5 m6-upgrades" "g1:p0 m5 m6-upgrades" "g2:m3 m6-upgrades" "g3:m6-upgrades" "g4:m6-upgrades"
   "g5:m6-upgrades" "dns:m5 m6-upgrades" "g6:dns m5 m6-upgrades" "g7:m6-upgrades" "h2:m6-upgrades"
   "pp:m6-upgrades"
@@ -379,10 +385,10 @@ SECTIONS=(
 #     uses client-b (g10), g18 counts origin requests that g15's cache zone
 #     reload repeats.
 # install only adds its own cluster and fills the download mirror nobody
-# else reads at that time; h2, g8 (own cluster), g12 and usage-guard keep to
+# else reads at that time, ssh-install adds its own cluster and host; h2, g8 (own cluster), g12 and usage-guard keep to
 # their own sites. Each lane runs Playwright with its own session (E2E_LANE).
 LANES=(
-  "m3..m4:install"
+  "m3..m4:install ssh-install"
   "g9..g14:h2 g8 g12 usage-guard"
 )
 section_names() { local s; for s in "${SECTIONS[@]}"; do printf '%s\n' "${s%%:*}"; done; }
@@ -1430,6 +1436,131 @@ for feature in brotli-v1 zstd-v1 modsecurity-v1; do
 done
 docker rm -f "$INSTALL_CONTAINER" >/dev/null 2>&1 || true
 pass "the installed agent ($NODE_VERSION) runs as the edgeweir user, is online over mTLS and reports brotli-v1, zstd-v1 and modsecurity-v1 with the installed packages"
+}
+
+# --------------------------------------------------------- section ssh-install
+# One-shot SSH install (ADR-0066) on a fresh systemd + sshd container: the
+# console scans the host key, refuses a wrong one, names a wrong sudo password,
+# then installs the latest signed edgeweir-node release (GitHub, full cosign
+# verification; the console's mirror is tried first and has no such version)
+# as a sudo user with a password. Needs github.com and api.github.com.
+section_ssh_install() {
+step "SSH install: a fresh systemd + sshd host with a sudo user"
+local version image password fingerprint cluster run result node_id deadline got
+version="$(curl -fsSL https://api.github.com/repos/marvinli001/edgeweir-node/releases/latest | jq -r .tag_name)" ||
+  fail "could not read the latest edgeweir-node release from GitHub"
+version="${version#v}"
+image="edgeweir-e2e-sshd:${E2E_TAG:-local}"
+docker build -q -t "$image" - >/dev/null <<EOF || fail "could not build the sshd host image"
+FROM $INSTALL_IMAGE
+RUN apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+      systemd systemd-sysv openssh-server sudo curl ca-certificates socat >/dev/null \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd -m -s /bin/bash deploy \
+ && echo 'deploy ALL=(ALL) ALL' >/etc/sudoers.d/deploy && chmod 0440 /etc/sudoers.d/deploy
+STOPSIGNAL SIGRTMIN+3
+CMD ["/lib/systemd/systemd"]
+EOF
+docker rm -f "$SSH_CONTAINER" >/dev/null 2>&1 || true
+docker run -d --name "$SSH_CONTAINER" --hostname edge-ssh --network "$NETWORK" --privileged --cgroupns=private \
+  --tmpfs /run --tmpfs /run/lock "$image" >/dev/null || fail "could not start the sshd host"
+in_ssh() { docker exec "$SSH_CONTAINER" bash -ec "$@"; }
+deadline=$((SECONDS + 60))
+until [[ "$(docker exec "$SSH_CONTAINER" systemctl is-active ssh 2>/dev/null)" == active ]]; do
+  ((SECONDS < deadline)) || fail "sshd did not start in the host container"
+  sleep 1
+done
+password="e2e-$(openssl rand -hex 12)"
+printf 'deploy:%s\n' "$password" | docker exec -i "$SSH_CONTAINER" chpasswd || fail "could not set the deploy password"
+# The console's URL as nodes see it is localhost:$port here (EDGEWEIR_PUBLIC_URL): the host
+# forwards it to the console on the e2e network.
+docker exec -d "$SSH_CONTAINER" socat "TCP-LISTEN:${E2E_CONSOLE_PORT:-13000},bind=127.0.0.1,fork,reuseaddr" TCP:console:3000
+fingerprint="$(in_ssh 'ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub | cut -d" " -f2')"
+[[ "$fingerprint" == SHA256:* ]] || fail "no ed25519 host key in the sshd host: $fingerprint"
+pass "host $SSH_CONTAINER: sshd up, deploy may sudo with its password, host key $fingerprint; installing edgeweir-node $version"
+
+step "SSH install: the console reads the host key and never trusts another one"
+result="$(api POST /ssh-installs/host-keys "$(jq -nc --arg h "$SSH_CONTAINER" '{hosts: [{host: $h, port: 22}, {host: "no-such-host.invalid"}]}')")" ||
+  fail "scanHostKeys failed"
+echo "$result" | jq -c '.hosts[]'
+[[ "$(jq -r '.hosts[0].fingerprint' <<<"$result")" == "$fingerprint" && "$(jq -r '.hosts[0].algorithm' <<<"$result")" == ssh-ed25519 &&
+  "$(jq -r '.hosts[1].error' <<<"$result")" == unreachable ]] || fail "unexpected host key scan: $result"
+cluster="$(api POST /clusters '{"name": "ssh-install-e2e"}' | jq -r .id)"
+ssh_body() { # ssh_body FINGERPRINT SUDO_PASSWORD
+  jq -nc --arg c "$cluster" --arg h "$SSH_CONTAINER" --arg f "$1" --arg p "$password" --arg s "$2" --arg v "$version" \
+    '{clusterId: $c, credential: {username: "deploy", password: $p, sudoPassword: $s},
+      hosts: [{host: $h, nodeName: "edge-ssh-1", hostKeyFingerprint: $f}],
+      options: {version: $v}, timeoutMinutes: 15}'
+}
+ssh_wait() { # ssh_wait RUN_ID SECONDS -> the ended run
+  local id="$1" until_s=$((SECONDS + $2)) out
+  while :; do
+    out="$(api GET "/ssh-installs/$id")" || fail "GET /ssh-installs/$id failed"
+    [[ "$(jq -r .state <<<"$out")" == running ]] || { echo "$out"; return; }
+    ((SECONDS < until_s)) || fail "the SSH install did not end in $2 s: $(jq -c '.hosts[0] | {state, error}' <<<"$out")"
+    sleep 2
+  done
+}
+# A key of the right shape that is not this host's.
+run="$(api POST /ssh-installs "$(ssh_body "SHA256:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU" "$password")" | jq -r .id)" ||
+  fail "start failed"
+result="$(ssh_wait "$run" 60)"
+[[ "$(jq -r '.hosts[0].error' <<<"$result")" == host_key_mismatch && "$(jq -r '.hosts[0].presentedFingerprint' <<<"$result")" == "$fingerprint" ]] ||
+  fail "a wrong host key must stop the install: $(jq -c '.hosts[0]' <<<"$result")"
+[[ "$(in_ssh 'journalctl -u ssh --no-pager | grep -c "Accepted password for deploy" || true')" == 0 ]] ||
+  fail "the console signed in although the host key did not match"
+pass "scan: $fingerprint (ssh-ed25519), unknown host unreachable; a wrong pinned key fails with host_key_mismatch before signing in"
+
+step "SSH install: a wrong sudo password is named; credentials never ride along with an Idempotency-Key"
+run="$(api POST /ssh-installs "$(ssh_body "$fingerprint" "not-the-password")" | jq -r .id)" || fail "start failed"
+result="$(ssh_wait "$run" 120)"
+[[ "$(jq -r '.hosts[0].error' <<<"$result")" == sudo_password_wrong ]] ||
+  fail "expected sudo_password_wrong: $(jq -c '.hosts[0] | {state, error, exitCode, output}' <<<"$result")"
+got="$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$CONSOLE/api/v1/ssh-installs" -H 'content-type: application/json' \
+  -H "x-api-key: $API_KEY" -H 'idempotency-key: ssh-e2e' --data "$(ssh_body "$fingerprint" "$password")")"
+[[ "$got" == 400 ]] || fail "an Idempotency-Key with SSH credentials must be refused, got HTTP $got"
+pass "wrong sudo password: sudo_password_wrong; Idempotency-Key with credentials: 400"
+
+step "SSH install: the node installs over SSH as deploy (sudo -S), enrolls and comes online under systemd"
+run="$(api POST /ssh-installs "$(ssh_body "$fingerprint" "$password")" | jq -r .id)" || fail "start failed"
+result="$(ssh_wait "$run" 900)"
+echo "$result" | jq -c '.hosts[0] | {state, error, exitCode, nodeId, attempts}'
+[[ "$(jq -r '.hosts[0].state' <<<"$result")" == succeeded ]] ||
+  fail "the SSH install failed: $(jq -r '.hosts[0] | "\(.error) (exit \(.exitCode))\n\(.output)"' <<<"$result")"
+node_id="$(jq -r '.hosts[0].nodeId' <<<"$result")"
+jq -r '.hosts[0].output' <<<"$result" | grep '\[edgeweir\]' | tail -n 6 || true
+deadline=$((SECONDS + 120))
+until [[ "$(api GET "/nodes/$node_id" | jq -r '"\(.online) \(.agentVersion) \(.name)"')" == "true $version edge-ssh-1" ]]; do
+  ((SECONDS < deadline)) || fail "the node installed over SSH did not come online: $(api GET "/nodes/$node_id" | jq -c '{online, agentVersion, name}')"
+  sleep 2
+done
+[[ "$(in_ssh 'systemctl is-active edgeweir-node')" == active && "$(in_ssh 'systemctl is-enabled edgeweir-node')" == enabled ]] ||
+  fail "edgeweir-node is not an enabled, active systemd service"
+grep -q "cosign signature verified (release workflow, tag v$version)" <<<"$(jq -r '.hosts[0].output' <<<"$result")" ||
+  fail "install.sh did not report the verified release signature"
+pass "node $node_id ($version) installed over SSH, online, edgeweir-node enabled and active; install.sh verified the release's cosign signature"
+
+step "SSH install: no credential or token left on the host, in the console's logs or in its database"
+leaks="$(in_ssh '
+  p="$1"
+  journalctl --no-pager | grep -cF -- "$p" || true
+  journalctl --no-pager | grep -cE "ewt_[A-Za-z0-9_-]{20,}" || true
+  grep -rlE "ewt_[A-Za-z0-9_-]{20,}" /var/log /tmp /home/deploy 2>/dev/null | wc -l
+  find /tmp -maxdepth 1 -name "tmp.*" -user deploy | wc -l
+  grep -lsa EDGEWEIR_TOKEN /proc/[0-9]*/environ | wc -l
+' _ "$password" | tr '\n' ' ')"
+[[ "$leaks" == "0 0 0 0 0 " ]] ||
+  fail "credentials or tokens left on the host (password in journal, token in journal, token files, temp dirs, environments): $leaks"
+journalctl_sudo="$(in_ssh 'journalctl --no-pager _COMM=sudo | grep "COMMAND=" | tail -n 1')"
+echo "sudo log: ${journalctl_sudo:0:200}"
+[[ "$journalctl_sudo" == *"install.sh --server https://console:8443"* ]] || fail "sudo did not log the install.sh command line"
+console_hits="$("${COMPOSE[@]}" logs console 2>&1 | grep -cF -- "$password" || true)"
+db_hits="$("${COMPOSE[@]}" exec -T postgres pg_dump -U edgeweir -d edgeweir --data-only | grep -cF -- "$password" || true)"
+[[ "$console_hits" == 0 && "$db_hits" == 0 ]] || fail "the SSH password reached the console's logs ($console_hits) or database ($db_hits)"
+audit="$(api GET "/audit-logs?action=ssh_install.host&limit=5" | jq -c --arg h "$SSH_CONTAINER" '[.items[] | .metadata | select(.host == $h) | .outcome]')"
+[[ "$audit" == '["succeeded","failed","failed"]' ]] || fail "unexpected ssh_install.host audit entries: $audit"
+docker rm -f "$SSH_CONTAINER" >/dev/null 2>&1 || true
+pass "host: no password or token in the journal, files, temp dirs or process environments; sudo logged only the install.sh command; console logs and pg_dump: no password; audit: succeeded, failed, failed"
 }
 
 # ----------------------------------------------------------------- section wss
