@@ -694,6 +694,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0079_origin_proxy_protocol` | `origin.proxy_protocol_version`（回源连接发送的 PROXY protocol 版本，0 为不发送） |
 | `0080_origin_ca_rotation` | `pki_authority.kind`、`status`、`generation`（CA 轮换；`(kind, status)` 唯一，已有行的 kind 取 ID）；`origin_certificate.authority_id`、`origin_client_certificate.authority_id`（签发它的 CA） |
 | `0081_node_location` | `node.location`（节点用自己的 GeoIP 库查出的公网地址位置：国家、一级行政区、City MMDB 的经纬度） |
+| `0082_markdown_agents` | `site.markdown`（面向代理的 Markdown）；分钟、小时、天统计与视图 `traffic_hour_stats` 的 `markdown_responses` |
 
 ## 构建产物
 

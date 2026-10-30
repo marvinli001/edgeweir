@@ -1,6 +1,6 @@
 {
-  "id": "cfdac98e-1810-497a-80c8-7260be109967",
-  "prevId": "8edf027c-6640-4208-86d9-9dff88a1a2f3",
+  "id": "1733dbd2-c32a-4bdf-ad44-9dbd815ad9ca",
+  "prevId": "cfdac98e-1810-497a-80c8-7260be109967",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -788,6 +788,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "markdown_responses": {
+          "name": "markdown_responses",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         }
       },
       "indexes": {
@@ -1035,6 +1042,13 @@
         },
         "image_bytes_saved": {
           "name": "image_bytes_saved",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "markdown_responses": {
+          "name": "markdown_responses",
           "type": "bigint",
           "primaryKey": false,
           "notNull": true,
@@ -5321,6 +5335,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "markdown_responses": {
+          "name": "markdown_responses",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         }
       },
       "indexes": {
@@ -6378,6 +6399,13 @@
         },
         "image_convert": {
           "name": "image_convert",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "markdown": {
+          "name": "markdown",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
@@ -11720,6 +11748,13 @@
         },
         "image_bytes_saved": {
           "name": "image_bytes_saved",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "markdown_responses": {
+          "name": "markdown_responses",
           "type": "bigint",
           "primaryKey": false,
           "notNull": true,
