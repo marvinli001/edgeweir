@@ -1895,6 +1895,7 @@
   "node_feature_channel_follow_v1": "跟随节点通道地址",
   "node_feature_node_logs_v1": "节点日志",
   "node_feature_debug_logs_v1": "Debug 日志",
+  "node_feature_decommission_v1": "无 SSH 退役",
   "waf_title": "OWASP CRS 托管规则",
   "waf_mode": "模式",
   "waf_mode_off": "关闭",
