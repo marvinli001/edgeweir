@@ -917,6 +917,17 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
   "https://cdn-admin.example.com/api/v1/sites/<site id>/image-convert/savings?range=7d"
 ```
 
+### Tiered Cache
+
+| Procedure | Endpoint | Notes |
+| --- | --- | --- |
+| `tieredCache.get` | `GET /tiered-cache` | The console-wide setting `{ topology, port, upperNodeIds, upperNodeGroupIds }`; `off` and `8444` by default |
+| `tieredCache.update` | `PUT /tiered-cache` | Replaces the console-wide setting and publishes the clusters of the sites that follow it. `topology`: `off`, `smart`, `generic`, `regional`, `custom`; `port` 1–65535, not a listener port; `upperNodeIds` / `upperNodeGroupIds` at most 32 together, used by `custom` only. Audit `system.tiered_cache_update` |
+| `tieredCache.site.get` | `GET /sites/{id}/tiered-cache` | The site's setting `{ topology, upperNodeIds, upperNodeGroupIds }`; `topology` also takes `inherit` (the default: the console-wide one) |
+| `tieredCache.site.update` | `PUT /sites/{id}/tiered-cache` | Replaces the site's setting and publishes its cluster. Audit `site.tiered_cache_update` (`from`, `to`) |
+| `tieredCache.site.selection` | `GET /sites/{id}/tiered-cache/selection` | `{ topology, inherited, target, idleReason, chosenAt, nodes: [{ nodeId, nodeName, regionName, uppers: [{ nodeId, nodeName, reason, rttMs }] }], unsupportedNodes }`: each active node of the cluster with its upper tiers (none: it fetches from the origin) and why (`lowest_latency`, `fallback_region`, `region_upper`, `regional_tier`, `global_upper`, `custom`); `idleReason` is `no_latency`, `no_upper`, `single_node` or `no_custom` when the topology is on but there are no upper tiers |
+| `tieredCache.site.stats` | `GET /sites/{id}/tiered-cache/stats?range=` | `{ fetches, served, hitRatio, fallbacks }`: over the range, fetches of lower tiers from upper tiers by the upper tier's cache status (`origin`: fallbacks), requests answered to lower tiers, the upper tiers' hit ratio (0–1, null without fetches) and the fallbacks |
+
 ### Usage protection
 
 | Procedure | Endpoint | Notes |

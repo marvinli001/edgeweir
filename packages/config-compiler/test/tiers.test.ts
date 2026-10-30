@@ -222,6 +222,12 @@ describe("compileTieredCache", () => {
     expect(applied.sites.map((s) => s.tierPlanId)).toEqual(after.sites.map((s) => s.tierPlanId));
   });
 
+  it("is left out when a listener or a TCP application took the port", () => {
+    const config = compile({ port: 443 });
+    expect(config.tieredCache).toBeUndefined();
+    expect(config.sites.every((s) => s.tierPlanId === "")).toBe(true);
+  });
+
   it("is left out when no site has upper tiers and nothing is measured", () => {
     expect(compile({ sites: [], latencyTargets: [] }).tieredCache).toBeUndefined();
   });

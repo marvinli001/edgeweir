@@ -288,6 +288,8 @@ export const errorDefs = {
   LISTEN_PORT_CONFLICT: { status: 400, params: ["port"] },
   /** An extra listener port inside a port pool of the cluster ("from-to/protocol"). */
   LISTEN_PORT_IN_POOL: { status: 400, params: ["port", "pools"] },
+  /** The tiered cache's port is a listener or TCP application port of these clusters (first 5 names). */
+  TIER_PORT_IN_USE: { status: 409, params: ["port", "clusters"] },
   /** A listener port that sites of the cluster still use (first 5 names). */
   LISTEN_PORT_IN_USE: { status: 409, params: ["port", "sites"] },
   /** A site port that is not an HTTP (or HTTPS) listener port of its cluster. */

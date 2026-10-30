@@ -2503,6 +2503,7 @@
   "error_l4_port_range_invalid": "结束端口须大于监听端口，最多 {max} 个端口",
   "error_l4_origin_port_required": "固定源站端口时每个源站都要填写端口",
   "error_listen_port_conflict": "端口 {port} 不能同时用于 HTTP 和 HTTPS",
+  "error_tier_port_in_use": "端口 {port} 已被集群 {clusters} 的监听端口或 TCP 应用占用",
   "error_listen_port_in_pool": "端口 {port} 在端口池内：{pools}",
   "error_listen_port_in_use": "端口 {port} 仍被网站使用：{sites}",
   "error_site_port_unavailable": "端口 {port} 不是集群的监听端口",

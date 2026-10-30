@@ -113,6 +113,19 @@ describe("tiered cache", async () => {
     expect((await admin.tieredCache.site.selection({ id: siteId })).topology).toBe("off");
   });
 
+  it("refuses a port a listener uses", async () => {
+    const error = await rpcError(
+      admin.tieredCache.update({
+        topology: "smart",
+        port: 443,
+        upperNodeIds: [],
+        upperNodeGroupIds: [],
+      }),
+    );
+    expect(error).toMatchObject({ code: "TIER_PORT_IN_USE", status: 409, data: { port: 443 } });
+    expect((await admin.tieredCache.get()).topology).toBe("off");
+  });
+
   it("smart: measures the origin first, then the fastest node is the upper tier", async () => {
     await admin.tieredCache.update({
       topology: "smart",

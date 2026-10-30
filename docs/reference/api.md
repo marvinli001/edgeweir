@@ -917,6 +917,17 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
   "https://cdn-admin.example.com/api/v1/sites/<网站 ID>/image-convert/savings?range=7d"
 ```
 
+### 分层缓存
+
+| 过程 | 端点 | 说明 |
+| --- | --- | --- |
+| `tieredCache.get` | `GET /tiered-cache` | 全局设置 `{ topology, port, upperNodeIds, upperNodeGroupIds }`；默认 `off`、`8444` |
+| `tieredCache.update` | `PUT /tiered-cache` | 替换全局设置并发布跟随全局的网站所在的集群。`topology`：`off`、`smart`、`generic`、`regional`、`custom`；`port` 1–65535，不能是监听端口；`upperNodeIds` / `upperNodeGroupIds` 合计 ≤ 32，只用于 `custom`。审计 `system.tiered_cache_update` |
+| `tieredCache.site.get` | `GET /sites/{id}/tiered-cache` | 网站设置 `{ topology, upperNodeIds, upperNodeGroupIds }`；`topology` 多一个 `inherit`（默认，跟随全局） |
+| `tieredCache.site.update` | `PUT /sites/{id}/tiered-cache` | 替换网站设置并发布其集群。审计 `site.tiered_cache_update`（`from`、`to`） |
+| `tieredCache.site.selection` | `GET /sites/{id}/tiered-cache/selection` | `{ topology, inherited, target, idleReason, chosenAt, nodes: [{ nodeId, nodeName, regionName, uppers: [{ nodeId, nodeName, reason, rttMs }] }], unsupportedNodes }`：集群每个活动节点的上层（空为直接回源）与原因（`lowest_latency`、`fallback_region`、`region_upper`、`regional_tier`、`global_upper`、`custom`）；开启但没有上层时 `idleReason` 为 `no_latency`、`no_upper`、`single_node` 或 `no_custom` |
+| `tieredCache.site.stats` | `GET /sites/{id}/tiered-cache/stats?range=` | `{ fetches, served, hitRatio, fallbacks }`：时间范围内下层向上层的请求按上层缓存状态计数（`origin` 为兜底回源）、作为上层回答下层的请求、上层命中率（0–1，没有请求时为 null）与兜底回源数 |
+
 ### 用量保护
 
 | 过程 | 端点 | 说明 |

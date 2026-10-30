@@ -22,6 +22,7 @@ import {
 } from "@edgeweir/proto";
 import { canonicalize, contentHash, matchMap, offlineHostKey } from "./canonical";
 import {
+  clusterTcpPorts,
   compileClientAddress,
   compileConnectionLimits,
   compileListener,
@@ -142,7 +143,15 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
       ),
     }),
   );
-  const tieredCache = compileTieredCache(input.tieredCache, sites);
+  const l4Apps = compileL4Apps(input.l4Apps);
+  // A tier port a listener or a TCP application took leaves the cluster without tiers
+  // (nodes would refuse the configuration or fail to bind); the console refuses it on save.
+  const tierPort = input.tieredCache?.port ?? 0;
+  const tieredCache = clusterTcpPorts(listeners, l4Apps).some(
+    (r) => tierPort >= r.start && tierPort <= r.end,
+  )
+    ? undefined
+    : compileTieredCache(input.tieredCache, sites);
   const compiled = create(NodeConfigSchema, {
     revision,
     clusterId: input.clusterId,
@@ -173,7 +182,7 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
     originCaPrevious: compileOriginCaPrevious(sites, input),
     platformErrorPages: compilePlatformErrorPages(input.platformErrorPages),
     offlineHosts: compileOfflineHosts(input.offlineHosts),
-    l4Apps: compileL4Apps(input.l4Apps),
+    l4Apps,
     clientAddress: compileClientAddress(input.edge?.clientIp),
     unknownHosts: compileUnknownHosts(input.edge?.unknownHosts, sites),
     tieredCache,

@@ -2700,6 +2700,7 @@
   "error_l4_port_range_invalid": "The last port must be above the first, at most {max} ports",
   "error_l4_origin_port_required": "Every origin needs a port while the origin port is fixed",
   "error_listen_port_conflict": "Port {port} cannot be both HTTP and HTTPS",
+  "error_tier_port_in_use": "Port {port} is a listener or TCP application port of {clusters}",
   "error_listen_port_in_pool": "Port {port} is inside port pools: {pools}",
   "error_listen_port_in_use": "Port {port} is still used by sites: {sites}",
   "error_site_port_unavailable": "Port {port} is not a listener port of the cluster",

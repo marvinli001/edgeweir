@@ -1,5 +1,7 @@
 import {
   chooseTiers,
+  clusterTcpPorts,
+  decodeNodeConfig,
   type TierCandidate,
   type TieredCacheModel,
   type TierHopModel,
@@ -24,11 +26,18 @@ import {
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { and, asc, eq, gt, inArray, lt, sql } from "drizzle-orm";
+import { fail } from "../lib/errors";
 import { lockClusterPublish } from "../lib/locks";
 import { rangeWindow, sourceFor } from "./analytics";
 import { type Actor, systemActor } from "./audit";
 import { nodeIpRows, schedulingAddressesOf } from "./node-addresses";
-import { type Executor, publishClusters, publishRevision, type Tx } from "./revisions";
+import {
+  type Executor,
+  latestRevision,
+  publishClusters,
+  publishRevision,
+  type Tx,
+} from "./revisions";
 import { defineSetting } from "./settings";
 import { publishSiteChange } from "./site-change";
 import { findSite } from "./sites";
@@ -368,8 +377,14 @@ export async function updateTieredCache(
   input: TieredCacheSettings,
   actor: Actor,
 ): Promise<TieredCacheSettings> {
-  return db.transaction((tx) =>
-    tieredCacheSetting.write(tx, actor, input, {
+  return db.transaction(async (tx) => {
+    const clusters = await clustersUsingPort(tx, input.port);
+    if (clusters.length)
+      fail("TIER_PORT_IN_USE", `port ${input.port} is a listener or TCP application port`, {
+        port: input.port,
+        clusters: clusters.slice(0, 5).join(", "),
+      });
+    return tieredCacheSetting.write(tx, actor, input, {
       afterWrite: async () => {
         const rows = await tx
           .selectDistinct({ id: schema.site.clusterId })
@@ -384,8 +399,27 @@ export async function updateTieredCache(
         );
         return { clusters: published.size };
       },
-    }),
-  );
+    });
+  });
+}
+
+/** Clusters whose current configuration listens on `port` (HTTP listeners, TCP applications). */
+async function clustersUsingPort(db: Executor, port: number): Promise<string[]> {
+  const clusters = await db
+    .select({ id: schema.cluster.id, name: schema.cluster.name })
+    .from(schema.cluster)
+    .orderBy(asc(schema.cluster.name));
+  const used: string[] = [];
+  for (const cluster of clusters) {
+    const latest = await latestRevision(db, cluster.id);
+    if (!latest) continue;
+    const config = decodeNodeConfig(latest.ir);
+    if (
+      clusterTcpPorts(config.listeners, config.l4Apps).some((r) => port >= r.start && port <= r.end)
+    )
+      used.push(cluster.name);
+  }
+  return used;
 }
 
 export async function getSiteTieredCache(
