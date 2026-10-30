@@ -162,7 +162,7 @@ Hooks run only on sites that enable the extension, in the order the extensions w
 | `ew.deny(status?)` | Node error page with `status` (400–499, default 403), `X-Edgeweir-Error: extension-denied`, reason `extension`, rule id `ext:<id>` |
 | `ew.challenge(level)` | Core challenge at `cookie302`, `js`, `pow` or `captcha`; a pass of that level continues |
 | `ew.allow()` | `access` only: skip Under Attack and CC challenges for this request (rules and WAF still run) |
-| `ew.respond(status, body?, headers?)` | Answer directly (no origin). Response headers starting with `X-Edgeweir-` are the node's and extensions cannot set them, except that `ew.respond` may mark its own challenge page with `X-Edgeweir-Challenge` |
+| `ew.respond(status, body?, headers?)` | Answer directly (no origin). Response headers starting with `X-Edgeweir-` are the node's and extensions cannot set or clear them, except the extensions' own prefix `X-Edgeweir-Ext-` (a sidecar's response headers, for instance) and `X-Edgeweir-Challenge`, with which `ew.respond` may mark its own challenge page |
 
 The first verdict wins; later extensions' hooks are not called. Verdicts need `verdicts`.
 

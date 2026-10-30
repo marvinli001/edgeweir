@@ -33,6 +33,7 @@ import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 
 import http from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { gunzipSync } from "node:zlib";
 import { actor, pass, sleep, stack, waitFor } from "./e2e-lib.mjs";
 
 const nodePort = Number(process.env.E2E_NODE_PORT ?? 18080);
@@ -52,7 +53,7 @@ const NAV = {
   "user-agent": BROWSER,
   accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
   "accept-language": "en-US,en;q=0.9",
-  "accept-encoding": "gzip, deflate",
+  "accept-encoding": "gzip",
 };
 
 /** A request through the node's published HTTP port: { status, headers, body }. */
@@ -67,7 +68,11 @@ const request = (method, path, host, headers = {}, body) =>
           resolve({
             status: res.statusCode,
             headers: res.headers,
-            body: Buffer.concat(chunks).toString("utf8"),
+            // Precursor scores a browser without Accept-Encoding lower.
+            body: (res.headers["content-encoding"] === "gzip"
+              ? gunzipSync(Buffer.concat(chunks))
+              : Buffer.concat(chunks)
+            ).toString("utf8"),
           }),
         );
       },
@@ -220,7 +225,10 @@ if (PRECURSOR) {
     if (r.status !== 403 || r.headers["x-edgeweir-challenge"] !== "session") return null;
     return r.body.match(/[?&]t=([A-Za-z0-9_.-]+)/)?.[1] ?? null;
   };
-  const token1 = await waitFor("the interstitial", () => interstitialToken());
+  const token1 = await waitFor("the interstitial", () => interstitialToken(), 180, 1000, async () => {
+    const r = await get("/", P_HOST, NAV);
+    return `${r.status} ${JSON.stringify(r.headers)} ${r.body.slice(0, 300)}`;
+  });
   const page = await get("/", P_HOST, NAV);
   assert.match(page.headers["content-type"], /^text\/html/);
   assert.match(page.headers["content-security-policy"], /script-src 'self'/);
@@ -446,7 +454,7 @@ if (COMPUTE) {
   // Down: kill it until the restart backoff leaves a window of seconds.
   let pid = running.details.sidecar.pid;
   for (let i = 0; i < 3; i++) {
-    await rootExec("kill", "-9", String(pid));
+    await rootExec("sh", "-c", `kill -9 ${pid}`); // no /bin/kill in the image
     if (i === 2) break;
     pid = await waitFor(
       "a restarted sidecar",
@@ -467,11 +475,12 @@ if (COMPUTE) {
     "the node restarts the sidecar",
     async () => {
       const s = await nodeState("edge-compute");
-      return s.details?.sidecar?.state === "running" ? s.details.sidecar : null;
+      const d = s.details?.sidecar;
+      return d?.state === "running" && d.restarts >= 3 ? d : null;
     },
     60,
   );
-  assert.ok(back.restarts >= 3, JSON.stringify(back));
+  assert.ok(back.status?.functions >= 1, `GET /status of the sidecar: ${JSON.stringify(back)}`);
   await waitFor("served again", async () => (await get("/hello/x", C_HOST)).status === 200, 60);
   pass(
     "edge-compute: with the sidecar down closed routes answer 502 and open ones the origin; the node restarts it",
