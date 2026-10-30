@@ -180,6 +180,8 @@ export const logEntry = z.object({
   crawlerVerification: z.string().default(""),
   /** Pay per crawl: the price sent in crawler-charged, in millionths of a US dollar; 0 when not charged. */
   crawlerChargedMicros: z.number().int().default(0),
+  /** The upper tier and its cache status ("<node id> HIT") or "origin" for a fetch through the tiered cache; empty otherwise. */
+  tier: z.string().default(""),
 });
 export type LogEntry = z.infer<typeof logEntry>;
 

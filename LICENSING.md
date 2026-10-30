@@ -32,9 +32,10 @@ Edgeweir 坚持 **“开源核心绝不设卡，商业扩展边界分明”** �
 | --- | --- |
 | 运营者账户（密码、两步验证、Passkey）、AccessKey、服务账号、审计日志 | 开源核心 |
 | 控制台、节点管理、开放 API | 开源核心 |
+| 分层缓存（Tiered Cache：Smart、Generic、Regional、自定义拓扑，按延迟选上层节点） | 开源核心 |
 | 多租户：组织、成员、邀请、角色权限、组织隔离与按组织的配额 | 独立商业运营产品 |
 | 对外客户门户、自助注册购买、套餐与计费、余额与财务、分销与结算 | 独立商业运营产品 |
-| L2 回源聚合节点与 Tiered Cache（含 Topologies、按延迟选父节点）、组内缓存共享（一致性哈希分片、缓存索引节点）、节点租期到期自动摘除、访问日志直推自定义 sink 与 Logpush、Prometheus 指标、GeoIP 热更新、OIDC SSO、103 Early Hints、Speculation-Rules、0-RTT、Tunnels、边缘计算与租户脚本审批、自建权威 DNS / GTM、XDP / eBPF、跨集群汇总的攻击大盘与回源质量视图、按学习基线的自适应七层 DDoS 缓解、Bot 评分 | 独立商业产品 |
+| 组内缓存共享（一致性哈希分片、缓存索引节点）、节点租期到期自动摘除、访问日志直推自定义 sink 与 Logpush、Prometheus 指标、GeoIP 热更新、OIDC SSO、103 Early Hints、Speculation-Rules、0-RTT、Tunnels、边缘计算与租户脚本审批、自建权威 DNS / GTM、XDP / eBPF、跨集群汇总的攻击大盘与回源质量视图、按学习基线的自适应七层 DDoS 缓解、Bot 评分 | 独立商业产品 |
 | 官方账户、订阅、许可证与插件分发 | 独立商业服务 |
 
 - “个人自用”“单一运营者”描述开源版的功能范围，不是许可限制：在 AGPL 允许的范围内，开源版可用于任何合法用途，包括为他人提供收费服务。

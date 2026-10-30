@@ -487,7 +487,7 @@ describe("challenge keys, security events and JA4 over the node channel", async 
     const csv = logsCsv(found.entries);
     // The G14 columns, then the G16 ones (ADR-0041) at the end.
     expect(csv.split("\r\n")[0]).toMatch(/,ja4,wafRuleIds,wafBlocked,ruleIds,userAgent,/);
-    expect(csv.split("\r\n")[0]).toMatch(/,blockReason,blockRuleId,query,headers,peerIp$/);
+    expect(csv.split("\r\n")[0]).toMatch(/,blockReason,blockRuleId,query,headers,peerIp,tier$/);
     expect(csv).toContain(JA4);
   });
 });

@@ -2293,6 +2293,7 @@ function entry(
     crawler: "",
     crawlerVerification: "",
     crawlerChargedMicros: 0,
+    tier: "",
   };
 }
 
@@ -2419,6 +2420,7 @@ const CSV_COLUMNS = [
   "query",
   "headers",
   "peerIp",
+  "tier",
 ] as const satisfies readonly (keyof LogEntry)[];
 
 /** A quoted cell as the server writes it: lists space-separated, headers "name: value; …". */

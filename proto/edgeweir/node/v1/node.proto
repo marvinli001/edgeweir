@@ -296,6 +296,10 @@ message ReportStatusRequest {
   // GeoIP databases (the console has none). Unset until a response carried
   // an address, and on nodes before v1.6.2.
   NodeLocation location = 18;
+  // Round trip times to the tiered cache's latency targets
+  // (TieredCache.latency_targets), measured in the last 5 minutes. Added in
+  // PROTO_NEXT (feature tiered-cache-v1).
+  repeated TierLatency tier_latencies = 80;
 }
 
 // NodeLocation places a node's address on the console's map.
@@ -534,6 +538,14 @@ message MinuteStats {
   // The paths crawlers requested most (path without query, at most 256
   // bytes), at most 64 per minute. Added in vNEXT (feature ai-crawlers-v1).
   repeated CrawlerPathCounter crawler_paths = 32;
+  // Fetches of the edge cache that went to an upper tier, by the upper
+  // tier's cache status (HIT, MISS, EXPIRED, STALE, UPDATING, REVALIDATED,
+  // BYPASS; "origin" when the fetch fell back to the origins because no
+  // upper tier answered). Added in PROTO_NEXT (feature tiered-cache-v1).
+  map<string, uint64> tier_fetches = 80;
+  // Requests this node served to lower tiers, by its cache status. Added in
+  // PROTO_NEXT.
+  map<string, uint64> tier_served = 81;
 }
 
 // CrawlerCounter is a minute of one crawler's requests on a node.
@@ -927,6 +939,10 @@ message AccessLog {
   string crawler = 40;
   string crawler_verification = 41;
   uint64 crawler_charged_micros = 42;
+  // Requests the edge fetched through the tiered cache: the upper tier's
+  // node id and cache status ("<id> HIT"), "origin" when it fell back to
+  // the origins; "" otherwise (cache hits included). Added in PROTO_NEXT.
+  string tier = 80;
 }
 // ReportLogsRequest is an immutable, ordered batch from the private node spool.
 message ReportLogsRequest {
@@ -1172,4 +1188,15 @@ message ReportSecurityEventsRequest {
 // ReportSecurityEventsResponse acknowledges the events.
 message ReportSecurityEventsResponse {
   uint32 accepted = 1;
+}
+
+// TierLatency is the round trip time to one TieredCache latency target: the
+// fastest TCP handshake of the last measurement (3 attempts). Added in
+// PROTO_NEXT.
+message TierLatency {
+  string target_id = 1;
+  // 0 when no attempt connected.
+  uint32 rtt_ms = 2;
+  bool ok = 3;
+  google.protobuf.Timestamp measured_at = 4;
 }

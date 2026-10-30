@@ -33,6 +33,7 @@ export const router = os.router({
   developmentMode: sitesRouter.developmentMode,
   markdown: sitesRouter.markdown,
   aiCrawl: sitesRouter.aiCrawl,
+  tieredCache: sitesRouter.tieredCache,
   accessControl: sitesRouter.accessControl,
   security: accessControlRouter.security,
   certificates: certificatesRouter.certificates,

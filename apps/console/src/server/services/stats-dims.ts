@@ -14,6 +14,7 @@ import {
   ORIGIN_HEADER_TIME_BUCKETS,
   STATS_HTTP_VERSIONS,
   STATS_TLS_VERSIONS,
+  TIER_STATUSES,
 } from "@edgeweir/contract";
 import { type SQL, sql } from "drizzle-orm";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
@@ -43,6 +44,9 @@ export interface ReportedDimensions {
   /** AI crawlers (MinuteStats.crawlers / crawler_paths, ai-crawlers-v1, ADR-0070). */
   crawlers?: ReportedCrawler[];
   crawlerPaths?: { crawler: string; path: string; requests: number }[];
+  /** The tiered cache (MinuteStats.tier_fetches / tier_served, ADR-0073). */
+  tierFetches?: Record<string, number>;
+  tierServed?: Record<string, number>;
 }
 
 /** A crawler's minute as nodes report it (CrawlerCounter). */
@@ -97,6 +101,8 @@ export interface DimensionBucket {
   crawler_stats: Record<string, number>;
   /** `<crawler>|<path>` → requests, the heaviest MAX_CRAWLER_PATHS. */
   crawler_paths: Record<string, number>;
+  /** `f:<status>` / `v:<status>` → count (TIER_STATUSES). */
+  tier_stats: Record<string, number>;
 }
 
 /** Map columns and how many keys a bucket keeps (null: the key list bounds them). */
@@ -120,6 +126,8 @@ export const DIMENSION_MAPS = [
   // Bounded by crawlersBounded (MAX_CRAWLER_STATS pairs of 10 counters).
   ["crawler_stats", null],
   ["crawler_paths", MAX_CRAWLER_PATHS],
+  // Bounded by TIER_STATUSES (two kinds of nine statuses).
+  ["tier_stats", null],
 ] as const satisfies readonly (readonly [keyof DimensionBucket, number | null])[];
 export const DIMENSION_COUNTERS = ["challenges_issued", "challenges_passed"] as const;
 export const DIMENSION_COLUMNS = [
@@ -147,6 +155,8 @@ const cleanAsName = (name: string) =>
     .replace(/\p{Cc}/gu, "")
     .trim()
     .slice(0, 128);
+
+const TIER_STATUS_SET: ReadonlySet<string> = new Set(TIER_STATUSES);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -225,6 +235,7 @@ export function cleanDimensions(input: ReportedDimensions | undefined): Dimensio
     challenge_outcomes: Object.create(null),
     crawler_stats: Object.create(null),
     crawler_paths: Object.create(null),
+    tier_stats: Object.create(null),
     challenges_issued:
       Number.isSafeInteger(d.challengesIssued) && (d.challengesIssued ?? 0) > 0
         ? (d.challengesIssued as number)
@@ -302,6 +313,12 @@ export function cleanDimensions(input: ReportedDimensions | undefined): Dimensio
   for (const p of d.crawlerPaths ?? [])
     if (CRAWLER_RE.test(p.crawler) && isCrawlerPath(p.path) && isCount(p.requests))
       add(out.crawler_paths, `${p.crawler}|${p.path}`, p.requests);
+  for (const [kind, values] of [
+    ["f", d.tierFetches],
+    ["v", d.tierServed],
+  ] as const)
+    for (const [status, n] of Object.entries(values ?? {}))
+      if (TIER_STATUS_SET.has(status) && isCount(n)) add(out.tier_stats, `${kind}:${status}`, n);
   for (const [column, limit] of DIMENSION_MAPS) out[column] = bounded(out[column], limit);
   out.origin_stats = originsBounded(out.origin_stats);
   out.crawler_stats = crawlersBounded(out.crawler_stats);

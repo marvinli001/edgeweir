@@ -76,6 +76,7 @@ const OSS = {
         ["site-management", "docs/guide/site-management.md"],
         ["domains", "docs/guide/domains.md"],
         ["origins-and-cache", "docs/guide/origins-and-cache.md"],
+        ["tiered-cache", "docs/guide/tiered-cache.md"],
         ["image-convert", "docs/guide/image-convert.md"],
         ["markdown-agents", "docs/guide/markdown-agents.md"],
         ["https", "docs/guide/https.md"],

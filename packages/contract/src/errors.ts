@@ -321,6 +321,8 @@ export const errorDefs = {
   LISTEN_PORT_CONFLICT: { status: 400, params: ["port"] },
   /** An extra listener port inside a port pool of the cluster ("from-to/protocol"). */
   LISTEN_PORT_IN_POOL: { status: 400, params: ["port", "pools"] },
+  /** The tiered cache's port is a listener or TCP application port of these clusters (first 5 names). */
+  TIER_PORT_IN_USE: { status: 409, params: ["port", "clusters"] },
   /** A listener port that sites of the cluster still use (first 5 names). */
   LISTEN_PORT_IN_USE: { status: 409, params: ["port", "sites"] },
   /** A site port that is not an HTTP (or HTTPS) listener port of its cluster. */
@@ -437,6 +439,8 @@ export const revisionReasonDefs = {
   origin_ca_rotation_started: { params: [], en: "Origin CA rotation started" },
   origin_ca_rotation_cancelled: { params: [], en: "Origin CA rotation cancelled" },
   origin_ca_retired: { params: [], en: "previous Origin CA retired" },
+  tiered_cache_updated: { params: [], en: "tiered cache updated" },
+  tier_selection_changed: { params: ["count"], en: "upper tiers of {count} sites changed" },
 } as const satisfies Record<string, { params: readonly string[]; en: string }>;
 
 export type RevisionReasonCode = keyof typeof revisionReasonDefs;

@@ -27,6 +27,7 @@ const LOG_COLUMNS = [
   ["crawler", "LowCardinality(String) DEFAULT ''"],
   ["crawler_verification", "LowCardinality(String) DEFAULT ''"],
   ["crawler_charged_micros", "UInt64 DEFAULT 0"],
+  ["tier", "String DEFAULT ''"],
 ] as const;
 
 /** Operator-controlled endpoint from the environment. Credentials stay in headers. */
@@ -198,6 +199,7 @@ export async function insertClickHouseLogs(env: Env, rows: LogEntry[]) {
         crawler: r.crawler,
         crawler_verification: r.crawlerVerification,
         crawler_charged_micros: r.crawlerChargedMicros,
+        tier: r.tier,
       }),
     )
     .join("\n");
@@ -215,7 +217,8 @@ export async function queryClickHouseLogs(env: Env, input: LogFilter): Promise<L
     upstream_addr AS upstreamAddr, upstream_status AS upstreamStatus, upstream_ms AS upstreamMs,
     toFloat64(request_bytes) AS requestBytes, content_type AS contentType, tls_version AS tlsVersion,
     block_reason AS blockReason, block_rule_id AS blockRuleId, query, headers, peer_ip AS peerIp,
-    crawler, crawler_verification AS crawlerVerification, toFloat64(crawler_charged_micros) AS crawlerChargedMicros
+    crawler, crawler_verification AS crawlerVerification, toFloat64(crawler_charged_micros) AS crawlerChargedMicros,
+    tier
     FROM access_log FINAL WHERE site_id = {site:UUID}
       AND time >= fromUnixTimestamp64Milli({from:Int64}) AND time < fromUnixTimestamp64Milli({to:Int64})
       AND ({status:UInt16} = 0 OR status = {status:UInt16}) AND ({ip:String} = '' OR client_ip = {ip:String})

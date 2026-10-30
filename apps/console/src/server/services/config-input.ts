@@ -55,6 +55,7 @@ import { loadOriginProtection } from "./origin-pki";
 import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
 import { loadPlatformProtection, loadSiteProtectionModels } from "./protection";
 import { type Executor, latestRevision, type Tx } from "./revisions";
+import { loadTieredCacheModel } from "./tiered-cache";
 import { loadSiteWafModels } from "./waf";
 
 /**
@@ -873,5 +874,6 @@ export async function loadConfigInput(
     edge: await loadEdgeModel(tx, clusterId),
     greylistChallenges: await greylistChallenges(tx, clusterId),
     aiCrawlers: ai.catalogue,
+    tieredCache: await loadTieredCacheModel(tx, clusterId),
   };
 }

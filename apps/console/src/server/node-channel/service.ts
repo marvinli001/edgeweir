@@ -24,6 +24,8 @@ import {
   MAX_REPORTED_BANS,
   nodeSupportsFeature,
   parseIp,
+  TIER_UPPER_FEATURE,
+  TIERED_CACHE_FEATURE,
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import {
@@ -104,6 +106,7 @@ import {
 import { sessionTicketKeySecrets } from "../services/session-ticket-keys";
 import { s3SecretBinding } from "../services/sites";
 import { ingestStatsBatch, MAX_STATS_PER_REPORT } from "../services/stats";
+import { recordTierLatencies } from "../services/tiered-cache";
 import {
   hasUpgradeTasks,
   pullUpgrade,
@@ -132,6 +135,19 @@ const KEEPALIVE_MS = 15_000;
 export const MAX_WATCH_STREAMS = 2;
 /** Ask nodes to renew once less than a third of the lifetime remains. */
 const RENEW_BEFORE_MS = (NODE_CERT_LIFETIME_DAYS * 24 * 3600 * 1000) / 3;
+/**
+ * A node of the tiered cache whose certificate cannot serve TLS (issued
+ * before node certificates carried server auth: it reports tiered-cache-v1
+ * without tier-upper-v1) renews it to become an upper tier; at most once a
+ * day, in case the new one still does not.
+ */
+export function needsTierCertificate(features: readonly string[], expiresIn: number): boolean {
+  return (
+    nodeSupportsFeature(features, TIERED_CACHE_FEATURE) &&
+    !nodeSupportsFeature(features, TIER_UPPER_FEATURE) &&
+    expiresIn < NODE_CERT_LIFETIME_DAYS * 24 * 3600 * 1000 - 24 * 3600 * 1000
+  );
+}
 /** Tasks handed out per PullTasks call unless the node asks for fewer. */
 const MAX_TASKS_PER_PULL = 20;
 /** Nodes with this feature receive dynamic bans (GetBans, WATCH_EVENT_BANS). */
@@ -624,6 +640,8 @@ export function createNodeService(
                     path: p.path,
                     requests: Number(p.requests),
                   })),
+                  tierFetches: counts(s.tierFetches),
+                  tierServed: counts(s.tierServed),
                 },
               },
             ]
@@ -1029,6 +1047,20 @@ export function createNodeService(
           })),
           now,
         );
+        await recordTierLatencies(
+          tx,
+          node.id,
+          req.tierLatencies.map((l) => {
+            const at = l.measuredAt ? timestampDate(l.measuredAt) : now;
+            // A node clock ahead of the console's never makes a measurement fresher.
+            return {
+              targetId: l.targetId,
+              rttMs: l.rttMs,
+              ok: l.ok,
+              measuredAt: at > now ? now : at,
+            };
+          }),
+        );
       });
       const latest = await currentTarget(node.id);
       const locateAddress = locateAddressOf(
@@ -1050,7 +1082,9 @@ export function createNodeService(
       });
       return {
         latestRevision: BigInt(latest?.revision ?? 0),
-        renewCertificate: expiresIn < RENEW_BEFORE_MS,
+        renewCertificate:
+          expiresIn < RENEW_BEFORE_MS ||
+          needsTierCertificate(info?.supportedFeatures ?? node.supportedFeatures, expiresIn),
         reportIntervalSeconds: heartbeatSeconds(),
         tasksPending,
         // The node probes only while its node group has a region to probe from.

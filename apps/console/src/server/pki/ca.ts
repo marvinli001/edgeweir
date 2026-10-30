@@ -123,10 +123,11 @@ export class CertificateAuthority {
 
   /**
    * Signs a node CSR. The CSR signature is verified; the subject is replaced
-   * by CN=<nodeId> and the certificate is limited to TLS client auth.
+   * by CN=<nodeId>. TLS client auth, and server auth for the name <nodeId>:
+   * an upper tier of the tiered cache serves lower tiers with it (ADR-0073).
    */
   signNodeCsr(csrPem: string, nodeId: string): Promise<IssuedCertificate> {
-    return this.signClientCsr(csrPem, nodeId, NODE_ORGANIZATION);
+    return this.signClientCsr(csrPem, nodeId, NODE_ORGANIZATION, true);
   }
 
   /**
@@ -149,6 +150,7 @@ export class CertificateAuthority {
     csrPem: string,
     commonName: string,
     organization: string,
+    server = false,
   ): Promise<IssuedCertificate> {
     const csr = await verifiedCsr(csrPem);
     const algorithm = csr.publicKey.algorithm as { name: string; namedCurve?: string };
@@ -172,7 +174,15 @@ export class CertificateAuthority {
       extensions: [
         new x509.BasicConstraintsExtension(false, undefined, true),
         new x509.KeyUsagesExtension(x509.KeyUsageFlags.digitalSignature, true),
-        new x509.ExtendedKeyUsageExtension([x509.ExtendedKeyUsage.clientAuth], false),
+        new x509.ExtendedKeyUsageExtension(
+          server
+            ? [x509.ExtendedKeyUsage.clientAuth, x509.ExtendedKeyUsage.serverAuth]
+            : [x509.ExtendedKeyUsage.clientAuth],
+          false,
+        ),
+        ...(server
+          ? [new x509.SubjectAlternativeNameExtension([{ type: "dns", value: commonName }], false)]
+          : []),
         await x509.AuthorityKeyIdentifierExtension.create(this.certificate, false),
         await x509.SubjectKeyIdentifierExtension.create(csr.publicKey),
       ],

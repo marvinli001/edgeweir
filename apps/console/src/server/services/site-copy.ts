@@ -904,6 +904,7 @@ const cloneColumns = (source: SiteRow) => ({
   maintenanceUpdatedAt: source.maintenanceUpdatedAt ? new Date() : null,
   charset: source.charset,
   requestBodyLimit: source.requestBodyLimit,
+  tieredCache: source.tieredCache,
 });
 
 /**

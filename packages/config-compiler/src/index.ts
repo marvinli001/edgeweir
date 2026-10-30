@@ -105,3 +105,10 @@ export {
   parseDomain,
   splitWafExclusions,
 } from "./site";
+export {
+  chooseTiers,
+  type TierCandidate,
+  type TieredCacheModel,
+  type TierHopModel,
+  tierTargetId,
+} from "./tiers";

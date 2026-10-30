@@ -518,7 +518,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
     // The G14 columns, then the G16 ones (ADR-0041) at the end.
     expect(csv[0]).toMatch(/,ja4,wafRuleIds,wafBlocked,ruleIds,userAgent,/);
     expect(csv[0]).toMatch(
-      /,blockReason,blockRuleId,query,headers,peerIp,crawler,crawlerVerification,crawlerChargedMicros$/,
+      /,blockReason,blockRuleId,query,headers,peerIp,crawler,crawlerVerification,crawlerChargedMicros,tier$/,
     );
     const header = csv[0]?.split(",") ?? [];
     const cells = (line: string) => line.slice(1, -1).split('","');

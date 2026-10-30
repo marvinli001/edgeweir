@@ -71,6 +71,7 @@ import {
   siteTagsInput,
 } from "./site-tags";
 import { sshInstallsContract } from "./ssh-install";
+import { tieredCacheContract } from "./tiered-cache";
 import { cnamePrefixInput, cnamePrefixState, unknownHostProcedures } from "./unknown-hosts";
 import { usageContract, usageSettings } from "./usage";
 import { usageGuardContract } from "./usage-guard";
@@ -104,6 +105,7 @@ export * from "./s3-presets";
 export * from "./schemas";
 export * from "./site-copy";
 export * from "./site-tags";
+export * from "./tiered-cache";
 export * from "./unknown-hosts";
 export * from "./waf";
 
@@ -171,6 +173,8 @@ export const contract = {
   markdown: markdownContract,
   /** AI crawl control: the crawler catalogue, global and site actions, managed robots.txt, pay per crawl and the overview. */
   aiCrawl: aiCrawlContract,
+  /** The tiered cache: the console-wide and each site's topology, the upper tiers chosen and their hit ratio. */
+  tieredCache: tieredCacheContract,
   /** What the console knows about an address: lists, bans and client address settings. */
   ipCheck: ipCheckContract,
   certificates: certificatesContract,

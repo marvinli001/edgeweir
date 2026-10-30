@@ -25,6 +25,7 @@ import {
 } from "@edgeweir/proto";
 import { canonicalize, contentHash, matchMap, offlineHostKey } from "./canonical";
 import {
+  clusterTcpPorts,
   compileClientAddress,
   compileConnectionLimits,
   compileListener,
@@ -53,6 +54,7 @@ import {
 import { compileRules } from "./rules";
 import { compileSite, rulesReadBody } from "./site";
 import { byString, sortedSet } from "./sort";
+import { compileTieredCache } from "./tiers";
 
 const defaultCacheZones: CacheZoneModel[] = [
   {
@@ -144,6 +146,15 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
       ),
     }),
   );
+  const l4Apps = compileL4Apps(input.l4Apps);
+  // A tier port a listener or a TCP application took leaves the cluster without tiers
+  // (nodes would refuse the configuration or fail to bind); the console refuses it on save.
+  const tierPort = input.tieredCache?.port ?? 0;
+  const tieredCache = clusterTcpPorts(listeners, l4Apps).some(
+    (r) => tierPort >= r.start && tierPort <= r.end,
+  )
+    ? undefined
+    : compileTieredCache(input.tieredCache, sites);
   const compiled = create(NodeConfigSchema, {
     revision,
     clusterId: input.clusterId,
@@ -174,10 +185,11 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
     originCaPrevious: compileOriginCaPrevious(sites, input),
     platformErrorPages: compilePlatformErrorPages(input.platformErrorPages),
     offlineHosts: compileOfflineHosts(input.offlineHosts),
-    l4Apps: compileL4Apps(input.l4Apps),
+    l4Apps,
     clientAddress: compileClientAddress(input.edge?.clientIp),
     unknownHosts: compileUnknownHosts(input.edge?.unknownHosts, sites),
     aiCrawlers: compileAiCrawlers(input.aiCrawlers, sites),
+    tieredCache,
   });
   compiled.connectionLimits = compileConnectionLimits(
     input.edge?.connectionLimits,
@@ -260,6 +272,7 @@ export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfig
     connectionLimits: target.connectionLimits,
     originCaPrevious: target.originCaPrevious,
     aiCrawlers: target.aiCrawlers,
+    tieredCache: target.tieredCache,
     upsertedSites: target.sites.filter((s) => baseSites.get(s.id) !== siteBytes(s)),
     removedSiteIds: base.sites
       .filter((s) => !targetIds.has(s.id))
@@ -303,6 +316,7 @@ export function applyNodeConfigDiff(base: NodeConfig, diff: NodeConfigDiff): Nod
       connectionLimits: diff.connectionLimits,
       originCaPrevious: diff.originCaPrevious,
       aiCrawlers: diff.aiCrawlers,
+      tieredCache: diff.tieredCache,
       sites,
     }),
   );

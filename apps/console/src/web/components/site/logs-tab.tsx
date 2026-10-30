@@ -589,6 +589,13 @@ function details(
       )),
     );
   if (row.peerIp) add("peer", m.logs_field_peer(), "log-peer-ip", row.peerIp);
+  if (row.tier)
+    add(
+      "tier",
+      m.logs_field_tier(),
+      "log-tier",
+      row.tier === "origin" ? m.tiered_cache_origin() : row.tier,
+    );
   return rows;
 }
 

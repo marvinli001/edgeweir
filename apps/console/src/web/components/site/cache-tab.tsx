@@ -47,6 +47,7 @@ import { NumberField, SwitchField } from "@/components/site/fields";
 import { ImageConvertCard, ImageSavingsCard } from "@/components/site/image-convert-card";
 import { MarkdownCard, MarkdownStatsCard } from "@/components/site/markdown-card";
 import { nextDraftKey, SaveBar, serializeDrafts, useSaveSite } from "@/components/site/save-site";
+import { TieredCacheCard, TierSelectionCard } from "@/components/site/tiered-cache-card";
 import { SortableList, useSortableRow } from "@/components/sortable-list";
 import { localizeError } from "@/lib/errors";
 import { m } from "@/lib/i18n";
@@ -56,7 +57,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Cache tab: development mode, purges, ordered cache rules, how cache keys are built, whether the
- * origin's Cache-Tag reaches clients, compression, WebP / AVIF conversion and
+ * origin's Cache-Tag reaches clients, the tiered cache, compression, WebP / AVIF conversion and
  * charsets. Each card saves on its own.
  */
 export function CacheTab({ site }: { site: Site }) {
@@ -72,6 +73,8 @@ export function CacheTab({ site }: { site: Site }) {
       <PurgeMethodCard key={`purge-${JSON.stringify(purgeMethod)}`} site={site} />
       <CacheTagCard key={`cache-tag-${keepCacheTag}`} site={site} />
       <XCacheCard key={`x-cache-${xCache}`} site={site} />
+      <TieredCacheCard site={site} />
+      <TierSelectionCard siteId={site.id} />
       <CompressionCard site={site} />
       <ImageConvertCard site={site} />
       <ImageSavingsCard siteId={site.id} />

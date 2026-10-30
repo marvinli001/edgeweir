@@ -38,4 +38,10 @@ export const statsDimensionColumns = () => ({
    */
   crawlerStats: jsonb("crawler_stats").$type<Record<string, number>>().notNull().default({}),
   crawlerPaths: jsonb("crawler_paths").$type<Record<string, number>>().notNull().default({}),
+  /**
+   * The tiered cache (tiered-cache-v1, ADR-0073): `f:<status>` fetches from
+   * upper tiers by their cache status ("origin": none answered), and
+   * `v:<status>` requests served to lower tiers by this node's.
+   */
+  tierStats: jsonb("tier_stats").$type<Record<string, number>>().notNull().default({}),
 });

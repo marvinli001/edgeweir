@@ -27,6 +27,9 @@ import { type Executor, publishRevision } from "./revisions";
 import { defineSetting } from "./settings";
 import { findSite } from "./sites";
 
+/** AccessLog.tier as nodes send it (ADR-0073). */
+const TIER_LOG_RE =
+  /^(?:origin|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} (?:HIT|MISS|EXPIRED|STALE|UPDATING|REVALIDATED|BYPASS|-))$/;
 const DAY = 86400000;
 /** a_b_c: protocol, version, SNI, counts and ALPN, then two truncated SHA-256 hashes. */
 const JA4_RE = /^[a-z][a-z0-9]{2}[di][0-9]{4}[a-zA-Z0-9]{2}_[0-9a-f]{12}_[0-9a-f]{12}$/;
@@ -271,6 +274,7 @@ export async function ingestLogs(
         headers,
         peerIp: policy.peer && isIP(l.peerIp) && l.peerIp !== l.clientIp ? l.peerIp : "",
         ...crawlerFields(l),
+        tier: TIER_LOG_RE.test(l.tier) ? l.tier : "",
       },
     ];
   });
@@ -509,6 +513,7 @@ export function logsCsv(entries: LogEntry[]) {
     "crawler",
     "crawlerVerification",
     "crawlerChargedMicros",
+    "tier",
   ] as const;
   const cell = (value: unknown) => {
     let text = Array.isArray(value)
