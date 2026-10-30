@@ -45,6 +45,9 @@ test("login -> clusters & nodes -> sites, then switch to English", async ({ page
   // The "add node" dialog shows a one-time install command with the CA pin at once. The
   // token travels in EDGEWEIR_TOKEN, never as an argument (the process list would show it).
   await page.getByTestId("add-node").click();
+  // SSH install is the default method; the manual command is the other tab (remembered).
+  await expect(page.getByTestId("ssh-install-form")).toBeVisible();
+  await page.getByTestId("enroll-method-manual").click();
   const command = page.getByTestId("install-command");
   const token = /export EDGEWEIR_TOKEN='(ewt_[A-Za-z0-9_-]+)'/;
   await expect(command).toContainText(token);
