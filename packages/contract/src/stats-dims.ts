@@ -62,6 +62,11 @@ export const statsDimensions = z.object({
   /** Requests per block reason. */
   blockReasons: keyed,
   challenges: z.object({ issued: count, passed: count }),
+  /**
+   * Requests of sites with session detection per bot score band (key: the band's lowest score,
+   * BOT_SCORE_BANDS), in band order; bands without requests are left out.
+   */
+  botScores: keyed,
   /** Active nodes of the sites' clusters without stats-dims-v1: the counts are partial. */
   unsupportedNodes: count,
 });

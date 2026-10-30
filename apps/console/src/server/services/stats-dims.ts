@@ -1,5 +1,6 @@
 import {
   BLOCK_REASONS,
+  BOT_SCORE_BANDS,
   BROWSERS,
   DEVICES,
   MAX_STATS_COUNTRIES,
@@ -33,6 +34,8 @@ export interface ReportedDimensions {
   challengesPassed?: number;
   /** Each origin's fetches (MinuteStats.origins, origin-stats-v1, ADR-0052). */
   origins?: ReportedOrigin[];
+  /** Requests per bot score band (MinuteStats.bot_scores, session-detection-v1, ADR-0068). */
+  botScores?: Record<string, number>;
 }
 
 /** An origin's minute as nodes report it (OriginCounter). */
@@ -64,6 +67,8 @@ export interface DimensionBucket {
   challenges_passed: number;
   /** `<origin id>:<field>` → count (ORIGIN_STATS_FIELDS), at most MAX_STATS_ORIGINS origins. */
   origin_stats: Record<string, number>;
+  /** Bot score band (BOT_SCORE_BANDS) → requests. */
+  bot_scores: Record<string, number>;
 }
 
 /** Map columns and how many keys a bucket keeps (null: the key list bounds them). */
@@ -82,6 +87,7 @@ export const DIMENSION_MAPS = [
   ["block_reasons", null],
   // Bounded by originsBounded (MAX_STATS_ORIGINS origins of 18 counters).
   ["origin_stats", null],
+  ["bot_scores", null],
 ] as const satisfies readonly (readonly [keyof DimensionBucket, number | null])[];
 export const DIMENSION_COUNTERS = ["challenges_issued", "challenges_passed"] as const;
 export const DIMENSION_COLUMNS = [
@@ -96,6 +102,7 @@ const KEYS: Record<string, ReadonlySet<string>> = {
   http_versions: new Set(STATS_HTTP_VERSIONS),
   tls_versions: new Set(STATS_TLS_VERSIONS),
   block_reasons: new Set(BLOCK_REASONS),
+  bot_scores: new Set(BOT_SCORE_BANDS),
 };
 const COUNTRY_RE = /^(?:[A-Z]{2})?$/;
 /** Referring hosts as nodes report them: lowercase labels of letters, digits, "-" and "_". */
@@ -156,6 +163,7 @@ export function cleanDimensions(input: ReportedDimensions | undefined): Dimensio
     tls_versions: Object.create(null),
     block_reasons: Object.create(null),
     origin_stats: Object.create(null),
+    bot_scores: Object.create(null),
     challenges_issued:
       Number.isSafeInteger(d.challengesIssued) && (d.challengesIssued ?? 0) > 0
         ? (d.challengesIssued as number)
@@ -184,6 +192,7 @@ export function cleanDimensions(input: ReportedDimensions | undefined): Dimensio
     ["http_versions", d.httpVersions],
     ["tls_versions", d.tlsVersions],
     ["block_reasons", d.blockReasons],
+    ["bot_scores", d.botScores],
   ] as const;
   for (const [column, values] of keyed)
     for (const [key, n] of Object.entries(values ?? {}))

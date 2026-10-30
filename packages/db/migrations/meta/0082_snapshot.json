@@ -1,6 +1,6 @@
 {
-  "id": "cfdac98e-1810-497a-80c8-7260be109967",
-  "prevId": "8edf027c-6640-4208-86d9-9dff88a1a2f3",
+  "id": "a07ed3fc-32da-4288-85a6-551da96c232d",
+  "prevId": "cfdac98e-1810-497a-80c8-7260be109967",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -782,6 +782,13 @@
           "notNull": true,
           "default": "'{}'::jsonb"
         },
+        "bot_scores": {
+          "name": "bot_scores",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
         "image_bytes_saved": {
           "name": "image_bytes_saved",
           "type": "bigint",
@@ -1028,6 +1035,13 @@
         },
         "origin_stats": {
           "name": "origin_stats",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "bot_scores": {
+          "name": "bot_scores",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
@@ -5315,6 +5329,13 @@
           "notNull": true,
           "default": "'{}'::jsonb"
         },
+        "bot_scores": {
+          "name": "bot_scores",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
         "image_bytes_saved": {
           "name": "image_bytes_saved",
           "type": "bigint",
@@ -6378,6 +6399,13 @@
         },
         "image_convert": {
           "name": "image_convert",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "session_detection": {
+          "name": "session_detection",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
@@ -8766,6 +8794,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "''"
+        },
+        "bot_score": {
+          "name": "bot_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         }
       },
       "indexes": {
@@ -11713,6 +11748,13 @@
         },
         "origin_stats": {
           "name": "origin_stats",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "bot_scores": {
+          "name": "bot_scores",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,

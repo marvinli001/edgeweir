@@ -50,6 +50,7 @@ import { ccTemplate, protectionContract, protectionSettings, securityContract } 
 import { ipListsContract, platformRulesContract, rulesContract } from "./rules";
 import * as s from "./schemas";
 import { serviceAccountsContract } from "./service-accounts";
+import { sessionDetectionContract } from "./session-detection";
 import { siteCopyContract } from "./site-copy";
 import {
   batchResult,
@@ -89,6 +90,7 @@ export * from "./protection";
 export * from "./rules";
 export * from "./s3-presets";
 export * from "./schemas";
+export * from "./session-detection";
 export * from "./site-copy";
 export * from "./site-tags";
 export * from "./unknown-hosts";
@@ -152,6 +154,8 @@ export const contract = {
   accessControl: accessControlContract,
   /** A site's WebP / AVIF conversion of cached images and the bytes it saved. */
   imageConvert: imageConvertContract,
+  /** A site's session detection: the bot score, the interstitial and its rules. */
+  sessionDetection: sessionDetectionContract,
   /** What the console knows about an address: lists, bans and client address settings. */
   ipCheck: ipCheckContract,
   certificates: certificatesContract,

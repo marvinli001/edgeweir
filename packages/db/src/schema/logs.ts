@@ -68,6 +68,8 @@ export const accessLog = pgTable(
     query: text("query").notNull().default(""),
     headers: jsonb("headers").$type<Record<string, string>>().notNull().default({}),
     peerIp: text("peer_ip").notNull().default(""),
+    /** The request's bot score 1-99 (session detection, ADR-0068); 0 without. */
+    botScore: integer("bot_score").notNull().default(0),
   },
   (t) => [
     primaryKey({ columns: [t.time, t.id] }),

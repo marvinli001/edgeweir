@@ -3,6 +3,7 @@ import {
   type ErrorPage,
   type ImageConvertSettings,
   type Revision,
+  type SessionDetectionSettings,
   SITE_COPY_LIST_PARTS,
   type SiteCloneInput,
   type SiteCopyChange,
@@ -26,6 +27,7 @@ import type { MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
 import { readImageConvert } from "../lib/image-convert";
 import { readActiveHealthCheck, readSessionAffinity } from "../lib/pool-settings";
+import { readSessionDetection } from "../lib/session-detection";
 import { formatDomain, normalizeDomains } from "../lib/site-domains";
 import { PURGE_KEY, siteSecretBinding, storeSiteSecret } from "../lib/site-secrets";
 import { checkSiteLists, storeAccessControl } from "./access-control";
@@ -667,6 +669,17 @@ export const COPY_PARTS: Record<SiteCopyPart, Part<unknown>> = {
       await tx
         .update(schema.site)
         .set({ imageConvert: value })
+        .where(eq(schema.site.id, target.id));
+    },
+  }),
+  sessionDetection: part<SessionDetectionSettings>({
+    async read(_db, site) {
+      return readSessionDetection(site.sessionDetection);
+    },
+    async write(tx, target, value) {
+      await tx
+        .update(schema.site)
+        .set({ sessionDetection: value })
         .where(eq(schema.site.id, target.id));
     },
   }),

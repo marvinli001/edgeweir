@@ -23,6 +23,7 @@ const LOG_COLUMNS = [
   ["query", "String DEFAULT ''"],
   ["headers", "Map(String, String)"],
   ["peer_ip", "String DEFAULT ''"],
+  ["bot_score", "UInt8 DEFAULT 0"],
 ] as const;
 
 /** Operator-controlled endpoint from the environment. Credentials stay in headers. */
@@ -186,6 +187,7 @@ export async function insertClickHouseLogs(env: Env, rows: LogEntry[]) {
         query: r.query,
         headers: r.headers,
         peer_ip: r.peerIp,
+        bot_score: r.botScore,
       }),
     )
     .join("\n");
@@ -202,7 +204,7 @@ export async function queryClickHouseLogs(env: Env, input: LogFilter): Promise<L
     user_agent AS userAgent, referer, http_version AS httpVersion, scheme, country, asn, as_name AS asName,
     upstream_addr AS upstreamAddr, upstream_status AS upstreamStatus, upstream_ms AS upstreamMs,
     toFloat64(request_bytes) AS requestBytes, content_type AS contentType, tls_version AS tlsVersion,
-    block_reason AS blockReason, block_rule_id AS blockRuleId, query, headers, peer_ip AS peerIp
+    block_reason AS blockReason, block_rule_id AS blockRuleId, query, headers, peer_ip AS peerIp, bot_score AS botScore
     FROM access_log FINAL WHERE site_id = {site:UUID}
       AND time >= fromUnixTimestamp64Milli({from:Int64}) AND time < fromUnixTimestamp64Milli({to:Int64})
       AND ({status:UInt16} = 0 OR status = {status:UInt16}) AND ({ip:String} = '' OR client_ip = {ip:String})

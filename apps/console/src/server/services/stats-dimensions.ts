@@ -104,6 +104,10 @@ export async function statsDimensions(
     httpVersions: keyed("http_versions"),
     tlsVersions: keyed("tls_versions"),
     blockReasons: keyed("block_reasons"),
+    botScores: [...(maps.get("bot_scores") ?? new Map<string, number>())]
+      .filter(([, n]) => n > 0)
+      .sort((a, b) => Number(a[0]) - Number(b[0]))
+      .map(([key, requests]) => ({ key, requests })),
     challenges: {
       issued: maps.get("challenges_issued")?.get("") ?? 0,
       passed: maps.get("challenges_passed")?.get("") ?? 0,

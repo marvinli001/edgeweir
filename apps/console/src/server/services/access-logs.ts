@@ -255,6 +255,8 @@ export async function ingestLogs(
         query: policy.query ? clean(l.query, 2048) : "",
         headers,
         peerIp: policy.peer && isIP(l.peerIp) && l.peerIp !== l.clientIp ? l.peerIp : "",
+        botScore:
+          Number.isInteger(l.botScore) && l.botScore >= 1 && l.botScore <= 99 ? l.botScore : 0,
       },
     ];
   });
@@ -486,6 +488,7 @@ export function logsCsv(entries: LogEntry[]) {
     "query",
     "headers",
     "peerIp",
+    "botScore",
   ] as const;
   const cell = (value: unknown) => {
     let text = Array.isArray(value)

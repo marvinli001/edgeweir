@@ -39,6 +39,7 @@ import {
 import { getSiteMaintenance, updateSiteMaintenance } from "../../services/maintenance";
 import { siteOriginHealth } from "../../services/origin-health";
 import { originQuality } from "../../services/origin-quality";
+import { getSessionDetection, updateSessionDetection } from "../../services/session-detection";
 import { batchDeleteSites, batchSetEnabled } from "../../services/site-batch";
 import { cloneSite, copySiteSettings, previewSiteCopy } from "../../services/site-copy";
 import { siteLaunch } from "../../services/site-launch";
@@ -146,6 +147,14 @@ export const sitesRouter = {
     ),
     savings: authed.imageConvert.savings.handler(({ input, context }) =>
       imageSavings(context.app.db, input),
+    ),
+  },
+  sessionDetection: {
+    get: authed.sessionDetection.get.handler(({ input, context }) =>
+      getSessionDetection(context.app.db, input.id),
+    ),
+    update: authed.sessionDetection.update.handler(({ input, context }) =>
+      updateSessionDetection(context.app.db, input, { actor: context.actor }),
     ),
   },
   accessControl: {

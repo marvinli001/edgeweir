@@ -256,6 +256,8 @@ export const siteFeatures = z.object({
   accessLogsV2: featureAvailability,
   /** WebP / AVIF conversion of cached images (image-convert-v1). */
   imageConvert: featureAvailability,
+  /** Session detection and the bot score fields (session-detection-v1). */
+  sessionDetection: featureAvailability,
 });
 
 const idParam = z.object({ id: uuid });

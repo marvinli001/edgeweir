@@ -165,6 +165,8 @@ export const logEntry = z.object({
   headers: z.record(z.string(), z.string()).default({}),
   /** The connection's peer when it differs from clientIp, while the site records it. */
   peerIp: z.string().default(""),
+  /** Bot score 1-99 (session detection); 0 when the site does not score. */
+  botScore: z.number().int().default(0),
 });
 export type LogEntry = z.infer<typeof logEntry>;
 

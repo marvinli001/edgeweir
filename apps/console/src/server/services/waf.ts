@@ -20,6 +20,7 @@ import {
   RULES_V2_FEATURE,
   RULES_V3_FEATURE,
   SESSION_AFFINITY_FEATURE,
+  SESSION_DETECTION_FEATURE,
   SITE_CONTENT_FEATURE,
   type SiteWafModel,
   WAF_V2_FEATURE,
@@ -245,6 +246,7 @@ export async function siteFeatures(db: Database, siteId: string): Promise<SiteFe
     challengeV2: byNodes(CHALLENGE_V2_FEATURE),
     accessLogsV2: byNodes(ACCESS_LOGS_V2_FEATURE),
     imageConvert: byNodes(IMAGE_CONVERT_FEATURE),
+    sessionDetection: byNodes(SESSION_DETECTION_FEATURE),
   };
 }
 

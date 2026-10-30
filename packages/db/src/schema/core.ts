@@ -363,6 +363,14 @@ export const site = pgTable(
      * image-convert-v1); `{}` means never set (off, the defaults).
      */
     imageConvert: jsonb("image_convert").$type<Record<string, unknown>>().notNull().default({}),
+    /**
+     * Session detection and the bot score (contract `sessionDetectionSettings`,
+     * session-detection-v1, ADR-0068); `{}` means never set (off).
+     */
+    sessionDetection: jsonb("session_detection")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
     cacheGeneration: bigint("cache_generation", { mode: "number" }).notNull().default(1),
     /** Cache key policy (contract `cacheKeyPolicy`); `{}` means the defaults. */
     cacheKey: jsonb("cache_key").$type<Record<string, unknown>>().notNull().default({}),

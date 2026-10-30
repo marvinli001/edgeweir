@@ -23,4 +23,9 @@ export const statsDimensionColumns = () => ({
    * `<origin id>:<field>` (ORIGIN_STATS_FIELDS), at most 64 origins.
    */
   originStats: jsonb("origin_stats").$type<Record<string, number>>().notNull().default({}),
+  /**
+   * Requests of sites with session detection per bot score band (ADR-0068):
+   * keys "1" (scores 1-9), "10" ... "90" (BOT_SCORE_BANDS).
+   */
+  botScores: jsonb("bot_scores").$type<Record<string, number>>().notNull().default({}),
 });

@@ -583,6 +583,7 @@ export function createNodeService(
                   httpVersions: counts(s.httpVersions),
                   tlsVersions: counts(s.tlsVersions),
                   blockReasons: counts(s.blockReasons),
+                  botScores: counts(s.botScores),
                   challengesIssued: Number(s.challengesIssued),
                   challengesPassed: Number(s.challengesPassed),
                   origins: s.origins.map((o) => ({

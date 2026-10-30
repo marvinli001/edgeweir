@@ -149,6 +149,7 @@ export const auditActions = [
   "site.https_update",
   "site.logs_configure",
   "site.image_convert_update",
+  "site.session_detection_update",
   "site.maintenance_update",
   "site.protection_update",
   "site.purge_all",
