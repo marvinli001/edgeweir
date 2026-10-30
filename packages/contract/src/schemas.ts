@@ -1140,6 +1140,14 @@ export const node = z.object({
       longitude: z.number().nullable(),
     })
     .nullable(),
+  /**
+   * When the operator asked the node to decommission itself
+   * (decommission-v1); null when no decommission waits. The node is deleted
+   * once it has done so.
+   */
+  decommissionRequestedAt: isoDateTime.nullable(),
+  /** Why the node's last decommission failed (its error code and reason), null otherwise. */
+  decommissionError: z.string().nullable(),
 });
 
 export const nodeUpdateInput = z.object({

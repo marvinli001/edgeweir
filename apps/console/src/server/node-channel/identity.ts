@@ -6,7 +6,7 @@ import type { IssuedCertificate } from "../pki/ca";
 import { acceptedCertificate } from "../services/nodes";
 
 /** Signs the CSR of an enrollment or renewal; one the CA refuses is the caller's error. */
-export async function signCsr(sign: () => Promise<IssuedCertificate>): Promise<IssuedCertificate> {
+export async function signCsr<T = IssuedCertificate>(sign: () => Promise<T>): Promise<T> {
   try {
     return await sign();
   } catch (error) {
@@ -59,4 +59,5 @@ export const nodeInfoColumns = (info: NodeInfo | undefined) => ({
   engineVersion: info?.engineVersion ?? "",
   os: info?.os ?? "",
   arch: info?.arch ?? "",
+  machineId: /^[0-9a-f]{64}$/.test(info?.machineId ?? "") ? (info?.machineId ?? "") : "",
 });

@@ -583,6 +583,8 @@
 | [`nodes.disable`](#nodesdisable) | `POST /nodes/{id}/disable` | 写 |
 | [`nodes.enable`](#nodesenable) | `POST /nodes/{id}/enable` | 写 |
 | [`nodes.delete`](#nodesdelete) | `DELETE /nodes/{id}` | 写 |
+| [`nodes.decommission`](#nodesdecommission) | `POST /nodes/{id}/decommission` | 写 |
+| [`nodes.cancelDecommission`](#nodescanceldecommission) | `DELETE /nodes/{id}/decommission` | 写 |
 | [`nodes.setProbe`](#nodessetprobe) | `PUT /nodes/{id}/probe` | 写 |
 | [`nodes.setAddresses`](#nodessetaddresses) | `PUT /nodes/{id}/addresses` | 写 |
 | [`nodes.setCache`](#nodessetcache) | `PUT /nodes/{id}/cache` | 写 |
@@ -676,6 +678,42 @@
 | 错误 | 状态 | 条件 |
 | --- | --- | --- |
 | `NODE_NOT_FOUND` | 404 | 节点不存在 |
+
+### `nodes.decommission`
+
+`POST /nodes/{id}/decommission` · 写
+
+让节点停止服务并删除身份（能力 `decommission-v1`，edgeweir-node 1.7.0 起），节点报告完成后控制台吊销其证书并删除节点，见[退役节点](../../deploy/nodes.md#退役节点)。离线节点在下次连接时收到任务。服务账号不能调用。审计 `node.decommission`；节点报告失败时 `node.decommission_failed`，请求清除，`decommissionError` 为原因。
+
+| 参数 | 位置 | 类型 | 必填 | 约束与默认值 | 说明 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | path | uuid | 是 | — | 节点 ID |
+
+响应：[节点](#节点对象)，`decommissionRequestedAt` 非空。
+
+| 错误 | 状态 | 条件 |
+| --- | --- | --- |
+| `NODE_NOT_FOUND` | 404 | 节点不存在 |
+| `NODE_CAPABILITY_REQUIRED` | 409 | 节点缺少 `decommission-v1` |
+| `NODE_DECOMMISSION_DISABLED` | 409 | 节点已停用 |
+| `NODE_DECOMMISSION_PENDING` | 409 | 已有未执行的请求 |
+
+### `nodes.cancelDecommission`
+
+`DELETE /nodes/{id}/decommission` · 写
+
+撤回节点尚未执行的退役请求。审计 `node.decommission_cancel`。
+
+| 参数 | 位置 | 类型 | 必填 | 约束与默认值 | 说明 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | path | uuid | 是 | — | 节点 ID |
+
+响应：[节点](#节点对象)。
+
+| 错误 | 状态 | 条件 |
+| --- | --- | --- |
+| `NODE_NOT_FOUND` | 404 | 节点不存在 |
+| `NODE_DECOMMISSION_NOT_PENDING` | 409 | 没有未执行的请求 |
 
 ### `nodes.setProbe`
 
@@ -1333,6 +1371,8 @@ GitHub 发布源经 releases API 查询，镜像读取 `<发布源>/latest`。�
 | `regionName` | string | 节点组的区域名称，或 `null` |
 | `hostname` | string | 主机名 |
 | `status` | enum | `active` / `disabled` |
+| `decommissionRequestedAt` | datetime | 等待节点执行的退役请求时间，或 `null` |
+| `decommissionError` | string | 上次退役失败的原因（`decommission_failed: …`），或 `null` |
 | `online` | boolean | 在线 |
 | `lastSeenAt` | datetime | 最近一次心跳，或 `null` |
 | `enrolledAt` | datetime | 注册时间，或 `null` |

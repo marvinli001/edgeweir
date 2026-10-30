@@ -1,6 +1,6 @@
 {
-  "id": "cfdac98e-1810-497a-80c8-7260be109967",
-  "prevId": "8edf027c-6640-4208-86d9-9dff88a1a2f3",
+  "id": "1ee5b7e9-9a9d-4910-9109-d4c9edaa3499",
+  "prevId": "cfdac98e-1810-497a-80c8-7260be109967",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -4708,6 +4708,37 @@
           "primaryKey": false,
           "notNull": false
         },
+        "key_sha256": {
+          "name": "key_sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "machine_id": {
+          "name": "machine_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "decommission_requested_at": {
+          "name": "decommission_requested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decommission_task_id": {
+          "name": "decommission_task_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decommission_error": {
+          "name": "decommission_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -4735,6 +4766,21 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "node_key_sha256_idx": {
+          "name": "node_key_sha256_idx",
+          "columns": [
+            {
+              "expression": "key_sha256",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
           "concurrently": false,
           "method": "btree",
           "with": {}

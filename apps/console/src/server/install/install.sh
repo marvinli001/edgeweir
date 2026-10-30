@@ -41,6 +41,16 @@
 #      not. --no-start skips the service and this check.
 # It never stores SSH credentials and never phones home.
 #
+# For unattended installs (the console's SSH install reads it) every step
+# writes one line to stdout, `EDGEWEIR_RESULT {"v":1,"step":...,"status":...}`
+# (steps check, download, verify, install, enroll, start, health; the enroll
+# line comes from edgeweir-node itself since 1.7.0), and the last line is
+# `{"step":"done","status":"ok"|"failed","failed_step":...,"exit":N}`. Exit
+# codes: 0 installed; 20 options; 21 unsupported system; 22 node channel
+# unreachable or not the pinned CA; 23 download; 24 signature or checksum;
+# 25 package install; 26 enrollment (also: enrolled with another console);
+# 27 service start; 28 not healthy in time; 29 another install.sh is running.
+#
 # The whole script is a set of functions; `main` runs on the last line, so a
 # download cut short executes nothing.
 set -euo pipefail
@@ -58,6 +68,7 @@ constants() {
   NGINX_BIN="/usr/lib/edgeweir-openresty/nginx/sbin/nginx"
   # The oldest C library the packages run on (RHEL 9, Debian 12, Ubuntu 22.04).
   GLIBC_MIN="2.34"
+  INSTALL_LOCK="/run/edgeweir-install.lock"
   # Pinned cosign for machines without one; SHA-256 values from the official
   # cosign_checksums.txt of the sigstore/cosign v3.1.3 release.
   COSIGN_VERSION="3.1.3"
@@ -68,10 +79,70 @@ constants() {
   SEMVER_RE='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
 }
 
-log() { printf '\033[1;34m[edgeweir]\033[0m %s\n' "$*" >&2; }
-die() {
-  printf '\033[1;31m[edgeweir] error:\033[0m %s\n' "$*" >&2
-  exit 1
+# Colours only on a terminal (not in a log file or an SSH install's output).
+color() { [ -t 2 ] && [ -z "${NO_COLOR:-}" ]; }
+log() {
+  if color; then printf '\033[1;34m[edgeweir]\033[0m %s\n' "$*" >&2; else printf '[edgeweir] %s\n' "$*" >&2; fi
+}
+# The JSON string of $1 (one line).
+json_string() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\t'/ }"
+  s="${s//$'\n'/ }"
+  s="${s//$'\r'/ }"
+  printf '"%s"' "$(printf '%s' "$s" | tr -d '\000-\037')"
+}
+# result STEP STATUS [JSON FIELDS]: a machine-readable progress line on stdout.
+result() {
+  printf 'EDGEWEIR_RESULT {"v":1,"step":"%s","status":"%s"%s}\n' "$1" "$2" "${3:+,$3}"
+}
+# The exit code of a failure in step $1 (outside main: 1).
+step_exit() {
+  case "$1" in
+    args) echo 20 ;; check) echo 21 ;; download) echo 23 ;; verify) echo 24 ;; install) echo 25 ;;
+    enroll) echo 26 ;; start) echo 27 ;; health) echo 28 ;; *) echo 1 ;;
+  esac
+}
+die() { die_with "$(step_exit "${STEP:-}")" "$@"; }
+# die_with CODE MESSAGE: fails the current step with CODE (and its result lines in main).
+die_with() {
+  local code="$1"
+  shift
+  if color; then printf '\033[1;31m[edgeweir] error:\033[0m %s\n' "$*" >&2; else printf '[edgeweir] error: %s\n' "$*" >&2; fi
+  if [ -n "${STEP:-}" ]; then
+    # edgeweir-node wrote its own enroll line.
+    if [ "$STEP" != "enroll" ] || [ "${NODE_RESULTS:-false}" != "true" ]; then
+      result "$STEP" failed "\"exit\":${code},\"message\":$(json_string "$*")"
+    fi
+    result "done" failed "\"failed_step\":\"${STEP}\",\"exit\":${code}"
+    REPORTED="true"
+  fi
+  exit "$code"
+}
+# On exit: removes the temporary directory; a command that failed under
+# `set -e` fails the current step like die (its exit code becomes the step's).
+on_exit() {
+  local status=$?
+  [ -z "${WORK:-}" ] || rm -rf "$WORK"
+  if [ "$status" -ne 0 ] && [ -n "${STEP:-}" ] && [ "${REPORTED:-false}" != "true" ]; then
+    REPORTED="true"
+    local code
+    code="$(step_exit "$STEP")"
+    [ "$status" -ne 20 ] || code=20
+    result "$STEP" failed "\"exit\":${code},\"message\":$(json_string "a command failed (exit ${status})")"
+    result "done" failed "\"failed_step\":\"${STEP}\",\"exit\":${code}"
+    exit "$code"
+  fi
+}
+
+# apt-get without questions: waits for a dpkg lock held by unattended-upgrades
+# (fresh cloud machines) instead of failing, and keeps changed configuration files.
+apt_install() {
+  DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get \
+    -o DPkg::Lock::Timeout=300 -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
+    install -y --no-install-recommends "$@"
 }
 
 usage() {
@@ -97,7 +168,7 @@ Usage:
                        edgeweir-node, replaces its identity and starts it again
   --allow-unsigned     skip the cosign signature check (development only; SHA-256 is still verified)
 USAGE
-  exit 2
+  exit "${1:-20}"
 }
 
 parse_args() {
@@ -127,7 +198,7 @@ parse_args() {
       --allow-unsigned) ALLOW_UNSIGNED="true"; shift ;;
       --token | --token=*)
         die "--token is not accepted (the process list would show it): export EDGEWEIR_TOKEN or use --token-file" ;;
-      -h | --help) usage ;;
+      -h | --help) usage 0 ;;
       *) die "unknown option: $1" ;;
     esac
   done
@@ -242,7 +313,7 @@ check_server() {
   authority="$(server_authority)"
   status="$(curl -sk -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 20 "${SERVER%/}/" 2>/dev/null || true)"
   if ! [[ "$status" =~ ^[1-5][0-9][0-9]$ ]]; then
-    die "cannot reach the node channel ${SERVER}: check the address and its DNS name, and that the firewall or security group lets this host reach ${authority} (the console's EDGEWEIR_NODE_API_URL)"
+    die_with 22 "cannot reach the node channel ${SERVER}: check the address and its DNS name, and that the firewall or security group lets this host reach ${authority} (the console's EDGEWEIR_NODE_API_URL)"
   fi
   if ! command -v openssl >/dev/null 2>&1; then
     log "node channel reachable (${authority}); openssl not installed, the CA is checked at enrollment"
@@ -266,7 +337,7 @@ check_server() {
   fi
   presented="$(printf '%s' "$presented" | openssl x509 -outform DER 2>/dev/null | sha256sum | awk '{ print $1 }')"
   if [ "$presented" != "$CA_SHA256" ]; then
-    die "${SERVER} does not present the console's node CA (--ca-sha256): a proxy or CDN terminates TLS in front of the node channel, or the address points at another service; nodes need a direct or layer-4 (TCP passthrough) connection to the console's port"
+    die_with 22 "${SERVER} does not present the console's node CA (--ca-sha256): a proxy or CDN terminates TLS in front of the node channel, or the address points at another service; nodes need a direct or layer-4 (TCP passthrough) connection to the console's port"
   fi
   log "node channel reachable and presents the pinned CA (${authority})"
 }
@@ -284,8 +355,8 @@ check_websocket_entry() {
   status="$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 20 "$url" 2>/dev/null || true)"
   case "$status" in
     426) log "node channel WebSocket entry reachable (${url}); the CA is checked at enrollment" ;;
-    404) die "${url} answers 404: the console's WebSocket entry is closed (save a wss:// node channel URL in System settings or set EDGEWEIR_NODE_API_WEBSOCKET=true), or the address points at another service" ;;
-    *) die "cannot reach the node channel WebSocket entry ${url} (HTTP ${status:-none}): check the address and its DNS name, and that this host can reach the console's web port" ;;
+    404) die_with 22 "${url} answers 404: the console's WebSocket entry is closed (save a wss:// node channel URL in System settings or set EDGEWEIR_NODE_API_WEBSOCKET=true), or the address points at another service" ;;
+    *) die_with 22 "cannot reach the node channel WebSocket entry ${url} (HTTP ${status:-none}): check the address and its DNS name, and that this host can reach the console's web port" ;;
   esac
 }
 
@@ -485,7 +556,7 @@ pick_openresty() {
     glibc="$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{ print $2 }' || true)"
   fi
   if [[ "$glibc" =~ ^[0-9]+\.[0-9]+$ ]] && ! version_at_least "$glibc" "$GLIBC_MIN"; then
-    die "${OPENRESTY_PACKAGE} needs glibc ${GLIBC_MIN} or later (this machine has ${glibc}): RHEL, Rocky or AlmaLinux 9, Debian 12, Ubuntu 22.04 or later"
+    die_with 21 "${OPENRESTY_PACKAGE} needs glibc ${GLIBC_MIN} or later (this machine has ${glibc}): RHEL, Rocky or AlmaLinux 9, Debian 12, Ubuntu 22.04 or later"
   fi
   if [ "$OPENRESTY_FORMAT" = "deb" ]; then arch="$ARCH"; else arch="$RPM_ARCH"; fi
   names="$(awk '{ sub(/^\*/, "", $2); print $2 }' "${WORK}/checksums.txt")"
@@ -512,7 +583,7 @@ install_openresty() {
     case "$OPENRESTY_FORMAT" in
       deb)
         if command -v apt-get >/dev/null 2>&1; then
-          apt-get install -y --no-install-recommends "$main" ${module:+"$module"}
+          apt_install "$main" ${module:+"$module"}
         else
           dpkg -i "$main" ${module:+"$module"}
         fi
@@ -565,7 +636,7 @@ install_package() {
   case "$FORMAT" in
     deb)
       if command -v apt-get >/dev/null 2>&1; then
-        apt-get install -y --no-install-recommends "${WORK}/${ARTIFACT}"
+        apt_install "${WORK}/${ARTIFACT}"
       else
         dpkg -i "${WORK}/${ARTIFACT}"
       fi
@@ -597,11 +668,40 @@ installing() {
   enrolling || [ "$VERSION" != "latest" ] || [ ! -x /usr/bin/edgeweir-node ]
 }
 
-enroll() {
-  if ! enrolling; then
+# Whether the installed edgeweir-node writes its own enroll result line and
+# knows `enroll --if-not-enrolled` (1.7.0 and later).
+node_results() {
+  # Go's flag package lists it with one dash: `-if-not-enrolled`.
+  { /usr/bin/edgeweir-node enroll -h 2>&1 || true; } | grep -q -- '-if-not-enrolled'
+}
+
+# An enrolled host: edgeweir-node 1.7.0 and later confirm the identity is
+# this console's (--if-not-enrolled; another console's: exit 11, and the
+# install fails instead of restarting a node of another console) and write
+# the node's id in their result line.
+confirm_enrollment() {
+  if ! node_results; then
     log "already enrolled; to enroll again with a new token, run this command with --force"
+    result enroll already_enrolled
     return 0
   fi
+  NODE_RESULTS="true"
+  local status=0
+  /usr/bin/edgeweir-node enroll --if-not-enrolled --server "$SERVER" --ca-sha256 "$CA_SHA256" \
+    --state-dir "$STATE_DIR" || status=$?
+  case "$status" in
+    0) log "already enrolled with this console; to enroll again with a new token, run this command with --force" ;;
+    11) die "this host is enrolled with another console (a different CA); run with --force and a token of this console to move it" ;;
+    *) die "could not confirm the enrollment (edgeweir-node enroll exit ${status})" ;;
+  esac
+}
+
+enroll() {
+  if ! enrolling; then
+    confirm_enrollment
+    return 0
+  fi
+  if node_results; then NODE_RESULTS="true"; fi
   log "enrolling with ${SERVER}"
   # The token goes through the environment only (edgeweir-node reads EDGEWEIR_TOKEN).
   if [ "$ENROLLED" = "true" ]; then
@@ -614,12 +714,14 @@ enroll() {
     EDGEWEIR_TOKEN="$TOKEN" /usr/bin/edgeweir-node enroll --server "$SERVER" --ca-sha256 "$CA_SHA256" \
       --state-dir "$STATE_DIR" || die "enrollment failed"
   fi
+  [ "${NODE_RESULTS:-false}" = "true" ] || result enroll enrolled
 }
 
 start_service() {
   if [ "$NO_START" = "true" ]; then
     log "done: installed and enrolled; --no-start given, the service was not started"
     log "start it with: systemctl enable --now edgeweir-node.service"
+    result start skipped
     return 0
   fi
   systemctl daemon-reload
@@ -632,6 +734,7 @@ start_service() {
   fi
   systemctl enable --now edgeweir-node.service
   log "edgeweir-node.service started"
+  result start ok
 }
 
 # Waits for the started node: `edgeweir-node healthcheck` passes once the
@@ -639,7 +742,10 @@ start_service() {
 # kept in the state directory). EDGEWEIR_HEALTHCHECK_TIMEOUT (seconds,
 # default 90) exists for tests.
 check_health() {
-  [ "$NO_START" != "true" ] || return 0
+  if [ "$NO_START" = "true" ]; then
+    result health skipped
+    return 0
+  fi
   local timeout="${EDGEWEIR_HEALTHCHECK_TIMEOUT:-90}" interval=3 attempt=1 attempts output=""
   [[ "$timeout" =~ ^[0-9]{1,4}$ ]] || timeout=90
   attempts=$(((timeout + interval - 1) / interval))
@@ -649,6 +755,7 @@ check_health() {
     if output="$(/usr/bin/edgeweir-node healthcheck 2>&1)"; then
       output="${output##*$'\n'}"
       log "done: edgeweir-node is healthy (${output#healthy: }); logs: journalctl -u edgeweir-node -f"
+      result health ok
       return 0
     fi
     output="${output##*$'\n'}"
@@ -660,13 +767,20 @@ check_health() {
 }
 
 main() {
+  STEP="args"
+  trap on_exit EXIT
   constants
   parse_args "$@"
   read_token
+  STEP="check"
   check_system
+  # One install at a time on a host (two SSH runs, or one beside a manual run).
+  if command -v flock >/dev/null 2>&1; then
+    exec 9>>"$INSTALL_LOCK"
+    flock -n 9 || die_with 29 "another install.sh is running on this host"
+  fi
   umask 022
   WORK="$(mktemp -d)"
-  trap 'rm -rf "$WORK"' EXIT
   # apt reads local packages as its _apt user (otherwise it notes "Permission
   # denied"); $WORK holds only public release files, never the token.
   chmod 0755 "$WORK"
@@ -674,29 +788,50 @@ main() {
     check_server
   fi
   if ! installing; then
+    result check ok
     log "already enrolled: nothing is downloaded or reinstalled (--version VER installs that version)"
+    STEP="enroll"
+    confirm_enrollment
     RESTART="true"
+    STEP="start"
     start_service
+    STEP="health"
     check_health
+    result "done" ok '"exit":0'
     return 0
   fi
+  STEP="download"
   resolve_version
   if enrolling; then
+    STEP="check"
     check_websocket_version
   fi
+  result check ok
+  STEP="download"
   log "installing edgeweir-node ${VERSION} (${FORMAT}, ${ARCH})"
   fetch "checksums.txt"
+  STEP="verify"
   verify_signature
+  STEP="download"
   pick_artifact
   pick_openresty
   fetch "$ARTIFACT"
   fetch_openresty
+  result download ok
+  STEP="verify"
   verify_checksum
+  result verify ok
+  STEP="install"
   install_openresty
   install_package
+  result install ok
+  STEP="enroll"
   enroll
+  STEP="start"
   start_service
+  STEP="health"
   check_health
+  result "done" ok '"exit":0'
 }
 
 main "$@"

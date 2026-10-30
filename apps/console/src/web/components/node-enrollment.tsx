@@ -132,6 +132,8 @@ function finished(status: EnrollmentTokenStatus | undefined, expired: boolean) {
   );
 }
 
+const FAR_FUTURE = "9999-12-31T00:00:00.000Z";
+
 /** True once `iso` has passed (re-renders at that moment). */
 function usePassed(iso: string): boolean {
   const [passed, setPassed] = React.useState(() => Date.parse(iso) <= Date.now());
@@ -153,13 +155,18 @@ function usePassed(iso: string): boolean {
  * token expired, or the enrolled node coming online, applying its
  * configuration, serving and having an address DNS can use.
  */
-export function EnrollProgress({ result }: { result: EnrollmentTokenResult }) {
-  const expired = usePassed(result.expiresAt);
+export function EnrollProgress({
+  result,
+}: {
+  /** Without expiresAt (an SSH install), the token's own expiry from its status. */
+  result: Pick<EnrollmentTokenResult, "tokenId"> & { expiresAt?: string };
+}) {
   const status = useQuery({
     ...orpc.clusters.getEnrollmentToken.queryOptions({ input: { id: result.tokenId } }),
     refetchInterval: (query) => (finished(query.state.data, expired) ? false : 3000),
     meta: { background: true },
   });
+  const expired = usePassed(result.expiresAt ?? status.data?.expiresAt ?? FAR_FUTURE);
   const data = status.data;
   const node = data?.node ?? null;
   const used = !!data?.usedAt;

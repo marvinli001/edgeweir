@@ -116,3 +116,9 @@ export const NODE_LOGS_FEATURE = "node-logs-v1";
  * from a node without it is refused.
  */
 export const NODE_DEBUG_LOGS_FEATURE = "debug-logs-v1";
+/**
+ * decommission-v1: DecommissionTask (proto v1.8.0). The node reports the
+ * task succeeded, then stops serving and forgets its identity; the console
+ * deletes it (ADR-0067).
+ */
+export const NODE_DECOMMISSION_FEATURE = "decommission-v1";

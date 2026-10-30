@@ -170,3 +170,46 @@ export async function claimEnrollmentToken(tx: Tx, token: string) {
     .for("update");
   return row;
 }
+
+/**
+ * The token with this value, used or not (locked): an Enroll with the key of
+ * an enrolled node may repeat the token that node used (ADR-0067).
+ */
+export async function findEnrollmentToken(tx: Tx, token: string) {
+  const [row] = await tx
+    .select()
+    .from(schema.enrollmentToken)
+    .where(eq(schema.enrollmentToken.tokenHash, hashToken(token)))
+    .for("update");
+  return row;
+}
+
+/**
+ * Ends an unused token now (an SSH install that failed or was canceled) and
+ * returns the node it enrolled, if enrollment won the race.
+ */
+export async function expireUnusedEnrollmentToken(
+  db: Database,
+  id: string,
+): Promise<{ usedByNodeId: string | null }> {
+  await db
+    .update(schema.enrollmentToken)
+    .set({ expiresAt: new Date() })
+    .where(and(eq(schema.enrollmentToken.id, id), isNull(schema.enrollmentToken.usedAt)));
+  return enrollmentTokenUse(db, id);
+}
+
+/** The node a token enrolled, null while it is unused. */
+export async function enrollmentTokenUse(
+  db: Database,
+  id: string,
+): Promise<{ usedByNodeId: string | null }> {
+  const [row] = await db
+    .select({
+      usedAt: schema.enrollmentToken.usedAt,
+      usedByNodeId: schema.enrollmentToken.usedByNodeId,
+    })
+    .from(schema.enrollmentToken)
+    .where(eq(schema.enrollmentToken.id, id));
+  return { usedByNodeId: row?.usedAt ? (row.usedByNodeId ?? null) : null };
+}

@@ -45,6 +45,8 @@ const ready: Node = {
   channel: null,
   clock: null,
   location: null,
+  decommissionRequestedAt: null,
+  decommissionError: null,
 };
 
 describe("nodes that stop an upgrade from starting", () => {

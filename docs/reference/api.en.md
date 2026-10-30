@@ -159,6 +159,7 @@ The sign-in endpoints of `/api/auth` have better-auth's own rate limiting (`NODE
 | Same key, another method, path or body | 422 `IDEMPOTENCY_KEY_MISMATCH` |
 | The first request still runs | 409 `IDEMPOTENCY_IN_PROGRESS` |
 | Malformed key | 400 `IDEMPOTENCY_KEY_INVALID` |
+| A body with SSH credentials: `sshInstalls.start`, `sshInstalls.retry` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`, not run, and no hash of the body is kept; send it again without the header |
 | A response with a credential shown once: `accessKeys.create`, `serviceAccounts.createKey`, `clusters.createEnrollmentToken`, `probes.createToken`, `authRules.signUrl` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`, not run; send it again without the header |
 
 - Keys are per caller: all AccessKeys share one namespace (one account), each service account has its own.

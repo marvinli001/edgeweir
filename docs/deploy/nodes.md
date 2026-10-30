@@ -1,6 +1,6 @@
 # 接入节点
 
-在 Linux 主机或容器中安装边缘节点并注册到集群：要求、发布物与校验、安装命令、手动安装、注册与 mTLS、端口、访客 IP、区域探针与下载镜像。
+经 SSH 由控制台安装，或在 Linux 主机、容器中安装边缘节点并注册到集群：要求、发布物与校验、安装命令、SSH 安装、手动安装、注册与 mTLS、退役、端口、访客 IP、区域探针与下载镜像。
 
 组件、端口与文件总表见 [节点概览](../node/README.md)。
 
@@ -56,7 +56,7 @@ gh attestation verify edgeweir-node_<版本>_linux_amd64.tar.gz --repo marvinli0
 
 ## 1. 生成安装命令
 
-1. 打开 **集群与节点**，选择集群，点击 **添加节点**。对话框立即显示 **安装命令**：集群的默认节点组，有效期 1 小时，不带节点名称。
+1. 打开 **集群与节点**，选择集群，点击 **添加节点**，切换到 **手动命令**（默认页签是 [SSH 安装](#ssh-安装)）。对话框立即显示 **安装命令**：集群的默认节点组，有效期 1 小时，不带节点名称。
 2. 需要节点名称、其他节点组或有效期时，打开 **选项**：填写 **节点名称**，选择 **节点组**（集群有多个节点组时显示）与 **有效期**（15 分钟、1 小时、24 小时），点击 **重新生成**。
 3. 复制 **安装命令**。命令下方显示剩余时间、「仅显示一次」、地址提醒与 [节点通道连接检查](#节点通道连接检查)；关闭对话框后不再显示，再次打开生成新的 token。
 4. 在节点上执行命令后，对话框的 **注册进度** 每 3 秒刷新：等待节点注册（或令牌已过期）、已注册（节点名称链接到节点详情）、在线、配置已应用、数据面正常、有可供 DNS 使用的地址。
@@ -122,6 +122,63 @@ sudo edgeweir-node diagnose
 
 预期：`edgeweir-node.service` 为 `active (running)`；`diagnose` 每项为 `ok`；**集群与节点** 中该节点状态为「在线」，**已应用版本** 显示配置版本号。节点注册后、首次连接节点通道前状态为「等待心跳」；在线但尚未应用配置时 **已应用版本** 标「待应用配置」。
 
+## SSH 安装
+
+不登录节点主机也能添加节点：控制台用 SSH 连接一次，运行与 [安装命令](#2-执行安装命令) 相同的 `install.sh`（同样的签名校验与选项），再断开；之后的一切仍经节点通道。
+
+1. **添加节点** 对话框默认是 **SSH 安装**（另一个页签是 **手动命令**，上次的选择会记住）。
+2. **单台**：填写 **主机**、**端口**（默认 22）、**用户**（默认 root）。**批量**：在 **主机列表** 每行填一台 `主机[:端口] [用户] [节点名称]`（IPv6 写成 `[2001:db8::1]:22`），或 CSV `主机,端口,用户,节点名称`（可带表头，空字段取默认值），`#` 开头的行忽略；一次最多 200 台，全部主机共用一份凭据，行内的用户优先。
+3. **认证**：**密码**，或 **私钥**（OpenSSH、PEM 或 PPK，加密的私钥填 **私钥口令**）。用户不是 root 时：填 **sudo 密码** 用 `sudo -S`；不填时要求免密 sudo（`sudo -n`）。
+4. **选项**：节点名称、预期的 **主机指纹**（单台）、节点组、**版本**（默认最新）、**包格式**、**下载镜像**、**只用镜像**、**安装 ModSecurity**、**并发**（批量，默认 5，最大 20）、**单台超时**（默认 15 分钟，1–60）。
+5. 点击 **读取主机指纹**：控制台只完成 SSH 握手、读取主机密钥后断开，不登录。逐台核对表中的 `SHA256:…` 指纹与主机上 `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` 的输出；填了预期指纹而不符的主机标「与填写的指纹不符」，不会安装。
+6. 点击 **安装 N 台**：每台主机依次显示排队、连接中、安装中（及当前步骤：检查、下载、校验、安装软件包、注册、启动、健康检查）、已注册或失败原因；点击主机看输出的最后几十行。单台安装成功后显示与手动命令相同的 **注册进度**。可以 **停止**、**重试** 失败的主机（使用表单里仍保留的凭据）、**复制结果**（制表符分隔：主机、端口、用户、状态、原因、节点 id）。
+
+| 项目 | 行为 |
+| --- | --- |
+| 主机指纹 | 控制台按 ssh2 的算法顺序协商（ssh-ed25519 优先）。安装时只接受确认过的指纹，其他密钥在登录前断开（`host_key_mismatch`），不发送任何凭据 |
+| 注册 token | 每台主机、每次尝试单独生成一个一次性 token（有效期为单台超时加 5 分钟），失败、停止或超时后立即作废 |
+| 远端执行 | 登录 shell 执行一段固定的 `sh` 脚本：token 是标准输入第一行，sudo 密码是第二行；`install.sh` 先以登录用户下载到 `mktemp -d` 的临时目录，再以 root 运行，其标准输入为 `/dev/null`；token 写进该目录里仅本人可读的文件，以 `--token-file` 交给 `install.sh`（不经环境变量：sudo 会把保留的环境变量连同值写进日志），结束时删除临时目录。命令行、环境与 sudo 日志里只有地址、选项与 token 文件路径 |
+| 凭据 | 只在该次安装期间留在控制台进程内存里，安装结束（全部主机结束或停止）即丢弃；控制台绝不保存 SSH 凭据，不写入数据库、日志、任务队列、审计或错误信息。重试需要再次提交凭据 |
+| 输出 | 每台最多保留最后 64 行、16 KiB，先删去密码、口令、token 与私钥块 |
+| 任务状态 | 只在控制台进程内存里：结束后保留 1 小时，控制台重启后丢失（界面提示到节点列表核对）。最多 4 个任务同时进行 |
+| 出站策略 | 主机解析一次后按地址连接；解析到内网、回环等特殊用途地址时需要 `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 放行，否则为「出站策略不允许连接该地址」 |
+| 审计 | `ssh_install.start`（集群、任务 id、主机数）、每台主机一条 `ssh_install.host`（主机、端口、用户、主机指纹、结果、节点 id、token id）、`ssh_install.cancel` |
+| 网络 | 控制台要能连上主机的 SSH 端口；主机要能访问控制台地址（`install.sh`）与节点通道地址，与手动命令相同 |
+
+失败原因：
+
+| 原因 | 含义 |
+| --- | --- |
+| 主机指纹不符 | 主机出示的密钥不是确认过的，可能被中间人拦截或主机已重装 |
+| 无法连接 / 超时 | 地址、端口或防火墙；或单台超时用完 |
+| 认证失败 | 用户、密码或私钥不对 |
+| 需要 sudo 密码 / sudo 密码错误 / 没有 sudo 权限 | 非 root 用户的 sudo |
+| sudo 要求终端（requiretty） | sudoers 设置了 `requiretty`，SSH 安装不支持，改用手动命令或去掉该设置 |
+| 下载 install.sh 失败 | 主机访问不到控制台地址 |
+| 系统不受支持 | 不是 Linux、没有 systemd、架构或 glibc 不支持（退出码 21） |
+| 主机连不上节点通道 | 节点通道地址不通、CA 指纹不符或 WebSocket 入口未开放（22，或注册时的 `unreachable`、`ca_mismatch`） |
+| 签名或校验和不符 | cosign 签名或 SHA-256 校验失败（24） |
+| 令牌被拒绝 | 控制台拒绝了本次的 token（26，节点的 `token_rejected`） |
+| 已注册到其他控制台或集群 | 主机的身份固定在另一个控制台的 CA 上（26，节点的 `enrolled_elsewhere`），或注册结果是本控制台另一个集群的节点 |
+| 主机上另有安装在进行 | 另一个 `install.sh` 或 `edgeweir-node enroll` 正在运行（29，或节点的 `busy`）；稍后重试 |
+| 服务启动失败 / 已启动，健康检查未通过 | 第 10 步（27）或第 11 步（28），查看该主机的输出与 `journalctl -u edgeweir-node -n 50` |
+| install.sh 失败 | 其他失败，查看该主机的输出 |
+| 未注册（主机已注册，但不是本控制台的节点） | `install.sh` 正常结束，既没有使用 token，也没有报告本控制台的节点：主机上的 edgeweir-node 早于 1.7.0、身份属于别处（要重新注册用手动命令加 `--force`） |
+
+重试与再次运行不会产生第二个节点：每次尝试用新的一次性 token；已注册的主机（edgeweir-node 1.7.0 起）经 `edgeweir-node enroll --if-not-enrolled` 报告原来的节点；SSH 断线时节点已经注册的，同一私钥再次注册得到同一个节点（[按密钥幂等](#重新注册与节点身份)）。
+
+API（`/api/v1`，AccessKey 须有写权限；服务账号不能调用；只读 AccessKey 只能查询）：
+
+| 请求 | 说明 |
+| --- | --- |
+| `POST /ssh-installs/host-keys` | `{ hosts: [{ host, port }] }`，返回每台的 `algorithm`、`fingerprint` 或 `error`（`unreachable`、`timeout`、`not_ssh`、`outbound_refused`） |
+| `POST /ssh-installs` | `{ clusterId, nodeGroupId?, credential: { username, password?, privateKey?, passphrase?, sudoPassword? }, hosts: [{ host, port, username?, nodeName?, hostKeyFingerprint }], options: { version, format, mirror, mirrorOnly, modsecurity, noStart }, concurrency, timeoutMinutes }`，返回任务 |
+| `GET /ssh-installs/{id}` | 任务与每台主机的 `state`、`step`（安装中的当前步骤：`check`、`download`、`verify`、`install`、`enroll`、`start`、`health`，其他时候为 `null`）、`error`、`exitCode`、`tokenId`、`nodeId`、`output`；任务不存在（过期或控制台重启）为 404 `SSH_INSTALL_NOT_FOUND` |
+| `POST /ssh-installs/{id}/cancel` | 停止 |
+| `POST /ssh-installs/{id}/retry` | `{ credential, hosts?: [{ id, hostKeyFingerprint? }] }`，默认重试全部失败与已停止的主机；任务仍在进行时 409 `SSH_INSTALL_BUSY` |
+
+`POST /ssh-installs` 与 `/retry` 不接受 `Idempotency-Key`（请求体带凭据，见 [API 与端点](../reference/api.md)）。
+
 ## install.sh 流程
 
 | 步骤 | 行为 | 失败时 |
@@ -136,12 +193,46 @@ sudo edgeweir-node diagnose
 | 8 | 安装 deb（`apt-get install`，无 apt-get 时 `dpkg -i`）、rpm（`dnf`、`yum` 或 `rpm -Uvh`）或 tar.gz | 退出 |
 | 9 | `edgeweir-node enroll`：核对 CA 指纹后提交 token，本机生成私钥，以 CSR 换取节点证书；此后仅经 mTLS 通信。已注册时跳过；加 `--force` 时先停止 `edgeweir-node.service`，以新 token 执行 `edgeweir-node enroll --force` 替换身份，第 10 步再启动 | 退出 |
 | 10 | 停用 `openresty.service`，启用并启动 `edgeweir-node.service`（`--no-start` 时跳过第 10、11 步）；tar.gz 安装与跳过安装的重新运行先重启运行中的服务（deb、rpm 由包脚本重启） | 退出 |
-| 11 | 每 3 秒执行一次 `edgeweir-node healthcheck`，最多 90 秒，直到数据面已应用配置；通过时输出 `done: edgeweir-node is healthy (revision N, M sites)` | 退出码 1，提示 `journalctl -u edgeweir-node -n 50` |
+| 11 | 每 3 秒执行一次 `edgeweir-node healthcheck`，最多 90 秒，直到数据面已应用配置；通过时输出 `done: edgeweir-node is healthy (revision N, M sites)` | 退出码 28，提示 `journalctl -u edgeweir-node -n 50` |
 
 - 第 5、6 步通过前不执行任何下载的程序。
 - 脚本全部由函数组成，最后一行才调用 `main`：下载中断时不执行任何内容。
-- 已注册的主机可以重新运行同一命令：不下载、不重装，启动服务（运行中则重启）并做健康检查；加 `--version <版本>` 时先安装该版本。主机上没有 `/usr/bin/edgeweir-node` 时安装最新版本。
-- 控制台不保存 SSH 凭据；节点私钥不离开节点。
+- 已注册的主机可以重新运行同一命令：不下载、不重装，启动服务（运行中则重启）并做健康检查；加 `--version <版本>` 时先安装该版本。主机上没有 `/usr/bin/edgeweir-node` 时安装最新版本。edgeweir-node 1.7.0 起先执行 `edgeweir-node enroll --if-not-enrolled` 核对身份：属于本控制台时报告原来的节点，属于另一个控制台时以退出码 26 失败，不重启服务。
+- 控制台不保存 SSH 凭据（[SSH 安装](#ssh-安装) 只在该次安装期间用于内存中）；节点私钥不离开节点。
+
+### 结果行与退出码
+
+`install.sh` 的说明文字在 stderr；stdout 每步一行 `EDGEWEIR_RESULT {"v":1,"step":"…","status":"…"}`（JSON 在同一行，未知字段忽略），供 SSH 安装等自动化读取。步骤为 `args`、`check`、`download`、`verify`、`install`、`enroll`、`start`、`health`；`status` 为 `ok`、`skipped` 或 `failed`（失败行带英文 `message`），注册一步由 edgeweir-node 1.7.0 起自己写（`enrolled`、`already_enrolled`、`token_rejected`、`enrolled_elsewhere` …，带 `node_id`）。最后一行为 `{"step":"done","status":"ok|failed","failed_step":"…","exit":N}`。
+
+| 退出码 | 含义 |
+| --- | --- |
+| 0 | 完成 |
+| 1 | 其他错误 |
+| 20 | 参数错误 |
+| 21 | 系统不受支持（不是 Linux 或 root、缺少命令、架构、glibc） |
+| 22 | 节点通道不通、CA 指纹不符或 WebSocket 入口未开放 |
+| 23 | 下载失败 |
+| 24 | 签名或 SHA-256 校验失败 |
+| 25 | 安装软件包失败 |
+| 26 | 注册失败（原因见注册结果行），或已注册到另一个控制台 |
+| 27 | 服务启动失败 |
+| 28 | 健康检查超时 |
+| 29 | 主机上另有安装在运行（`/run/edgeweir-install.lock`） |
+
+## 重新注册与节点身份
+
+控制台按节点证书的公钥识别节点：同一私钥再次注册（例如注册成功但应答丢失后重试）得到同一个节点与新证书，不会产生第二个节点。token 须是该节点当初用掉的，或同一集群（及节点组）未用的新 token；其他集群的 token 被拒绝。edgeweir-node 1.7.0 起在注册成功前保留待用私钥，重试时自动沿用。
+
+节点报告主机的 machine-id 摘要；新注册的节点与已有节点在同一台机器上（重装了状态目录，或复制了镜像）时，审计 `node.enroll` 记下 `sameMachineAs`，控制台日志给出警告。这只是提示，不会合并节点。
+
+## 退役节点
+
+不登录主机就让节点停止服务（edgeweir-node 1.7.0 起，能力 `decommission-v1`）：在 **集群与节点** 的节点菜单或节点详情点击 **退役** 并确认。节点收到任务后停止 OpenResty，删除身份、最后可用配置与缓存，留下标记使服务（重启主机后也）不再提供服务，直到重新注册；控制台随后吊销其证书并删除节点（审计 `node.delete`，`decommissioned: true`）。
+
+- 节点离线时请求保留，上线后执行；完成前可以 **撤回**。
+- 节点报告失败时请求清除，详情显示「上次退役失败」与原因，可以再次退役。
+- 软件包仍留在主机上，卸载需要 root：`apt-get remove edgeweir-node edgeweir-openresty edgeweir-openresty-modsecurity`（rpm 用 `dnf remove`）。
+- 没有该能力的节点不显示 **退役**，用 **删除** 并在主机上停止服务。
 
 deb、rpm 由包脚本创建 `edgeweir` 用户、`/var/lib/edgeweir-node`（0700）与 `/var/cache/edgeweir-node`（0750）；tar.gz 由 `install.sh` 创建，并把单元安装到 `/etc/systemd/system/`。安装后的文件见 [文件与目录](../node/README.md#文件与目录)。
 

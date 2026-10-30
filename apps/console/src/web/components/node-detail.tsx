@@ -2,7 +2,9 @@ import {
   CACHE_SIZE_GB_RANGE,
   CACHE_ZONE_FEATURE,
   forbiddenOriginRange,
+  NODE_DECOMMISSION_FEATURE,
   type Node,
+  nodeSupportsFeature,
   nodeUpgradeRecommended,
   unicastAddress,
 } from "@edgeweir/contract";
@@ -15,6 +17,7 @@ import { Button } from "@/components/arc/button/button";
 import { Drawer, DrawerContent } from "@/components/arc/drawer/drawer";
 import { Input } from "@/components/arc/input/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/arc/tabs/tabs";
+import { DecommissionNodeDialog } from "@/components/clusters/node-dialogs";
 import { markOverflow } from "@/components/data-table";
 import { OptionSelect } from "@/components/form-select";
 import { FieldError } from "@/components/layout/form";
@@ -128,6 +131,12 @@ function LoadMeter({ value, label }: { value: number; label: string }) {
 
 /** A node's state in its detail header: lit while online. */
 function DetailState({ node }: { node: Node }) {
+  if (node.decommissionRequestedAt)
+    return (
+      <StatusDot tone="warn" pulse>
+        {m.node_decommissioning()}
+      </StatusDot>
+    );
   if (node.status === "disabled") return <StatusDot tone="idle">{m.nodes_disabled()}</StatusDot>;
   return node.online ? (
     <StatusDot tone="good" glow>
@@ -206,6 +215,7 @@ export function NodeDetailSheet({
               <h3 className="text-sm font-medium">{m.probes_results()}</h3>
               <ProbeResults input={{ nodeId: node.id }} by="prober" testId="node-probe-results" />
             </section>
+            <NodeDecommission node={node} />
           </TabsContent>
           <TabsContent
             value="logs"
@@ -862,5 +872,62 @@ function AddressEditor({
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Decommission (decommission-v1): the node stops serving and forgets its
+ * identity, then the console deletes it. Waiting: withdraw it; failed: why.
+ */
+function NodeDecommission({ node }: { node: Node }) {
+  const [confirming, setConfirming] = React.useState(false);
+  const cancel = useMutation({
+    ...orpc.nodes.cancelDecommission.mutationOptions(),
+    meta: { invalidates: "all", toastError: true },
+  });
+  if (!nodeSupportsFeature(node.supportedFeatures, NODE_DECOMMISSION_FEATURE)) return null;
+  return (
+    <section className="flex min-w-0 flex-col gap-3" data-testid="node-decommission-section">
+      <h3 className="text-sm font-medium">{m.node_decommission()}</h3>
+      {node.decommissionRequestedAt ? (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <span className="text-muted-foreground" data-testid="node-decommission-waiting">
+            {node.online ? m.node_decommission_waiting() : m.node_decommission_waiting_offline()}
+          </span>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={cancel.isPending}
+            onClick={() => cancel.mutate({ id: node.id })}
+            data-testid="node-decommission-cancel"
+          >
+            {m.node_decommission_cancel()}
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          {node.decommissionError ? (
+            <Badge
+              size="sm"
+              tone="danger"
+              title={node.decommissionError}
+              data-testid="node-decommission-failed"
+            >
+              {m.node_decommission_failed()}
+            </Badge>
+          ) : null}
+          <Button
+            size="sm"
+            variant="danger"
+            disabled={node.status !== "active"}
+            onClick={() => setConfirming(true)}
+            data-testid="node-decommission-start"
+          >
+            {m.node_decommission()}
+          </Button>
+        </div>
+      )}
+      <DecommissionNodeDialog node={node} open={confirming} onOpenChange={setConfirming} />
+    </section>
   );
 }

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { defaultKeyHasher } from "@better-auth/api-key";
-import { type ErrorCode, errorDefs } from "@edgeweir/contract";
+import { carriesSshCredentials, type ErrorCode, errorDefs } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { ORPCError } from "@orpc/server";
 import { and, eq, lt, lte } from "drizzle-orm";
@@ -86,6 +86,12 @@ export async function withIdempotency(
     return errorResponse(
       "IDEMPOTENCY_KEY_INVALID",
       "Idempotency-Key must be 1 to 255 printable ASCII characters",
+    );
+  // SSH credentials in the body: not even the body's hash may be kept (ADR-0066).
+  if (carriesSshCredentials(request.method, new URL(request.url).pathname))
+    return errorResponse(
+      "IDEMPOTENCY_KEY_UNSUPPORTED",
+      "this request carries SSH credentials; send it without Idempotency-Key",
     );
   const principal = await idempotencyPrincipal(db, apiKey);
   // Without valid credentials the procedure answers 401; nothing to remember.

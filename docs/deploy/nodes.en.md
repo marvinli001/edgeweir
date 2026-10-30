@@ -1,6 +1,6 @@
 # Adding nodes
 
-Install and enroll edge nodes: requirements, releases and verification, install command, manual installs, enrollment, ports, client IP, probes, mirror.
+Install and enroll edge nodes: requirements, releases and verification, install command, SSH install, manual installs, enrollment, decommissioning, ports, client IP, probes, mirror.
 
 Components, ports and files at a glance: [Node overview](../node/README.en.md).
 
@@ -56,7 +56,7 @@ GitHub Actions builds the releases from the tag, reproducibly (`-trimpath`, time
 
 ## 1. Generate the install command
 
-1. Open **Clusters & nodes**, select a cluster, and click **Add node**. The dialog shows the **Install command** at once: the cluster's default node group, valid for 1 hour, no node name.
+1. Open **Clusters & nodes**, select a cluster, click **Add node** and switch to **Manual command** (the default tab is [SSH install](#ssh-install)). The dialog shows the **Install command** at once: the cluster's default node group, valid for 1 hour, no node name.
 2. For a node name, another node group, or another lifetime, open **Options**: fill in **Node name**, choose a **Node group** (shown when the cluster has several) and **Valid for** (15 minutes, 1 hour, or 24 hours), and click **Regenerate**.
 3. Copy the **Install command**. Below it are the time left, **Shown once**, address warnings, and the [node channel connection check](#node-channel-connection-check); once the dialog is closed the command is not shown again, and opening it again generates a new token.
 4. Once the command runs on the node, the dialog's **Progress** refreshes every 3 seconds: waiting for the node (or token expired), enrolled (the node name links to its details), online, configuration applied, data plane healthy, has an address for DNS.
@@ -122,6 +122,63 @@ sudo edgeweir-node diagnose
 
 Expected: `edgeweir-node.service` is `active (running)`; every `diagnose` line is `ok`; in **Clusters & nodes** the node is "Online" and **Applied** shows a revision number. After enrolling and before its first connection to the node channel the node shows "Awaiting heartbeat"; online without a configuration yet, **Applied** shows "Awaiting configuration".
 
+## SSH install
+
+Add nodes without signing in to each host: the console connects over SSH once, runs the same `install.sh` as the [install command](#2-run-the-install-command) (same signature checks and options), and disconnects; everything after that still goes through the node channel.
+
+1. The **Add node** dialog opens on **SSH install** (the other tab is **Manual command**; the last choice is remembered).
+2. **One host**: fill in **Host**, **Port** (default 22) and **User** (default root). **Batch**: in **Hosts**, one host per line as `host[:port] [user] [node name]` (IPv6 as `[2001:db8::1]:22`), or CSV `host,port,user,node name` (a header line is allowed, empty fields take the defaults); lines starting with `#` are ignored. Up to 200 hosts at once share one credential; a user on a line wins.
+3. **Authentication**: **Password**, or **Private key** (OpenSSH, PEM or PPK; with its **Passphrase** when encrypted). For a user other than root: a **sudo password** uses `sudo -S`; without one, passwordless sudo is required (`sudo -n`).
+4. **Options**: node name, the expected **Host key fingerprint** (one host), node group, **Version** (default latest), **Package format**, **Download mirror**, **Mirror only**, **Install ModSecurity**, **Concurrency** (batch, default 5, at most 20), **Timeout per host** (default 15 minutes, 1–60).
+5. Click **Read host keys**: the console completes the SSH handshake only, reads the host key and disconnects without signing in. Compare each `SHA256:…` fingerprint with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the host; a host whose key differs from the fingerprint entered is marked and not installed.
+6. Click **Install on N**: each host shows queued, connecting, installing (with its current step: checking, downloading, verifying, installing packages, enrolling, starting, health check), enrolled or why it failed; click a host for the last lines of its output. A single host shows the same **Progress** as the manual command once enrolled. **Stop**, **Retry** failed hosts (with the credential still in the form) and **Copy results** (tab-separated: host, port, user, state, reason, node id).
+
+| Item | Behavior |
+| --- | --- |
+| Host keys | Negotiated in ssh2's order (ssh-ed25519 first). The install accepts only the confirmed fingerprint; any other key ends the connection before signing in (`host_key_mismatch`), and no credential is sent |
+| Enrollment token | One single-use token per host and attempt (valid for the host timeout plus 5 minutes), expired at once after a failure, a stop or a timeout |
+| On the host | The login shell runs a fixed `sh` script: the token is the first line of stdin, the sudo password the second; `install.sh` is downloaded as the user into a `mktemp -d` directory, then runs as root with stdin from `/dev/null`; the token goes into an owner-only file in that directory and reaches `install.sh` as `--token-file` (not an environment variable: sudo logs preserved variables with their values), and the directory is removed. Command lines, environments and sudo logs carry only URLs, options and the token file's path |
+| Credentials | Held in the console's process memory for that install only and dropped when it ends (every host done or stopped); the console never stores SSH credentials and never writes them to the database, logs, job queue, audit log or error messages. A retry needs the credential again |
+| Output | At most the last 64 lines and 16 KiB per host, with passwords, passphrases, tokens and private key blocks removed |
+| Run state | In the console's process memory only: kept 1 hour after the run ends, lost when the console restarts (the dialog says so; check the node list). At most 4 runs at once |
+| Outbound policy | A host is resolved once and connected by that address; special-purpose addresses (private, loopback …) need `EDGEWEIR_OUTBOUND_ALLOW_CIDRS`, otherwise "The outbound policy does not allow this address" |
+| Audit | `ssh_install.start` (cluster, run id, host count), one `ssh_install.host` per host (host, port, user, host key fingerprint, outcome, node id, token id), `ssh_install.cancel` |
+| Network | The console must reach the hosts' SSH port; the hosts must reach the console URL (`install.sh`) and the node channel URL, as with the manual command |
+
+Reasons:
+
+| Reason | Meaning |
+| --- | --- |
+| Host key mismatch | The host presented a key other than the confirmed one: an interception, or the host was reinstalled |
+| Unreachable / Timed out | Address, port or firewall; or the host timeout ran out |
+| Authentication failed | Wrong user, password or key |
+| sudo needs a password / Wrong sudo password / No sudo rights | sudo of a user other than root |
+| sudo requires a terminal (requiretty) | sudoers sets `requiretty`, which SSH install does not support: use the manual command, or drop the setting |
+| Could not download install.sh | The host cannot reach the console URL |
+| System not supported | Not Linux, no systemd, or an unsupported architecture or glibc (exit code 21) |
+| Host cannot reach the node channel | The node channel URL is unreachable, the CA fingerprint differs, or the WebSocket entry is closed (22, or `unreachable`, `ca_mismatch` while enrolling) |
+| Signature or checksum mismatch | The cosign signature or a SHA-256 failed (24) |
+| Token rejected | The console refused this attempt's token (26, the node's `token_rejected`) |
+| Enrolled with another console or cluster | The host's identity is pinned to another console's CA (26, the node's `enrolled_elsewhere`), or the enrollment reported a node of another cluster of this console |
+| Another install is running on the host | Another `install.sh` or `edgeweir-node enroll` runs (29, or the node's `busy`); retry later |
+| Service did not start / Started, not healthy in time | Step 10 (27) or step 11 (28); see the host's output and `journalctl -u edgeweir-node -n 50` |
+| install.sh failed | Any other failure; see the host's output |
+| Not enrolled (enrolled, but no node of this console) | `install.sh` ended without using the token or reporting a node of this console: edgeweir-node before 1.7.0 with an identity from elsewhere (to enroll again, run the manual command with `--force`) |
+
+Retries and new runs never add a second node: every attempt gets a new one-time token; an enrolled host (edgeweir-node 1.7.0 and later) reports its node through `edgeweir-node enroll --if-not-enrolled`; a node that enrolled while SSH dropped gets the same node again when its key enrolls once more ([idempotent by key](#enrolling-again-and-node-identity)).
+
+API (`/api/v1`, an AccessKey with write scope; service accounts cannot call it; read-only AccessKeys can only read):
+
+| Request | Notes |
+| --- | --- |
+| `POST /ssh-installs/host-keys` | `{ hosts: [{ host, port }] }`; returns each host's `algorithm`, `fingerprint` or `error` (`unreachable`, `timeout`, `not_ssh`, `outbound_refused`) |
+| `POST /ssh-installs` | `{ clusterId, nodeGroupId?, credential: { username, password?, privateKey?, passphrase?, sudoPassword? }, hosts: [{ host, port, username?, nodeName?, hostKeyFingerprint }], options: { version, format, mirror, mirrorOnly, modsecurity, noStart }, concurrency, timeoutMinutes }`; returns the run |
+| `GET /ssh-installs/{id}` | The run and each host's `state`, `step` (the current step while installing: `check`, `download`, `verify`, `install`, `enroll`, `start`, `health`; otherwise `null`), `error`, `exitCode`, `tokenId`, `nodeId`, `output`; 404 `SSH_INSTALL_NOT_FOUND` once it expired or the console restarted |
+| `POST /ssh-installs/{id}/cancel` | Stops the run |
+| `POST /ssh-installs/{id}/retry` | `{ credential, hosts?: [{ id, hostKeyFingerprint? }] }`; by default every failed or stopped host; 409 `SSH_INSTALL_BUSY` while the run is going |
+
+`POST /ssh-installs` and `/retry` refuse an `Idempotency-Key` (the body carries credentials; see [API and endpoints](../reference/api.en.md)).
+
 ## install.sh flow
 
 | Step | Behavior | On failure |
@@ -136,12 +193,46 @@ Expected: `edgeweir-node.service` is `active (running)`; every `diagnose` line i
 | 8 | Installs the deb (`apt-get install`, `dpkg -i` without apt-get), rpm (`dnf`, `yum` or `rpm -Uvh`) or tar.gz | Exit |
 | 9 | `edgeweir-node enroll`: checks the CA fingerprint before sending the token, generates the private key locally, and exchanges a CSR for the node certificate; from then on, mTLS only. Skipped on an enrolled host; with `--force`, stops `edgeweir-node.service` and replaces the identity with `edgeweir-node enroll --force` and the new token; step 10 starts it again | Exit |
 | 10 | Disables `openresty.service`, enables and starts `edgeweir-node.service` (`--no-start` skips steps 10 and 11); a tar.gz install and a rerun that skipped the install first restart a running service (deb and rpm package scripts do that themselves) | Exit |
-| 11 | Runs `edgeweir-node healthcheck` every 3 seconds for up to 90 seconds, until the data plane has applied its configuration; on success prints `done: edgeweir-node is healthy (revision N, M sites)` | Exit code 1, pointing to `journalctl -u edgeweir-node -n 50` |
+| 11 | Runs `edgeweir-node healthcheck` every 3 seconds for up to 90 seconds, until the data plane has applied its configuration; on success prints `done: edgeweir-node is healthy (revision N, M sites)` | Exit code 28, pointing to `journalctl -u edgeweir-node -n 50` |
 
 - Nothing downloaded runs before steps 5 and 6 pass.
 - The script consists of functions and calls `main` on its last line: a truncated download executes nothing.
-- An enrolled host can run the same command again: nothing is downloaded or reinstalled, the service is started (restarted when running) and health-checked; with `--version <version>` that version is installed first. Without `/usr/bin/edgeweir-node` on the host, the latest version is installed.
-- The console never stores SSH credentials; the node private key never leaves the node.
+- An enrolled host can run the same command again: nothing is downloaded or reinstalled, the service is started (restarted when running) and health-checked; with `--version <version>` that version is installed first. Without `/usr/bin/edgeweir-node` on the host, the latest version is installed. From edgeweir-node 1.7.0, `edgeweir-node enroll --if-not-enrolled` checks the identity first: one of this console reports its node, one of another console fails with exit code 26 and the service is not restarted.
+- The console never stores SSH credentials ([SSH install](#ssh-install) uses them in memory for that install only); the node private key never leaves the node.
+
+### Result lines and exit codes
+
+`install.sh` writes its messages to stderr; stdout has one `EDGEWEIR_RESULT {"v":1,"step":"…","status":"…"}` line per step (JSON on the same line; ignore unknown fields) for SSH install and other automation. Steps are `args`, `check`, `download`, `verify`, `install`, `enroll`, `start`, `health`; `status` is `ok`, `skipped` or `failed` (a failed line has an English `message`). From edgeweir-node 1.7.0 the node writes the enroll line itself (`enrolled`, `already_enrolled`, `token_rejected`, `enrolled_elsewhere` …, with `node_id`). The last line is `{"step":"done","status":"ok|failed","failed_step":"…","exit":N}`.
+
+| Exit code | Meaning |
+| --- | --- |
+| 0 | Done |
+| 1 | Any other error |
+| 20 | Bad arguments |
+| 21 | System not supported (not Linux or root, a missing command, architecture, glibc) |
+| 22 | Node channel unreachable, CA fingerprint mismatch, or the WebSocket entry is closed |
+| 23 | Download failed |
+| 24 | Signature or SHA-256 check failed |
+| 25 | Package install failed |
+| 26 | Enrollment failed (the enroll result line says why), or enrolled with another console |
+| 27 | The service did not start |
+| 28 | Health check timed out |
+| 29 | Another install is running on the host (`/run/edgeweir-install.lock`) |
+
+## Enrolling again and node identity
+
+The console knows a node by its certificate's public key: the same private key enrolling again (for example a retry after the answer was lost) gets the same node and a new certificate, never a second node. The token must be the one that node used, or an unused token of the same cluster (and node group); another cluster's token is refused. From edgeweir-node 1.7.0 the node keeps its pending key until an enrollment succeeds, so retries reuse it.
+
+Nodes report a digest of the host's machine-id; when a new node enrolls from the machine of an existing one (a reinstalled state directory, or a cloned image), the `node.enroll` audit entry records `sameMachineAs` and the console logs a warning. It is a hint only; nodes are never merged.
+
+## Decommissioning a node
+
+Retire a node without signing in to the host (edgeweir-node 1.7.0 and later, feature `decommission-v1`): in **Clusters & nodes**, choose **Decommission** in the node's menu or on its detail page and confirm. The node stops OpenResty, deletes its identity, last known good configuration and cache, and leaves a marker so that it does not serve again (also after a reboot) until it enrolls anew; the console then revokes its certificate and deletes the node (audit `node.delete`, `decommissioned: true`).
+
+- A request for an offline node waits until it connects; **Withdraw** it until then.
+- When the node reports a failure, the request is cleared and the detail page shows "Last decommission failed" with the reason; decommission again.
+- The packages stay on the host; removing them needs root: `apt-get remove edgeweir-node edgeweir-openresty edgeweir-openresty-modsecurity` (`dnf remove` on rpm hosts).
+- Nodes without the feature have no **Decommission**: **Delete** them and stop the service on the host.
 
 The deb and rpm package scripts create the `edgeweir` user, `/var/lib/edgeweir-node` (0700) and `/var/cache/edgeweir-node` (0750); for tar.gz `install.sh` creates them and installs the unit to `/etc/systemd/system/`. Installed files: [Files and directories](../node/README.en.md#files-and-directories).
 

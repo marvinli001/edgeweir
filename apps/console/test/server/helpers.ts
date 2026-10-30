@@ -24,6 +24,7 @@ import { createLogger, setLogLevel } from "../../src/server/lib/logger";
 import { CertificateAuthority, generateCa } from "../../src/server/pki/ca";
 import { AccessKeyRateLimiter } from "../../src/server/services/access-keys";
 import { ensureSetupToken, runSetup } from "../../src/server/services/setup";
+import { SshInstallRuns } from "../../src/server/services/ssh-install";
 
 export const TEST_MASTER_KEY = Buffer.alloc(32, 7).toString("base64");
 export const PASSWORD = "correct horse battery";
@@ -122,6 +123,7 @@ export async function createTestContext(
     events: new ConfigEventBus("postgres://unused", log),
     log,
     accessKeyLimits: new AccessKeyRateLimiter(),
+    sshInstalls: new SshInstallRuns(),
   };
   return { ctx, client };
 }

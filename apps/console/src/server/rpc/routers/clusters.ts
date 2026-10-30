@@ -1,5 +1,8 @@
 import { schema } from "@edgeweir/db";
 import { desc, eq } from "drizzle-orm";
+import type { AppContext } from "../../lib/context";
+import { outboundAddress } from "../../lib/outbound";
+import type { Actor } from "../../services/audit";
 import {
   createCluster,
   deleteCluster,
@@ -24,6 +27,7 @@ import { createEnrollmentToken, getEnrollmentToken } from "../../services/enroll
 import { getPortPools, setPortPools } from "../../services/l4";
 import { nodeChannelUrl } from "../../services/node-channel-url";
 import { getDebugLog, listDebugLogs, pullDebugLogs } from "../../services/node-debug-logs";
+import { cancelDecommission, requestDecommission } from "../../services/node-decommission";
 import {
   createNodeGroup,
   deleteNodeGroup,
@@ -58,6 +62,7 @@ import {
   previewScheduling,
   updateSchedulingRule,
 } from "../../services/scheduling";
+import type { InstallContext } from "../../services/ssh-install";
 import {
   cancelUpgrade,
   createUpgrade,
@@ -69,7 +74,42 @@ import {
 import { authed, ok } from "../base";
 
 /** Clusters, node groups, regions, nodes, upgrades, probes and scheduling. */
+/** What an SSH install run needs from the request: the caller and the install command's URLs. */
+async function installContext(context: { app: AppContext; actor: Actor }): Promise<InstallContext> {
+  return {
+    db: context.app.db,
+    log: context.app.log.child({ component: "ssh-install" }),
+    actor: context.actor,
+    consoleUrl: context.app.env.EDGEWEIR_PUBLIC_URL,
+    serverUrl: await nodeChannelUrl(context.app),
+    caSha256: context.app.nodeCa.fingerprintSha256,
+    resolve: outboundResolver(context.app),
+  };
+}
+
+/** SSH hosts are outbound targets like any other the operator names (lib/outbound.ts). */
+function outboundResolver(app: AppContext) {
+  return async (host: string) => (await outboundAddress(app, host)).address;
+}
+
 export const clustersRouter = {
+  sshInstalls: {
+    scanHostKeys: authed.sshInstalls.scanHostKeys.handler(async ({ input, context }) => ({
+      hosts: await context.app.sshInstalls.scanHostKeys(input.hosts, outboundResolver(context.app)),
+    })),
+    start: authed.sshInstalls.start.handler(async ({ input, context }) =>
+      context.app.sshInstalls.start(input, await installContext(context)),
+    ),
+    get: authed.sshInstalls.get.handler(({ input, context }) =>
+      context.app.sshInstalls.get(input.id),
+    ),
+    cancel: authed.sshInstalls.cancel.handler(({ input, context }) =>
+      context.app.sshInstalls.cancel(input.id, context.actor),
+    ),
+    retry: authed.sshInstalls.retry.handler(async ({ input, context }) =>
+      context.app.sshInstalls.retry(input, await installContext(context)),
+    ),
+  },
   probes: {
     list: authed.probes.list.handler(({ context }) => listProbes(context.app.db)),
     createToken: authed.probes.createToken.handler(async ({ input, context }) =>
@@ -259,6 +299,12 @@ export const clustersRouter = {
       await deleteNode(context.app.db, input.id, context.actor);
       return ok;
     }),
+    decommission: authed.nodes.decommission.handler(({ input, context }) =>
+      requestDecommission(context.app, context.actor, input.id),
+    ),
+    cancelDecommission: authed.nodes.cancelDecommission.handler(({ input, context }) =>
+      cancelDecommission(context.app, context.actor, input.id),
+    ),
     setProbe: authed.nodes.setProbe.handler(({ input, context }) =>
       setNodeProbe(context.app.db, input, context.actor),
     ),

@@ -27,6 +27,8 @@ export interface IssuedCertificate {
   serialNumber: string;
   fingerprintSha256: string;
   notAfter: Date;
+  /** Hex SHA-256 of the certified SubjectPublicKeyInfo (the CSR's key). */
+  keySha256: string;
 }
 
 export interface IssuedServerCertificate {
@@ -46,6 +48,20 @@ function randomSerial(): string {
   bytes[0] = (bytes[0] ?? 0) & 0x7f; // positive INTEGER
   return bytes.toString("hex");
 }
+
+async function verifiedCsr(csrPem: string): Promise<x509.Pkcs10CertificateRequest> {
+  let csr: x509.Pkcs10CertificateRequest;
+  try {
+    csr = new x509.Pkcs10CertificateRequest(csrPem);
+  } catch {
+    throw new CsrError("malformed CSR");
+  }
+  if (!(await csr.verify())) throw new CsrError("CSR signature verification failed");
+  return csr;
+}
+
+const keySha256 = (key: x509.PublicKey) =>
+  createHash("sha256").update(Buffer.from(key.rawData)).digest("hex");
 
 export function sha256Fingerprint(cert: x509.X509Certificate): string {
   return createHash("sha256").update(Buffer.from(cert.rawData)).digest("hex");
@@ -121,18 +137,20 @@ export class CertificateAuthority {
     return this.signClientCsr(csrPem, probeId, PROBE_ORGANIZATION);
   }
 
+  /**
+   * The hex SHA-256 of a CSR's SubjectPublicKeyInfo, once its signature
+   * proves the sender holds the key.
+   */
+  async csrKeySha256(csrPem: string): Promise<string> {
+    return keySha256((await verifiedCsr(csrPem)).publicKey);
+  }
+
   private async signClientCsr(
     csrPem: string,
     commonName: string,
     organization: string,
   ): Promise<IssuedCertificate> {
-    let csr: x509.Pkcs10CertificateRequest;
-    try {
-      csr = new x509.Pkcs10CertificateRequest(csrPem);
-    } catch {
-      throw new CsrError("malformed CSR");
-    }
-    if (!(await csr.verify())) throw new CsrError("CSR signature verification failed");
+    const csr = await verifiedCsr(csrPem);
     const algorithm = csr.publicKey.algorithm as { name: string; namedCurve?: string };
     const ok =
       (algorithm.name === "ECDSA" && ["P-256", "P-384"].includes(algorithm.namedCurve ?? "")) ||
@@ -164,6 +182,7 @@ export class CertificateAuthority {
       serialNumber: cert.serialNumber,
       fingerprintSha256: sha256Fingerprint(cert),
       notAfter,
+      keySha256: keySha256(csr.publicKey),
     };
   }
 

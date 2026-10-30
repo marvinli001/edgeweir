@@ -291,10 +291,29 @@ export const node = pgTable(
      * reports it.
      */
     location: jsonb("location").$type<NodeLocationData>(),
+    /**
+     * Hex SHA-256 of the SubjectPublicKeyInfo of the node's key, set at
+     * enrollment and renewal: an Enroll with a CSR of the same key returns
+     * this node instead of a new one (ADR-0067).
+     */
+    keySha256: text("key_sha256"),
+    /** NodeInfo.machine_id (a hint that two nodes share a machine), "" when not reported. */
+    machineId: text("machine_id").notNull().default(""),
+    /**
+     * Decommission (decommission-v1, ADR-0067): when the operator asked, the
+     * id the DecommissionTask is handed out with, and why the node's last one
+     * failed. The node is deleted once it reports the task SUCCEEDED.
+     */
+    decommissionRequestedAt: timestamp("decommission_requested_at", { withTimezone: true }),
+    decommissionTaskId: uuid("decommission_task_id"),
+    decommissionError: text("decommission_error"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("node_cluster_idx").on(t.clusterId)],
+  (t) => [
+    index("node_cluster_idx").on(t.clusterId),
+    uniqueIndex("node_key_sha256_idx").on(t.keySha256),
+  ],
 );
 
 export const nodeIp = pgTable(

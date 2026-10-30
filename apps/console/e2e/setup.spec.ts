@@ -23,6 +23,8 @@ test("first-run setup needs the setup token printed in the console log", async (
   await page.getByTestId("setup-submit").click();
   // Without a node the console starts with adding one: the add-node dialog of the default cluster.
   await expect(page.getByTestId("page-title")).toHaveText("集群与节点");
+  await expect(page.getByTestId("ssh-install-form")).toBeVisible();
+  await page.getByTestId("enroll-method-manual").click();
   await expect(page.getByTestId("install-command")).toContainText("EDGEWEIR_TOKEN");
   const primary = page.getByTestId("nav-primary-action");
   await expect(primary).toHaveText("添加节点");

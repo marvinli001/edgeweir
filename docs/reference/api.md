@@ -159,6 +159,7 @@ curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application
 | 同一 key、不同的方法、路径或请求体 | 422 `IDEMPOTENCY_KEY_MISMATCH` |
 | 第一次请求仍在执行 | 409 `IDEMPOTENCY_IN_PROGRESS` |
 | key 格式无效 | 400 `IDEMPOTENCY_KEY_INVALID` |
+| 请求体带 SSH 凭据：`sshInstalls.start`、`sshInstalls.retry` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`，不执行，也不留下请求体的哈希；不带该请求头重新发送 |
 | 响应里有只显示一次的凭据：`accessKeys.create`、`serviceAccounts.createKey`、`clusters.createEnrollmentToken`、`probes.createToken`、`authRules.signUrl` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`，不执行；不带该请求头重新发送 |
 
 - key 按调用方区分：全部 AccessKey 共用一份（同一账户），每个服务账号单独一份。

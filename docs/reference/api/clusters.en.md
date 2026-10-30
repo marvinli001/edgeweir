@@ -583,6 +583,8 @@ Response: `{ ok: true }`.
 | [`nodes.disable`](#nodesdisable) | `POST /nodes/{id}/disable` | write |
 | [`nodes.enable`](#nodesenable) | `POST /nodes/{id}/enable` | write |
 | [`nodes.delete`](#nodesdelete) | `DELETE /nodes/{id}` | write |
+| [`nodes.decommission`](#nodesdecommission) | `POST /nodes/{id}/decommission` | write |
+| [`nodes.cancelDecommission`](#nodescanceldecommission) | `DELETE /nodes/{id}/decommission` | write |
 | [`nodes.setProbe`](#nodessetprobe) | `PUT /nodes/{id}/probe` | write |
 | [`nodes.setAddresses`](#nodessetaddresses) | `PUT /nodes/{id}/addresses` | write |
 | [`nodes.setCache`](#nodessetcache) | `PUT /nodes/{id}/cache` | write |
@@ -676,6 +678,42 @@ Response: `{ ok: true }`.
 | Error | Status | Condition |
 | --- | --- | --- |
 | `NODE_NOT_FOUND` | 404 | The node does not exist |
+
+### `nodes.decommission`
+
+`POST /nodes/{id}/decommission` · write
+
+Asks the node to stop serving and delete its identity (capability `decommission-v1`, edgeweir-node 1.7.0 and later); once the node reports it done, the console revokes its certificate and deletes the node, see [Decommissioning a node](../../deploy/nodes.en.md#decommissioning-a-node). An offline node gets the task when it connects again. Service accounts cannot call it. Audit `node.decommission`; when the node reports a failure, `node.decommission_failed`, the request is cleared and `decommissionError` holds the reason.
+
+| Parameter | In | Type | Required | Constraints and default | Description |
+| --- | --- | --- | --- | --- | --- |
+| `id` | path | uuid | yes | — | Node ID |
+
+Response: [Node](#node-object) with `decommissionRequestedAt` set.
+
+| Error | Status | When |
+| --- | --- | --- |
+| `NODE_NOT_FOUND` | 404 | No such node |
+| `NODE_CAPABILITY_REQUIRED` | 409 | The node lacks `decommission-v1` |
+| `NODE_DECOMMISSION_DISABLED` | 409 | The node is disabled |
+| `NODE_DECOMMISSION_PENDING` | 409 | A request is already pending |
+
+### `nodes.cancelDecommission`
+
+`DELETE /nodes/{id}/decommission` · write
+
+Withdraws a decommission the node has not carried out yet. Audit `node.decommission_cancel`.
+
+| Parameter | In | Type | Required | Constraints and default | Description |
+| --- | --- | --- | --- | --- | --- |
+| `id` | path | uuid | yes | — | Node ID |
+
+Response: [Node](#node-object).
+
+| Error | Status | When |
+| --- | --- | --- |
+| `NODE_NOT_FOUND` | 404 | No such node |
+| `NODE_DECOMMISSION_NOT_PENDING` | 409 | No request is pending |
 
 ### `nodes.setProbe`
 
@@ -1333,6 +1371,8 @@ Counters: `connections` (TCP connections or UDP sessions accepted), `refused` (r
 | `regionName` | string | Region name of the node group, or `null` |
 | `hostname` | string | Host name |
 | `status` | enum | `active` / `disabled` |
+| `decommissionRequestedAt` | datetime | When a decommission waiting for the node was requested, or `null` |
+| `decommissionError` | string | Why the last decommission failed (`decommission_failed: …`), or `null` |
 | `online` | boolean | Online |
 | `lastSeenAt` | datetime | Last heartbeat, or `null` |
 | `enrolledAt` | datetime | Enrolled, or `null` |

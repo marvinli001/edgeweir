@@ -29,11 +29,20 @@ const options = {
     "mongodb",
     "@prisma/client",
     "kysely-codegen",
+    // ssh2's optional native speed-ups, required inside try/catch: without
+    // them it uses its pure JavaScript code (the image has no build tools).
+    "cpu-features",
+    "*.node",
   ],
   banner: {
     js: [
       "import { createRequire as __edgeweirCreateRequire } from 'node:module';",
       "const require = __edgeweirCreateRequire(import.meta.url);",
+      // CommonJS dependencies (ssh2) read these at load time.
+      "import { fileURLToPath as __edgeweirFileURLToPath } from 'node:url';",
+      "import { dirname as __edgeweirDirname } from 'node:path';",
+      "const __filename = __edgeweirFileURLToPath(import.meta.url);",
+      "const __dirname = __edgeweirDirname(__filename);",
     ].join("\n"),
   },
 };

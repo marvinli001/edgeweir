@@ -292,7 +292,7 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 
 安装命令与 `install.sh` 的校验见 [接入节点](docs/deploy/nodes.md)。
 
-控制台绝不保存 SSH 凭据；节点只经控制台生成的一次性安装命令接入，由节点主动注册。
+控制台绝不保存 SSH 凭据；节点只经控制台生成的一次性安装命令接入，由节点主动注册。SSH 安装（`sshInstalls.*`）由控制台登录主机一次、运行同一个命令：凭据与任务状态只在进程内存里，主机密钥须经确认（见 [接入节点](docs/deploy/nodes.md#ssh-安装)）。
 
 除 `Enroll`、`EnrollProbe` 外的 RPC 都要求经内部 CA 校验的客户端证书，且序列号等于库中记录的当前序列号：证书轮换后旧证书立即失效，删除节点或探针时序列号写入 `node_certificate_revocation`。停用或删除的节点每次 RPC 都被拒绝，打开的 `WatchConfig` 流随之关闭；停用的探针只能续期证书。
 
@@ -686,6 +686,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0079_origin_proxy_protocol` | `origin.proxy_protocol_version`（回源连接发送的 PROXY protocol 版本，0 为不发送） |
 | `0080_origin_ca_rotation` | `pki_authority.kind`、`status`、`generation`（CA 轮换；`(kind, status)` 唯一，已有行的 kind 取 ID）；`origin_certificate.authority_id`、`origin_client_certificate.authority_id`（签发它的 CA） |
 | `0081_node_location` | `node.location`（节点用自己的 GeoIP 库查出的公网地址位置：国家、一级行政区、City MMDB 的经纬度） |
+| `0082_node_key_decommission` | `node.key_sha256`（证书公钥 SPKI 的 SHA-256，唯一；同一密钥再次注册得到同一节点）、`machine_id`（主机 machine-id 摘要，只作提示）、`decommission_requested_at`、`decommission_task_id`、`decommission_error`（无 SSH 退役，ADR-0067） |
 
 ## 构建产物
 
