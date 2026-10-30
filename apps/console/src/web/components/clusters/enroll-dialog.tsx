@@ -149,6 +149,8 @@ function EnrollDialog({
   });
   const create = useMutation(orpc.clusters.createEnrollmentToken.mutationOptions());
   const { mutateAsync } = create;
+  // What the shown command was minted with: switching the node channel URL mints it again.
+  const minting = React.useRef<Parameters<typeof mutateAsync>[0]>({ clusterId: cluster.id });
   // One token per opening (the dialog is keyed per opening). StrictMode runs
   // effects twice; the ref keeps that to one token.
   const minted = React.useRef(false);
@@ -221,7 +223,14 @@ function EnrollDialog({
                     </div>
                     <div className="flex flex-col gap-1">
                       <ConsoleUrlWarnings warnings={result.warnings} />
-                      <NodeChannelCheckStatus line />
+                      <NodeChannelCheckStatus
+                        line
+                        onSwitched={() =>
+                          mutateAsync(minting.current).then(setResult, () => {
+                            // rendered below via create.error
+                          })
+                        }
+                      />
                     </div>
                   </Field>
                   <Field>
@@ -241,14 +250,13 @@ function EnrollDialog({
                   onSubmit={async (event) => {
                     event.preventDefault();
                     try {
-                      setResult(
-                        await create.mutateAsync({
-                          clusterId: cluster.id,
-                          nodeGroupId: selectedGroup || undefined,
-                          nodeName: nodeName.trim(),
-                          ttlMinutes: ttl,
-                        }),
-                      );
+                      minting.current = {
+                        clusterId: cluster.id,
+                        nodeGroupId: selectedGroup || undefined,
+                        nodeName: nodeName.trim(),
+                        ttlMinutes: ttl,
+                      };
+                      setResult(await create.mutateAsync(minting.current));
                       setOptionsOpen(false);
                     } catch {
                       // rendered below via create.error

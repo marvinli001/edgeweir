@@ -354,6 +354,7 @@ Response:
 | --- | --- | --- |
 | `url` | string | The URL checked |
 | `result` | enum | `ok`: the presented chain contains the node channel CA; `unreachable`: no handshake within the timeout; `mismatch`: another chain answered, or a WebSocket URL did not upgrade; `refused`: the saved URL resolves to a special-purpose address the outbound policy does not allow, not connected |
+| `candidate` | object | After `unreachable` or `mismatch`, the WebSocket entry candidate `{ url, result }` (checked also while the entry is closed; with `ok`, saving its `url` as the node channel URL switches to it), otherwise `null` |
 | `checkedAt` | datetime | Time of the check |
 
 ### `settings.nodeChannel`

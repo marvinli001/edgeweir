@@ -81,7 +81,14 @@ gh attestation verify edgeweir-node_<版本>_linux_amd64.tar.gz --repo marvinli0
 | 证书不符，前面可能有代理或 CDN / 节点通道证书不符，前面可能有代理或 CDN | 出示了其他证书链：代理或 CDN 终结了 TLS，或地址指向其他服务，节点 mTLS 会失败，见 [节点通道四层透传](networking.md#节点通道四层透传)；`wss://`、`ws://` 地址的 WebSocket 握手被拒绝（入口未开放或地址指向其他服务）也是此结果，见 [节点通道的 WebSocket 入口](networking.md#节点通道的-websocket-入口) |
 | 出站策略不允许连接该地址 / 出站策略不允许连接节点通道地址 | **系统设置** 中保存的地址解析到内网、回环等特殊用途地址，`EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 未放行：控制台不连接。`EDGEWEIR_NODE_API_URL` 与默认地址不受此限制 |
 
-检查只作提示，不阻止任何操作：控制台能连上自己的地址，不代表其他网络的节点也能连上；控制台所在网络不支持访问自己的公网地址（NAT 回流）时，结果为无法连接，节点仍可能正常注册。结果缓存 30 秒，地址改变后重新检查。API：`GET /api/v1/settings/node-channel-check`，返回 `{ url, result, checkedAt }`，`result` 为 `ok`、`unreachable`、`mismatch` 或 `refused`。
+结果为无法连接或证书不符时，控制台再检查 [WebSocket 入口](networking.md#节点通道的-websocket-入口)：`wss://<EDGEWEIR_PUBLIC_URL 的主机[:端口]>`（控制台地址为 `http://` 时是 `ws://`），以及 `https://` 节点通道地址自己的主机 443 端口。入口关闭时也能检查：检查请求带控制台签发的一次性令牌，入口只为这次检查转发，不对其他请求开放。
+
+| 候选结果 | 显示 |
+| --- | --- |
+| 通过（经代理或 CDN 在 WebSocket 内看到节点通道内部 CA） | 「WebSocket 入口 `wss://…` 可用」与 **改用**。点击即把该地址保存为节点通道地址（覆盖 `EDGEWEIR_NODE_API_URL`）、开放入口并写审计日志；已注册的节点与探针检查新地址后自动切换（[更换节点通道地址](networking.md#更换节点通道地址)）。在添加节点对话框中点击，会用同样的选项重新生成安装命令 |
+| 未通过 | 原提示下加一行：改为四层透传节点通道端口，或关闭该域名的 CDN 代理（如 Cloudflare 灰云），见 [节点通道四层透传](networking.md#节点通道四层透传) |
+
+检查只作提示，不阻止任何操作：控制台能连上自己的地址，不代表其他网络的节点也能连上；控制台所在网络不支持访问自己的公网地址（NAT 回流）时，结果为无法连接，节点仍可能正常注册。结果缓存 30 秒，地址改变后重新检查。API：`GET /api/v1/settings/node-channel-check`，返回 `{ url, result, candidate, checkedAt }`，`result` 为 `ok`、`unreachable`、`mismatch` 或 `refused`；`candidate` 为 `{ url, result }`，没有检查候选时为 `null`。
 
 ## 2. 执行安装命令
 

@@ -6,7 +6,7 @@ import {
   type Server as TcpServer,
   connect as tcpConnect,
 } from "node:net";
-import { connect as tlsConnect } from "node:tls";
+import { createServer as createTlsServer, connect as tlsConnect } from "node:tls";
 import { Code, ConnectError, createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { NODE_CHANNEL_WEBSOCKET_PATH, NODE_CHANNEL_WEBSOCKET_PROTOCOL } from "@edgeweir/contract";
@@ -15,6 +15,7 @@ import { getRequestListener } from "@hono/node-server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import WebSocket, { createWebSocketStream } from "ws";
 import { createApp } from "../../src/server/app";
+import { CHECK_HEADER, issueCheckToken } from "../../src/server/node-channel/check-token";
 import { type NodeChannel, startNodeChannel } from "../../src/server/node-channel/server";
 import {
   attachNodeChannelWebSocket,
@@ -24,6 +25,11 @@ import {
   WEBSOCKET_ENTRY_LIMITS,
   type WebSocketEntryLimits,
 } from "../../src/server/node-channel/websocket";
+import { CertificateAuthority, generateCa } from "../../src/server/pki/ca";
+import {
+  checkNodeChannel,
+  checkNodeChannelUrl,
+} from "../../src/server/services/node-channel-check";
 import { type ApiClient, createTestContext, rpcClient, setupPlatform, signIn } from "./helpers";
 import { nodeKeyAndCsr } from "./node-csr";
 
@@ -170,6 +176,83 @@ describe("the node channel's WebSocket entry", async () => {
   it("is closed while the node channel URL is an https:// one", async () => {
     await expect(openWebSocket()).rejects.toThrow("HTTP 404");
     expect(await plainGet()).toBe(404);
+  });
+
+  it("takes the console's own check while closed, once per token", async () => {
+    const fingerprint = ctx.nodeCa.fingerprintSha256;
+    const checkToken = issueCheckToken(ctx.env.EDGEWEIR_MASTER_KEY);
+    // The node channel's TLS inside the WebSocket, through a closed entry.
+    expect(await checkNodeChannelUrl(entry, fingerprint, 3000, { checkToken })).toBe("ok");
+    expect(await checkNodeChannelUrl(entry, fingerprint, 3000, { checkToken })).toBe("mismatch");
+    expect(await checkNodeChannelUrl(entry, fingerprint, 3000)).toBe("mismatch");
+    const other = issueCheckToken(Buffer.alloc(32, 9).toString("base64"));
+    await expect(openWebSocket({ headers: { [CHECK_HEADER]: other } })).rejects.toThrow("HTTP 404");
+    expect(await plainGet()).toBe(404);
+
+    // A check's bridge lasts checkMs: it never authenticates.
+    const small = await smallEntry(ctx, app.fetch, channel, { checkMs: 300 });
+    try {
+      const ws = await openWebSocket(
+        { headers: { [CHECK_HEADER]: issueCheckToken(ctx.env.EDGEWEIR_MASTER_KEY) } },
+        undefined,
+        small.entry,
+      );
+      const started = Date.now();
+      expect(await closed(ws)).not.toBe(-1);
+      expect(Date.now() - started).toBeLessThan(2000);
+    } finally {
+      await small.close(sockets);
+    }
+  });
+
+  it("finds the closed entry behind a proxy that terminates the node channel's TLS", async () => {
+    // A CDN in front of the node channel port: its own certificate, the bytes relayed on.
+    const proxyCa = await CertificateAuthority.load(await generateCa("CDN CA"));
+    const proxyCert = await proxyCa.issueServerCertificate(["localhost", "127.0.0.1"]);
+    const proxy = createTlsServer(
+      { key: proxyCert.privateKeyPem, cert: proxyCert.certificatePem },
+      (socket) => {
+        const upstream = tcpConnect((channel.server.address() as AddressInfo).port, "127.0.0.1");
+        socket.pipe(upstream).pipe(socket);
+        socket.on("error", () => upstream.destroy());
+        upstream.on("error", () => socket.destroy());
+      },
+    );
+    await new Promise<void>((resolve) => proxy.listen(0, "127.0.0.1", resolve));
+    const proxied = `https://127.0.0.1:${(proxy.address() as AddressInfo).port}`;
+    const env = {
+      publicUrl: ctx.env.EDGEWEIR_PUBLIC_URL,
+      apiUrl: ctx.env.EDGEWEIR_NODE_API_URL,
+      nodeApiUrl: ctx.env.nodeApiUrl,
+    };
+    // The operator's addresses (environment), checked as they are.
+    ctx.env.EDGEWEIR_PUBLIC_URL = entry.replace(/^ws/, "http");
+    ctx.env.EDGEWEIR_NODE_API_URL = proxied;
+    ctx.env.nodeApiUrl = proxied;
+    let clock = Date.now() + 7_200_000;
+    try {
+      const check = await checkNodeChannel(ctx, () => (clock += 60_000));
+      expect(check).toMatchObject({
+        url: proxied,
+        result: "mismatch",
+        candidate: { url: entry, result: "ok" },
+      });
+      // Checked, not opened.
+      expect(await plainGet()).toBe(404);
+
+      // Switching saves the candidate: the entry opens, the change is audited.
+      const saved = await admin.settings.setNodeChannel({ url: entry });
+      expect(saved).toMatchObject({ effectiveUrl: entry, source: "setting" });
+      expect(await plainGet()).toBe(426);
+      const after = await checkNodeChannel(ctx, () => (clock += 60_000));
+      expect(after).toMatchObject({ url: entry, candidate: null });
+      expect(after.result).not.toBe("mismatch");
+    } finally {
+      ctx.env.EDGEWEIR_PUBLIC_URL = env.publicUrl;
+      ctx.env.EDGEWEIR_NODE_API_URL = env.apiUrl;
+      ctx.env.nodeApiUrl = env.nodeApiUrl;
+      await new Promise<void>((resolve) => proxy.close(() => resolve()));
+    }
   });
 
   it("opens with a wss:// node channel URL and serves the node channel inside", async () => {

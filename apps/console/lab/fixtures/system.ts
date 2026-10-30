@@ -1171,7 +1171,12 @@ export const systemFixtures: Fixtures = {
         },
       };
     },
-    nodeChannelCheck: () => ({ url: NODE_CHANNEL_URL, result: "ok", checkedAt: ago(12_000) }),
+    nodeChannelCheck: () => ({
+      url: NODE_CHANNEL_URL,
+      result: "ok",
+      candidate: null,
+      checkedAt: ago(12_000),
+    }),
     originAllowList: () => ({ cidrs: ["10.40.0.0/16", "fd00:40::/48"] }),
     releaseSource: () => ({
       url: "https://releases.example.net/edgeweir-node",

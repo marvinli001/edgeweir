@@ -157,6 +157,12 @@ pnpm e2e --only g12
 
 The variables for a second, parallel stack (`COMPOSE_PROJECT_NAME`, `E2E_CONSOLE_PORT`, `E2E_NODE_PORT`, `E2E_TAG`, `E2E_SUBNET`, `E2E_ISOLATED_SUBNET`, `E2E_INSTALL_IMAGE`, `EDGEWEIR_NODE_CONTEXT`) are listed in [README end-to-end tests](README.en.md#end-to-end-tests).
 
+The node channel behind a CDN (`scripts/e2e-cdn.mjs`) runs on its own and builds no images: a checkout after `pnpm install` and Docker are enough. The console runs from source with this machine's Node.js; nodes install the released, signed version with `install.sh` in clean Debian containers (github.com and deb.debian.org must be reachable). The project name, subnet, port, and node version are listed at the top of the script.
+
+```bash
+node scripts/e2e-cdn.mjs
+```
+
 ## Commit conventions
 
 Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).

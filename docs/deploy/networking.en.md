@@ -174,6 +174,7 @@ When the platform forwards HTTP only (for example Render), or 8443 cannot be ope
 | Plain requests | `GET /node-channel` answers 426 while the entry is open and 404 while it is closed; `install.sh` takes 426 as reachable |
 | Connection limits | At most 1024 WebSocket connections per console process; with `EDGEWEIR_TRUSTED_PROXIES` set, at most 64 per client address (IPv6 per /64). Beyond that: 503 and the log line `node channel WebSocket entry full` (at most once a minute) |
 | Timeouts | A connection that has not presented a verified client certificate within 30 seconds is closed (a connection without one can only enroll); a connection with no data either way for 120 seconds is closed, and nodes send on their streams every 15 seconds |
+| The console's own check | When the node channel URL fails its check, the console checks the entry through the proxy or CDN (also while the entry is closed; see [Node channel connection check](nodes.en.md#node-channel-connection-check)) and, when it passes, offers **Switch** in **System settings** |
 | Source address | The "connection source address" of a node is the client address of the WebSocket request, resolved as in [Trusted proxies and client IP](#trusted-proxies-and-client-ip) |
 | Node version | edgeweir-node 0.2.0 or later; `install.sh` refuses to enroll an earlier version through a `wss://` or `ws://` URL |
 

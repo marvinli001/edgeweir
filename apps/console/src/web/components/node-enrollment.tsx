@@ -6,10 +6,12 @@ import {
   type NodeChannelCheck,
   urlHostScope,
 } from "@edgeweir/contract";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
+import { Button } from "@/components/arc/button/button";
+import { Spinner } from "@/components/layout/spinner";
 import { SafetyNote } from "@/components/safety-note";
 import { Dot, type StatusTone } from "@/components/status-dot";
 import { m } from "@/lib/i18n";
@@ -82,20 +84,77 @@ const checkText = (result: NodeChannelCheck["result"], line: boolean) =>
       })[result]();
 
 /**
+ * The WebSocket entry the console found working when the URL did not, with the switch to it
+ * (saving it opens the entry; enrolled nodes and probes follow), or, when it fails too, what
+ * else makes the node channel reachable.
+ */
+function WebSocketCandidate({
+  candidate,
+  onSwitched,
+}: {
+  candidate: NonNullable<NodeChannelCheck["candidate"]>;
+  onSwitched?: () => void;
+}) {
+  const save = useMutation({
+    ...orpc.settings.setNodeChannel.mutationOptions(),
+    meta: {
+      invalidates: [orpc.settings.key()],
+      success: m.node_channel_switched,
+      toastError: true,
+    },
+    onSuccess: () => onSwitched?.(),
+  });
+  if (candidate.result !== "ok")
+    return (
+      <SafetyNote data-testid="node-channel-hint">{m.node_channel_passthrough_hint()}</SafetyNote>
+    );
+  return (
+    <span
+      className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground"
+      data-testid="node-channel-candidate"
+      data-url={candidate.url}
+    >
+      <Dot tone="good" small />
+      <span className="min-w-0 break-all">
+        {m.node_channel_websocket_ok({ url: candidate.url })}
+      </span>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        disabled={save.isPending}
+        onClick={() => save.mutate({ url: candidate.url })}
+        data-testid="node-channel-switch"
+      >
+        {save.isPending ? <Spinner /> : null}
+        {m.node_channel_switch()}
+      </Button>
+    </span>
+  );
+}
+
+/**
  * The console's own TLS handshake with the node channel URL, as one line:
  * a pulsing dot while it runs, nothing when it cannot be asked. `line`
  * names the node channel and links a failed check to the setting (the
- * add-node dialog).
+ * add-node dialog). A failed check adds the WebSocket entry's: a switch to
+ * it when it works (`onSwitched` after saving), a hint otherwise.
  */
-export function NodeChannelCheckStatus({ line = false }: { line?: boolean }) {
+export function NodeChannelCheckStatus({
+  line = false,
+  onSwitched,
+}: {
+  line?: boolean;
+  onSwitched?: () => void;
+}) {
   const check = useQuery({
     ...orpc.settings.nodeChannelCheck.queryOptions(),
     meta: { background: true },
   });
   if (check.isPending) return <Dot tone="idle" pulse small />;
   if (!check.data) return null;
-  const { result } = check.data;
-  return (
+  const { result, candidate } = check.data;
+  const status = (
     <span
       className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground"
       data-testid="node-channel-check"
@@ -112,6 +171,13 @@ export function NodeChannelCheckStatus({ line = false }: { line?: boolean }) {
           {m.node_channel_line_fix()}
         </Link>
       ) : null}
+    </span>
+  );
+  if (!candidate) return status;
+  return (
+    <span className="flex basis-full flex-col gap-1">
+      {status}
+      <WebSocketCandidate candidate={candidate} onSwitched={onSwitched} />
     </span>
   );
 }

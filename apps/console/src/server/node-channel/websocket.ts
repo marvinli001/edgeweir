@@ -12,6 +12,7 @@ import { createWebSocketStream, type WebSocket, WebSocketServer } from "ws";
 import { resolveClientIp } from "../lib/client-ip";
 import type { AppContext } from "../lib/context";
 import { nodeChannelWebSocketOpen } from "../services/node-channel-url";
+import { acceptCheckToken, CHECK_HEADER } from "./check-token";
 import type { NodeChannel } from "./server";
 
 /**
@@ -29,7 +30,8 @@ export const MAX_MESSAGE_BYTES = 64 << 10;
  * attacker would lock the nodes out); a bridge whose node channel
  * connection has not presented a verified client certificate within
  * authenticateMs is closed (without one, a connection can only enroll);
- * a bridge with no bytes either way for
+ * the console's own check (CHECK_HEADER) is bridged while the entry is
+ * closed and gets checkMs; a bridge with no bytes either way for
  * idleMs is closed (nodes keep their streams busy every 15 seconds); whether
  * the entry is open is kept for openCacheMs and forgotten when the node
  * channel settings change.
@@ -38,6 +40,7 @@ export interface WebSocketEntryLimits {
   bridges: number;
   bridgesPerClient: number;
   authenticateMs: number;
+  checkMs: number;
   idleMs: number;
   openCacheMs: number;
 }
@@ -45,6 +48,7 @@ export const WEBSOCKET_ENTRY_LIMITS: WebSocketEntryLimits = {
   bridges: 1024,
   bridgesPerClient: 64,
   authenticateMs: 30_000,
+  checkMs: 10_000,
   idleMs: 120_000,
   openCacheMs: 5_000,
 };
@@ -141,8 +145,9 @@ function refuse(socket: Duplex, status: number, reason: string): void {
  * the node channel terminates it and requires mTLS exactly as on its own
  * port; whatever is in front of the web port only sees the TLS records.
  *
- * The entry answers while nodeChannelWebSocketOpen says so (404 otherwise)
- * and never to browsers (they send Origin).
+ * The entry answers while nodeChannelWebSocketOpen says so (404 otherwise,
+ * except to the console's own check: a token signed with the master key in
+ * CHECK_HEADER, taken once) and never to browsers (they send Origin).
  */
 export function attachNodeChannelWebSocket(
   server: Server,
@@ -189,7 +194,7 @@ export function attachNodeChannelWebSocket(
       protocols.has(NODE_CHANNEL_WEBSOCKET_PROTOCOL) ? NODE_CHANNEL_WEBSOCKET_PROTOCOL : false,
   });
 
-  const bridge = (ws: WebSocket, client: string, release: () => void) => {
+  const bridge = (ws: WebSocket, client: string, release: () => void, check: boolean) => {
     const address = channel.server.address() as AddressInfo | null;
     if (!address) {
       release();
@@ -201,11 +206,14 @@ export function attachNodeChannelWebSocket(
     let key: string | undefined;
     // Without a verified client certificate a connection can only enroll:
     // it gets authenticateMs for that, then gives its bridge back.
-    const unauthenticated = setTimeout(() => {
-      if (key !== undefined && bridged.get(key)?.authorized) return;
-      log.debug("node channel WebSocket without a client certificate, closed", { client });
-      close();
-    }, limits.authenticateMs);
+    const unauthenticated = setTimeout(
+      () => {
+        if (key !== undefined && bridged.get(key)?.authorized) return;
+        log.debug("node channel WebSocket without a client certificate, closed", { client });
+        close();
+      },
+      check ? limits.checkMs : limits.authenticateMs,
+    );
     const close = () => {
       clearTimeout(unauthenticated);
       if (key !== undefined) bridged.delete(key);
@@ -249,7 +257,11 @@ export function attachNodeChannelWebSocket(
       log.warn("cannot tell whether the node channel WebSocket entry is open", { error });
       return refuse(socket, 503, "Service Unavailable");
     }
-    if (!isOpen) return refuse(socket, 404, "Not Found");
+    // A closed entry still takes the console's own check (a token only it issues, taken once):
+    // that one WebSocket reaches the node channel's TLS, for checkMs.
+    const check =
+      !isOpen && acceptCheckToken(app.env.EDGEWEIR_MASTER_KEY, req.headers[CHECK_HEADER]);
+    if (!isOpen && !check) return refuse(socket, 404, "Not Found");
     const client = resolveClientIp(
       req.socket.remoteAddress ?? "",
       headersOf(req),
@@ -279,7 +291,7 @@ export function attachNodeChannelWebSocket(
     });
     wss.handleUpgrade(req, socket, head, (ws) => {
       upgraded = true;
-      bridge(ws, client, release);
+      bridge(ws, client, release, check);
     });
   };
 

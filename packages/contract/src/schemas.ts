@@ -1392,9 +1392,19 @@ export const settings = z.object({
  * resolves to a special-purpose address the outbound policy does not allow
  * (no connection is made). Advisory only.
  */
+const nodeChannelCheckResult = z.enum(["ok", "unreachable", "mismatch", "refused"]);
+
 export const nodeChannelCheck = z.object({
   url: z.string(),
-  result: z.enum(["ok", "unreachable", "mismatch", "refused"]),
+  result: nodeChannelCheckResult,
+  /**
+   * When the URL is unreachable or mismatched: the WebSocket entry at the console's public
+   * address (or at the URL's own host on 443), checked through whatever is in front even while
+   * the entry is closed; the first that is ok, otherwise the first with its result. Saving its
+   * URL as the node channel URL opens the entry; enrolled nodes and probes follow. Null when not
+   * checked.
+   */
+  candidate: z.object({ url: z.string(), result: nodeChannelCheckResult }).nullable(),
   checkedAt: isoDateTime,
 });
 

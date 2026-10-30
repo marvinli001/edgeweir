@@ -157,6 +157,12 @@ pnpm e2e --only g12
 
 并行运行第二套环境所需的变量（`COMPOSE_PROJECT_NAME`、`E2E_CONSOLE_PORT`、`E2E_NODE_PORT`、`E2E_TAG`、`E2E_SUBNET`、`E2E_ISOLATED_SUBNET`、`E2E_INSTALL_IMAGE`、`EDGEWEIR_NODE_CONTEXT`）见 [README 端到端测试](README.md#端到端测试)。
 
+控制台前有 CDN 的节点通道（`scripts/e2e-cdn.mjs`）单独运行，不需要构建镜像：已 `pnpm install` 的检出与 Docker 即可，控制台用本机 Node.js 从源码运行，节点在干净的 Debian 容器中用 `install.sh` 安装已发布的签名版本（需访问 github.com 与 deb.debian.org）。项目名、子网、端口与节点版本见脚本开头。
+
+```bash
+node scripts/e2e-cdn.mjs
+```
+
 ## 提交规范
 
 使用 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/v1.0.0/)。

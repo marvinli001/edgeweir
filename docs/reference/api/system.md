@@ -354,6 +354,7 @@
 | --- | --- | --- |
 | `url` | string | 检查的地址 |
 | `result` | enum | `ok`：出示的证书链含节点通道 CA；`unreachable`：超时内没有完成握手；`mismatch`：出示了其他证书链，或 WebSocket 地址没有完成升级；`refused`：保存的地址解析到出站策略不允许的特殊用途地址，未连接 |
+| `candidate` | object | `result` 为 `unreachable`、`mismatch` 时为 WebSocket 入口候选 `{ url, result }`（入口关闭时也检查；`result` 为 `ok` 时把 `url` 保存为节点通道地址即可改用），否则为 `null` |
 | `checkedAt` | datetime | 检查时间 |
 
 ### `settings.nodeChannel`
