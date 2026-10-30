@@ -558,7 +558,8 @@ describe("SSH install (ADR-0066)", async () => {
         hosts: [host(server.port), { ...host(server.port), host: "localhost" }],
         concurrency: 1,
       });
-      await until(started.id, (r) => r.hosts[0]?.state === "installing");
+      // The server records an exec once stdin ends, which can trail the "installing" state.
+      await until(started.id, () => server.execs.length === 1);
       expect(
         (await rpcError(admin.sshInstalls.retry({ id: started.id, credential: { password: "x" } })))
           .code,
