@@ -10,18 +10,11 @@ import {
   type TierTopology,
 } from "@edgeweir/contract";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { RangeSelect } from "@/components/analytics/range-select";
 import { Badge } from "@/components/arc/badge/badge";
 import { Checkbox } from "@/components/arc/checkbox/checkbox";
 import { FormSelect } from "@/components/form-select";
 import { Field, FieldLabel } from "@/components/layout/form";
-import {
-  Panel,
-  PanelAction,
-  PanelContent,
-  PanelHeader,
-  PanelTitle,
-} from "@/components/layout/panel";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { SafetyNote } from "@/components/safety-note";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, EmptyState, QueryView } from "@/components/states";
@@ -329,11 +322,10 @@ function SelectionView({ data }: { data: TierSelection }) {
 export function TierStatsCard({
   siteId,
   range,
-  onRangeChange,
 }: {
   siteId: string;
+  /** The analytics tab's range: the card sits under its range picker and follows it. */
   range: AnalyticsRange;
-  onRangeChange: (range: AnalyticsRange) => void;
 }) {
   const stats = useQuery({
     ...orpc.tieredCache.site.stats.queryOptions({ input: { id: siteId, range } }),
@@ -345,9 +337,6 @@ export function TierStatsCard({
     <Panel className="animate-enter" data-testid="tier-stats-card">
       <PanelHeader>
         <PanelTitle>{m.tiered_cache_stats_title()}</PanelTitle>
-        <PanelAction>
-          <RangeSelect value={range} onChange={onRangeChange} />
-        </PanelAction>
       </PanelHeader>
       <PanelContent>
         <QueryView

@@ -230,11 +230,7 @@ function SiteDetailPage() {
                 range={search.range ?? DEFAULT_RANGE}
                 onRangeChange={setRange}
               />
-              <TierStatsCard
-                siteId={data.id}
-                range={search.range ?? DEFAULT_RANGE}
-                onRangeChange={setRange}
-              />
+              <TierStatsCard siteId={data.id} range={search.range ?? DEFAULT_RANGE} />
             </TabsContent>
             <TabsContent value="domains" className="animate-enter">
               <DomainsTab site={data} />
