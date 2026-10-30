@@ -341,6 +341,7 @@ const core: Fixtures = {
         challengeV2: on,
         accessLogsV2: older,
         imageConvert: older,
+        sessionDetection: older,
       };
     },
   },

@@ -562,6 +562,24 @@ export function dimensionsOf(range: AnalyticsRange, siteId?: string): StatsDimen
     tlsVersions: keyed(totals.requests, profile.tls),
     blockReasons,
     challenges: { issued, passed: Math.round(issued * 0.41) },
+    // The shop scores its sessions: mostly people, a ridge of scripted clients at 1-9.
+    botScores:
+      !site || site.id === SHOP
+        ? (
+            [
+              ["1", 0.09],
+              ["10", 0.02],
+              ["20", 0.03],
+              ["30", 0.05],
+              ["40", 0.08],
+              ["50", 0.14],
+              ["60", 0.12],
+              ["70", 0.11],
+              ["80", 0.13],
+              ["90", 0.23],
+            ] as const
+          ).map(([key, share]) => ({ key, requests: Math.round(totals.requests * share) }))
+        : [],
     unsupportedNodes: !site || PARTIAL_SITES.has(site.name) ? 1 : 0,
   };
 }

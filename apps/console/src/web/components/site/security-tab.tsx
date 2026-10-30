@@ -52,6 +52,7 @@ import { SafetyNote } from "@/components/safety-note";
 import { ExclusionDialog } from "@/components/site/exclusion-dialog";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
+import { SecuritySettings } from "@/components/site/security-settings";
 import { combineQueries, QueryView } from "@/components/states";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { useDraft } from "@/hooks/use-draft";
@@ -125,6 +126,7 @@ export function SecurityTab({ siteId }: { siteId: string }) {
           </LinkButton>
         </div>
       </div>
+      <SecuritySettings siteId={siteId} />
       <QueryView query={protection}>
         {(data) => (
           <>

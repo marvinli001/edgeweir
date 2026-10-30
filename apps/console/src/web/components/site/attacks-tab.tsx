@@ -25,6 +25,7 @@ import { Pager } from "@/components/pager";
 import { RowMenu, type RowMenuItem } from "@/components/quick-actions";
 import { SafetyNote } from "@/components/safety-note";
 import { AutoMitigationCard } from "@/components/site/auto-mitigation-card";
+import { BotScoresCard } from "@/components/site/bot-scores-card";
 import { combineQueries, EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { TimeAgo } from "@/components/time-ago";
@@ -109,6 +110,7 @@ export function AttacksTab({
         <LoggedRulesCard siteId={siteId} range={range} />
         <ChallengesCard siteId={siteId} range={range} />
         <AuthFailuresCard siteId={siteId} range={range} />
+        <BotScoresCard siteId={siteId} range={range} />
       </div>
       {/* A new range starts at the first page. */}
       <EventsCard key={range} siteId={siteId} range={range} />

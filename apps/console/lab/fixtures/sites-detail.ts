@@ -27,6 +27,7 @@ import {
   type RuleDto,
   type RuleVersion,
   type SecurityEvent,
+  type SessionDetectionSettings,
   type Site,
   type SiteAuthRules,
   type SiteErrorPages,
@@ -1730,6 +1731,26 @@ function imageConvertOf(site: Site): ImageConvertSettings {
   return settings;
 }
 
+/** Session detection per site: the shop enforces, with the interstitial on its checkout only. */
+const sessionDetections = new Map<string, SessionDetectionSettings>();
+function sessionDetectionOf(site: Site): SessionDetectionSettings {
+  let settings = sessionDetections.get(site.id);
+  if (!settings) {
+    settings = isShop(site)
+      ? {
+          mode: "enforce",
+          interstitial: false,
+          interstitialRules: [
+            { host: site.name, pathPrefix: "/checkout", interstitial: true },
+            { host: `api.${site.name}`, pathPrefix: "", interstitial: false },
+          ],
+        }
+      : { mode: "off", interstitial: false, interstitialRules: [] };
+    sessionDetections.set(site.id, settings);
+  }
+  return settings;
+}
+
 const logOptions = new Map<string, LogOptions>();
 
 function logOptionsOf(site: Site): LogOptions {
@@ -2260,6 +2281,7 @@ function entry(
     query: options.logQuery ? (traits.query ?? "") : "",
     headers,
     peerIp: options.logPeer ? `10.20.0.${5 + Math.floor(r(30) * 3)}` : "",
+    botScore: isShop(ctx.site) ? (agent.tool ? 1 : 40 + Math.floor(r(31) * 59)) : 0,
   };
 }
 
@@ -2694,6 +2716,13 @@ export const siteDetailFixtures: Fixtures = {
       requests: isShop(siteOf(input.id)) ? 1284 : 0,
       unsupportedNodes: 0,
     }),
+  },
+  sessionDetection: {
+    get: ({ id: siteId }) => sessionDetectionOf(siteOf(siteId)),
+    update: ({ id: siteId, ...settings }) => {
+      sessionDetections.set(siteId, settings);
+      return sessionDetectionOf(siteOf(siteId));
+    },
   },
   imageConvert: {
     get: ({ id: siteId }) => imageConvertOf(siteOf(siteId)),

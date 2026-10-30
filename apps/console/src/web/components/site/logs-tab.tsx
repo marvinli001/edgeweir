@@ -578,6 +578,8 @@ function details(
       )),
     );
   if (row.peerIp) add("peer", m.logs_field_peer(), "log-peer-ip", row.peerIp);
+  if (row.botScore)
+    add("bot-score", m.logs_field_bot_score(), "log-bot-score", String(row.botScore));
   return rows;
 }
 
