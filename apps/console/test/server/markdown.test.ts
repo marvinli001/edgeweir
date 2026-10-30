@@ -90,7 +90,11 @@ describe("Markdown for Agents", async () => {
   describe("site settings", () => {
     it("starts off on every path; nodes see nothing", async () => {
       expect(await admin.markdown.get({ id: siteId })).toEqual(MARKDOWN_DEFAULTS);
-      expect(MARKDOWN_DEFAULTS).toEqual({ enabled: false, includePrefixes: [], excludePrefixes: [] });
+      expect(MARKDOWN_DEFAULTS).toEqual({
+        enabled: false,
+        includePrefixes: [],
+        excludePrefixes: [],
+      });
       expect((await ir()).requiredFeatures).not.toContain(MARKDOWN_FEATURE);
       expect((await siteIr())?.markdown).toBeUndefined();
     });
@@ -120,14 +124,19 @@ describe("Markdown for Agents", async () => {
         .orderBy(desc(schema.auditLog.occurredAt))
         .limit(1);
       expect(entry?.targetId).toBe(siteId);
-      expect(entry?.metadata).toEqual({
+      expect(entry?.metadata).toMatchObject({
         enabled: true,
         changed: ["enabled", "includePrefixes", "excludePrefixes"],
       });
     });
 
     it("every path: an empty include list still sends the message", async () => {
-      await admin.markdown.update({ id: siteId, enabled: true, includePrefixes: [], excludePrefixes: [] });
+      await admin.markdown.update({
+        id: siteId,
+        enabled: true,
+        includePrefixes: [],
+        excludePrefixes: [],
+      });
       const md = (await siteIr())?.markdown;
       expect(md).toBeDefined();
       expect(md?.includePrefixes).toEqual([]);

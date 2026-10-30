@@ -11,9 +11,9 @@ import * as z from "zod";
 import { analyticsRange, uuid } from "./schemas";
 
 /** Prefix lists hold at most this many entries. */
-export const MAX_MARKDOWN_PREFIXES = 32;
+const MAX_MARKDOWN_PREFIXES = 32;
 /** A prefix is at most this many bytes. */
-export const MAX_MARKDOWN_PREFIX_LENGTH = 256;
+const MAX_MARKDOWN_PREFIX_LENGTH = 256;
 
 /** What a site starts with (off, every path). */
 export const MARKDOWN_DEFAULTS = {

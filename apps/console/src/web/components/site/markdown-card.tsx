@@ -79,7 +79,11 @@ function MarkdownEditor({
   // Nodes that lack the feature: it cannot be turned on (it can be turned off).
   const blocked = !availability.available && !server.enabled;
   return (
-    <Panel className="animate-enter" style={{ animationDelay: "240ms" }} data-testid="markdown-card">
+    <Panel
+      className="animate-enter"
+      style={{ animationDelay: "240ms" }}
+      data-testid="markdown-card"
+    >
       <form className="flex flex-col gap-(--panel-pad)" onSubmit={submit}>
         <PanelHeader>
           <PanelTitle>{m.markdown_title()}</PanelTitle>
