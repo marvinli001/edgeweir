@@ -186,3 +186,60 @@ export async function outboundGet(
     return response.body;
   }
 }
+
+/**
+ * A provider API request (external probe sources) under the same policy:
+ * resolved once, special-purpose addresses only when allowed, connected by
+ * the pinned IP, HTTPS for public addresses, no redirects. Returns the
+ * status and body (at most `maxBytes`) whatever the status.
+ */
+export async function outboundRequest(
+  app: AppContext,
+  request: { method: "GET" | "POST"; url: string; headers: Record<string, string>; body?: Buffer },
+  limits: { maxBytes: number; timeoutMs: number },
+): Promise<{ status: number; body: Buffer }> {
+  const signal = AbortSignal.timeout(limits.timeoutMs);
+  const url = new URL(request.url);
+  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.hash)
+    throw new Error("invalid outbound URL");
+  const address = await withinDeadline(outboundAddress(app, url.hostname), signal);
+  signal.throwIfAborted();
+  if (url.protocol === "http:" && forbiddenOriginRange(address.address, []) === null)
+    throw new Error("HTTPS required for public destinations");
+  const body = request.body ?? Buffer.alloc(0);
+  return new Promise((resolve, reject) => {
+    const outgoing = (url.protocol === "https:" ? https : http).request(
+      {
+        hostname: address.address,
+        family: address.family,
+        servername: isIP(address.servername) ? undefined : address.servername,
+        port: url.port || undefined,
+        path: url.pathname + url.search,
+        method: request.method,
+        headers: {
+          host: url.host,
+          ...request.headers,
+          ...(request.method === "POST" ? { "content-length": body.length } : {}),
+        },
+        timeout: limits.timeoutMs,
+        signal,
+      },
+      (response) => {
+        let size = 0;
+        const chunks: Buffer[] = [];
+        response.on("data", (chunk: Buffer) => {
+          size += chunk.length;
+          if (size > limits.maxBytes) response.destroy(new Error("outbound response too large"));
+          else chunks.push(chunk);
+        });
+        response.once("error", reject);
+        response.once("end", () =>
+          resolve({ status: response.statusCode ?? 0, body: Buffer.concat(chunks) }),
+        );
+      },
+    );
+    outgoing.once("error", () => reject(new Error("outbound transport failed")));
+    outgoing.once("timeout", () => outgoing.destroy(new Error("outbound timeout")));
+    outgoing.end(request.method === "POST" ? body : undefined);
+  });
+}

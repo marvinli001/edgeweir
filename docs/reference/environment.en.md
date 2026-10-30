@@ -76,6 +76,7 @@ The ClickHouse variables apply only with `EDGEWEIR_ANALYTICS=clickhouse`. The `a
 | `EDGEWEIR_ACME_CA_FILE` | Empty | Path of a PEM file: fallback issuers of the custom ACME directory's TLS certificate (trusted in addition to the system trust store); CA certificates saved in system settings win. |
 | `EDGEWEIR_SMTP_CA_FILE` | Empty | **Fallback** for **Alerts → SMTP** → "CA certificates (PEM)". CA for SMTP TLS (path of a PEM file), used only when the SMTP settings hold no CA. Empty: the system trust store. |
 | `EDGEWEIR_DNS_TEST_ENDPOINT` | Empty | Address of the local DNS simulator for integration tests; enables the `test` DNS provider. Never set it for real providers. |
+| `EDGEWEIR_PROBE_SOURCE_TEST_ENDPOINT` | Empty | Address of the local monitoring-API simulator for integration tests; external probe source API requests go there instead. Never set it in a deployment. |
 
 ## Node releases
 

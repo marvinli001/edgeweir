@@ -1,0 +1,6 @@
+{
+  "Code": "200",
+  "Success": "true",
+  "RequestId": "r-2",
+  "Data": "[{\"taskId\": \"t-1\", \"timestamp\": 1793347080000, \"cityEN\": \"Hangzhou\", \"ispEN\": \"China Telecom\", \"TotalTime\": 38.4, \"HTTPResponseCode\": 200, \"errorCode\": 0}, {\"taskId\": \"t-1\", \"timestamp\": 1793347140000, \"cityEN\": \"Hangzhou\", \"ispEN\": \"China Telecom\", \"TotalTime\": 41.2, \"HTTPResponseCode\": 200, \"errorCode\": 0}, {\"taskId\": \"t-1\", \"timestamp\": 1793347140000, \"cityEN\": \"Beijing\", \"ispEN\": \"China Unicom\", \"TotalTime\": 0, \"HTTPResponseCode\": 0, \"errorCode\": 610}, {\"taskId\": \"t-2\", \"timestamp\": 1793347150000, \"cityEN\": \"Shanghai\", \"ispEN\": \"China Mobile\", \"TotalTime\": 12, \"HTTPResponseCode\": 503, \"errorCode\": \"\"}]"
+}

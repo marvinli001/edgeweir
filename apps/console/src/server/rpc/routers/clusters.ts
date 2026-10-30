@@ -21,6 +21,20 @@ import {
   setUnknownHosts,
 } from "../../services/edge";
 import { createEnrollmentToken, getEnrollmentToken } from "../../services/enrollment";
+import {
+  checkProbeSource,
+  createProbeSource,
+  deleteProbeSource,
+  listProbeModes,
+  listProbeSourceMappings,
+  listProbeSourceMonitors,
+  listProbeSourceResults,
+  listProbeSources,
+  rotateProbeSourceSecret,
+  setClusterProbeMode,
+  setProbeSourceMappings,
+  updateProbeSource,
+} from "../../services/external-probes";
 import { getPortPools, setPortPools } from "../../services/l4";
 import { nodeChannelUrl } from "../../services/node-channel-url";
 import { getDebugLog, listDebugLogs, pullDebugLogs } from "../../services/node-debug-logs";
@@ -87,6 +101,43 @@ export const clustersRouter = {
     ),
     results: authed.probes.results.handler(({ input, context }) =>
       listProbeResults(context.app.db, input),
+    ),
+  },
+  probeSources: {
+    list: authed.probeSources.list.handler(({ context }) => listProbeSources(context.app)),
+    create: authed.probeSources.create.handler(({ input, context }) =>
+      createProbeSource(context.app, input, context.actor),
+    ),
+    update: authed.probeSources.update.handler(({ input, context }) =>
+      updateProbeSource(context.app, input, context.actor),
+    ),
+    delete: authed.probeSources.delete.handler(async ({ input, context }) => {
+      await deleteProbeSource(context.app, input.id, context.actor);
+      return { ok: true as const };
+    }),
+    rotateWebhookSecret: authed.probeSources.rotateWebhookSecret.handler(({ input, context }) =>
+      rotateProbeSourceSecret(context.app, input.id, context.actor),
+    ),
+    check: authed.probeSources.check.handler(({ input, context }) =>
+      checkProbeSource(context.app, input),
+    ),
+    monitors: authed.probeSources.monitors.handler(({ input, context }) =>
+      listProbeSourceMonitors(context.app, input.id),
+    ),
+    mappings: authed.probeSources.mappings.handler(({ input, context }) =>
+      listProbeSourceMappings(context.app.db, input.id),
+    ),
+    setMappings: authed.probeSources.setMappings.handler(
+      async ({ input, context }) =>
+        (await setProbeSourceMappings(context.app.db, input.id, input.mappings, context.actor))
+          .mappings,
+    ),
+    results: authed.probeSources.results.handler(({ input, context }) =>
+      listProbeSourceResults(context.app.db, input.id),
+    ),
+    modes: authed.probeSources.modes.handler(({ context }) => listProbeModes(context.app.db)),
+    setClusterMode: authed.probeSources.setClusterMode.handler(({ input, context }) =>
+      setClusterProbeMode(context.app.db, input.clusterId, input.mode, context.actor),
     ),
   },
   scheduling: {

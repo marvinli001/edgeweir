@@ -1,0 +1,21 @@
+{
+  "data": {
+    "id": "2001",
+    "type": "monitor_response_times",
+    "attributes": {
+      "regions": [
+        {
+          "region": "us",
+          "response_times": [
+            { "at": "2026-10-30T07:58:30.000Z", "response_time": 0.131 },
+            { "at": "2026-10-30T07:59:30.000Z", "response_time": 0.12 }
+          ]
+        },
+        {
+          "region": "eu",
+          "response_times": [{ "at": "2026-10-30T07:59:30.000Z", "response_time": 0.045 }]
+        }
+      ]
+    }
+  }
+}

@@ -177,3 +177,84 @@ export const schedulingState = pgTable(
     index("scheduling_state_node_idx").on(t.nodeId),
   ],
 );
+
+/**
+ * A monitoring service the operator already uses (or their own sender of
+ * the generic webhook) whose results about the nodes count like probe
+ * results (ADR-0069). Credentials and the webhook secret are envelopes bound
+ * to the row; the API never returns them.
+ */
+export const externalProbeSource = pgTable("external_probe_source", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  /** Adapter id (contract `probeSourceProvider`). */
+  provider: text("provider").notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  /** Sealed JSON of the API credentials (external_probe_source.credential_envelope). */
+  credentialEnvelope: text("credential_envelope"),
+  /** Sealed webhook secret (external_probe_source.webhook_secret_envelope); null: no webhook. */
+  webhookSecretEnvelope: text("webhook_secret_envelope"),
+  /** Provider options that are not secret (API site, region, endpoint). */
+  options: jsonb("options").$type<Record<string, string>>().notNull().default({}),
+  pollIntervalSeconds: integer("poll_interval_seconds").notNull().default(60),
+  /** Results stop counting this long after the source last answered or delivered. */
+  staleAfterSeconds: integer("stale_after_seconds").notNull().default(300),
+  lastPollAt: timestamp("last_poll_at", { withTimezone: true }),
+  /** The last successful poll or verified webhook delivery. */
+  lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+  lastDeliveryAt: timestamp("last_delivery_at", { withTimezone: true }),
+  /** The last failure (error code) of a poll; cleared by the next success. */
+  lastErrorAt: timestamp("last_error_at", { withTimezone: true }),
+  lastError: text("last_error").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+/** Which node (and scheduling address) a monitor of a source checks. */
+export const externalProbeMapping = pgTable(
+  "external_probe_mapping",
+  {
+    sourceId: uuid("source_id")
+      .notNull()
+      .references(() => externalProbeSource.id, { onDelete: "cascade" }),
+    monitorId: text("monitor_id").notNull(),
+    monitorName: text("monitor_name").notNull().default(""),
+    nodeId: uuid("node_id")
+      .notNull()
+      .references(() => node.id, { onDelete: "cascade" }),
+    /** One scheduling address of the node; null: each of its scheduling addresses. */
+    address: text("address"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.sourceId, t.monitorId] }),
+    index("external_probe_mapping_node_idx").on(t.nodeId),
+  ],
+);
+
+/**
+ * The latest normalized result of a source's monitor from one of the
+ * provider's locations ("" when the provider reports one result).
+ */
+export const externalProbeObservation = pgTable(
+  "external_probe_observation",
+  {
+    sourceId: uuid("source_id")
+      .notNull()
+      .references(() => externalProbeSource.id, { onDelete: "cascade" }),
+    monitorId: text("monitor_id").notNull(),
+    location: text("location").notNull().default(""),
+    sent: integer("sent").notNull(),
+    lost: integer("lost").notNull(),
+    rttMs: integer("rtt_ms").notNull().default(0),
+    error: text("error").notNull().default(""),
+    /** When the provider checked (as reported, never later than receivedAt). */
+    checkedAt: timestamp("checked_at", { withTimezone: true }).notNull(),
+    /** When the console last received or confirmed the result. */
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.sourceId, t.monitorId, t.location] })],
+);

@@ -11,6 +11,7 @@ import {
   nodeChannelStateOf,
   type Probe,
   type ProbeResultDto,
+  type ProbeSource,
   type ServiceAccount,
 } from "@edgeweir/contract";
 import type { Fixtures } from "./define";
@@ -463,6 +464,98 @@ function lastRoundOf(probeId: string): Probe["lastRound"] {
       : null,
   };
 }
+
+// External probe sources (ADR-0069): a healthy Checkly account, an UptimeRobot key that
+// stopped working and a generic webhook that went quiet. Id kind 43.
+const sourceBase = {
+  enabled: true,
+  pollIntervalSeconds: 60,
+  staleAfterSeconds: 300,
+  lastDeliveryAt: null,
+  lastErrorAt: null,
+  lastError: "",
+  createdAt: iso(NOW - 20 * DAY),
+};
+const probeSources: ProbeSource[] = [
+  {
+    ...sourceBase,
+    id: id(43, 1),
+    name: "Checkly",
+    provider: "checkly",
+    options: { account_id: "4f6a8c1e-0000-4000-8000-00000000c0de" },
+    secretsSet: ["api_key"],
+    webhookUrl: `https://console.example.net/api/hooks/probe-sources/${id(43, 1)}`,
+    status: "healthy",
+    lastSuccessAt: ago(40_000),
+    lastPollAt: ago(40_000),
+    lastDeliveryAt: ago(6 * MINUTE),
+    mappings: 3,
+    down: 1,
+  },
+  {
+    ...sourceBase,
+    id: id(43, 2),
+    name: "UptimeRobot",
+    provider: "uptimerobot",
+    options: {},
+    secretsSet: ["api_key"],
+    webhookUrl: null,
+    status: "failing",
+    lastSuccessAt: ago(2 * HOUR),
+    lastPollAt: ago(50_000),
+    lastErrorAt: ago(50_000),
+    lastError: "auth_failed",
+    mappings: 2,
+    down: 0,
+  },
+  {
+    ...sourceBase,
+    id: id(43, 3),
+    name: "Home lab sender",
+    provider: "generic_webhook",
+    options: {},
+    secretsSet: [],
+    webhookUrl: `https://console.example.net/api/hooks/probe-sources/${id(43, 3)}`,
+    pollIntervalSeconds: 30,
+    status: "stale",
+    lastSuccessAt: ago(47 * MINUTE),
+    lastPollAt: null,
+    lastDeliveryAt: ago(47 * MINUTE),
+    mappings: 1,
+    down: 0,
+  },
+];
+const checklyMappings = ["tyo-edge-01", "sin-edge-02", "fra-edge-01"].map((name, index) => {
+  const node = nodeNamed(name);
+  return {
+    monitorId: `a1b2c3d4-0000-4000-8000-00000000000${index + 1}`,
+    monitorName: `${name} https`,
+    nodeId: node.id,
+    nodeName: node.name,
+    clusterId: node.clusterId,
+    address: null,
+  };
+});
+const checklyResults = checklyMappings.flatMap((m, index) =>
+  ["ap-northeast-1", "eu-central-1", "us-east-1"].map((location, l) => {
+    // fra-edge-01's monitor fails from two of three locations (world.ts: Frankfurt offline).
+    const up = !(index === 2 && l < 2);
+    return {
+      monitorId: m.monitorId,
+      monitorName: m.monitorName,
+      nodeId: m.nodeId,
+      nodeName: m.nodeName,
+      location,
+      up,
+      lossPercent: up ? 0 : 100,
+      rttMs: up ? Math.round(40 + noise(index * 7 + l) * 180) : null,
+      error: up ? "" : "failed",
+      checkedAt: ago(40_000 + l * 5000),
+      receivedAt: ago(40_000),
+      counted: true,
+    };
+  }),
+);
 
 const probes: Probe[] = probeSeeds.map((seed, index) => {
   const region = regionByCode(seed.region);
@@ -1192,6 +1285,7 @@ export const systemFixtures: Fixtures = {
       lossPercent: 50,
       ipDownSeconds: 30,
       ipUpSeconds: 120,
+      mode: "any",
     }),
     errorPages: () => ({
       unknownHost: [
@@ -1228,6 +1322,19 @@ export const systemFixtures: Fixtures = {
           (!input.probeId || r.proberId === input.probeId) &&
           (!input.nodeId || r.nodeId === input.nodeId),
       ),
+  },
+  probeSources: {
+    list: () => probeSources,
+    mappings: (input) => (input.id === id(43, 1) ? checklyMappings : []),
+    results: (input) => (input.id === id(43, 1) ? checklyResults : []),
+    modes: () => ({
+      global: "any",
+      clusters: clusters.map((c, index) => ({
+        clusterId: c.id,
+        clusterName: c.name,
+        mode: index === 0 ? "internal" : null,
+      })),
+    }),
   },
   serviceAccounts: {
     list: () => serviceAccounts,

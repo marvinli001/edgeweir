@@ -1,0 +1,40 @@
+{
+  "checks": [
+    {
+      "id": 85975,
+      "created": 1790000000,
+      "name": "edge-1",
+      "hostname": "203.0.113.30",
+      "resolution": 1,
+      "type": "http",
+      "lasterrortime": 1793300000,
+      "lasttesttime": 1793347150,
+      "lastresponsetime": 355,
+      "status": "up"
+    },
+    {
+      "id": 161748,
+      "created": 1790000000,
+      "name": "edge-2",
+      "hostname": "203.0.113.31",
+      "resolution": 1,
+      "type": "ping",
+      "lasterrortime": 1793347100,
+      "lasttesttime": 1793347100,
+      "lastresponsetime": 0,
+      "status": "down"
+    },
+    {
+      "id": 161749,
+      "created": 1790000000,
+      "name": "not mapped",
+      "hostname": "203.0.113.32",
+      "resolution": 5,
+      "type": "ping",
+      "lasttesttime": 1793347100,
+      "lastresponsetime": 12,
+      "status": "up"
+    }
+  ],
+  "counts": { "total": 3, "limited": 3, "filtered": 3 }
+}

@@ -34,6 +34,7 @@ export const router = os.router({
   security: accessControlRouter.security,
   certificates: certificatesRouter.certificates,
   probes: clustersRouter.probes,
+  probeSources: clustersRouter.probeSources,
   scheduling: clustersRouter.scheduling,
   l4Apps: sitesRouter.l4Apps,
   https: sitesRouter.https,

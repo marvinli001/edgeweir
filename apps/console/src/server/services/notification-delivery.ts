@@ -84,6 +84,7 @@ export async function deliverNotification(
     scheduling_action: m.alert_kind_scheduling_action,
     certificate_unloadable: m.alert_kind_certificate_unloadable,
     dns_reconcile_failed: m.alert_kind_dns_reconcile_failed,
+    probe_source_stale: m.alert_kind_probe_source_stale,
     test: m.alert_test_message,
   }[event.kind]({}, { locale });
   // Usage protection names the metric (the resource).

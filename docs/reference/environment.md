@@ -76,6 +76,7 @@ ClickHouse 变量仅在 `EDGEWEIR_ANALYTICS=clickhouse` 时使用。`compose.yml
 | `EDGEWEIR_ACME_CA_FILE` | 空 | PEM 文件路径：自定义 ACME 目录 TLS 证书的签发者（与系统信任库一起使用）的后备值，系统设置中保存的 CA 证书优先。 |
 | `EDGEWEIR_SMTP_CA_FILE` | 空 | **后备值**，对应 **告警 → SMTP** →「CA 证书（PEM）」。SMTP TLS 使用的 CA（PEM 文件路径），仅在 SMTP 设置未保存 CA 时使用。空：系统信任库。 |
 | `EDGEWEIR_DNS_TEST_ENDPOINT` | 空 | 集成测试用的本地 DNS 模拟器地址；设置后启用 `test` DNS 服务商。不得用于真实服务商。 |
+| `EDGEWEIR_PROBE_SOURCE_TEST_ENDPOINT` | 空 | 集成测试用的本地监控 API 模拟器地址；设置后外部探测源的服务商接口请求都发往这里。不得在部署中设置。 |
 
 ## 节点发布
 

@@ -1,5 +1,6 @@
 import {
   type DnsLine,
+  type ProbeMode,
   type ProbeSettings,
   type SchedulingPreview,
   type SchedulingRule,
@@ -15,6 +16,7 @@ import { lockClusterScheduling } from "../lib/locks";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import { publishClusterDns, reconcileBinding } from "./dns";
 import { withLease } from "./dns-lease";
+import { EXTERNAL_PROBER_KIND, externalProbeRows } from "./external-probes";
 import { nodeIpRows, type SchedulingAddress, schedulingAddressesOf } from "./node-addresses";
 import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
 import { getProbeSettings, probeWindowSeconds } from "./probes";
@@ -37,9 +39,15 @@ type Condition = RuleRow["conditions"][number];
 /** What one evaluation knows about a cluster. */
 interface ClusterData {
   cluster: { id: string; name: string };
+  /** Which results decide (the cluster's own mode or the global one). */
+  mode: ProbeMode;
   nodes: NodeRow[];
   addresses: Map<string, SchedulingAddress[]>;
-  /** Fresh results (inside the window) of enabled probers about the cluster's nodes. */
+  /**
+   * Fresh results (inside the window) of enabled probers about the cluster's
+   * nodes, and those of healthy external sources (proberKind "external"),
+   * as the mode selects.
+   */
   results: ResultRow[];
   rules: RuleRow[];
   states: StateRow[];
@@ -53,11 +61,13 @@ async function loadClusterData(
   settings: ProbeSettings,
   now: Date,
 ): Promise<ClusterData | null> {
-  const [cluster] = await db
-    .select({ id: schema.cluster.id, name: schema.cluster.name })
+  const [row] = await db
+    .select({ id: schema.cluster.id, name: schema.cluster.name, mode: schema.cluster.probeMode })
     .from(schema.cluster)
     .where(eq(schema.cluster.id, clusterId));
-  if (!cluster) return null;
+  if (!row) return null;
+  const cluster = { id: row.id, name: row.name };
+  const mode = probeModeOf(row.mode, settings);
   const nodes = await db.select().from(schema.node).where(eq(schema.node.clusterId, clusterId));
   const nodeIds = nodes.map((n) => n.id);
   const ips = await nodeIpRows(db, nodeIds);
@@ -95,7 +105,9 @@ async function loadClusterData(
         )
     : [];
   const allowed = new Set([...probes, ...nodeProbers].map((p) => p.id));
-  const results = fresh.filter((r) => allowed.has(r.proberId));
+  const internal = mode === "external" ? [] : fresh.filter((r) => allowed.has(r.proberId));
+  const external = mode === "internal" ? [] : await externalProbeRows(db, addresses, now);
+  const results = [...internal, ...external];
   const rules = await db
     .select()
     .from(schema.schedulingRule)
@@ -118,6 +130,7 @@ async function loadClusterData(
     .where(eq(schema.dnsBinding.clusterId, clusterId));
   return {
     cluster,
+    mode,
     nodes,
     addresses,
     results,
@@ -140,6 +153,40 @@ function perProber(rows: ResultRow[]) {
       latency: answered.length ? answered.reduce((n, r) => n + r.rttMs, 0) / answered.length : null,
     };
   });
+}
+
+/** A cluster's mode, or the global one when it has none (or an unknown value). */
+export function probeModeOf(mode: string | null, settings: ProbeSettings): ProbeMode {
+  return mode === "internal" || mode === "external" || mode === "all" || mode === "any"
+    ? mode
+    : settings.mode;
+}
+
+/**
+ * Whether more than half of the probers in the rows lost at least
+ * lossPercent of their attempts; false without a prober.
+ */
+function majorityFailing(rows: ResultRow[], lossPercent: number) {
+  const probers = perProber(rows).filter((p) => p.loss !== null);
+  return probers.filter((p) => (p.loss ?? 0) >= lossPercent).length * 2 > probers.length;
+}
+
+/**
+ * Whether an address fails under the mode: each kind of prober (internal:
+ * probes and nodes; external: sources' locations) decides by a strict
+ * majority of its own; "all" needs both to fail (one without results never
+ * fails), the other modes need either (their results hold one kind only).
+ */
+export function addressFailing(rows: ResultRow[], mode: ProbeMode, lossPercent: number) {
+  const internal = majorityFailing(
+    rows.filter((r) => r.proberKind !== EXTERNAL_PROBER_KIND),
+    lossPercent,
+  );
+  const external = majorityFailing(
+    rows.filter((r) => r.proberKind === EXTERNAL_PROBER_KIND),
+    lossPercent,
+  );
+  return mode === "all" ? internal && external : internal || external;
 }
 
 function aggregate(values: number[], how: string): number | null {
@@ -317,7 +364,8 @@ const alertName = (rule: { name: string }, node: { name: string }) => `${rule.na
 /**
  * Probe-driven reachability of every scheduling address of the cluster's
  * enabled nodes: failing while more than half of the probers that reported
- * it in the window lost at least lossPercent of their attempts (all ports);
+ * it in the window lost at least lossPercent of their attempts (all ports;
+ * internal and external probers counted apart, combined by the mode);
  * down once failing lasted ipDownSeconds; up again once it did not fail
  * for ipUpSeconds. Returns whether an address went down or up.
  */
@@ -340,12 +388,12 @@ async function updateAddressStates(
   for (const node of data.nodes.filter((n) => n.status === "active")) {
     for (const { address } of data.addresses.get(node.id) ?? []) {
       keep.add(`${node.id}|${address}`);
-      const probers = perProber(
-        data.results.filter((r) => r.nodeId === node.id && r.address === address),
-      ).filter((p) => p.loss !== null);
       // A strict majority: one region losing an address is for region-scoped rules.
-      const failing =
-        probers.filter((p) => (p.loss ?? 0) >= settings.lossPercent).length * 2 > probers.length;
+      const failing = addressFailing(
+        data.results.filter((r) => r.nodeId === node.id && r.address === address),
+        data.mode,
+        settings.lossPercent,
+      );
       const prev = existing.find((e) => e.nodeId === node.id && e.address === address);
       let down = prev?.down ?? false;
       let failingSince = prev?.failingSince ?? null;

@@ -170,6 +170,18 @@ export const errorDefs = {
   /** Probes are bound to the region; delete or move them first. */
   REGION_IN_USE: { status: 409, params: ["probes"] },
   PROBE_NOT_FOUND: { status: 404, params: [] },
+  PROBE_SOURCE_NOT_FOUND: { status: 404, params: [] },
+  /** A field the provider's catalog entry does not have, misses or rejects. */
+  PROBE_SOURCE_FIELD_INVALID: { status: 400, params: ["field"] },
+  /** A poll interval below the provider's minimum (seconds). */
+  PROBE_SOURCE_POLL_TOO_FAST: { status: 400, params: ["min"] },
+  PROBE_SOURCE_LIMIT: { status: 409, params: ["limit"] },
+  /** The provider's API failed (reason: auth_failed, rate_limited, unreachable, refused, …). */
+  PROBE_SOURCE_UNAVAILABLE: { status: 502, params: ["reason"] },
+  /** The provider takes no webhook, or its secret is the provider's own (entered, not made). */
+  PROBE_SOURCE_WEBHOOK_UNSUPPORTED: { status: 409, params: [] },
+  /** A mapping names a monitor twice, an unknown node, or an address that is not the node's. */
+  PROBE_SOURCE_MAPPING_INVALID: { status: 400, params: ["monitor"] },
   /** A node probes from its node group's region; the group has none. */
   NODE_REGION_REQUIRED: { status: 409, params: [] },
   /** A scheduling address that is not a single unicast IP literal. */

@@ -1,0 +1,9 @@
+{
+  "Response": {
+    "RequestId": "r-6",
+    "Error": {
+      "Code": "AuthFailure.SignatureFailure",
+      "Message": "The provided credentials could not be validated."
+    }
+  }
+}

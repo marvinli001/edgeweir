@@ -40,6 +40,12 @@ const platformAlertKind = z.enum([
    * more).
    */
   "dns_reconcile_failed",
+  /**
+   * An enabled external probe source with mappings has had no successful
+   * poll or delivery for its staleAfterSeconds (its results stopped
+   * counting; resolved by the next success, or when disabled or deleted).
+   */
+  "probe_source_stale",
 ]);
 export const alertEventKind = z.enum([...alertKind.options, ...platformAlertKind.options]);
 const endpoint = z

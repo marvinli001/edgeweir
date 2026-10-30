@@ -215,6 +215,83 @@ A level change publishes the cluster's DNS revision (reason **Node health change
 
 Example: a node has `203.0.113.10` (primary) and `198.51.100.10` (backup 1). After most probers fail to reach `203.0.113.10` for 30 seconds, DNS answers with `198.51.100.10`; after `203.0.113.10` answers again for 60 seconds, DNS moves back.
 
+## External probe sources
+
+Results of third-party monitoring services can decide an address's reachability together with the regional probes. Add them under **External sources** on the **Monitoring** tab of **System settings**; each source's monitors map to nodes (and one of their scheduling addresses), and their results go through the same strict majority, unreachable and recovery times.
+
+### Providers
+
+| Provider | How | Results | Credentials |
+| --- | --- | --- | --- |
+| Generic webhook | Push | Up, latency and loss per location | A signing secret the console makes (shown once) |
+| UptimeRobot | Pull (API v3) | One result per monitor, status only | API key (read-only is enough) |
+| Better Stack Uptime | Pull | Monitor status, newest response time per region | API token |
+| Pingdom | Pull (API 3.1) | One result per check, last response time | API token |
+| Checkly | Pull (API v2) and push | Newest result per run location | API key, account ID; push uses a signing secret the console makes |
+| Datadog Synthetics | Pull | Newest result per location | API key, application key, site |
+| Alibaba Cloud CloudMonitor site monitoring | Pull (CMS 2019-01-01) | Newest probe log per city/ISP | AccessKey ID, AccessKey secret, region |
+| Tencent Cloud CAT | Pull (CAT 2018-04-09) | Newest network-quality record per city/ISP, with loss | SecretId, SecretKey |
+
+Credentials are write-only; leave them empty when editing to keep them. Pulls follow the outbound policy and no redirects. The poll interval is at least 60 seconds (UptimeRobot's free plan allows 10 requests a minute). Alibaba Cloud counts a log as up when `errorCode` is empty or 0 and the HTTP status is below 400 (the provider does not document the rule).
+
+### Mappings
+
+| Field | Meaning |
+| --- | --- |
+| Monitor | The provider's monitor ID; **Match from provider** lists every monitor and suggests a node by an IP or node hostname in its target |
+| Node | The node the results belong to |
+| Address | One of the node's scheduling addresses or known IPs; with **All scheduling addresses** the results apply to each of them |
+
+At most 2000 mappings per source; results of unmapped monitors are ignored.
+
+### Decision
+
+The **Decision** card sets the global mode, and each cluster may override it:
+
+| Mode | An address is failing when |
+| --- | --- |
+| Internal probes only (default) | A strict majority of the regional probes fail it; external results do not count |
+| External sources only | A strict majority of external results fail it (each location of each source is one prober) |
+| Both must see it down | Internal and external each fail it by a strict majority; a side with no results does not fail it |
+| Either sees it down | Either side fails it by a strict majority |
+
+### Safety
+
+| Case | Behavior |
+| --- | --- |
+| A source is **Failing** (its pull fails: bad credentials, rate limited, unreachable) | Its results do not count; no node is removed |
+| A source is **Stale** (no successful pull or delivery for **Stale after**) | Its results do not count; the platform alert **External probe source stale** fires and resolves when data returns |
+| A single result is older than **Stale after** | It does not count |
+| Every node would be removed | [Mass-removal protection](dns-and-alerts.en.md#mass-removal-protection) applies as usual |
+
+### Webhook
+
+Each push source has its own URL, `POST {console URL}/api/hooks/probe-sources/{source ID}`; the secret travels in headers only.
+
+| Item | Rule |
+| --- | --- |
+| Signature (generic) | `X-Edgeweir-Timestamp`: Unix seconds; `X-Edgeweir-Signature: v1=<hex HMAC-SHA256(secret, "<timestamp>." + raw body)>`, as in the console's outgoing DNS webhook |
+| Signature (Checkly) | Put the secret in the Checkly webhook alert channel's **Webhook secret** (`x-checkly-signature`: hex HMAC-SHA256 of the body) and use the body template below |
+| Time window | The timestamp is within 300 seconds of the console's clock; an identical replay answers 409; a result older than the stored one is ignored |
+| Size and rate | At most 256 KiB and 1000 results per body; 600 requests a minute per IP, 300 per source |
+| Answers | 202 `{"code":"accepted","accepted":N}`; 401 `signature_invalid` / `timestamp_invalid`; 400 `invalid_payload`; 404 for an unknown or disabled source; 413; 429 (with `Retry-After`) |
+
+Generic body: `{"results":[{"monitor","location","up","latencyMs","lossPercent","error","checkedAt"}]}`, `monitor` and `up` required. Example: secret `ewh_example-secret-0123456789`, timestamp `1793347200`, body
+
+```json
+{"results":[{"monitor":"edge-1","location":"fra","up":true,"latencyMs":31,"lossPercent":0,"checkedAt":"2026-10-30T07:59:50Z"},{"monitor":"edge-1","location":"sin","up":false,"error":"timeout"}]}
+```
+
+signs as `v1=a3ca080d23babef56a52ca51f64e36660f83af586939717855dbe37a26019dab`.
+
+Checkly body template:
+
+```json
+{"checkId":"{{CHECK_ID}}","alertType":"{{ALERT_TYPE}}","runLocation":"{{RUN_LOCATION}}","responseTime":"{{RESPONSE_TIME}}","startedAt":"{{STARTED_AT}}"}
+```
+
+`ALERT_FAILURE` is down; `ALERT_RECOVERY`, `ALERT_DEGRADED` and the like are up; other types (such as SSL) are ignored.
+
 ## Scheduling rules
 
 Page: **Clusters & nodes** → select the cluster → **Scheduling** tab (`/clusters?tab=scheduling`, shown once the cluster has a node), with **Scheduling rules** on top and **Preview** below.
@@ -363,3 +440,6 @@ The preview writes nothing and refreshes with the rule list.
 | The preview shows **No data** | The node lacks `metrics-v1` or stopped sending heartbeats, or the region has no prober online | Upgrade the node; check the probes |
 | A rule is active but DNS did not change | DNS mode is not Automatic; the mass removal protection held the publication back; the node has no reachable backup address; the line has no backup node groups | Check the revisions and their reasons on the cluster's **DNS** tab |
 | An address only one region cannot reach did not switch to a backup IP | Reachability is decided by a strict majority | Use a rule scoped to that region |
+| An external source is **Failing** with **Invalid credentials** | Wrong credentials or missing permissions | Edit the source, enter the credentials again and **Test connection** |
+| External results do not change DNS | The decision is **Internal probes only**, or the monitor is not mapped | Change the global or cluster mode under **Decision**; add a mapping |
+| The webhook answers 401 `timestamp_invalid` | The sender's clock is more than 300 seconds off | Fix the sender's clock |

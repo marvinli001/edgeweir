@@ -9,6 +9,10 @@
 // the line. GET /records dumps every zone's records with their line.
 // Custom HTTP provider receiver (the "webhook" provider): POST /dns-hook,
 // signed with WEBHOOK_SECRET as documented (X-Edgeweir-Signature: v1=HMAC).
+// Probe source API simulator (EDGEWEIR_PROBE_SOURCE_TEST_ENDPOINT, ADR-0069):
+// GET /v3/monitors as UptimeRobot answers it, for "Authorization: Bearer
+// <apiKey>"; POST /probe-api/uptimerobot {apiKey, monitors, fail} sets that
+// account's monitors ({id, name, url, up}) or makes it answer 503.
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 import http from "node:http";
@@ -16,7 +20,10 @@ import http from "node:http";
 const ACCOUNTS = {
   "e2e-dns-token": ["cdn.m5.test", "browser.cdn.test"],
   "e2e-dns-token-b": ["cdn-b.dns.test"],
+  "e2e-dns-token-ps": ["ps.e2e.test"],
 };
+/** UptimeRobot accounts of the simulator: apiKey -> { monitors, fail }. */
+const robots = new Map();
 const WEBHOOK_SECRET = "e2e-webhook-secret-0123";
 const WEBHOOK_ZONES = ["dns-hook.test"];
 
@@ -58,6 +65,22 @@ const httpServer = http.createServer(async (req, res) => {
   if (req.method === "GET" && req.url === "/records")
     return respond(200, Object.fromEntries(zones));
   if (req.method === "GET" && req.url === "/events") return respond(200, events);
+  if (req.method === "GET" && req.url?.startsWith("/v3/monitors")) {
+    const robot = robots.get((req.headers.authorization ?? "").replace(/^Bearer /, ""));
+    if (!robot) return respond(401, { message: "Unauthorized" });
+    if (robot.fail) return respond(503, { message: "unavailable" });
+    return respond(200, {
+      nextLink: null,
+      data: robot.monitors.map((m) => ({
+        id: m.id,
+        friendlyName: m.name,
+        url: m.url,
+        type: "PING",
+        interval: 60,
+        status: m.up ? "UP" : "DOWN",
+      })),
+    });
+  }
   let size = 0;
   const chunks = [];
   for await (const chunk of req) {
@@ -74,6 +97,14 @@ const httpServer = http.createServer(async (req, res) => {
   }
   if (req.method === "POST" && req.url === "/webhook") {
     events.push(body);
+    return respond(200, { ok: true });
+  }
+  if (req.method === "POST" && req.url === "/probe-api/uptimerobot") {
+    if (typeof body.apiKey !== "string") return respond(400, { error: "apiKey required" });
+    const robot = robots.get(body.apiKey) ?? { monitors: [], fail: false };
+    if (Array.isArray(body.monitors)) robot.monitors = body.monitors;
+    if (typeof body.fail === "boolean") robot.fail = body.fail;
+    robots.set(body.apiKey, robot);
     return respond(200, { ok: true });
   }
   if (req.method === "POST" && req.url === "/fail") {
@@ -112,4 +143,5 @@ const httpServer = http.createServer(async (req, res) => {
   }
   return respond(404, { error: "not found" });
 });
-httpServer.listen(8080, "0.0.0.0");
+// The port: the first argument (a stack-less run beside other services), 8080 by default.
+httpServer.listen(Number(process.argv[2] ?? 8080), "0.0.0.0");

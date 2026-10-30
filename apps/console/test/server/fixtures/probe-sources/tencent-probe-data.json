@@ -1,0 +1,119 @@
+{
+  "Response": {
+    "TotalNumber": 3,
+    "RequestId": "r-5",
+    "DataSet": [
+      {
+        "ProbeTime": 1793347140000,
+        "Labels": [
+          {
+            "ID": "City",
+            "Name": "City",
+            "Value": "Guangzhou"
+          },
+          {
+            "ID": "Operator",
+            "Name": "Operator",
+            "Value": "China Telecom"
+          },
+          {
+            "ID": "District",
+            "Name": "District",
+            "Value": "CN"
+          }
+        ],
+        "Fields": [
+          {
+            "ID": "PingTime",
+            "Name": "PingTime",
+            "Value": 22.5
+          },
+          {
+            "ID": "PingPackageLossRate",
+            "Name": "PingPackageLossRate",
+            "Value": 0
+          },
+          {
+            "ID": "ErrorId",
+            "Name": "ErrorId",
+            "Value": 0
+          }
+        ]
+      },
+      {
+        "ProbeTime": 1793347080000,
+        "Labels": [
+          {
+            "ID": "City",
+            "Name": "City",
+            "Value": "Guangzhou"
+          },
+          {
+            "ID": "Operator",
+            "Name": "Operator",
+            "Value": "China Telecom"
+          },
+          {
+            "ID": "District",
+            "Name": "District",
+            "Value": "CN"
+          }
+        ],
+        "Fields": [
+          {
+            "ID": "PingTime",
+            "Name": "PingTime",
+            "Value": 25
+          },
+          {
+            "ID": "PingPackageLossRate",
+            "Name": "PingPackageLossRate",
+            "Value": 0
+          },
+          {
+            "ID": "ErrorId",
+            "Name": "ErrorId",
+            "Value": 0
+          }
+        ]
+      },
+      {
+        "ProbeTime": 1793347140000,
+        "Labels": [
+          {
+            "ID": "City",
+            "Name": "City",
+            "Value": "Chengdu"
+          },
+          {
+            "ID": "Operator",
+            "Name": "Operator",
+            "Value": "China Mobile"
+          },
+          {
+            "ID": "District",
+            "Name": "District",
+            "Value": "CN"
+          }
+        ],
+        "Fields": [
+          {
+            "ID": "PingTime",
+            "Name": "PingTime",
+            "Value": 0
+          },
+          {
+            "ID": "PingPackageLossRate",
+            "Name": "PingPackageLossRate",
+            "Value": 100
+          },
+          {
+            "ID": "ErrorId",
+            "Name": "ErrorId",
+            "Value": 7
+          }
+        ]
+      }
+    ]
+  }
+}

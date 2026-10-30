@@ -1,0 +1,21 @@
+{
+  "nextLink": null,
+  "data": [
+    {
+      "id": 779,
+      "friendlyName": "paused",
+      "url": "203.0.113.12",
+      "type": "PING",
+      "interval": 300,
+      "status": "PAUSED"
+    },
+    {
+      "id": 780,
+      "friendlyName": "edge-4",
+      "url": "203.0.113.13",
+      "type": "PORT",
+      "interval": 60,
+      "status": "LOOKS_DOWN"
+    }
+  ]
+}

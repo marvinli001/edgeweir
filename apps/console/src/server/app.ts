@@ -27,8 +27,14 @@ import { withIdempotency } from "./lib/idempotency";
 import { type RequestContext, router } from "./rpc/router";
 import { findAccessKey } from "./services/access-keys";
 import { isDemoEnabled } from "./services/demo";
+import { PROBE_SOURCE_WEBHOOK_PATH } from "./services/external-probes";
 import { loginAllowed, logLoginRefusal } from "./services/login-allow-list";
 import { nodeChannelWebSocketOpen } from "./services/node-channel-url";
+import {
+  PROBE_SOURCE_WEBHOOK_MAX_BYTES,
+  ProbeSourceWebhooks,
+} from "./services/probe-source-webhook";
+import { evaluateAfterProbeReport } from "./services/scheduling";
 import { authenticateServiceAccountKey, isServiceAccountKey } from "./services/service-accounts";
 
 /**
@@ -330,6 +336,32 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
     c.header("upgrade", "websocket");
     return c.json({ error: "upgrade required" }, 426);
   });
+
+  // External probe source deliveries (ADR-0069): no session or API key; the
+  // source's webhook secret authenticates each one (adapter verification).
+  const probeSourceWebhooks = new ProbeSourceWebhooks();
+  app.post(
+    `${PROBE_SOURCE_WEBHOOK_PATH}/:id`,
+    bodyLimit({
+      maxSize: PROBE_SOURCE_WEBHOOK_MAX_BYTES,
+      onError: (c) => c.json({ code: "payload_too_large" }, 413),
+    }),
+    async (c) => {
+      const outcome = await probeSourceWebhooks.handle(ctx, c.req.param("id"), {
+        headers: c.req.raw.headers,
+        body: Buffer.from(await c.req.arrayBuffer()),
+        ip: clientIp(c),
+      });
+      if (outcome.retryAfterSeconds) c.header("retry-after", String(outcome.retryAfterSeconds));
+      if (outcome.clusterIds?.length) void evaluateAfterProbeReport(ctx, outcome.clusterIds);
+      return c.json(
+        outcome.status === 202
+          ? { code: outcome.code, accepted: outcome.accepted ?? 0 }
+          : { code: outcome.code },
+        outcome.status,
+      );
+    },
+  );
 
   app.on(["GET", "HEAD"], "/downloads/*", (c) =>
     serveDownload(ctx.env.EDGEWEIR_DOWNLOADS_DIR, c.req.raw, ctx.log),

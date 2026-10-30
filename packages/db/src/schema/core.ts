@@ -99,6 +99,11 @@ export const cluster = pgTable("cluster", {
   cacheMaxSizeGb: integer("cache_max_size_gb").notNull().default(10),
   /** Cached objects not requested for this many days are removed (1-90). */
   cacheInactiveDays: integer("cache_inactive_days").notNull().default(7),
+  /**
+   * Which probe results decide reachability (internal | external | all | any);
+   * null: the global probe setting.
+   */
+  probeMode: text("probe_mode"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
