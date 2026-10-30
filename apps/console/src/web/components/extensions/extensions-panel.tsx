@@ -78,15 +78,11 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 
 function Names({ list }: { list: readonly string[] }) {
   if (list.length === 0) return <span className="text-muted-foreground">—</span>;
-  return (
-    <>
-      {list.map((name) => (
-        <Badge key={name} size="sm" tone="neutral" className="font-mono">
-          {name}
-        </Badge>
-      ))}
-    </>
-  );
+  return list.map((name) => (
+    <Badge key={name} size="sm" tone="neutral" className="font-mono">
+      {name}
+    </Badge>
+  ));
 }
 
 const NODE_STATE: Record<string, { tone: StatusTone; label: () => string }> = {

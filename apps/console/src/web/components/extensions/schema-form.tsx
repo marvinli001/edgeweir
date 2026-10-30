@@ -1,9 +1,10 @@
-import type * as React from "react";
-import type {
-  ExtensionConfigProperty,
-  ExtensionConfigSchema,
-  ExtensionText,
+import {
+  EXTENSION_SECRET_MASK,
+  type ExtensionConfigProperty,
+  type ExtensionConfigSchema,
+  type ExtensionText,
 } from "@edgeweir/contract";
+import type * as React from "react";
 import { Input } from "@/components/arc/input/input";
 import { OptionSelect } from "@/components/form-select";
 import { Field, FieldLabel } from "@/components/layout/form";
@@ -51,7 +52,6 @@ export function configFromDraft(
   draft: ConfigDraft,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  const required = new Set(schema?.required ?? []);
   for (const [name, property] of Object.entries(schema?.properties ?? {})) {
     const value = draft[name];
     if (property.type === "boolean") {
@@ -60,7 +60,7 @@ export function configFromDraft(
       const list = Array.isArray(value) ? value : [];
       out[name] = property.items.type === "integer" ? list.map(Number) : list;
     } else if (typeof value === "string") {
-      if (value === "" && !required.has(name)) continue;
+      if (value === "") continue;
       out[name] = property.type === "string" ? value : Number(value);
     }
   }
@@ -140,7 +140,7 @@ function PropertyField({
         spellCheck={false}
         // A masked secret is cleared on focus: typing replaces it, leaving it keeps it.
         onFocus={(event) => {
-          if (secret && text && /^•+$/.test(text)) event.currentTarget.select();
+          if (secret && text && text === EXTENSION_SECRET_MASK) event.currentTarget.select();
         }}
         onChange={(event) => onChange(event.target.value)}
         className={property.format ? "font-mono" : undefined}
@@ -194,22 +194,18 @@ export function SchemaForm({
   disabled?: boolean;
 }) {
   const required = new Set(schema?.required ?? []);
-  return (
-    <>
-      {Object.entries(schema?.properties ?? {}).map(([name, property]) => (
-        <PropertyField
-          key={name}
-          id={`${idPrefix}-${name}`}
-          name={name}
-          property={property}
-          required={required.has(name)}
-          value={draft[name]}
-          onChange={(value) => onChange({ ...draft, [name]: value })}
-          disabled={disabled}
-        />
-      ))}
-    </>
-  );
+  return Object.entries(schema?.properties ?? {}).map(([name, property]) => (
+    <PropertyField
+      key={name}
+      id={`${idPrefix}-${name}`}
+      name={name}
+      property={property}
+      required={required.has(name)}
+      value={draft[name]}
+      onChange={(value) => onChange({ ...draft, [name]: value })}
+      disabled={disabled}
+    />
+  ));
 }
 
 /** Whether a schema has fields to show. */

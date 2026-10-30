@@ -264,7 +264,10 @@ describe("access logs and statistics dimensions (G16)", async () => {
         query: "q=shoes&page=2",
         headers: { "x-trace-id": "abc-1", "accept-language": "de" },
         peerIp: "198.51.100.2",
-        ext: { "ext.hello-header.greeting": `hi${"x".repeat(254)}`, "ext.hello-header.verdict": "deny" },
+        ext: {
+          "ext.hello-header.greeting": `hi${"x".repeat(254)}`,
+          "ext.hello-header.verdict": "deny",
+        },
       });
       expect(entries[0]?.userAgent).toHaveLength(512);
       expect(entries[0]?.userAgent).not.toContain("\u0007");
