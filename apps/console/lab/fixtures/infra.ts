@@ -1308,6 +1308,89 @@ function enrolledNode(): Node {
 
 // ---------------------------------------------------------------------------------------------
 
+/** SSH install runs (ADR-0066): every host steps through connecting and installing; the second fails. */
+const SSH_STEP = 1500;
+const LAB_HOST_KEYS = [
+  "SHA256:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU",
+  "SHA256:nThbg6kXUpJWGl7E1IGOCspRomTxdCARLviKw6E5SY8",
+];
+let sshRun: {
+  at: number;
+  input: Parameters<NonNullable<NonNullable<Fixtures["sshInstalls"]>["start"]>>[0];
+} | null = null;
+function sshRunNow() {
+  const run = sshRun;
+  if (!run) throw notFound();
+  const elapsed = Date.now() - run.at;
+  const hosts = run.input.hosts.map((h, index) => {
+    const phase = Math.floor((elapsed - index * 400) / SSH_STEP);
+    const failed = index === 1;
+    const state =
+      phase < 0
+        ? "queued"
+        : phase === 0
+          ? "connecting"
+          : phase === 1
+            ? "installing"
+            : failed
+              ? "failed"
+              : "succeeded";
+    const done = state === "failed" || state === "succeeded";
+    return {
+      id: String(index),
+      host: h.host,
+      port: h.port ?? 22,
+      username: h.username ?? run.input.credential.username ?? "root",
+      nodeName: h.nodeName ?? "",
+      hostKeyFingerprint: h.hostKeyFingerprint,
+      state,
+      error: state === "failed" ? ("sudo_password_wrong" as const) : null,
+      exitCode: done ? (failed ? 1 : 0) : null,
+      presentedFingerprint: null,
+      tokenId: phase >= 0 ? id(36, 10 + index) : null,
+      nodeId: state === "succeeded" ? nodeNamed("tyo-edge-01").id : null,
+      attempts: phase >= 0 ? 1 : 0,
+      startedAt: phase >= 0 ? new Date(run.at + index * 400).toISOString() : null,
+      finishedAt: done ? new Date(run.at + index * 400 + 2 * SSH_STEP).toISOString() : null,
+      output:
+        phase >= 1
+          ? failed
+            ? "Sorry, try again.\nsudo: 1 incorrect password attempt"
+            : "[edgeweir] signature verified\n[edgeweir] installing edgeweir-node 1.6.2 (deb)\n[edgeweir] done: installed and enrolled"
+          : "",
+    } as const;
+  });
+  const count = (s: string) => hosts.filter((h) => h.state === s).length;
+  const running = hosts.some((h) => h.state !== "succeeded" && h.state !== "failed");
+  return {
+    id: id(37, 1),
+    clusterId: run.input.clusterId,
+    nodeGroupId: run.input.nodeGroupId ?? null,
+    state: running ? ("running" as const) : ("finished" as const),
+    concurrency: run.input.concurrency ?? 5,
+    timeoutMinutes: run.input.timeoutMinutes ?? 15,
+    options: {
+      version: "",
+      format: "auto" as const,
+      mirror: "",
+      mirrorOnly: false,
+      modsecurity: true,
+      noStart: false,
+    },
+    createdAt: new Date(run.at).toISOString(),
+    finishedAt: running ? null : new Date().toISOString(),
+    expiresAt: running ? null : ahead(60 * MINUTE),
+    counts: {
+      queued: count("queued"),
+      running: count("connecting") + count("installing"),
+      succeeded: count("succeeded"),
+      failed: count("failed"),
+      canceled: 0,
+    },
+    hosts,
+  };
+}
+
 export const infraFixtures: Fixtures = {
   clusters: {
     rollbackPreview: (input) => {
@@ -1368,6 +1451,27 @@ export const infraFixtures: Fixtures = {
         usedAt: used ? new Date(minted.at + ENROLL_AFTER).toISOString() : null,
         node: used ? enrolledNode() : null,
       };
+    },
+  },
+  sshInstalls: {
+    scanHostKeys: ({ hosts }) => ({
+      hosts: hosts.map((h, index) => ({
+        host: h.host,
+        port: h.port ?? 22,
+        algorithm: index === 2 ? null : "ssh-ed25519",
+        fingerprint: index === 2 ? null : (LAB_HOST_KEYS[index % LAB_HOST_KEYS.length] ?? null),
+        error: index === 2 ? ("unreachable" as const) : null,
+      })),
+    }),
+    start: (input) => {
+      sshRun = { at: Date.now(), input };
+      return sshRunNow();
+    },
+    get: () => sshRunNow(),
+    cancel: () => sshRunNow(),
+    retry: () => {
+      if (sshRun) sshRun.at = Date.now() - 2 * SSH_STEP;
+      return sshRunNow();
     },
   },
   upgrades: {

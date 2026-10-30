@@ -684,7 +684,28 @@ function RunView({
                           className={cn(h.output && "cursor-pointer")}
                           onClick={() => h.output && setOpen(open === h.id ? null : h.id)}
                         >
-                          <TableCell className="font-mono">{hostLabel(h)}</TableCell>
+                          <TableCell className="font-mono">
+                            {h.output ? (
+                              <button
+                                type="button"
+                                aria-expanded={open === h.id}
+                                className="flex items-center gap-1 underline-offset-4 hover:underline"
+                                data-testid="ssh-host-output-toggle"
+                              >
+                                <HugeiconsIcon
+                                  icon={ArrowDown01Icon}
+                                  strokeWidth={2}
+                                  className={cn(
+                                    "size-3.5 text-muted-foreground transition-transform",
+                                    open !== h.id && "-rotate-90",
+                                  )}
+                                />
+                                {hostLabel(h)}
+                              </button>
+                            ) : (
+                              hostLabel(h)
+                            )}
+                          </TableCell>
                           <TableCell>
                             <span className="flex items-center gap-1.5">
                               <Dot {...HOST_STATE[h.state]} small />
