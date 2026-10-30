@@ -1,0 +1,21 @@
+{
+  "nextLink": "https://api.uptimerobot.com/v3/monitors?limit=200&cursor=778",
+  "data": [
+    {
+      "id": 777,
+      "friendlyName": "edge-1 https",
+      "url": "https://203.0.113.10/",
+      "type": "HTTP",
+      "interval": 60,
+      "status": "UP"
+    },
+    {
+      "id": 778,
+      "friendlyName": "edge-2",
+      "url": "203.0.113.11",
+      "type": "PING",
+      "interval": 60,
+      "status": "DOWN"
+    }
+  ]
+}

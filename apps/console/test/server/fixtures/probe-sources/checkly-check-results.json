@@ -1,0 +1,48 @@
+{
+  "entries": [
+    {
+      "id": "r-3",
+      "checkId": "a1b2c3d4-0000-4000-8000-000000000001",
+      "hasFailures": true,
+      "hasErrors": false,
+      "isDegraded": false,
+      "overMaxResponseTime": false,
+      "runLocation": "eu-central-1",
+      "startedAt": "2026-10-30T07:59:00.000Z",
+      "stoppedAt": "2026-10-30T07:59:03.000Z",
+      "created_at": "2026-10-30T07:59:04.000Z",
+      "responseTime": 3000,
+      "attempts": 1,
+      "resultType": "FINAL"
+    },
+    {
+      "id": "r-2",
+      "checkId": "a1b2c3d4-0000-4000-8000-000000000001",
+      "hasFailures": false,
+      "hasErrors": false,
+      "isDegraded": false,
+      "runLocation": "us-east-1",
+      "startedAt": "2026-10-30T07:58:00.000Z",
+      "stoppedAt": "2026-10-30T07:58:00.210Z",
+      "created_at": "2026-10-30T07:58:01.000Z",
+      "responseTime": 210,
+      "attempts": 1,
+      "resultType": "FINAL"
+    },
+    {
+      "id": "r-1",
+      "checkId": "a1b2c3d4-0000-4000-8000-000000000001",
+      "hasFailures": false,
+      "hasErrors": false,
+      "isDegraded": false,
+      "runLocation": "eu-central-1",
+      "startedAt": "2026-10-30T07:57:00.000Z",
+      "stoppedAt": "2026-10-30T07:57:00.090Z",
+      "created_at": "2026-10-30T07:57:01.000Z",
+      "responseTime": 90,
+      "attempts": 1,
+      "resultType": "FINAL"
+    }
+  ],
+  "nextId": null
+}

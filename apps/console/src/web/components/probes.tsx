@@ -39,6 +39,7 @@ import {
 } from "@/components/layout/table";
 import { NodeChannelBadge } from "@/components/node-channel-state";
 import { enterDelay } from "@/components/page";
+import { ProbeModesPanel, ProbeSourcesPanel } from "@/components/probe-sources";
 import { SafetyNote } from "@/components/safety-note";
 import { SettingsCard } from "@/components/settings-card";
 import { NumberField } from "@/components/site/fields";
@@ -312,6 +313,8 @@ export function ProbesPanel({
         )}
       </QueryView>
       <ProbeMatrixCard />
+      <ProbeSourcesPanel />
+      <ProbeModesPanel />
       <ProbeSettingsCard />
       <AddProbeDialog key={`add-${addKey}`} open={addOpen} onOpenChange={onAddOpenChange} />
       {action.value ? (
@@ -941,8 +944,9 @@ function MatrixLegend() {
   );
 }
 
+type NumericSetting = Exclude<keyof ProbeSettings, "mode">;
 const SETTINGS_FIELDS: {
-  key: keyof ProbeSettings;
+  key: NumericSetting;
   label: () => string;
   min: number;
   max: number;
@@ -964,15 +968,21 @@ function ProbeSettingsCard() {
       style={{ animationDelay: "120ms" }}
       query={orpc.settings.probes.queryOptions()}
       mutation={orpc.settings.setProbes.mutationOptions()}
-      toDraft={(s) =>
-        Object.fromEntries(SETTINGS_FIELDS.map(({ key }) => [key, String(s[key])])) as Record<
-          keyof ProbeSettings,
+      toDraft={(s) => ({
+        ...(Object.fromEntries(SETTINGS_FIELDS.map(({ key }) => [key, String(s[key])])) as Record<
+          NumericSetting,
           string
-        >
-      }
-      toInput={(d) =>
-        Object.fromEntries(SETTINGS_FIELDS.map(({ key }) => [key, Number(d[key])])) as ProbeSettings
-      }
+        >),
+        // Kept as it is: the probe mode card sets it.
+        mode: s.mode,
+      })}
+      toInput={(d) => ({
+        ...(Object.fromEntries(SETTINGS_FIELDS.map(({ key }) => [key, Number(d[key])])) as Omit<
+          ProbeSettings,
+          "mode"
+        >),
+        mode: d.mode,
+      })}
       check={(s) =>
         s.timeoutMs > s.intervalSeconds * 1000 ? m.probes_settings_timeout_too_long() : null
       }

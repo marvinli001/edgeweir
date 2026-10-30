@@ -16,13 +16,19 @@ import { rotateChallengeKeys } from "../services/challenge-keys";
 import { expireCnamePrefixes } from "../services/cname-prefixes";
 import { expireDevelopmentModes } from "../services/development-mode";
 import { pruneDnsRevisions, reconcileDns } from "../services/dns";
+import { withLease } from "../services/dns-lease";
+import { pollProbeSources, sweepProbeSourceAlerts } from "../services/external-probes";
 import { pruneNodeDebugLogs } from "../services/node-debug-logs";
 import { pruneNodeLogs } from "../services/node-logs";
 import { rotateOriginClientCertificates } from "../services/origin-pki";
 import { recompileAfterUpgrade } from "../services/recompile";
 import { pruneRevisions } from "../services/revisions";
 import { evaluateRollouts } from "../services/rollout";
-import { SCHEDULING_INTERVAL_MS, schedulingTick } from "../services/scheduling";
+import {
+  evaluateAfterProbeReport,
+  SCHEDULING_INTERVAL_MS,
+  schedulingTick,
+} from "../services/scheduling";
 import { pruneSecurityEvents } from "../services/security";
 import { rotateSessionTicketKeys } from "../services/session-ticket-keys";
 import { maintainTraffic } from "../services/stats-rollup";
@@ -238,6 +244,25 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   }, SCHEDULING_INTERVAL_MS);
   scheduling.unref();
   boss.on("stopped", () => clearInterval(scheduling));
+
+  // External probe sources (ADR-0069): due polls and stale alerts on the same
+  // 10-second timer, one process at a time; a poll's results are evaluated at once.
+  let polling = false;
+  const sources = setInterval(() => {
+    if (polling) return;
+    polling = true;
+    withLease(ctx.db, "probe-sources:poll", 120, async () => {
+      const clusters = await pollProbeSources(ctx);
+      await sweepProbeSourceAlerts(ctx.db);
+      if (clusters.length) await evaluateAfterProbeReport(ctx, clusters);
+    })
+      .catch((error: unknown) => log.warn("probe source polling failed", { error }))
+      .finally(() => {
+        polling = false;
+      });
+  }, SCHEDULING_INTERVAL_MS);
+  sources.unref();
+  boss.on("stopped", () => clearInterval(sources));
 
   // End-to-end tests only (EDGEWEIR_E2E_TICK_SECONDS): the every-minute jobs
   // run every few seconds too, one per queue and time slot.

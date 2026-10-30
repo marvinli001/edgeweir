@@ -369,7 +369,7 @@ SECTIONS=(
   "pp:m6-upgrades"
   "g8:m6-upgrades" "g9:m6-upgrades" "g15:m6-upgrades" "g10:dns m5 m6-upgrades" "g11:m6-upgrades"
   "g12:m6-upgrades" "g13:m6-upgrades" "g14:m6-upgrades" "g16:m6-upgrades" "g17:m6-upgrades"
-  "g18:m6-upgrades" "g19:m6-upgrades" "usage-guard:m6-upgrades" "dev-mode:" "allowlist:" "lifecycle:"
+  "g18:m6-upgrades" "g19:m6-upgrades" "probe-sources:" "usage-guard:m6-upgrades" "dev-mode:" "allowlist:" "lifecycle:"
 )
 # Parallel lanes, "FIRST..LAST:SECTION ...": the SECTIONs run in a second
 # lane while the chain runs FIRST to LAST, and the chain waits for the lane
@@ -1848,6 +1848,12 @@ section_g19() {
 step "G19: origin protection: client certificates to origins and the Origin CA"
 story g19 --cleanup
 pass "G19 checks passed"
+}
+
+section_probe_sources() {
+step "Probe sources: a generic webhook and a simulated UptimeRobot drive nodes out of DNS and back; failing and stale sources remove nothing"
+story probe-sources --cleanup
+pass "probe source checks passed"
 }
 
 section_usage_guard() {

@@ -158,6 +158,12 @@ const schema = z.object({
   /** Fallback PEM bundle for SMTP TLS when the SMTP settings carry no CA. */
   EDGEWEIR_SMTP_CA_FILE: z.string().default(""),
   EDGEWEIR_DNS_TEST_ENDPOINT: z.string().default(""),
+  /**
+   * Integration tests only: every external probe source API request goes to
+   * this base URL instead (path and query kept, the provider's host in
+   * x-edgeweir-test-host). Unset in deployments.
+   */
+  EDGEWEIR_PROBE_SOURCE_TEST_ENDPOINT: z.string().default(""),
   /** Fallback CA certificates (PEM file) of the custom ACME directory. */
   EDGEWEIR_ACME_CA_FILE: z.string().default(""),
   /**

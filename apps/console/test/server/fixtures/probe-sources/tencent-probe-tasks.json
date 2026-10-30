@@ -1,0 +1,16 @@
+{
+  "Response": {
+    "Total": 1,
+    "RequestId": "r-4",
+    "TaskSet": [
+      {
+        "TaskId": "task-abc123",
+        "Name": "edge-1 ping",
+        "TaskType": 5,
+        "TargetAddress": "203.0.113.40",
+        "Interval": 1,
+        "Status": 2
+      }
+    ]
+  }
+}

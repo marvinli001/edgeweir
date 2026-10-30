@@ -1,0 +1,52 @@
+{
+  "data": [
+    {
+      "id": "2001",
+      "type": "monitor",
+      "attributes": {
+        "url": "https://203.0.113.20",
+        "pronounceable_name": "Edge 1",
+        "monitor_type": "status",
+        "status": "up",
+        "last_checked_at": "2026-10-30T07:59:30.000Z",
+        "check_frequency": 30,
+        "regions": ["us", "eu"],
+        "paused": false
+      }
+    },
+    {
+      "id": "2002",
+      "type": "monitor",
+      "attributes": {
+        "url": "https://203.0.113.21",
+        "pronounceable_name": "Edge 2",
+        "monitor_type": "status",
+        "status": "down",
+        "last_checked_at": "2026-10-30T07:59:10.000Z",
+        "check_frequency": 30,
+        "regions": ["us", "eu"],
+        "paused": false
+      }
+    },
+    {
+      "id": "2003",
+      "type": "monitor",
+      "attributes": {
+        "url": "https://203.0.113.22",
+        "pronounceable_name": "Paused",
+        "monitor_type": "status",
+        "status": "paused",
+        "last_checked_at": null,
+        "check_frequency": 180,
+        "regions": ["us"],
+        "paused": true
+      }
+    }
+  ],
+  "pagination": {
+    "first": "https://incidents.betterstack.com/api/v2/monitors?page=1",
+    "last": "https://incidents.betterstack.com/api/v2/monitors?page=1",
+    "prev": null,
+    "next": null
+  }
+}

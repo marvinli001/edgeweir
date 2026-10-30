@@ -1,0 +1,29 @@
+{
+  "last_timestamp_fetched": 1793347100000,
+  "results": [
+    {
+      "check_time": 1793347100000,
+      "probe_dc": "aws:eu-central-1",
+      "result": {
+        "passed": true,
+        "timings": { "dns": 3.1, "tcp": 9.2, "firstByte": 60.4, "total": 87.4 }
+      },
+      "result_id": "5001",
+      "status": 0
+    },
+    {
+      "check_time": 1793347050000,
+      "probe_dc": "aws:ap-northeast-1",
+      "result": { "passed": false, "timings": { "total": 30000 } },
+      "result_id": "5002",
+      "status": 2
+    },
+    {
+      "check_time": 1793346900000,
+      "probe_dc": "aws:eu-central-1",
+      "result": { "passed": false, "timings": { "total": 30000 } },
+      "result_id": "4999",
+      "status": 2
+    }
+  ]
+}

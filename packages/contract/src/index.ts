@@ -40,6 +40,7 @@ import { imageConvertContract } from "./image-convert";
 import { l4AppsContract, portPoolProcedures } from "./l4";
 import { loginAllowListProcedures } from "./login-allow-list";
 import { originCaContract, originCertificatesContract, originClientCaContract } from "./origin-pki";
+import { probeSourcesContract } from "./probe-sources";
 import {
   nodeAddressesInput,
   nodeProbeInput,
@@ -170,6 +171,8 @@ export const contract = {
   probes: probesContract,
   /** One-shot SSH install of nodes, one host or many (ADR-0066). */
   sshInstalls: sshInstallsContract,
+  /** External probe sources: monitoring services whose results count like probe results. */
+  probeSources: probeSourcesContract,
   /** Scheduling rules of a cluster: conditions on node and probe metrics, DNS actions. */
   scheduling: schedulingContract,
   /** Layer-4 (TCP / UDP) applications: ports of a cluster forwarded to origins. */
@@ -706,6 +709,9 @@ export const oneTimeSecretProcedures: ReadonlySet<string> = new Set([
   "serviceAccounts.createKey",
   "clusters.createEnrollmentToken",
   "probes.createToken",
+  // A webhook secret the console made is shown once.
+  "probeSources.create",
+  "probeSources.rotateWebhookSecret",
   // A signed URL grants access until it expires (up to a year).
   "authRules.signUrl",
 ]);
@@ -720,6 +726,7 @@ export * from "./dns-providers";
 export * from "./edge";
 export * from "./l4";
 export * from "./login-allow-list";
+export * from "./probe-sources";
 export * from "./probes";
 export * from "./service-accounts";
 export * from "./ssh-install";

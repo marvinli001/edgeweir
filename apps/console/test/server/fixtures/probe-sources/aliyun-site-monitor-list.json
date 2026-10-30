@@ -1,0 +1,28 @@
+{
+  "Code": "200",
+  "Success": "true",
+  "PageNumber": 1,
+  "PageSize": 100,
+  "TotalCount": 2,
+  "RequestId": "r-1",
+  "SiteMonitors": {
+    "SiteMonitor": [
+      {
+        "TaskId": "t-1",
+        "TaskName": "edge-1",
+        "TaskType": "HTTP",
+        "Address": "https://203.0.113.30",
+        "Interval": "1",
+        "TaskState": "1"
+      },
+      {
+        "TaskId": "t-2",
+        "TaskName": "edge-2 ping",
+        "TaskType": "PING",
+        "Address": "203.0.113.31",
+        "Interval": "1",
+        "TaskState": "1"
+      }
+    ]
+  }
+}

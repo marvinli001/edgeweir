@@ -11,6 +11,15 @@ import { isoDateTime, nodeChannelStatus, uuid } from "./schemas";
  * their attempts for ipDownSeconds, and as reachable again after
  * ipUpSeconds without that.
  */
+/**
+ * Which probers decide whether an address is reachable: internal (probes
+ * and nodes that probe), external (healthy external sources), all (both
+ * must see it fail) or any (either is enough). Each kind decides by a
+ * strict majority of its own probers; a kind without fresh results never
+ * fails an address.
+ */
+export const probeMode = z.enum(["internal", "external", "all", "any"]);
+export type ProbeMode = z.infer<typeof probeMode>;
 export const probeSettings = z
   .object({
     /** Seconds between probe rounds. */
@@ -25,6 +34,8 @@ export const probeSettings = z
     ipDownSeconds: z.number().int().min(5).max(3600),
     /** How long a failed address answers again before the node switches back. */
     ipUpSeconds: z.number().int().min(5).max(3600),
+    /** The global mode; a cluster may set its own (clusters' probeMode). */
+    mode: probeMode.default("internal"),
   })
   .refine((s) => s.timeoutMs <= s.intervalSeconds * 1000, {
     message: "timeout longer than the interval",
@@ -38,6 +49,7 @@ export const PROBE_SETTINGS_DEFAULTS: ProbeSettings = {
   lossPercent: 50,
   ipDownSeconds: 30,
   ipUpSeconds: 60,
+  mode: "internal",
 };
 
 const probeMethod = z.enum(["tcp", "http", "https"]);

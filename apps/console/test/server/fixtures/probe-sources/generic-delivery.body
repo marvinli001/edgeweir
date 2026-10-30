@@ -1,0 +1,1 @@
+{"results":[{"monitor":"edge-1","location":"fra","up":true,"latencyMs":31,"lossPercent":0,"checkedAt":"2026-10-30T07:59:50Z"},{"monitor":"edge-1","location":"sin","up":false,"error":"timeout"}]}
