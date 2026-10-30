@@ -1567,7 +1567,8 @@ audit="$(api GET "/audit-logs?action=ssh_install.host&limit=5" | jq -c --arg h "
 pass "host: no password or token in the journal, files, temp dirs or process environments; sudo logged only the install.sh command; console logs and pg_dump: no password; audit: succeeded, failed, failed"
 
 step "SSH install: with edgeweir-node 1.7.0 a new run keeps the enrolled host's node; decommission retires it without SSH"
-# The stack's own edgeweir-node build (EDGEWEIR_NODE_CONTEXT) on the host, or E2E_SSH_NODE_BINARY.
+# The stack's own edgeweir-node build (EDGEWEIR_NODE_CONTEXT) on the host, or E2E_SSH_NODE_BINARY, with the
+# unit of EDGEWEIR_NODE_CONTEXT.
 local binary="$STATE_DIR/edgeweir-node-ssh" cid nodes_before
 if [[ -n "${E2E_SSH_NODE_BINARY:-}" ]]; then
   cp "$E2E_SSH_NODE_BINARY" "$binary"
@@ -1580,7 +1581,11 @@ docker cp "$binary" "$SSH_CONTAINER:/tmp/edgeweir-node-new" >/dev/null
 if ! in_ssh '/tmp/edgeweir-node-new enroll -h 2>&1 | grep -q -- -if-not-enrolled'; then
   echo "skipped: the stack's edgeweir-node has no enroll --if-not-enrolled (edgeweir-node 1.7.0 and later)"
 else
-  in_ssh 'install -m 0755 /tmp/edgeweir-node-new /usr/bin/edgeweir-node && systemctl restart edgeweir-node'
+  # The 1.7.0 package's unit as well (RestartPreventExitStatus=2 3, SuccessExitStatus=3): with the
+  # installed release's unit a decommissioned node is restarted.
+  docker cp "$NODE_CONTEXT/packaging/systemd/edgeweir-node.service" "$SSH_CONTAINER:/usr/lib/systemd/system/edgeweir-node.service" >/dev/null ||
+    fail "no packaging/systemd/edgeweir-node.service in $NODE_CONTEXT"
+  in_ssh 'install -m 0755 /tmp/edgeweir-node-new /usr/bin/edgeweir-node && systemctl daemon-reload && systemctl restart edgeweir-node'
   deadline=$((SECONDS + 120))
   until api GET "/nodes/$node_id" | jq -e '.online and (.supportedFeatures | index("decommission-v1"))' >/dev/null; do
     ((SECONDS < deadline)) || fail "the node did not come back with decommission-v1: $(api GET "/nodes/$node_id" | jq -c '{online, agentVersion}')"
