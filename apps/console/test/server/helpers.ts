@@ -23,8 +23,8 @@ import { ConfigEventBus } from "../../src/server/lib/events";
 import { createLogger, setLogLevel } from "../../src/server/lib/logger";
 import { CertificateAuthority, generateCa } from "../../src/server/pki/ca";
 import { AccessKeyRateLimiter } from "../../src/server/services/access-keys";
-import { SshInstallRuns } from "../../src/server/services/ssh-install";
 import { ensureSetupToken, runSetup } from "../../src/server/services/setup";
+import { SshInstallRuns } from "../../src/server/services/ssh-install";
 
 export const TEST_MASTER_KEY = Buffer.alloc(32, 7).toString("base64");
 export const PASSWORD = "correct horse battery";

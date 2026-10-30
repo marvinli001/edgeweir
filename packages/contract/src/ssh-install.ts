@@ -146,7 +146,13 @@ export const scanHostKeysInput = z.object({
 });
 
 /** Why a host key could not be read. */
-export const HOST_KEY_SCAN_ERRORS = ["unreachable", "timeout", "not_ssh"] as const;
+export const HOST_KEY_SCAN_ERRORS = [
+  "unreachable",
+  "timeout",
+  "not_ssh",
+  /** A special-purpose address EDGEWEIR_OUTBOUND_ALLOW_CIDRS does not allow (private, loopback …). */
+  "outbound_refused",
+] as const;
 
 export const hostKeyScan = z.object({
   host: z.string(),
@@ -277,6 +283,8 @@ export type SshInstallHostState = (typeof SSH_INSTALL_HOST_STATES)[number];
 /** Why a host failed (`ssh_install_error_<code>` in the UI). */
 export const SSH_INSTALL_ERRORS = [
   "host_key_mismatch",
+  /** The host resolves to an address the outbound policy (EDGEWEIR_OUTBOUND_ALLOW_CIDRS) refuses. */
+  "outbound_refused",
   "unreachable",
   "timeout",
   "auth_failed",

@@ -41,6 +41,7 @@ const otherHostKey = utils.generateKeyPairSync("ed25519");
 const clientKey = utils.generateKeyPairSync("ed25519", {
   passphrase: PASSPHRASE,
   cipher: "aes256-ctr",
+  rounds: 16,
 });
 const plainClientKey = utils.generateKeyPairSync("ed25519");
 const fingerprintOf = (publicKey: string) => {
@@ -146,7 +147,11 @@ function fingerprintKey(publicKey: string): Buffer {
 }
 
 describe("SSH install (ADR-0066)", async () => {
-  const { ctx, client: pglite } = await createTestContext();
+  // The test servers listen on loopback, a special-purpose address the outbound policy refuses
+  // unless allowed.
+  const { ctx, client: pglite } = await createTestContext({
+    EDGEWEIR_OUTBOUND_ALLOW_CIDRS: "127.0.0.0/8",
+  });
   const app = createApp(ctx);
   const origin = ctx.env.EDGEWEIR_PUBLIC_URL;
   let admin: ApiClient;
@@ -233,6 +238,8 @@ describe("SSH install (ADR-0066)", async () => {
           { host: "127.0.0.1", port: server.port },
           { host: "127.0.0.1", port: closedPort },
           { host: "127.0.0.1", port: (notSsh.address() as AddressInfo).port },
+          { host: "10.0.0.1", port: 22 },
+          { host: "no-such-host.invalid", port: 22 },
         ],
       });
       expect(hosts[0]).toEqual({
@@ -244,6 +251,13 @@ describe("SSH install (ADR-0066)", async () => {
       });
       expect(hosts[1]).toMatchObject({ fingerprint: null, error: "unreachable" });
       expect(hosts[2]).toMatchObject({ fingerprint: null, error: "not_ssh" });
+      // Private addresses only with EDGEWEIR_OUTBOUND_ALLOW_CIDRS, like every outbound target.
+      expect(hosts[3]).toMatchObject({
+        host: "10.0.0.1",
+        fingerprint: null,
+        error: "outbound_refused",
+      });
+      expect(hosts[4]).toMatchObject({ fingerprint: null, error: "unreachable" });
       // Only the handshake: the scan never authenticates nor runs anything.
       expect(server.execs).toEqual([]);
     } finally {
@@ -390,6 +404,19 @@ describe("SSH install (ADR-0066)", async () => {
         PASSPHRASE,
       );
     }
+  });
+
+  it("refuses hosts the outbound policy refuses, without connecting", async () => {
+    const done = await ended(
+      (
+        await admin.sshInstalls.start({
+          clusterId,
+          credential: { password: PASSWORD },
+          hosts: [{ host: "10.0.0.1", hostKeyFingerprint: HOST_FP }],
+        })
+      ).id,
+    );
+    expect(done.hosts[0]).toMatchObject({ state: "failed", error: "outbound_refused" });
   });
 
   it("refuses a host key other than the confirmed one, expires that host's token, keeps going with the others", async () => {

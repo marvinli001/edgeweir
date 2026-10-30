@@ -3284,5 +3284,7 @@
   "ssh_mirror_only": "只用镜像",
   "ssh_modsecurity": "安装 ModSecurity",
   "ssh_concurrency": "并发",
-  "ssh_timeout": "单台超时（分钟）"
+  "ssh_timeout": "单台超时（分钟）",
+  "ssh_scan_error_outbound_refused": "出站策略不允许连接该地址",
+  "ssh_install_error_outbound_refused": "出站策略不允许连接该地址"
 }

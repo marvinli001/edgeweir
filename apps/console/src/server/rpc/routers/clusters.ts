@@ -1,6 +1,7 @@
 import { schema } from "@edgeweir/db";
 import { desc, eq } from "drizzle-orm";
 import type { AppContext } from "../../lib/context";
+import { outboundAddress } from "../../lib/outbound";
 import type { Actor } from "../../services/audit";
 import {
   createCluster,
@@ -81,13 +82,19 @@ async function installContext(context: { app: AppContext; actor: Actor }): Promi
     consoleUrl: context.app.env.EDGEWEIR_PUBLIC_URL,
     serverUrl: await nodeChannelUrl(context.app),
     caSha256: context.app.nodeCa.fingerprintSha256,
+    resolve: outboundResolver(context.app),
   };
+}
+
+/** SSH hosts are outbound targets like any other the operator names (lib/outbound.ts). */
+function outboundResolver(app: AppContext) {
+  return async (host: string) => (await outboundAddress(app, host)).address;
 }
 
 export const clustersRouter = {
   sshInstalls: {
     scanHostKeys: authed.sshInstalls.scanHostKeys.handler(async ({ input, context }) => ({
-      hosts: await context.app.sshInstalls.scanHostKeys(input.hosts),
+      hosts: await context.app.sshInstalls.scanHostKeys(input.hosts, outboundResolver(context.app)),
     })),
     start: authed.sshInstalls.start.handler(async ({ input, context }) =>
       context.app.sshInstalls.start(input, await installContext(context)),

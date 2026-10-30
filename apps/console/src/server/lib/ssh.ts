@@ -81,6 +81,7 @@ export class SshFailure extends Error {
   constructor(
     readonly code:
       | "host_key_mismatch"
+      | "outbound_refused"
       | "unreachable"
       | "timeout"
       | "auth_failed"

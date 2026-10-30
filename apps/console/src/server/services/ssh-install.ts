@@ -15,6 +15,7 @@ import { eq } from "drizzle-orm";
 import type * as z from "zod";
 import { fail } from "../lib/errors";
 import type { Logger } from "../lib/logger";
+import { OutboundRefusedError } from "../lib/outbound";
 import {
   checkPrivateKey,
   openSshSession,
@@ -49,6 +50,24 @@ export interface InstallContext {
   consoleUrl: string;
   serverUrl: string;
   caSha256: string;
+  /**
+   * The address to connect to: resolved once, refused (OutboundRefusedError) when it is a
+   * special-purpose address EDGEWEIR_OUTBOUND_ALLOW_CIDRS does not allow.
+   */
+  resolve: Resolve;
+}
+
+export type Resolve = (host: string) => Promise<string>;
+
+/** Pins the host's address, or fails the way the scan and the install name it. */
+async function pin(resolve: Resolve, host: string): Promise<string> {
+  try {
+    return await resolve(host);
+  } catch (error) {
+    throw new SshFailure(
+      error instanceof OutboundRefusedError ? "outbound_refused" : "unreachable",
+    );
+  }
 }
 
 /** The credential as the run keeps it: buffers, zeroed when the run ends. */
@@ -296,13 +315,33 @@ export class SshInstallRuns {
   }
 
   /** The host key each host presents; nothing is sent but the SSH handshake. */
-  async scanHostKeys(hosts: { host: string; port: number }[]): Promise<HostKeyScan[]> {
+  async scanHostKeys(
+    hosts: { host: string; port: number }[],
+    resolve: Resolve,
+  ): Promise<HostKeyScan[]> {
     const results: HostKeyScan[] = new Array(hosts.length);
     await pool(
       hosts.map((host, index) => ({ host, index })),
       SCAN_CONCURRENCY,
       async ({ host, index }) => {
-        results[index] = await this.scan(host, SCAN_TIMEOUT_MS);
+        try {
+          const address = await pin(resolve, host.host);
+          results[index] = {
+            ...(await this.scan({ host: address, port: host.port }, SCAN_TIMEOUT_MS)),
+            host: host.host,
+          };
+        } catch (error) {
+          results[index] = {
+            host: host.host,
+            port: host.port,
+            algorithm: null,
+            fingerprint: null,
+            error:
+              error instanceof SshFailure && error.code === "outbound_refused"
+                ? "outbound_refused"
+                : "unreachable",
+          };
+        }
       },
     );
     return results;
@@ -544,9 +583,11 @@ export class SshInstallRuns {
       host.tokenId = minted.tokenId;
       host.token = minted.token;
       if (abort.signal.aborted) throw abort.signal.reason;
+      const address = await pin(ctx.resolve, host.host);
+      if (abort.signal.aborted) throw abort.signal.reason;
       session = await this.connect(
         {
-          host: host.host,
+          host: address,
           port: host.port,
           username: host.username,
           password: secrets.password,

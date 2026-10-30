@@ -66,6 +66,7 @@ const stateText = (state: SshInstallHost["state"]) =>
 export const sshErrorText = (error: SshInstallError) =>
   ({
     host_key_mismatch: m.ssh_install_error_host_key_mismatch,
+    outbound_refused: m.ssh_install_error_outbound_refused,
     unreachable: m.ssh_install_error_unreachable,
     timeout: m.ssh_install_error_timeout,
     auth_failed: m.ssh_install_error_auth_failed,
@@ -85,6 +86,7 @@ const scanErrorText = (error: NonNullable<HostKeyScan["error"]>) =>
     unreachable: m.ssh_scan_error_unreachable,
     timeout: m.ssh_scan_error_timeout,
     not_ssh: m.ssh_scan_error_not_ssh,
+    outbound_refused: m.ssh_scan_error_outbound_refused,
   })[error]();
 
 const errorCode = (error: unknown) =>

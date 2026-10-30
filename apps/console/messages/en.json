@@ -3499,5 +3499,7 @@
   "ssh_mirror_only": "Mirror only",
   "ssh_modsecurity": "Install ModSecurity",
   "ssh_concurrency": "Concurrency",
-  "ssh_timeout": "Timeout per host (minutes)"
+  "ssh_timeout": "Timeout per host (minutes)",
+  "ssh_scan_error_outbound_refused": "The outbound policy does not allow this address",
+  "ssh_install_error_outbound_refused": "The outbound policy does not allow this address"
 }
