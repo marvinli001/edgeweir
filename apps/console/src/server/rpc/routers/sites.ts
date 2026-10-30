@@ -27,6 +27,7 @@ import { demoLogEntry } from "../../services/demo";
 import { getSiteErrorPages, updateSiteErrorPages } from "../../services/error-pages";
 import { checkHttps } from "../../services/https-check";
 import { getImageConvert, imageSavings, updateImageConvert } from "../../services/image-convert";
+import { getMarkdown, markdownStats, updateMarkdown } from "../../services/markdown";
 import {
   createL4App,
   deleteL4App,
@@ -146,6 +147,15 @@ export const sitesRouter = {
     ),
     savings: authed.imageConvert.savings.handler(({ input, context }) =>
       imageSavings(context.app.db, input),
+    ),
+  },
+  markdown: {
+    get: authed.markdown.get.handler(({ input, context }) => getMarkdown(context.app.db, input.id)),
+    update: authed.markdown.update.handler(({ input, context }) =>
+      updateMarkdown(context.app.db, input, { actor: context.actor }),
+    ),
+    stats: authed.markdown.stats.handler(({ input, context }) =>
+      markdownStats(context.app.db, input),
     ),
   },
   accessControl: {

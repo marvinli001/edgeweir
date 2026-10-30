@@ -38,6 +38,7 @@ import { hiddenCardsContract } from "./hidden-cards";
 import { imageConvertContract } from "./image-convert";
 import { l4AppsContract, portPoolProcedures } from "./l4";
 import { loginAllowListProcedures } from "./login-allow-list";
+import { markdownContract } from "./markdown";
 import { originCaContract, originCertificatesContract, originClientCaContract } from "./origin-pki";
 import {
   nodeAddressesInput,
@@ -80,6 +81,7 @@ export * from "./expressions";
 export * from "./greylist";
 export * from "./hidden-cards";
 export * from "./image-convert";
+export * from "./markdown";
 export * from "./node-channel";
 export * from "./node-errors";
 export * from "./node-features";
@@ -152,6 +154,8 @@ export const contract = {
   accessControl: accessControlContract,
   /** A site's WebP / AVIF conversion of cached images and the bytes it saved. */
   imageConvert: imageConvertContract,
+  /** A site's Markdown for Agents and the Markdown responses it served. */
+  markdown: markdownContract,
   /** What the console knows about an address: lists, bans and client address settings. */
   ipCheck: ipCheckContract,
   certificates: certificatesContract,

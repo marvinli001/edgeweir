@@ -562,6 +562,7 @@ export function createNodeService(
                 ),
                 authFailures: Number(s.authFailures),
                 imageBytesSaved: Number(s.imageBytesSaved),
+                markdownResponses: Number(s.markdownResponses),
                 statusCodes: Object.fromEntries(
                   Object.entries(s.statusCodes).map(([code, n]) => [code, Number(n)]),
                 ),

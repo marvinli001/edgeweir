@@ -884,7 +884,7 @@ See [Access logs and access keys](../guide/access-logs.en.md) and [System settin
 
 `ids` and `targetIds` are 1–100 site IDs; `targetIds` cannot include the source (400). A missing site fails a batch operation as a whole with 404 `SITE_NOT_FOUND` (a copy fails only that target); more than 10 tags after adding is 400 `SITE_TAG_LIMIT` (`data.site`, `data.limit`). Arrays in a query string use bracket notation (`targetIds[]=a&targetIds[]=b`); a single value can be `targetIds=a`.
 
-Values of `parts`: `cacheRules`, `cacheKey` (cache key and slicing), `cacheTag`, `compression`, `https` (without certificates and the domains left out of the redirect), `rules` (with `rulesBodyLimit`), `bulkRedirects`, `errorPages` (without maintenance mode), `waf`, `protection` (without `logJa4`), `accessControl`, `authRules` (secrets encrypted again for the target), `originSettings` (without the origins), `logs` (sample rate, `logBlocked`, `logQuery`, `logHeaders`, `logPeer` and `logJa4`), `imageConvert` (image format conversion). A copied part replaces that part of the target as a whole; parts already equal to the source's are not written. A target that lacks what the settings use fails: an origin group a rule chooses 400 `ORIGIN_GROUP_UNKNOWN` (`data.group`, `data.rule`); the HTTPS redirect, HSTS or client certificates without a certificate 400 `HTTPS_REQUIRES_CERTIFICATE`; a redirect port that is not one of the target's HTTPS ports 400 `HTTPS_REDIRECT_PORT_INVALID`; a bulk redirect source host that is not a domain of the target 400 `BULK_REDIRECT_HOST_UNKNOWN`; an access authentication domain the target does not have 400 `AUTH_DOMAIN_UNKNOWN`; a missing IP list 404 `IP_LIST_NOT_FOUND`. In a clone these errors fail the whole clone (except the certificate ones: those settings are turned off).
+Values of `parts`: `cacheRules`, `cacheKey` (cache key and slicing), `cacheTag`, `compression`, `https` (without certificates and the domains left out of the redirect), `rules` (with `rulesBodyLimit`), `bulkRedirects`, `errorPages` (without maintenance mode), `waf`, `protection` (without `logJa4`), `accessControl`, `authRules` (secrets encrypted again for the target), `originSettings` (without the origins), `logs` (sample rate, `logBlocked`, `logQuery`, `logHeaders`, `logPeer` and `logJa4`), `imageConvert` (image format conversion), `markdown` (Markdown for Agents). A copied part replaces that part of the target as a whole; parts already equal to the source's are not written. A target that lacks what the settings use fails: an origin group a rule chooses 400 `ORIGIN_GROUP_UNKNOWN` (`data.group`, `data.rule`); the HTTPS redirect, HSTS or client certificates without a certificate 400 `HTTPS_REQUIRES_CERTIFICATE`; a redirect port that is not one of the target's HTTPS ports 400 `HTTPS_REDIRECT_PORT_INVALID`; a bulk redirect source host that is not a domain of the target 400 `BULK_REDIRECT_HOST_UNKNOWN`; an access authentication domain the target does not have 400 `AUTH_DOMAIN_UNKNOWN`; a missing IP list 404 `IP_LIST_NOT_FOUND`. In a clone these errors fail the whole clone (except the certificate ones: those settings are turned off).
 
 `sites.list` takes `tagIds` (`tagIds[]=…`, ≤ 10) and `tagMatch` (`any` by default, or `all`), and `search` also matches tag names; sites carry `tags: [{ id, name }]`; `sites.create` takes `tags`. A read-only AccessKey can call the `GET`s only (the tag list, the preview); service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`).
 
@@ -915,6 +915,32 @@ curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application
   https://cdn-admin.example.com/api/v1/sites/<site id>/image-convert
 curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
   "https://cdn-admin.example.com/api/v1/sites/<site id>/image-convert/savings?range=7d"
+```
+
+### Markdown for Agents
+
+| Procedure | Endpoint | Notes |
+| --- | --- | --- |
+| `markdown.get` | `GET /sites/{id}/markdown` | The site's Markdown conversion settings; the defaults (off, every path) until saved |
+| `markdown.update` | `PUT /sites/{id}/markdown` | Replaces the settings and publishes the site's cluster (hot update; changes while it is off leave the nodes' configuration as it is and create no revision). Prefixes are stored sorted and unique. Audit `site.markdown_update` (`changed`, `enabled`) |
+| `markdown.stats` | `GET /sites/{id}/markdown/stats?range=` | `{ responses, unsupportedNodes }`: over the range (`1h`, `6h`, `24h` by default, `7d`, `30d`), the complete 200 GET responses served as Markdown (cache hits included); `unsupportedNodes` counts the cluster's active nodes without `markdown-v1` |
+
+Fields of the settings (all required by `update`, plus `id`):
+
+| Field | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `enabled` | boolean | `false` | |
+| `includePrefixes` | string array | `[]` | Path prefixes converted, empty for every path; ≤ 32, each ≤ 256 bytes, starting with `/`, visible ASCII only |
+| `excludePrefixes` | string array | `[]` | Path prefixes never converted, winning over `includePrefixes`; same limits |
+
+Anything else (also while it is off) is 400. A read-only AccessKey calls the `GET`s only; service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`). `sites.features` adds `markdown` (feature `markdown-v1`); settings that are on require node feature `markdown-v1`, settings that are off leave the configuration as it is. Copying settings takes the part `markdown`, and clones copy it. Behaviour: [Markdown for Agents](../guide/markdown-agents.en.md).
+
+```bash
+curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"enabled":true,"includePrefixes":["/docs/"],"excludePrefixes":["/docs/private/"]}' \
+  https://cdn-admin.example.com/api/v1/sites/<site id>/markdown
+curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
+  "https://cdn-admin.example.com/api/v1/sites/<site id>/markdown/stats?range=7d"
 ```
 
 ### Usage protection

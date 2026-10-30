@@ -34,6 +34,7 @@ import {
   GeoAccessSchema,
   HotlinkSchema,
   ImageConvertSchema,
+  MarkdownSchema,
   LoadBalancePolicy,
   MaintenanceSchema,
   OriginCacheControl,
@@ -285,6 +286,14 @@ export function compileSite(
     logHeaders: sortedByteSet(model.logHeaders ?? []),
     logPeer: model.logPeer ?? false,
     ...(model.imageConvert ? { imageConvert: compileImageConvert(model.imageConvert) } : {}),
+    ...(model.markdown
+      ? {
+          markdown: create(MarkdownSchema, {
+            includePrefixes: sortedByteSet(model.markdown.includePrefixes),
+            excludePrefixes: sortedByteSet(model.markdown.excludePrefixes),
+          }),
+        }
+      : {}),
     domains: model.domains.map((d) =>
       create(DomainSchema, {
         name: d.name,

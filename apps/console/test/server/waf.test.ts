@@ -56,6 +56,7 @@ const ALL_FEATURES = [
   "challenge-v2",
   "access-logs-v2",
   "image-convert-v1",
+  "markdown-v1",
 ];
 
 /** A change without the operator behind it (service accounts, background jobs). */

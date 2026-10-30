@@ -20,6 +20,8 @@ import {
   type HttpsCheck,
   IMAGE_CONVERT_DEFAULTS,
   type ImageConvertSettings,
+  MARKDOWN_DEFAULTS,
+  type MarkdownSettings,
   type LogEntry,
   type LoggedRules,
   logQuery,
@@ -1730,6 +1732,19 @@ function imageConvertOf(site: Site): ImageConvertSettings {
   return settings;
 }
 
+/** Markdown for Agents per site: the shop converts its help pages. */
+const markdowns = new Map<string, MarkdownSettings>();
+function markdownOf(site: Site): MarkdownSettings {
+  let settings = markdowns.get(site.id);
+  if (!settings) {
+    settings = isShop(site)
+      ? { enabled: true, includePrefixes: ["/help/"], excludePrefixes: [] }
+      : { ...MARKDOWN_DEFAULTS };
+    markdowns.set(site.id, settings);
+  }
+  return settings;
+}
+
 const logOptions = new Map<string, LogOptions>();
 
 function logOptionsOf(site: Site): LogOptions {
@@ -2703,6 +2718,17 @@ export const siteDetailFixtures: Fixtures = {
     },
     savings: (input) => ({
       bytesSaved: isShop(siteOf(input.id)) ? 41_873_211_904 : 0,
+      unsupportedNodes: 0,
+    }),
+  },
+  markdown: {
+    get: ({ id: siteId }) => markdownOf(siteOf(siteId)),
+    update: ({ id: siteId, ...settings }) => {
+      markdowns.set(siteId, settings);
+      return markdownOf(siteOf(siteId));
+    },
+    stats: (input) => ({
+      responses: isShop(siteOf(input.id)) ? 18_342 : 0,
       unsupportedNodes: 0,
     }),
   },

@@ -44,6 +44,7 @@ import { CharsetCard, PurgeMethodCard, XCacheCard } from "@/components/site/cont
 import { ExpressionEditor, expressionFailure } from "@/components/site/expression-editor";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { ImageConvertCard, ImageSavingsCard } from "@/components/site/image-convert-card";
+import { MarkdownCard, MarkdownStatsCard } from "@/components/site/markdown-card";
 import { nextDraftKey, SaveBar, serializeDrafts, useSaveSite } from "@/components/site/save-site";
 import { SortableList, useSortableRow } from "@/components/sortable-list";
 import { localizeError } from "@/lib/errors";
@@ -72,6 +73,8 @@ export function CacheTab({ site }: { site: Site }) {
       <CompressionCard site={site} />
       <ImageConvertCard site={site} />
       <ImageSavingsCard siteId={site.id} />
+      <MarkdownCard site={site} />
+      <MarkdownStatsCard siteId={site.id} />
       <CharsetCard key={`charset-${JSON.stringify(site.contentSettings.charset)}`} site={site} />
     </div>
   );

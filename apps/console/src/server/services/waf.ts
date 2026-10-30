@@ -9,6 +9,7 @@ import {
   CLIENT_CERT_FEATURE,
   ERROR_PAGES_FEATURE,
   IMAGE_CONVERT_FEATURE,
+  MARKDOWN_FEATURE,
   MODSECURITY_FEATURE,
   MULTI_CERTIFICATE_FEATURE,
   ORIGIN_CA_FEATURE,
@@ -245,6 +246,7 @@ export async function siteFeatures(db: Database, siteId: string): Promise<SiteFe
     challengeV2: byNodes(CHALLENGE_V2_FEATURE),
     accessLogsV2: byNodes(ACCESS_LOGS_V2_FEATURE),
     imageConvert: byNodes(IMAGE_CONVERT_FEATURE),
+    markdown: byNodes(MARKDOWN_FEATURE),
   };
 }
 

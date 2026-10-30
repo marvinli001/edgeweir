@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   type ErrorPage,
   type ImageConvertSettings,
+  type MarkdownSettings,
   type Revision,
   SITE_COPY_LIST_PARTS,
   type SiteCloneInput,
@@ -25,6 +26,7 @@ import { readCacheKey } from "../lib/cache-key";
 import type { MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
 import { readImageConvert } from "../lib/image-convert";
+import { readMarkdown } from "../lib/markdown";
 import { readActiveHealthCheck, readSessionAffinity } from "../lib/pool-settings";
 import { formatDomain, normalizeDomains } from "../lib/site-domains";
 import { PURGE_KEY, siteSecretBinding, storeSiteSecret } from "../lib/site-secrets";
@@ -668,6 +670,14 @@ export const COPY_PARTS: Record<SiteCopyPart, Part<unknown>> = {
         .update(schema.site)
         .set({ imageConvert: value })
         .where(eq(schema.site.id, target.id));
+    },
+  }),
+  markdown: part<MarkdownSettings>({
+    async read(_db, site) {
+      return readMarkdown(site.markdown);
+    },
+    async write(tx, target, value) {
+      await tx.update(schema.site).set({ markdown: value }).where(eq(schema.site.id, target.id));
     },
   }),
 };

@@ -40,6 +40,7 @@ import { readCacheKey } from "../lib/cache-key";
 import { uncoveredByAll } from "../lib/certificate-names";
 import { fail } from "../lib/errors";
 import { imageConvertModel } from "../lib/image-convert";
+import { markdownModel } from "../lib/markdown";
 import { activeHealthCheckModel, sessionAffinityModel } from "../lib/pool-settings";
 import { readContentSettings, readMaintenance } from "../lib/site-content";
 import { PURGE_KEY } from "../lib/site-secrets";
@@ -265,6 +266,7 @@ async function loadSiteModels(
         logHeaders: s.logHeaders,
         logPeer: s.logPeer,
         imageConvert: imageConvertModel(s.imageConvert),
+        markdown: markdownModel(s.markdown),
         domains: served(
           s,
           domains.filter((d) => d.siteId === s.id),

@@ -27,7 +27,8 @@ import { MAX_BATCH_SITES, queryList, siteTagNames } from "./site-tags";
  * - originSettings: the origin pool settings without the origins;
  * - logs: the access log sample rate and options (blocked requests, the
  *   query string, request headers, the peer address) and JA4 logging;
- * - imageConvert: the WebP / AVIF conversion settings.
+ * - imageConvert: the WebP / AVIF conversion settings;
+ * - markdown: the Markdown for Agents settings.
  */
 export const SITE_COPY_PARTS = [
   "cacheRules",
@@ -45,6 +46,7 @@ export const SITE_COPY_PARTS = [
   "originSettings",
   "logs",
   "imageConvert",
+  "markdown",
 ] as const;
 const siteCopyPart = z.enum(SITE_COPY_PARTS);
 export type SiteCopyPart = z.infer<typeof siteCopyPart>;
