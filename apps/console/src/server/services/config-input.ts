@@ -43,6 +43,7 @@ import { imageConvertModel } from "../lib/image-convert";
 import { activeHealthCheckModel, sessionAffinityModel } from "../lib/pool-settings";
 import { readContentSettings, readMaintenance } from "../lib/site-content";
 import { PURGE_KEY } from "../lib/site-secrets";
+import { loadAiCrawl } from "./ai-crawl";
 import { siteIdentityHeaders } from "./auth-identity";
 import { loadEdgeModel } from "./edge";
 import { errorPagesModel, loadPlatformErrorPages, loadSiteErrorPages } from "./error-pages";
@@ -804,11 +805,15 @@ export async function loadConfigInput(
 ): Promise<CompileInput> {
   const previous = previousConfig(tx, clusterId);
   const invalid: InvalidRule[] = [];
-  const sites = await loadSiteModels(tx, clusterId, {
-    strictSiteId: opts.site,
-    previous,
-    invalid,
-  });
+  const ai = await loadAiCrawl(
+    tx,
+    await loadSiteModels(tx, clusterId, {
+      strictSiteId: opts.site,
+      previous,
+      invalid,
+    }),
+  );
+  const sites = ai.sites;
   // Every list is the operator's: allow and block lists apply to every site,
   // and any rule may refer to any list.
   const lists = await tx.select().from(schema.ipList);
@@ -864,5 +869,6 @@ export async function loadConfigInput(
     l4Apps,
     edge: await loadEdgeModel(tx, clusterId),
     greylistChallenges: await greylistChallenges(tx, clusterId),
+    aiCrawlers: ai.catalogue,
   };
 }

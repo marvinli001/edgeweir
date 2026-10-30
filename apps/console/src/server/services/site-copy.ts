@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  type AiCrawlSiteSettings,
   type ErrorPage,
   type ImageConvertSettings,
   type Revision,
@@ -29,6 +30,7 @@ import { readActiveHealthCheck, readSessionAffinity } from "../lib/pool-settings
 import { formatDomain, normalizeDomains } from "../lib/site-domains";
 import { PURGE_KEY, siteSecretBinding, storeSiteSecret } from "../lib/site-secrets";
 import { checkSiteLists, storeAccessControl } from "./access-control";
+import { readSiteAiCrawl, writeSiteAiCrawl } from "./ai-crawl";
 import { type Actor, recordAudit } from "./audit";
 import { assertAuthRuleTargets, replaceAuthRules } from "./auth-rules";
 import { noteOperatorUnderAttack } from "./auto-mitigation";
@@ -657,6 +659,14 @@ export const COPY_PARTS: Record<SiteCopyPart, Part<unknown>> = {
         .set({ logSampleRate: sampleRate, ...columns })
         .where(eq(schema.site.id, target.id));
       await upsertProtection(tx, target.id, { logJa4 });
+    },
+  }),
+  aiCrawl: part<AiCrawlSiteSettings>({
+    async read(db, site) {
+      return readSiteAiCrawl(db, site.id);
+    },
+    async write(tx, target, value) {
+      await writeSiteAiCrawl(tx, target.id, value);
     },
   }),
   imageConvert: part<ImageConvertSettings>({

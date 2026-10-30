@@ -1,7 +1,11 @@
 import {
+  AI_CRAWLER_STATS_FIELDS,
+  AI_CRAWLER_VERIFICATIONS,
   BLOCK_REASONS,
   BROWSERS,
   DEVICES,
+  MAX_CRAWLER_PATHS,
+  MAX_CRAWLER_STATS,
   MAX_STATS_COUNTRIES,
   MAX_STATS_ORIGINS,
   MAX_STATS_TOP,
@@ -33,6 +37,26 @@ export interface ReportedDimensions {
   challengesPassed?: number;
   /** Each origin's fetches (MinuteStats.origins, origin-stats-v1, ADR-0052). */
   origins?: ReportedOrigin[];
+  /** AI crawlers (MinuteStats.crawlers / crawler_paths, ai-crawlers-v1, ADR-0070). */
+  crawlers?: ReportedCrawler[];
+  crawlerPaths?: { crawler: string; path: string; requests: number }[];
+}
+
+/** A crawler's minute as nodes report it (CrawlerCounter). */
+interface ReportedCrawler {
+  crawler: string;
+  verification: string;
+  requests: number;
+  status2xx: number;
+  status3xx: number;
+  status4xx: number;
+  status5xx: number;
+  blocked: number;
+  bytes: number;
+  charged: number;
+  chargedMicros: number;
+  robots: number;
+  allowed: number;
 }
 
 /** An origin's minute as nodes report it (OriginCounter). */
@@ -64,6 +88,10 @@ export interface DimensionBucket {
   challenges_passed: number;
   /** `<origin id>:<field>` → count (ORIGIN_STATS_FIELDS), at most MAX_STATS_ORIGINS origins. */
   origin_stats: Record<string, number>;
+  /** `<crawler>|<verification>:<field>` → count (AI_CRAWLER_STATS_FIELDS), at most MAX_CRAWLER_STATS pairs. */
+  crawler_stats: Record<string, number>;
+  /** `<crawler>|<path>` → requests, the heaviest MAX_CRAWLER_PATHS. */
+  crawler_paths: Record<string, number>;
 }
 
 /** Map columns and how many keys a bucket keeps (null: the key list bounds them). */
@@ -82,6 +110,9 @@ export const DIMENSION_MAPS = [
   ["block_reasons", null],
   // Bounded by originsBounded (MAX_STATS_ORIGINS origins of 18 counters).
   ["origin_stats", null],
+  // Bounded by crawlersBounded (MAX_CRAWLER_STATS pairs of 10 counters).
+  ["crawler_stats", null],
+  ["crawler_paths", MAX_CRAWLER_PATHS],
 ] as const satisfies readonly (readonly [keyof DimensionBucket, number | null])[];
 export const DIMENSION_COUNTERS = ["challenges_issued", "challenges_passed"] as const;
 export const DIMENSION_COLUMNS = [
@@ -110,6 +141,33 @@ const cleanAsName = (name: string) =>
     .slice(0, 128);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+const CRAWLER_RE = /^[a-z0-9-]{1,40}$/;
+const VERIFICATIONS: ReadonlySet<string> = new Set(AI_CRAWLER_VERIFICATIONS);
+/** Paths as nodes report them: absolute, printable, without a query, at most 256 bytes. */
+const isCrawlerPath = (path: string) =>
+  path.startsWith("/") && path.length <= 256 && !path.includes("?") && !/\p{Cc}/u.test(path);
+
+/** crawler_stats keeping the MAX_CRAWLER_STATS pairs with the most requests (ties by key). */
+function crawlersBounded(values: Record<string, number>): Record<string, number> {
+  const requests = new Map<string, number>();
+  for (const [key, n] of Object.entries(values)) {
+    const at = key.lastIndexOf(":");
+    const pair = key.slice(0, at);
+    if (!requests.has(pair)) requests.set(pair, 0);
+    if (key.slice(at + 1) === "n") requests.set(pair, n);
+  }
+  if (requests.size <= MAX_CRAWLER_STATS) return values;
+  const kept = new Set(
+    [...requests]
+      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+      .slice(0, MAX_CRAWLER_STATS)
+      .map(([pair]) => pair),
+  );
+  return Object.fromEntries(
+    Object.entries(values).filter(([key]) => kept.has(key.slice(0, key.lastIndexOf(":")))),
+  );
+}
 
 /** origin_stats keeping the MAX_STATS_ORIGINS origins with the most attempts (ties by id). */
 function originsBounded(values: Record<string, number>): Record<string, number> {
@@ -156,6 +214,8 @@ export function cleanDimensions(input: ReportedDimensions | undefined): Dimensio
     tls_versions: Object.create(null),
     block_reasons: Object.create(null),
     origin_stats: Object.create(null),
+    crawler_stats: Object.create(null),
+    crawler_paths: Object.create(null),
     challenges_issued:
       Number.isSafeInteger(d.challengesIssued) && (d.challengesIssued ?? 0) > 0
         ? (d.challengesIssued as number)
@@ -208,8 +268,33 @@ export function cleanDimensions(input: ReportedDimensions | undefined): Dimensio
     for (const [field, n] of counters)
       if (isCount(n)) add(out.origin_stats, `${o.originId}:${field}`, n);
   }
+  for (const c of d.crawlers ?? []) {
+    if (!CRAWLER_RE.test(c.crawler) || !VERIFICATIONS.has(c.verification) || !isCount(c.requests))
+      continue;
+    const values = [
+      c.requests,
+      c.status2xx,
+      c.status3xx,
+      c.status4xx,
+      c.status5xx,
+      c.blocked,
+      c.bytes,
+      c.charged,
+      c.chargedMicros,
+      c.robots,
+      c.allowed,
+    ];
+    AI_CRAWLER_STATS_FIELDS.forEach((field, i) => {
+      const n = values[i];
+      if (isCount(n)) add(out.crawler_stats, `${c.crawler}|${c.verification}:${field}`, n);
+    });
+  }
+  for (const p of d.crawlerPaths ?? [])
+    if (CRAWLER_RE.test(p.crawler) && isCrawlerPath(p.path) && isCount(p.requests))
+      add(out.crawler_paths, `${p.crawler}|${p.path}`, p.requests);
   for (const [column, limit] of DIMENSION_MAPS) out[column] = bounded(out[column], limit);
   out.origin_stats = originsBounded(out.origin_stats);
+  out.crawler_stats = crawlersBounded(out.crawler_stats);
   out.country_requests = bounded(out.country_requests, MAX_STATS_COUNTRIES);
   out.country_bytes = Object.fromEntries(
     Object.entries(out.country_bytes).filter(([country]) => country in out.country_requests),
@@ -227,6 +312,7 @@ export function mergeDimensions(a: DimensionBucket, b: DimensionBucket): Dimensi
   }
   for (const column of DIMENSION_COUNTERS) out[column] = addTrafficCounter(a[column], b[column]);
   out.origin_stats = originsBounded(out.origin_stats);
+  out.crawler_stats = crawlersBounded(out.crawler_stats);
   return out;
 }
 

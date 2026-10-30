@@ -4,6 +4,7 @@ import {
   ACCESS_LOGS_V2_FEATURE,
   ACTIVE_HEALTH_FEATURE,
   ACTIVE_HEALTH_GRPC_FEATURE,
+  AI_CRAWLERS_FEATURE,
   BROTLI_FEATURE,
   CHALLENGE_V2_FEATURE,
   CLIENT_CERT_FEATURE,
@@ -245,6 +246,7 @@ export async function siteFeatures(db: Database, siteId: string): Promise<SiteFe
     challengeV2: byNodes(CHALLENGE_V2_FEATURE),
     accessLogsV2: byNodes(ACCESS_LOGS_V2_FEATURE),
     imageConvert: byNodes(IMAGE_CONVERT_FEATURE),
+    aiCrawl: byNodes(AI_CRAWLERS_FEATURE),
   };
 }
 

@@ -56,6 +56,7 @@ const ALL_FEATURES = [
   "challenge-v2",
   "access-logs-v2",
   "image-convert-v1",
+  "ai-crawlers-v1",
 ];
 
 /** A change without the operator behind it (service accounts, background jobs). */
@@ -172,6 +173,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       challengeV2: available,
       accessLogsV2: available,
       imageConvert: available,
+      aiCrawl: available,
     });
     const https = await admin.https.get({ id: siteId });
     expect(https).toMatchObject({ brotli: false, brotliLevel: 6, zstd: false, zstdLevel: 3 });
@@ -348,6 +350,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       challengeV2: unavailable,
       accessLogsV2: unavailable,
       imageConvert: unavailable,
+      aiCrawl: unavailable,
     });
     const before = (await config()).revision;
     for (const [call, feature] of [
@@ -511,7 +514,9 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
     const csv = logsCsv(entries).split("\r\n");
     // The G14 columns, then the G16 ones (ADR-0041) at the end.
     expect(csv[0]).toMatch(/,ja4,wafRuleIds,wafBlocked,ruleIds,userAgent,/);
-    expect(csv[0]).toMatch(/,blockReason,blockRuleId,query,headers,peerIp$/);
+    expect(csv[0]).toMatch(
+      /,blockReason,blockRuleId,query,headers,peerIp,crawler,crawlerVerification,crawlerChargedMicros$/,
+    );
     const header = csv[0]?.split(",") ?? [];
     const cells = (line: string) => line.slice(1, -1).split('","');
     const row = csv.find((line) => line.includes('"920000 920001 920002'));

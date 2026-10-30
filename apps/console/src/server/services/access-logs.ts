@@ -2,6 +2,7 @@ import { isIP } from "node:net";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
+  AI_CRAWLER_VERIFICATIONS,
   BLOCK_REASONS,
   HTTP_VERSIONS,
   LOG_RETENTION_DEFAULTS,
@@ -15,7 +16,7 @@ import {
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import type { AccessLog } from "@edgeweir/proto";
-import { and, desc, eq, gte, inArray, lt, type SQL, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, ne, type SQL, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import type { Env } from "../lib/env";
 import { lockLogPartition, lockLogPartitions, tryLockNodeLogs } from "../lib/locks";
@@ -127,6 +128,20 @@ interface SiteLogPolicy {
   query: boolean;
   headers: ReadonlySet<string>;
   peer: boolean;
+}
+
+const CRAWLER_RE = /^[a-z0-9-]{1,40}$/;
+const VERIFICATIONS: ReadonlySet<string> = new Set(AI_CRAWLER_VERIFICATIONS);
+
+/** The AI crawler fields of a line (ai-crawlers-v1), empty when invalid. */
+function crawlerFields(l: AccessLog) {
+  const claimed = CRAWLER_RE.test(l.crawler) && VERIFICATIONS.has(l.crawlerVerification);
+  const charged = Number(l.crawlerChargedMicros);
+  return {
+    crawler: claimed ? l.crawler : "",
+    crawlerVerification: claimed ? l.crawlerVerification : "",
+    crawlerChargedMicros: claimed && Number.isSafeInteger(charged) && charged > 0 ? charged : 0,
+  };
 }
 
 export async function ingestLogs(
@@ -255,6 +270,7 @@ export async function ingestLogs(
         query: policy.query ? clean(l.query, 2048) : "",
         headers,
         peerIp: policy.peer && isIP(l.peerIp) && l.peerIp !== l.clientIp ? l.peerIp : "",
+        ...crawlerFields(l),
       },
     ];
   });
@@ -374,6 +390,8 @@ export interface LogFilter {
   minDuration: number;
   /** Canonical CIDR or "". */
   cidr: string;
+  /** A crawler id, "any" or "". */
+  crawler: string;
   limit: number;
 }
 
@@ -397,6 +415,7 @@ function toFilter(input: LogQuery, from: number, to: number): LogFilter {
     referer: (input.referer ?? "").toLowerCase(),
     minDuration: input.minDuration ?? 0,
     cidr: input.cidr ? (normalizeCidr(input.cidr) ?? "") : "",
+    crawler: input.crawler ?? "",
     limit: input.limit,
   };
 }
@@ -427,6 +446,7 @@ function postgresWhere(f: LogFilter): SQL | undefined {
     f.minDuration ? gte(t.durationMs, f.minDuration) : undefined,
     // Stored client addresses are validated IPs.
     f.cidr ? sql`${t.clientIp}::inet <<= ${f.cidr}::cidr` : undefined,
+    f.crawler === "any" ? ne(t.crawler, "") : f.crawler ? eq(t.crawler, f.crawler) : undefined,
   );
 }
 
@@ -486,6 +506,9 @@ export function logsCsv(entries: LogEntry[]) {
     "query",
     "headers",
     "peerIp",
+    "crawler",
+    "crawlerVerification",
+    "crawlerChargedMicros",
   ] as const;
   const cell = (value: unknown) => {
     let text = Array.isArray(value)
