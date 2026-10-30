@@ -254,6 +254,147 @@ return M
 
 edgeweir-node 仓库里的 `examples/extensions/hello-header` 就是这个扩展；节点的 Lua 测试加载它，端到端测试对它签名、安装并运行。
 
+## 1.1 版（Lua API 2）
+
+1.1 版沿用扩展包格式 `edgeweir-node-extension-v1`，为节点级扩展（指标导出等）和带原生辅助进程的扩展（边车，例如函数运行时）增加清单成员与调用。本节的一切都需要 `"requires": {"lua_api": 2}`；节点能力为 `extensions-v2`（具备它的节点同时运行 Lua API 1 与 2 的扩展包）。用了本节成员却声明 `lua_api: 1` 的扩展包会被控制台拒绝；API 2 扩展只下发到活跃节点都报告 `extensions-v2` 的集群（否则 `NODE_CAPABILITY_REQUIRED`）。这里没有针对任何产品的内容，也不检查许可证。
+
+### 清单成员（API 2）
+
+| 成员 | 规则 |
+| --- | --- |
+| `scope` | `"sites"`（默认）：同 1 版。`"node"`：扩展在节点上运行，不按网站开启：允许的钩子为 `init`、`log`、`listen`；不能有 `endpoints`、`fields`、`html_inject`、`body_rewrite`、`request_headers`、`verdicts`、`sidecar`、`data`，也没有网站配置。它的 `log` 钩子对下发到的节点上每个网站的每个请求运行 |
+| `listeners` | 仅 `scope: "node"`。≤ 2 项 `{ "name": <^[a-z][a-z0-9_]{0,15}$>, "default_port": 1024–65535, "methods": ["GET", "HEAD", "POST"] }`；节点在独立端口上提供服务，与所有网站无关（见[节点监听器](#节点监听器)）。需要钩子 `listen` |
+| `secret` | `true`：控制台为扩展保存一个随机 32 字节密钥，节点以 `ew.secret()` 提供（见[密钥](#密钥)） |
+| `sidecar` | 原生辅助进程（见[边车](#边车)）。需要能力 `sidecar` |
+| `data` | `{ "max_bytes": ≤ 25165824, "max_items": ≤ 32, "max_total_bytes": ≤ 268435456 }`：扩展接受按网站上传的数据项（见[网站数据](#网站数据)）；需要 `sidecar` |
+| 上限 | API 2 把 `fields` 提高到 ≤ 16、`log_fields` ≤ 16、`counters` ≤ 32 |
+
+钩子增加 `listen`；能力增加 `sidecar`。带边车的扩展包最大 64 MiB（归档）、解包后 192 MiB，单个文件 96 MiB；对这类扩展包，`POST /extensions` 与 `POST /extensions/verify` 接受最大 96 MiB 的请求。
+
+### API 2 调用
+
+| 调用 | 说明 |
+| --- | --- |
+| `ew.site_name` | 网站的主域名（第一个域名）；节点级钩子中为 `nil` |
+| `ew.req.http_version()` | `"1.0"`、`"1.1"`、`"2"`、`"3"` |
+| `ew.req.request_length()`、`ew.req.request_time()` | 收到的字节数（请求行、请求头、请求体）与自第一个字节起的秒数；`log` |
+| `ew.resp.bytes_sent()` | 发给客户端的字节数；`log` |
+| `ew.resp.upstream_status()`、`upstream_response_time()`、`upstream_connect_time()`、`upstream_header_time()` | 最后一次回源的状态与耗时（秒）；没有回源（缓存命中、节点自己的应答）时为 `nil`；`log` |
+| `ew.resp.reason()` | 节点对请求的拦截原因及其规则 id（`"rate_limit", "<规则 id>"`），没有时为 `""`；原因同访问日志（`ip_banned`、`ip_blocked`、`rule`、`rate_limit`、`crs`、`cc`、`challenge`、`auth`、`referer`、`user_agent`、`region`、`cors`、`websocket_origin`、`client_cert`、`maintenance`、`extension`） |
+| `ew.req.verified_bot()` | 经过验证的搜索引擎爬虫名称（PTR 加正向解析，与网站的爬虫设置相同），否则 `nil`；`access`、`access_late`；等待 DNS 的时间不计入预算 |
+| `ew.req.exempt()` | 客户端在网站的放行名单或平台放行名单上时为 `true`（即节点免于封禁与挑战的客户端）；`access`、`access_late` |
+| `ew.node.id()`、`name()`、`cluster_id()`、`version()` | 节点身份与 agent 版本 |
+| `ew.node.connections()` | nginx worker 视角的 `{ active, reading, writing, waiting }`（stub_status），请求与监听器钩子中可用；定时器中为 `nil` |
+| `ew.node.status()` | 节点最近一次上报的主机指标 `{ at, cpu_percent, memory_used_bytes, memory_total_bytes, load1, load5, load15, disk_used_bytes, disk_total_bytes, uptime_seconds }`（首次上报前为 `nil`）；任何钩子 |
+| `ew.secret()`、`ew.secrets()` | `secret: true`：当前密钥（32 个原始字节）；`ew.secrets()` 返回 `{ current, previous }`（首次轮换前 `previous` 为 `nil`） |
+| `ew.equal(a, b)` | 常数时间比较两个字符串 |
+| `ew.sidecar.ready()` | `sidecar`：边车是否通过健康检查 |
+| `ew.sidecar.proxy(opts)` | `sidecar`；仅 `access_late`：把请求交给边车的裁决（见[边车](#边车)） |
+
+两个 API 版本通用的说明：`ew.req.pass_level()` 为 0（无）、1 `cookie302`、2 `js`、3 `pow`、4 `captcha`；`ew.sha256` 与 `ew.hmac_sha256` 返回 32 个原始字节；`ew.req.header(name)` 不区分大小写，重复的请求头以 `", "` 连接；`ew.respond` 可以设置 `Set-Cookie`，`HEAD` 请求不发送正文；`ew.ctx` 对同一请求、同一扩展的所有钩子是同一个表（包括 `endpoint` 与 `log`）；`/.edgeweir/ext/<id>/…` 请求不运行访问阶段钩子，运行 `log` 钩子；响应头过滤钩子也作用于扩展自己用 `ew.respond` 生成的响应；带查询字符串的同源 `src` 仍算同源，静态资源的服务与查询字符串无关。
+
+### 节点监听器
+
+节点监听器是节点为 `scope: "node"` 扩展开设的 HTTP 服务，与所有网站无关：不查 Host、不走规则、挑战、CC、缓存与访问日志。
+
+- 运营者在控制台开启监听器（扩展设置 `listeners.<name>`）：`port`（1024–65535；不能是 80、443、集群的边缘或四层端口、8443）、`bind`（节点上的地址，默认 `0.0.0.0` 与 `[::]`）与 `allow`（1–64 个 CIDR，必填）。节点把 `allow` / `deny all` 写进监听器，名单之外的客户端到不了 Lua。没有设置的监听器不开启。
+- 节点对声明方法的每个请求调用 `listen(ew, name, path)`，`path` 为请求路径。钩子返回 `ew.respond(...)`，其他返回值得到 500。预算 1000 ms。`ew.req.*` 读取请求，`ew.req.body()`（需 `request_body`）最多 64 KiB。
+- 地址名单之外的认证（扩展配置里的 Bearer 令牌，用 `ew.equal` 比较）由扩展负责。1.1 不提供 TLS 与客户端证书：把监听器放在私有网络上或依靠地址名单。
+- 节点绑定不了的端口记在扩展的节点状态里（`failed` 与消息），其余配置照常生效。
+
+### 密钥
+
+`secret: true` 时，控制台在安装扩展时生成 32 个随机字节，信封加密保存。`POST /extensions/{id}/rotate-secret` 生成新的当前密钥，旧的保留为 previous。节点只通过节点通道（`GetExtensionSecrets`，mTLS）获取密钥；配置修订只带版本号，不带密钥本身。用于所有节点共享的 HMAC 密钥（签名 Cookie、令牌）。标记 `x-secret` 的配置值在 API 中打码，但属于配置修订的一部分；密钥优先用 `ew.secret()`。
+
+### 边车
+
+边车是随扩展包分发、由节点 agent 在 nginx 旁运行的原生程序，用于请求钩子容不下的工作（函数运行时、长驻引擎）。它运行受信任发布者的代码，并视扩展而定运行运营者的用户提供的代码；节点把它当作对自己不可信的进程。
+
+清单：
+
+```json
+"sidecar": {
+  "binary": "runtime",
+  "args": ["--socket", "{socket}"],
+  "env": { "RUST_LOG": "info" },
+  "memory_mb": 1024,
+  "tasks_max": 256,
+  "cpu_percent": 200,
+  "health_path": "/healthz",
+  "connect_timeout_ms": 1000,
+  "timeout_s": 30,
+  "max_body": 10485760
+}
+```
+
+| 字段 | 规则 |
+| --- | --- |
+| `binary` | 文件名 `^[a-z0-9][a-z0-9._-]{0,63}$`；扩展包含 `sidecar/linux-amd64/<binary>` 和/或 `sidecar/linux-arm64/<binary>`（建议静态链接的 ELF 可执行文件）。`sidecar/` 下的文件是扩展包唯一允许的原生代码，且只在声明能力 `sidecar` 时允许。缺少本机架构的节点报告 `incompatible` |
+| `args` | ≤ 16 个、每个 ≤ 256 字节；替换 `{socket}`、`{origin_socket}`、`{state}`、`{data}` |
+| `env` | ≤ 16 个变量 `^[A-Z][A-Z0-9_]{0,63}$`，不能是 `EDGEWEIR_*`，值 ≤ 1024 字节；节点另设 `EDGEWEIR_SIDECAR_SOCKET`、`EDGEWEIR_ORIGIN_SOCKET`、`EDGEWEIR_EXT_STATE`、`EDGEWEIR_EXT_DATA`、`EDGEWEIR_EXT_ID`、`EDGEWEIR_EXT_VERSION`；不继承其他环境变量 |
+| `memory_mb` | 16–8192，内存上限 |
+| `tasks_max` | 16–4096（默认 256），进程与线程数 |
+| `cpu_percent` | 10–800（默认不限），以单核百分比计的 CPU 上限 |
+| `health_path` | 默认 `/healthz`；对其套接字 `GET` 返回 200 时节点认为边车就绪 |
+| `connect_timeout_ms`、`timeout_s` | 100–10000（默认 1000）、1–60（默认 30）：到边车的连接超时与每个请求的读写超时（两次读写之间） |
+| `max_body` | 0–104857600（默认 10 MiB）：转给边车的请求体上限 |
+
+生命周期：扩展包解开、扩展启用（且总开关关闭）后 agent 启动边车；边车退出后重启（1 秒起翻倍，最长 60 秒）；扩展停用、卸载或升级、总开关打开、`--no-extensions` 或 agent 停止时停止它（SIGTERM，10 秒后 SIGKILL）。状态写入扩展的节点状态（`details.sidecar`：`starting`、`running`、`unhealthy`、`crashed`、`stopped`、`unsupported`；重启次数；最近一次退出）。标准输出与标准错误由 agent 读取，每行限 1 KiB、每秒限 20 行，出现在节点日志中（来源 `extension`）。
+
+隔离（仅 Linux；达不到时为 `unsupported`，不启动边车）：
+
+- **独立用户。** 边车从不以 agent 或 nginx 的用户运行。安装包（systemd）安装的节点以模板单元 `edgeweir-node-sidecar@<id>.service`、`DynamicUser=yes` 启动它，靠一条 polkit 规则让节点用户只能启停这些单元；容器等其他环境需要 agent 以 root 运行并指定 `--sidecar-user USER`（agent 切换到该用户）。`run --sidecar-mode auto|systemd|user|off` 选择方式；`off` 拒绝边车。
+- **沙箱。** `NoNewPrivileges`、无 capability、只读的系统视图、私有 `/tmp`，只有自己的状态目录可写；seccomp 过滤器拒绝 `ptrace`、`process_vm_*`、挂载、命名空间、BPF、perf、keyring、内核模块、重启与改时钟；内存、任务数与 CPU 上限取自清单（cgroup v2；内存退而用 `RLIMIT_DATA`）；不生成 core dump。
+- **能访问什么。** 可读：本扩展包的 `sidecar/` 与 `assets/`、自己的数据目录。可写：自己的状态目录 `<state>/extensions/run/<id>/state`。可连接：自己的套接字目录与网络。读不到节点状态目录（密钥、凭据、配置），连不上 agent 与 nginx 的控制套接字，也不能向其他进程发信号。
+- **网络。** 允许出站连接（函数运行时要调用 API）；特殊用途地址由边车自己拒绝。访问网站自己的源站时用下面的源站套接字，私有源站地址无需对边车可达。
+
+套接字（目录 `/run/edgeweir-node/ext/<id>/`，只有边车用户与 nginx 共享的组可访问）：
+
+- `sidecar.sock`：由边车创建，nginx 连接。
+- `origin.sock`：nginx 为边车提供。带 `X-Edgeweir-Ext-Site: <网站 id>` 的请求按边缘层的方式发往该网站的源站（源站池、Host、TLS 校验、回源规则、源站地址策略），不经过缓存、CRS 与任何扩展钩子。没有开启该扩展的网站得到 403，没有该请求头的请求得到 400。
+
+转发请求：在 `access_late` 中 `return ew.sidecar.proxy({ headers = { ["X-Edgeweir-Ext-Route"] = "r1" }, fail = "open" })` 用 nginx 的代理（不是 cosocket）把请求（方法、URI、请求头、流式请求体）交给 `sidecar.sock`，钩子预算不适用。`headers` 设置以 `X-Edgeweir-Ext-` 开头的请求头（节点移除客户端发来的所有 `X-Edgeweir-` 前缀请求头，所以边车可以信任它们）；节点另加 `X-Edgeweir-Ext-Site`（网站 id）、`X-Edgeweir-Ext-Request-Id`、`X-Edgeweir-Ext-Client-Ip`、`X-Edgeweir-Ext-Scheme` 与 `X-Edgeweir-Ext-Host`。边车的响应经过节点的响应头与正文过滤（包括扩展的响应头过滤、压缩）、日志与统计返回客户端，从不缓存。失败时：
+
+| 情况 | `fail = "open"` | `fail = "closed"`（默认取扩展的失败模式） |
+| --- | --- | --- |
+| 边车未就绪、连接被拒、收到响应头前超时 | 请求按网站的正常路径继续（CRS、缓存、源站） | 502（`X-Edgeweir-Error: extension`） |
+| 边车返回状态 599 | 请求按网站的正常路径继续 | 同上 |
+| 请求体超过 `max_body` | 413 | 413 |
+
+交给边车的请求拦截原因为无，访问日志字段 `ext.<id>.verdict = "sidecar"`，计入扩展计数器 `ext.<id>.sidecar`。
+
+### 网站数据
+
+声明了 `data` 的扩展接受按网站上传的不透明数据项，由管理网站的人通过控制台 API 上传，不经发布者签名（函数包、网站自己的密钥）：
+
+| 路由 | 说明 |
+| --- | --- |
+| `GET /sites/{siteId}/extensions/{id}/data` | `[{ name, sha256, size, updatedAt }]` |
+| `PUT /sites/{siteId}/extensions/{id}/data/{name}` | 请求体 `{ "content": "<base64>" }`（请求最大 34 MiB）；名称 `^[a-z0-9][a-z0-9._-]{0,63}$`；上限取自清单的 `data`；写入审计（`site.extension_data_put`），发布修订 |
+| `DELETE /sites/{siteId}/extensions/{id}/data/{name}` | 写入审计（`site.extension_data_delete`），发布修订 |
+
+数据项存在控制台数据库中。配置按网站与扩展带 `{name, sha256, size}`；节点通过节点通道按摘要获取缺少的数据项（`GetExtensionData`，mTLS，每块 4 MiB），校验摘要后存到 `<state>/extensions/data/<id>/<网站 id>/<name>`，只有边车用户与 nginx 可读，并删除不再被配置引用的数据项。数据变化热生效，不重载 nginx。
+
+边车从 `$EDGEWEIR_EXT_DATA/index.json` 得知网站、配置与数据。修订的所有数据项就绪后，该文件原子写入，随后发送 `SIGHUP`：
+
+```json
+{ "revision": 42, "config": { "...": "全局配置" },
+  "sites": { "<网站 id>": { "name": "shop.example", "domains": ["shop.example"], "config": { "...": "网站配置" },
+    "data": [{ "name": "fn-main.wasm", "sha256": "…", "size": 9123456, "path": "/var/lib/edgeweir-node/extensions/data/<id>/<网站 id>/fn-main.wasm" }] } } }
+```
+
+只出现开启了该扩展的网站。网站配置对 Lua 与控制台 API 可见（打码的 `x-secret` 值除外）；密钥应放在数据项里。
+
+### 节点状态详情
+
+每个扩展的节点状态带 `details`（JSON，≤ 4 KiB）：`sidecar`（状态、重启次数、最近一次退出、起始时间）、`listeners`（`{name: {port, state, message}}`），以及边车套接字上 `GET /status` 的返回，放在 `sidecar.status` 下（≤ 2 KiB，每 30 秒轮询）。
+
+### 1.1 版的分发变化
+
+- `GetExtensionPackage` 与 `GetExtensionData` 分块传输（`offset`，每次应答最多 4 MiB，带 `total` 总大小）。
+- `Extension` 增加 `lua_api`、`scope`、`listeners`（运营者的设置）、`secret_version`；`SiteExtension` 增加 `data`；`ExtensionStatus` 增加 `details_json`。
+- 节点级扩展启用后下发到所有集群，或扩展设置中选定的集群（`clusterIds`）。
+
 ## 兼容性
 
 - 格式与 Lua API 的版本只增不减：支持 Lua API 1 的节点保留上面的每个调用；新调用随更高的 `lua_api` 出现，扩展包需要目标节点没有的 API 时控制台拒绝。

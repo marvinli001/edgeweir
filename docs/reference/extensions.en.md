@@ -254,6 +254,147 @@ return M
 
 `examples/extensions/hello-header` in the edgeweir-node repository is this extension; the node's Lua tests load it and the end-to-end tests sign, install and run it.
 
+## Version 1.1 (Lua API 2)
+
+Version 1.1 keeps the package format `edgeweir-node-extension-v1` and adds manifest members and calls for node-level extensions (metrics exporters) and for extensions that run a native helper process (sidecars, such as function runtimes). Everything in this section needs `"requires": {"lua_api": 2}`; the node feature is `extensions-v2` (a node with it runs Lua API 1 and 2 packages). The console refuses a package that uses a member of this section with `lua_api: 1`, and delivers an API 2 extension only to clusters whose active nodes all report `extensions-v2` (`NODE_CAPABILITY_REQUIRED` otherwise). Nothing here is specific to any product, and nothing checks licenses.
+
+### Manifest members (API 2)
+
+| Member | Rules |
+| --- | --- |
+| `scope` | `"sites"` (default): as in version 1. `"node"`: the extension runs on nodes, not per site: allowed hooks `init`, `log`, `listen`; no `endpoints`, `fields`, `html_inject`, `body_rewrite`, `request_headers`, `verdicts`, `sidecar`, `data`; no site configuration. Its `log` hook runs for every request of every site on the nodes it is delivered to |
+| `listeners` | `scope: "node"` only. ≤ 2 entries `{ "name": <^[a-z][a-z0-9_]{0,15}$>, "default_port": 1024–65535, "methods": ["GET", "HEAD", "POST"] }`; served by the node on a port of its own, outside every site (see [Node listeners](#node-listeners)). Needs the hook `listen` |
+| `secret` | `true`: the console keeps a random 32-byte secret for the extension and nodes expose it as `ew.secret()` (see [Secrets](#secrets)) |
+| `sidecar` | A native helper process (see [Sidecars](#sidecars)). Needs the capability `sidecar` |
+| `data` | `{ "max_bytes": ≤ 25165824, "max_items": ≤ 32, "max_total_bytes": ≤ 268435456 }`: the extension accepts per-site data items (see [Site data](#site-data)); needs `sidecar` |
+| Limits | API 2 raises `fields` to ≤ 16, `log_fields` to ≤ 16 and `counters` to ≤ 32 |
+
+Hooks gain `listen`; capabilities gain `sidecar`. A package with a sidecar may be up to 64 MiB (archive), 192 MiB unpacked, with files up to 96 MiB; `POST /extensions` and `POST /extensions/verify` accept requests up to 96 MiB for them.
+
+### API 2 calls
+
+| Call | Notes |
+| --- | --- |
+| `ew.site_name` | The site's primary domain (its first domain); `nil` in node-level hooks |
+| `ew.req.http_version()` | `"1.0"`, `"1.1"`, `"2"`, `"3"` |
+| `ew.req.request_length()`, `ew.req.request_time()` | Bytes received (request line, headers, body) and seconds since the first byte; `log` |
+| `ew.resp.bytes_sent()` | Bytes sent to the client; `log` |
+| `ew.resp.upstream_status()`, `upstream_response_time()`, `upstream_connect_time()`, `upstream_header_time()` | The last origin attempt's status and times in seconds; `nil` without an origin request (cache hits, the node's own answers); `log` |
+| `ew.resp.reason()` | The node's block reason of the request and its rule id (`"rate_limit", "<rule id>"`), `""` when none; reasons as in the access logs (`ip_banned`, `ip_blocked`, `rule`, `rate_limit`, `crs`, `cc`, `challenge`, `auth`, `referer`, `user_agent`, `region`, `cors`, `websocket_origin`, `client_cert`, `maintenance`, `extension`) |
+| `ew.req.verified_bot()` | The verified search engine crawler name (PTR plus forward lookup, as for the site's crawler setting) or `nil`; `access`, `access_late`; its DNS wait does not count against the budget |
+| `ew.req.exempt()` | `true` when the client is on one of the site's allow lists or a platform allow list (the clients the node exempts from bans and challenges); `access`, `access_late` |
+| `ew.node.id()`, `name()`, `cluster_id()`, `version()` | The node's identity and agent version |
+| `ew.node.connections()` | `{ active, reading, writing, waiting }` of the nginx worker's view (stub_status), in request and listener hooks; `nil` in timers |
+| `ew.node.status()` | The node's last reported host metrics `{ at, cpu_percent, memory_used_bytes, memory_total_bytes, load1, load5, load15, disk_used_bytes, disk_total_bytes, uptime_seconds }` (`nil` before the first report); any hook |
+| `ew.secret()`, `ew.secrets()` | `secret: true`: the current secret (32 raw bytes); `ew.secrets()` returns `{ current, previous }` (`previous` `nil` before the first rotation) |
+| `ew.equal(a, b)` | Constant-time comparison of two strings |
+| `ew.sidecar.ready()` | `sidecar`: whether the sidecar passed its health check |
+| `ew.sidecar.proxy(opts)` | `sidecar`; `access_late` only: verdict that hands the request to the sidecar (see [Sidecars](#sidecars)) |
+
+Clarifications for both API versions: `ew.req.pass_level()` is 0 (none), 1 `cookie302`, 2 `js`, 3 `pow`, 4 `captcha`; `ew.sha256` and `ew.hmac_sha256` return 32 raw bytes; `ew.req.header(name)` is case-insensitive and joins repeated headers with `", "`; `ew.respond` may set `Set-Cookie` and sends no body for `HEAD`; `ew.ctx` is one table per request and extension across all its hooks (also `endpoint` and `log`); access hooks do not run for `/.edgeweir/ext/<id>/…` requests, the `log` hook does; header filter hooks also run on responses an extension produced with `ew.respond`; a same-origin `src` with a query string counts as same origin, and assets are served regardless of the query string.
+
+### Node listeners
+
+A node listener is an HTTP server the node opens for a `scope: "node"` extension, outside every site: no Host lookup, rules, challenges, CC, cache or access logs.
+
+- The operator turns a listener on in the console (extension settings, `listeners.<name>`): `port` (1024–65535; not 80, 443, the cluster's edge or layer-4 ports or 8443), `bind` (an address of the node, default `0.0.0.0` and `[::]`) and `allow` (1–64 CIDRs, required). The node renders `allow` / `deny all` into the listener, so clients outside the list never reach Lua. A listener without settings is off.
+- The node calls `listen(ew, name, path)` for each request on a declared method; `path` is the request path. The hook returns `ew.respond(...)`; anything else is a 500. Budget: 1000 ms. `ew.req.*` reads the request, `ew.req.body()` (with `request_body`) up to 64 KiB.
+- Authentication beyond the address list (bearer tokens in the extension's configuration, compared with `ew.equal`) is the extension's. TLS and client certificates are not offered in 1.1: put the listener on a private network or behind the allow list.
+- A port the node cannot bind is reported in the extension's node state (`failed`, message), the rest of the configuration applies.
+
+### Secrets
+
+For `secret: true` the console generates 32 random bytes when the extension is installed and stores them envelope-encrypted. `POST /extensions/{id}/rotate-secret` makes a new current secret and keeps the old one as previous. Nodes fetch secrets over the node channel (`GetExtensionSecrets`, mTLS) only; configuration revisions carry a version number, never the secret. Use it for HMAC keys shared by all nodes (signed cookies, tokens). Configuration values marked `x-secret` are masked in the API but are part of the configuration revisions; prefer `ew.secret()` for keys.
+
+### Sidecars
+
+A sidecar is a native program shipped in the package and run by the node agent next to nginx. It exists for work that does not fit a request hook (a function runtime, a long-lived engine). It runs code of the trusted publisher and, depending on the extension, code the operator's users supply; the node treats it as untrusted towards itself.
+
+Manifest:
+
+```json
+"sidecar": {
+  "binary": "runtime",
+  "args": ["--socket", "{socket}"],
+  "env": { "RUST_LOG": "info" },
+  "memory_mb": 1024,
+  "tasks_max": 256,
+  "cpu_percent": 200,
+  "health_path": "/healthz",
+  "connect_timeout_ms": 1000,
+  "timeout_s": 30,
+  "max_body": 10485760
+}
+```
+
+| Field | Rules |
+| --- | --- |
+| `binary` | File name `^[a-z0-9][a-z0-9._-]{0,63}$`; the package holds `sidecar/linux-amd64/<binary>` and/or `sidecar/linux-arm64/<binary>` (static ELF executables recommended). Files under `sidecar/` are the only native code a package may contain, and only with the capability `sidecar`. A node without its architecture reports `incompatible` |
+| `args` | ≤ 16 strings ≤ 256 bytes; `{socket}`, `{origin_socket}`, `{state}`, `{data}` are replaced |
+| `env` | ≤ 16 variables `^[A-Z][A-Z0-9_]{0,63}$`, not `EDGEWEIR_*`, values ≤ 1024 bytes; the node also sets `EDGEWEIR_SIDECAR_SOCKET`, `EDGEWEIR_ORIGIN_SOCKET`, `EDGEWEIR_EXT_STATE`, `EDGEWEIR_EXT_DATA`, `EDGEWEIR_EXT_ID`, `EDGEWEIR_EXT_VERSION`; nothing else is inherited |
+| `memory_mb` | 16–8192, the memory limit |
+| `tasks_max` | 16–4096 (default 256), processes and threads |
+| `cpu_percent` | 10–800 (default: none), CPU limit in percent of one core |
+| `health_path` | Default `/healthz`; the node treats the sidecar as ready when `GET` on its socket answers 200 |
+| `connect_timeout_ms`, `timeout_s` | 100–10000 (default 1000), 1–60 (default 30): towards the sidecar, per request (read and send timeouts between two reads or writes) |
+| `max_body` | 0–104857600 (default 10 MiB): request bodies proxied to the sidecar |
+
+Lifecycle: the agent starts the sidecar once the package is unpacked and the extension is enabled (and the kill switch off), restarts it after it exits (1 s doubling to 60 s), and stops it (SIGTERM, SIGKILL after 10 s) when the extension is disabled, uninstalled or upgraded, on the kill switch, with `--no-extensions`, or when the agent stops. Its state goes to the extension's node state (`details.sidecar`: `starting`, `running`, `unhealthy`, `crashed`, `stopped`, `unsupported`; restarts; last exit). Standard output and error are read by the agent, limited to 1 KiB lines and 20 lines per second, and appear in the node's logs (source `extension`).
+
+Isolation (Linux only; anything less is `unsupported` and the sidecar is not started):
+
+- **Own user.** The sidecar never runs as the agent's or nginx's user. Package installs (systemd) start it as the template unit `edgeweir-node-sidecar@<id>.service` with `DynamicUser=yes`, through a polkit rule that lets the node's user start and stop only those units; containers and other setups need the agent to run as root with `--sidecar-user USER` (the agent then switches to that user). `run --sidecar-mode auto|systemd|user|off` chooses; `off` refuses sidecars.
+- **Sandbox.** `NoNewPrivileges`, no capabilities, a read-only view of the system, a private `/tmp`, writable only its state directory; a seccomp filter refusing `ptrace`, `process_vm_*`, mounts, namespaces, BPF, perf, keyrings, kernel modules, reboot and clock changes; memory, task and CPU limits from the manifest (cgroup v2; `RLIMIT_DATA` as a fallback for memory); no core dumps.
+- **What it reaches.** Reads: its package's `sidecar/` and `assets/`, its data directory. Writes: its state directory `<state>/extensions/run/<id>/state`. Connects: its own socket directory and the network. It cannot read the node's state directory (keys, credentials, configuration), connect to the agent's or nginx's control sockets, or signal other processes.
+- **Network.** Outbound connections are allowed (a function runtime calls APIs); the sidecar must refuse special-purpose destinations itself. To reach a site's own origin it uses the origin socket below, so private origin addresses never need to be reachable from it.
+
+Sockets (directory `/run/edgeweir-node/ext/<id>/`, group-shared between the sidecar user and nginx only):
+
+- `sidecar.sock`: created by the sidecar; nginx connects to it.
+- `origin.sock`: served by nginx for the sidecar. A request carrying `X-Edgeweir-Ext-Site: <site id>` goes to that site's origin as the edge layer would send it (origin pools, Host, TLS verification, origin rules, origin address policy), without the cache, the CRS or any extension hook. Sites that do not turn the extension on get 403; requests without the header 400.
+
+Routing a request: from `access_late`, `return ew.sidecar.proxy({ headers = { ["X-Edgeweir-Ext-Route"] = "r1" }, fail = "open" })` hands the request (method, URI, headers, body streamed) to `sidecar.sock` with nginx's proxy, not a cosocket, so the hook budget does not apply. `headers` set request headers whose names start with `X-Edgeweir-Ext-` (the node removes every client header with the `X-Edgeweir-` prefix, so the sidecar can trust them); the node adds `X-Edgeweir-Ext-Site` (site id), `X-Edgeweir-Ext-Request-Id`, `X-Edgeweir-Ext-Client-Ip`, `X-Edgeweir-Ext-Scheme` and `X-Edgeweir-Ext-Host`. The sidecar's response goes to the client through the node's header and body filters (including extensions' header filters, compression), logs and statistics; it is never cached. Failure:
+
+| Case | `fail = "open"` | `fail = "closed"` (default: the extension's failure mode) |
+| --- | --- | --- |
+| Sidecar not ready, connection refused, timeout before the response header | The request continues on the site's normal path (CRS, cache, origin) | 502 (`X-Edgeweir-Error: extension`) |
+| The sidecar answers status 599 | The request continues on the site's normal path | Same |
+| Request body over `max_body` | 413 | 413 |
+
+Requests handed to the sidecar get block reason none, access log field `ext.<id>.verdict = "sidecar"`, and count towards the extension's counter `ext.<id>.sidecar`.
+
+### Site data
+
+Extensions with `data` accept opaque items per site, uploaded through the console API by whoever manages the site, never signed by the publisher (function bundles, per-site secrets):
+
+| Route | Notes |
+| --- | --- |
+| `GET /sites/{siteId}/extensions/{id}/data` | `[{ name, sha256, size, updatedAt }]` |
+| `PUT /sites/{siteId}/extensions/{id}/data/{name}` | Body `{ "content": "<base64>" }` (requests up to 34 MiB); name `^[a-z0-9][a-z0-9._-]{0,63}$`; limits from the manifest's `data`; audited (`site.extension_data_put`), publishes a revision |
+| `DELETE /sites/{siteId}/extensions/{id}/data/{name}` | Audited (`site.extension_data_delete`), publishes a revision |
+
+Items are stored in the console's database. Configuration carries `{name, sha256, size}` per site and extension; nodes fetch missing items by digest over the node channel (`GetExtensionData`, mTLS, in chunks of 4 MiB), check the digest, and store them under `<state>/extensions/data/<id>/<site id>/<name>`, readable by the sidecar user and nginx only, deleting items no configuration references. Data changes are hot: no nginx reload.
+
+The sidecar learns about sites, configuration and data from `$EDGEWEIR_EXT_DATA/index.json`, written atomically after every item of a revision is present, followed by `SIGHUP`:
+
+```json
+{ "revision": 42, "config": { "...": "global configuration" },
+  "sites": { "<site id>": { "name": "shop.example", "domains": ["shop.example"], "config": { "...": "site configuration" },
+    "data": [{ "name": "fn-main.wasm", "sha256": "…", "size": 9123456, "path": "/var/lib/edgeweir-node/extensions/data/<id>/<site id>/fn-main.wasm" }] } } }
+```
+
+Only sites that turn the extension on appear. Site configuration is visible to Lua and the console API (masked `x-secret` values aside); secrets belong in data items.
+
+### Node state details
+
+Each extension's node state carries `details` (JSON, ≤ 4 KiB): `sidecar` (state, restarts, last exit, since), `listeners` (`{name: {port, state, message}}`), and whatever the sidecar returns from `GET /status` on its socket under `sidecar.status` (≤ 2 KiB, polled every 30 s).
+
+### Distribution changes in 1.1
+
+- `GetExtensionPackage` and `GetExtensionData` transfer in chunks (`offset`, at most 4 MiB per answer, `total` size).
+- `Extension` carries `lua_api`, `scope`, `listeners` (the operator's settings), `secret_version`; `SiteExtension` carries `data`; `ExtensionStatus` carries `details_json`.
+- Node-scope extensions are delivered to every cluster while enabled, or to the clusters chosen in the extension's settings (`clusterIds`).
+
 ## Compatibility
 
 - Format and Lua API versions only grow: a node that supports Lua API 1 keeps every call above; new calls come with a higher `lua_api` and the console refuses packages that need an API a target node lacks.
