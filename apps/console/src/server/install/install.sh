@@ -58,6 +58,7 @@ constants() {
   NGINX_BIN="/usr/lib/edgeweir-openresty/nginx/sbin/nginx"
   # The oldest C library the packages run on (RHEL 9, Debian 12, Ubuntu 22.04).
   GLIBC_MIN="2.34"
+  INSTALL_LOCK="/run/edgeweir-install.lock"
   # Pinned cosign for machines without one; SHA-256 values from the official
   # cosign_checksums.txt of the sigstore/cosign v3.1.3 release.
   COSIGN_VERSION="3.1.3"
@@ -68,10 +69,22 @@ constants() {
   SEMVER_RE='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
 }
 
-log() { printf '\033[1;34m[edgeweir]\033[0m %s\n' "$*" >&2; }
+# Colours only on a terminal (not in a log file or an SSH install's output).
+color() { [ -t 2 ] && [ -z "${NO_COLOR:-}" ]; }
+log() {
+  if color; then printf '\033[1;34m[edgeweir]\033[0m %s\n' "$*" >&2; else printf '[edgeweir] %s\n' "$*" >&2; fi
+}
 die() {
-  printf '\033[1;31m[edgeweir] error:\033[0m %s\n' "$*" >&2
+  if color; then printf '\033[1;31m[edgeweir] error:\033[0m %s\n' "$*" >&2; else printf '[edgeweir] error: %s\n' "$*" >&2; fi
   exit 1
+}
+
+# apt-get without questions: waits for a dpkg lock held by unattended-upgrades
+# (fresh cloud machines) instead of failing, and keeps changed configuration files.
+apt_install() {
+  DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get \
+    -o DPkg::Lock::Timeout=300 -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
+    install -y --no-install-recommends "$@"
 }
 
 usage() {
@@ -512,7 +525,7 @@ install_openresty() {
     case "$OPENRESTY_FORMAT" in
       deb)
         if command -v apt-get >/dev/null 2>&1; then
-          apt-get install -y --no-install-recommends "$main" ${module:+"$module"}
+          apt_install "$main" ${module:+"$module"}
         else
           dpkg -i "$main" ${module:+"$module"}
         fi
@@ -565,7 +578,7 @@ install_package() {
   case "$FORMAT" in
     deb)
       if command -v apt-get >/dev/null 2>&1; then
-        apt-get install -y --no-install-recommends "${WORK}/${ARTIFACT}"
+        apt_install "${WORK}/${ARTIFACT}"
       else
         dpkg -i "${WORK}/${ARTIFACT}"
       fi
@@ -664,6 +677,11 @@ main() {
   parse_args "$@"
   read_token
   check_system
+  # One install at a time on a host (two SSH runs, or one beside a manual run).
+  if command -v flock >/dev/null 2>&1; then
+    exec 9>>"$INSTALL_LOCK"
+    flock -n 9 || die "another install.sh is running on this host"
+  fi
   umask 022
   WORK="$(mktemp -d)"
   trap 'rm -rf "$WORK"' EXIT

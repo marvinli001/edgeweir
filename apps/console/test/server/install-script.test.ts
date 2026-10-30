@@ -129,6 +129,9 @@ describe("install.sh", () => {
     const res = run([...valid, "--token", TOKEN]);
     expect(res.status).toBe(1);
     expect(res.stderr).toMatch(/--token is not accepted.*EDGEWEIR_TOKEN/);
+    // stderr is not a terminal here (as in an SSH install): plain text, no colour codes.
+    expect(res.stderr).toContain("[edgeweir] error: --token is not accepted");
+    expect(res.stderr).not.toContain("\x1b");
     expect(res.calls).toBe("");
   });
 
@@ -639,9 +642,18 @@ describe("install.sh", () => {
       .replace('STATE_DIR="/var/lib/edgeweir-node"', `STATE_DIR="${state}"`)
       .replace('NGINX_BIN="/usr/lib/edgeweir-openresty/nginx/sbin/nginx"', `NGINX_BIN="${nginx}"`)
       .replace("/run/systemd/system", systemd)
+      .replace(
+        'INSTALL_LOCK="/run/edgeweir-install.lock"',
+        `INSTALL_LOCK="${join(root, "install.lock")}"`,
+      )
       .replaceAll("/usr/bin/edgeweir-node", join(bin, "edgeweir-node"));
     return {
       input,
+      lock: join(root, "install.lock"),
+      env: {
+        PATH: `${bin}${delimiter}${stubs}${delimiter}/usr/bin${delimiter}/bin`,
+        HEALTH_FAILURES: "0",
+      },
       node: join(bin, "edgeweir-node"),
       install(args: string[], env: Record<string, string> = {}, text = input) {
         rmSync(healthchecks, { force: true });
@@ -669,6 +681,29 @@ describe("install.sh", () => {
     "systemctl try-restart edgeweir-node.service",
     "systemctl enable --now edgeweir-node.service",
   ];
+
+  const hasFlock = spawnSync("sh", ["-c", "command -v flock"]).status === 0;
+  it.skipIf(!hasFlock)("runs one install at a time on a host", () => {
+    const host = fakeHost(false);
+    try {
+      // Another install holds the lock (this shell, around the script).
+      writeFileSync(calls, "");
+      const res = spawnSync(
+        "sh",
+        ["-c", 'exec 9>>"$0"; flock 9; bash -s -- "$@"', host.lock, ...valid],
+        {
+          input: host.input,
+          encoding: "utf8",
+          env: { ...host.env, EDGEWEIR_TOKEN: TOKEN },
+        },
+      );
+      expect(res.status).toBe(1);
+      expect(res.stderr).toContain("[edgeweir] error: another install.sh is running on this host");
+      expect(readFileSync(calls, "utf8")).not.toContain("curl");
+    } finally {
+      host.remove();
+    }
+  });
 
   it("reports the healthcheck once the started node passes it", () => {
     const main = script.slice(script.indexOf("main() {"));
@@ -700,7 +735,7 @@ describe("install.sh", () => {
       expect(short.lines.filter((l) => l === "edgeweir-node healthcheck")).toHaveLength(3);
       expect(short.lines.filter((l) => l === "sleep 3")).toHaveLength(2);
       expect(short.stderr).toContain(
-        "error:\u001b[0m edgeweir-node is installed but not healthy after 9s (unhealthy: data plane has no site table yet); see journalctl -u edgeweir-node -n 50",
+        "[edgeweir] error: edgeweir-node is installed but not healthy after 9s (unhealthy: data plane has no site table yet); see journalctl -u edgeweir-node -n 50",
       );
       expect(short.stderr).not.toContain("done:");
       // 90 seconds by default.
@@ -787,8 +822,8 @@ describe("install.sh", () => {
           fetched(node),
           fetched(openresty),
           fetched(modsecurity),
-          `apt-get install -y --no-install-recommends $WORK/${openresty} $WORK/${modsecurity}`,
-          `apt-get install -y --no-install-recommends $WORK/${node}`,
+          `apt-get -o DPkg::Lock::Timeout=300 -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install -y --no-install-recommends $WORK/${openresty} $WORK/${modsecurity}`,
+          `apt-get -o DPkg::Lock::Timeout=300 -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install -y --no-install-recommends $WORK/${node}`,
         ];
         // The package restarts a running service itself; the identity is kept.
         expect(res.lines).toEqual([
