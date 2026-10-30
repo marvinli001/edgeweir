@@ -14,6 +14,7 @@ export {
   ACCESS_LOGS_V2_FEATURE,
   ACTIVE_HEALTH_FEATURE,
   ACTIVE_HEALTH_GRPC_FEATURE,
+  AI_CRAWLERS_FEATURE,
   BROTLI_FEATURE,
   CHALLENGE_V2_FEATURE,
   CHALLENGE_V3_FEATURE,
@@ -53,6 +54,8 @@ export {
 export {
   type AccessControlModel,
   type ActiveHealthCheckModel,
+  type AiCrawlerModel,
+  type AiCrawlModel,
   type AuthRuleModel,
   type CacheRuleModel,
   type CacheZoneModel,

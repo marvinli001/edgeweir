@@ -93,6 +93,7 @@ const OSS = {
         ["access-control", "docs/guide/access-control.md"],
         ["bans", "docs/guide/bans.md"],
         ["challenges", "docs/guide/challenges.md"],
+        ["ai-crawl-control", "docs/guide/ai-crawl-control.md"],
         ["waf", "docs/guide/waf.md"],
         ["attack-dashboard", "docs/guide/attack-dashboard.md"],
       ],

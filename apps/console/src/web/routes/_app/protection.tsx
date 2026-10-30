@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { AiCrawlGlobalCard } from "@/components/ai-crawl-global";
 import { BanSettingsCard } from "@/components/ban-settings";
 import { ConnectionLimitsCard } from "@/components/connection-limits";
 import { GeoIpSettings } from "@/components/geoip-settings";
@@ -12,7 +13,7 @@ import { m } from "@/lib/i18n";
 
 /**
  * Platform-wide protection: Under Attack, ban limits, the interactive provider, the CC template,
- * connection limits and GeoIP.
+ * connection limits, GeoIP and AI crawl control.
  */
 export const Route = createFileRoute("/_app/protection")({ component: ProtectionPage });
 
@@ -33,6 +34,10 @@ function ProtectionPage() {
           style={enterDelay(4, 60)}
         />
         <GeoIpSettings className="animate-enter @4xl/main:col-span-2" style={enterDelay(5, 60)} />
+        <AiCrawlGlobalCard
+          className="animate-enter @4xl/main:col-span-2"
+          style={enterDelay(6, 60)}
+        />
       </div>
     </Page>
   );

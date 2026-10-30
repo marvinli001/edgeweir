@@ -48,6 +48,7 @@ const copyPartLabel = (part: SiteCopyPart): string =>
     logs: m.copy_part_logs,
     imageConvert: m.copy_part_image_convert,
     markdown: m.copy_part_markdown,
+    aiCrawl: m.copy_part_ai_crawl,
   })[part]();
 
 /** What a part's change looks like on one line: item counts, or how many settings change. */

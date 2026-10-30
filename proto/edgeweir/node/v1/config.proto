@@ -118,6 +118,43 @@ message NodeConfig {
   // origin_ca. Changing it is a structural change. Added in v1.6.0
   // (feature origin-ca-rotation-v1).
   OriginCa origin_ca_previous = 24;
+  // The AI crawler catalogue the console ships (ADR-0070): which
+  // User-Agents claim which crawler and how a claim is verified. Nodes
+  // never download crawler lists. Present while the operator keeps crawler
+  // detection on. Requests of every site are tagged with the crawler they
+  // claim (access logs, minute stats); Site.ai_crawl acts on them. Added in
+  // vNEXT; the catalogue alone requires no feature (nodes without
+  // ai-crawlers-v1 ignore it).
+  AiCrawlerCatalogue ai_crawlers = 25;
+}
+
+// AiCrawlerCatalogue lists the AI crawlers nodes recognise, sorted by id
+// and unique, at most 256.
+message AiCrawlerCatalogue {
+  repeated AiCrawler crawlers = 1;
+}
+
+// AiCrawler is one crawler of an operator. A request claims the crawler
+// when its User-Agent contains one of tokens (ASCII case-insensitive); of
+// several crawlers whose tokens match, the one with the longest matching
+// token wins, then the smaller id. A claim is verified when ip.src lies in
+// one of cidrs, or when the reverse name of ip.src is one of domains or
+// ends in "." and one of them and a forward lookup of that name holds
+// ip.src (the method of edgeweir.bots). Without cidrs and domains the
+// operator publishes no way to verify: such claims are unverifiable.
+message AiCrawler {
+  // [a-z0-9-], 1-40 characters.
+  string id = 1;
+  // The operator's id, [a-z0-9-], 1-40 characters.
+  string operator = 2;
+  // Lowercase printable ASCII without spaces, 3-64 characters, sorted and
+  // unique, 1-8 of them.
+  repeated string tokens = 3;
+  // Canonical CIDRs (IPv4 a.b.c.d/n, IPv6 compressed lowercase), sorted and
+  // unique, at most 4096.
+  repeated string cidrs = 4;
+  // Lowercase domain names, sorted and unique, at most 8.
+  repeated string domains = 5;
 }
 
 // ConnectionLimits limits each client's TCP connections to ports in the
@@ -281,6 +318,8 @@ message NodeConfigDiff {
   ConnectionLimits connection_limits = 25;
   // Always sent in full (NodeConfig field 24). Added in v1.6.0.
   OriginCa origin_ca_previous = 26;
+  // Always sent in full (NodeConfig field 25). Added in vNEXT.
+  AiCrawlerCatalogue ai_crawlers = 27;
 }
 
 // L4Protocol is the transport of a layer-4 application.
@@ -527,6 +566,11 @@ message Site {
   // whose Accept names text/markdown (Markdown); unset means off. Added in
   // proto/vX.Y.Z-markdown (feature markdown-v1).
   Markdown markdown = 40;
+  // AI crawl control (ADR-0070): actions on the crawlers of
+  // NodeConfig.ai_crawlers, the managed robots.txt and pay per crawl.
+  // Unset: crawlers are only tagged. Added in vNEXT (feature
+  // ai-crawlers-v1).
+  AiCrawlPolicy ai_crawl = 45;
 }
 
 // DevelopmentMode bypasses the edge cache of a site until expires_at, on
@@ -557,6 +601,55 @@ message Markdown {
   // Path prefixes never converted, checked after include_prefixes; same
   // bounds.
   repeated string exclude_prefixes = 2;
+}
+
+// AiCrawlPolicy acts on requests that claim a crawler of the catalogue,
+// after the site's rules (a rule's allow action skips it) and before Under
+// Attack and CC challenges.
+message AiCrawlPolicy {
+  // The action of each crawler, operator and global defaults already
+  // resolved by the console, sorted by crawler and unique; crawlers not
+  // listed are not acted on. Actions apply to every request that claims
+  // the crawler, verified or not, except allow's exemption.
+  repeated AiCrawlerAction actions = 1;
+  // Requests that claim a crawler with cidrs or domains whose address does
+  // not verify: "" treated as any other visitor (no action of the
+  // crawler's other than block, challenge or charge applies), "block" or
+  // "challenge".
+  string impersonators = 2;
+  // Challenge type of the challenge action and of impersonators: cookie302,
+  // js, pow or captcha. The site's pass and difficulty settings apply.
+  string challenge = 3;
+  // Status of the block action: 403 or 402. block_body: plain text sent
+  // with it (UTF-8, at most 2048 bytes, no NUL); empty: the built-in error
+  // page "ai-crawler-blocked".
+  uint32 block_status = 4;
+  string block_body = 5;
+  // Text the edge puts before the origin's /robots.txt (GET and HEAD of
+  // exactly that path): prepended to a 200 text response that is not
+  // content-encoded, served alone (200 text/plain) for a 404 or 410.
+  // Applied on delivery, cache hits included, so the cached object stays
+  // the origin's. UTF-8, ends in a newline, at most 16384 bytes; empty
+  // none.
+  string robots_txt = 6;
+  // Pay per crawl: the price of a crawl in millionths of a US dollar, 1000
+  // (USD 0.001) to 1000000000; 0 off (the charge action then blocks).
+  uint64 price_micros = 7;
+  // An origin response header crawler-price ("USD <decimal>") sets the
+  // price of that response.
+  bool dynamic_pricing = 8;
+}
+
+// AiCrawlerAction is the action of one crawler.
+message AiCrawlerAction {
+  // AiCrawler.id.
+  string crawler = 1;
+  // "allow": no action, and a verified claim also skips Under Attack and CC
+  // challenges like Site.protection.allow_verified_bots; "block": the
+  // policy's block response; "challenge": the policy's challenge;
+  // "charge": pay per crawl (HTTP 402 with crawler-price until the crawler
+  // offers the price; only verified claims may pay).
+  string action = 2;
 }
 
 // EncodedPathExemption lets raw paths that start with prefix carry an

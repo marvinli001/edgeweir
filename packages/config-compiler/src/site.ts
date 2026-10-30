@@ -11,6 +11,8 @@ import {
   AccessControlSchema,
   ActiveHealthCheckSchema,
   ActiveHealthCheckType,
+  AiCrawlerActionSchema,
+  AiCrawlPolicySchema,
   AuthKind,
   AuthRuleSchema,
   BasicAuthSchema,
@@ -72,9 +74,11 @@ import {
   RULES_BODY_LIMIT,
   structuredCacheCondition,
 } from "@edgeweir/rule-engine";
+import { aiCrawlActive, aiCrawlChallenges } from "./ai-crawl";
 import { matchMap } from "./canonical";
 import {
   type AccessControlModel,
+  type AiCrawlModel,
   type AuthRuleModel,
   type CacheRuleModel,
   DEFAULT_CACHE_ZONE,
@@ -313,6 +317,9 @@ export function compileSite(
             excludePrefixes: sortedByteSet(model.markdown.excludePrefixes),
           }),
         }
+      : {}),
+    ...(model.aiCrawl && aiCrawlActive(model.aiCrawl)
+      ? { aiCrawl: compileAiCrawl(model.aiCrawl) }
       : {}),
     domains: model.domains.map((d) =>
       create(DomainSchema, {
@@ -683,6 +690,21 @@ function cacheCondition(r: CacheRuleModel) {
     parseExpression(r.expression, "cache", { maxLength: CACHE_EXPRESSION_MAX_LENGTH });
   const structured = structuredCacheCondition(condition);
   return structured ? lists(structured) : { condition };
+}
+
+function compileAiCrawl(m: AiCrawlModel) {
+  return create(AiCrawlPolicySchema, {
+    actions: Object.entries(m.actions).map(([crawler, action]) =>
+      create(AiCrawlerActionSchema, { crawler, action }),
+    ),
+    impersonators: m.impersonators === "none" ? "" : m.impersonators,
+    challenge: aiCrawlChallenges(m) ? m.challenge : "",
+    blockStatus: m.blockStatus,
+    blockBody: m.blockBody,
+    robotsTxt: m.robotsTxt,
+    priceMicros: BigInt(m.priceMicros),
+    dynamicPricing: m.priceMicros > 0 && m.dynamicPricing,
+  });
 }
 
 function compileImageConvert(m: ImageConvertModel) {

@@ -255,6 +255,13 @@
 #   limit served and cached as JPEG; AVIF off serves the WebP variant; the
 #   saved bytes reach imageConvert.savings; off again, the cached JPEG;
 #   Playwright e2e/g18.spec.ts.
+#   AI crawl control (scripts/e2e-ai-crawl.mjs, ADR-0070, after core): the
+#   core node reports ai-crawlers-v1; a spoofed GPTBot is only tagged, then
+#   blocked (403 ai-crawler-blocked) while robots.txt stays readable with the
+#   managed text before the origin's file; ClaudeBot gets 402 crawler-price
+#   and 400 StrongAuthRequired with a price; a spoofed Googlebot is blocked
+#   as an impersonator (402 with the site's text); the overview and the
+#   access log filter count the claims; Playwright e2e/ai-crawl.spec.ts.
 #   Login IP allow list (scripts/e2e-allowlist.mjs, ADR-0047): the console
 #   sees the host through the port mapping (a private address, the proxy
 #   hint); a list without it is refused; client-a saves only its own address
@@ -383,7 +390,7 @@ SECTIONS=(
   "pp:m6-upgrades"
   "g8:m6-upgrades" "g9:m6-upgrades" "g15:m6-upgrades" "g10:dns m5 m6-upgrades" "g11:m6-upgrades"
   "g12:m6-upgrades" "g13:m6-upgrades" "g14:m6-upgrades" "g16:m6-upgrades" "g17:m6-upgrades"
-  "g18:m6-upgrades" "g19:m6-upgrades" "g20:m6-upgrades" "probe-sources:" "usage-guard:m6-upgrades" "dev-mode:" "allowlist:" "lifecycle:"
+  "g18:m6-upgrades" "g19:m6-upgrades" "g20:m6-upgrades" "probe-sources:" "usage-guard:m6-upgrades" "dev-mode:" "ai-crawl:" "allowlist:" "lifecycle:"
 )
 # Parallel lanes, "FIRST..LAST:SECTION ...": the SECTIONs run in a second
 # lane while the chain runs FIRST to LAST, and the chain waits for the lane
@@ -2005,6 +2012,13 @@ if ! $SKIP_UI; then
 fi
 api DELETE "/sites/$DM_SITE" >/dev/null
 pass "development mode checks passed"
+}
+
+# ----------------------------------------------------------- section ai-crawl
+section_ai_crawl() {
+step "AI crawl control: a spoofed GPTBot unverified, block, managed robots.txt, pay per crawl 402, impersonators, the overview"
+story ai-crawl --cleanup
+pass "AI crawl control checks passed"
 }
 
 # ----------------------------------------------------------- section allowlist

@@ -16,7 +16,7 @@
 | 入门 | [核心概念](guide/concepts.md) · [快速上手](guide/first-site.md) |
 | 部署 | [部署概览](deploy/README.md) · [Docker Compose](deploy/docker.md) · [宝塔面板 / aaPanel](deploy/baota.md) · [deploy.sh 参考](deploy/deploy-script.md) · [Railway](deploy/railway.md) · [Fly.io](deploy/fly.md) · [bunny.net Magic Containers](deploy/bunny.md) · [Render](deploy/render.md) · [Zeabur](deploy/zeabur.md) · [端口、反向代理与可信代理](deploy/networking.md) |
 | 站点 | [概览](guide/overview.md) · [网站管理](guide/site-management.md) · [域名与未知域名](guide/domains.md) · [源站与缓存](guide/origins-and-cache.md) · [图片格式转换](guide/image-convert.md) · [面向代理的 Markdown](guide/markdown-agents.md) · [HTTPS 与证书](guide/https.md) · [错误页](guide/error-pages.md) · [L4 转发](guide/l4.md) · [用量保护](guide/usage-protection.md) · [统计与访问日志](guide/access-logs.md) |
-| 访问控制 | [规则、IP 名单与 GeoIP](guide/rules.md) · [访问控制](guide/access-control.md) · [封禁](guide/bans.md) · [挑战与 CC 防护](guide/challenges.md) · [OWASP CRS 托管规则](guide/waf.md) · [攻击与自动缓解](guide/attack-dashboard.md) |
+| 访问控制 | [规则、IP 名单与 GeoIP](guide/rules.md) · [访问控制](guide/access-control.md) · [封禁](guide/bans.md) · [挑战与 CC 防护](guide/challenges.md) · [AI 爬虫管理](guide/ai-crawl-control.md) · [OWASP CRS 托管规则](guide/waf.md) · [攻击与自动缓解](guide/attack-dashboard.md) |
 | 基础设施 | [集群与节点](guide/clusters.md) · [区域探针与智能调度](guide/scheduling.md) · [DNS 调度](guide/dns.md) |
 | 系统 | [账户与登录](guide/account.md) · [告警](guide/alerts.md) · [系统设置与审计](guide/system.md) |
 | 节点 | [节点概览](node/README.md) · [接入节点](deploy/nodes.md) · [节点配置](node/configuration.md) · [节点升级](guide/node-upgrades.md) · [节点日志](guide/node-logs.md) · [节点运维](node/operations.md) · [节点排障](node/troubleshooting.md) |

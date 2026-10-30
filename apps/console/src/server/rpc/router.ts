@@ -32,6 +32,7 @@ export const router = os.router({
   imageConvert: sitesRouter.imageConvert,
   developmentMode: sitesRouter.developmentMode,
   markdown: sitesRouter.markdown,
+  aiCrawl: sitesRouter.aiCrawl,
   accessControl: sitesRouter.accessControl,
   security: accessControlRouter.security,
   certificates: certificatesRouter.certificates,

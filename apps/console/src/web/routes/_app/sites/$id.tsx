@@ -40,6 +40,7 @@ import { LinkButton } from "@/components/link-button";
 import { Page, PageTabs } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { AccessTab } from "@/components/site/access-tab";
+import { AiCrawlTab } from "@/components/site/ai-crawl-tab";
 import { AttacksTab } from "@/components/site/attacks-tab";
 import { BulkRedirectsTab } from "@/components/site/bulk-redirects-tab";
 import { CacheTab } from "@/components/site/cache-tab";
@@ -84,6 +85,10 @@ export const Route = createFileRoute("/_app/sites/$id")({
     ip: z.string().max(64).optional(),
     cidr: z.string().max(64).optional(),
     path: z.string().max(2048).optional(),
+    crawler: z
+      .string()
+      .regex(/^[a-z0-9-]{1,40}$/)
+      .optional(),
     from: z.iso.datetime().optional(),
     to: z.iso.datetime().optional(),
   }),
@@ -176,6 +181,7 @@ function SiteDetailPage() {
                   ip: undefined,
                   cidr: undefined,
                   path: undefined,
+                  crawler: undefined,
                   from: undefined,
                   to: undefined,
                 }),
@@ -269,6 +275,21 @@ function SiteDetailPage() {
                 }
               />
             </TabsContent>
+            <TabsContent value="crawlers" className="animate-enter">
+              <AiCrawlTab
+                siteId={data.id}
+                range={search.range ?? DEFAULT_RANGE}
+                onRangeChange={(range) =>
+                  navigate({
+                    search: (prev) => ({
+                      ...prev,
+                      range: range === DEFAULT_RANGE ? undefined : range,
+                    }),
+                    replace: true,
+                  })
+                }
+              />
+            </TabsContent>
             <TabsContent value="errors" className="animate-enter">
               <ErrorPagesTab siteId={data.id} />
             </TabsContent>
@@ -280,6 +301,7 @@ function SiteDetailPage() {
                   search.ip ||
                   search.cidr ||
                   search.path ||
+                  search.crawler ||
                   search.from ||
                   search.to
                     ? {
@@ -287,6 +309,7 @@ function SiteDetailPage() {
                         ip: search.ip,
                         cidr: search.cidr,
                         path: search.path,
+                        crawler: search.crawler,
                         from: search.from,
                         to: search.to,
                       }

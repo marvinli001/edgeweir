@@ -41,6 +41,7 @@ export const PAGES: LabPage[] = [
   { name: "site-access", group: "site", path: site("access") },
   { name: "site-security", group: "site", path: site("security") },
   { name: "site-attacks", group: "site", path: site("attacks") },
+  { name: "site-crawlers", group: "site", path: site("crawlers") },
   { name: "site-errors", group: "site", path: site("errors") },
   { name: "site-logs", group: "site", path: site("logs") },
   { name: "certificates", group: "sites", path: "/certificates" },

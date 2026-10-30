@@ -11,7 +11,8 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "dns:catalog": "node scripts/dns-catalog.mjs"
+    "dns:catalog": "node scripts/dns-catalog.mjs",
+    "ai-crawlers:ranges": "node scripts/ai-crawler-ranges.mjs"
   },
   "dependencies": {
     "@orpc/contract": "1.15.4",

@@ -122,3 +122,10 @@ export const NODE_DEBUG_LOGS_FEATURE = "debug-logs-v1";
  * deletes it (ADR-0067).
  */
 export const NODE_DECOMMISSION_FEATURE = "decommission-v1";
+/**
+ * ai-crawlers-v1: AI crawl control (ADR-0070): Site.ai_crawl (required by
+ * configurations that use it), crawler tagging of access logs and
+ * MinuteStats.crawlers / crawler_paths. A site's crawler counts are partial
+ * while an active node of its cluster lacks it.
+ */
+export const AI_CRAWLERS_FEATURE = "ai-crawlers-v1";

@@ -153,6 +153,7 @@ describe("log filters", () => {
         referer: "search.example",
         minDuration: "250",
         cidr: "2001:db8::/32",
+        crawler: "gptbot",
       }),
       FROM,
       TO,
@@ -177,6 +178,7 @@ describe("log filters", () => {
         referer: "search.example",
         minDuration: 250,
         cidr: "2001:db8::/32",
+        crawler: "gptbot",
         limit: 100,
       },
     });

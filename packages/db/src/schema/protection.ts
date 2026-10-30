@@ -274,3 +274,33 @@ export const securityEvent = pgTable(
       .where(sql`${t.kind} = 'site_level' and ${t.level} <> 'normal'`),
   ],
 );
+
+/**
+ * A site's AI crawl control (ADR-0070, contract `aiCrawlSiteSettings`): its
+ * crawler and operator actions, the overrides of the global impersonator,
+ * challenge and block response settings (null follows them), the managed
+ * robots.txt and pay per crawl. No row means the defaults.
+ */
+export const siteAiCrawl = pgTable("site_ai_crawl", {
+  siteId: uuid("site_id")
+    .primaryKey()
+    .references(() => site.id, { onDelete: "cascade" }),
+  /** crawler id → allow | block | challenge | charge */
+  crawlers: jsonb("crawlers").$type<Record<string, string>>().notNull().default({}),
+  /** operator id → allow | block | challenge | charge */
+  operators: jsonb("operators").$type<Record<string, string>>().notNull().default({}),
+  impersonators: text("impersonators"),
+  challenge: text("challenge"),
+  blockStatus: integer("block_status"),
+  blockBody: text("block_body"),
+  robotsManaged: boolean("robots_managed").notNull().default(false),
+  /** Content signals: unset | yes | no. */
+  signalSearch: text("signal_search").notNull().default("unset"),
+  signalAiInput: text("signal_ai_input").notNull().default("unset"),
+  signalAiTrain: text("signal_ai_train").notNull().default("unset"),
+  payPerCrawl: boolean("pay_per_crawl").notNull().default(false),
+  /** Millionths of a US dollar. */
+  priceMicros: integer("price_micros").notNull().default(10000),
+  dynamicPricing: boolean("dynamic_pricing").notNull().default(false),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});

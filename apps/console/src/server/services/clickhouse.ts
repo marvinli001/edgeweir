@@ -23,6 +23,10 @@ const LOG_COLUMNS = [
   ["query", "String DEFAULT ''"],
   ["headers", "Map(String, String)"],
   ["peer_ip", "String DEFAULT ''"],
+  // AI crawl control (ai-crawlers-v1, ADR-0070).
+  ["crawler", "LowCardinality(String) DEFAULT ''"],
+  ["crawler_verification", "LowCardinality(String) DEFAULT ''"],
+  ["crawler_charged_micros", "UInt64 DEFAULT 0"],
 ] as const;
 
 /** Operator-controlled endpoint from the environment. Credentials stay in headers. */
@@ -191,6 +195,9 @@ export async function insertClickHouseLogs(env: Env, rows: LogEntry[]) {
         query: r.query,
         headers: r.headers,
         peer_ip: r.peerIp,
+        crawler: r.crawler,
+        crawler_verification: r.crawlerVerification,
+        crawler_charged_micros: r.crawlerChargedMicros,
       }),
     )
     .join("\n");
@@ -207,7 +214,8 @@ export async function queryClickHouseLogs(env: Env, input: LogFilter): Promise<L
     user_agent AS userAgent, referer, http_version AS httpVersion, scheme, country, asn, as_name AS asName,
     upstream_addr AS upstreamAddr, upstream_status AS upstreamStatus, upstream_ms AS upstreamMs,
     toFloat64(request_bytes) AS requestBytes, content_type AS contentType, tls_version AS tlsVersion,
-    block_reason AS blockReason, block_rule_id AS blockRuleId, query, headers, peer_ip AS peerIp
+    block_reason AS blockReason, block_rule_id AS blockRuleId, query, headers, peer_ip AS peerIp,
+    crawler, crawler_verification AS crawlerVerification, toFloat64(crawler_charged_micros) AS crawlerChargedMicros
     FROM access_log FINAL WHERE site_id = {site:UUID}
       AND time >= fromUnixTimestamp64Milli({from:Int64}) AND time < fromUnixTimestamp64Milli({to:Int64})
       AND ({status:UInt16} = 0 OR status = {status:UInt16}) AND ({ip:String} = '' OR client_ip = {ip:String})
@@ -224,6 +232,7 @@ export async function queryClickHouseLogs(env: Env, input: LogFilter): Promise<L
       AND ({referer:String} = '' OR positionCaseInsensitiveUTF8(referer, {referer:String}) > 0)
       AND duration_ms >= {minDuration:UInt32}
       AND ({cidr:String} = '' OR isIPAddressInRange(client_ip, {cidr:String}))
+      AND ({crawler:String} = '' OR crawler = {crawler:String} OR ({crawler:String} = 'any' AND crawler != ''))
       ORDER BY time DESC, id DESC LIMIT {limit:UInt32} FORMAT JSONEachRow`,
     {
       site: input.siteId,
@@ -244,6 +253,7 @@ export async function queryClickHouseLogs(env: Env, input: LogFilter): Promise<L
       referer: input.referer,
       minDuration: String(input.minDuration),
       cidr: input.cidr,
+      crawler: input.crawler,
       limit: String(input.limit + 1),
     },
   );

@@ -23,7 +23,8 @@ export function StatusCodesCard({
   wide,
   onOpen,
 }: {
-  totals: TrafficTotals;
+  /** The status class counters (traffic totals, or any counters that carry them). */
+  totals: Pick<TrafficTotals, (typeof STATUS_CLASSES)[number]["key"]>;
   wide?: boolean;
   /** Opens the per-code breakdown. */
   onOpen?: () => void;

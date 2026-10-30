@@ -6,6 +6,7 @@
 import type { HiddenCards, Site, SiteCopyChange, SiteCopyPart } from "@edgeweir/contract";
 import { accessFixtures } from "./access";
 import { accessControlFixtures } from "./access-control";
+import { aiCrawlFixtures } from "./ai-crawl";
 import { type Fixtures, mergeFixtures, notFound, ok } from "./define";
 import { infraFixtures } from "./infra";
 import { siteDetailFixtures } from "./sites-detail";
@@ -343,6 +344,7 @@ const core: Fixtures = {
         accessLogsV2: older,
         imageConvert: older,
         markdown: older,
+        aiCrawl: older,
       };
     },
   },
@@ -355,4 +357,5 @@ export const fixtures: Fixtures = mergeFixtures(
   accessControlFixtures,
   infraFixtures,
   systemFixtures,
+  aiCrawlFixtures,
 );

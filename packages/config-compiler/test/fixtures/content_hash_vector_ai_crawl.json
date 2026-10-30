@@ -1,0 +1,147 @@
+{
+  "config": {
+    "clusterId": "c1",
+    "listeners": [
+      {
+        "port": 80,
+        "protocol": "LISTENER_PROTOCOL_HTTP"
+      }
+    ],
+    "cacheZones": [
+      {
+        "name": "default",
+        "maxSizeMb": "10240",
+        "keysZoneMb": 64,
+        "inactiveSeconds": 604800
+      }
+    ],
+    "sites": [
+      {
+        "id": "c",
+        "name": "c",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "c.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-c",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-c",
+              "address": "origin.test",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ]
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1"
+      },
+      {
+        "id": "b",
+        "name": "b",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "b.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-b",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-b",
+              "address": "origin.test",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ]
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "aiCrawl": {
+          "blockStatus": 403,
+          "robotsTxt": "# BEGIN Edgeweir managed content\nUser-agent: *\nContent-Signal: ai-train=no\nAllow: /\n# END Edgeweir managed content\n"
+        }
+      },
+      {
+        "id": "a",
+        "name": "a",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "a.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-a",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-a",
+              "address": "origin.test",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ]
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "aiCrawl": {
+          "actions": [
+            {
+              "crawler": "claudebot",
+              "action": "charge"
+            },
+            {
+              "crawler": "googlebot",
+              "action": "allow"
+            },
+            {
+              "crawler": "gptbot",
+              "action": "block"
+            }
+          ],
+          "impersonators": "block",
+          "blockStatus": 402,
+          "blockBody": "No crawling\n",
+          "robotsTxt": "# BEGIN Edgeweir managed content\nUser-agent: GPTBot\nDisallow: /\n# END Edgeweir managed content\n",
+          "priceMicros": "10000",
+          "dynamicPricing": true
+        }
+      }
+    ],
+    "requiredFeatures": ["ai-crawlers-v1"],
+    "aiCrawlers": {
+      "crawlers": [
+        {
+          "id": "gptbot",
+          "operator": "openai",
+          "tokens": ["gptbot"],
+          "cidrs": ["2001:db8::/48", "192.0.2.0/24"]
+        },
+        {
+          "id": "googlebot",
+          "operator": "google",
+          "tokens": ["googlebot", "googleother"],
+          "cidrs": ["203.0.113.0/25"],
+          "domains": ["google.com", "googlebot.com"]
+        },
+        {
+          "id": "claudebot",
+          "operator": "anthropic",
+          "tokens": ["claudebot"]
+        }
+      ]
+    }
+  },
+  "canonical_hex": "1a0263312204085010012a120a0764656661756c7410805018402080f52432fc010a0161120161180122080a06612e746573742a210a03702d6110011a180a036f2d61120b6f726967696e2e746573741850200128013a0764656661756c744001ea02b8010a130a09636c61756465626f7412066368617267650a120a09676f6f676c65626f741205616c6c6f770a0f0a06677074626f741205626c6f636b1205626c6f636b2092032a0c4e6f20637261776c696e670a325f2320424547494e204564676577656972206d616e6167656420636f6e74656e740a557365722d6167656e743a20475054426f740a446973616c6c6f773a202f0a2320454e44204564676577656972206d616e6167656420636f6e74656e740a38904e400132bb010a0162120162180122080a06622e746573742a210a03702d6210011a180a036f2d62120b6f726967696e2e746573741850200128013a0764656661756c744001ea027820930332732320424547494e204564676577656972206d616e6167656420636f6e74656e740a557365722d6167656e743a202a0a436f6e74656e742d5369676e616c3a2061692d747261696e3d6e6f0a416c6c6f773a202f0a2320454e44204564676577656972206d616e6167656420636f6e74656e740a32400a0163120163180122080a06632e746573742a210a03702d6310011a180a036f2d63120b6f726967696e2e746573741850200128013a0764656661756c7440014a0e61692d637261776c6572732d7631ca01b2010a210a09636c61756465626f741209616e7468726f7069631a09636c61756465626f740a560a09676f6f676c65626f741206676f6f676c651a09676f6f676c65626f741a0b676f6f676c656f74686572220e3230332e302e3131332e302f32352a0a676f6f676c652e636f6d2a0d676f6f676c65626f742e636f6d0a350a06677074626f7412066f70656e61691a06677074626f74220c3139322e302e322e302f3234220d323030313a6462383a3a2f3438",
+  "content_hash": "5bbb166ee6db3720bbbc94fbb2d275487df93d27a76debba8c8221cb3d04e020"
+}

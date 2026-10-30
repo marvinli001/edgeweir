@@ -35,8 +35,13 @@
   "command_results": "Results",
   "command_result_count": [
     {
-      "declarations": ["input count", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
       "match": {
         "countPlural=one": "{count} result",
         "countPlural=other": "{count} results"
@@ -210,8 +215,13 @@
   "enroll_ttl": "Valid for",
   "enroll_ttl_minutes": [
     {
-      "declarations": ["input count", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
       "match": {
         "countPlural=one": "{count} minute",
         "countPlural=other": "{count} minutes"
@@ -220,8 +230,13 @@
   ],
   "enroll_ttl_hours": [
     {
-      "declarations": ["input count", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
       "match": {
         "countPlural=one": "{count} hour",
         "countPlural=other": "{count} hours"
@@ -368,7 +383,10 @@
         "local nodesPlural = nodes: plural",
         "local sitesPlural = sites: plural"
       ],
-      "selectors": ["nodesPlural", "sitesPlural"],
+      "selectors": [
+        "nodesPlural",
+        "sitesPlural"
+      ],
       "match": {
         "nodesPlural=one, sitesPlural=one": "The cluster still has {nodes} node and {sites} site",
         "nodesPlural=one, sitesPlural=other": "The cluster still has {nodes} node and {sites} sites",
@@ -869,8 +887,14 @@
   "site_origin_health_ok": "Healthy",
   "site_origin_health_down": [
     {
-      "declarations": ["input down", "input total", "local totalPlural = total: plural"],
-      "selectors": ["totalPlural"],
+      "declarations": [
+        "input down",
+        "input total",
+        "local totalPlural = total: plural"
+      ],
+      "selectors": [
+        "totalPlural"
+      ],
       "match": {
         "totalPlural=one": "Down on {down} of {total} node",
         "totalPlural=other": "Down on {down} of {total} nodes"
@@ -959,8 +983,13 @@
   "quick_purge_url": "Purge URL",
   "quick_purge_confirm": [
     {
-      "declarations": ["input count", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
       "match": {
         "countPlural=one": "Purge {count} URL?",
         "countPlural=other": "Purge {count} URLs?"
@@ -979,8 +1008,14 @@
   "purge_nodes": "Nodes",
   "purge_nodes_progress": [
     {
-      "declarations": ["input done", "input total", "local totalPlural = total: plural"],
-      "selectors": ["totalPlural"],
+      "declarations": [
+        "input done",
+        "input total",
+        "local totalPlural = total: plural"
+      ],
+      "selectors": [
+        "totalPlural"
+      ],
       "match": {
         "totalPlural=one": "{done}/{total} node",
         "totalPlural=other": "{done}/{total} nodes"
@@ -1011,7 +1046,9 @@
         "input url",
         "local totalPlural = total: plural"
       ],
-      "selectors": ["totalPlural"],
+      "selectors": [
+        "totalPlural"
+      ],
       "match": {
         "totalPlural=one": "{failed} of {total} URL failed, first {url} ({reason})",
         "totalPlural=other": "{failed} of {total} URLs failed, first {url} ({reason})"
@@ -1025,8 +1062,14 @@
   "task_error_reason_other": "other error",
   "task_error_prefetch_timeout": [
     {
-      "declarations": ["input done", "input total", "local totalPlural = total: plural"],
-      "selectors": ["totalPlural"],
+      "declarations": [
+        "input done",
+        "input total",
+        "local totalPlural = total: plural"
+      ],
+      "selectors": [
+        "totalPlural"
+      ],
       "match": {
         "totalPlural=one": "Ran out of time after {done} of {total} URL",
         "totalPlural=other": "Ran out of time after {done} of {total} URLs"
@@ -1111,8 +1154,13 @@
   "origin_cert_validity": "Validity",
   "origin_cert_years": [
     {
-      "declarations": ["input count", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
       "match": {
         "countPlural=one": "{count} year",
         "countPlural=other": "{count} years"
@@ -1186,8 +1234,14 @@
   "cert_error_other": "Issuance failed ({code})",
   "cert_expires": [
     {
-      "declarations": ["input date", "input days", "local daysPlural = days: plural"],
-      "selectors": ["daysPlural"],
+      "declarations": [
+        "input date",
+        "input days",
+        "local daysPlural = days: plural"
+      ],
+      "selectors": [
+        "daysPlural"
+      ],
       "match": {
         "daysPlural=one": "Expires {date} · {days} day remaining",
         "daysPlural=other": "Expires {date} · {days} days remaining"
@@ -1414,8 +1468,13 @@
   "ip_lists_empty": "No IP lists",
   "ip_lists_count": [
     {
-      "declarations": ["input count", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
       "match": {
         "countPlural=one": "{count} entry",
         "countPlural=other": "{count} entries"
@@ -1594,8 +1653,13 @@
   "logs_percent": "{value}%",
   "logs_privacy": [
     {
-      "declarations": ["input days", "local daysPlural = days: plural"],
-      "selectors": ["daysPlural"],
+      "declarations": [
+        "input days",
+        "local daysPlural = days: plural"
+      ],
+      "selectors": [
+        "daysPlural"
+      ],
       "match": {
         "daysPlural=one": "Logs kept {days} day; may contain personal data",
         "daysPlural=other": "Logs kept {days} days; may contain personal data"
@@ -1652,8 +1716,14 @@
   "upgrade_group": "Canary node group",
   "upgrade_group_nodes": [
     {
-      "declarations": ["input count", "input name", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
+      "declarations": [
+        "input count",
+        "input name",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
       "match": {
         "countPlural=one": "{name} ({count} node)",
         "countPlural=other": "{name} ({count} nodes)"
@@ -1787,8 +1857,14 @@
   "rollout_traffic_baseline": "Baseline traffic",
   "rollout_traffic_value": [
     {
-      "declarations": ["input errors", "input requests", "local requestsPlural = requests: plural"],
-      "selectors": ["requestsPlural"],
+      "declarations": [
+        "input errors",
+        "input requests",
+        "local requestsPlural = requests: plural"
+      ],
+      "selectors": [
+        "requestsPlural"
+      ],
       "match": {
         "requestsPlural=one": "{requests} request, {errors} 5xx",
         "requestsPlural=other": "{requests} requests, {errors} 5xx"
@@ -1819,7 +1895,9 @@
         "input removed",
         "local previousPlural = previous: plural"
       ],
-      "selectors": ["previousPlural"],
+      "selectors": [
+        "previousPlural"
+      ],
       "match": {
         "previousPlural=one": "DNS mass removal held back: {removed} of {previous} address record; current records kept",
         "previousPlural=other": "DNS mass removal held back: {removed} of {previous} address records; current records kept"
@@ -1878,8 +1956,13 @@
   "bans_expired": "Expired",
   "bans_unapplied": [
     {
-      "declarations": ["input count", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
       "match": {
         "countPlural=one": "Not applied on {count} node",
         "countPlural=other": "Not applied on {count} nodes"
@@ -2028,8 +2111,13 @@
   "security_no_nodes": "No nodes",
   "security_escalated_paths": [
     {
-      "declarations": ["input count", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
       "match": {
         "countPlural=one": "{count} escalated path",
         "countPlural=other": "{count} escalated paths"
@@ -2162,8 +2250,13 @@
   "purge_sitemap_max": "URL limit",
   "purge_sitemap_limit": [
     {
-      "declarations": ["input count", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
       "match": {
         "countPlural=one": "Up to {count} URL",
         "countPlural=other": "Up to {count} URLs"
@@ -2408,8 +2501,13 @@
   "error_dns_reconcile_busy": "This cluster's DNS is still being synced; try again later",
   "error_region_in_use": [
     {
-      "declarations": ["input probes", "local probesPlural = probes: plural"],
-      "selectors": ["probesPlural"],
+      "declarations": [
+        "input probes",
+        "local probesPlural = probes: plural"
+      ],
+      "selectors": [
+        "probesPlural"
+      ],
       "match": {
         "probesPlural=one": "{probes} probe still belongs to this region",
         "probesPlural=other": "{probes} probes still belong to this region"
@@ -2443,8 +2541,13 @@
   "probes_rtt": "{rtt} ms",
   "probes_failed_targets": [
     {
-      "declarations": ["input count", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
       "match": {
         "countPlural=one": "{count} target unreachable",
         "countPlural=other": "{count} targets unreachable"
@@ -2511,8 +2614,13 @@
   "probe_source_mappings": "Mappings",
   "probe_source_monitor_count": [
     {
-      "declarations": ["input count", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
       "match": {
         "countPlural=one": "{count} monitor",
         "countPlural=other": "{count} monitors"
@@ -2529,8 +2637,13 @@
   "probe_source_check": "Test connection",
   "probe_source_check_ok": [
     {
-      "declarations": ["input count", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
       "match": {
         "countPlural=one": "Connected, {count} monitor",
         "countPlural=other": "Connected, {count} monitors"
@@ -3531,8 +3644,13 @@
   "greylist_removed": "Removed from the greylist",
   "greylist_unsupported_nodes": [
     {
-      "declarations": ["input count", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
       "match": {
         "countPlural=one": "{count} node runs an older version and ignores the greylist",
         "countPlural=other": "{count} nodes run an older version and ignore the greylist"
@@ -3555,8 +3673,14 @@
   "connection_limits_burst_low": "Burst cannot be below the new connection rate",
   "connection_limits_enforcing": [
     {
-      "declarations": ["input count", "input total", "local totalPlural = total: plural"],
-      "selectors": ["totalPlural"],
+      "declarations": [
+        "input count",
+        "input total",
+        "local totalPlural = total: plural"
+      ],
+      "selectors": [
+        "totalPlural"
+      ],
       "match": {
         "totalPlural=one": "{count} of {total} node enforces it",
         "totalPlural=other": "{count} of {total} nodes enforce it"
@@ -3591,6 +3715,111 @@
   "cluster_tab_settings": "Settings",
   "batch_more": "More",
   "upgrade_nodes": "Nodes",
+  "site_tab_crawlers": "AI crawlers",
+  "copy_part_ai_crawl": "AI crawl control",
+  "block_reason_ai_crawler": "AI crawler",
+  "block_reason_pay_per_crawl": "Pay per crawl",
+  "logs_crawler": "AI crawler",
+  "logs_crawler_any": "Any AI crawler",
+  "audit_action_site_ai_crawl_update": "AI crawl control updated",
+  "audit_action_system_ai_crawl_update": "Global AI crawl control updated",
+  "revision_reason_site_ai_crawl_updated": "AI crawl control of {site} updated",
+  "revision_reason_ai_crawl_updated": "Global AI crawl control updated",
+  "node_feature_ai_crawlers_v1": "AI crawl control",
+  "ai_crawl_action_allow": "Allow",
+  "ai_crawl_action_block": "Block",
+  "ai_crawl_action_challenge": "Challenge",
+  "ai_crawl_action_charge": "Charge",
+  "ai_crawl_action_none": "Tag only",
+  "ai_crawl_inherit": "Default · {action}",
+  "ai_crawl_category_training": "Training",
+  "ai_crawl_category_search": "AI search",
+  "ai_crawl_category_assistant": "AI assistant",
+  "ai_crawl_category_search_engine": "Search engine",
+  "ai_crawl_impersonators_none": "Nothing",
+  "ai_crawl_signal_unset": "Not stated",
+  "ai_crawl_signal_yes": "Yes",
+  "ai_crawl_signal_no": "No",
+  "ai_crawl_verified": "Verified",
+  "ai_crawl_impersonated": "Impersonated",
+  "ai_crawl_unverifiable": "Unverifiable",
+  "ai_crawl_pending": "Pending",
+  "ai_crawl_robots_only": "robots.txt only",
+  "ai_crawl_verify_both": "IP ranges and reverse DNS",
+  "ai_crawl_verify_ranges": "IP ranges",
+  "ai_crawl_verify_dns": "Reverse DNS",
+  "ai_crawl_usd": "USD {amount}",
+  "ai_crawl_global_title": "AI crawlers",
+  "ai_crawl_settings_title": "AI crawl control",
+  "ai_crawl_detection": "Detect AI crawlers",
+  "ai_crawl_actions": "Actions",
+  "ai_crawl_impersonators": "Impersonators",
+  "ai_crawl_block_status": "Block status",
+  "ai_crawl_block_body": "Block response body",
+  "ai_crawl_robots": "robots.txt",
+  "ai_crawl_robots_managed": "Managed robots.txt",
+  "ai_crawl_signal_search": "Search",
+  "ai_crawl_signal_ai_input": "AI input",
+  "ai_crawl_signal_ai_train": "AI training",
+  "ai_crawl_robots_preview": "Managed content preview",
+  "ai_crawl_robots_nothing": "Nothing to add",
+  "ai_crawl_ppc": "Pay per crawl",
+  "ai_crawl_ppc_enabled": "Enabled",
+  "ai_crawl_price": "Price per crawl",
+  "ai_crawl_price_invalid": "The price must be USD 0.001 to 1000",
+  "ai_crawl_dynamic_pricing": "Origin sets the price",
+  "ai_crawl_ppc_note": "Answers with 402 and price headers only; no payments are processed",
+  "ai_crawl_overview_title": "AI crawler traffic",
+  "ai_crawl_operator": "Operator",
+  "ai_crawl_all_operators": "All operators",
+  "ai_crawl_crawler": "Crawler",
+  "ai_crawl_all_crawlers": "All crawlers",
+  "ai_crawl_no_requests": "No AI crawler requests",
+  "ai_crawl_requests": "Requests",
+  "ai_crawl_allowed": "Allowed",
+  "ai_crawl_failed": "Not allowed",
+  "ai_crawl_blocked": "Refused",
+  "ai_crawl_bytes": "Bytes sent",
+  "ai_crawl_robots_fetches": "robots.txt requests",
+  "ai_crawl_charged": "Charged",
+  "ai_crawl_top_paths": "Top paths",
+  "ai_crawl_summary": [
+    {
+      "declarations": [
+        "input allowed",
+        "input crawlers",
+        "input requests",
+        "local crawlersPlural = crawlers: plural",
+        "local requestsPlural = requests: plural"
+      ],
+      "selectors": [
+        "crawlersPlural",
+        "requestsPlural"
+      ],
+      "match": {
+        "crawlersPlural=one, requestsPlural=one": "{crawlers} crawler made {requests} request, {allowed} allowed",
+        "crawlersPlural=one, requestsPlural=other": "{crawlers} crawler made {requests} requests, {allowed} allowed",
+        "crawlersPlural=other, requestsPlural=one": "{crawlers} crawlers made {requests} request, {allowed} allowed",
+        "crawlersPlural=other, requestsPlural=other": "{crawlers} crawlers made {requests} requests, {allowed} allowed"
+      }
+    }
+  ],
+  "ai_crawl_summary_charged": [
+    {
+      "declarations": [
+        "input amount",
+        "input count",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{count} crawl charged, {amount} in total",
+        "countPlural=other": "{count} crawls charged, {amount} in total"
+      }
+    }
+  ],
   "error_ssh_install_not_found": "Install run not found (expired, or the console restarted)",
   "error_ssh_install_too_many_runs": "At most {limit} SSH installs can run at once",
   "error_ssh_install_duplicate_host": "{host} is listed twice",

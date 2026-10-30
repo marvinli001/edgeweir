@@ -1,6 +1,14 @@
 import { getAccessControl, updateAccessControl } from "../../services/access-control";
 import { configureLogs, logSettings, logsCsv, queryLogs } from "../../services/access-logs";
 import {
+  aiCrawlCatalogue,
+  aiCrawlOverview,
+  getAiCrawlSettings,
+  getSiteAiCrawl,
+  setAiCrawlSettings,
+  updateSiteAiCrawl,
+} from "../../services/ai-crawl";
+import {
   topNodes,
   topRequests,
   topSites,
@@ -165,6 +173,22 @@ export const sitesRouter = {
     ),
     stats: authed.markdown.stats.handler(({ input, context }) =>
       markdownStats(context.app.db, input),
+    ),
+  },
+  aiCrawl: {
+    catalogue: authed.aiCrawl.catalogue.handler(() => aiCrawlCatalogue()),
+    settings: authed.aiCrawl.settings.handler(({ context }) => getAiCrawlSettings(context.app.db)),
+    setSettings: authed.aiCrawl.setSettings.handler(({ input, context }) =>
+      setAiCrawlSettings(context.app.db, input, context.actor),
+    ),
+    get: authed.aiCrawl.get.handler(({ input, context }) =>
+      getSiteAiCrawl(context.app.db, input.id),
+    ),
+    update: authed.aiCrawl.update.handler(({ input, context }) =>
+      updateSiteAiCrawl(context.app.db, input, { actor: context.actor }),
+    ),
+    overview: authed.aiCrawl.overview.handler(({ input, context }) =>
+      aiCrawlOverview(context.app.db, input),
     ),
   },
   accessControl: {

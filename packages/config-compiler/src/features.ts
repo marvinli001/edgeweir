@@ -35,6 +35,7 @@ import {
   needsRulesV3,
   usesRulesV3Placeholders,
 } from "@edgeweir/rule-engine";
+import { aiCrawlActive, aiCrawlChallenges } from "./ai-crawl";
 import { canonicalize, contentHash } from "./canonical";
 import {
   compileClientAddress,
@@ -139,6 +140,8 @@ export const IMAGE_CONVERT_FEATURE = "image-convert-v1";
 export const DEVELOPMENT_MODE_FEATURE = "development-mode-v1";
 /** A site's Markdown for Agents (proto vX.Y.Z-markdown, Site.markdown). */
 export const MARKDOWN_FEATURE = "markdown-v1";
+/** AI crawl control (Site.ai_crawl, vNEXT, ADR-0070); the catalogue alone needs no feature. */
+export const AI_CRAWLERS_FEATURE = "ai-crawlers-v1";
 
 /** Whether a compiled action uses fields or kinds only rules-v2 nodes know. */
 function actionNeedsRulesV2(action: RuleAction | undefined): boolean {
@@ -281,7 +284,10 @@ export function usesChallenges(input: CompileInput): boolean {
     input.sites.some(
       (site) =>
         site.enabled &&
-        (!!site.protection?.underAttack || !!site.protection?.cc || challengeRule(site.rules)),
+        (!!site.protection?.underAttack ||
+          !!site.protection?.cc ||
+          challengeRule(site.rules) ||
+          (!!site.aiCrawl && aiCrawlActive(site.aiCrawl) && aiCrawlChallenges(site.aiCrawl))),
     )
   );
 }
@@ -501,6 +507,7 @@ export function derivedFeatures(config: NodeConfig): string[] {
     ...(config.sites.some((site) => site.imageConvert) ? [IMAGE_CONVERT_FEATURE] : []),
     ...(config.sites.some((site) => site.developmentMode) ? [DEVELOPMENT_MODE_FEATURE] : []),
     ...(config.sites.some((site) => site.markdown) ? [MARKDOWN_FEATURE] : []),
+    ...(config.sites.some((site) => site.aiCrawl) ? [AI_CRAWLERS_FEATURE] : []),
   ];
 }
 

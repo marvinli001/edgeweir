@@ -610,6 +610,13 @@
       "when": 1793330656802,
       "tag": "0086_challenges_v3",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1793330656803,
+      "tag": "0087_ai_crawl_control",
+      "breakpoints": true
     }
   ]
 }

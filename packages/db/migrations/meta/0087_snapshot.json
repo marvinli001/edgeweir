@@ -1,6 +1,6 @@
 {
-  "id": "52177807-7f28-43a2-9538-ad5152acd68a",
-  "prevId": "1733dbd2-c32a-4bdf-ad44-9dbd815ad9ca",
+  "id": "a89ff514-ac97-4f65-9676-a4ba5b8e5f6e",
+  "prevId": "52177807-7f28-43a2-9538-ad5152acd68a",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -802,6 +802,20 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'{}'::jsonb"
+        },
+        "crawler_stats": {
+          "name": "crawler_stats",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "crawler_paths": {
+          "name": "crawler_paths",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
         }
       },
       "indexes": {
@@ -1063,6 +1077,20 @@
         },
         "challenge_outcomes": {
           "name": "challenge_outcomes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "crawler_stats": {
+          "name": "crawler_stats",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "crawler_paths": {
+          "name": "crawler_paths",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
@@ -5415,6 +5443,20 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'{}'::jsonb"
+        },
+        "crawler_stats": {
+          "name": "crawler_stats",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "crawler_paths": {
+          "name": "crawler_paths",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
         }
       },
       "indexes": {
@@ -8873,6 +8915,27 @@
           "primaryKey": false,
           "notNull": true,
           "default": "''"
+        },
+        "crawler": {
+          "name": "crawler",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "crawler_verification": {
+          "name": "crawler_verification",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "crawler_charged_micros": {
+          "name": "crawler_charged_micros",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         }
       },
       "indexes": {
@@ -12036,6 +12099,133 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
+    },
+    "public.site_ai_crawl": {
+      "name": "site_ai_crawl",
+      "schema": "",
+      "columns": {
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "crawlers": {
+          "name": "crawlers",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "operators": {
+          "name": "operators",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "impersonators": {
+          "name": "impersonators",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "challenge": {
+          "name": "challenge",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "block_status": {
+          "name": "block_status",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "block_body": {
+          "name": "block_body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "robots_managed": {
+          "name": "robots_managed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "signal_search": {
+          "name": "signal_search",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unset'"
+        },
+        "signal_ai_input": {
+          "name": "signal_ai_input",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unset'"
+        },
+        "signal_ai_train": {
+          "name": "signal_ai_train",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unset'"
+        },
+        "pay_per_crawl": {
+          "name": "pay_per_crawl",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "price_micros": {
+          "name": "price_micros",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 10000
+        },
+        "dynamic_pricing": {
+          "name": "dynamic_pricing",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "site_ai_crawl_site_id_site_id_fk": {
+          "name": "site_ai_crawl_site_id_site_id_fk",
+          "tableFrom": "site_ai_crawl",
+          "tableTo": "site",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     }
   },
   "enums": {},
@@ -12269,6 +12459,20 @@
         },
         "challenge_outcomes": {
           "name": "challenge_outcomes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "crawler_stats": {
+          "name": "crawler_stats",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "crawler_paths": {
+          "name": "crawler_paths",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,

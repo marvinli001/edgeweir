@@ -23,6 +23,10 @@ export const BLOCK_REASONS = [
   "websocket_origin",
   "client_cert",
   "maintenance",
+  // AI crawl control (ADR-0070): the crawler's block or challenge action, and
+  // pay per crawl's 402 / 400 answers.
+  "ai_crawler",
+  "pay_per_crawl",
 ] as const;
 const blockReason = z.enum(BLOCK_REASONS);
 export type BlockReason = z.infer<typeof blockReason>;
@@ -104,6 +108,11 @@ export const logQuery = z.object({
   minDuration: z.coerce.number().int().min(0).max(86400000).optional(),
   /** Client IP in this network. */
   cidr: cidrFilter.optional(),
+  /** Requests claiming this AI crawler (catalogue id), or `any` for every claim. */
+  crawler: z
+    .string()
+    .regex(/^(?:[a-z0-9-]{1,40})$/)
+    .optional(),
   limit: z.coerce.number().int().min(1).max(1000).default(100),
 });
 export type LogQuery = z.infer<typeof logQuery>;
@@ -165,6 +174,12 @@ export const logEntry = z.object({
   headers: z.record(z.string(), z.string()).default({}),
   /** The connection's peer when it differs from clientIp, while the site records it. */
   peerIp: z.string().default(""),
+  /** The AI crawler the User-Agent claims (catalogue id); empty when none. */
+  crawler: z.string().default(""),
+  /** verified, failed, unverifiable or pending; empty without crawler. */
+  crawlerVerification: z.string().default(""),
+  /** Pay per crawl: the price sent in crawler-charged, in millionths of a US dollar; 0 when not charged. */
+  crawlerChargedMicros: z.number().int().default(0),
 });
 export type LogEntry = z.infer<typeof logEntry>;
 

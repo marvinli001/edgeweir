@@ -15,6 +15,7 @@ export * from "./stats-dims";
 
 import { accessControlContract, ipCheckContract } from "./access-control";
 import { accessKeysContract } from "./access-keys";
+import { aiCrawlContract } from "./ai-crawl";
 import { alertsContract } from "./alerts";
 import { authRulesContract } from "./auth-rules";
 import { autoMitigationContract } from "./auto-mitigation";
@@ -77,6 +78,7 @@ import { siteFeatures, wafContract } from "./waf";
 
 export * from "./access-control";
 export * from "./addresses";
+export * from "./ai-crawl";
 export * from "./audit";
 export * from "./auth-rules";
 export * from "./bans";
@@ -167,6 +169,8 @@ export const contract = {
   developmentMode: developmentModeContract,
   /** A site's Markdown for Agents and the Markdown responses it served. */
   markdown: markdownContract,
+  /** AI crawl control: the crawler catalogue, global and site actions, managed robots.txt, pay per crawl and the overview. */
+  aiCrawl: aiCrawlContract,
   /** What the console knows about an address: lists, bans and client address settings. */
   ipCheck: ipCheckContract,
   certificates: certificatesContract,

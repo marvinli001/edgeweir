@@ -400,6 +400,8 @@ export const revisionReasonDefs = {
   site_maintenance_updated: { params: ["site"], en: "maintenance of {site} updated" },
   site_auth_updated: { params: ["site"], en: "access authentication of {site} updated" },
   site_access_control_updated: { params: ["site"], en: "access control of {site} updated" },
+  site_ai_crawl_updated: { params: ["site"], en: "AI crawl control of {site} updated" },
+  ai_crawl_updated: { params: [], en: "global AI crawl control updated" },
   cluster_cache_updated: { params: [], en: "cache zone updated" },
   node_cache_updated: { params: ["node"], en: "cache size of node {node} updated" },
   error_pages_updated: { params: [], en: "platform error pages updated" },
