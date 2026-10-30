@@ -77,6 +77,7 @@ const OSS = {
         ["domains", "docs/guide/domains.md"],
         ["origins-and-cache", "docs/guide/origins-and-cache.md"],
         ["image-convert", "docs/guide/image-convert.md"],
+        ["markdown-agents", "docs/guide/markdown-agents.md"],
         ["https", "docs/guide/https.md"],
         ["error-pages", "docs/guide/error-pages.md"],
         ["l4", "docs/guide/l4.md"],

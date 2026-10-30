@@ -184,6 +184,7 @@ Enabling, disabling, tags and deleting complete for every site or change none (f
 | Origin pool settings (no origins) | Load balancing, timeouts, keep-alive, origin protocol, gRPC, active health checks, session affinity, retries, WebSocket | The origins |
 | Log settings | The access log sample rate, logging blocked requests, the query string, request headers, the peer address and JA4 | |
 | Image format conversion | On or off, formats and qualities, source types, the size range and the most pixels | |
+| Markdown for Agents | On or off, include and exclude path prefixes | |
 
 Domains, origins, certificates, ports, X-Cache, the PURGE method and key, charset, the request body limit, maintenance mode, development mode, usage protection, automatic mitigation and tags belong to no part and are never copied.
 

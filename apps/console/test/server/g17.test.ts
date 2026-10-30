@@ -260,6 +260,12 @@ describe("site tags, batch operations, copying settings and cloning (G17)", asyn
       avif: true,
       maxPixels: 4_000_000,
     });
+    await admin.markdown.update({
+      id: sourceId,
+      enabled: true,
+      includePrefixes: ["/docs/"],
+      excludePrefixes: [],
+    });
   });
 
   afterAll(() => pglite.close());
@@ -746,6 +752,7 @@ describe("site tags, batch operations, copying settings and cloning (G17)", asyn
         "logHeaders",
         "logPeer",
         "imageConvert",
+        "markdown",
         "cacheKey",
         "rangeSlice",
         "keepCacheTag",

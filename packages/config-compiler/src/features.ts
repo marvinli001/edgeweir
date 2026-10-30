@@ -134,6 +134,8 @@ export const ACCESS_LOGS_V2_FEATURE = "access-logs-v2";
 export const IMAGE_CONVERT_FEATURE = "image-convert-v1";
 /** A site's development mode (proto/vX.Y.Z-dev-mode, Site.development_mode). */
 export const DEVELOPMENT_MODE_FEATURE = "development-mode-v1";
+/** A site's Markdown for Agents (proto vX.Y.Z-markdown, Site.markdown). */
+export const MARKDOWN_FEATURE = "markdown-v1";
 
 /** Whether a compiled action uses fields or kinds only rules-v2 nodes know. */
 function actionNeedsRulesV2(action: RuleAction | undefined): boolean {
@@ -485,6 +487,7 @@ export function derivedFeatures(config: NodeConfig): string[] {
     ...g14Features(config),
     ...(config.sites.some((site) => site.imageConvert) ? [IMAGE_CONVERT_FEATURE] : []),
     ...(config.sites.some((site) => site.developmentMode) ? [DEVELOPMENT_MODE_FEATURE] : []),
+    ...(config.sites.some((site) => site.markdown) ? [MARKDOWN_FEATURE] : []),
   ];
 }
 

@@ -216,6 +216,16 @@ export interface AuthRuleModel {
 }
 
 /**
+ * A site's Markdown for Agents (config.proto Markdown), only while it is on:
+ * path prefixes converted (empty: every path) and never converted, sorted
+ * and unique.
+ */
+export interface MarkdownModel {
+  includePrefixes: string[];
+  excludePrefixes: string[];
+}
+
+/**
  * A site's WebP / AVIF conversion (config.proto ImageConvert), only while it
  * is on: a site without it compiles as before. The quality of a format the
  * site does not offer is not sent.
@@ -376,6 +386,8 @@ export interface SiteModel {
   logPeer?: boolean;
   /** WebP / AVIF conversion (feature image-convert-v1); absent while off. */
   imageConvert?: ImageConvertModel;
+  /** Markdown for Agents (feature markdown-v1); absent while off. */
+  markdown?: MarkdownModel;
   /**
    * `tlsPending`: the site's certificate does not cover the domain yet; it
    * is served over HTTP only (feature tls-pending-domains-v1). Ignored on a

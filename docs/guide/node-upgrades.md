@@ -211,6 +211,7 @@ EDGEWEIR_UPGRADE_PUBLIC_KEY=/etc/edgeweir-node/release.pub
 | `multi-certificate-v1` | 一个网站多张证书 |
 | `client-cert-v1` | 访客客户端证书（mTLS）与 `tls.client.*` 字段 |
 | `image-convert-v1` | 网站开启了图片格式转换，见[图片格式转换](image-convert.md)；节点以 `--image-workers 0` 运行时不上报 |
+| `markdown-v1` | 网站开启了面向代理的 Markdown，见[面向代理的 Markdown](markdown-agents.md)；节点以 `--markdown-workers 0` 运行时不上报 |
 | `edge-ports-v1` | 集群有附加监听端口、网站绑定了非默认端口，或 HTTPS 跳转用了非默认的状态码、端口或不跳转的域名，见 [HTTPS](https.md#集群的监听端口) |
 | `client-ip-v1` | 集群的访客 IP 不是直连（或打开了「丢弃访客自带的 X-Forwarded-For」），或规则读取 `ip.peer`，见 [访客 IP](../deploy/nodes.md#访客-ip) |
 | `domains-v2` | 网站（含停用网站）有 `.` 后缀或正则域名，见[域名写法](domains.md#域名写法) |

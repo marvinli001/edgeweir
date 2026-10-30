@@ -211,6 +211,7 @@ A node without one shows **Upgrade required**; it keeps using the last configura
 | `multi-certificate-v1` | Several certificates for one site |
 | `client-cert-v1` | Visitor client certificates (mTLS) and the `tls.client.*` fields |
 | `image-convert-v1` | A site converts images to WebP / AVIF, see [Image format conversion](image-convert.en.md); nodes running with `--image-workers 0` do not report it |
+| `markdown-v1` | A site has Markdown for Agents on, see [Markdown for Agents](markdown-agents.en.md); nodes running with `--markdown-workers 0` do not announce it |
 | `edge-ports-v1` | The cluster has extra listener ports, a site is bound to ports other than the defaults, or the HTTPS redirect uses a status, port or excluded domains other than the defaults, see [HTTPS](https.en.md#the-clusters-listener-ports) |
 | `client-ip-v1` | The cluster's client IP is not direct (or drops the client's X-Forwarded-For), or a rule reads `ip.peer`, see [Client IP](../deploy/nodes.en.md#client-ip) |
 | `domains-v2` | A site (disabled ones included) has `.` suffix or pattern domains, see [Domain forms](domains.en.md#domain-forms) |

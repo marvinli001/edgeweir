@@ -523,6 +523,10 @@ message Site {
   // Development mode; unset means off. Added in proto/vX.Y.Z-dev-mode
   // (feature development-mode-v1).
   DevelopmentMode development_mode = 39;
+  // Markdown for Agents: HTML responses converted to Markdown for requests
+  // whose Accept names text/markdown (Markdown); unset means off. Added in
+  // proto/vX.Y.Z-markdown (feature markdown-v1).
+  Markdown markdown = 40;
 }
 
 // DevelopmentMode bypasses the edge cache of a site until expires_at, on
@@ -535,6 +539,24 @@ message Site {
 // configuration arrives; an expires_at in the past is off.
 message DevelopmentMode {
   google.protobuf.Timestamp expires_at = 1;
+}
+
+// Markdown converts a site's HTML responses to Markdown for GET and HEAD
+// requests whose Accept names text/markdown with q > 0: 2xx responses
+// (except 204, 205 and 206) of type text/html or application/xhtml+xml, at
+// most 6 MiB after any gzip decoding, become text/markdown; every other
+// response, and any conversion that fails, passes as the origin sent it.
+// Converted and passed responses alike are cached apart from the HTML ones
+// (the variant joins the cache key) and purged with them. Only paths whose
+// last segment has no extension or an HTML one (html, htm, xhtml, shtml,
+// php, asp, aspx, jsp, jspx, cfm, cgi, pl, do, action) qualify.
+message Markdown {
+  // Path prefixes converted (each starts with "/"); empty means every
+  // path. At most 32, each at most 256 bytes, sorted and unique.
+  repeated string include_prefixes = 1;
+  // Path prefixes never converted, checked after include_prefixes; same
+  // bounds.
+  repeated string exclude_prefixes = 2;
 }
 
 // EncodedPathExemption lets raw paths that start with prefix carry an

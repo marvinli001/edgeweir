@@ -38,6 +38,7 @@ import {
   updateL4App,
 } from "../../services/l4";
 import { getSiteMaintenance, updateSiteMaintenance } from "../../services/maintenance";
+import { getMarkdown, markdownStats, updateMarkdown } from "../../services/markdown";
 import { siteOriginHealth } from "../../services/origin-health";
 import { originQuality } from "../../services/origin-quality";
 import { batchDeleteSites, batchSetEnabled } from "../../services/site-batch";
@@ -155,6 +156,15 @@ export const sitesRouter = {
     ),
     set: authed.developmentMode.set.handler(({ input, context }) =>
       setDevelopmentMode(context.app.db, input, { actor: context.actor }),
+    ),
+  },
+  markdown: {
+    get: authed.markdown.get.handler(({ input, context }) => getMarkdown(context.app.db, input.id)),
+    update: authed.markdown.update.handler(({ input, context }) =>
+      updateMarkdown(context.app.db, input, { actor: context.actor }),
+    ),
+    stats: authed.markdown.stats.handler(({ input, context }) =>
+      markdownStats(context.app.db, input),
     ),
   },
   accessControl: {

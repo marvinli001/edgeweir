@@ -56,6 +56,7 @@ const ALL_FEATURES = [
   "challenge-v2",
   "access-logs-v2",
   "image-convert-v1",
+  "markdown-v1",
 ];
 
 /** A change without the operator behind it (service accounts, background jobs). */
@@ -172,6 +173,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       challengeV2: available,
       accessLogsV2: available,
       imageConvert: available,
+      markdown: available,
     });
     const https = await admin.https.get({ id: siteId });
     expect(https).toMatchObject({ brotli: false, brotliLevel: 6, zstd: false, zstdLevel: 3 });
@@ -348,6 +350,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       challengeV2: unavailable,
       accessLogsV2: unavailable,
       imageConvert: unavailable,
+      markdown: unavailable,
     });
     const before = (await config()).revision;
     for (const [call, feature] of [

@@ -517,6 +517,10 @@ message MinuteStats {
   // background and prefetch fetches included; active health checks and cache
   // hits not), at most 64 origins. Added in v1.4.0 (feature origin-stats-v1).
   repeated OriginCounter origins = 26;
+  // Complete 200 responses to GETs served as Markdown converted from HTML
+  // (Site.markdown; cache hits included). Added in proto/vX.Y.Z-markdown
+  // (feature markdown-v1).
+  uint64 markdown_responses = 27;
 }
 
 // OriginCounter is a minute of one origin's fetches on a node.

@@ -387,6 +387,11 @@ export const site = pgTable(
      * image-convert-v1); `{}` means never set (off, the defaults).
      */
     imageConvert: jsonb("image_convert").$type<Record<string, unknown>>().notNull().default({}),
+    /**
+     * Markdown for Agents (contract `markdownSettings`, markdown-v1); `{}`
+     * means never set (off, the defaults).
+     */
+    markdown: jsonb("markdown").$type<Record<string, unknown>>().notNull().default({}),
     cacheGeneration: bigint("cache_generation", { mode: "number" }).notNull().default(1),
     /** Cache key policy (contract `cacheKeyPolicy`); `{}` means the defaults. */
     cacheKey: jsonb("cache_key").$type<Record<string, unknown>>().notNull().default({}),
@@ -888,6 +893,8 @@ export const nodeMinuteStats = pgTable(
     ...statsDimensionColumns(),
     /** Bytes WebP / AVIF variants saved against their originals (image-convert-v1). */
     imageBytesSaved: bigint("image_bytes_saved", { mode: "number" }).notNull().default(0),
+    /** Responses served as Markdown converted from HTML (markdown-v1). */
+    markdownResponses: bigint("markdown_responses", { mode: "number" }).notNull().default(0),
   },
   (t) => [
     primaryKey({ columns: [t.minute, t.nodeId, t.siteId] }),
