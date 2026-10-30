@@ -72,7 +72,7 @@ Disallow: /
 - The `Content-Signal` line appears only when a content signal (search, ai-input, ai-train: yes / no) is set.
 - Each blocked or challenged crawler gets a `Disallow: /` group; charged crawlers do not.
 - Only `GET` / `HEAD` of exactly `/robots.txt`: prepended when the origin answers 200 plain text without content encoding; alone for a 404, 410 or a 200 that is not text (an application's fallback page).
-- The node drops `Accept-Encoding`, `Range` and conditional request headers when it fetches the file. The change happens on delivery: the cache keeps the origin's file.
+- The node drops `Accept-Encoding`, `Range` and conditional request headers when it fetches the file; the edge compresses the merged file as the site's compression settings say. The change happens on delivery: the cache keeps the origin's file.
 
 ## Pay per crawl
 
