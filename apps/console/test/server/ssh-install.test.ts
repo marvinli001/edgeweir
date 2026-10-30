@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { type AddressInfo, createServer, type Server as NetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -776,16 +776,19 @@ describe("remote command and output", () => {
         "curl",
         `[ "$4" = "http://console.test/install.sh" ] || exit 22
 cat >"$3" <<'SH'
+[ "$1" = --token-file ] || exit 3
+echo "token=$(cat "$2") $(ls -l "$2" | cut -c1-10) env=\${EDGEWEIR_TOKEN:-unset}"
+echo "$2" >>"$TOKEN_FILES"
+shift 2
 echo "args=$*"
-echo "token=$EDGEWEIR_TOKEN"
 if IFS= read -r line; then echo "stdin=$line"; else echo "stdin=<eof>"; fi
 SH`,
       );
       stub("id", `echo "\${FAKE_UID:-1000}"`);
-      // sudo -S -p '' --preserve-env=…: reads one password line, then runs the rest.
+      // sudo -S -p '' …: reads one password line, then runs the rest; sudo -n … runs the rest.
       stub(
         "sudo",
-        `if [ "$1" = -S ]; then IFS= read -r pw; echo "sudo-password=$pw"; shift 4; else shift 2; fi
+        `if [ "$1" = -S ]; then IFS= read -r pw; echo "sudo-password=$pw"; shift 3; else shift 1; fi
 exec "$@"`,
       );
     });
@@ -800,29 +803,29 @@ exec "$@"`,
         const child = execFile(
           "sh",
           ["-c", REMOTE_SCRIPT, url, mode, "--server", "https://c:8443"],
-          { env: { PATH: `${dir}:/usr/bin:/bin`, ...env } },
+          { env: { PATH: `${dir}:/usr/bin:/bin`, TOKEN_FILES: join(dir, "token-files"), ...env } },
           (error, stdout) =>
             resolve(error ? `exit ${(error as { code?: number }).code}\n${stdout}` : stdout),
         );
         child.stdin?.end(stdin);
       });
 
-    it("as root: the token from stdin line 1 in EDGEWEIR_TOKEN, install.sh's stdin empty", async () => {
-      expect(await exec("sudo-s", "ewt_tok\nleft-over-password\n", { FAKE_UID: "0" })).toBe(
-        "args=--server https://c:8443\ntoken=ewt_tok\nstdin=<eof>\n",
-      );
+    // install.sh gets the token in a 0600 --token-file, never in its environment.
+    const ran = "token=ewt_tok -rw------- env=unset\nargs=--server https://c:8443\nstdin=<eof>\n";
+
+    it("as root: the token from stdin line 1 in a --token-file, install.sh's stdin empty", async () => {
+      expect(await exec("sudo-s", "ewt_tok\nleft-over-password\n", { FAKE_UID: "0" })).toBe(ran);
     });
 
     it("with sudo -S: sudo reads line 2, install.sh still reads nothing", async () => {
-      expect(await exec("sudo-s", "ewt_tok\nsudo-pw\n")).toBe(
-        "sudo-password=sudo-pw\nargs=--server https://c:8443\ntoken=ewt_tok\nstdin=<eof>\n",
-      );
+      expect(await exec("sudo-s", "ewt_tok\nsudo-pw\n")).toBe(`sudo-password=sudo-pw\n${ran}`);
     });
 
-    it("with sudo -n, and exit 91 when the download fails", async () => {
-      expect(await exec("sudo-n", "ewt_tok\n")).toBe(
-        "args=--server https://c:8443\ntoken=ewt_tok\nstdin=<eof>\n",
-      );
+    it("with sudo -n, and exit 91 when the download fails; no token file outlives the script", async () => {
+      expect(await exec("sudo-n", "ewt_tok\n")).toBe(ran);
+      const files = readFileSync(join(dir, "token-files"), "utf8").trim().split("\n");
+      expect(files).toHaveLength(3);
+      for (const file of files) expect(existsSync(file)).toBe(false);
       expect(await exec("sudo-n", "ewt_tok\n", {}, "http://other/install.sh")).toBe("exit 91\n");
       expect(await exec("sudo-n", "")).toBe("exit 90\n");
     });

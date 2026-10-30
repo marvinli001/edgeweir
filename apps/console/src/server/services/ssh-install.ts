@@ -223,20 +223,25 @@ function sh(value: string): string {
  * The fixed script the login shell runs (as `sh -c SCRIPT URL MODE ARGS…`).
  * stdin line 1 is the token, line 2 the sudo password (sudo -S only).
  * install.sh is fetched as the user and run as root with stdin from
- * /dev/null, so a sudo password sudo did not read stays unread. Exit 90: no
- * token on stdin, 91: download failed, 92: no temporary directory.
+ * /dev/null, so a sudo password sudo did not read stays unread. The token
+ * reaches it as `--token-file` (0600 in the user's 0700 temporary directory,
+ * removed on exit), never in an environment: sudo logs preserved variables
+ * with their values. Exit 90: no token on stdin, 91: download failed, 92: no
+ * temporary directory.
  */
 export const REMOTE_SCRIPT = [
   "LC_ALL=C; export LC_ALL",
   "url=$0; mode=$1; shift",
-  "IFS= read -r EDGEWEIR_TOKEN || exit 90",
-  "export EDGEWEIR_TOKEN",
+  "IFS= read -r t || exit 90",
   "d=$(mktemp -d) || exit 92",
   "trap 'rm -rf \"$d\"' EXIT",
+  `(umask 077; printf '%s\\n' "$t" >"$d/token") || exit 92`,
+  "t=",
   'curl -fsSL -o "$d/install.sh" "$url" || exit 91',
+  'set -- --token-file "$d/token" "$@"',
   'if [ "$(id -u)" = 0 ]; then bash "$d/install.sh" "$@" </dev/null',
-  `elif [ "$mode" = sudo-s ]; then sudo -S -p '' --preserve-env=EDGEWEIR_TOKEN sh -c 'exec bash "$0" "$@" </dev/null' "$d/install.sh" "$@"`,
-  'else sudo -n --preserve-env=EDGEWEIR_TOKEN bash "$d/install.sh" "$@" </dev/null',
+  `elif [ "$mode" = sudo-s ]; then sudo -S -p '' sh -c 'exec bash "$0" "$@" </dev/null' "$d/install.sh" "$@"`,
+  'else sudo -n bash "$d/install.sh" "$@" </dev/null',
   "fi",
 ].join("\n");
 

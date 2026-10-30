@@ -1553,7 +1553,7 @@ leaks="$(in_ssh '
   fail "credentials or tokens left on the host (password in journal, token in journal, token files, temp dirs, environments): $leaks"
 journalctl_sudo="$(in_ssh 'journalctl --no-pager _COMM=sudo | grep "COMMAND=" | tail -n 1')"
 echo "sudo log: ${journalctl_sudo:0:200}"
-[[ "$journalctl_sudo" == *"install.sh --server https://console:8443"* ]] || fail "sudo did not log the install.sh command line"
+[[ "$journalctl_sudo" == *"/install.sh --token-file /tmp/tmp."*"/token --server https://console:8443"* && "$journalctl_sudo" != *ewt_* ]] || fail "sudo did not log the install.sh command line, or logged a token"
 console_hits="$("${COMPOSE[@]}" logs console 2>&1 | grep -cF -- "$password" || true)"
 db_hits="$("${COMPOSE[@]}" exec -T postgres pg_dump -U edgeweir -d edgeweir --data-only | grep -cF -- "$password" || true)"
 [[ "$console_hits" == 0 && "$db_hits" == 0 ]] || fail "the SSH password reached the console's logs ($console_hits) or database ($db_hits)"
