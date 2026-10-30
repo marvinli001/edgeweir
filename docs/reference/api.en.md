@@ -917,6 +917,20 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
   "https://cdn-admin.example.com/api/v1/sites/<site id>/image-convert/savings?range=7d"
 ```
 
+### Development mode
+
+| Procedure | Endpoint | Description |
+| --- | --- | --- |
+| `developmentMode.get` | `GET /sites/{id}/development-mode` | `{ siteId, until, unsupportedNodes }`: `until` is when it ends (`null` while off or once passed), `unsupportedNodes` counts the cluster's active nodes without `development-mode-v1` |
+| `developmentMode.set` | `PUT /sites/{id}/development-mode` | `{ "enabled": true }` turns it on for three hours, `false` off now; unchanged, nothing is published or audited (turning it on while on does not extend it). A change publishes the site's cluster (to every node at once, no canary) and audits `site.development_mode_on` / `site.development_mode_off` (`until`). A disabled site cannot turn it on (409 `SITE_DISABLED`) |
+
+The worker checks for expired ones every minute, turns them off, publishes and audits `site.development_mode_expire` as the system; nodes resumed caching at the deadline already. Sites gain `developmentModeUntil`. Read-only AccessKeys can call `GET` only; service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`). Behavior: [Development mode](../guide/origins-and-cache.en.md#development-mode).
+
+```bash
+curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"enabled":true}' https://cdn-admin.example.com/api/v1/sites/<site ID>/development-mode
+```
+
 ### Usage protection
 
 | Procedure | Endpoint | Notes |

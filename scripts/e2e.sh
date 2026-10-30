@@ -281,6 +281,15 @@
 #   accept either CA's certificates until the first one is retired; rotating
 #   the origin client CA, nodes switch certificates only when it is
 #   activated; Playwright e2e/g19.spec.ts.
+#   Development mode (section dev-mode, after core): dev-mode.test behind
+#   whoami, cached for an hour: MISS then HIT; on, every request BYPASSes to
+#   the origin (whoami echoes the request's own id); off early, the kept
+#   object HITs again and a path requested while on MISSes (nothing was
+#   stored); on again with the console paused, the node bypasses until the
+#   deadline (EDGEWEIR_E2E_DEVELOPMENT_MODE_SECONDS, 60 s here) and HITs with
+#   the kept body after it without a new configuration; unpaused, the
+#   console publishes development_mode_expired and audits the expiry as the
+#   system; Playwright e2e/dev-mode.spec.ts (card, time left, badge).
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -354,7 +363,7 @@ SECTIONS=(
   "pp:m6-upgrades"
   "g8:m6-upgrades" "g9:m6-upgrades" "g15:m6-upgrades" "g10:dns m5 m6-upgrades" "g11:m6-upgrades"
   "g12:m6-upgrades" "g13:m6-upgrades" "g14:m6-upgrades" "g16:m6-upgrades" "g17:m6-upgrades"
-  "g18:m6-upgrades" "g19:m6-upgrades" "usage-guard:m6-upgrades" "allowlist:" "lifecycle:"
+  "g18:m6-upgrades" "g19:m6-upgrades" "usage-guard:m6-upgrades" "dev-mode:" "allowlist:" "lifecycle:"
 )
 # Parallel lanes, "FIRST..LAST:SECTION ...": the SECTIONs run in a second
 # lane while the chain runs FIRST to LAST, and the chain waits for the lane
@@ -367,7 +376,8 @@ SECTIONS=(
 #     revision numbers or that no revision was published;
 #   m3, m4, g5 and g7 assert that nginx did not reload, which any change of
 #     nginx.conf elsewhere breaks (h2's gRPC site, g9's ports, g15's cache zone);
-#   node-logs restarts the console and stops the core node, m5, p0 and dns
+#   node-logs restarts the console and stops the core node, dev-mode pauses
+#     the console, m5, p0 and dns
 #     stop nodes, lifecycle deletes the core node, m6-upgrades upgrades both
 #     nodes, g6 blocks the edge node's ports, channel and wss move every node
 #     to other channel URLs;
@@ -1657,6 +1667,124 @@ section_usage_guard() {
 step "usage protection: warning and limit alerts, maintenance and disabling at both nodes, a higher limit, a manual restore"
 story usage-guard --cleanup
 pass "usage protection checks passed"
+}
+
+# ----------------------------------------------------------- section dev-mode
+section_dev_mode() {
+step "development mode: a cached object HIT, BYPASS to the origin while on, off early, then expiry on the node's own clock with the console paused"
+DM_HOST="dev-mode.test"
+# dm_get PATH -> "X-CACHE RESPONSE-ID BODY-ID": the body is whoami's echo of the request,
+# so BODY-ID is the X-Request-Id of the request that reached the origin.
+dm_get() {
+  local out
+  out="$(curl -sS -D - -H "Host: $DM_HOST" "$NODE_HTTP$1" | tr -d '\r')"
+  printf '%s %s %s\n' \
+    "$(awk 'tolower($1) == "x-cache:" { print $2; exit }' <<<"$out")" \
+    "$(awk 'tolower($1) == "x-request-id:" { print $2; exit }' <<<"$out")" \
+    "$(awk 'tolower($1) == "x-request-id:" { n++ } n == 2 { print $2; exit }' <<<"$out")"
+}
+dm_latest() { api GET "/clusters/$CLUSTER_ID" | jq -r .latestRevision.revision; }
+dm_node_latest() {
+  local latest
+  latest="$(dm_latest)"
+  dm_on_latest() { [[ "$(node_json | jq -r '"\(.appliedRevision) \(.applyState)"')" == "$latest applied" ]]; }
+  wait_for 60 "node applies revision #$latest" dm_on_latest
+}
+dm_reason() { api GET "/clusters/$CLUSTER_ID/revisions" | jq -r 'max_by(.revision).reasonCode'; }
+OLD_DM="$(api GET "/sites?search=$DM_HOST" | jq -r '.items[0].id // empty')"
+[[ -z "$OLD_DM" ]] || api DELETE "/sites/$OLD_DM" >/dev/null
+DM_SITE="$(api POST /sites "$(jq -nc --arg c "$CLUSTER_ID" --arg h "$DM_HOST" '{name: "dev-mode", clusterId: $c,
+  domains: [$h], origins: [{address: "whoami"}],
+  cacheRules: [{pathPrefixes: ["/"], edgeTtlSeconds: 3600, originCacheControl: "override"}]}')" | jq -r .site.id)"
+dm_node_latest
+[[ "$(node_json | jq -r '.supportedFeatures | index("development-mode-v1") != null')" == "true" ]] ||
+  fail "the node does not report development-mode-v1: $(node_json | jq -c .supportedFeatures)"
+
+read -r C1 R1 B1 <<<"$(dm_get /dm/object)"
+read -r C2 R2 B2 <<<"$(dm_get /dm/object)"
+echo "first: X-Cache $C1 (origin saw $B1), second: X-Cache $C2, request $R2, cached body from $B2"
+[[ "$C1" == MISS && "$B1" == "$R1" ]] || fail "first request should be a MISS answered by the origin: $C1 $R1 $B1"
+[[ "$C2" == HIT && "$B2" == "$B1" && "$R2" != "$B2" ]] || fail "second request should be a HIT with the first body: $C2 $R2 $B2"
+pass "cached object: MISS, then HIT with the body the origin sent for $B1"
+
+step "development mode on: every request goes to the origin, nothing is stored"
+DM_ON="$(api PUT "/sites/$DM_SITE/development-mode" '{"enabled":true}')"
+DM_UNTIL="$(jq -r .until <<<"$DM_ON")"
+[[ "$DM_UNTIL" != null ]] || fail "development mode did not turn on: $DM_ON"
+[[ "$(dm_reason)" == development_mode_on ]] || fail "latest revision should be development_mode_on, is $(dm_reason)"
+dm_node_latest
+[[ "$(api GET "/sites/$DM_SITE" | jq -r .developmentModeUntil)" == "$DM_UNTIL" ]] || fail "site does not carry developmentModeUntil"
+for path in /dm/object /dm/object /dm/new /dm/new; do
+  read -r C R B <<<"$(dm_get "$path")"
+  echo "$path: X-Cache $C, request $R, origin saw $B"
+  [[ "$C" == BYPASS && "$B" == "$R" ]] || fail "$path should bypass the cache to the origin while on: $C $R $B"
+done
+pass "on until $DM_UNTIL: BYPASS to the origin for the cached object and a new path (each request reached whoami)"
+
+step "development mode off early: the cache answers again with what it kept"
+api PUT "/sites/$DM_SITE/development-mode" '{"enabled":false}' >/dev/null
+[[ "$(dm_reason)" == development_mode_off ]] || fail "latest revision should be development_mode_off, is $(dm_reason)"
+dm_node_latest
+read -r C R B <<<"$(dm_get /dm/object)"
+[[ "$C" == HIT && "$B" == "$B1" ]] || fail "/dm/object should be a HIT with the body kept from before: $C $R $B"
+read -r C R B <<<"$(dm_get /dm/new)"
+[[ "$C" == MISS ]] || fail "/dm/new was not stored while on, so it should MISS now: $C $R $B"
+[[ "$(api GET "/audit-logs?action=site.development_mode_off" | jq -r --arg id "$DM_SITE" \
+  '[.items[] | select(.targetId == $id)][0].actorType')" == user ]] || fail "turning it off is not audited as the operator"
+pass "off: /dm/object HIT with the kept body from $B1, /dm/new MISS (nothing stored while on), audited"
+
+step "expiry with the console paused: the node resumes caching at the deadline on its own"
+DM_ON="$(api PUT "/sites/$DM_SITE/development-mode" '{"enabled":true}')"
+DM_UNTIL="$(jq -r .until <<<"$DM_ON")"
+dm_node_latest
+read -r C R B <<<"$(dm_get /dm/object)"
+[[ "$C" == BYPASS ]] || fail "/dm/object should bypass while on again: $C"
+DM_END="$(date -d "$DM_UNTIL" +%s 2>/dev/null || node -e 'console.log(Math.floor(Date.parse(process.argv[1]) / 1000))' "$DM_UNTIL")"
+# While the console is paused nothing may fail: the check returns its finding and the
+# console is unpaused before any fail.
+dm_while_paused() {
+  local now c r b
+  while now="$(date +%s)"; ((now < DM_END - 2)); do
+    [[ "$(dm_get /dm/object | cut -d' ' -f1)" == BYPASS ]] || { DM_FINDING="the node stopped bypassing $((DM_END - now)) s before the deadline"; return 1; }
+    sleep 2
+  done
+  while now="$(date +%s)"; ((now < DM_END + 15)); do
+    read -r c r b <<<"$(dm_get /dm/object)"
+    if [[ "$c" == HIT ]]; then
+      [[ "$b" == "$B1" ]] || { DM_FINDING="the HIT after expiry carries $b, not the kept body $B1"; return 1; }
+      DM_FINDING="HIT with the kept body $((now - DM_END)) s after the deadline"
+      return 0
+    fi
+    sleep 1
+  done
+  DM_FINDING="still $c 15 s after the deadline"
+  return 1
+}
+"${COMPOSE[@]}" pause console >/dev/null
+echo "console paused; development mode ends at $DM_UNTIL ($((DM_END - $(date +%s))) s)"
+DM_OK=true
+dm_while_paused || DM_OK=false
+"${COMPOSE[@]}" unpause console >/dev/null
+$DM_OK || fail "console paused: $DM_FINDING"
+pass "console paused: BYPASS until $DM_UNTIL, then $DM_FINDING, without a new configuration"
+
+step "the console turns the expired development mode off, publishes and audits it as the system"
+dm_expired() { [[ "$(api GET "/sites/$DM_SITE/development-mode" | jq -r .until)" == null && "$(dm_reason)" == development_mode_expired ]]; }
+wait_for 90 "expiry revision after the console is back" dm_expired
+dm_node_latest
+[[ "$(api GET "/audit-logs?action=site.development_mode_expire" | jq -r --arg id "$DM_SITE" \
+  '[.items[] | select(.targetId == $id)][0] | "\(.actorType) \(.metadata.until)"')" == "system $DM_UNTIL" ]] ||
+  fail "expiry is not audited as the system with its deadline"
+[[ "$(dm_get /dm/object | cut -d' ' -f1)" == HIT ]] || fail "/dm/object should stay a HIT after the expiry revision"
+[[ "$(api GET "/sites/$DM_SITE" | jq -r .developmentModeUntil)" == null ]] || fail "site still carries developmentModeUntil"
+pass "expired: revision development_mode_expired applied, audit site.development_mode_expire by the system, still HIT"
+mkdir -p .e2e && jq -nc --arg id "$DM_SITE" '{siteId: $id}' >.e2e/dev-mode-state.json
+if ! $SKIP_UI; then
+  part ui env E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+    pnpm --filter @edgeweir/console run test:e2e e2e/dev-mode.spec.ts || fail "development mode browser checks failed"
+fi
+api DELETE "/sites/$DM_SITE" >/dev/null
+pass "development mode checks passed"
 }
 
 # ----------------------------------------------------------- section allowlist

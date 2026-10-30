@@ -65,7 +65,7 @@ A batch action completes for every site or changes none (for example when one of
 | Log settings | The access log sample rate, logging blocked requests, the query string, request headers, the peer address and JA4 | |
 | Image format conversion | On or off, formats and qualities, source types, the size range and the most pixels | |
 
-Domains, origins, certificates, ports, X-Cache, the PURGE method and key, charset, the request body limit and maintenance mode belong to no part and are never copied.
+Domains, origins, certificates, ports, X-Cache, the PURGE method and key, charset, the request body limit, maintenance mode and development mode belong to no part and are never copied.
 
 ### Why a copy fails
 
@@ -84,7 +84,7 @@ A target that lacks something the settings use fails:
 1. Click "Clone" under **⋯** in the site page's header.
 2. Enter a name (empty: the first domain) and the domains, change the tags if needed (the source's by default) and click "Clone".
 
-The new site is in the source's cluster with the source's origins (S3 credentials encrypted again for it), every part that can be copied, X-Cache, the PURGE method and key (encrypted again), charset, the request body limit and maintenance mode. Certificates cover the source's domains and are not copied, so the clone has force HTTPS, HSTS and client certificates off and keeps only 443 of the HTTPS ports (80 when the source has no HTTP port). If the source's access authentication domains or bulk redirect sources name the source's domains, the clone fails with the reason. A clone gets the audit entry "Site cloned".
+The new site is in the source's cluster with the source's origins (S3 credentials encrypted again for it), every part that can be copied, X-Cache, the PURGE method and key (encrypted again), charset, the request body limit and maintenance mode; development mode starts off. Certificates cover the source's domains and are not copied, so the clone has force HTTPS, HSTS and client certificates off and keeps only 443 of the HTTPS ports (80 when the source has no HTTP port). If the source's access authentication domains or bulk redirect sources name the source's domains, the clone fails with the reason. A clone gets the audit entry "Site cloned".
 
 ## API
 

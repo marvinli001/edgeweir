@@ -917,6 +917,20 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
   "https://cdn-admin.example.com/api/v1/sites/<网站 ID>/image-convert/savings?range=7d"
 ```
 
+### 开发模式
+
+| 过程 | 端点 | 说明 |
+| --- | --- | --- |
+| `developmentMode.get` | `GET /sites/{id}/development-mode` | `{ siteId, until, unsupportedNodes }`：`until` 为结束时间（关闭或已过期时为 `null`），`unsupportedNodes` 为集群中不支持 `development-mode-v1` 的活动节点数 |
+| `developmentMode.set` | `PUT /sites/{id}/development-mode` | `{ "enabled": true }` 开启 3 小时，`false` 立即关闭；状态不变时不发布、不审计（开启期间再开不延长）。变化时发布所在集群（直接下发所有节点，不经金丝雀），审计 `site.development_mode_on` / `site.development_mode_off`（`until`）。停用的网站不能开启（409 `SITE_DISABLED`） |
+
+到期由 worker 每分钟检查，关闭、发布并以系统身份审计 `site.development_mode_expire`；节点在到期时刻已自行恢复缓存。网站对象增加 `developmentModeUntil`。只读 AccessKey 只能调用 `GET`；服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）。行为见[开发模式](../guide/origins-and-cache.md#开发模式)。
+
+```bash
+curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"enabled":true}' https://cdn-admin.example.com/api/v1/sites/<网站 ID>/development-mode
+```
+
 ### 用量保护
 
 | 过程 | 端点 | 说明 |
