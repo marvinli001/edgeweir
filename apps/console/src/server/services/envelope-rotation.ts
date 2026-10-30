@@ -17,6 +17,7 @@ import {
 } from "./certificates";
 import { challengeKeyBinding } from "./challenge-keys";
 import { providerBinding } from "./dns-providers";
+import { extensionSecretBinding } from "./extensions";
 import { channelBinding, SMTP_KEY, smtpBinding } from "./notification-delivery";
 import { originClientKeyBinding } from "./origin-pki";
 import type { Executor } from "./revisions";
@@ -118,6 +119,12 @@ export const ENVELOPE_COLUMNS: EnvelopeColumn[] = [
     id: schema.sessionTicketKey.id,
     column: schema.sessionTicketKey.secret,
     binding: sessionTicketKeyBinding,
+  },
+  {
+    table: schema.extension,
+    id: schema.extension.id,
+    column: schema.extension.secretEnvelope,
+    binding: extensionSecretBinding,
   },
 ];
 

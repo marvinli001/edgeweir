@@ -232,6 +232,8 @@ export interface NodeExtensionStatus {
   message: string;
   faults: number;
   trips: number;
+  /** ExtensionStatus.details_json as an object (version 1.1); absent when none was valid. */
+  details?: Record<string, unknown>;
 }
 
 export const node = pgTable(

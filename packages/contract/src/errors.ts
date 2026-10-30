@@ -347,6 +347,13 @@ export const errorDefs = {
   /** The extension's version needs a Lua API this console does not deliver. */
   EXTENSION_UNSUPPORTED: { status: 400, params: ["luaApi"] },
   EXTENSION_KEY_INVALID: { status: 400, params: [] },
+  /** The active version's manifest has no `secret: true`. */
+  EXTENSION_SECRET_NOT_SUPPORTED: { status: 400, params: [] },
+  /** The active version's manifest has no `data`. */
+  EXTENSION_DATA_NOT_SUPPORTED: { status: 400, params: [] },
+  /** A data item over the manifest's `data` limits: `limit` max_bytes | max_items | max_total_bytes, `max` its value. */
+  EXTENSION_DATA_TOO_LARGE: { status: 400, params: ["limit", "max"] },
+  EXTENSION_DATA_NOT_FOUND: { status: 404, params: [] },
   EXTENSION_KEY_EXISTS: { status: 409, params: ["kid"] },
   EXTENSION_KEY_NOT_FOUND: { status: 404, params: [] },
   /** Stored versions are signed by the key. */

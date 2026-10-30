@@ -27,6 +27,23 @@ export const EXTENSION_LIMITS = {
   pathBytes: 200,
 } as const;
 
+/** Package limits of an extension with a sidecar (version 1.1). */
+export const EXTENSION_SIDECAR_LIMITS = {
+  archiveBytes: 64 * 1024 * 1024,
+  unpackedBytes: 192 * 1024 * 1024,
+  fileBytes: 96 * 1024 * 1024,
+} as const;
+
+/** Upper bounds of the manifest's `data` member (version 1.1). */
+const EXTENSION_DATA_LIMITS = {
+  maxBytes: 25165824,
+  maxItems: 32,
+  maxTotalBytes: 268435456,
+} as const;
+
+/** Name of a per-site data item and of a sidecar binary. */
+const EXTENSION_DATA_NAME_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+
 const EXTENSION_ID_RE = /^[a-z][a-z0-9-]{1,38}[a-z0-9]$/;
 const RESERVED_IDS = new Set([
   "edgeweir",
@@ -44,6 +61,8 @@ const SEMVER_RE =
 const NAME_RE = /^[a-z][a-z0-9_]{0,31}$/;
 const SHORT_NAME_RE = /^[a-z][a-z0-9_]{0,15}$/;
 const ENDPOINT_PATH_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+const SIDECAR_ENV_RE = /^[A-Z][A-Z0-9_]{0,63}$/;
+const utf8Length = (value: string) => new TextEncoder().encode(value).length;
 
 const EXTENSION_HOOKS = [
   "init",
@@ -63,6 +82,7 @@ const EXTENSION_CAPABILITIES = [
   "body_rewrite",
   "http_client",
   "timers",
+  "sidecar",
 ] as const;
 const EXTENSION_ENDPOINT_METHODS = ["GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"] as const;
 const EXTENSION_FIELD_TYPES = ["string", "number", "boolean"] as const;
@@ -344,6 +364,34 @@ const names = (re: RegExp, max: number) =>
     .max(max)
     .refine((list) => new Set(list).size === list.length, "duplicate name");
 
+const extensionSidecar = z.strictObject({
+  binary: z.string().regex(EXTENSION_DATA_NAME_RE),
+  args: z
+    .array(z.string().refine((arg) => utf8Length(arg) <= 256, "argument too long"))
+    .max(16)
+    .default([]),
+  env: z
+    .record(
+      z
+        .string()
+        .regex(SIDECAR_ENV_RE)
+        .refine((name) => !name.startsWith("EDGEWEIR_"), "reserved variable"),
+      z.string().refine((value) => utf8Length(value) <= 1024, "value too long"),
+    )
+    .refine((env) => Object.keys(env).length <= 16, "too many variables")
+    .default({}),
+  memory_mb: z.number().int().min(16).max(8192),
+  tasks_max: z.number().int().min(16).max(4096).default(256),
+  cpu_percent: z.number().int().min(10).max(800).optional(),
+  health_path: z
+    .string()
+    .regex(/^\/[\x21-\x7e]{0,255}$/)
+    .default("/healthz"),
+  connect_timeout_ms: z.number().int().min(100).max(10000).default(1000),
+  timeout_s: z.number().int().min(1).max(60).default(30),
+  max_body: z.number().int().min(0).max(104857600).default(10485760),
+});
+
 export const extensionManifest = z
   .strictObject({
     format: z.literal(EXTENSION_FORMAT),
@@ -434,9 +482,36 @@ export const extensionManifest = z
       .default([])
       .refine((list) => new Set(list.map((d) => d.name)).size === list.length, "duplicate dict")
       .refine((list) => list.reduce((sum, d) => sum + d.size_kb, 0) <= 32768, "too large"),
+    /** Lua API 2: a console-generated 32-byte secret (ew.secret()). */
+    secret: z.boolean().optional(),
+    /** Lua API 2: a native helper process run by the node agent. */
+    sidecar: extensionSidecar.optional(),
+    /** Lua API 2: per-site data items uploaded through the console. */
+    data: z
+      .strictObject({
+        max_bytes: z.number().int().min(1).max(EXTENSION_DATA_LIMITS.maxBytes),
+        max_items: z.number().int().min(1).max(EXTENSION_DATA_LIMITS.maxItems),
+        max_total_bytes: z.number().int().min(1).max(EXTENSION_DATA_LIMITS.maxTotalBytes),
+      })
+      .optional(),
   })
   .superRefine((manifest, ctx) => {
     const limits = API_LIMITS[manifest.requires.lua_api];
+    for (const member of ["secret", "sidecar", "data"] as const) {
+      if (manifest[member] !== undefined && manifest.requires.lua_api < 2) {
+        ctx.addIssue({ code: "custom", path: [member], message: `${member} needs lua_api 2` });
+      }
+    }
+    if ((manifest.sidecar !== undefined) !== manifest.capabilities.includes("sidecar")) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["sidecar"],
+        message: "sidecar and the capability sidecar go together",
+      });
+    }
+    if (manifest.data !== undefined && manifest.sidecar === undefined) {
+      ctx.addIssue({ code: "custom", path: ["data"], message: "data needs sidecar" });
+    }
     if (manifest.log_fields.length > limits.logFields) {
       ctx.addIssue({ code: "custom", path: ["log_fields"], message: "too many log fields" });
     }
@@ -465,11 +540,11 @@ const extensionFailureMode = z.enum(["open", "closed"]);
 const configObject = z.record(z.string(), z.unknown());
 
 const packageInput = z.object({
-  /** The .ewx bytes, base64. */
+  /** The .ewx bytes, base64 (a package with a sidecar may be up to 64 MiB). */
   package: z
     .string()
     .min(1)
-    .max(Math.ceil((EXTENSION_LIMITS.archiveBytes * 4) / 3) + 4),
+    .max(Math.ceil((EXTENSION_SIDECAR_LIMITS.archiveBytes * 4) / 3) + 4),
   /** The .ewx.sig JWS (compact serialization). */
   signature: z.string().trim().min(1).max(4096),
 });
@@ -515,6 +590,8 @@ const nodeExtensionState = z.object({
   message: z.string(),
   faults: z.number().int(),
   trips: z.number().int(),
+  /** What the node reports beyond the state (version 1.1): `sidecar`, `listeners`. */
+  details: z.record(z.string(), z.unknown()),
 });
 
 const extensionSummary = z.object({
@@ -542,6 +619,8 @@ const extensionDetail = extensionSummary.extend({
   nodes: z.array(nodeExtensionState),
   /** Rules that read the extension's fields (uninstall is refused while any exist). */
   ruleReferences: z.number().int(),
+  /** Version of the console-generated secret (manifest `secret: true`); 0: none. */
+  secretVersion: z.number().int(),
 });
 
 const siteExtensionView = z.object({
@@ -556,7 +635,25 @@ const siteExtensionView = z.object({
   schema: extensionConfigSchema.nullable(),
   capabilities: z.array(z.enum(EXTENSION_CAPABILITIES)),
   updatedAt: isoDateTime.nullable(),
+  /** The active manifest's `data` limits; null: the extension takes no site data. */
+  dataLimits: z
+    .object({
+      maxBytes: z.number().int(),
+      maxItems: z.number().int(),
+      maxTotalBytes: z.number().int(),
+    })
+    .nullable(),
 });
+
+const siteDataItem = z.object({
+  name: z.string(),
+  /** Lowercase hex SHA-256 of the content. */
+  sha256: z.string(),
+  size: z.number().int(),
+  updatedAt: isoDateTime,
+});
+
+const siteDataName = z.string().regex(EXTENSION_DATA_NAME_RE);
 
 const settingsView = z.object({ disabled: z.boolean() });
 
@@ -612,6 +709,37 @@ export const extensionsContract = {
     .route({ method: "GET", path: "/sites/{siteId}/extensions", tags })
     .input(z.object({ siteId: uuid }))
     .output(z.array(siteExtensionView)),
+  /** Makes a new current secret and keeps the old one as previous (manifest `secret: true`). */
+  rotateSecret: oc
+    .route({ method: "POST", path: "/extensions/{id}/rotate-secret", tags })
+    .input(z.object({ id: extensionId }))
+    .output(extensionDetail),
+  /** The site's data items of an extension (manifest `data`). */
+  listSiteData: oc
+    .route({ method: "GET", path: "/sites/{siteId}/extensions/{id}/data", tags })
+    .input(z.object({ siteId: uuid, id: extensionId }))
+    .output(z.array(siteDataItem)),
+  /** Creates or replaces a data item; limits from the active manifest's `data`. */
+  putSiteData: oc
+    .route({ method: "PUT", path: "/sites/{siteId}/extensions/{id}/data/{name}", tags })
+    .input(
+      z.object({
+        siteId: uuid,
+        id: extensionId,
+        name: siteDataName,
+        /** The item's bytes, base64. */
+        content: z
+          .string()
+          .max(Math.ceil((EXTENSION_DATA_LIMITS.maxBytes * 4) / 3) + 4)
+          .regex(/^[A-Za-z0-9+/]*={0,2}$/)
+          .refine((value) => value.length % 4 === 0, "not base64"),
+      }),
+    )
+    .output(siteDataItem),
+  deleteSiteData: oc
+    .route({ method: "DELETE", path: "/sites/{siteId}/extensions/{id}/data/{name}", tags })
+    .input(z.object({ siteId: uuid, id: extensionId, name: siteDataName }))
+    .output(z.object({ ok: z.literal(true) })),
   updateSite: oc
     .route({ method: "PUT", path: "/sites/{siteId}/extensions/{id}", tags })
     .input(
@@ -652,3 +780,4 @@ export type ExtensionKeyView = z.infer<typeof extensionKeyView>;
 export type VerifiedExtensionPackage = z.infer<typeof verifiedPackage>;
 export type SiteExtensionView = z.infer<typeof siteExtensionView>;
 export type NodeExtensionState = z.infer<typeof nodeExtensionState>;
+export type ExtensionSiteDataItem = z.infer<typeof siteDataItem>;

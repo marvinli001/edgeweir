@@ -1135,6 +1135,8 @@ message GetExtensionSecretsRequest {
   repeated string ids = 1;
 }
 
+// GetExtensionSecretsResponse carries the secrets of the extensions the
+// node's cluster gets with `secret: true`.
 message GetExtensionSecretsResponse {
   repeated ExtensionSecret secrets = 1;
 }

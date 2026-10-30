@@ -2,13 +2,17 @@ import {
   activateExtensionVersion,
   addExtensionKey,
   deleteExtensionVersion,
+  deleteSiteExtensionData,
   getExtension,
   getExtensionSettings,
   installExtension,
   listExtensionKeys,
   listExtensions,
+  listSiteExtensionData,
   listSiteExtensions,
+  putSiteExtensionData,
   removeExtensionKey,
+  rotateExtensionSecret,
   uninstallExtension,
   updateExtension,
   updateExtensionSettings,
@@ -28,10 +32,10 @@ export const extensionsRouter = {
       verifyExtensionPackage(context.app.db, input),
     ),
     install: authed.extensions.install.handler(({ input, context }) =>
-      installExtension(context.app.db, input, context.actor),
+      installExtension(context.app.db, context.app.masterKey, input, context.actor),
     ),
     activate: authed.extensions.activate.handler(({ input, context }) =>
-      activateExtensionVersion(context.app.db, input, context.actor),
+      activateExtensionVersion(context.app.db, context.app.masterKey, input, context.actor),
     ),
     deleteVersion: authed.extensions.deleteVersion.handler(({ input, context }) =>
       deleteExtensionVersion(context.app.db, input, context.actor),
@@ -55,6 +59,19 @@ export const extensionsRouter = {
     updateSite: authed.extensions.updateSite.handler(({ input, context }) =>
       updateSiteExtension(context.app.db, input, context.actor),
     ),
+    rotateSecret: authed.extensions.rotateSecret.handler(({ input, context }) =>
+      rotateExtensionSecret(context.app.db, context.app.masterKey, input.id, context.actor),
+    ),
+    listSiteData: authed.extensions.listSiteData.handler(({ input, context }) =>
+      listSiteExtensionData(context.app.db, input),
+    ),
+    putSiteData: authed.extensions.putSiteData.handler(({ input, context }) =>
+      putSiteExtensionData(context.app.db, input, context.actor),
+    ),
+    deleteSiteData: authed.extensions.deleteSiteData.handler(async ({ input, context }) => {
+      await deleteSiteExtensionData(context.app.db, input, context.actor);
+      return { ok: true as const };
+    }),
   },
   extensionKeys: {
     list: authed.extensionKeys.list.handler(({ context }) => listExtensionKeys(context.app.db)),

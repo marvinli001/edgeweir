@@ -3113,6 +3113,9 @@ export const GetExtensionSecretsRequestSchema: GenMessage<GetExtensionSecretsReq
   messageDesc(file_edgeweir_node_v1_node, 69);
 
 /**
+ * GetExtensionSecretsResponse carries the secrets of the extensions the
+ * node's cluster gets with `secret: true`.
+ *
  * @generated from message edgeweir.node.v1.GetExtensionSecretsResponse
  */
 export type GetExtensionSecretsResponse = Message<"edgeweir.node.v1.GetExtensionSecretsResponse"> & {

@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import type { ExtensionModel, SiteModel } from "@edgeweir/config-compiler";
 import {
   applyExtensionConfig,
@@ -7,6 +8,7 @@ import {
   type ExtensionDetail,
   type ExtensionKeyView,
   type ExtensionManifest,
+  type ExtensionSiteDataItem,
   type ExtensionSummary,
   extensionManifest,
   maskExtensionConfig,
@@ -18,7 +20,8 @@ import {
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { registerExtensionFields } from "@edgeweir/rule-engine";
-import { and, asc, eq, inArray, like, sql } from "drizzle-orm";
+import { type AnyColumn, and, asc, eq, inArray, isNotNull, like, sql } from "drizzle-orm";
+import type { Envelope, MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
 import {
   decodePackage,
@@ -57,6 +60,57 @@ const extensionFeatures = (manifest: ExtensionManifest) =>
   manifest.requires.lua_api >= 2
     ? [EXTENSIONS_FEATURE, EXTENSIONS_V2_FEATURE]
     : [EXTENSIONS_FEATURE];
+
+// ---------------------------------------------------------------------------
+// Secrets (manifest `secret: true`, version 1.1)
+
+/** Envelope binding of an extension's secrets: the column and the extension (AAD). */
+export const extensionSecretBinding = (id: string) => ({
+  purpose: "extension.secret_envelope",
+  recordId: id,
+});
+
+const SECRET_BYTES = 32;
+
+/** Seals the current secret followed by the previous one (absent before the first rotation). */
+function sealSecrets(masterKey: MasterKey, id: string, current: Buffer, previous?: Buffer) {
+  return JSON.stringify(
+    masterKey.seal(
+      previous ? Buffer.concat([current, previous]) : current,
+      extensionSecretBinding(id),
+    ),
+  );
+}
+
+function openSecrets(
+  masterKey: MasterKey,
+  id: string,
+  envelope: string,
+): { current: Buffer; previous: Buffer | null } {
+  const plain = masterKey.open(JSON.parse(envelope) as Envelope, extensionSecretBinding(id));
+  return {
+    current: plain.subarray(0, SECRET_BYTES),
+    previous:
+      plain.length >= 2 * SECRET_BYTES ? plain.subarray(SECRET_BYTES, 2 * SECRET_BYTES) : null,
+  };
+}
+
+/** Generates the secret (version 1) when the active version declares one and none exists. */
+async function ensureSecret(tx: Tx, masterKey: MasterKey, id: string, manifest: ExtensionManifest) {
+  if (!manifest.secret) return;
+  const [row] = await tx
+    .select({ envelope: schema.extension.secretEnvelope, version: schema.extension.secretVersion })
+    .from(schema.extension)
+    .where(eq(schema.extension.id, id));
+  if (!row || row.envelope) return;
+  await tx
+    .update(schema.extension)
+    .set({
+      secretEnvelope: sealSecrets(masterKey, id, randomBytes(SECRET_BYTES)),
+      secretVersion: row.version + 1,
+    })
+    .where(eq(schema.extension.id, id));
+}
 
 const schemaOf = (manifest: ExtensionManifest, scope: "global" | "site") =>
   manifest.config[scope] as ExtensionConfigSchema | undefined;
@@ -237,13 +291,48 @@ export async function loadExtensionInput(
           ),
         )
     : [];
+  const manifests = new Map(rows.map((row) => [row.extension.id, manifestOf(row.version)]));
+  // Data items of the enabled entries whose extension takes data (version 1.1).
+  const withData = entries.filter((entry) => manifests.get(entry.extensionId)?.data);
+  const items = withData.length
+    ? await db
+        .select({
+          siteId: schema.siteExtensionData.siteId,
+          extensionId: schema.siteExtensionData.extensionId,
+          name: schema.siteExtensionData.name,
+          sha256: schema.siteExtensionData.sha256,
+          size: schema.siteExtensionData.size,
+        })
+        .from(schema.siteExtensionData)
+        .where(
+          and(
+            inArray(
+              schema.siteExtensionData.siteId,
+              withData.map((entry) => entry.siteId),
+            ),
+            inArray(
+              schema.siteExtensionData.extensionId,
+              withData.map((entry) => entry.extensionId),
+            ),
+          ),
+        )
+        .orderBy(asc(schema.siteExtensionData.name))
+    : [];
   for (const site of sites) {
     site.extensions = entries
       .filter((entry) => entry.siteId === site.id)
-      .map((entry) => ({ id: entry.extensionId, configJson: canonicalJson(entry.config) }));
+      .map((entry) => ({
+        id: entry.extensionId,
+        configJson: canonicalJson(entry.config),
+        data: manifests.get(entry.extensionId)?.data
+          ? items
+              .filter((item) => item.siteId === site.id && item.extensionId === entry.extensionId)
+              .map(({ name, sha256, size }) => ({ name, sha256, size }))
+          : [],
+      }));
   }
   const extensions = rows.map(({ extension, version, key }): ExtensionModel => {
-    const manifest = manifestOf(version);
+    const manifest = manifests.get(extension.id) ?? manifestOf(version);
     return {
       id: extension.id,
       version: version.version,
@@ -257,6 +346,7 @@ export async function loadExtensionInput(
       configJson: canonicalJson(extension.config),
       sharedDicts: manifest.shared_dicts.map((d) => ({ name: d.name, sizeKb: d.size_kb })),
       luaApi: manifest.requires.lua_api,
+      secretVersion: manifest.secret ? extension.secretVersion : 0,
     };
   });
   return { extensions, extensionsDisabled: (await getExtensionSettings(db)).disabled };
@@ -403,6 +493,7 @@ export async function verifyExtensionPackage(
  */
 export async function installExtension(
   db: Database,
+  masterKey: MasterKey,
   input: { package: string; signature: string },
   actor: Actor,
 ): Promise<ExtensionDetail> {
@@ -461,10 +552,11 @@ export async function installExtension(
           capabilities: manifest.capabilities,
         },
       });
+      await ensureSecret(tx, masterKey, manifest.id, manifest);
       await refreshExtensionFields(tx);
       return manifest.id;
     }
-    await activate(tx, existing, manifest.version, actor, "extension.upgrade", {
+    await activate(tx, masterKey, existing, manifest.version, actor, "extension.upgrade", {
       sha256: pkg.sha256,
       kid: pkg.kid,
     });
@@ -475,6 +567,7 @@ export async function installExtension(
 
 async function activate(
   tx: Tx,
+  masterKey: MasterKey,
   existing: ExtensionRow,
   version: string,
   actor: Actor,
@@ -529,6 +622,7 @@ async function activate(
     .update(schema.extension)
     .set({ activeVersion: version, config })
     .where(eq(schema.extension.id, existing.id));
+  await ensureSecret(tx, masterKey, existing.id, manifest);
   await refreshExtensionFields(tx);
   const clusters = await clustersUsing(tx, existing.id);
   if (existing.enabled)
@@ -585,6 +679,7 @@ async function activeVersion(db: Executor, row: ExtensionRow): Promise<VersionRo
 
 export async function activateExtensionVersion(
   db: Database,
+  masterKey: MasterKey,
   input: { id: string; version: string },
   actor: Actor,
 ): Promise<ExtensionDetail> {
@@ -592,6 +687,7 @@ export async function activateExtensionVersion(
     await lockExtensions(tx);
     await activate(
       tx,
+      masterKey,
       await requireExtension(tx, input.id),
       input.version,
       actor,
@@ -688,6 +784,50 @@ export async function updateExtension(
     });
   });
   return getExtension(db, input.id);
+}
+
+/**
+ * Makes a new current secret and keeps the old one as previous (version + 1),
+ * then publishes the clusters that get the extension.
+ */
+export async function rotateExtensionSecret(
+  db: Database,
+  masterKey: MasterKey,
+  id: string,
+  actor: Actor,
+): Promise<ExtensionDetail> {
+  await db.transaction(async (tx) => {
+    await lockExtensions(tx);
+    const row = await requireExtension(tx, id);
+    const manifest = manifestOf(await activeVersion(tx, row));
+    if (!manifest.secret) fail("EXTENSION_SECRET_NOT_SUPPORTED", "the extension has no secret");
+    const previous = row.secretEnvelope
+      ? openSecrets(masterKey, id, row.secretEnvelope).current
+      : undefined;
+    const version = row.secretVersion + 1;
+    await tx
+      .update(schema.extension)
+      .set({
+        secretEnvelope: sealSecrets(masterKey, id, randomBytes(SECRET_BYTES), previous),
+        secretVersion: version,
+      })
+      .where(eq(schema.extension.id, id));
+    const revisions = await publishUsing(
+      tx,
+      actor,
+      await clustersUsing(tx, id),
+      "extension_updated",
+      id,
+    );
+    await recordAudit(tx, actor, {
+      action: "extension.rotate_secret",
+      targetType: "extension",
+      targetId: id,
+      targetName: manifest.name.en,
+      metadata: { secretVersion: version, revisions },
+    });
+  });
+  return getExtension(db, id);
 }
 
 export async function uninstallExtension(db: Database, id: string, actor: Actor): Promise<void> {
@@ -809,6 +949,13 @@ function siteView(
     schema: siteSchema,
     capabilities: manifest.capabilities,
     updatedAt: entry?.updatedAt.toISOString() ?? null,
+    dataLimits: manifest.data
+      ? {
+          maxBytes: manifest.data.max_bytes,
+          maxItems: manifest.data.max_items,
+          maxTotalBytes: manifest.data.max_total_bytes,
+        }
+      : null,
   };
 }
 
@@ -882,6 +1029,131 @@ export async function updateSiteExtension(
 }
 
 // ---------------------------------------------------------------------------
+// Site data (manifest `data`, version 1.1)
+
+const dataView = (row: {
+  name: string;
+  sha256: string;
+  size: number;
+  updatedAt: Date;
+}): ExtensionSiteDataItem => ({
+  name: row.name,
+  sha256: row.sha256,
+  size: row.size,
+  updatedAt: row.updatedAt.toISOString(),
+});
+
+const dataOf = (siteId: string, extensionId: string) =>
+  and(
+    eq(schema.siteExtensionData.siteId, siteId),
+    eq(schema.siteExtensionData.extensionId, extensionId),
+  );
+
+export async function listSiteExtensionData(
+  db: Executor,
+  input: { siteId: string; id: string },
+): Promise<ExtensionSiteDataItem[]> {
+  await requireSite(db, input.siteId);
+  await requireExtension(db, input.id);
+  const rows = await db
+    .select({
+      name: schema.siteExtensionData.name,
+      sha256: schema.siteExtensionData.sha256,
+      size: schema.siteExtensionData.size,
+      updatedAt: schema.siteExtensionData.updatedAt,
+    })
+    .from(schema.siteExtensionData)
+    .where(dataOf(input.siteId, input.id))
+    .orderBy(asc(schema.siteExtensionData.name));
+  return rows.map(dataView);
+}
+
+/**
+ * Creates or replaces a data item within the active manifest's `data` limits
+ * (the item, the number of items and their total size per site and
+ * extension) and publishes the site's cluster.
+ */
+export async function putSiteExtensionData(
+  db: Database,
+  input: { siteId: string; id: string; name: string; content: string },
+  actor: Actor,
+): Promise<ExtensionSiteDataItem> {
+  const content = new Uint8Array(Buffer.from(input.content, "base64"));
+  return db.transaction(async (tx) => {
+    await lockExtensions(tx);
+    const site = await requireSite(tx, input.siteId);
+    const extension = await requireExtension(tx, input.id);
+    const limits = manifestOf(await activeVersion(tx, extension)).data;
+    if (!limits) return fail("EXTENSION_DATA_NOT_SUPPORTED", "the extension takes no site data");
+    const tooLarge = (limit: "max_bytes" | "max_items" | "max_total_bytes") =>
+      fail("EXTENSION_DATA_TOO_LARGE", `over the extension's ${limit}`, {
+        limit,
+        max: limits[limit],
+      });
+    if (content.length > limits.max_bytes) tooLarge("max_bytes");
+    const others = (
+      await tx
+        .select({ name: schema.siteExtensionData.name, size: schema.siteExtensionData.size })
+        .from(schema.siteExtensionData)
+        .where(dataOf(site.id, extension.id))
+    ).filter((item) => item.name !== input.name);
+    if (others.length + 1 > limits.max_items) tooLarge("max_items");
+    if (others.reduce((sum, item) => sum + item.size, 0) + content.length > limits.max_total_bytes)
+      tooLarge("max_total_bytes");
+    const sha256 = createHash("sha256").update(content).digest("hex");
+    const updatedAt = new Date();
+    const values = { sha256, size: content.length, content, updatedAt };
+    const [row] = await tx
+      .insert(schema.siteExtensionData)
+      .values({ siteId: site.id, extensionId: extension.id, name: input.name, ...values })
+      .onConflictDoUpdate({
+        target: [
+          schema.siteExtensionData.siteId,
+          schema.siteExtensionData.extensionId,
+          schema.siteExtensionData.name,
+        ],
+        set: values,
+      })
+      .returning({
+        name: schema.siteExtensionData.name,
+        sha256: schema.siteExtensionData.sha256,
+        size: schema.siteExtensionData.size,
+        updatedAt: schema.siteExtensionData.updatedAt,
+      });
+    await publishSiteChange(tx, actor, site, {
+      reason: "site_extension_updated",
+      params: { extension: extension.id, site: site.name },
+      action: "site.extension_data_put",
+      metadata: { extension: extension.id, name: input.name, sha256, size: content.length },
+    });
+    return dataView(row ?? { name: input.name, ...values });
+  });
+}
+
+export async function deleteSiteExtensionData(
+  db: Database,
+  input: { siteId: string; id: string; name: string },
+  actor: Actor,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await lockExtensions(tx);
+    const site = await requireSite(tx, input.siteId);
+    const extension = await requireExtension(tx, input.id);
+    const [deleted] = await tx
+      .delete(schema.siteExtensionData)
+      .where(and(dataOf(site.id, extension.id), eq(schema.siteExtensionData.name, input.name)))
+      .returning({ sha256: schema.siteExtensionData.sha256 });
+    if (!deleted) return fail("EXTENSION_DATA_NOT_FOUND", "no such data item");
+    await publishSiteChange(tx, actor, site, {
+      reason: "site_extension_updated",
+      params: { extension: extension.id, site: site.name },
+      action: "site.extension_data_delete",
+      metadata: { extension: extension.id, name: input.name, sha256: deleted.sha256 },
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Views
 
 function nodeStates(
@@ -906,6 +1178,7 @@ function nodeStates(
         message: reported?.message ?? "",
         faults: reported?.faults ?? 0,
         trips: reported?.trips ?? 0,
+        details: reported?.details ?? {},
       };
     });
 }
@@ -1007,24 +1280,40 @@ export async function getExtension(db: Executor, id: string): Promise<ExtensionD
     siteList: sites.map((s) => ({ ...s, config: maskExtensionConfig(siteSchema, s.config) })),
     nodes,
     ruleReferences: (await ruleReferences(db, id)).length,
+    secretVersion: manifest.secret ? row.secretVersion : 0,
   };
 }
 
 // ---------------------------------------------------------------------------
 // Node channel
 
+/** At most this much of a package or a data item goes into one node channel answer. */
+const EXTENSION_CHUNK_BYTES = 4 * 1024 * 1024;
+
+const toBytes = (value: Uint8Array) => new Uint8Array(value);
+
+/** A part of a bytea column from `offset` (at most EXTENSION_CHUNK_BYTES) and its whole size. */
+const chunkOf = (column: AnyColumn, offset: number) => ({
+  data: sql<Uint8Array>`substring(${column} from ${offset + 1}::int for ${EXTENSION_CHUNK_BYTES}::int)`.mapWith(
+    toBytes,
+  ),
+  total: sql<number>`octet_length(${column})`.mapWith(Number),
+});
+
 /**
- * The package bytes for a node: a stored version of an extension that an
- * enabled site of the node's cluster turns on (the active one, or an older
- * one a rollback revision may still reference).
+ * A part of the package bytes for a node (from `offset`, at most
+ * EXTENSION_CHUNK_BYTES) and the package's size: a stored version of an
+ * extension that an enabled site of the node's cluster turns on (the active
+ * one, or an older one a rollback revision may still reference).
  */
 export async function packageForNode(
   db: Executor,
   clusterId: string,
   sha256: string,
-): Promise<Uint8Array | null> {
+  offset = 0,
+): Promise<{ data: Uint8Array; total: number } | null> {
   const [row] = await db
-    .select({ package: schema.extensionVersion.package })
+    .select(chunkOf(schema.extensionVersion.package, offset))
     .from(schema.extensionVersion)
     .innerJoin(
       schema.siteExtension,
@@ -1033,5 +1322,94 @@ export async function packageForNode(
     .innerJoin(schema.site, eq(schema.site.id, schema.siteExtension.siteId))
     .where(and(eq(schema.extensionVersion.sha256, sha256), eq(schema.site.clusterId, clusterId)))
     .limit(1);
-  return row?.package ?? null;
+  return row ?? null;
+}
+
+/**
+ * The secrets (current, previous) of the extensions an enabled site of the
+ * node's cluster turns on whose active version declares `secret: true`;
+ * `ids` narrows them (empty: all).
+ */
+export async function secretsForNode(
+  db: Executor,
+  masterKey: MasterKey,
+  clusterId: string,
+  ids: string[],
+): Promise<{ id: string; version: number; current: Uint8Array; previous: Uint8Array }[]> {
+  const rows = await db
+    .select({
+      id: schema.extension.id,
+      envelope: schema.extension.secretEnvelope,
+      version: schema.extension.secretVersion,
+      manifest: schema.extensionVersion.manifest,
+    })
+    .from(schema.extension)
+    .innerJoin(
+      schema.extensionVersion,
+      and(
+        eq(schema.extensionVersion.extensionId, schema.extension.id),
+        eq(schema.extensionVersion.version, schema.extension.activeVersion),
+      ),
+    )
+    .innerJoin(schema.siteExtension, eq(schema.siteExtension.extensionId, schema.extension.id))
+    .innerJoin(schema.site, eq(schema.site.id, schema.siteExtension.siteId))
+    .where(
+      and(
+        eq(schema.site.clusterId, clusterId),
+        eq(schema.site.enabled, true),
+        eq(schema.siteExtension.enabled, true),
+        isNotNull(schema.extension.secretEnvelope),
+        ...(ids.length ? [inArray(schema.extension.id, ids)] : []),
+      ),
+    )
+    .orderBy(asc(schema.extension.id));
+  const seen = new Set<string>();
+  const secrets: { id: string; version: number; current: Uint8Array; previous: Uint8Array }[] = [];
+  for (const row of rows) {
+    if (seen.has(row.id) || !row.envelope || !manifestOf(row).secret) continue;
+    seen.add(row.id);
+    const { current, previous } = openSecrets(masterKey, row.id, row.envelope);
+    secrets.push({
+      id: row.id,
+      version: row.version,
+      current: new Uint8Array(current),
+      previous: previous ? new Uint8Array(previous) : new Uint8Array(),
+    });
+  }
+  return secrets;
+}
+
+/**
+ * A part of a data item for a node (from `offset`, at most
+ * EXTENSION_CHUNK_BYTES) and its size: an item of a site of the node's
+ * cluster that turns the extension on.
+ */
+export async function dataForNode(
+  db: Executor,
+  clusterId: string,
+  item: { extensionId: string; siteId: string; sha256: string },
+  offset = 0,
+): Promise<{ data: Uint8Array; total: number } | null> {
+  const [row] = await db
+    .select(chunkOf(schema.siteExtensionData.content, offset))
+    .from(schema.siteExtensionData)
+    .innerJoin(
+      schema.siteExtension,
+      and(
+        eq(schema.siteExtension.siteId, schema.siteExtensionData.siteId),
+        eq(schema.siteExtension.extensionId, schema.siteExtensionData.extensionId),
+      ),
+    )
+    .innerJoin(schema.site, eq(schema.site.id, schema.siteExtensionData.siteId))
+    .where(
+      and(
+        eq(schema.siteExtensionData.siteId, item.siteId),
+        eq(schema.siteExtensionData.extensionId, item.extensionId),
+        eq(schema.siteExtensionData.sha256, item.sha256),
+        eq(schema.siteExtension.enabled, true),
+        eq(schema.site.clusterId, clusterId),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
 }

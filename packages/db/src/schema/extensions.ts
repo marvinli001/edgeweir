@@ -38,6 +38,15 @@ export const extension = pgTable("extension", {
   /** open | closed */
   failureMode: text("failure_mode").notNull().default("open"),
   config: jsonb("config").$type<Record<string, unknown>>().notNull().default({}),
+  /**
+   * Manifest `secret: true` (version 1.1): JSON envelope (purpose
+   * "extension.secret_envelope", bound to the id) of the current secret's 32
+   * bytes followed by the previous one's (none before the first rotation).
+   * Generated when such a version becomes active; never plaintext.
+   */
+  secretEnvelope: text("secret_envelope"),
+  /** Version of the secret (Extension.secret_version); 0 while there is none. */
+  secretVersion: integer("secret_version").notNull().default(0),
   /** Hooks run in install order (then id). */
   installedAt: timestamp("installed_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
@@ -87,4 +96,28 @@ export const siteExtension = pgTable(
       .notNull(),
   },
   (t) => [primaryKey({ columns: [t.siteId, t.extensionId] })],
+);
+
+/**
+ * An opaque per-site data item of an extension whose manifest declares
+ * `data` (version 1.1), uploaded through the console API; nodes fetch it by
+ * digest (GetExtensionData).
+ */
+export const siteExtensionData = pgTable(
+  "site_extension_data",
+  {
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => site.id, { onDelete: "cascade" }),
+    extensionId: text("extension_id")
+      .notNull()
+      .references(() => extension.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** Lowercase hex SHA-256 of the content. */
+    sha256: text("sha256").notNull(),
+    size: integer("size").notNull(),
+    content: bytea("content").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.siteId, t.extensionId, t.name] })],
 );

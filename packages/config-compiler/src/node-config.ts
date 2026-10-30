@@ -5,6 +5,7 @@ import {
   type CertificateRef,
   ChallengeKeyRefSchema,
   DomainMatch,
+  ExtensionDataItemSchema,
   ExtensionSchema,
   ExtensionSharedDictSchema,
   IpListSchema,
@@ -218,6 +219,7 @@ function compileExtensions(config: NodeConfig, input: CompileInput): void {
         create(ExtensionSharedDictSchema, { name: dict.name, sizeKb: dict.sizeKb }),
       ),
       luaApi: extension.luaApi ?? 1,
+      secretVersion: extension.secretVersion ?? 0,
     }),
   );
   config.extensionsDisabled = input.extensionsDisabled ?? false;
@@ -225,7 +227,19 @@ function compileExtensions(config: NodeConfig, input: CompileInput): void {
     site.extensions = (bySite.get(site.id) ?? [])
       .filter((entry) => order.has(entry.id))
       .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
-      .map((entry) => create(SiteExtensionSchema, { id: entry.id, configJson: entry.configJson }));
+      .map((entry) =>
+        create(SiteExtensionSchema, {
+          id: entry.id,
+          configJson: entry.configJson,
+          data: (entry.data ?? []).map((item) =>
+            create(ExtensionDataItemSchema, {
+              name: item.name,
+              sha256: item.sha256,
+              size: BigInt(item.size),
+            }),
+          ),
+        }),
+      );
   }
 }
 
