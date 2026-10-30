@@ -91,7 +91,7 @@ const ERROR_LABEL: Record<string, () => string> = {
   provider_error: m.probe_source_error_provider_error,
 };
 const sourceErrorLabel = (code: string) => ERROR_LABEL[code]?.() ?? code;
-export const MODE_LABEL: Record<ProbeMode, () => string> = {
+const MODE_LABEL: Record<ProbeMode, () => string> = {
   internal: m.probe_mode_internal,
   external: m.probe_mode_external,
   all: m.probe_mode_all,

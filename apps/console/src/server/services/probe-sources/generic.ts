@@ -9,7 +9,7 @@ import {
 } from "./types";
 
 /** Results per delivery of the generic webhook. */
-export const MAX_GENERIC_RESULTS = 1000;
+const MAX_GENERIC_RESULTS = 1000;
 
 const genericResult = z.object({
   /** The monitor id the mapping table names. */

@@ -37,7 +37,7 @@ import type { Executor } from "./revisions";
 
 /** proberKind of the result rows external sources contribute (never stored in probe_result). */
 export const EXTERNAL_PROBER_KIND = "external";
-export const MAX_PROBE_SOURCES = 32;
+const MAX_PROBE_SOURCES = 32;
 /** Locations kept per monitor; more are dropped. */
 const MAX_LOCATIONS = 64;
 /** Monitors kept per source (mapped or seen in deliveries). */
@@ -56,17 +56,17 @@ type SourceRow = typeof schema.externalProbeSource.$inferSelect;
 type ObservationRow = typeof schema.externalProbeObservation.$inferSelect;
 type ResultRow = typeof schema.probeResult.$inferSelect;
 
-export const credentialBinding = (id: string) => ({
+const credentialBinding = (id: string) => ({
   purpose: "external_probe_source.credential_envelope",
   recordId: id,
 });
-export const webhookSecretBinding = (id: string) => ({
+const webhookSecretBinding = (id: string) => ({
   purpose: "external_probe_source.webhook_secret_envelope",
   recordId: id,
 });
 
 /** The source's state now; only "healthy" sources' results count. */
-export function sourceStatus(row: SourceRow, now: Date): ProbeSourceStatus {
+function sourceStatus(row: SourceRow, now: Date): ProbeSourceStatus {
   if (!row.enabled) return "disabled";
   const success = row.lastSuccessAt?.getTime() ?? null;
   const error = row.lastErrorAt?.getTime() ?? null;
@@ -717,7 +717,7 @@ export async function listProbeSourceResults(
 // ---- provider API ----
 
 /** The provider requests of a source, under the outbound policy. */
-export function sourceHttp(app: AppContext): Http {
+function sourceHttp(app: AppContext): Http {
   const test = app.env.EDGEWEIR_PROBE_SOURCE_TEST_ENDPOINT;
   return async (request) => {
     try {
@@ -868,7 +868,7 @@ export async function listProbeSourceMonitors(
  * failure code (stored; the source's results stop counting until the next
  * success). Returns the clusters to evaluate.
  */
-export async function pollProbeSource(
+async function pollProbeSource(
   app: AppContext,
   row: SourceRow,
   now: Date,

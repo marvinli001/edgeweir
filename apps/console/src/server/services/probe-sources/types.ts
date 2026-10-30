@@ -31,7 +31,7 @@ export interface HttpRequest {
   headers: Record<string, string>;
   body?: Buffer;
 }
-export interface HttpResponse {
+interface HttpResponse {
   status: number;
   body: Buffer;
 }
@@ -48,7 +48,7 @@ export interface PullContext {
 }
 
 /** Failure codes a source reports (stored as last_error; `probe_source_error_<code>` in the UI). */
-export const PROBE_SOURCE_ERRORS = [
+const PROBE_SOURCE_ERRORS = [
   "auth_failed",
   "rate_limited",
   "unreachable",
@@ -64,13 +64,13 @@ export class ProbeSourceError extends Error {
   }
 }
 
-export interface WebhookRequest {
+interface WebhookRequest {
   headers: Headers;
   body: Buffer;
   now: Date;
 }
 /** ok, or why a delivery is refused (401). */
-export type WebhookVerdict = "ok" | "signature_invalid" | "timestamp_invalid";
+type WebhookVerdict = "ok" | "signature_invalid" | "timestamp_invalid";
 
 export interface ProbeSourceAdapter {
   provider: ProbeSourceProvider;
@@ -147,7 +147,7 @@ export function jsonBody(body: Buffer): unknown {
 }
 
 /** Maps an HTTP status of a provider API to an error (null for 2xx). */
-export function statusError(status: number): ProbeSourceError | null {
+function statusError(status: number): ProbeSourceError | null {
   if (status >= 200 && status < 300) return null;
   if (status === 401 || status === 403) return new ProbeSourceError("auth_failed");
   if (status === 429) return new ProbeSourceError("rate_limited");

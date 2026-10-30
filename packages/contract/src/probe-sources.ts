@@ -9,7 +9,7 @@ import { isoDateTime, uuid } from "./schemas";
  * under the probe mode. Display names and field labels are Paraglide
  * messages (`probe_source_provider_<id>`, `probe_source_field_<key>`).
  */
-export const PROBE_SOURCE_PROVIDERS = [
+const PROBE_SOURCE_PROVIDERS = [
   "generic_webhook",
   "uptimerobot",
   "betterstack",
@@ -19,10 +19,10 @@ export const PROBE_SOURCE_PROVIDERS = [
   "aliyun_site_monitor",
   "tencent_cat",
 ] as const;
-export const probeSourceProvider = z.enum(PROBE_SOURCE_PROVIDERS);
+const probeSourceProvider = z.enum(PROBE_SOURCE_PROVIDERS);
 export type ProbeSourceProvider = z.infer<typeof probeSourceProvider>;
 
-export interface ProbeSourceField {
+interface ProbeSourceField {
   /** Field key (snake_case). */
   readonly key: string;
   /** Sealed and never returned; otherwise an option the API returns. */

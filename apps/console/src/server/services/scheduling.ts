@@ -156,7 +156,7 @@ function perProber(rows: ResultRow[]) {
 }
 
 /** A cluster's mode, or the global one when it has none (or an unknown value). */
-export function probeModeOf(mode: string | null, settings: ProbeSettings): ProbeMode {
+function probeModeOf(mode: string | null, settings: ProbeSettings): ProbeMode {
   return mode === "internal" || mode === "external" || mode === "all" || mode === "any"
     ? mode
     : settings.mode;
