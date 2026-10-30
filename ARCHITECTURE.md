@@ -407,6 +407,15 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 4. 并发数、内存总量与超时是节点参数（`--image-workers`、`--image-memory-mb`、`--image-timeout`）；`--image-workers 0` 时不监听 `image.sock`、不上报 `image-convert-v1`，开启转换的配置被拒绝并保留 last-known-good。
 5. 节省的字节数在边缘层 log 阶段按分钟累加（完整的 200 GET 响应），经 `MinuteStats.image_bytes_saved` 上报，进入分钟、小时、天统计与视图 `traffic_hour_stats`。详见 [图片格式转换](docs/guide/image-convert.md)。
 
+## 分层缓存
+
+1. 全局设置存于 `system_setting` 的 `tiered_cache`（拓扑、上层端口 8444、自定义的节点与节点组），网站设置存于 `site.tiered_cache`（null 跟随全局）。ADR-0073。
+2. 参与的节点：集群中 10 分钟内有心跳、上报 `tiered-cache-v1` 的活动节点；能作上层的还要上报 `tier-upper-v1`（节点证书带 serverAuth 与 SAN `<节点 ID>`，旧证书的节点由心跳的 `renewCertificate` 每天至多续期一次）并有主调度地址（IPv4 优先）。
+3. 选择（`config-compiler/src/tiers.ts` 的 `chooseTiers`，纯函数）：Smart、Generic、Regional、自定义，见 [分层缓存](docs/guide/tiered-cache.md)。延迟来自节点每分钟测量的、到每个网站默认源站组第一个主源站的 TCP 往返时间（`ReportStatusRequest.tier_latencies` → `tier_latency`，只用 10 分钟内的成功测量）。已选上层在不超过最快者 120% + 5 ms 时保留。结果存于 `tier_selection`（每站一行：拓扑、各节点的上层与原因、测量目标、选定时间）。
+4. 每次 `publishRevision` 先在发布锁内 `syncTierSelections`，`loadConfigInput` 再把选择编译为 `NodeConfig.tiered_cache`：上层相同的网站共享一个计划（计划 ID 是各跳的哈希），`Site.tier_plan_id` 指向它；节点列表只给上层填地址；测量目标是所有开启分层的网站的源站（ID 是 `主机:端口` 的哈希）。没有计划与目标时不下发该字段，关闭的集群配置与之前逐字节相同。
+5. pg-boss 队列 `tiers.select` 每分钟重新选择有分层网站的集群，上层变化时以 `tier_selection_changed` 发布。全局设置变化时发布跟随全局的网站所在的集群（`tiered_cache_updated`）。
+6. 统计：节点上报 `MinuteStats.tier_fetches`（下层按上层的缓存状态，`origin` 为兜底回源）与 `tier_served`（作为上层回答下层），控制台存为分钟、小时、天统计与视图 `traffic_hour_stats` 的 `tier_stats`（`f:<状态>` / `v:<状态>`）。访问日志的 `tier` 字段为 `<节点 ID> <状态>` 或 `origin`。
+
 ## 区域探针与智能调度
 
 1. 探测方：区域探针（`probe`，`edgeweir-node probe` 以一次性 `probe_token` 经 `EnrollProbe` 注册），或 `node.probe_enabled` 且节点组有区域的节点（`ReportStatus` 响应 `probe=true`）。
@@ -458,6 +467,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `dns.reconcile` | 每分钟 | 删除到期的旧 CNAME 前缀并发布受影响集群的 DNS；DNS 调度发布与外部记录维护 |
 | `traffic.rollup` | 每分钟 | 流量汇总与清理（含 L4 应用的分钟统计）、用量汇总与保留期清理（随后评估各网站的用量保护，告警有变化时立即触发一次告警扫描）、访问日志分区维护、升级任务到期；一项失败不影响其他各项 |
 | `certificates.sweep` | 每分钟 | 证书签发与续期 |
+| `tiers.select` | 每分钟 | 重新选择分层缓存的上层，变化时发布 |
 | `maintenance.recompile` | 启动时；`system_setting` 的 `config_recompiled` 与当前标记一致时跳过 | 升级改变了已存数据的编译结果时，为每个集群重新发布一次 revision |
 | `maintenance.check-certificates` | 启动时 | 检查尚未标记的已上传证书，把节点无法加载的（EC 密钥使用显式曲线参数）标记为错误 |
 | `maintenance.link-acme-accounts` | 启动时 | 为证书补上签发所用的 ACME 账户；环境变量时代签发的证书记为自定义 ACME 目录 |
@@ -686,6 +696,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0079_origin_proxy_protocol` | `origin.proxy_protocol_version`（回源连接发送的 PROXY protocol 版本，0 为不发送） |
 | `0080_origin_ca_rotation` | `pki_authority.kind`、`status`、`generation`（CA 轮换；`(kind, status)` 唯一，已有行的 kind 取 ID）；`origin_certificate.authority_id`、`origin_client_certificate.authority_id`（签发它的 CA） |
 | `0081_node_location` | `node.location`（节点用自己的 GeoIP 库查出的公网地址位置：国家、一级行政区、City MMDB 的经纬度） |
+| `0082_tiered_cache` | `site.tiered_cache`；`tier_latency`、`tier_selection`；`access_log.tier`；分钟、小时、天统计与视图 `traffic_hour_stats` 的 `tier_stats` |
 
 ## 构建产物
 

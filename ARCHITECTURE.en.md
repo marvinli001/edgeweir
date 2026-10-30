@@ -406,6 +406,15 @@ DNS steering is bound per cluster (`dns_binding`, mode Not managed, Manual, or A
 4. Concurrency, the memory total and the timeout are node flags (`--image-workers`, `--image-memory-mb`, `--image-timeout`); with `--image-workers 0` the agent does not listen on `image.sock` nor announce `image-convert-v1`, and configurations that convert are rejected, keeping the last-known-good one.
 5. Saved bytes are added up per minute in the edge layer's log phase (complete 200 GET responses), reported as `MinuteStats.image_bytes_saved`, and kept in minute, hour and day statistics and the view `traffic_hour_stats`. See [Image format conversion](docs/guide/image-convert.en.md).
 
+## Tiered Cache
+
+1. The console-wide setting is `system_setting` `tiered_cache` (topology, upper tier port 8444, custom nodes and node groups); a site's is `site.tiered_cache` (null follows the console-wide one). ADR-0073.
+2. Nodes taking part: active nodes of the cluster with a heartbeat in the last 10 minutes that report `tiered-cache-v1`; upper tiers also report `tier-upper-v1` (the node certificate carries serverAuth and the SAN `<node id>`; nodes with an older one are asked to renew by the heartbeat's `renewCertificate` at most once a day) and have a primary scheduling address (IPv4 first).
+3. Selection (`chooseTiers` in `config-compiler/src/tiers.ts`, a pure function): Smart, Generic, Regional and custom, see [Tiered Cache](docs/guide/tiered-cache.en.md). Latencies are the TCP round trip times nodes measure every minute to the first primary origin of each site's default origin group (`ReportStatusRequest.tier_latencies` → `tier_latency`; only successful measurements of the last 10 minutes count). A chosen upper tier stays while within 120% + 5 ms of the fastest. Choices are kept in `tier_selection` (one row per site: topology, each node's upper tiers and why, the measured target, when chosen).
+4. Every `publishRevision` runs `syncTierSelections` under the publish lock first; `loadConfigInput` then compiles the choices into `NodeConfig.tiered_cache`: sites with the same hops share a plan (its id a hash of the hops) that `Site.tier_plan_id` names; only upper tiers carry an address; the latency targets are the origins of every tiered site (ids a hash of `host:port`). Without plans and targets the field is left out, so a cluster without tiers compiles byte for byte as before.
+5. The pg-boss queue `tiers.select` chooses again every minute for clusters with tiered sites and publishes with `tier_selection_changed` when upper tiers change. Changing the console-wide setting publishes the clusters of the sites that follow it (`tiered_cache_updated`).
+6. Statistics: nodes report `MinuteStats.tier_fetches` (lower tiers, by the upper tier's cache status, `origin` for fallbacks) and `tier_served` (answers to lower tiers); the console keeps them as `tier_stats` (`f:<status>` / `v:<status>`) of the minute, hour and day statistics and the view `traffic_hour_stats`. The access log's `tier` field is `<node id> <status>` or `origin`.
+
 ## Regional probes and scheduling
 
 1. Probers: regional probes (`probe`; `edgeweir-node probe` enrolls through `EnrollProbe` with a one-time `probe_token`), or nodes with `node.probe_enabled` whose node group has a region (`probe=true` in the `ReportStatus` response).
@@ -457,6 +466,7 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, skewed node clocks (
 | `dns.reconcile` | Every minute | Deletes expired old CNAME prefixes and publishes the DNS of their clusters; DNS steering publishing and external record maintenance |
 | `traffic.rollup` | Every minute | Traffic rollup and cleanup (L4 app minute statistics included), usage rollup and retention (then every site's usage protection, with an immediate alert sweep when its alerts change), access log partition maintenance, upgrade expiry; one failing part does not stop the others |
 | `certificates.sweep` | Every minute | Certificate issuance and renewal |
+| `tiers.select` | Every minute | Chooses the tiered cache's upper tiers again and publishes when they change |
 | `maintenance.recompile` | At start; skipped while `config_recompiled` in `system_setting` matches the current marker | Republishes every cluster once when an upgrade changes what stored data compiles to |
 | `maintenance.check-certificates` | At start | Checks uploaded certificates not marked yet and marks those nodes cannot load (EC keys with explicit curve parameters) as failed |
 | `maintenance.link-acme-accounts` | At start | Links certificates to the ACME account that issued them; records certificates of the environment-variable era as the custom ACME directory |
@@ -683,6 +693,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0078_greylist_connection_limits` | `ip_ban.action`, `challenge`, `rate_limit_requests`, `rate_limit_window_seconds` (greylist entries; unique indexes split between bans and greylist entries); `cluster.connection_limits` (kernel connection limits) |
 | `0079_origin_proxy_protocol` | `origin.proxy_protocol_version` (PROXY protocol to the origin: 0 off, 1, 2) |
 | `0080_origin_ca_rotation` | `pki_authority.kind`, `status`, `generation` (CA rotation; `(kind, status)` unique, existing rows take their id as kind); `origin_certificate.authority_id`, `origin_client_certificate.authority_id` (the issuing CA) |
+| `0082_tiered_cache` | `site.tiered_cache`; `tier_latency`, `tier_selection`; `access_log.tier`; `tier_stats` in minute, hour and day statistics and the view `traffic_hour_stats` |
 
 ## Build output
 
