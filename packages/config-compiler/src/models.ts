@@ -216,6 +216,32 @@ export interface AuthRuleModel {
 }
 
 /**
+ * A site's AI crawl control (config.proto AiCrawlPolicy, ADR-0070), resolved
+ * by the console: each crawler's action (site and global, crawler and
+ * operator), the impersonator action, challenge and block response, the
+ * managed robots.txt text and the pay per crawl price (0: off).
+ */
+export interface AiCrawlModel {
+  actions: Record<string, "allow" | "block" | "challenge" | "charge">;
+  impersonators: "none" | "block" | "challenge";
+  challenge: string;
+  blockStatus: 403 | 402;
+  blockBody: string;
+  robotsTxt: string;
+  priceMicros: number;
+  dynamicPricing: boolean;
+}
+
+/** A crawler of the catalogue as nodes receive it (config.proto AiCrawler). */
+export interface AiCrawlerModel {
+  id: string;
+  operator: string;
+  tokens: readonly string[];
+  cidrs: readonly string[];
+  domains: readonly string[];
+}
+
+/**
  * A site's WebP / AVIF conversion (config.proto ImageConvert), only while it
  * is on: a site without it compiles as before. The quality of a format the
  * site does not offer is not sent.
@@ -376,6 +402,8 @@ export interface SiteModel {
   logPeer?: boolean;
   /** WebP / AVIF conversion (feature image-convert-v1); absent while off. */
   imageConvert?: ImageConvertModel;
+  /** AI crawl control (feature ai-crawlers-v1); absent: crawlers are only tagged. */
+  aiCrawl?: AiCrawlModel;
   /**
    * `tlsPending`: the site's certificate does not cover the domain yet; it
    * is served over HTTP only (feature tls-pending-domains-v1). Ignored on a
@@ -758,6 +786,11 @@ export interface CompileInput {
   l4Apps?: L4AppModel[];
   /** Listener ports besides 80 and 443 and the client address setting; omitted: none, direct. */
   edge?: EdgeModel;
+  /**
+   * The AI crawler catalogue (NodeConfig.ai_crawlers): compiled while
+   * `detection` is on or a served site has AI crawl control. Omitted: none.
+   */
+  aiCrawlers?: { detection: boolean; crawlers: readonly AiCrawlerModel[] };
   /**
    * The cluster has active greylist entries that challenge (platform ones
    * or of its sites): the configuration carries challenge keys.

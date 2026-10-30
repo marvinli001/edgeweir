@@ -23,4 +23,11 @@ export const statsDimensionColumns = () => ({
    * `<origin id>:<field>` (ORIGIN_STATS_FIELDS), at most 64 origins.
    */
   originStats: jsonb("origin_stats").$type<Record<string, number>>().notNull().default({}),
+  /**
+   * AI crawlers (ai-crawlers-v1, ADR-0070): counters keyed
+   * `<crawler>|<verification>:<field>` (AI_CRAWLER_STATS_FIELDS), and
+   * requests per `<crawler>|<path>`, the heaviest 100.
+   */
+  crawlerStats: jsonb("crawler_stats").$type<Record<string, number>>().notNull().default({}),
+  crawlerPaths: jsonb("crawler_paths").$type<Record<string, number>>().notNull().default({}),
 });

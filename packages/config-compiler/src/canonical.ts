@@ -58,8 +58,19 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
   if (out.clientAddress) out.clientAddress.trustedCidrs = sortedSet(out.clientAddress.trustedCidrs);
   // v1.6.0: connection limit ports by start.
   out.connectionLimits?.ports.sort((a, b) => a.start - b.start);
+  // vNEXT: crawlers by id, their tokens, CIDRs and domains as sets; each
+  // site's crawler actions by crawler.
+  if (out.aiCrawlers) {
+    out.aiCrawlers.crawlers.sort(byString((c) => c.id));
+    for (const c of out.aiCrawlers.crawlers) {
+      c.tokens = sortedSet(c.tokens);
+      c.cidrs = sortedSet(c.cidrs);
+      c.domains = sortedSet(c.domains);
+    }
+  }
   for (const rule of out.platformRules) canonicalizeAction(rule.action);
   for (const site of out.sites) {
+    site.aiCrawl?.actions.sort(byString((a) => a.crawler));
     if (site.tls) {
       site.tls.gzipTypes = sortedSet(site.tls.gzipTypes);
       site.tls.brotliTypes = sortedSet(site.tls.brotliTypes);

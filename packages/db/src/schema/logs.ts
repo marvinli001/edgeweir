@@ -68,6 +68,10 @@ export const accessLog = pgTable(
     query: text("query").notNull().default(""),
     headers: jsonb("headers").$type<Record<string, string>>().notNull().default({}),
     peerIp: text("peer_ip").notNull().default(""),
+    /** AI crawl control (ai-crawlers-v1, ADR-0070). */
+    crawler: text("crawler").notNull().default(""),
+    crawlerVerification: text("crawler_verification").notNull().default(""),
+    crawlerChargedMicros: bigint("crawler_charged_micros", { mode: "number" }).notNull().default(0),
   },
   (t) => [
     primaryKey({ columns: [t.time, t.id] }),

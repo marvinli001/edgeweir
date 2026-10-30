@@ -256,6 +256,8 @@ export const siteFeatures = z.object({
   accessLogsV2: featureAvailability,
   /** WebP / AVIF conversion of cached images (image-convert-v1). */
   imageConvert: featureAvailability,
+  /** AI crawl control: crawler actions, the managed robots.txt and pay per crawl (ai-crawlers-v1). */
+  aiCrawl: featureAvailability,
 });
 
 const idParam = z.object({ id: uuid });

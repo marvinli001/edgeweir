@@ -34,6 +34,7 @@ import {
   needsRulesV3,
   usesRulesV3Placeholders,
 } from "@edgeweir/rule-engine";
+import { aiCrawlActive, aiCrawlChallenges } from "./ai-crawl";
 import { canonicalize, contentHash } from "./canonical";
 import {
   compileClientAddress,
@@ -132,6 +133,8 @@ export const CHALLENGE_V2_FEATURE = "challenge-v2";
 export const ACCESS_LOGS_V2_FEATURE = "access-logs-v2";
 /** A site's WebP / AVIF conversion (proto v0.31.0, Site.image_convert; ADR-0043). */
 export const IMAGE_CONVERT_FEATURE = "image-convert-v1";
+/** AI crawl control (Site.ai_crawl, vNEXT, ADR-0070); the catalogue alone needs no feature. */
+export const AI_CRAWLERS_FEATURE = "ai-crawlers-v1";
 
 /** Whether a compiled action uses fields or kinds only rules-v2 nodes know. */
 function actionNeedsRulesV2(action: RuleAction | undefined): boolean {
@@ -273,7 +276,10 @@ export function usesChallenges(input: CompileInput): boolean {
     input.sites.some(
       (site) =>
         site.enabled &&
-        (!!site.protection?.underAttack || !!site.protection?.cc || challengeRule(site.rules)),
+        (!!site.protection?.underAttack ||
+          !!site.protection?.cc ||
+          challengeRule(site.rules) ||
+          (!!site.aiCrawl && aiCrawlActive(site.aiCrawl) && aiCrawlChallenges(site.aiCrawl))),
     )
   );
 }
@@ -482,6 +488,7 @@ export function derivedFeatures(config: NodeConfig): string[] {
     ...accessControlFeatures(config),
     ...g14Features(config),
     ...(config.sites.some((site) => site.imageConvert) ? [IMAGE_CONVERT_FEATURE] : []),
+    ...(config.sites.some((site) => site.aiCrawl) ? [AI_CRAWLERS_FEATURE] : []),
   ];
 }
 

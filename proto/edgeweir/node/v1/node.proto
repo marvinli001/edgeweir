@@ -511,6 +511,49 @@ message MinuteStats {
   // background and prefetch fetches included; active health checks and cache
   // hits not), at most 64 origins. Added in v1.4.0 (feature origin-stats-v1).
   repeated OriginCounter origins = 26;
+  // Requests that claimed a crawler of NodeConfig.ai_crawlers, per crawler
+  // and verification, at most 256. Added in vNEXT (feature ai-crawlers-v1).
+  repeated CrawlerCounter crawlers = 31;
+  // The paths crawlers requested most (path without query, at most 256
+  // bytes), at most 64 per minute. Added in vNEXT (feature ai-crawlers-v1).
+  repeated CrawlerPathCounter crawler_paths = 32;
+}
+
+// CrawlerCounter is a minute of one crawler's requests on a node.
+message CrawlerCounter {
+  // AiCrawler.id.
+  string crawler = 1;
+  // "verified", "failed" (the address did not verify), "unverifiable" (the
+  // operator publishes no way to verify) or "pending" (a lookup was in
+  // flight or failed).
+  string verification = 2;
+  uint64 requests = 3;
+  // Responses per status class.
+  uint64 status_2xx = 4;
+  uint64 status_3xx = 5;
+  uint64 status_4xx = 6;
+  uint64 status_5xx = 7;
+  // Requests refused by AI crawl control (block, challenge, pay per crawl's
+  // 402 and 400 answers).
+  uint64 blocked = 8;
+  // Bytes sent to the crawler.
+  uint64 bytes = 9;
+  // Pay per crawl: 2xx responses sent with crawler-charged, and the sum of
+  // their prices in millionths of a US dollar.
+  uint64 charged = 10;
+  uint64 charged_micros = 11;
+  // Requests for /robots.txt.
+  uint64 robots = 12;
+  // Responses below 400 that AI crawl control did not refuse.
+  uint64 allowed = 13;
+}
+
+// CrawlerPathCounter is a minute of one crawler's requests for one path.
+message CrawlerPathCounter {
+  string crawler = 1;
+  string path = 2;
+  uint64 requests = 3;
+  uint64 bytes = 4;
 }
 
 // OriginCounter is a minute of one origin's fetches on a node.
@@ -846,7 +889,8 @@ message AccessLog {
   string tls_version = 29;
   // Why the node refused or challenged the request (ip_banned, ip_blocked,
   // rule, rate_limit, crs, cc, challenge, auth, referer, user_agent,
-  // region, cors, websocket_origin, client_cert, maintenance); "" none.
+  // region, cors, websocket_origin, client_cert, maintenance, ai_crawler,
+  // pay_per_crawl); "" none.
   string block_reason = 30;
   // The rule behind the reason (EdgeRule.id, or the access authentication
   // rule's id); CRS rules are in waf_rule_ids.
@@ -856,6 +900,13 @@ message AccessLog {
   string query = 32;
   map<string, string> headers = 33;
   string peer_ip = 34;
+  // The crawler of NodeConfig.ai_crawlers the User-Agent claims ("" none),
+  // its verification (CrawlerCounter.verification) and, for a crawl paid
+  // with pay per crawl, the price sent in crawler-charged in millionths of
+  // a US dollar. Added in vNEXT (feature ai-crawlers-v1).
+  string crawler = 40;
+  string crawler_verification = 41;
+  uint64 crawler_charged_micros = 42;
 }
 // ReportLogsRequest is an immutable, ordered batch from the private node spool.
 message ReportLogsRequest {

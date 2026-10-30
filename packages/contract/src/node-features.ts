@@ -116,3 +116,10 @@ export const NODE_LOGS_FEATURE = "node-logs-v1";
  * from a node without it is refused.
  */
 export const NODE_DEBUG_LOGS_FEATURE = "debug-logs-v1";
+/**
+ * ai-crawlers-v1: AI crawl control (ADR-0070): Site.ai_crawl (required by
+ * configurations that use it), crawler tagging of access logs and
+ * MinuteStats.crawlers / crawler_paths. A site's crawler counts are partial
+ * while an active node of its cluster lacks it.
+ */
+export const AI_CRAWLERS_FEATURE = "ai-crawlers-v1";

@@ -1,5 +1,8 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import {
+  type AiCrawlerCatalogue,
+  AiCrawlerCatalogueSchema,
+  AiCrawlerSchema,
   CacheZoneNodeSizeSchema,
   CacheZoneSchema,
   type CertificateRef,
@@ -174,6 +177,7 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
     l4Apps: compileL4Apps(input.l4Apps),
     clientAddress: compileClientAddress(input.edge?.clientIp),
     unknownHosts: compileUnknownHosts(input.edge?.unknownHosts, sites),
+    aiCrawlers: compileAiCrawlers(input.aiCrawlers, sites),
   });
   compiled.connectionLimits = compileConnectionLimits(
     input.edge?.connectionLimits,
@@ -184,6 +188,30 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
   const config = canonicalize(compiled);
   config.contentHash = contentHash(config);
   return config;
+}
+
+/**
+ * The crawler catalogue: while detection is on or a served site acts on
+ * crawlers; otherwise none, and the configuration encodes as before.
+ */
+function compileAiCrawlers(
+  catalogue: CompileInput["aiCrawlers"],
+  sites: readonly Site[],
+): AiCrawlerCatalogue | undefined {
+  if (!catalogue || (!catalogue.detection && !sites.some((s) => s.aiCrawl))) return undefined;
+  return create(AiCrawlerCatalogueSchema, {
+    crawlers: catalogue.crawlers
+      .filter((c) => c.tokens.length > 0)
+      .map((c) =>
+        create(AiCrawlerSchema, {
+          id: c.id,
+          operator: c.operator,
+          tokens: [...c.tokens],
+          cidrs: [...c.cidrs],
+          domains: [...c.domains],
+        }),
+      ),
+  });
 }
 
 export function encodeNodeConfig(config: NodeConfig): Uint8Array {
@@ -231,6 +259,7 @@ export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfig
     originCa: target.originCa,
     connectionLimits: target.connectionLimits,
     originCaPrevious: target.originCaPrevious,
+    aiCrawlers: target.aiCrawlers,
     upsertedSites: target.sites.filter((s) => baseSites.get(s.id) !== siteBytes(s)),
     removedSiteIds: base.sites
       .filter((s) => !targetIds.has(s.id))
@@ -273,6 +302,7 @@ export function applyNodeConfigDiff(base: NodeConfig, diff: NodeConfigDiff): Nod
       originCa: diff.originCa,
       connectionLimits: diff.connectionLimits,
       originCaPrevious: diff.originCaPrevious,
+      aiCrawlers: diff.aiCrawlers,
       sites,
     }),
   );
