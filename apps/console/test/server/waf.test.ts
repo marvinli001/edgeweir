@@ -58,6 +58,7 @@ const ALL_FEATURES = [
   "image-convert-v1",
   "markdown-v1",
   "ai-crawlers-v1",
+  "challenge-v3",
 ];
 
 /** A change without the operator behind it (service accounts, background jobs). */
@@ -172,6 +173,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       wafV2: available,
       rulesBody: available,
       challengeV2: available,
+      challengeV3: available,
       accessLogsV2: available,
       imageConvert: available,
       markdown: available,
@@ -350,6 +352,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       wafV2: unavailable,
       rulesBody: unavailable,
       challengeV2: unavailable,
+      challengeV3: unavailable,
       accessLogsV2: unavailable,
       imageConvert: unavailable,
       markdown: unavailable,
@@ -518,7 +521,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
     // The G14 columns, then the G16 ones (ADR-0041) at the end.
     expect(csv[0]).toMatch(/,ja4,wafRuleIds,wafBlocked,ruleIds,userAgent,/);
     expect(csv[0]).toMatch(
-      /,blockReason,blockRuleId,query,headers,peerIp,crawler,crawlerVerification,crawlerChargedMicros,tier$/,
+      /,blockReason,blockRuleId,query,headers,peerIp,crawler,crawlerVerification,crawlerChargedMicros,tier,ext$/,
     );
     const header = csv[0]?.split(",") ?? [];
     const cells = (line: string) => line.slice(1, -1).split('","');

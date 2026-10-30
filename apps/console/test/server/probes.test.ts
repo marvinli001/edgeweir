@@ -129,6 +129,7 @@ describe("probe, scheduling and node address procedures", async () => {
       lossPercent: 50,
       ipDownSeconds: 30,
       ipUpSeconds: 60,
+      mode: "internal",
     });
     const short = {
       intervalSeconds: 5,

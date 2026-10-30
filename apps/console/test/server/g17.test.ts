@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
 import {
+  AI_CRAWL_SITE_DEFAULTS,
   IMAGE_CONVERT_DEFAULTS,
   SITE_COPY_PARTS,
   type SiteCopyPart,
@@ -265,6 +266,12 @@ describe("site tags, batch operations, copying settings and cloning (G17)", asyn
       enabled: true,
       includePrefixes: ["/docs/"],
       excludePrefixes: [],
+    });
+    await admin.aiCrawl.update({
+      id: sourceId,
+      ...AI_CRAWL_SITE_DEFAULTS,
+      crawlers: { gptbot: "block" },
+      robots: { managed: true, search: "yes", aiInput: "unset", aiTrain: "no" },
     });
   });
 

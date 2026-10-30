@@ -481,6 +481,10 @@ describe("access logs and statistics dimensions (G16)", async () => {
         "query",
         "headers",
         "peerIp",
+        "crawler",
+        "crawlerVerification",
+        "crawlerChargedMicros",
+        "tier",
         "ext",
       ]);
       const cells = row?.slice(1, -1).split('","') ?? [];
