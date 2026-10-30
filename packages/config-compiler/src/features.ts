@@ -135,17 +135,17 @@ export const ACCESS_CONTROL_FEATURE = "access-control-v1";
 export const WAF_V2_FEATURE = "waf-v2";
 export const RULES_BODY_FEATURE = "rules-body-v1";
 export const CHALLENGE_V2_FEATURE = "challenge-v2";
-/** The managed challenge and third-party interactive providers (proto PROTO_NEXT, SiteProtection.interactive). */
+/** The managed challenge and third-party interactive providers (proto v1.9.0, SiteProtection.interactive). */
 export const CHALLENGE_V3_FEATURE = "challenge-v3";
 /** A site's access log options (proto v0.30.0, Site.log_blocked..log_peer; ADR-0041). */
 export const ACCESS_LOGS_V2_FEATURE = "access-logs-v2";
 /** A site's WebP / AVIF conversion (proto v0.31.0, Site.image_convert; ADR-0043). */
 export const IMAGE_CONVERT_FEATURE = "image-convert-v1";
-/** A site's development mode (proto/vX.Y.Z-dev-mode, Site.development_mode). */
+/** A site's development mode (proto/v1.9.0, Site.development_mode). */
 export const DEVELOPMENT_MODE_FEATURE = "development-mode-v1";
-/** A site's Markdown for Agents (proto vX.Y.Z-markdown, Site.markdown). */
+/** A site's Markdown for Agents (proto v1.9.0, Site.markdown). */
 export const MARKDOWN_FEATURE = "markdown-v1";
-/** AI crawl control (Site.ai_crawl, vNEXT, ADR-0070); the catalogue alone needs no feature. */
+/** AI crawl control (Site.ai_crawl, v1.9.0, ADR-0070); the catalogue alone needs no feature. */
 export const AI_CRAWLERS_FEATURE = "ai-crawlers-v1";
 
 /** Whether a compiled action uses fields or kinds only rules-v2 nodes know. */

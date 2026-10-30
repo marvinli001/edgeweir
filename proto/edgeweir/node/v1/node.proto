@@ -90,7 +90,7 @@ service NodeService {
   // debug-logs-v1).
   rpc UploadDebugLogs(UploadDebugLogsRequest) returns (UploadDebugLogsResponse);
   // GetExtensionPackage returns an extension package (.ewx) that the
-  // node's current configuration references, by digest. Added in PROTO_NEXT
+  // node's current configuration references, by digest. Added in v1.9.0
   // (feature extensions-v1).
   rpc GetExtensionPackage(GetExtensionPackageRequest) returns (GetExtensionPackageResponse);
   // GetExtensionSecrets returns the current and previous secret of the
@@ -309,10 +309,10 @@ message ReportStatusRequest {
   NodeLocation location = 18;
   // Round trip times to the tiered cache's latency targets
   // (TieredCache.latency_targets), measured in the last 5 minutes. Added in
-  // PROTO_NEXT (feature tiered-cache-v1).
+  // v1.9.0 (feature tiered-cache-v1).
   repeated TierLatency tier_latencies = 80;
   // State of each extension of the applied configuration (extensions-v1).
-  // Added in PROTO_NEXT.
+  // Added in v1.9.0.
   repeated ExtensionStatus extensions = 60;
 }
 
@@ -536,7 +536,7 @@ message MinuteStats {
   // hits not), at most 64 origins. Added in v1.4.0 (feature origin-stats-v1).
   repeated OriginCounter origins = 26;
   // Complete 200 responses to GETs served as Markdown converted from HTML
-  // (Site.markdown; cache hits included). Added in proto/vX.Y.Z-markdown
+  // (Site.markdown; cache hits included). Added in proto/v1.9.0
   // (feature markdown-v1).
   uint64 markdown_responses = 27;
   // Challenges by kind and outcome, "<kind>:<outcome>": kind cookie302, js,
@@ -544,24 +544,24 @@ message MinuteStats {
   // outcome issued (a page or a cookie302 redirect), passed (a pass signed),
   // failed (a wrong or rejected answer), escalated (a managed challenge
   // turned interactive) or fallback (a provider replaced by the built-in
-  // image captcha). Added in PROTO_NEXT (feature challenge-v3).
+  // image captcha). Added in v1.9.0 (feature challenge-v3).
   map<string, uint64> challenge_outcomes = 28;
   // Requests that claimed a crawler of NodeConfig.ai_crawlers, per crawler
-  // and verification, at most 256. Added in vNEXT (feature ai-crawlers-v1).
+  // and verification, at most 256. Added in v1.9.0 (feature ai-crawlers-v1).
   repeated CrawlerCounter crawlers = 31;
   // The paths crawlers requested most (path without query, at most 256
-  // bytes), at most 64 per minute. Added in vNEXT (feature ai-crawlers-v1).
+  // bytes), at most 64 per minute. Added in v1.9.0 (feature ai-crawlers-v1).
   repeated CrawlerPathCounter crawler_paths = 32;
   // Fetches of the edge cache that went to an upper tier, by the upper
   // tier's cache status (HIT, MISS, EXPIRED, STALE, UPDATING, REVALIDATED,
   // BYPASS; "origin" when the fetch fell back to the origins because no
-  // upper tier answered). Added in PROTO_NEXT (feature tiered-cache-v1).
+  // upper tier answered). Added in v1.9.0 (feature tiered-cache-v1).
   map<string, uint64> tier_fetches = 80;
   // Requests this node served to lower tiers, by its cache status. Added in
-  // PROTO_NEXT.
+  // v1.9.0.
   map<string, uint64> tier_served = 81;
   // Extension counters and faults of the site by "<id>.<name>" (counters
-  // declared by the manifest, and "<id>.faults"). Added in PROTO_NEXT.
+  // declared by the manifest, and "<id>.faults"). Added in v1.9.0.
   map<string, uint64> ext_counters = 60;
 }
 
@@ -952,16 +952,16 @@ message AccessLog {
   // The crawler of NodeConfig.ai_crawlers the User-Agent claims ("" none),
   // its verification (CrawlerCounter.verification) and, for a crawl paid
   // with pay per crawl, the price sent in crawler-charged in millionths of
-  // a US dollar. Added in vNEXT (feature ai-crawlers-v1).
+  // a US dollar. Added in v1.9.0 (feature ai-crawlers-v1).
   string crawler = 40;
   string crawler_verification = 41;
   uint64 crawler_charged_micros = 42;
   // Requests the edge fetched through the tiered cache: the upper tier's
   // node id and cache status ("<id> HIT"), "origin" when it fell back to
-  // the origins; "" otherwise (cache hits included). Added in PROTO_NEXT.
+  // the origins; "" otherwise (cache hits included). Added in v1.9.0.
   string tier = 80;
   // Extension log fields by "<id>.<name>", and "<id>.verdict" when an
-  // extension decided the request. Added in PROTO_NEXT.
+  // extension decided the request. Added in v1.9.0.
   map<string, string> ext = 60;
 }
 // ReportLogsRequest is an immutable, ordered batch from the private node spool.
@@ -1212,7 +1212,7 @@ message ReportSecurityEventsResponse {
 
 // TierLatency is the round trip time to one TieredCache latency target: the
 // fastest TCP handshake of the last measurement (3 attempts). Added in
-// PROTO_NEXT.
+// v1.9.0.
 message TierLatency {
   string target_id = 1;
   // 0 when no attempt connected.
@@ -1274,7 +1274,7 @@ message GetExtensionDataResponse {
   uint64 total = 2;
 }
 
-// ExtensionStatus is one extension's state on the node. Added in PROTO_NEXT.
+// ExtensionStatus is one extension's state on the node. Added in v1.9.0.
 message ExtensionStatus {
   string id = 1;
   string version = 2;

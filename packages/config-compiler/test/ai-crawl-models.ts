@@ -33,7 +33,7 @@ export const policy = (extra: Partial<AiCrawlModel> = {}): AiCrawlModel => ({
 });
 
 /**
- * The console models behind the vNEXT AI crawl vector: site a blocks
+ * The console models behind the v1.9.0 AI crawl vector: site a blocks
  * GPTBot with a 402 and its own text, charges ClaudeBot USD 0.01 with
  * dynamic pricing, blocks impersonators and manages robots.txt; site b
  * only manages robots.txt; site c has none (crawlers are only tagged).

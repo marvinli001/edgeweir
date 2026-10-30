@@ -58,7 +58,7 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
   if (out.clientAddress) out.clientAddress.trustedCidrs = sortedSet(out.clientAddress.trustedCidrs);
   // v1.6.0: connection limit ports by start.
   out.connectionLimits?.ports.sort((a, b) => a.start - b.start);
-  // vNEXT: crawlers by id, their tokens, CIDRs and domains as sets; each
+  // v1.9.0: crawlers by id, their tokens, CIDRs and domains as sets; each
   // site's crawler actions by crawler.
   if (out.aiCrawlers) {
     out.aiCrawlers.crawlers.sort(byString((c) => c.id));

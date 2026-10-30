@@ -123,13 +123,13 @@ message NodeConfig {
   // never download crawler lists. Present while the operator keeps crawler
   // detection on. Requests of every site are tagged with the crawler they
   // claim (access logs, minute stats); Site.ai_crawl acts on them. Added in
-  // vNEXT; the catalogue alone requires no feature (nodes without
+  // v1.9.0; the catalogue alone requires no feature (nodes without
   // ai-crawlers-v1 ignore it).
   AiCrawlerCatalogue ai_crawlers = 25;
   // Tiered cache (ADR-0073): the nodes the plans name and the plans the
   // sites use (Site.tier_plan_id). Unset: no site uses one. Changing which
   // nodes listen for lower tiers (TieredCache.port and whether this node is
-  // an upper tier of some plan) is a structural change. Added in PROTO_NEXT
+  // an upper tier of some plan) is a structural change. Added in v1.9.0
   // (feature tiered-cache-v1; no feature required: a node without it
   // fetches from the origins, the console names it as an upper tier only
   // with tier-upper-v1).
@@ -137,10 +137,10 @@ message NodeConfig {
   // Node extensions (docs/reference/extensions.md), sorted by install
   // order then id: each installed extension's active package. Changing the
   // set of packages (or their shared dicts) is a structural change; the rest
-  // is hot-updated. Added in PROTO_NEXT (feature extensions-v1).
+  // is hot-updated. Added in v1.9.0 (feature extensions-v1).
   repeated Extension extensions = 60;
   // Kill switch: nodes load no extension code paths while set (packages stay
-  // on disk). Added in PROTO_NEXT.
+  // on disk). Added in v1.9.0.
   bool extensions_disabled = 61;
 }
 
@@ -334,11 +334,11 @@ message NodeConfigDiff {
   ConnectionLimits connection_limits = 25;
   // Always sent in full (NodeConfig field 24). Added in v1.6.0.
   OriginCa origin_ca_previous = 26;
-  // Always sent in full (NodeConfig field 25). Added in vNEXT.
+  // Always sent in full (NodeConfig field 25). Added in v1.9.0.
   AiCrawlerCatalogue ai_crawlers = 27;
-  // Always sent in full (NodeConfig field 80). Added in PROTO_NEXT.
+  // Always sent in full (NodeConfig field 80). Added in v1.9.0.
   TieredCache tiered_cache = 80;
-  // Always sent in full (NodeConfig fields 60 and 61). Added in PROTO_NEXT.
+  // Always sent in full (NodeConfig fields 60 and 61). Added in v1.9.0.
   repeated Extension extensions = 60;
   bool extensions_disabled = 61;
 }
@@ -580,25 +580,25 @@ message Site {
   // Added in v1.6.0; nodes without feature encoded-path-exemptions-v1 keep
   // treating every such path as ambiguous (no feature required).
   repeated EncodedPathExemption encoded_path_exemptions = 38;
-  // Development mode; unset means off. Added in proto/vX.Y.Z-dev-mode
+  // Development mode; unset means off. Added in proto/v1.9.0
   // (feature development-mode-v1).
   DevelopmentMode development_mode = 39;
   // Markdown for Agents: HTML responses converted to Markdown for requests
   // whose Accept names text/markdown (Markdown); unset means off. Added in
-  // proto/vX.Y.Z-markdown (feature markdown-v1).
+  // proto/v1.9.0 (feature markdown-v1).
   Markdown markdown = 40;
   // AI crawl control (ADR-0070): actions on the crawlers of
   // NodeConfig.ai_crawlers, the managed robots.txt and pay per crawl.
-  // Unset: crawlers are only tagged. Added in vNEXT (feature
+  // Unset: crawlers are only tagged. Added in v1.9.0 (feature
   // ai-crawlers-v1).
   AiCrawlPolicy ai_crawl = 45;
   // The tiered cache plan of the site (TieredCache.plans); "" fetches from
   // the origins. Only requests the edge may cache go through upper tiers.
-  // Added in PROTO_NEXT (feature tiered-cache-v1).
+  // Added in v1.9.0 (feature tiered-cache-v1).
   string tier_plan_id = 80;
   // Extensions the site turns on, in NodeConfig.extensions order, with the
   // site's configuration. Only ids present in NodeConfig.extensions.
-  // Added in PROTO_NEXT (feature extensions-v1).
+  // Added in v1.9.0 (feature extensions-v1).
   repeated SiteExtension extensions = 60;
 }
 
@@ -1155,7 +1155,7 @@ message WafExclusion {
 // interactive challenge: the site's interactive provider, or the built-in
 // image captcha.
 //
-// Since PROTO_NEXT (feature challenge-v3) a challenge may also be
+// Since v1.9.0 (feature challenge-v3) a challenge may also be
 // "managed" (Under Attack, PlatformProtection, the challenge rule action):
 // it asks for a pass of level 3 (pow) and is passed without interaction
 // (a proof of work and the browser's signals) unless the node judges the
@@ -1165,7 +1165,7 @@ message WafExclusion {
 message SiteProtection {
   // Challenge every GET/HEAD request that carries no valid pass.
   bool under_attack = 1;
-  // Challenge type of Under Attack (managed since PROTO_NEXT).
+  // Challenge type of Under Attack (managed since v1.9.0).
   string under_attack_challenge = 2;
   // Lifetime of a pass, 300 to 86400 seconds.
   uint32 pass_ttl_seconds = 3;
@@ -1192,7 +1192,7 @@ message SiteProtection {
   uint32 failure_threshold = 10;
   uint32 failure_ban_seconds = 11;
   // Third-party widget of the interactive challenge (level 4); unset means
-  // the built-in image captcha. Added in PROTO_NEXT (feature
+  // the built-in image captcha. Added in v1.9.0 (feature
   // challenge-v3).
   ChallengeProvider interactive = 12;
 }
@@ -1265,7 +1265,7 @@ message CcPolicy {
 // PlatformProtection is set by the operator for every site.
 message PlatformProtection {
   bool under_attack = 1;
-  // Challenge type of Under Attack (managed since PROTO_NEXT).
+  // Challenge type of Under Attack (managed since v1.9.0).
   string under_attack_challenge = 2;
 }
 
@@ -1346,7 +1346,7 @@ message RuleAction {
   bool remove = 11;
   // Challenge type of kind "challenge" (waf-custom): cookie302, js, pow or
   // captcha. Added in v0.10.0 (feature challenge-v1); managed since
-  // PROTO_NEXT (feature challenge-v3).
+  // v1.9.0 (feature challenge-v3).
   string challenge = 12;
   // Fields 13-31 were added in v0.13.0 (feature rules-v2).
   //
@@ -1910,7 +1910,7 @@ message CertificateRef {
 // Node, and verify the other's against the node CA), upper tiers from the
 // origins. A node that is an upper tier of some plan listens on port for
 // the lower tiers the plans name; a lower tier falls back to the origins
-// when none of its upper tiers answers. Added in PROTO_NEXT (feature
+// when none of its upper tiers answers. Added in v1.9.0 (feature
 // tiered-cache-v1).
 message TieredCache {
   // TLS port of the upper tiers' listener, 1-65535, not a listener's.
@@ -1964,7 +1964,7 @@ message TierLatencyTarget {
 // Extension is one installed node extension (format
 // edgeweir-node-extension-v1): the active package, fetched by digest with
 // NodeService.GetExtensionPackage, verified against signature and
-// public_key, and its operator settings. Added in PROTO_NEXT.
+// public_key, and its operator settings. Added in v1.9.0.
 message Extension {
   // Manifest id ([a-z][a-z0-9-]{1,38}[a-z0-9]).
   string id = 1;

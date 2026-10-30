@@ -1,5 +1,5 @@
 {
-  "description": "proto/vX.Y.Z-dev-mode: site a with development mode until 2026-11-01T03:00:00Z (Site.development_mode.expires_at, whole seconds, required feature development-mode-v1); site b without. Sites given out of canonical order (reversed). Canonical encoding with revision and content_hash cleared.",
+  "description": "proto/v1.9.0: site a with development mode until 2026-11-01T03:00:00Z (Site.development_mode.expires_at, whole seconds, required feature development-mode-v1); site b without. Sites given out of canonical order (reversed). Canonical encoding with revision and content_hash cleared.",
   "config": {
     "revision": "15",
     "contentHash": "7f1fd5e1c25a47581662249254013c93dbb6862b8be656651cebf8cbe47a71a4",

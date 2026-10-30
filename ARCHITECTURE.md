@@ -409,7 +409,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 
 ## 面向代理的 Markdown
 
-1. 网站设置存于 `site.markdown`（jsonb，`{}` 为默认值、关闭）；只在开启时编译为 `Site.markdown`（包含与排除前缀，排序去重；proto `vX.Y.Z-markdown`，能力 `markdown-v1`），关闭的网站配置与之前逐字节相同。设置变化是热更新。
+1. 网站设置存于 `site.markdown`（jsonb，`{}` 为默认值、关闭）；只在开启时编译为 `Site.markdown`（包含与排除前缀，排序去重；proto `v1.9.0`，能力 `markdown-v1`），关闭的网站配置与之前逐字节相同。设置变化是热更新。
 2. 边缘层在缓存判断之前、对 GET / HEAD 请求，路径有资格（没有扩展名或是 HTML 类扩展名，前缀命中）时给 HTML 与 Markdown 响应加 `Vary: Accept`；`Accept` 明确列出 `text/markdown`（q > 0）时，请求不分片并改走 upstream `edgeweir_markdown`（agent 的 `markdown.sock`），`X-Edgeweir-Markdown` 带上原本的回源层名称；被缓存的请求在缓存键末尾加 `|m=md`（清缓存时间戳之前；HTML 的键不变），刷新标记、Cache-Tag 与缓存代数作用于两种变体。`Vary` 只在边缘层发给访客时添加，缓存的对象不带，缓存不会按每个访客的 `Accept` 拆分。
 3. agent 的转换器以 GET（HEAD 同样，Markdown 的头取决于整个文档）、去掉条件与 Range 头、只接受 identity / gzip 编码，向该回源层取完整文档；回答是 2xx（不含 204、205、206）的 `text/html`、gzip 解压后不超过 6 MiB 时，在子进程 `edgeweir-node mdconv` 中转换（`JohannesKaufmann/html-to-markdown` v2 与 `golang.org/x/net/html`，字符集由 `x/net/html/charset` 识别）：去掉导航、页面级页眉页脚、侧栏、表单、脚本与隐藏元素，只有一个可见 `<main>` 时只转换它，链接改为绝对地址，前面加 YAML 头信息，后面加 JSON-LD。子进程的限制与图片转换相同（`internal/sandbox`）。转换后的响应改 `Content-Type: text/markdown; charset=utf-8`，加 `X-Markdown-Tokens` 与默认的 `Content-Signal`，去掉 `ETag`、`Last-Modified` 与编码、范围头，带内部头 `X-Edgeweir-Markdown-Converted`（边缘层对访客隐藏，命中时同样读取）；失败、超限或为空时原样返回，只有拿不到转换名额或源站太慢时把 `X-Accel-Expires` 限到 60 秒。
 4. 并发数、内存总量与超时是节点参数（`--markdown-workers`、`--markdown-memory-mb`、`--markdown-timeout`）；`--markdown-workers 0` 时不监听 `markdown.sock`、不上报 `markdown-v1`，开启转换的配置被拒绝并保留 last-known-good。

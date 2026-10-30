@@ -11,7 +11,7 @@ import {
   usesChallenges,
 } from "../src/index";
 import { site } from "./v0230-models";
-import { aiCrawlModels, crawlers, policy } from "./vnext-ai-crawl-models";
+import { aiCrawlModels, crawlers, policy } from "./ai-crawl-models";
 
 // Same vector as edgeweir-node/internal/configir/testdata/content_hash_vector_ai_crawl.json.
 type Vector = { config: JsonValue; canonical_hex: string; content_hash: string };
@@ -37,7 +37,7 @@ function writeVector() {
 if (process.env.WRITE_VECTORS === "1" || !existsSync(vectorPath)) writeVector();
 const vector = JSON.parse(readFileSync(vectorPath, "utf8")) as Vector;
 
-describe("AI crawl control (proto vNEXT, ADR-0070)", () => {
+describe("AI crawl control (proto v1.9.0, ADR-0070)", () => {
   it("sends no catalogue without detection or a site policy", () => {
     const before = compileNodeConfig({ clusterId: "c", sites: [site("a")] }, 1n);
     const off = compileNodeConfig(
