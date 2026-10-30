@@ -4,6 +4,7 @@ import { alertsRouter } from "./routers/alerts";
 import { certificatesRouter } from "./routers/certificates";
 import { clustersRouter } from "./routers/clusters";
 import { dnsRouter } from "./routers/dns";
+import { extensionsRouter } from "./routers/extensions";
 import { settingsRouter } from "./routers/settings";
 import { sitesRouter } from "./routers/sites";
 import { systemRouter } from "./routers/system";
@@ -25,6 +26,8 @@ export const router = os.router({
   protection: accessControlRouter.protection,
   waf: accessControlRouter.waf,
   errorPages: sitesRouter.errorPages,
+  extensions: extensionsRouter.extensions,
+  extensionKeys: extensionsRouter.extensionKeys,
   maintenance: sitesRouter.maintenance,
   usageGuard: sitesRouter.usageGuard,
   autoMitigation: sitesRouter.autoMitigation,

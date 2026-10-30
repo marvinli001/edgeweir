@@ -149,9 +149,35 @@ export const botFields: ReadonlySet<string> = new Set([
   "http.request.bot.verified",
   "http.request.bot.name",
 ]);
+/**
+ * Rule fields of installed node extensions (extensions-v1): `ext.<id>.<name>`
+ * with the type their manifest declares. The console registers them from its
+ * installed extensions; an unregistered `ext.` field is unknown.
+ */
+const extensionFields = new Map<string, ValueType>();
+export const EXTENSION_FIELD_PREFIX = "ext.";
+/** Replaces the registered extension fields. */
+export function registerExtensionFields(entries: Iterable<[string, ValueType]>): void {
+  extensionFields.clear();
+  for (const [name, type] of entries) {
+    if (name.startsWith(EXTENSION_FIELD_PREFIX)) extensionFields.set(name, type);
+  }
+}
+export const extensionFieldType = (field: string): ValueType | undefined =>
+  extensionFields.get(field);
+/** Whether the expression reads an extension field. */
+export function needsExtensionFields(expression: Expression): boolean {
+  return (
+    (expression.op !== "call" && expression.field.startsWith(EXTENSION_FIELD_PREFIX)) ||
+    expression.children.some(needsExtensionFields)
+  );
+}
+
 /** Whether a field or function is only available in the request phases. */
 export const requestOnly = (op: string, name: string) =>
-  op === "call" ? bodyFunctions.has(name) : bodyFields.has(name) || botFields.has(name);
+  op === "call"
+    ? bodyFunctions.has(name)
+    : bodyFields.has(name) || botFields.has(name) || name.startsWith(EXTENSION_FIELD_PREFIX);
 /** Whether the expression reads the request body (rules-body-v1). */
 export function needsRulesBody(expression: Expression): boolean {
   return (

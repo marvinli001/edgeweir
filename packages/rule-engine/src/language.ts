@@ -1,4 +1,11 @@
-import { ARG_FIELD, ARG_NAME_RE, COOKIE_FIELD, COOKIE_NAME_RE, fields } from "./fields.ts";
+import {
+  ARG_FIELD,
+  ARG_NAME_RE,
+  COOKIE_FIELD,
+  COOKIE_NAME_RE,
+  extensionFieldType,
+  fields,
+} from "./fields.ts";
 import { ExpressionError, type ExpressionErrorCode, type ValueType } from "./model.ts";
 
 /** Functions of the expression language (rules-v2, rules-v3), all over byte strings. */
@@ -154,5 +161,5 @@ export function irFieldType(field: string): ValueType | undefined {
       return "string";
   for (const [prefix, { re }] of Object.entries(namedFields))
     if (field.startsWith(`${prefix}.`) && re.test(field.slice(prefix.length + 1))) return "string";
-  return Object.hasOwn(fields, field) ? fields[field] : undefined;
+  return Object.hasOwn(fields, field) ? fields[field] : extensionFieldType(field);
 }

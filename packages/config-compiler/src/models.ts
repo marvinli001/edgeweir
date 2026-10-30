@@ -377,6 +377,11 @@ export interface SiteModel {
   /** WebP / AVIF conversion (feature image-convert-v1); absent while off. */
   imageConvert?: ImageConvertModel;
   /**
+   * Extensions the site turns on with the site's configuration (JSON);
+   * compiled only for extensions in CompileInput.extensions, in their order.
+   */
+  extensions?: { id: string; configJson: string }[];
+  /**
    * `tlsPending`: the site's certificate does not cover the domain yet; it
    * is served over HTTP only (feature tls-pending-domains-v1). Ignored on a
    * site without a certificate.
@@ -712,6 +717,22 @@ export interface CacheZoneModel {
   nodeSizes?: { nodeId: string; maxSizeMb: number; keysZoneMb: number }[];
 }
 
+/** An installed node extension's active package and settings (extensions-v1). */
+export interface ExtensionModel {
+  id: string;
+  version: string;
+  publisher: string;
+  sha256: string;
+  size: number;
+  signature: string;
+  /** JWK JSON of the signing key. */
+  publicKey: string;
+  enabled: boolean;
+  failureMode: "open" | "closed";
+  configJson: string;
+  sharedDicts: { name: string; sizeKb: number }[];
+}
+
 export interface CompileInput {
   clusterId: string;
   sites: SiteModel[];
@@ -763,6 +784,13 @@ export interface CompileInput {
    * or of its sites): the configuration carries challenge keys.
    */
   greylistChallenges?: boolean;
+  /**
+   * Installed extensions in hook order (install order, then id); compiled
+   * are those an enabled site of the cluster turns on.
+   */
+  extensions?: ExtensionModel[];
+  /** The extension kill switch. */
+  extensionsDisabled?: boolean;
 }
 
 export const DEFAULT_CACHE_ZONE = "default";

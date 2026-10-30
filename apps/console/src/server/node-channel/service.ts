@@ -76,6 +76,7 @@ import { nodeCertificates } from "../services/certificates";
 import { challengeKeySecrets } from "../services/challenge-keys";
 import { mirrorMinuteStats } from "../services/clickhouse";
 import { claimEnrollmentToken } from "../services/enrollment";
+import { packageForNode } from "../services/extensions";
 import { locateAddressOf, nodeIpRows } from "../services/node-addresses";
 import {
   hasDebugLogTasks,
@@ -876,6 +877,16 @@ export function createNodeService(
             ...(info ? { ...nodeInfoColumns(info), hostname: info.hostname || node.hostname } : {}),
             // Nodes since v1.6.2, for the previous response's locate_address.
             ...(req.location ? { location: toNodeLocation(req.location, now) } : {}),
+            // extensions-v1: the state of each extension of the applied configuration.
+            extensionStatus: req.extensions.slice(0, 64).map((status) => ({
+              id: status.id.slice(0, 40),
+              version: status.version.slice(0, 64),
+              sha256: status.sha256.slice(0, 64),
+              state: status.state.slice(0, 16),
+              message: status.message.slice(0, 512),
+              faults: Number(status.faults),
+              trips: Number(status.trips),
+            })),
           })
           .where(eq(schema.node.id, node.id));
         // Certificates of the applied revision the node could not load
@@ -991,6 +1002,15 @@ export function createNodeService(
     },
     reportStats: statsHandler,
     reportStatsV2: statsHandler,
+
+    async getExtensionPackage(req, ctx) {
+      const node = await requireNode(ctx);
+      if (!/^[0-9a-f]{64}$/.test(req.sha256))
+        throw new ConnectError("invalid digest", Code.InvalidArgument);
+      const bytes = await packageForNode(app.db, node.clusterId, req.sha256);
+      if (!bytes) throw new ConnectError("no such extension package", Code.NotFound);
+      return { package: bytes };
+    },
 
     async uploadDebugLogs(req, ctx) {
       const node = await requireNode(ctx);

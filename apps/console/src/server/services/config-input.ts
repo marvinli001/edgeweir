@@ -46,6 +46,7 @@ import { PURGE_KEY } from "../lib/site-secrets";
 import { siteIdentityHeaders } from "./auth-identity";
 import { loadEdgeModel } from "./edge";
 import { errorPagesModel, loadPlatformErrorPages, loadSiteErrorPages } from "./error-pages";
+import { loadExtensionInput } from "./extensions";
 import { greylistChallenges } from "./greylist";
 import { loadL4AppModels } from "./l4-config";
 import { loadOriginAllowList } from "./origin-allow-list";
@@ -864,5 +865,6 @@ export async function loadConfigInput(
     l4Apps,
     edge: await loadEdgeModel(tx, clusterId),
     greylistChallenges: await greylistChallenges(tx, clusterId),
+    ...(await loadExtensionInput(tx, sites)),
   };
 }

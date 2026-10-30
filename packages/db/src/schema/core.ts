@@ -223,6 +223,17 @@ export interface NodeSiteSecurity {
   escalatedPaths: number;
 }
 
+/** One extension's state on a node (extensions-v1). */
+export interface NodeExtensionStatus {
+  id: string;
+  version: string;
+  sha256: string;
+  state: string;
+  message: string;
+  faults: number;
+  trips: number;
+}
+
 export const node = pgTable(
   "node",
   {
@@ -291,6 +302,8 @@ export const node = pgTable(
      * reports it.
      */
     location: jsonb("location").$type<NodeLocationData>(),
+    /** Extension states of the last heartbeat (ReportStatusRequest.extensions). */
+    extensionStatus: jsonb("extension_status").$type<NodeExtensionStatus[]>().notNull().default([]),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
