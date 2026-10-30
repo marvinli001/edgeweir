@@ -60,7 +60,7 @@ import { SaveBar, useSaveSite } from "@/components/site/save-site";
 import { SecurityTab } from "@/components/site/security-tab";
 import { UsageGuardCard } from "@/components/site/usage-guard-card";
 import { StarButton, useSiteStars } from "@/components/site-star";
-import { SiteStatus, untilLive } from "@/components/site-status";
+import { DevelopmentModeBadge, SiteStatus, untilLive } from "@/components/site-status";
 import { TagBadges, TagPicker } from "@/components/site-tags";
 import { QueryView } from "@/components/states";
 import { NotFoundPage } from "@/components/status-page";
@@ -122,6 +122,12 @@ function SiteDetailPage() {
       title={site.data?.name ?? m.site_detail_title()}
       actions={
         <>
+          {site.data?.developmentModeUntil ? (
+            <DevelopmentModeBadge
+              until={site.data.developmentModeUntil}
+              testId="site-header-dev-mode"
+            />
+          ) : null}
           {site.data ? (
             <StarButton
               starred={stars.ids.has(id)}

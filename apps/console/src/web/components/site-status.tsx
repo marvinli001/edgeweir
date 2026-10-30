@@ -34,16 +34,18 @@ export function SiteStatus({
         </Badge>
       ) : null}
       {site.developmentModeUntil ? (
-        <Badge
-          size="sm"
-          tone="warning"
-          title={formatClockTime(site.developmentModeUntil)}
-          data-testid="site-dev-mode"
-        >
-          {m.site_dev_mode_badge()}
-        </Badge>
+        <DevelopmentModeBadge until={site.developmentModeUntil} testId="site-dev-mode" />
       ) : null}
     </span>
+  );
+}
+
+/** "Development mode", with the time it ends as its tooltip. */
+export function DevelopmentModeBadge({ until, testId }: { until: string; testId: string }) {
+  return (
+    <Badge size="sm" tone="warning" title={formatClockTime(until)} data-testid={testId}>
+      {m.site_dev_mode_badge()}
+    </Badge>
   );
 }
 
