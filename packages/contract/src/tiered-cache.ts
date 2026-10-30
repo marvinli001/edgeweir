@@ -36,7 +36,7 @@ export const TIER_STATUSES = [
 export const TIER_HIT_STATUSES = ["HIT", "STALE", "UPDATING", "REVALIDATED"] as const;
 
 /** The tier listener's default TLS port. */
-export const DEFAULT_TIER_PORT = 8444;
+const DEFAULT_TIER_PORT = 8444;
 /** Upper tiers a node tries per site (TierHop.upper_node_ids). */
 export const MAX_TIER_UPPERS = 3;
 /** Most nodes or node groups a custom topology names. */
@@ -76,7 +76,7 @@ export const SITE_TIERED_CACHE_DEFAULTS = {
 } as const satisfies z.infer<typeof siteTieredCacheSettings>;
 
 /** Why a node is an upper tier of another. */
-export const TIER_REASONS = [
+const TIER_REASONS = [
   /** smart: the lowest round trip time to the origin. */
   "lowest_latency",
   /** smart: the fallback, the fastest node of another region. */
@@ -92,7 +92,7 @@ export const TIER_REASONS = [
 ] as const;
 
 /** Why a site has no plan although its topology is on. */
-export const TIER_IDLE_REASONS = [
+const TIER_IDLE_REASONS = [
   /** No latency measurement of the site's origin yet (smart, regional). */
   "no_latency",
   /** No node of the cluster can be an upper tier (tier-upper-v1) or none has an address. */

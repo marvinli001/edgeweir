@@ -93,15 +93,9 @@ export {
 export { compileRules, expressionOf, ruleModelOf } from "./rules";
 export { compileSitePorts, parseDomain, splitWafExclusions } from "./site";
 export {
-  type ChooseTiersInput,
   chooseTiers,
-  compileTieredCache,
-  TIER_HYSTERESIS_FACTOR,
-  TIER_HYSTERESIS_MS,
   type TierCandidate,
-  type TierChoice,
   type TieredCacheModel,
   type TierHopModel,
-  type TierUpperModel,
   tierTargetId,
 } from "./tiers";

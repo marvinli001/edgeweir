@@ -32,7 +32,7 @@ export interface TierCandidate {
   groupIds: readonly string[];
 }
 
-export interface TierUpperModel {
+interface TierUpperModel {
   nodeId: string;
   reason: TierReason;
   rttMs: number | null;
@@ -44,13 +44,13 @@ export interface TierHopModel {
   uppers: TierUpperModel[];
 }
 
-export interface TierChoice {
+interface TierChoice {
   /** Nodes with upper tiers, sorted by node id; the others fetch from the origin. */
   hops: TierHopModel[];
   idleReason: TierIdleReason | null;
 }
 
-export interface ChooseTiersInput {
+interface ChooseTiersInput {
   topology: Exclude<TierTopology, "off">;
   candidates: readonly TierCandidate[];
   /** The node's round trip time to the site's origin (ms); null without a fresh measurement. */
@@ -67,8 +67,8 @@ export interface ChooseTiersInput {
  * factor of the fastest plus TIER_HYSTERESIS_MS, so that measurement noise
  * does not move a site's cache between nodes.
  */
-export const TIER_HYSTERESIS_FACTOR = 1.2;
-export const TIER_HYSTERESIS_MS = 5;
+const TIER_HYSTERESIS_FACTOR = 1.2;
+const TIER_HYSTERESIS_MS = 5;
 
 const idle = (idleReason: TierIdleReason): TierChoice => ({ hops: [], idleReason });
 

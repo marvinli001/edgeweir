@@ -1,4 +1,5 @@
 import {
+  type AnalyticsRange,
   analyticsRange,
   BLOCK_REASONS,
   displaySiteDomain,
@@ -58,6 +59,7 @@ import { SitePortsCard } from "@/components/site/ports-card";
 import { RulesTab } from "@/components/site/rules-tab";
 import { SaveBar, useSaveSite } from "@/components/site/save-site";
 import { SecurityTab } from "@/components/site/security-tab";
+import { TierStatsCard } from "@/components/site/tiered-cache-card";
 import { UsageGuardCard } from "@/components/site/usage-guard-card";
 import { StarButton, useSiteStars } from "@/components/site-star";
 import { SiteStatus, untilLive } from "@/components/site-status";
@@ -103,6 +105,11 @@ function SiteDetailPage() {
   });
   const stars = useSiteStars();
   const tab: SiteTab = search.tab ?? "overview";
+  const setRange = (range: AnalyticsRange) =>
+    navigate({
+      search: (prev) => ({ ...prev, range: range === DEFAULT_RANGE ? undefined : range }),
+      replace: true,
+    });
   const name = site.data?.name;
   const tabBar = useTabBar(`tab-${tab}`);
 
@@ -199,19 +206,16 @@ function SiteDetailPage() {
             <TabsContent value="overview" className="animate-enter">
               <OverviewTab site={data} />
             </TabsContent>
-            <TabsContent value="analytics" className="animate-enter">
+            <TabsContent value="analytics" className="flex flex-col gap-4 animate-enter">
               <AnalyticsSection
                 siteId={data.id}
                 range={search.range ?? DEFAULT_RANGE}
-                onRangeChange={(range) =>
-                  navigate({
-                    search: (prev) => ({
-                      ...prev,
-                      range: range === DEFAULT_RANGE ? undefined : range,
-                    }),
-                    replace: true,
-                  })
-                }
+                onRangeChange={setRange}
+              />
+              <TierStatsCard
+                siteId={data.id}
+                range={search.range ?? DEFAULT_RANGE}
+                onRangeChange={setRange}
               />
             </TabsContent>
             <TabsContent value="domains" className="animate-enter">

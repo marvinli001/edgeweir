@@ -23,6 +23,7 @@ import { ProbesPanel } from "@/components/probes";
 import { ReleaseSourceCard } from "@/components/release-source";
 import { ServiceAccountsPanel } from "@/components/service-accounts";
 import { QueryView } from "@/components/states";
+import { TieredCacheSettingsCard } from "@/components/tiered-cache";
 import { UsageSettingsCard } from "@/components/usage-settings";
 import { formatDateTime, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
@@ -178,6 +179,7 @@ function GeneralSettings() {
       </Panel>
       <NodeChannelCard />
       <OriginAllowListCard />
+      <TieredCacheSettingsCard />
       <ReleaseSourceCard />
       <AcmeDirectoryCard />
       <UsageSettingsCard />

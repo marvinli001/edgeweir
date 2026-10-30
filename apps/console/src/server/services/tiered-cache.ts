@@ -51,7 +51,7 @@ const tieredCacheSetting = defineSetting({
 export const getTieredCache = tieredCacheSetting.read;
 
 /** Measurements older than this do not count (a node measures every minute). */
-export const TIER_LATENCY_MAX_AGE_MS = 10 * 60_000;
+const TIER_LATENCY_MAX_AGE_MS = 10 * 60_000;
 /** Nodes not seen for this long take no part. */
 const TIER_NODE_MAX_SILENCE_MS = 10 * 60_000;
 
