@@ -285,7 +285,7 @@ edgeweir-node 仓库里的 `examples/extensions/hello-header` 就是这个扩展
 | `ew.req.exempt()` | 客户端在网站的放行名单或平台放行名单上时为 `true`（即节点免于封禁与挑战的客户端）；`access`、`access_late` |
 | `ew.node.id()`、`name()`、`cluster_id()`、`version()` | 节点身份与 agent 版本 |
 | `ew.node.connections()` | nginx worker 视角的 `{ active, reading, writing, waiting }`（stub_status），请求与监听器钩子中可用；定时器中为 `nil` |
-| `ew.node.status()` | 节点最近一次上报的主机指标 `{ at, cpu_percent, memory_used_bytes, memory_total_bytes, load1, load5, load15, disk_used_bytes, disk_total_bytes, uptime_seconds }`（首次上报前为 `nil`）；任何钩子 |
+| `ew.node.status()` | 节点最近一次上报的主机指标 `{ at, cpu_percent, load1, load5, load15, memory_used_bytes, memory_total_bytes, egress_bps, active_connections }`（首次上报前为 `nil`）；任何钩子 |
 | `ew.secret()`、`ew.secrets()` | `secret: true`：当前密钥（32 个原始字节）；`ew.secrets()` 返回 `{ current, previous }`（首次轮换前 `previous` 为 `nil`） |
 | `ew.equal(a, b)` | 常数时间比较两个字符串 |
 | `ew.sidecar.ready()` | `sidecar`：边车是否通过健康检查 |

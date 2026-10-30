@@ -285,7 +285,7 @@ Hooks gain `listen`; capabilities gain `sidecar`. A package with a sidecar may b
 | `ew.req.exempt()` | `true` when the client is on one of the site's allow lists or a platform allow list (the clients the node exempts from bans and challenges); `access`, `access_late` |
 | `ew.node.id()`, `name()`, `cluster_id()`, `version()` | The node's identity and agent version |
 | `ew.node.connections()` | `{ active, reading, writing, waiting }` of the nginx worker's view (stub_status), in request and listener hooks; `nil` in timers |
-| `ew.node.status()` | The node's last reported host metrics `{ at, cpu_percent, memory_used_bytes, memory_total_bytes, load1, load5, load15, disk_used_bytes, disk_total_bytes, uptime_seconds }` (`nil` before the first report); any hook |
+| `ew.node.status()` | The node's last reported host metrics `{ at, cpu_percent, load1, load5, load15, memory_used_bytes, memory_total_bytes, egress_bps, active_connections }` (`nil` before the first report); any hook |
 | `ew.secret()`, `ew.secrets()` | `secret: true`: the current secret (32 raw bytes); `ew.secrets()` returns `{ current, previous }` (`previous` `nil` before the first rotation) |
 | `ew.equal(a, b)` | Constant-time comparison of two strings |
 | `ew.sidecar.ready()` | `sidecar`: whether the sidecar passed its health check |
