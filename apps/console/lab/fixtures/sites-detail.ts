@@ -2260,6 +2260,9 @@ function entry(
     query: options.logQuery ? (traits.query ?? "") : "",
     headers,
     peerIp: options.logPeer ? `10.20.0.${5 + Math.floor(r(30) * 3)}` : "",
+    crawler: "",
+    crawlerVerification: "",
+    crawlerChargedMicros: 0,
   };
 }
 

@@ -1,4 +1,7 @@
 import {
+  AI_CRAWLERS,
+  aiCrawler,
+  aiCrawlerDetectable,
   BLOCK_REASONS,
   CACHE_STATUSES,
   crsDetectionRule,
@@ -53,6 +56,7 @@ import {
   normalizeLogHeaders,
   protocolText,
 } from "@/lib/access-logs";
+import { formatUsd, verificationLabel } from "@/lib/ai-crawl";
 import { formatNumber, m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 import { requestUrl } from "@/lib/purge";
@@ -417,6 +421,13 @@ function LogSearch({ siteId, jump }: { siteId: string; jump?: LogJump }) {
                 max: 86400000,
               })}
               {textField("cidr", m.logs_cidr(), { maxLength: 64, mono: true })}
+              {selectField("crawler", m.logs_crawler(), [
+                { value: "any", label: m.logs_crawler_any() },
+                ...AI_CRAWLERS.filter(aiCrawlerDetectable).map((c) => ({
+                  value: c.id,
+                  label: c.name,
+                })),
+              ])}
             </CollapsibleContent>
             <div className="flex flex-wrap items-center gap-2">
               <Button type="submit" disabled={logs.isFetching} data-testid="logs-search">
@@ -706,6 +717,7 @@ function LogTable({ entries, siteId }: { entries: LogEntry[]; siteId: string }) 
                     </span>
                   </span>
                   {row.blockReason ||
+                  row.crawler ||
                   row.requestId ||
                   row.ja4 ||
                   row.wafBlocked ||
@@ -733,6 +745,38 @@ function LogTable({ entries, siteId }: { entries: LogEntry[]; siteId: string }) 
                               data-rule-id={row.blockRuleId}
                             >
                               {ruleName(row.blockRuleId) ?? row.blockRuleId}
+                            </span>
+                          ) : null}
+                        </span>
+                      ) : null}
+                      {/* The AI crawler the User-Agent claims and what the node found. */}
+                      {row.crawler ? (
+                        <span
+                          className="flex min-w-0 flex-wrap items-center gap-1.5"
+                          data-testid="log-crawler"
+                          data-crawler={row.crawler}
+                          data-verification={row.crawlerVerification}
+                        >
+                          <span className="text-foreground">
+                            {aiCrawler(row.crawler)?.name ?? row.crawler}
+                          </span>
+                          {row.crawlerVerification ? (
+                            <Badge
+                              size="sm"
+                              tone={
+                                row.crawlerVerification === "verified"
+                                  ? "success"
+                                  : row.crawlerVerification === "failed"
+                                    ? "danger"
+                                    : "neutral"
+                              }
+                            >
+                              {verificationLabel(row.crawlerVerification)}
+                            </Badge>
+                          ) : null}
+                          {row.crawlerChargedMicros > 0 ? (
+                            <span className="tabular-nums" data-testid="log-crawler-charged">
+                              {formatUsd(row.crawlerChargedMicros)}
                             </span>
                           ) : null}
                         </span>

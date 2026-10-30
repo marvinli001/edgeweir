@@ -40,6 +40,8 @@ const BLOCK_REASON_LABELS: Record<BlockReason, Label> = {
   websocket_origin: m.block_reason_websocket_origin,
   client_cert: m.block_reason_client_cert,
   maintenance: m.block_reason_maintenance,
+  ai_crawler: m.block_reason_ai_crawler,
+  pay_per_crawl: m.block_reason_pay_per_crawl,
 };
 /** Why a node refused or challenged a request (ADR-0041 §3). */
 export const blockReasonLabel = lookup(BLOCK_REASON_LABELS);
@@ -189,6 +191,8 @@ export interface LogFilters {
   referer: string;
   minDuration: string;
   cidr: string;
+  /** An AI crawler of the catalogue, or "any" for every claim. */
+  crawler: string;
 }
 
 /** What the console links to in a site's logs: the filters of a search and its time window (ISO). */
@@ -198,6 +202,8 @@ export interface LogJump {
   /** A network, for a client that is an IPv6 /64. */
   cidr?: string;
   path?: string;
+  /** Requests claiming this AI crawler. */
+  crawler?: string;
   from?: string;
   to?: string;
 }
@@ -230,6 +236,7 @@ export function initialLogFilters(jump: LogJump | undefined, now = Date.now()) {
     ...emptyMoreFilters(),
     blockReason: jump?.blockReason ?? "",
     cidr: jump?.cidr ?? "",
+    crawler: jump?.crawler ?? "",
   };
   return {
     filters,
@@ -251,6 +258,7 @@ const MORE_FILTERS = [
   "referer",
   "minDuration",
   "cidr",
+  "crawler",
 ] as const satisfies readonly (keyof LogFilters)[];
 export type MoreFilter = (typeof MORE_FILTERS)[number];
 
@@ -319,6 +327,7 @@ export function logQueryOf(
       referer: optional(trimmed("referer")),
       minDuration: minDurationValue,
       cidr: optional(cidr),
+      crawler: optional(trimmed("crawler")),
       limit: 100,
     },
   };
