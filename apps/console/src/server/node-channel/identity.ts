@@ -46,9 +46,18 @@ export const issuedCertificateResponse = (
   notAfter: timestampFromDate(issued.notAfter),
 });
 
-/** The features a node reports, as stored: distinct, well-formed, at most 64. */
+/**
+ * Bound on the features stored per node. A current node reports about 70, and
+ * the ones past the bound would be dropped silently (channel following,
+ * decommissioning, ...), so it leaves room for many releases.
+ */
+const MAX_SUPPORTED_FEATURES = 256;
+
+/** The features a node reports, as stored: distinct, well-formed, at most MAX_SUPPORTED_FEATURES. */
 const supportedFeatures = (features: readonly string[]) =>
-  [...new Set(features)].filter((f) => /^[a-z0-9-]{1,64}$/.test(f)).slice(0, 64);
+  [...new Set(features)]
+    .filter((f) => /^[a-z0-9-]{1,64}$/.test(f))
+    .slice(0, MAX_SUPPORTED_FEATURES);
 
 /** What a node reports about its host and agent (none: empty), as stored on its row. */
 export const nodeInfoColumns = (info: NodeInfo | undefined) => ({

@@ -188,6 +188,18 @@ describe("enrolled nodes and probes follow the node channel URL", async () => {
     });
   });
 
+  it("keeps every feature of a node that reports more than 64", async () => {
+    const many = Array.from({ length: 80 }, (_, i) => `feature-${i}-v1`);
+    await nodeAt("old.example.test", follower.cert).reportStatus({
+      info: { supportedFeatures: [...many, CHANNEL_FOLLOW_FEATURE] },
+      channel: status(OLD),
+    });
+    const node = await getNode(ctx.db, follower.id);
+    expect(node.supportedFeatures).toHaveLength(81);
+    expect(node.supportedFeatures.at(-1)).toBe(CHANNEL_FOLLOW_FEATURE);
+    expect(await stateOf(node)).toBe("current");
+  });
+
   it("gives out a new URL; nodes not on it yet show as pending or needing an upgrade", async () => {
     await admin.settings.setNodeChannel({ url: NEW });
     await vi.waitFor(() => expect(names()).toContain("new.example.test"));
