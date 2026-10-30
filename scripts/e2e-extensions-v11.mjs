@@ -225,10 +225,16 @@ if (PRECURSOR) {
     if (r.status !== 403 || r.headers["x-edgeweir-challenge"] !== "session") return null;
     return r.body.match(/[?&]t=([A-Za-z0-9_.-]+)/)?.[1] ?? null;
   };
-  const token1 = await waitFor("the interstitial", () => interstitialToken(), 180, 1000, async () => {
-    const r = await get("/", P_HOST, NAV);
-    return `${r.status} ${JSON.stringify(r.headers)} ${r.body.slice(0, 300)}`;
-  });
+  const token1 = await waitFor(
+    "the interstitial",
+    () => interstitialToken(),
+    180,
+    1000,
+    async () => {
+      const r = await get("/", P_HOST, NAV);
+      return `${r.status} ${JSON.stringify(r.headers)} ${r.body.slice(0, 300)}`;
+    },
+  );
   const page = await get("/", P_HOST, NAV);
   assert.match(page.headers["content-type"], /^text\/html/);
   assert.match(page.headers["content-security-policy"], /script-src 'self'/);
