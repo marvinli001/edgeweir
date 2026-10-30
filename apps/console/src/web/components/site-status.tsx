@@ -14,21 +14,35 @@ export function canaryLabel(delivery: SiteDelivery): string | null {
 
 /**
  * Whether the site runs on its cluster's online nodes: disabled, pending, rolling out or live;
- * and a badge while its usage protection holds maintenance mode or the site disabled.
+ * and badges while its usage protection holds maintenance mode or the site disabled, and while
+ * its development mode bypasses the cache.
  */
 export function SiteStatus({
   site,
 }: {
-  site: Pick<Site, "enabled" | "delivery"> & Partial<Pick<Site, "usageGuardHeld">>;
+  site: Pick<Site, "enabled" | "delivery"> &
+    Partial<Pick<Site, "usageGuardHeld" | "developmentModeUntil">>;
 }) {
   const dot = <SiteStatusDot site={site} />;
-  if (!site.usageGuardHeld) return dot;
+  if (!site.usageGuardHeld && !site.developmentModeUntil) return dot;
   return (
     <span className="inline-flex flex-wrap items-center gap-2">
       {dot}
-      <Badge size="sm" tone="neutral" data-testid="site-usage-guard">
-        {m.usage_guard_badge()}
-      </Badge>
+      {site.usageGuardHeld ? (
+        <Badge size="sm" tone="neutral" data-testid="site-usage-guard">
+          {m.usage_guard_badge()}
+        </Badge>
+      ) : null}
+      {site.developmentModeUntil ? (
+        <Badge
+          size="sm"
+          tone="warning"
+          title={formatClockTime(site.developmentModeUntil)}
+          data-testid="site-dev-mode"
+        >
+          {m.site_dev_mode_badge()}
+        </Badge>
+      ) : null}
     </span>
   );
 }
