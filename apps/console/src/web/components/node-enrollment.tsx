@@ -227,12 +227,16 @@ export function EnrollProgress({
   /** Without expiresAt (an SSH install), the token's own expiry from its status. */
   result: Pick<EnrollmentTokenResult, "tokenId"> & { expiresAt?: string };
 }) {
+  // The expiry can come from the status itself (SSH installs), so the polling reads it
+  // through a ref: refetchInterval runs while useQuery is still being called.
+  const expiredRef = React.useRef(false);
   const status = useQuery({
     ...orpc.clusters.getEnrollmentToken.queryOptions({ input: { id: result.tokenId } }),
-    refetchInterval: (query) => (finished(query.state.data, expired) ? false : 3000),
+    refetchInterval: (query) => (finished(query.state.data, expiredRef.current) ? false : 3000),
     meta: { background: true },
   });
   const expired = usePassed(result.expiresAt ?? status.data?.expiresAt ?? FAR_FUTURE);
+  expiredRef.current = expired;
   const data = status.data;
   const node = data?.node ?? null;
   const used = !!data?.usedAt;
