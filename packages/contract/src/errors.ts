@@ -178,6 +178,11 @@ export const errorDefs = {
   /** A rule the cluster cannot evaluate (e.g. backup_group without a line, an unknown line). */
   SCHEDULING_RULE_INVALID: { status: 400, params: [] },
   NODE_NOT_FOUND: { status: 404, params: [] },
+  /** A decommission of the node is already waiting for the node. */
+  NODE_DECOMMISSION_PENDING: { status: 409, params: [] },
+  /** A disabled node pulls no tasks: enable it, or delete it. */
+  NODE_DECOMMISSION_DISABLED: { status: 409, params: [] },
+  NODE_DECOMMISSION_NOT_PENDING: { status: 409, params: [] },
   /** The name is not one an earlier node channel URL left in the certificate. */
   NODE_CHANNEL_NAME_NOT_FOUND: { status: 404, params: [] },
   /** Nodes and probes may still connect with the name. */

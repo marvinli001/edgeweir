@@ -1,4 +1,10 @@
-import { type Cluster, type Node, nodeUpgradeRecommended } from "@edgeweir/contract";
+import {
+  type Cluster,
+  NODE_DECOMMISSION_FEATURE,
+  type Node,
+  nodeSupportsFeature,
+  nodeUpgradeRecommended,
+} from "@edgeweir/contract";
 import { Add01Icon, MoreHorizontalIcon, ServerStack01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -117,6 +123,17 @@ function NodeActions({
           {node.status === "disabled" ? m.nodes_enable() : m.nodes_disable()}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
+        {nodeSupportsFeature(node.supportedFeatures, NODE_DECOMMISSION_FEATURE) &&
+        !node.decommissionRequestedAt &&
+        node.status === "active" ? (
+          <DropdownMenuItem
+            variant="destructive"
+            onClick={() => onAction({ kind: "decommission", node })}
+            data-testid="node-decommission"
+          >
+            {m.node_decommission()}
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem variant="destructive" onClick={() => onAction({ kind: "delete", node })}>
           {m.common_delete()}
         </DropdownMenuItem>
@@ -188,6 +205,12 @@ function NodeAgent({ node }: { node: Node }) {
 
 /** A node's state in words, with its light (lit while it serves) and what is wrong with it. */
 function NodeState({ node }: { node: Node }) {
+  if (node.decommissionRequestedAt)
+    return (
+      <StatusDot tone="warn" pulse data-testid="node-decommissioning">
+        {m.node_decommissioning()}
+      </StatusDot>
+    );
   if (node.status === "disabled")
     return (
       <StatusDot tone="idle" data-testid="node-disabled">

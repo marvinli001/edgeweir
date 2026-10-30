@@ -458,6 +458,8 @@ export const nodes: Node[] = nodeSeeds.map((seed, index) => {
       skewed: index === 3,
     },
     location: locationOf(seed),
+    decommissionRequestedAt: null,
+    decommissionError: null,
   };
 });
 

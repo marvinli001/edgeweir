@@ -27,6 +27,7 @@ import { createEnrollmentToken, getEnrollmentToken } from "../../services/enroll
 import { getPortPools, setPortPools } from "../../services/l4";
 import { nodeChannelUrl } from "../../services/node-channel-url";
 import { getDebugLog, listDebugLogs, pullDebugLogs } from "../../services/node-debug-logs";
+import { cancelDecommission, requestDecommission } from "../../services/node-decommission";
 import {
   createNodeGroup,
   deleteNodeGroup,
@@ -298,6 +299,12 @@ export const clustersRouter = {
       await deleteNode(context.app.db, input.id, context.actor);
       return ok;
     }),
+    decommission: authed.nodes.decommission.handler(({ input, context }) =>
+      requestDecommission(context.app, context.actor, input.id),
+    ),
+    cancelDecommission: authed.nodes.cancelDecommission.handler(({ input, context }) =>
+      cancelDecommission(context.app, context.actor, input.id),
+    ),
     setProbe: authed.nodes.setProbe.handler(({ input, context }) =>
       setNodeProbe(context.app.db, input, context.actor),
     ),

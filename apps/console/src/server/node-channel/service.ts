@@ -47,7 +47,7 @@ import {
   SecurityEventKind,
   TaskState,
 } from "@edgeweir/proto";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import { accessAuthSecretBinding } from "../lib/access-auth-secrets";
 import type { AppContext } from "../lib/context";
 import { heartbeatSeconds } from "../lib/node-online";
@@ -75,7 +75,7 @@ import {
 import { nodeCertificates } from "../services/certificates";
 import { challengeKeySecrets } from "../services/challenge-keys";
 import { mirrorMinuteStats } from "../services/clickhouse";
-import { claimEnrollmentToken } from "../services/enrollment";
+import { claimEnrollmentToken, findEnrollmentToken } from "../services/enrollment";
 import { locateAddressOf, nodeIpRows } from "../services/node-addresses";
 import {
   hasDebugLogTasks,
@@ -83,6 +83,11 @@ import {
   reportDebugLogResult,
   uploadDebugLogs,
 } from "../services/node-debug-logs";
+import {
+  hasDecommissionTask,
+  pullDecommissionTask,
+  reportDecommissionResult,
+} from "../services/node-decommission";
 import { ingestNodeLogs, nodeLogCursor } from "../services/node-logs";
 import { acceptedCertificate, isSerialRevoked, replaceReportedAddresses } from "../services/nodes";
 import { replaceOriginHealth } from "../services/origin-health";
@@ -645,15 +650,62 @@ export function createNodeService(
       if (!req.token || !req.csrPem) {
         throw new ConnectError("token and csr_pem are required", Code.InvalidArgument);
       }
+      const keySha256 = await signCsr(() => app.nodeCa.csrKeySha256(req.csrPem));
+      const refused = () =>
+        new ConnectError(
+          "invalid, expired or already used enrollment token",
+          Code.PermissionDenied,
+        );
       const result = await app.db.transaction(async (tx) => {
-        const token = await claimEnrollmentToken(tx, req.token);
-        if (!token) {
-          throw new ConnectError(
-            "invalid, expired or already used enrollment token",
-            Code.PermissionDenied,
-          );
-        }
         const info = req.info;
+        // The key of an enrolled node (a retry after a lost answer): that node, never a second one.
+        const [known] = await tx
+          .select()
+          .from(schema.node)
+          .where(eq(schema.node.keySha256, keySha256))
+          .for("update");
+        if (known) {
+          const token = await findEnrollmentToken(tx, req.token);
+          const sameToken = token?.usedByNodeId === known.id;
+          const freshToken =
+            !!token &&
+            token.usedAt === null &&
+            token.expiresAt > new Date() &&
+            token.clusterId === known.clusterId &&
+            (token.nodeGroupId === null || token.nodeGroupId === known.nodeGroupId);
+          if (!token || !(sameToken || freshToken)) throw refused();
+          const issued = await signCsr(() => app.nodeCa.signNodeCsr(req.csrPem, known.id));
+          await tx
+            .update(schema.node)
+            .set({ ...certificateColumns(issued), previousCertSerial: known.certSerial, keySha256 })
+            .where(eq(schema.node.id, known.id));
+          if (freshToken) {
+            await tx
+              .update(schema.enrollmentToken)
+              .set({ usedAt: new Date(), usedByNodeId: known.id })
+              .where(eq(schema.enrollmentToken.id, token.id));
+          }
+          await recordAudit(
+            tx,
+            { type: "node", id: known.id, name: known.name, ip: peer.remoteAddress ?? "" },
+            {
+              action: "node.enroll",
+              targetType: "node",
+              targetId: known.id,
+              targetName: known.name,
+              metadata: {
+                clusterId: known.clusterId,
+                tokenId: token.id,
+                hostname: info?.hostname ?? "",
+                certSerial: issued.serialNumber,
+                sameKey: true,
+              },
+            },
+          );
+          return { nodeRow: known, issued, sameKey: true };
+        }
+        const token = await claimEnrollmentToken(tx, req.token);
+        if (!token) throw refused();
         let nodeGroupId = token.nodeGroupId;
         if (!nodeGroupId) {
           const [fallback] = await tx
@@ -681,8 +733,17 @@ export function createNodeService(
         const issued = await signCsr(() => app.nodeCa.signNodeCsr(req.csrPem, nodeRow.id));
         await tx
           .update(schema.node)
-          .set({ ...certificateColumns(issued), enrolledAt: new Date() })
+          .set({ ...certificateColumns(issued), keySha256, enrolledAt: new Date() })
           .where(eq(schema.node.id, nodeRow.id));
+        // NodeInfo.machine_id: the same machine as other nodes (a hint only, ADR-0067).
+        const sameMachine = nodeRow.machineId
+          ? await tx
+              .select({ id: schema.node.id })
+              .from(schema.node)
+              .where(
+                and(eq(schema.node.machineId, nodeRow.machineId), ne(schema.node.id, nodeRow.id)),
+              )
+          : [];
         await replaceReportedAddresses(tx, nodeRow.id, info?.ipAddresses ?? []);
         await tx
           .update(schema.enrollmentToken)
@@ -701,12 +762,21 @@ export function createNodeService(
               tokenId: token.id,
               hostname: info?.hostname ?? "",
               certSerial: issued.serialNumber,
+              ...(sameMachine.length > 0 ? { sameMachineAs: sameMachine.map((n) => n.id) } : {}),
             },
           },
         );
-        return { nodeRow, issued };
+        if (sameMachine.length > 0)
+          log.warn("node enrolled on the machine of other nodes", {
+            nodeId: nodeRow.id,
+            sameMachineAs: sameMachine.map((n) => n.id),
+          });
+        return { nodeRow, issued, sameKey: false };
       });
-      log.info("node enrolled", { nodeId: result.nodeRow.id, name: result.nodeRow.name });
+      log.info(result.sameKey ? "node enrolled again with its key" : "node enrolled", {
+        nodeId: result.nodeRow.id,
+        name: result.nodeRow.name,
+      });
       return {
         nodeId: result.nodeRow.id,
         clusterId: result.nodeRow.clusterId,
@@ -732,7 +802,11 @@ export function createNodeService(
         const kept = keptSerial(row, peerSerial);
         await tx
           .update(schema.node)
-          .set({ ...certificateColumns(issued), previousCertSerial: kept })
+          .set({
+            ...certificateColumns(issued),
+            previousCertSerial: kept,
+            keySha256: issued.keySha256,
+          })
           .where(eq(schema.node.id, node.id));
         await recordAudit(
           tx,
@@ -942,7 +1016,8 @@ export function createNodeService(
       const tasksPending =
         (await hasDeliverableTasks(app.db, node.id)) ||
         (await hasUpgradeTasks(app.db, node.id)) ||
-        (await hasDebugLogTasks(app.db, node.id));
+        (await hasDebugLogTasks(app.db, node.id)) ||
+        (await hasDecommissionTask(app.db, node.id));
       const expiresIn = (node.certNotAfter?.getTime() ?? 0) - now.getTime();
       log.debug("status", {
         nodeId: node.id,
@@ -1169,7 +1244,8 @@ export function createNodeService(
       const purgeOnly = req.purgeOnly;
       const upgrade = purgeOnly ? null : await pullUpgrade(app, node);
       const debugLogs = purgeOnly ? null : await pullDebugLogTask(app, node);
-      const limit = max - (upgrade ? 1 : 0) - (debugLogs ? 1 : 0);
+      const decommission = purgeOnly ? null : await pullDecommissionTask(app.db, node);
+      const limit = max - (upgrade ? 1 : 0) - (debugLogs ? 1 : 0) - (decommission ? 1 : 0);
       const tasks = limit > 0 ? await pullCacheTasks(app.db, node, limit, { purgeOnly }) : [];
       // Only prefetches depend on the cache key's device type.
       const deviceType = await deviceTypeSites(
@@ -1185,6 +1261,7 @@ export function createNodeService(
           ...tasks.map((task) => toNodeTask(task, deviceType)),
           ...(upgrade ? [upgrade] : []),
           ...(debugLogs ? [debugLogs] : []),
+          ...(decommission ? [decommission] : []),
         ],
       };
     },
@@ -1199,6 +1276,7 @@ export function createNodeService(
       }
       if (await reportUpgrade(app, node.id, req)) return {};
       if (await reportDebugLogResult(app, node.id, req)) return {};
+      if (await reportDecommissionResult(app, node, req)) return {};
       const recorded = await reportCacheTaskResult(app.db, node, {
         taskId: req.taskId,
         state: req.state === TaskState.SUCCEEDED ? "succeeded" : "failed",

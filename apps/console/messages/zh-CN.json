@@ -3286,5 +3286,19 @@
   "ssh_concurrency": "并发",
   "ssh_timeout": "单台超时（分钟）",
   "ssh_scan_error_outbound_refused": "出站策略不允许连接该地址",
-  "ssh_install_error_outbound_refused": "出站策略不允许连接该地址"
+  "ssh_install_error_outbound_refused": "出站策略不允许连接该地址",
+  "node_decommission": "退役",
+  "node_decommission_confirm": "退役节点 {name}？",
+  "node_decommission_note": "节点停止服务并删除身份，完成后从控制台删除；软件包保留在主机上",
+  "node_decommissioning": "退役中",
+  "node_decommission_waiting": "等待节点执行",
+  "node_decommission_waiting_offline": "节点离线，上线后执行",
+  "node_decommission_cancel": "撤回",
+  "node_decommission_failed": "上次退役失败",
+  "error_node_decommission_pending": "该节点的退役已在等待执行",
+  "error_node_decommission_disabled": "已停用的节点不接收任务：先启用，或直接删除",
+  "error_node_decommission_not_pending": "该节点没有等待中的退役",
+  "audit_action_node_decommission": "退役节点",
+  "audit_action_node_decommission_cancel": "撤回节点退役",
+  "audit_action_node_decommission_failed": "节点退役失败"
 }

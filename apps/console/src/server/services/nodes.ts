@@ -164,6 +164,8 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
             longitude: r.location.longitude,
           }
         : null,
+      decommissionRequestedAt: r.decommissionRequestedAt?.toISOString() ?? null,
+      decommissionError: r.decommissionError,
     };
   });
 }
@@ -309,7 +311,12 @@ export async function setNodeStatus(
  * the certificate from now on, so the agent cannot reconnect without a new
  * enrollment token.
  */
-export async function deleteNode(db: Database, id: string, actor: Actor): Promise<void> {
+export async function deleteNode(
+  db: Database,
+  id: string,
+  actor: Actor,
+  opts: { decommissioned?: boolean } = {},
+): Promise<void> {
   await db.transaction(async (tx) => {
     const row = await findNode(tx, id);
     // Also the certificate a renewal replaced, still accepted until the node used the new one.
@@ -329,7 +336,7 @@ export async function deleteNode(db: Database, id: string, actor: Actor): Promis
             serial: normalizeSerial(s.serial),
             nodeId: row.id,
             fingerprintSha256: s.fingerprintSha256 ?? "",
-            reason: "node deleted",
+            reason: opts.decommissioned ? "node decommissioned" : "node deleted",
           })),
         )
         .onConflictDoNothing();
@@ -356,6 +363,7 @@ export async function deleteNode(db: Database, id: string, actor: Actor): Promis
         clusterId: row.clusterId,
         certSerial: row.certSerial,
         certFingerprint: row.certFingerprint,
+        ...(opts.decommissioned ? { decommissioned: true } : {}),
       },
     });
   });

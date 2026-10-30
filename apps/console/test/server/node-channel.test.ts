@@ -9,6 +9,7 @@ import {
   type CacheTaskCreateInput,
   cacheTaskCreateInput,
   NODE_DEBUG_LOGS_FEATURE,
+  NODE_DECOMMISSION_FEATURE,
   NODE_LOGS_FEATURE,
   siteCreateInput,
   tlsSettings,
@@ -35,6 +36,10 @@ import { createCacheTask, getCacheTask } from "../../src/server/services/cache-t
 import { createClusterTx } from "../../src/server/services/clusters";
 import { createEnrollmentToken } from "../../src/server/services/enrollment";
 import { getDebugLog, pullDebugLogs } from "../../src/server/services/node-debug-logs";
+import {
+  cancelDecommission,
+  requestDecommission,
+} from "../../src/server/services/node-decommission";
 import { listNodeLogs } from "../../src/server/services/node-logs";
 import {
   deleteNode,
@@ -398,6 +403,164 @@ describe("node channel", async () => {
     const page = await listNodeLogs(ctx.db, { id: nodeId, limit: 10 });
     expect(page.supported).toBe(true);
     expect(page.entries.map((e) => e.fields.request)).toEqual(["GET /a?[redacted] HTTP/1.1"]);
+  });
+
+  it("enrolls a key it knows as that node again, never as a second one (ADR-0067)", async () => {
+    const mint = (cluster: string, nodeName = "") =>
+      createEnrollmentToken(
+        ctx.db,
+        { clusterId: cluster, nodeName, ttlMinutes: 10 },
+        {
+          actor,
+          consoleUrl: ctx.env.EDGEWEIR_PUBLIC_URL,
+          serverUrl: ctx.env.nodeApiUrl,
+          caSha256: ctx.nodeCa.fingerprintSha256,
+        },
+      );
+    const machineId = "ab".repeat(32);
+    const first = await mint(clusterId, "edge-same-key");
+    const key = await nodeKeyAndCsr();
+    const info = { hostname: "same-key", machineId, supportedFeatures: AGENT_FEATURES };
+    const enrolled = await anonymous().enroll({ token: first.token, csrPem: key.csrPem, info });
+    const nodes = async () =>
+      (await ctx.db.select().from(schema.node)).filter((n) => n.hostname === "same-key");
+
+    // The answer was lost: the same token and key again give the same node, a new certificate.
+    const retried = await anonymous().enroll({ token: first.token, csrPem: key.csrPem, info });
+    expect(retried.nodeId).toBe(enrolled.nodeId);
+    expect(retried.certificatePem).not.toBe(enrolled.certificatePem);
+    // A new token of the same cluster with that key: the same node, and the token is spent on it.
+    const second = await mint(clusterId);
+    const again = await anonymous().enroll({ token: second.token, csrPem: key.csrPem, info });
+    expect(again.nodeId).toBe(enrolled.nodeId);
+    const [spent] = await ctx.db
+      .select()
+      .from(schema.enrollmentToken)
+      .where(eq(schema.enrollmentToken.id, second.tokenId));
+    expect(spent?.usedByNodeId).toBe(enrolled.nodeId);
+    expect(await nodes()).toHaveLength(1);
+    // The certificate it got last works.
+    const mtls = createClient(
+      NodeService,
+      createConnectTransport({
+        baseUrl,
+        httpVersion: "2",
+        nodeOptions: {
+          ca: again.caCertificatePem,
+          cert: again.certificatePem,
+          key: key.keyPem,
+          servername: "localhost",
+        },
+      }),
+    );
+    await mtls.reportStatus({ appliedRevision: 0n });
+
+    // Another cluster's token with that key, and a used token with another key: refused.
+    const other = await ctx.db.transaction((tx) =>
+      createClusterTx(tx, { name: "same-key-other", description: "" }, actor),
+    );
+    const foreign = await mint(other.id);
+    await expect(
+      anonymous().enroll({ token: foreign.token, csrPem: key.csrPem, info }),
+    ).rejects.toMatchObject({ code: Code.PermissionDenied });
+    const [unspent] = await ctx.db
+      .select()
+      .from(schema.enrollmentToken)
+      .where(eq(schema.enrollmentToken.id, foreign.tokenId));
+    expect(unspent?.usedAt).toBeNull();
+    const stranger = await nodeKeyAndCsr();
+    await expect(
+      anonymous().enroll({ token: first.token, csrPem: stranger.csrPem, info }),
+    ).rejects.toMatchObject({ code: Code.PermissionDenied });
+    expect(await nodes()).toHaveLength(1);
+
+    // A new key on the same machine: a second node, noted as on the machine of the first.
+    const twin = await mint(clusterId);
+    const cloned = await anonymous().enroll({ token: twin.token, csrPem: stranger.csrPem, info });
+    expect(cloned.nodeId).not.toBe(enrolled.nodeId);
+    const audits = await ctx.db
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "node.enroll"));
+    const of = (id: string) => audits.filter((a) => a.targetId === id).map((a) => a.metadata);
+    expect(of(enrolled.nodeId).filter((m) => (m as { sameKey?: boolean }).sameKey)).toHaveLength(2);
+    expect(of(cloned.nodeId)).toEqual([
+      expect.objectContaining({ sameMachineAs: [enrolled.nodeId] }),
+    ]);
+  });
+
+  it("decommissions a node once it has retired itself (decommission-v1)", async () => {
+    const plain = await enroll("node-no-decommission");
+    await expect(requestDecommission(ctx, actor, plain.nodeId)).rejects.toMatchObject({
+      code: "NODE_CAPABILITY_REQUIRED",
+    });
+    const { nodeId, mtls } = await enroll("node-decommission", {}, [
+      ...AGENT_FEATURES,
+      NODE_DECOMMISSION_FEATURE,
+    ]);
+    await expect(cancelDecommission(ctx, actor, nodeId)).rejects.toMatchObject({
+      code: "NODE_DECOMMISSION_NOT_PENDING",
+    });
+    const asked = await requestDecommission(ctx, actor, nodeId);
+    expect(asked.decommissionRequestedAt).not.toBeNull();
+    await expect(requestDecommission(ctx, actor, nodeId)).rejects.toMatchObject({
+      code: "NODE_DECOMMISSION_PENDING",
+    });
+    expect((await mtls.reportStatus({ appliedRevision: 0n })).tasksPending).toBe(true);
+    expect((await mtls.pullTasks({ purgeOnly: true })).tasks).toHaveLength(0);
+    const [task] = (await mtls.pullTasks({ maxTasks: 5 })).tasks;
+    expect(task?.kind.case).toBe("decommission");
+    // Handed out again until the node answers.
+    expect((await mtls.pullTasks({ maxTasks: 5 })).tasks.map((t) => t.id)).toEqual([task?.id]);
+
+    // Failed: the request ends with why.
+    await mtls.reportTaskResult({
+      taskId: task?.id ?? "",
+      state: TaskState.FAILED,
+      errorCode: "decommission_failed",
+      errorParams: { reason: "cannot stop openresty" },
+    });
+    const row = async () =>
+      (await ctx.db.select().from(schema.node).where(eq(schema.node.id, nodeId)))[0];
+    expect(await row()).toMatchObject({
+      decommissionRequestedAt: null,
+      decommissionTaskId: null,
+      decommissionError: "decommission_failed: cannot stop openresty",
+    });
+    expect((await mtls.pullTasks({ maxTasks: 5 })).tasks).toHaveLength(0);
+
+    // Withdrawn before the node saw it.
+    await requestDecommission(ctx, actor, nodeId);
+    await cancelDecommission(ctx, actor, nodeId);
+    expect((await mtls.pullTasks({ maxTasks: 5 })).tasks).toHaveLength(0);
+
+    // Succeeded: the node is deleted and its certificate revoked.
+    await requestDecommission(ctx, actor, nodeId);
+    const [retire] = (await mtls.pullTasks({ maxTasks: 5 })).tasks;
+    // A stale task id is not this decommission.
+    await mtls.reportTaskResult({ taskId: task?.id ?? "", state: TaskState.SUCCEEDED });
+    expect(await row()).toBeDefined();
+    await mtls.reportTaskResult({ taskId: retire?.id ?? "", state: TaskState.SUCCEEDED });
+    expect(await row()).toBeUndefined();
+    const revoked = await ctx.db
+      .select()
+      .from(schema.nodeCertificateRevocation)
+      .where(eq(schema.nodeCertificateRevocation.nodeId, nodeId));
+    expect(revoked.map((r) => r.reason)).toContain("node decommissioned");
+    await expect(mtls.reportStatus({ appliedRevision: 0n })).rejects.toMatchObject({
+      code: Code.Unauthenticated,
+    });
+    const actions = (await ctx.db.select().from(schema.auditLog))
+      .filter((a) => a.targetId === nodeId)
+      .map((a) => a.action);
+    expect(actions).toEqual(
+      expect.arrayContaining([
+        "node.decommission",
+        "node.decommission_failed",
+        "node.decommission_cancel",
+        "node.delete",
+      ]),
+    );
   });
 
   it("hands a debug log pull to the node and stores its upload once (debug-logs-v1)", async () => {

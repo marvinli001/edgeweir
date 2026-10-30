@@ -385,6 +385,20 @@ export const contract = {
       .route({ method: "DELETE", path: "/nodes/{id}", tags: ["nodes"] })
       .input(idParam)
       .output(ok),
+    /**
+     * Asks the node (decommission-v1) to stop serving and forget its
+     * identity; it is deleted, its certificate revoked, once it reports the
+     * task done. An offline node gets the task when it connects again.
+     */
+    decommission: oc
+      .route({ method: "POST", path: "/nodes/{id}/decommission", tags: ["nodes"] })
+      .input(idParam)
+      .output(s.node),
+    /** Withdraws a decommission the node has not answered yet. */
+    cancelDecommission: oc
+      .route({ method: "DELETE", path: "/nodes/{id}/decommission", tags: ["nodes"] })
+      .input(idParam)
+      .output(s.node),
     /** Lets the node probe the other nodes from its node group's region (the group needs one). */
     setProbe: oc
       .route({ method: "PUT", path: "/nodes/{id}/probe", tags: ["nodes"] })

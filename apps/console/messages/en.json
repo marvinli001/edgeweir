@@ -3501,5 +3501,19 @@
   "ssh_concurrency": "Concurrency",
   "ssh_timeout": "Timeout per host (minutes)",
   "ssh_scan_error_outbound_refused": "The outbound policy does not allow this address",
-  "ssh_install_error_outbound_refused": "The outbound policy does not allow this address"
+  "ssh_install_error_outbound_refused": "The outbound policy does not allow this address",
+  "node_decommission": "Decommission",
+  "node_decommission_confirm": "Decommission node {name}?",
+  "node_decommission_note": "The node stops serving and deletes its identity, then it is deleted here; the packages stay on the host",
+  "node_decommissioning": "Decommissioning",
+  "node_decommission_waiting": "Waiting for the node",
+  "node_decommission_waiting_offline": "Node offline: runs when it connects",
+  "node_decommission_cancel": "Withdraw",
+  "node_decommission_failed": "Last decommission failed",
+  "error_node_decommission_pending": "A decommission of this node is already waiting",
+  "error_node_decommission_disabled": "A disabled node takes no tasks: enable it, or delete it",
+  "error_node_decommission_not_pending": "No decommission of this node is waiting",
+  "audit_action_node_decommission": "Decommission node",
+  "audit_action_node_decommission_cancel": "Withdraw node decommission",
+  "audit_action_node_decommission_failed": "Node decommission failed"
 }

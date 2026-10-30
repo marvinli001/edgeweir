@@ -11,7 +11,7 @@ import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
 /** What the node menu opens a dialog for. */
-export type NodeAction = { kind: "rename" | "move" | "delete"; node: Node };
+export type NodeAction = { kind: "rename" | "move" | "delete" | "decommission"; node: Node };
 
 /** The dialog of a node menu action. */
 export function NodeActionDialog({ action, ...dialog }: { action: NodeAction } & DialogProps) {
@@ -22,6 +22,8 @@ export function NodeActionDialog({ action, ...dialog }: { action: NodeAction } &
       return <MoveNodeDialog node={action.node} {...dialog} />;
     case "delete":
       return <DeleteNodeDialog node={action.node} {...dialog} />;
+    case "decommission":
+      return <DecommissionNodeDialog node={action.node} {...dialog} />;
   }
 }
 
@@ -107,6 +109,26 @@ function DeleteNodeDialog({ node, open, onOpenChange }: { node: Node } & DialogP
       title={m.nodes_delete_confirm({ name: node.name })}
       onConfirm={async () => {
         await remove.mutateAsync({ id: node.id });
+      }}
+    />
+  );
+}
+
+/** Asks the node to retire itself (decommission-v1); it is deleted once it has. */
+export function DecommissionNodeDialog({ node, open, onOpenChange }: { node: Node } & DialogProps) {
+  const decommission = useMutation({
+    ...orpc.nodes.decommission.mutationOptions(),
+    meta: { invalidates: "all" },
+  });
+  return (
+    <ControlledConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={m.node_decommission_confirm({ name: node.name })}
+      note={m.node_decommission_note()}
+      confirmLabel={m.node_decommission()}
+      onConfirm={async () => {
+        await decommission.mutateAsync({ id: node.id });
       }}
     />
   );
