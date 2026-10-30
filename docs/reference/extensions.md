@@ -162,7 +162,7 @@ edgeweir-node extension verify --pubkey publisher.pub.jwk --publisher example.or
 | `ew.deny(status?)` | 节点错误页，状态 `status`（400–499，默认 403），`X-Edgeweir-Error: extension-denied`，原因 `extension`，规则 id `ext:<id>` |
 | `ew.challenge(level)` | 核心挑战，级别 `cookie302`、`js`、`pow` 或 `captcha`；有该级别的凭证则继续 |
 | `ew.allow()` | 仅 `access`：本请求跳过 Under Attack 与 CC 挑战（规则与 WAF 照常） |
-| `ew.respond(status, body?, headers?)` | 直接应答（不回源） |
+| `ew.respond(status, body?, headers?)` | 直接应答（不回源）。以 `X-Edgeweir-` 开头的响应头属于节点，扩展不能设置；例外是 `ew.respond` 可以用 `X-Edgeweir-Challenge` 标记自己的验证页 |
 
 第一个裁决生效，之后的扩展钩子不再调用。裁决需要 `verdicts`。
 

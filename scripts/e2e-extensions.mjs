@@ -62,6 +62,8 @@ const node = (await admin.ok("GET", "/nodes")).find((n) => n.name === NODE);
 assert.ok(node, `${NODE} is not enrolled`);
 const nodeContainer = await containerId("node");
 const exec = (...args) => run(["exec", nodeContainer, ...args]);
+// Files `docker cp` puts in the container belong to the copying user.
+const rootExec = (...args) => run(["exec", "-u", "0", nodeContainer, ...args]);
 
 const findSite = async (host) =>
   (await admin.ok("GET", `/sites?search=${encodeURIComponent(host)}&pageSize=100`)).items.find(
@@ -107,7 +109,7 @@ await waitFor("extensions-v1", async () =>
 pass("the node reports extensions-v1");
 
 // -------------------------------------------------------------- b. the CLI
-await exec("rm", "-rf", WORK);
+await rootExec("rm", "-rf", WORK);
 await exec("mkdir", "-p", WORK);
 await run([
   "cp",
@@ -146,7 +148,7 @@ assert.match(
 );
 const packageB64 = (await exec("base64", "-w0", `${WORK}/hello.ewx`)).trim();
 const signature = (await exec("cat", `${WORK}/hello.ewx.sig`)).trim();
-await exec("rm", "-rf", WORK);
+await rootExec("rm", "-rf", WORK);
 pass("keygen, pack, sign and verify in the node container");
 
 // ---------------------------------------------------------- c. verification

@@ -84,6 +84,7 @@ const node = (await admin.ok("GET", "/nodes")).find((n) => n.name === NODE);
 assert.ok(node, `${NODE} is not enrolled`);
 const nodeContainer = await containerId("node");
 const exec = (...args) => run(["exec", nodeContainer, ...args]);
+// Files `docker cp` puts in the container belong to the copying user.
 const rootExec = (...args) => run(["exec", "-u", "0", nodeContainer, ...args]);
 
 const findSite = async (host) =>
@@ -120,7 +121,7 @@ async function cleanup() {
   for (const key of await admin.ok("GET", "/extension-keys")) {
     if (key.label === LABEL) await admin.ok("DELETE", `/extension-keys/${key.kid}`);
   }
-  await exec("rm", "-rf", WORK);
+  await rootExec("rm", "-rf", WORK);
   pass(`extensions 1.1 cleanup: ${removed} sites removed`);
 }
 if (process.argv.includes("--cleanup")) {
