@@ -154,7 +154,7 @@ await synced("the site reaches the node");
 await waitFor("the site is routed", async () => (await as("browser")).status === 200, 60);
 const tagged = await as("gptbot", "/tagged");
 assert.equal(tagged.status, 200, `spoofed GPTBot without a policy: ${summary(tagged)}`);
-assert.match(tagged.body, /^GET \/tagged /, "the origin answered");
+assert.match(tagged.body, /\nGET \/tagged /, "the origin answered");
 pass("a spoofed GPTBot without a policy is only tagged: 200 from the origin");
 
 // ---------------------------------------------------------------- c
