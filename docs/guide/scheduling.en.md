@@ -262,7 +262,7 @@ The **Decision** card sets the global mode, and each cluster may override it:
 | A source is **Failing** (its pull fails: bad credentials, rate limited, unreachable) | Its results do not count; no node is removed |
 | A source is **Stale** (no successful pull or delivery for **Stale after**) | Its results do not count; the platform alert **External probe source stale** fires and resolves when data returns |
 | A single result is older than **Stale after** | It does not count |
-| Every node would be removed | [Mass-removal protection](dns-and-alerts.en.md#mass-removal-protection) applies as usual |
+| Every node would be removed | [Mass-removal protection](dns.en.md#mass-removal-protection) applies as usual |
 
 ### Webhook
 
