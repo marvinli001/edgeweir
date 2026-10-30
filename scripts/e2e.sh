@@ -260,6 +260,14 @@
 #   logged; client-a signs in; `recover.js --clear-login-allowlist` lets the
 #   host sign in again and signs the old session out; Playwright
 #   e2e/allowlist.spec.ts (the card, the sign-in page's reason).
+#   Tiered cache (scripts/e2e-tiers.mjs, ADR-0073): three nodes in cluster
+#   tiers across regions tier-east and tier-west; the smart topology picks the
+#   upper tier by the measured round trip time and a fallback in the other
+#   region; one origin fetch for a URL requested through all three nodes; the
+#   tier listener refuses a client without a node certificate; a URL purge
+#   reaches every tier; stopped upper tiers fall back to the next one and then
+#   to the origin; latency injected with nftables moves the upper tier;
+#   --skip-ui only (no browser spec).
 #   Usage protection (scripts/e2e-usage-guard.mjs, after M6): four sites of
 #   the upgrade cluster with daily guards and tiny limits; warning and limit
 #   alerts at a webhook; maintenance on at both nodes after the request that
@@ -354,7 +362,7 @@ SECTIONS=(
   "pp:m6-upgrades"
   "g8:m6-upgrades" "g9:m6-upgrades" "g15:m6-upgrades" "g10:dns m5 m6-upgrades" "g11:m6-upgrades"
   "g12:m6-upgrades" "g13:m6-upgrades" "g14:m6-upgrades" "g16:m6-upgrades" "g17:m6-upgrades"
-  "g18:m6-upgrades" "g19:m6-upgrades" "usage-guard:m6-upgrades" "allowlist:" "lifecycle:"
+  "g18:m6-upgrades" "g19:m6-upgrades" "usage-guard:m6-upgrades" "tiers:" "allowlist:" "lifecycle:"
 )
 # Parallel lanes, "FIRST..LAST:SECTION ...": the SECTIONs run in a second
 # lane while the chain runs FIRST to LAST, and the chain waits for the lane
@@ -440,6 +448,8 @@ cleanup() {
   docker ps -aq --filter "label=dev.edgeweir.e2e-g8=${COMPOSE_PROJECT_NAME:-edgeweir-e2e}" | xargs docker rm -f >/dev/null 2>&1 || true
   # ... and the PROXY protocol cluster's node of e2e-g9.mjs.
   docker ps -aq --filter "label=dev.edgeweir.e2e-g9=${COMPOSE_PROJECT_NAME:-edgeweir-e2e}" | xargs docker rm -f >/dev/null 2>&1 || true
+  # ... and the three nodes of e2e-tiers.mjs.
+  docker ps -aq --filter "label=dev.edgeweir.e2e-tiers=${COMPOSE_PROJECT_NAME:-edgeweir-e2e}" | xargs docker rm -f >/dev/null 2>&1 || true
   report_timings
   # Every profile: the upgrade peer and ClickHouse keep their state otherwise.
   if $DOWN; then "${COMPOSE[@]}" --profile '*' down -v >/dev/null 2>&1 || true; fi
@@ -1657,6 +1667,14 @@ section_usage_guard() {
 step "usage protection: warning and limit alerts, maintenance and disabling at both nodes, a higher limit, a manual restore"
 story usage-guard --cleanup
 pass "usage protection checks passed"
+}
+
+# ----------------------------------------------------------- section tiers
+section_tiers() {
+step "Tiered cache: smart upper tier by latency, one origin fetch for three nodes, mTLS between tiers, purges on every tier, fallback, latency moves the upper tier"
+part checks node scripts/e2e-tiers.mjs || fail "tiers end-to-end checks failed"
+part cleanup node scripts/e2e-tiers.mjs --cleanup || fail "tiers cleanup failed"
+pass "Tiered cache checks passed"
 }
 
 # ----------------------------------------------------------- section allowlist
