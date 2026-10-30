@@ -31,6 +31,10 @@ import {
 } from "../../src/server/services/envelope-rotation";
 import { extensionSecretBinding } from "../../src/server/services/extensions";
 import {
+  credentialBinding as probeSourceCredentialBinding,
+  webhookSecretBinding as probeSourceWebhookBinding,
+} from "../../src/server/services/external-probes";
+import {
   channelBinding,
   SMTP_KEY,
   smtpBinding,
@@ -150,6 +154,7 @@ describe("master key rotation", () => {
       ticketPending: crypto.randomUUID(),
       originClient: crypto.randomUUID(),
       challengeProvider: crypto.randomUUID(),
+      probeSource: crypto.randomUUID(),
     };
     await db.insert(schema.originCredential).values({
       id: ids.credential,
@@ -247,6 +252,13 @@ describe("master key rotation", () => {
       activeVersion: "1.0.0",
       secretEnvelope: seal(extensionSecretBinding("ext-secret")),
       secretVersion: 1,
+    });
+    await db.insert(schema.externalProbeSource).values({
+      id: ids.probeSource,
+      name: "probe source",
+      provider: "generic_webhook",
+      credentialEnvelope: seal(probeSourceCredentialBinding(ids.probeSource)),
+      webhookSecretEnvelope: seal(probeSourceWebhookBinding(ids.probeSource)),
     });
     await db.insert(schema.originClientCertificate).values({
       id: ids.originClient,

@@ -138,6 +138,7 @@ describe("probe, scheduling and node address procedures", async () => {
       lossPercent: 50,
       ipDownSeconds: 5,
       ipUpSeconds: 5,
+      mode: "internal" as const,
     };
     expect(await admin.settings.setProbes(short)).toEqual(short);
     expect(await admin.settings.probes()).toEqual(short);
@@ -150,6 +151,7 @@ describe("probe, scheduling and node address procedures", async () => {
           lossPercent: 50,
           ipDownSeconds: 30,
           ipUpSeconds: 60,
+          mode: "internal",
         },
         to: short,
       },
