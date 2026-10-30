@@ -511,6 +511,10 @@ message MinuteStats {
   // background and prefetch fetches included; active health checks and cache
   // hits not), at most 64 origins. Added in v1.4.0 (feature origin-stats-v1).
   repeated OriginCounter origins = 26;
+  // Requests of sites with session detection per bot score band: keys "1"
+  // (scores 1-9), "10" (10-19), ... "90" (90-99). Added in vNEXT (feature
+  // session-detection-v1).
+  map<string, uint64> bot_scores = 29;
 }
 
 // OriginCounter is a minute of one origin's fetches on a node.
@@ -856,6 +860,10 @@ message AccessLog {
   string query = 32;
   map<string, string> headers = 33;
   string peer_ip = 34;
+  // The request's bot score, 1-99 (SessionDetection), for sites with
+  // session detection; 0 without. Added in vNEXT (feature
+  // session-detection-v1).
+  uint32 bot_score = 35;
 }
 // ReportLogsRequest is an immutable, ordered batch from the private node spool.
 message ReportLogsRequest {

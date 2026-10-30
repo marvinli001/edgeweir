@@ -520,6 +520,49 @@ message Site {
   // Added in v1.6.0; nodes without feature encoded-path-exemptions-v1 keep
   // treating every such path as ambiguous (no feature required).
   repeated EncodedPathExemption encoded_path_exemptions = 38;
+  // Session detection and the bot score (ADR-0068); unset means off. Added
+  // in vNEXT (feature session-detection-v1).
+  SessionDetection session_detection = 41;
+}
+
+// SessionDetection scores how likely each request of the site comes from
+// automation: 1 (automated) to 99 (a person), from server-side signals
+// (User-Agent class, header consistency, the TLS fingerprint, the
+// request's challenge pass) and, for browsers, the signals of a small
+// first-party script the node adds to HTML responses (navigator.webdriver,
+// automation framework globals, headless traits, trusted input seen). The
+// script reports to POST /.edgeweir/session/c and gets a session cookie
+// (__ew_sess) signed with the cluster's challenge keys, bound like a
+// challenge pass to the site, the client network and the User-Agent.
+// Requests carry their score in http.request.bot.score (and
+// http.request.bot.automated: score below 30), in the access log
+// (AccessLog.bot_score) and in MinuteStats.bot_scores.
+message SessionDetection {
+  // "monitor": inject the script and score, never block. "enforce": also
+  // show the interstitial where it applies and challenge automated
+  // sessions (captcha level; a lower pass of such a session does not
+  // count). Anything else rejects the configuration.
+  string mode = 1;
+  // Show the interstitial (enforce only) to requests without a valid
+  // session: a page that runs the script and reloads; other methods than
+  // GET and HEAD get a plain 403. Off: the session is set up in the
+  // background by the injected script.
+  bool interstitial = 2;
+  // Overrides of interstitial for hosts and paths, at most 32, in order;
+  // the first that matches applies.
+  repeated InterstitialRule interstitial_rules = 3;
+}
+
+// InterstitialRule turns the interstitial on or off for a host and path.
+message InterstitialRule {
+  // A lowercase host name of the site ("www.example.com") or a wildcard of
+  // one label ("*.example.com"); "" matches every host.
+  string host = 1;
+  // A path prefix ("/checkout"): 1-256 bytes starting with "/", printable
+  // ASCII without spaces; "" matches every path. Compared with the
+  // normalized path ($uri), case-sensitive.
+  string path_prefix = 2;
+  bool interstitial = 3;
 }
 
 // EncodedPathExemption lets raw paths that start with prefix carry an
@@ -1119,6 +1162,12 @@ message ChallengeKeyRef {
 // redirect, config, waf-custom, ratelimit and origin only. Feature
 // challenge-v2: fields http.request.bot.verified (boolean) and
 // http.request.bot.name, in the same phases.
+//
+// Since vNEXT (feature session-detection-v1): fields http.request.bot.score
+// (number, 1-99) and http.request.bot.automated (boolean: score below 30)
+// in the request phases request-transform, redirect, config, waf-custom,
+// ratelimit and origin. Without session detection on the site the score
+// has only the server-side signals.
 message RuleExpression {
   string op = 1;
   string field = 2;
