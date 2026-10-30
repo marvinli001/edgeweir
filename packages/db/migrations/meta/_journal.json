@@ -624,6 +624,20 @@
       "when": 1793330656804,
       "tag": "0088_tiered_cache",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1793330656805,
+      "tag": "0089_node_extensions",
+      "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1793339303755,
+      "tag": "0090_extension_secrets_data",
+      "breakpoints": true
     }
   ]
 }

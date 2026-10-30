@@ -1,6 +1,6 @@
 {
-  "id": "b88114ef-f61e-4927-91ec-f9efaaef4ce6",
-  "prevId": "a89ff514-ac97-4f65-9676-a4ba5b8e5f6e",
+  "id": "87b83f53-4d75-4491-8b58-c23a4d80e1b3",
+  "prevId": "3a106209-5591-45be-a6d0-3476ef20ff72",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -4828,6 +4828,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "extension_status": {
+          "name": "extension_status",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
         }
       },
       "indexes": {
@@ -8970,6 +8977,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "''"
+        },
+        "ext": {
+          "name": "ext",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
         }
       },
       "indexes": {
@@ -12381,6 +12395,403 @@
         }
       },
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.extension": {
+      "name": "extension",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "active_version": {
+          "name": "active_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "failure_mode": {
+          "name": "failure_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'open'"
+        },
+        "config": {
+          "name": "config",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "secret_envelope": {
+          "name": "secret_envelope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "secret_version": {
+          "name": "secret_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "installed_at": {
+          "name": "installed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.extension_key": {
+      "name": "extension_key",
+      "schema": "",
+      "columns": {
+        "kid": {
+          "name": "kid",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "publisher": {
+          "name": "publisher",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "x": {
+          "name": "x",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.extension_version": {
+      "name": "extension_version",
+      "schema": "",
+      "columns": {
+        "extension_id": {
+          "name": "extension_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sha256": {
+          "name": "sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "size": {
+          "name": "size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "package": {
+          "name": "package",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "signature": {
+          "name": "signature",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kid": {
+          "name": "kid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "manifest": {
+          "name": "manifest",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "uploaded_at": {
+          "name": "uploaded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "extension_version_sha256_idx": {
+          "name": "extension_version_sha256_idx",
+          "columns": [
+            {
+              "expression": "sha256",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "extension_version_extension_id_extension_id_fk": {
+          "name": "extension_version_extension_id_extension_id_fk",
+          "tableFrom": "extension_version",
+          "tableTo": "extension",
+          "columnsFrom": [
+            "extension_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "extension_version_extension_id_version_pk": {
+          "name": "extension_version_extension_id_version_pk",
+          "columns": [
+            "extension_id",
+            "version"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.site_extension": {
+      "name": "site_extension",
+      "schema": "",
+      "columns": {
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "extension_id": {
+          "name": "extension_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "config": {
+          "name": "config",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "site_extension_site_id_site_id_fk": {
+          "name": "site_extension_site_id_site_id_fk",
+          "tableFrom": "site_extension",
+          "tableTo": "site",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "site_extension_extension_id_extension_id_fk": {
+          "name": "site_extension_extension_id_extension_id_fk",
+          "tableFrom": "site_extension",
+          "tableTo": "extension",
+          "columnsFrom": [
+            "extension_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "site_extension_site_id_extension_id_pk": {
+          "name": "site_extension_site_id_extension_id_pk",
+          "columns": [
+            "site_id",
+            "extension_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.site_extension_data": {
+      "name": "site_extension_data",
+      "schema": "",
+      "columns": {
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "extension_id": {
+          "name": "extension_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sha256": {
+          "name": "sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "size": {
+          "name": "size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "site_extension_data_site_id_site_id_fk": {
+          "name": "site_extension_data_site_id_site_id_fk",
+          "tableFrom": "site_extension_data",
+          "tableTo": "site",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "site_extension_data_extension_id_extension_id_fk": {
+          "name": "site_extension_data_extension_id_extension_id_fk",
+          "tableFrom": "site_extension_data",
+          "tableTo": "extension",
+          "columnsFrom": [
+            "extension_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "site_extension_data_site_id_extension_id_name_pk": {
+          "name": "site_extension_data_site_id_extension_id_name_pk",
+          "columns": [
+            "site_id",
+            "extension_id",
+            "name"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},

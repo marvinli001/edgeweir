@@ -361,6 +361,38 @@ export const errorDefs = {
   ORIGIN_GROUP_UNKNOWN: { status: 400, params: ["group", "rule"] },
   /** Copied settings: the HTTPS redirect, HSTS or client certificates on a site without a certificate. */
   HTTPS_REQUIRES_CERTIFICATE: { status: 400, params: [] },
+  /** `reason`: what is wrong with the package (archive, entry, manifest, size, ...), `detail` in English. */
+  EXTENSION_PACKAGE_INVALID: { status: 400, params: ["reason", "detail"] },
+  /** `reason`: format | header | signature | digest | identity. */
+  EXTENSION_SIGNATURE_INVALID: { status: 400, params: ["reason"] },
+  /** The signing key (`kid`) is not in the trust store. */
+  EXTENSION_KEY_UNTRUSTED: { status: 400, params: ["kid"] },
+  /** The package's publisher differs from the signing key's. */
+  EXTENSION_PUBLISHER_MISMATCH: { status: 400, params: ["publisher", "keyPublisher"] },
+  EXTENSION_NOT_FOUND: { status: 404, params: [] },
+  EXTENSION_VERSION_NOT_FOUND: { status: 404, params: ["version"] },
+  /** The active version cannot be deleted. */
+  EXTENSION_VERSION_ACTIVE: { status: 409, params: ["version"] },
+  /** The version is stored with a different digest. */
+  EXTENSION_VERSION_EXISTS: { status: 409, params: ["version"] },
+  /** `path` of the first issue and its `issue` code (required, type, enum, min, max, pattern, format, unknown, unique). */
+  EXTENSION_CONFIG_INVALID: { status: 400, params: ["scope", "path", "issue"] },
+  /** Rules read the extension's fields (first 5 rule names). */
+  EXTENSION_IN_USE: { status: 409, params: ["rules"] },
+  /** The extension's version needs a Lua API this console does not deliver. */
+  EXTENSION_UNSUPPORTED: { status: 400, params: ["luaApi"] },
+  EXTENSION_KEY_INVALID: { status: 400, params: [] },
+  /** The active version's manifest has no `secret: true`. */
+  EXTENSION_SECRET_NOT_SUPPORTED: { status: 400, params: [] },
+  /** The active version's manifest has no `data`. */
+  EXTENSION_DATA_NOT_SUPPORTED: { status: 400, params: [] },
+  /** A data item over the manifest's `data` limits: `limit` max_bytes | max_items | max_total_bytes, `max` its value. */
+  EXTENSION_DATA_TOO_LARGE: { status: 400, params: ["limit", "max"] },
+  EXTENSION_DATA_NOT_FOUND: { status: 404, params: [] },
+  EXTENSION_KEY_EXISTS: { status: 409, params: ["kid"] },
+  EXTENSION_KEY_NOT_FOUND: { status: 404, params: [] },
+  /** Stored versions are signed by the key. */
+  EXTENSION_KEY_IN_USE: { status: 409, params: ["versions"] },
 } as const satisfies Record<string, { status: number; params: readonly string[] }>;
 
 export type ErrorCode = keyof typeof errorDefs;
@@ -441,6 +473,13 @@ export const revisionReasonDefs = {
   origin_ca_retired: { params: [], en: "previous Origin CA retired" },
   tiered_cache_updated: { params: [], en: "tiered cache updated" },
   tier_selection_changed: { params: ["count"], en: "upper tiers of {count} sites changed" },
+  extension_updated: { params: ["extension"], en: "extension {extension} updated" },
+  extension_removed: { params: ["extension"], en: "extension {extension} uninstalled" },
+  site_extension_updated: {
+    params: ["extension", "site"],
+    en: "extension {extension} of {site} updated",
+  },
+  extensions_settings_updated: { params: [], en: "extension kill switch updated" },
 } as const satisfies Record<string, { params: readonly string[]; en: string }>;
 
 export type RevisionReasonCode = keyof typeof revisionReasonDefs;

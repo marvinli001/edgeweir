@@ -51,6 +51,7 @@ import { CopySettingsDialog } from "@/components/site/copy-settings-dialog";
 import { followSiteDelivery } from "@/components/site/delivery-toast";
 import { DomainKindBadge, DomainName } from "@/components/site/domain-name";
 import { ErrorPagesTab } from "@/components/site/error-pages-tab";
+import { ExtensionsTab } from "@/components/site/extensions-tab";
 import { HttpsTab } from "@/components/site/https-tab";
 import { LaunchCheck } from "@/components/site/launch-check";
 import { LiveRequests } from "@/components/site/live-requests";
@@ -115,6 +116,9 @@ function SiteDetailPage() {
       search: (prev) => ({ ...prev, range: range === DEFAULT_RANGE ? undefined : range }),
       replace: true,
     });
+  // The Extensions tab shows once an extension is installed.
+  const extensions = useQuery(orpc.extensions.list.queryOptions());
+  const hasExtensions = (extensions.data?.length ?? 0) > 0 || tab === "extensions";
   const name = site.data?.name;
   const tabBar = useTabBar(`tab-${tab}`);
 
@@ -203,16 +207,18 @@ function SiteDetailPage() {
                 variant="line"
                 className="w-full max-w-full justify-start overflow-x-auto overflow-y-hidden scroll-fade [scrollbar-width:none]"
               >
-                {SITE_TABS.map((value) => (
-                  <TabsTrigger
-                    key={value}
-                    value={value}
-                    className="flex-none"
-                    data-testid={`tab-${value}`}
-                  >
-                    {siteTabLabel(value)}
-                  </TabsTrigger>
-                ))}
+                {SITE_TABS.filter((value) => value !== "extensions" || hasExtensions).map(
+                  (value) => (
+                    <TabsTrigger
+                      key={value}
+                      value={value}
+                      className="flex-none"
+                      data-testid={`tab-${value}`}
+                    >
+                      {siteTabLabel(value)}
+                    </TabsTrigger>
+                  ),
+                )}
               </TabsList>
             </PageTabs>
             <TabsContent value="overview" className="animate-enter">
@@ -296,6 +302,9 @@ function SiteDetailPage() {
             </TabsContent>
             <TabsContent value="errors" className="animate-enter">
               <ErrorPagesTab siteId={data.id} />
+            </TabsContent>
+            <TabsContent value="extensions" className="animate-enter">
+              <ExtensionsTab siteId={data.id} />
             </TabsContent>
             <TabsContent value="logs" className="animate-enter">
               <LogsTab

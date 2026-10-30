@@ -89,6 +89,17 @@ service NodeService {
   // buffer; ReportTaskResult follows. Added in v1.6.0 (feature
   // debug-logs-v1).
   rpc UploadDebugLogs(UploadDebugLogsRequest) returns (UploadDebugLogsResponse);
+  // GetExtensionPackage returns an extension package (.ewx) that the
+  // node's current configuration references, by digest. Added in PROTO_NEXT
+  // (feature extensions-v1).
+  rpc GetExtensionPackage(GetExtensionPackageRequest) returns (GetExtensionPackageResponse);
+  // GetExtensionSecrets returns the current and previous secret of the
+  // extensions with `secret: true` that the node's configuration delivers
+  // (extension version 1.1, feature extensions-v2).
+  rpc GetExtensionSecrets(GetExtensionSecretsRequest) returns (GetExtensionSecretsResponse);
+  // GetExtensionData returns a part of a per-site data item that the node's
+  // configuration references, by digest (extension version 1.1).
+  rpc GetExtensionData(GetExtensionDataRequest) returns (GetExtensionDataResponse);
 }
 
 // CheckChannelRequest is empty: the client certificate names the node.
@@ -300,6 +311,9 @@ message ReportStatusRequest {
   // (TieredCache.latency_targets), measured in the last 5 minutes. Added in
   // PROTO_NEXT (feature tiered-cache-v1).
   repeated TierLatency tier_latencies = 80;
+  // State of each extension of the applied configuration (extensions-v1).
+  // Added in PROTO_NEXT.
+  repeated ExtensionStatus extensions = 60;
 }
 
 // NodeLocation places a node's address on the console's map.
@@ -546,6 +560,9 @@ message MinuteStats {
   // Requests this node served to lower tiers, by its cache status. Added in
   // PROTO_NEXT.
   map<string, uint64> tier_served = 81;
+  // Extension counters and faults of the site by "<id>.<name>" (counters
+  // declared by the manifest, and "<id>.faults"). Added in PROTO_NEXT.
+  map<string, uint64> ext_counters = 60;
 }
 
 // CrawlerCounter is a minute of one crawler's requests on a node.
@@ -943,6 +960,9 @@ message AccessLog {
   // node id and cache status ("<id> HIT"), "origin" when it fell back to
   // the origins; "" otherwise (cache hits included). Added in PROTO_NEXT.
   string tier = 80;
+  // Extension log fields by "<id>.<name>", and "<id>.verdict" when an
+  // extension decided the request. Added in PROTO_NEXT.
+  map<string, string> ext = 60;
 }
 // ReportLogsRequest is an immutable, ordered batch from the private node spool.
 message ReportLogsRequest {
@@ -1199,4 +1219,76 @@ message TierLatency {
   uint32 rtt_ms = 2;
   bool ok = 3;
   google.protobuf.Timestamp measured_at = 4;
+}
+
+// GetExtensionPackageRequest names a package by digest.
+message GetExtensionPackageRequest {
+  // Lowercase hex SHA-256 of the package.
+  string sha256 = 1;
+  // Where the answer starts (extension version 1.1: packages over 4 MiB
+  // come in parts).
+  uint64 offset = 2;
+}
+
+// GetExtensionPackageResponse carries the package from offset, at most
+// 4 MiB of it.
+message GetExtensionPackageResponse {
+  bytes package = 1;
+  // The package's whole size.
+  uint64 total = 2;
+}
+
+// GetExtensionSecretsRequest names the extensions; empty: all the node's.
+message GetExtensionSecretsRequest {
+  repeated string ids = 1;
+}
+
+// GetExtensionSecretsResponse carries the secrets of the extensions the
+// node's cluster gets with `secret: true`.
+message GetExtensionSecretsResponse {
+  repeated ExtensionSecret secrets = 1;
+}
+
+// ExtensionSecret is an extension's console-generated secret.
+message ExtensionSecret {
+  string id = 1;
+  // Extension.secret_version of this secret.
+  uint32 version = 2;
+  // 32 random bytes; previous is empty before the first rotation.
+  bytes current = 3;
+  bytes previous = 4;
+}
+
+// GetExtensionDataRequest names a data item part.
+message GetExtensionDataRequest {
+  string extension_id = 1;
+  string site_id = 2;
+  // Lowercase hex SHA-256 of the item.
+  string sha256 = 3;
+  uint64 offset = 4;
+}
+
+// GetExtensionDataResponse carries the item from offset, at most 4 MiB.
+message GetExtensionDataResponse {
+  bytes data = 1;
+  uint64 total = 2;
+}
+
+// ExtensionStatus is one extension's state on the node. Added in PROTO_NEXT.
+message ExtensionStatus {
+  string id = 1;
+  string version = 2;
+  string sha256 = 3;
+  // "loaded", "failed" (download, verification or load error), "incompatible"
+  // (requires a newer node or Lua API) or "disabled" (kill switch, disabled
+  // extension or --no-extensions).
+  string state = 4;
+  string message = 5;
+  // Hook faults (errors and budget overruns) since the data plane started,
+  // and how often a worker tripped the extension.
+  uint64 faults = 6;
+  uint64 trips = 7;
+  // JSON object, at most 4 KiB: "sidecar" {state, restarts, last_exit,
+  // since, status} and "listeners" (extension version 1.1).
+  string details_json = 8;
 }

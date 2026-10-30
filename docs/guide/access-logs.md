@@ -145,6 +145,7 @@
 | `websocket_origin` | WebSocket 来源 | WebSocket 来源不允许 |
 | `client_cert` | 客户端证书 | 网站要求客户端证书 |
 | `maintenance` | 维护模式 | 维护模式 |
+| `extension` | 扩展 | 节点扩展的裁决（规则 `ext:<id>`），或失败拒绝的扩展无法运行时的 503（[扩展](extensions.md)） |
 
 原因由节点在拒绝处记录，与错误页的 `X-Edgeweir-Error` 对应（`ip-banned`、`ip-blocked`、`policy-denied`、`ip-greylisted`、`waf-blocked`、`geo-denied`、`hotlink-denied`、`ua-denied`、`cors-origin-denied`、`websocket-origin-denied`、`client-cert-required`、`maintenance`、`auth-*`，见[错误页](error-pages.md#设置网站错误页)）。强制 HTTPS 而没有证书的 503、WebSocket 关闭、请求体过大与未知域名不算拦截。
 
@@ -164,7 +165,7 @@
 
    完成后的提示带有链接，打开封禁列表、刷新任务或 CRS 设置。
 
-列表列为「时间」「客户端 IP」「请求」「状态码」「字节」「耗时（毫秒）」「缓存」。有拦截原因的行在请求下方显示原因标记（挑战为灰色，其余为红色）与规则名称（已删除的规则显示 ID）；请求下方还显示「请求 ID」、「JA4」、「CRS」与「规则」（有值时）。点击行的任意位置（或请求前的箭头）展开「详情」：User-Agent、Referer、协议、国家/地区、运营商、回源（「地址 · 状态码 · 毫秒」）、请求字节、内容类型、查询字符串、请求头与直连对端，空字段不显示。
+列表列为「时间」「客户端 IP」「请求」「状态码」「字节」「耗时（毫秒）」「缓存」。有拦截原因的行在请求下方显示原因标记（挑战为灰色，其余为红色）与规则名称（已删除的规则显示 ID）；请求下方还显示「请求 ID」、「JA4」、「CRS」与「规则」（有值时）。点击行的任意位置（或请求前的箭头）展开「详情」：User-Agent、Referer、协议、国家/地区、运营商、回源（「地址 · 状态码 · 毫秒」）、请求字节、内容类型、查询字符串、请求头、直连对端以及节点扩展的日志字段与裁决，空字段不显示。
 
 | 筛选 | 取值 | 匹配 |
 | --- | --- | --- |

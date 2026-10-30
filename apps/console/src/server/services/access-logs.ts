@@ -34,6 +34,8 @@ const DAY = 86400000;
 /** a_b_c: protocol, version, SNI, counts and ALPN, then two truncated SHA-256 hashes. */
 const JA4_RE = /^[a-z][a-z0-9]{2}[di][0-9]{4}[a-zA-Z0-9]{2}_[0-9a-f]{12}_[0-9a-f]{12}$/;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** The block rule id of a node extension's deny verdict ("ext:<id>"). */
+const EXTENSION_RULE_ID = /^ext:[a-z][a-z0-9-]{1,38}[a-z0-9]$/;
 /** CRS rule ids kept per log entry (nodes send at most 16). */
 const MAX_WAF_RULE_IDS = 16;
 /** Log rules that wrote a line whatever the sample rate (waf-v2). */
@@ -57,6 +59,18 @@ const UPSTREAM_RE = /^[A-Za-z0-9._:[\]/@-]{1,128}$/;
 const MEDIA_TYPE_RE = /^[a-z0-9!#$&^_.+-]{1,63}\/[a-z0-9!#$&^_.+-]{1,63}$/;
 const COUNTRY_RE = /^[A-Z]{2}$/;
 const clean = (v: string, n: number) => v.replace(/\p{Cc}/gu, "").slice(0, n);
+const EXTENSION_LOG_FIELD = /^ext\.[a-z][a-z0-9-]{1,38}[a-z0-9]\.[a-z][a-z0-9_]{0,31}$/;
+
+/** Node extensions' log fields and verdicts: valid names only, the first 32 by name, values cut at 256. */
+function extensionLogFields(fields: Record<string, string> | undefined) {
+  const out: Record<string, string> = {};
+  for (const name of Object.keys(fields ?? {}).sort()) {
+    if (Object.keys(out).length >= 32) break;
+    const value = fields?.[name];
+    if (EXTENSION_LOG_FIELD.test(name) && typeof value === "string") out[name] = clean(value, 256);
+  }
+  return out;
+}
 
 /** System setting: days access logs are kept, per storage (ADR-0041 §5). */
 const retentionSetting = defineSetting({
@@ -269,12 +283,17 @@ export async function ingestLogs(
         tlsVersion: TLS.has(l.tlsVersion) ? l.tlsVersion : "",
         blockReason: REASONS.has(l.blockReason) ? l.blockReason : "",
         blockRuleId:
-          REASONS.has(l.blockReason) && uuid.test(l.blockRuleId) ? l.blockRuleId.toLowerCase() : "",
+          REASONS.has(l.blockReason) && uuid.test(l.blockRuleId)
+            ? l.blockRuleId.toLowerCase()
+            : l.blockReason === "extension" && EXTENSION_RULE_ID.test(l.blockRuleId)
+              ? l.blockRuleId
+              : "",
         query: policy.query ? clean(l.query, 2048) : "",
         headers,
         peerIp: policy.peer && isIP(l.peerIp) && l.peerIp !== l.clientIp ? l.peerIp : "",
         ...crawlerFields(l),
         tier: TIER_LOG_RE.test(l.tier) ? l.tier : "",
+        ext: extensionLogFields(l.ext),
       },
     ];
   });
@@ -514,6 +533,7 @@ export function logsCsv(entries: LogEntry[]) {
     "crawlerVerification",
     "crawlerChargedMicros",
     "tier",
+    "ext",
   ] as const;
   const cell = (value: unknown) => {
     let text = Array.isArray(value)

@@ -42,6 +42,7 @@ const BLOCK_REASON_LABELS: Record<BlockReason, Label> = {
   maintenance: m.block_reason_maintenance,
   ai_crawler: m.block_reason_ai_crawler,
   pay_per_crawl: m.block_reason_pay_per_crawl,
+  extension: m.block_reason_extension,
 };
 /** Why a node refused or challenged a request (ADR-0041 §3). */
 export const blockReasonLabel = lookup(BLOCK_REASON_LABELS);

@@ -1,0 +1,86 @@
+import {
+  activateExtensionVersion,
+  addExtensionKey,
+  deleteExtensionVersion,
+  deleteSiteExtensionData,
+  getExtension,
+  getExtensionSettings,
+  installExtension,
+  listExtensionKeys,
+  listExtensions,
+  listSiteExtensionData,
+  listSiteExtensions,
+  putSiteExtensionData,
+  removeExtensionKey,
+  rotateExtensionSecret,
+  uninstallExtension,
+  updateExtension,
+  updateExtensionSettings,
+  updateSiteExtension,
+  verifyExtensionPackage,
+} from "../../services/extensions";
+import { authed } from "../base";
+
+/** Node extensions and the publisher keys the operator trusts. */
+export const extensionsRouter = {
+  extensions: {
+    list: authed.extensions.list.handler(({ context }) => listExtensions(context.app.db)),
+    get: authed.extensions.get.handler(({ input, context }) =>
+      getExtension(context.app.db, input.id),
+    ),
+    verify: authed.extensions.verify.handler(({ input, context }) =>
+      verifyExtensionPackage(context.app.db, input),
+    ),
+    install: authed.extensions.install.handler(({ input, context }) =>
+      installExtension(context.app.db, context.app.masterKey, input, context.actor),
+    ),
+    activate: authed.extensions.activate.handler(({ input, context }) =>
+      activateExtensionVersion(context.app.db, context.app.masterKey, input, context.actor),
+    ),
+    deleteVersion: authed.extensions.deleteVersion.handler(({ input, context }) =>
+      deleteExtensionVersion(context.app.db, input, context.actor),
+    ),
+    update: authed.extensions.update.handler(({ input, context }) =>
+      updateExtension(context.app.db, input, context.actor),
+    ),
+    uninstall: authed.extensions.uninstall.handler(async ({ input, context }) => {
+      await uninstallExtension(context.app.db, input.id, context.actor);
+      return { ok: true as const };
+    }),
+    settings: authed.extensions.settings.handler(({ context }) =>
+      getExtensionSettings(context.app.db),
+    ),
+    updateSettings: authed.extensions.updateSettings.handler(({ input, context }) =>
+      updateExtensionSettings(context.app.db, input, context.actor),
+    ),
+    forSite: authed.extensions.forSite.handler(({ input, context }) =>
+      listSiteExtensions(context.app.db, input.siteId),
+    ),
+    updateSite: authed.extensions.updateSite.handler(({ input, context }) =>
+      updateSiteExtension(context.app.db, input, context.actor),
+    ),
+    rotateSecret: authed.extensions.rotateSecret.handler(({ input, context }) =>
+      rotateExtensionSecret(context.app.db, context.app.masterKey, input.id, context.actor),
+    ),
+    listSiteData: authed.extensions.listSiteData.handler(({ input, context }) =>
+      listSiteExtensionData(context.app.db, input),
+    ),
+    putSiteData: authed.extensions.putSiteData.handler(({ input, context }) =>
+      putSiteExtensionData(context.app.db, input, context.actor),
+    ),
+    deleteSiteData: authed.extensions.deleteSiteData.handler(async ({ input, context }) => {
+      await deleteSiteExtensionData(context.app.db, input, context.actor);
+      return { ok: true as const };
+    }),
+  },
+  extensionKeys: {
+    list: authed.extensionKeys.list.handler(({ context }) => listExtensionKeys(context.app.db)),
+    add: authed.extensionKeys.add.handler(({ input, context }) =>
+      addExtensionKey(context.app.db, input, context.actor),
+    ),
+    remove: authed.extensionKeys.remove.handler(async ({ input, context }) => {
+      await removeExtensionKey(context.app.db, input.kid, context.actor);
+      return { ok: true as const };
+    }),
+  },
+};

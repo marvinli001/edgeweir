@@ -52,6 +52,18 @@
 #   reports its clock offset (within 2 s, not skewed); `edgeweir-node
 #   diagnose` passes every check; `edgeweir-node pprof` writes heap and CPU
 #   profiles from the agent's diagnostics socket.
+#   Node extensions (scripts/e2e-extensions.mjs, ADR-0071): the node's CLI
+#   signs the example hello-header with a fresh key; untrusted keys and
+#   changed signatures or bytes are refused; installed, enabled and on for
+#   one site the node loads it (header, deny verdict, endpoint, asset); a
+#   throwing hook fails open or closed (503); the kill switch; off,
+#   uninstalled, and the node deletes the package. Publishes revisions and
+#   reloads nginx, and the kill switch is a platform setting: in the chain.
+#   Version 1.1 (scripts/e2e-extensions-v11.mjs) with the real Precursor and
+#   edge-compute packages when E2E_PRECURSOR_PACKAGE, E2E_EDGE_COMPUTE_PACKAGE
+#   and E2E_EDGE_COMPUTE_BUILD name them (edgeweir-cloud, private): console
+#   secret and its rotation, a sidecar as its own user with per-site data,
+#   the origin socket, fallthrough, fail closed and restarts.
 #   Core gaps P0 (scripts/e2e-p0.mjs): Idempotency-Key, service accounts with
 #   scopes disabling a site, usage and its completeness watermark,
 #   configuration canary with automatic promotion and rollback, DNS mass
@@ -392,7 +404,7 @@ done
 # (.e2e/*-state.json, or clusters and nodes they create). Every section needs
 # core, which only runs on a fresh stack.
 SECTIONS=(
-  "core:" "m1:" "analytics:" "m2:" "install:" "ssh-install:" "wss:" "channel:" "node-logs:" "diagnostics:" "m3:" "m4:" "m5:" "m6-logs:m5" "m6-upgrades:m5"
+  "core:" "m1:" "analytics:" "m2:" "install:" "ssh-install:" "wss:" "channel:" "node-logs:" "diagnostics:" "extensions:" "m3:" "m4:" "m5:" "m6-logs:m5" "m6-upgrades:m5"
   "p0:m5 m6-upgrades" "g1:p0 m5 m6-upgrades" "g2:m3 m6-upgrades" "g3:m6-upgrades" "g4:m6-upgrades"
   "g5:m6-upgrades" "dns:m5 m6-upgrades" "g6:dns m5 m6-upgrades" "g7:m6-upgrades" "h2:m6-upgrades"
   "pp:m6-upgrades"
@@ -1707,6 +1719,14 @@ section_diagnostics() {
 step "Node diagnostics: clock offset in the heartbeats, edgeweir-node diagnose and pprof"
 part checks node scripts/e2e-diagnostics.mjs || fail "diagnostics end-to-end checks failed"
 pass "Node diagnostics checks passed"
+}
+
+# ---------------------------------------------------------- section extensions
+section_extensions() {
+step "Node extensions: sign, trust, install, load, per-site, failure modes, kill switch, removal"
+part checks node scripts/e2e-extensions.mjs || fail "extensions end-to-end checks failed"
+part checks node scripts/e2e-extensions-v11.mjs || fail "extensions 1.1 end-to-end checks failed"
+pass "Node extension checks passed"
 }
 
 # ------------------------------------- sections m3 ... g20 (scripts/e2e-*.mjs)

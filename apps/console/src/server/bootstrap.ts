@@ -19,6 +19,7 @@ import { AccessKeyRateLimiter } from "./services/access-keys";
 import { setDevelopmentModeSeconds } from "./services/development-mode";
 import { resealEnvelopes } from "./services/envelope-rotation";
 import { upgradeLegacyEnvelopes } from "./services/envelope-upgrade";
+import { refreshExtensionFields } from "./services/extensions";
 import { nodeChannelUrl } from "./services/node-channel-url";
 import { announceSetupToken, ensureSetupToken } from "./services/setup";
 import { SshInstallRuns } from "./services/ssh-install";
@@ -181,6 +182,8 @@ export async function bootstrap(): Promise<Running> {
   // After a master key rotation: everything the previous key sealed.
   await resealEnvelopes(db, masterKey, log);
   const nodeCa = await loadOrCreateNodeCa(db, masterKey);
+  // Rules may read the fields of installed extensions (ext.<id>.<name>).
+  await refreshExtensionFields(db);
   const auth = createAuth({
     db,
     secret: authSecret.value,

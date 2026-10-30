@@ -596,6 +596,18 @@ function details(
       "log-tier",
       row.tier === "origin" ? m.tiered_cache_origin() : row.tier,
     );
+  const ext = headerLines(row.ext ?? {});
+  if (ext.length)
+    add(
+      "ext",
+      m.logs_field_ext(),
+      "log-ext",
+      ext.map((line) => (
+        <span key={line} className="block">
+          {line}
+        </span>
+      )),
+    );
   return rows;
 }
 

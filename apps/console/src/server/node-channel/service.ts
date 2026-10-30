@@ -79,6 +79,7 @@ import { challengeKeySecrets } from "../services/challenge-keys";
 import { nodeProviderSecrets } from "../services/challenge-providers";
 import { mirrorMinuteStats } from "../services/clickhouse";
 import { claimEnrollmentToken, findEnrollmentToken } from "../services/enrollment";
+import { dataForNode, packageForNode, secretsForNode } from "../services/extensions";
 import { locateAddressOf, nodeIpRows } from "../services/node-addresses";
 import {
   hasDebugLogTasks,
@@ -176,6 +177,40 @@ function toNodeBanStatus(status: BanStatus, now: Date): schema.NodeBanStatus {
     // The node's message, shown as it is: printable and short.
     connectionLimitsError: status.connectionLimitsError.replace(/[^\x20-\x7e]/g, " ").slice(0, 300),
   };
+}
+
+const SHA256_RE = /^[0-9a-f]{64}$/;
+const EXTENSION_ID_RE = /^[a-z][a-z0-9-]{1,38}[a-z0-9]$/;
+
+/** ExtensionStatus.details_json as stored: a JSON object of at most 4 KiB, else nothing. */
+function extensionDetails(json: string): Record<string, unknown> | undefined {
+  if (!json || Buffer.byteLength(json) > 4096) return undefined;
+  try {
+    const value: unknown = JSON.parse(json);
+    return typeof value === "object" && value !== null && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A chunk request's offset as a number; past the end (or beyond 2^53) is OutOfRange. */
+function chunkOffset(offset: bigint): number {
+  if (offset > BigInt(Number.MAX_SAFE_INTEGER))
+    throw new ConnectError("offset out of range", Code.OutOfRange);
+  return Number(offset);
+}
+
+/** A chunk of a stored item for a node: NotFound without it, OutOfRange past its end. */
+function chunkAnswer(
+  found: { data: Uint8Array; total: number } | null,
+  offset: number,
+  what: string,
+): { data: Uint8Array; total: bigint } {
+  if (!found) throw new ConnectError(`no such ${what}`, Code.NotFound);
+  if (offset > found.total) throw new ConnectError("offset out of range", Code.OutOfRange);
+  return { data: found.data, total: BigInt(found.total) };
 }
 
 /** ReportStatusRequest.clock_offset_millis as stored (an integer column: ±24 days at most). */
@@ -991,6 +1026,21 @@ export function createNodeService(
             ...(info ? { ...nodeInfoColumns(info), hostname: info.hostname || node.hostname } : {}),
             // Nodes since v1.6.2, for the previous response's locate_address.
             ...(req.location ? { location: toNodeLocation(req.location, now) } : {}),
+            // extensions-v1: the state of each extension of the applied configuration.
+            extensionStatus: req.extensions.slice(0, 64).map((status) => {
+              // Version 1.1: sidecar and listener states; dropped unless a small JSON object.
+              const details = extensionDetails(status.detailsJson);
+              return {
+                id: status.id.slice(0, 40),
+                version: status.version.slice(0, 64),
+                sha256: status.sha256.slice(0, 64),
+                state: status.state.slice(0, 16),
+                message: status.message.slice(0, 512),
+                faults: Number(status.faults),
+                trips: Number(status.trips),
+                ...(details ? { details } : {}),
+              };
+            }),
           })
           .where(eq(schema.node.id, node.id));
         // Certificates of the applied revision the node could not load
@@ -1123,6 +1173,53 @@ export function createNodeService(
     },
     reportStats: statsHandler,
     reportStatsV2: statsHandler,
+
+    // Parts of at most 4 MiB from offset; older nodes ask for offset 0 and
+    // get packages of up to 4 MiB whole.
+    async getExtensionPackage(req, ctx) {
+      const node = await requireNode(ctx);
+      if (!SHA256_RE.test(req.sha256))
+        throw new ConnectError("invalid digest", Code.InvalidArgument);
+      const offset = chunkOffset(req.offset);
+      const { data, total } = chunkAnswer(
+        await packageForNode(app.db, node.clusterId, req.sha256, offset),
+        offset,
+        "extension package",
+      );
+      return { package: data, total };
+    },
+
+    // Secrets of the extensions the node's cluster gets with `secret: true` (extensions-v2).
+    async getExtensionSecrets(req, ctx) {
+      const node = await requireNode(ctx);
+      const ids = req.ids.filter((id) => EXTENSION_ID_RE.test(id)).slice(0, 256);
+      if (req.ids.length && !ids.length) return { secrets: [] };
+      return {
+        secrets: await secretsForNode(app.db, app.masterKey, node.clusterId, ids),
+      };
+    },
+
+    // A part of a data item of a site of the node's cluster that turns the extension on.
+    async getExtensionData(req, ctx) {
+      const node = await requireNode(ctx);
+      if (
+        !SHA256_RE.test(req.sha256) ||
+        !UUID_RE.test(req.siteId) ||
+        !EXTENSION_ID_RE.test(req.extensionId)
+      )
+        throw new ConnectError("invalid data item", Code.InvalidArgument);
+      const offset = chunkOffset(req.offset);
+      return chunkAnswer(
+        await dataForNode(
+          app.db,
+          node.clusterId,
+          { extensionId: req.extensionId, siteId: req.siteId.toLowerCase(), sha256: req.sha256 },
+          offset,
+        ),
+        offset,
+        "extension data item",
+      );
+    },
 
     async uploadDebugLogs(req, ctx) {
       const node = await requireNode(ctx);

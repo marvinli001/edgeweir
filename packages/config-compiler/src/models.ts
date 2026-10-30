@@ -418,6 +418,16 @@ export interface SiteModel {
   /** AI crawl control (feature ai-crawlers-v1); absent: crawlers are only tagged. */
   aiCrawl?: AiCrawlModel;
   /**
+   * Extensions the site turns on with the site's configuration (JSON);
+   * compiled only for extensions in CompileInput.extensions, in their order.
+   */
+  extensions?: {
+    id: string;
+    configJson: string;
+    /** The site's data items of the extension (manifest `data`, version 1.1). */
+    data?: { name: string; sha256: string; size: number }[];
+  }[];
+  /**
    * `tlsPending`: the site's certificate does not cover the domain yet; it
    * is served over HTTP only (feature tls-pending-domains-v1). Ignored on a
    * site without a certificate.
@@ -775,6 +785,26 @@ export interface CacheZoneModel {
   nodeSizes?: { nodeId: string; maxSizeMb: number; keysZoneMb: number }[];
 }
 
+/** An installed node extension's active package and settings (extensions-v1). */
+export interface ExtensionModel {
+  id: string;
+  version: string;
+  publisher: string;
+  sha256: string;
+  size: number;
+  signature: string;
+  /** JWK JSON of the signing key. */
+  publicKey: string;
+  enabled: boolean;
+  failureMode: "open" | "closed";
+  configJson: string;
+  sharedDicts: { name: string; sizeKb: number }[];
+  /** The package's Lua API (1 when absent); 2 needs extensions-v2. */
+  luaApi?: number;
+  /** Version of the console-generated secret (manifest `secret: true`); 0 or absent: none. */
+  secretVersion?: number;
+}
+
 export interface CompileInput {
   clusterId: string;
   sites: SiteModel[];
@@ -833,6 +863,13 @@ export interface CompileInput {
   greylistChallenges?: boolean;
   /** Tiered cache (ADR-0073); omitted: every node fetches from the origins. */
   tieredCache?: TieredCacheModel;
+  /**
+   * Installed extensions in hook order (install order, then id); compiled
+   * are those an enabled site of the cluster turns on.
+   */
+  extensions?: ExtensionModel[];
+  /** The extension kill switch. */
+  extensionsDisabled?: boolean;
 }
 
 export const DEFAULT_CACHE_ZONE = "default";

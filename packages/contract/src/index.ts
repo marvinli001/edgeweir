@@ -35,6 +35,7 @@ import { developmentModeContract } from "./development-mode";
 import { dnsContract } from "./dns";
 import { edgeProcedures } from "./edge";
 import { errorPagesContract, maintenanceContract, platformErrorPages } from "./error-pages";
+import { extensionKeysContract, extensionsContract } from "./extensions";
 import { greylistContract } from "./greylist";
 import { hiddenCardsContract } from "./hidden-cards";
 import { imageConvertContract } from "./image-convert";
@@ -90,6 +91,7 @@ export * from "./domains";
 export * from "./error-pages";
 export * from "./errors";
 export * from "./expressions";
+export * from "./extensions";
 export * from "./greylist";
 export * from "./hidden-cards";
 export * from "./image-convert";
@@ -155,6 +157,10 @@ export const contract = {
   waf: wafContract,
   /** A site's error pages for node-generated and (optionally) origin error responses. */
   errorPages: errorPagesContract,
+  /** Node extensions: signed Lua packages, their versions, configuration and sites. */
+  extensions: extensionsContract,
+  /** Publisher keys the operator trusts for extension packages. */
+  extensionKeys: extensionKeysContract,
   /** A site's maintenance mode. */
   maintenance: maintenanceContract,
   /** A site's usage protection: limits on bytes sent, requests and bandwidth. */

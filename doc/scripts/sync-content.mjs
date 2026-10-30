@@ -115,6 +115,7 @@ const OSS = {
         ["account", "docs/guide/account.md"],
         ["alerts", "docs/guide/alerts.md"],
         ["system", "docs/guide/system.md"],
+        ["extensions", "docs/guide/extensions.md"],
       ],
     },
     {
@@ -156,6 +157,7 @@ const OSS = {
         ["environment", "docs/reference/environment.md"],
         ["cli", "docs/reference/cli.md"],
         ["errors", "docs/reference/errors.md"],
+        ["extensions", "docs/reference/extensions.md"],
       ],
     },
     {

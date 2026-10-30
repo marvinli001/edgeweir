@@ -145,6 +145,7 @@ Access logs need the node capability `access-logs-v1`, JA4 also `ja4-v1`, forced
 | `websocket_origin` | WebSocket origin | The WebSocket Origin is not allowed |
 | `client_cert` | Client certificate | The site requires a client certificate |
 | `maintenance` | Maintenance mode | Maintenance mode |
+| `extension` | Extension | A node extension's verdict (rule `ext:<id>`), or 503 while an extension that fails closed cannot run ([Extensions](extensions.en.md)) |
 
 Nodes record the reason where they refuse; reasons match the `X-Edgeweir-Error` codes of error pages (`ip-banned`, `ip-blocked`, `policy-denied`, `ip-greylisted`, `waf-blocked`, `geo-denied`, `hotlink-denied`, `ua-denied`, `cors-origin-denied`, `websocket-origin-denied`, `client-cert-required`, `maintenance`, `auth-*`, see [Error pages](error-pages.en.md#set-a-sites-error-pages)). A forced HTTPS answer without a certificate (503), WebSocket turned off, an oversized body and unknown hosts are not blocks.
 
@@ -164,7 +165,7 @@ Nodes record the reason where they refuse; reasons match the `X-Edgeweir-Error` 
 
    The toast that follows links to the bans, the purge tasks or the CRS settings.
 
-The columns are **Time**, **Client IP**, **Request**, **Status**, **Bytes**, **Duration (ms)** and **Cache**. Rows with a block reason show its badge under the request (grey for challenges, red otherwise) with the rule name (deleted rules by id); **Request ID**, **JA4**, **CRS** and **Rules** also show under the request when set. A click anywhere in the row (or on the arrow before the request) opens the **Details**: User-Agent, Referer, protocol, country, network, origin ("address · status · ms"), request bytes, content type, query string, request headers and peer address; empty fields are left out.
+The columns are **Time**, **Client IP**, **Request**, **Status**, **Bytes**, **Duration (ms)** and **Cache**. Rows with a block reason show its badge under the request (grey for challenges, red otherwise) with the rule name (deleted rules by id); **Request ID**, **JA4**, **CRS** and **Rules** also show under the request when set. A click anywhere in the row (or on the arrow before the request) opens the **Details**: User-Agent, Referer, protocol, country, network, origin ("address · status · ms"), request bytes, content type, query string, request headers, peer address, and node extensions' log fields and verdicts; empty fields are left out.
 
 | Filter | Values | Match |
 | --- | --- | --- |

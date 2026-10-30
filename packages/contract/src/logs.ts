@@ -27,6 +27,7 @@ export const BLOCK_REASONS = [
   // pay per crawl's 402 / 400 answers.
   "ai_crawler",
   "pay_per_crawl",
+  "extension",
 ] as const;
 const blockReason = z.enum(BLOCK_REASONS);
 export type BlockReason = z.infer<typeof blockReason>;
@@ -182,6 +183,8 @@ export const logEntry = z.object({
   crawlerChargedMicros: z.number().int().default(0),
   /** The upper tier and its cache status ("<node id> HIT") or "origin" for a fetch through the tiered cache; empty otherwise. */
   tier: z.string().default(""),
+  /** Node extensions' log fields and verdicts ("ext.<id>.<name>" → value). */
+  ext: z.record(z.string(), z.string()).default({}),
 });
 export type LogEntry = z.infer<typeof logEntry>;
 

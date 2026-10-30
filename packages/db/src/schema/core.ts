@@ -228,6 +228,19 @@ export interface NodeSiteSecurity {
   escalatedPaths: number;
 }
 
+/** One extension's state on a node (extensions-v1). */
+export interface NodeExtensionStatus {
+  id: string;
+  version: string;
+  sha256: string;
+  state: string;
+  message: string;
+  faults: number;
+  trips: number;
+  /** ExtensionStatus.details_json as an object (version 1.1); absent when none was valid. */
+  details?: Record<string, unknown>;
+}
+
 export const node = pgTable(
   "node",
   {
@@ -312,6 +325,8 @@ export const node = pgTable(
     decommissionRequestedAt: timestamp("decommission_requested_at", { withTimezone: true }),
     decommissionTaskId: uuid("decommission_task_id"),
     decommissionError: text("decommission_error"),
+    /** Extension states of the last heartbeat (ReportStatusRequest.extensions). */
+    extensionStatus: jsonb("extension_status").$type<NodeExtensionStatus[]>().notNull().default([]),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

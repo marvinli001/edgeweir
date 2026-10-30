@@ -8,6 +8,9 @@ import {
   type CertificateRef,
   ChallengeKeyRefSchema,
   DomainMatch,
+  ExtensionDataItemSchema,
+  ExtensionSchema,
+  ExtensionSharedDictSchema,
   IpListSchema,
   type NodeConfig,
   type NodeConfigDiff,
@@ -21,6 +24,7 @@ import {
   PlatformProtectionSchema,
   SessionTicketKeyRefSchema,
   type Site,
+  SiteExtensionSchema,
   SiteSchema,
 } from "@edgeweir/proto";
 import { canonicalize, contentHash, matchMap, offlineHostKey } from "./canonical";
@@ -196,6 +200,7 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
     compiled.listeners,
     compiled.l4Apps,
   );
+  compileExtensions(compiled, input);
   compiled.requiredFeatures = derivedFeatures(compiled);
   const config = canonicalize(compiled);
   config.contentHash = contentHash(config);
@@ -224,6 +229,58 @@ function compileAiCrawlers(
         }),
       ),
   });
+}
+
+/**
+ * Delivers the extensions the cluster's sites turn on, in hook order, and
+ * each site's list in the same order; nothing (and no kill switch) without one.
+ */
+function compileExtensions(config: NodeConfig, input: CompileInput): void {
+  const bySite = new Map(input.sites.map((site) => [site.id, site.extensions ?? []]));
+  const used = new Set(
+    config.sites.flatMap((site) => (bySite.get(site.id) ?? []).map((e) => e.id)),
+  );
+  const extensions = (input.extensions ?? []).filter((extension) => used.has(extension.id));
+  if (extensions.length === 0) return;
+  const order = new Map(extensions.map((extension, index) => [extension.id, index]));
+  config.extensions = extensions.map((extension) =>
+    create(ExtensionSchema, {
+      id: extension.id,
+      version: extension.version,
+      publisher: extension.publisher,
+      sha256: extension.sha256,
+      size: BigInt(extension.size),
+      signature: extension.signature,
+      publicKey: extension.publicKey,
+      enabled: extension.enabled,
+      failureMode: extension.failureMode,
+      configJson: extension.configJson,
+      sharedDicts: extension.sharedDicts.map((dict) =>
+        create(ExtensionSharedDictSchema, { name: dict.name, sizeKb: dict.sizeKb }),
+      ),
+      luaApi: extension.luaApi ?? 1,
+      secretVersion: extension.secretVersion ?? 0,
+    }),
+  );
+  config.extensionsDisabled = input.extensionsDisabled ?? false;
+  for (const site of config.sites) {
+    site.extensions = (bySite.get(site.id) ?? [])
+      .filter((entry) => order.has(entry.id))
+      .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
+      .map((entry) =>
+        create(SiteExtensionSchema, {
+          id: entry.id,
+          configJson: entry.configJson,
+          data: (entry.data ?? []).map((item) =>
+            create(ExtensionDataItemSchema, {
+              name: item.name,
+              sha256: item.sha256,
+              size: BigInt(item.size),
+            }),
+          ),
+        }),
+      );
+  }
 }
 
 export function encodeNodeConfig(config: NodeConfig): Uint8Array {
@@ -273,6 +330,8 @@ export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfig
     originCaPrevious: target.originCaPrevious,
     aiCrawlers: target.aiCrawlers,
     tieredCache: target.tieredCache,
+    extensions: target.extensions,
+    extensionsDisabled: target.extensionsDisabled,
     upsertedSites: target.sites.filter((s) => baseSites.get(s.id) !== siteBytes(s)),
     removedSiteIds: base.sites
       .filter((s) => !targetIds.has(s.id))
@@ -317,6 +376,8 @@ export function applyNodeConfigDiff(base: NodeConfig, diff: NodeConfigDiff): Nod
       originCaPrevious: diff.originCaPrevious,
       aiCrawlers: diff.aiCrawlers,
       tieredCache: diff.tieredCache,
+      extensions: diff.extensions,
+      extensionsDisabled: diff.extensionsDisabled,
       sites,
     }),
   );

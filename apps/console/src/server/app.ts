@@ -46,6 +46,25 @@ import { authenticateServiceAccountKey, isServiceAccountKey } from "./services/s
 export const MAX_BODY_BYTES = 1 << 20;
 export const MAX_AUTHENTICATED_BODY_BYTES = 16 << 20;
 export const MAX_AUTH_BODY_BYTES = 64 << 10;
+/** Extension packages with a sidecar (64 MiB, base64 in JSON): verify and install. */
+const MAX_EXTENSION_PACKAGE_BODY_BYTES = 96 << 20;
+/** Extension site data items (24 MiB, base64 in JSON). */
+const MAX_EXTENSION_DATA_BODY_BYTES = 34 << 20;
+
+/** The larger bound of an authenticated request: the extension uploads take more. */
+export function authenticatedBodyLimit(method: string, path: string): number {
+  if (
+    method === "POST" &&
+    /^\/(?:api\/v1\/extensions(?:\/verify)?|rpc\/extensions\/(?:install|verify))$/.test(path)
+  )
+    return MAX_EXTENSION_PACKAGE_BODY_BYTES;
+  if (
+    (method === "PUT" && /^\/api\/v1\/sites\/[^/]+\/extensions\/[^/]+\/data\/[^/]+$/.test(path)) ||
+    (method === "POST" && path === "/rpc/extensions/putSiteData")
+  )
+    return MAX_EXTENSION_DATA_BODY_BYTES;
+  return MAX_AUTHENTICATED_BODY_BYTES;
+}
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -208,11 +227,12 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
     return async (c: HonoContext, next: () => Promise<void>) => {
       const body = c.req.raw.body;
       if (!body) return next();
+      const authenticatedLimit = authenticatedBodyLimit(c.req.method, c.req.path);
       const length = Number(c.req.header("content-length") ?? Number.NaN);
       if (c.req.header("transfer-encoding") === undefined && Number.isFinite(length)) {
         // Node's parser holds the body to its declared length.
         if (length <= MAX_BODY_BYTES) return next();
-        return length <= MAX_AUTHENTICATED_BODY_BYTES && (await credentialValid(c, surface))
+        return length <= authenticatedLimit && (await credentialValid(c, surface))
           ? next()
           : tooLarge(c);
       }
@@ -226,11 +246,11 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
         if (done) break;
         size += value.byteLength;
         if (size > limit) {
-          if (limit === MAX_AUTHENTICATED_BODY_BYTES || !(await credentialValid(c, surface))) {
+          if (limit === authenticatedLimit || !(await credentialValid(c, surface))) {
             await reader.cancel();
             return tooLarge(c);
           }
-          limit = MAX_AUTHENTICATED_BODY_BYTES;
+          limit = authenticatedLimit;
           if (size > limit) {
             await reader.cancel();
             return tooLarge(c);

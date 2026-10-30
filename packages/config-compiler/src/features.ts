@@ -30,6 +30,7 @@ import {
   needsBotFields,
   needsClientCertificate,
   needsClientIp,
+  needsExtensionFields,
   needsRulesBody,
   needsRulesV2,
   needsRulesV3,
@@ -60,6 +61,10 @@ export const MODSECURITY_FEATURE = "modsecurity-v1";
 export const ACTIVE_HEALTH_FEATURE = "active-health-v1";
 export const SESSION_AFFINITY_FEATURE = "session-affinity-v1";
 export const ERROR_PAGES_FEATURE = "error-pages-v1";
+/** Node extensions (docs/reference/extensions.md); required while the configuration delivers one. */
+export const EXTENSIONS_FEATURE = "extensions-v1";
+/** Node extensions of Lua API 2 (extension version 1.1); required while one is delivered. */
+export const EXTENSIONS_V2_FEATURE = "extensions-v2";
 /**
  * Feature of HTTP/2 towards an origin pool's origins and of gRPC proxied
  * over HTTP/2 end to end (proto v0.21.0, OriginPool.protocol and grpc).
@@ -508,6 +513,13 @@ export function derivedFeatures(config: NodeConfig): string[] {
     ...(config.sites.some((site) => site.developmentMode) ? [DEVELOPMENT_MODE_FEATURE] : []),
     ...(config.sites.some((site) => site.markdown) ? [MARKDOWN_FEATURE] : []),
     ...(config.sites.some((site) => site.aiCrawl) ? [AI_CRAWLERS_FEATURE] : []),
+    ...(config.extensions.length ||
+    configExpressions(config).map(expressionOf).some(needsExtensionFields)
+      ? [EXTENSIONS_FEATURE]
+      : []),
+    ...(config.extensions.some((extension) => extension.luaApi >= 2)
+      ? [EXTENSIONS_V2_FEATURE]
+      : []),
   ];
 }
 

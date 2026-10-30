@@ -111,12 +111,13 @@ export function demoAuditEntry(entry: AuditLogEntry): AuditLogEntry {
   };
 }
 
-/** An access log line as the demo account sees it: addresses reduced, headers left out. */
+/** An access log line as the demo account sees it: addresses reduced, headers and extension fields left out. */
 export function demoLogEntry(entry: LogEntry): LogEntry {
   return {
     ...entry,
     clientIp: demoAddress(entry.clientIp),
     peerIp: demoAddress(entry.peerIp),
     headers: {},
+    ext: {},
   };
 }

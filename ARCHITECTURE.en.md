@@ -421,6 +421,16 @@ DNS steering is bound per cluster (`dns_binding`, mode Not managed, Manual, or A
 4. Every `publishRevision` runs `syncTierSelections` under the publish lock first; `loadConfigInput` then compiles the choices into `NodeConfig.tiered_cache`: sites with the same hops share a plan (its id a hash of the hops) that `Site.tier_plan_id` names; only upper tiers carry an address; the latency targets are the origins of every tiered site (ids a hash of `host:port`). Without plans and targets the field is left out, so a cluster without tiers compiles byte for byte as before.
 5. The pg-boss queue `tiers.select` chooses again every minute for clusters with tiered sites and publishes with `tier_selection_changed` when upper tiers change. Changing the console-wide setting publishes the clusters of the sites that follow it (`tiered_cache_updated`).
 6. Statistics: nodes report `MinuteStats.tier_fetches` (lower tiers, by the upper tier's cache status, `origin` for fallbacks) and `tier_served` (answers to lower tiers); the console keeps them as `tier_stats` (`f:<status>` / `v:<status>`) of the minute, hour and day statistics and the view `traffic_hour_stats`. The access log's `tier` field is `<node id> <status>` or `origin`.
+## Node extensions
+
+Generic, signed Lua extensions of the edge request path (format `edgeweir-node-extension-v1`, Lua API 1, ADR-0071; contract in [Node extensions](docs/reference/extensions.en.md)). The console and the node know no particular extension, check no licenses and contact nobody about them.
+
+1. Trust: the operator adds publisher keys (Ed25519 public JWKs, `extension_key`, kid = RFC 7638 thumbprint); there are none by default. Installing (`POST /extensions`, base64 package + compact JWS) verifies the archive (strict ustar, limits, no links / native code / bytecode), the manifest (strict schema) and the signature against a trusted key whose publisher matches, then stores the version (`extension_version`, bytes in the database). A new id starts disabled; installing a newer version of an installed id activates it.
+2. Settings: per extension enabled, failure mode and global configuration (`extension`), per site enabled and site configuration (`site_extension`), the kill switch (system setting `extensions`). Configuration is validated against the manifest's JSON Schema subset; `x-secret` values are masked in answers. Manifest rule fields register `ext.<id>.<name>` in the rule engine, which rules may use in request phases; removing an extension or version that rules still read is refused.
+3. Compilation (`packages/config-compiler`): `NodeConfig.extensions` lists, in install order, the active version of each enabled extension that an enabled site of the cluster turns on (digest, size, signature, signing key, failure mode, global configuration, shared dicts), with the kill switch; each site lists its extensions with their site configuration. Delivered extensions or rules reading `ext.*` require `extensions-v1`; enabling is refused while an active node of an affected cluster lacks it.
+4. Node: the agent fetches missing packages by digest (`GetExtensionPackage`, mTLS), verifies them again (and against `--extension-keys` when set), unpacks them to `<state>/extensions/<sha256>/` and lists the loadable ones in `nginx.conf` (init parameter `extensions`, one `lua_shared_dict ewx_<hex id>_<name>` per declared dict). A change of the loaded set reloads nginx; settings and site lists are hot. `--no-extensions` turns it off.
+5. Runtime (`lua/edgeweir/ext.lua`): each worker loads packages into an environment of their own, runs `init` on first use and calls `access` (before access control, rules and challenges), `access_late` (after them, before the CRS, cache and origin), `header_filter`, `body_filter` (with HTML injection) and `log`, and answers `/.edgeweir/ext/<id>/…` (assets, endpoints). Hooks run under `pcall` with time budgets; faults trip an extension per worker; failure mode `closed` answers 503 `X-Edgeweir-Error: extension`.
+6. Reporting: access logs carry `AccessLog.ext` (log fields, verdicts) and block reason `extension` with rule id `ext:<id>`; minute statistics carry `MinuteStats.ext_counters`; heartbeats carry `ExtensionStatus` per extension (state, faults, trips), shown per node in the console.
 
 ## Regional probes and scheduling
 
@@ -561,6 +571,10 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `config_revision` | Revisions per cluster: number, content hash, binary IR, reason code |
 | `node_config_status` | Node apply receipts and heartbeats, with the receipt verification flag |
 | `cluster_rollout` | Configuration canary of a cluster: policy (switch, observation window, auto promotion, 5xx thresholds) and the current rollout (stable and candidate revisions, window, outcome) |
+| `extension_key` | Trusted publisher keys of node extensions: kid (RFC 7638 thumbprint), publisher, public key `x`, label |
+| `extension` | Installed node extensions: active version, enabled, failure mode, global configuration |
+| `extension_version` | Uploaded versions of an extension: package bytes, SHA-256 (unique), size, signature, signing kid, manifest |
+| `site_extension` | A site's extensions: enabled and site configuration |
 
 ### Certificates, DNS, and domains
 
@@ -704,6 +718,9 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0083_site_development_mode` | `site.development_mode_until` (when development mode ends; null while off) |
 | `0085_markdown_agents` | `site.markdown` (Markdown for Agents); `markdown_responses` in minute, hour and day statistics and the view `traffic_hour_stats` |
 | `0088_tiered_cache` | `site.tiered_cache`; `tier_latency`, `tier_selection`; `access_log.tier`; `tier_stats` in minute, hour and day statistics and the view `traffic_hour_stats` |
+| `0081_node_location` | `node.location` (where the node's public address is, from its own GeoIP data: country, subdivision, City MMDB coordinates) |
+| `0089_node_extensions` | `extension_key`, `extension`, `extension_version`, `site_extension` (node extensions); `node.extension_status` (per extension state reported by the node) |
+| `0090_extension_secrets_data` | `extension.secret_envelope`, `extension.secret_version` (console-generated extension secrets); `site_extension_data` (per-site data items of extensions) |
 
 ## Build output
 

@@ -29,6 +29,7 @@ import {
   storedEnvelopes,
   UNSTORED_ENVELOPE_PURPOSES,
 } from "../../src/server/services/envelope-rotation";
+import { extensionSecretBinding } from "../../src/server/services/extensions";
 import {
   channelBinding,
   SMTP_KEY,
@@ -241,6 +242,12 @@ describe("master key rotation", () => {
       },
       { id: ids.ticketPending, clusterId, role: "next", secret: null },
     ]);
+    await db.insert(schema.extension).values({
+      id: "ext-secret",
+      activeVersion: "1.0.0",
+      secretEnvelope: seal(extensionSecretBinding("ext-secret")),
+      secretVersion: 1,
+    });
     await db.insert(schema.originClientCertificate).values({
       id: ids.originClient,
       clusterId,

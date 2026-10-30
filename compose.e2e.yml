@@ -353,6 +353,7 @@ services:
       # can manage its nftables table for kernel bans.
       args:
         NFT_CAPABILITY: "true"
+        SIDECAR_CAPABILITY: "true"
     image: edgeweir-node:${E2E_TAG:-e2e}
     hostname: edge-e2e-1
     # Kernel bans: the agent reports kernel-ban-v1 only with this capability.
@@ -375,6 +376,7 @@ services:
       # the g20-captcha mock (profile g20) instead of Cloudflare; only G20's
       # sites have a provider.
       EDGEWEIR_CHALLENGE_VERIFY_ENDPOINTS: turnstile=http://g20-captcha:8080/siteverify
+      EDGEWEIR_SIDECAR_USER: edgeweir-sidecar
     ports:
       - "${E2E_NODE_PORT:-18080}:80"
       - "${E2E_NODE_TLS_PORT:-18443}:443"

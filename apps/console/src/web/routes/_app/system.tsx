@@ -10,6 +10,7 @@ import { Button } from "@/components/arc/button/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/arc/tabs/tabs";
 import { CopyButton } from "@/components/copy-button";
 import { DemoSettingsCard } from "@/components/demo-settings";
+import { ExtensionsPanel } from "@/components/extensions/extensions-panel";
 import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { LogRetentionCard } from "@/components/log-retention";
 import { LoginAllowListCard } from "@/components/login-allow-list";
@@ -30,13 +31,13 @@ import { orpc } from "@/lib/orpc";
 
 export const Route = createFileRoute("/_app/system")({
   validateSearch: z.object({
-    tab: z.enum(["probes", "service-accounts"]).optional(),
+    tab: z.enum(["probes", "service-accounts", "extensions"]).optional(),
     addProbe: z.boolean().optional(),
   }),
   component: SystemSettingsPage,
 });
 
-type Tab = "general" | "probes" | "service-accounts";
+type Tab = "general" | "probes" | "service-accounts" | "extensions";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -47,12 +48,13 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-/** System settings: general settings, monitoring (probes) and service accounts. */
+/** System settings: general settings, monitoring (probes), service accounts and node extensions. */
 function SystemSettingsPage() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const tab: Tab = search.tab ?? "general";
   const [createAccount, setCreateAccount] = React.useState(false);
+  const [installExtension, setInstallExtension] = React.useState(false);
   const setAddProbe = (open: boolean) =>
     navigate({ search: (prev) => ({ ...prev, addProbe: open || undefined }), replace: true });
   return (
@@ -73,6 +75,15 @@ function SystemSettingsPage() {
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             {m.service_accounts_create()}
           </Button>
+        ) : tab === "extensions" ? (
+          <Button
+            size="sm"
+            onClick={() => setInstallExtension(true)}
+            data-testid="extension-install"
+          >
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+            {m.extensions_install()}
+          </Button>
         ) : null
       }
     >
@@ -81,7 +92,10 @@ function SystemSettingsPage() {
         onValueChange={(value) =>
           navigate({
             search: {
-              tab: value === "probes" || value === "service-accounts" ? value : undefined,
+              tab:
+                value === "probes" || value === "service-accounts" || value === "extensions"
+                  ? value
+                  : undefined,
             },
             replace: true,
           })
@@ -106,6 +120,13 @@ function SystemSettingsPage() {
             >
               {m.nav_service_accounts()}
             </TabsTrigger>
+            <TabsTrigger
+              value="extensions"
+              className="flex-none"
+              data-testid="system-tab-extensions"
+            >
+              {m.system_tab_extensions()}
+            </TabsTrigger>
           </TabsList>
         </PageTabs>
         <TabsContent value="general" className="flex flex-col gap-6 animate-enter">
@@ -116,6 +137,12 @@ function SystemSettingsPage() {
         </TabsContent>
         <TabsContent value="service-accounts" className=" animate-enter">
           <ServiceAccountsPanel createOpen={createAccount} onCreateOpenChange={setCreateAccount} />
+        </TabsContent>
+        <TabsContent value="extensions" className=" animate-enter">
+          <ExtensionsPanel
+            installOpen={installExtension}
+            onInstallOpenChange={setInstallExtension}
+          />
         </TabsContent>
       </Tabs>
     </Page>

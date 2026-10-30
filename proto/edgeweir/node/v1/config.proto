@@ -134,6 +134,14 @@ message NodeConfig {
   // fetches from the origins, the console names it as an upper tier only
   // with tier-upper-v1).
   TieredCache tiered_cache = 80;
+  // Node extensions (docs/reference/extensions.md), sorted by install
+  // order then id: each installed extension's active package. Changing the
+  // set of packages (or their shared dicts) is a structural change; the rest
+  // is hot-updated. Added in PROTO_NEXT (feature extensions-v1).
+  repeated Extension extensions = 60;
+  // Kill switch: nodes load no extension code paths while set (packages stay
+  // on disk). Added in PROTO_NEXT.
+  bool extensions_disabled = 61;
 }
 
 // AiCrawlerCatalogue lists the AI crawlers nodes recognise, sorted by id
@@ -330,6 +338,9 @@ message NodeConfigDiff {
   AiCrawlerCatalogue ai_crawlers = 27;
   // Always sent in full (NodeConfig field 80). Added in PROTO_NEXT.
   TieredCache tiered_cache = 80;
+  // Always sent in full (NodeConfig fields 60 and 61). Added in PROTO_NEXT.
+  repeated Extension extensions = 60;
+  bool extensions_disabled = 61;
 }
 
 // L4Protocol is the transport of a layer-4 application.
@@ -585,6 +596,10 @@ message Site {
   // the origins. Only requests the edge may cache go through upper tiers.
   // Added in PROTO_NEXT (feature tiered-cache-v1).
   string tier_plan_id = 80;
+  // Extensions the site turns on, in NodeConfig.extensions order, with the
+  // site's configuration. Only ids present in NodeConfig.extensions.
+  // Added in PROTO_NEXT (feature extensions-v1).
+  repeated SiteExtension extensions = 60;
 }
 
 // DevelopmentMode bypasses the edge cache of a site until expires_at, on
@@ -1944,4 +1959,64 @@ message TierLatencyTarget {
   // Host name or IP literal (the origin's address).
   string host = 2;
   uint32 port = 3;
+}
+
+// Extension is one installed node extension (format
+// edgeweir-node-extension-v1): the active package, fetched by digest with
+// NodeService.GetExtensionPackage, verified against signature and
+// public_key, and its operator settings. Added in PROTO_NEXT.
+message Extension {
+  // Manifest id ([a-z][a-z0-9-]{1,38}[a-z0-9]).
+  string id = 1;
+  // Active version (semver) and its publisher.
+  string version = 2;
+  string publisher = 3;
+  // Lowercase hex SHA-256 and size of the .ewx package bytes.
+  string sha256 = 4;
+  uint64 size = 5;
+  // Compact JWS (EdDSA) over the package identity and digest.
+  string signature = 6;
+  // The signing key as an OKP / Ed25519 JWK (JSON).
+  string public_key = 7;
+  // Globally enabled; disabled extensions stay loaded but run no hook.
+  bool enabled = 8;
+  // "open" (default) or "closed".
+  string failure_mode = 9;
+  // Global configuration (JSON object, defaults filled in by the console).
+  string config_json = 10;
+  // Shared dicts of the manifest (name, size in KiB), so nodes can render
+  // nginx.conf before unpacking.
+  repeated ExtensionSharedDict shared_dicts = 11;
+  // Lua API the package requires (0 or 1: version 1; 2: extension version
+  // 1.1, nodes with extensions-v2).
+  uint32 lua_api = 12;
+  // Version of the extension's console-generated secret (manifest
+  // `secret: true`, extension version 1.1); 0: none. Nodes fetch the secret
+  // itself with NodeService.GetExtensionSecrets when it changes.
+  uint32 secret_version = 13;
+}
+
+// ExtensionSharedDict is one lua_shared_dict of an extension.
+message ExtensionSharedDict {
+  string name = 1;
+  uint32 size_kb = 2;
+}
+
+// SiteExtension turns an extension on for one site.
+message SiteExtension {
+  string id = 1;
+  // Site configuration (JSON object, defaults filled in by the console).
+  string config_json = 2;
+  // The site's data items for the extension (manifest `data`, extension
+  // version 1.1), fetched with NodeService.GetExtensionData by digest.
+  repeated ExtensionDataItem data = 3;
+}
+
+// ExtensionDataItem is one opaque per-site data item of an extension.
+message ExtensionDataItem {
+  // ^[a-z0-9][a-z0-9._-]{0,63}$
+  string name = 1;
+  // Lowercase hex SHA-256 and size of the content.
+  string sha256 = 2;
+  uint64 size = 3;
 }

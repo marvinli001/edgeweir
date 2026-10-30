@@ -74,6 +74,8 @@ export const accessLog = pgTable(
     crawlerChargedMicros: bigint("crawler_charged_micros", { mode: "number" }).notNull().default(0),
     /** The upper tier and its cache status ("<node id> HIT"), "origin", or empty (ADR-0073). */
     tier: text("tier").notNull().default(""),
+    /** Node extensions' log fields and verdicts ("ext.<id>.<name>", extensions-v1). */
+    ext: jsonb("ext").$type<Record<string, string>>().notNull().default({}),
   },
   (t) => [
     primaryKey({ columns: [t.time, t.id] }),
