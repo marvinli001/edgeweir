@@ -14,9 +14,9 @@
 //      with the managed text, then the origin's file; ClaudeBot without a
 //      price gets 402 with crawler-price, with crawler-max-price 400
 //      StrongAuthRequired (it cannot be verified); /robots.txt is free
-//   d. impersonators blocked with a 402 and a text: the spoofed Googlebot
-//      (verifiable, address outside Google's ranges and without its reverse
-//      DNS) gets 402 and the text
+//   d. impersonators blocked with a 402 and a text: the spoofed
+//      PerplexityBot (verified by published ranges only, the gateway address
+//      is outside them) gets 402 and the text
 //   e. the overview counts the requests: GPTBot as an impersonator with its
 //      refusals, ClaudeBot unverifiable, the managed robots.txt reads, the
 //      paths; the access log filter by crawler finds GPTBot's lines
@@ -26,6 +26,7 @@
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import http from "node:http";
+import zlib from "node:zlib";
 import { actor, pass, waitFor } from "./e2e-lib.mjs";
 
 const STATE = ".e2e/ai-crawl-state.json";
@@ -35,7 +36,7 @@ const UA = {
   gptbot:
     "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.2; +https://openai.com/gptbot",
   claudebot: "Mozilla/5.0 (compatible; ClaudeBot/1.0; +claudebot@anthropic.com)",
-  googlebot: "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+  perplexitybot: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot)",
   bytespider:
     "Mozilla/5.0 (Linux; Android 5.0) AppleWebKit/537.36 (KHTML, like Gecko) Mobile Safari/537.36 (compatible; Bytespider)",
   browser:
@@ -52,7 +53,15 @@ const DEFAULTS = {
   payPerCrawl: { enabled: false, price: "0.01", dynamicPricing: false },
 };
 
-/** A request to the node with the site's Host header. */
+/** A body as sent, decoded from the edge's compression. */
+function decoded(encoding, body) {
+  if (encoding === "gzip") return zlib.gunzipSync(body);
+  if (encoding === "br") return zlib.brotliDecompressSync(body);
+  if (encoding === "zstd") return zlib.zstdDecompressSync(body);
+  return body;
+}
+
+/** A request to the node with the site's Host header (bodies decoded). */
 function request(path, headers = {}, method = "GET") {
   return new Promise((resolve) => {
     const req = http.request(
@@ -72,7 +81,7 @@ function request(path, headers = {}, method = "GET") {
           resolve({
             status: res.statusCode,
             headers: res.headers,
-            body: Buffer.concat(chunks).toString("utf8"),
+            body: decoded(res.headers["content-encoding"], Buffer.concat(chunks)).toString("utf8"),
           }),
         );
       },
@@ -195,13 +204,10 @@ assert.ok(managedEnd > 0, summary(robots));
 assert.match(
   robots.body.slice(managedEnd),
   /\nGET \/robots\.txt /,
-  "the origin's file follows, whole and uncompressed",
+  "the origin's file follows, whole (no range)",
 );
-assert.equal(robots.headers["content-encoding"], undefined, "not compressed");
-assert.equal(
-  Number(robots.headers["content-length"] ?? robots.body.length),
-  Buffer.byteLength(robots.body),
-);
+assert.equal(robots.headers["content-range"], undefined, "not a range");
+pass(`robots.txt: ${robots.headers["content-encoding"] ?? "identity"} from the edge`);
 pass("robots.txt stays readable for GPTBot: managed text, then the origin's whole file");
 
 const unpaid = await as("claudebot");
@@ -235,9 +241,9 @@ site = await admin.ok("PUT", `/sites/${siteId}/ai-crawl`, {
 });
 await synced("impersonators blocked");
 const fake = await waitFor(
-  "the spoofed Googlebot verified (reverse DNS) and refused",
+  "the spoofed PerplexityBot refused as an impersonator",
   async () => {
-    const r = await as("googlebot");
+    const r = await as("perplexitybot");
     return r.status === 402 ? r : null;
   },
   30,
@@ -246,7 +252,7 @@ assert.equal(fake.body, "No crawling without a licence.\n", summary(fake));
 const gptText = await as("gptbot");
 assert.equal(gptText.status, 402, `GPTBot gets the site's block response: ${summary(gptText)}`);
 pass(
-  "the spoofed Googlebot (outside Google's ranges and reverse DNS) is an impersonator: 402 with the site's text",
+  "the spoofed PerplexityBot (outside its published ranges) is an impersonator: 402 with the site's text",
 );
 
 // ---------------------------------------------------------------- e

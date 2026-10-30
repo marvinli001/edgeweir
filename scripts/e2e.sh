@@ -271,7 +271,7 @@
 #   core node reports ai-crawlers-v1; a spoofed GPTBot is only tagged, then
 #   blocked (403 ai-crawler-blocked) while robots.txt stays readable with the
 #   managed text before the origin's file; ClaudeBot gets 402 crawler-price
-#   and 400 StrongAuthRequired with a price; a spoofed Googlebot is blocked
+#   and 400 StrongAuthRequired with a price; a spoofed PerplexityBot is blocked
 #   as an impersonator (402 with the site's text); the overview and the
 #   access log filter count the claims; Playwright e2e/ai-crawl.spec.ts.
 #   Login IP allow list (scripts/e2e-allowlist.mjs, ADR-0047): the console
