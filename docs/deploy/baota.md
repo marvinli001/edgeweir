@@ -17,7 +17,7 @@
 | `EDGEWEIR_TRUSTED_PROXIES` | 默认 `127.0.0.1,::1` | Docker 网关地址，由 `deploy.sh` 写入并在启动时同步 |
 | 面板容器列表的端口列 | 空（host 网络没有端口映射） | 显示映射 |
 
-镜像 `ghcr.io/marvinli001/edgeweir` 公开，面板中无需添加镜像仓库或登录。tag 格式与版本固定见 [upgrade.md](upgrade.md)。
+镜像 `ghcr.io/marvinli001/edgeweir` 公开，面板中无需添加镜像仓库或登录。tag 格式与版本固定见 [版本与升级](upgrade.md)。
 
 ## 1. 准备
 
@@ -28,7 +28,7 @@
 | 云安全组 | 放行同一端口 | — | — |
 | 域名 | 控制台域名（例如 `cdn-admin.example.com`）解析到本机 | — | — |
 | 数据库（host） | PostgreSQL 18；空数据库及其所有者用户；云数据库白名单包含本机 IP | **数据库 → PgSQL → 添加数据库** | **Databases → PgSQL → Add DB** |
-| 镜像 | 能访问 `ghcr.io`；否则预先 `docker load` 导入，见 [deploy-script.md](deploy-script.md#无人值守安装) 的 `EDGEWEIR_NO_PULL` | — | — |
+| 镜像 | 能访问 `ghcr.io`；否则预先 `docker load` 导入，见 [deploy.sh 参考：无人值守安装](deploy-script.md#无人值守安装) 的 `EDGEWEIR_NO_PULL` | — | — |
 | 终端 | root | **终端** 或 SSH | **Terminal** 或 SSH |
 
 其余运行要求见 [部署概览](README.md#运行要求)。
@@ -41,7 +41,7 @@
    curl -fsSL -o deploy.sh https://raw.githubusercontent.com/marvinli001/edgeweir/master/deploy.sh
    ```
 
-2. 运行安装，依次回答安装目录、数据库模式、数据库连接、控制台地址、节点通道地址。提示与默认值见 [deploy-script.md](deploy-script.md#install)。
+2. 运行安装，依次回答安装目录、数据库模式、数据库连接、控制台地址、节点通道地址。提示与默认值见 [deploy.sh 参考：install](deploy-script.md#install)。
 
    ```bash
    sudo bash deploy.sh install
@@ -52,9 +52,9 @@
 3. 记录输出末尾的 setup token。
 
 > [!IMPORTANT]
-> 安装目录中的 `.env` 含 `EDGEWEIR_MASTER_KEY`。离线备份；丢失后已加密的数据无法恢复。见 [backup.md](backup.md)。
+> 安装目录中的 `.env` 含 `EDGEWEIR_MASTER_KEY`。离线备份；丢失后已加密的数据无法恢复。见 [备份与恢复](backup.md)。
 
-无人值守安装（以 root 运行；变量表见 [deploy-script.md](deploy-script.md#无人值守安装)）：
+无人值守安装（以 root 运行；变量表见 [deploy.sh 参考：无人值守安装](deploy-script.md#无人值守安装)）：
 
 ```bash
 EDGEWEIR_YES=1 EDGEWEIR_DB=host \
@@ -79,7 +79,7 @@ bash deploy.sh install
 - 发送域名（`Host`）保持默认值：控制台只按 `EDGEWEIR_PUBLIC_URL` 校验请求来源。
 - 安装时填写的控制台地址不是 `https://` 时，证书生效后运行 `./deploy.sh config` 改为 `https://`。
 
-通用 nginx 配置与请求头见 [networking.md](networking.md#反向代理-web-控制台)。
+通用 nginx 配置与请求头见 [端口、反向代理与可信代理：反向代理 Web 控制台](networking.md#反向代理-web-控制台)。
 
 ## 4. 初始化与验证
 
@@ -90,7 +90,7 @@ bash deploy.sh install
    ./deploy.sh setup-token
    ```
 
-2. 打开 `https://cdn-admin.example.com/setup`，填入 setup token 与姓名、邮箱、密码，创建控制台账户。初始化向导见 [快速上手](../guide/first-site.md)。
+2. 打开 `https://cdn-admin.example.com/setup`，填写「初始化令牌」（setup token）、「姓名」「邮箱」「密码」（至少 12 位），点击「创建并继续」。后续步骤见 [快速上手](../guide/first-site.md#1-完成初始化向导)。
 
 3. 验证 Web 控制台：
 
@@ -109,7 +109,7 @@ bash deploy.sh install
 
    预期：签发者含 `Edgeweir Node Channel CA`。
 
-节点发布源与源站地址允许清单在 **系统设置** 配置，见 [集群与系统](../guide/system.md#系统设置)；GeoIP 数据库在 **防护设置**，见 [防护设置](../guide/system.md#防护设置)；SMTP 在 **告警** 页配置，见 [SMTP](../guide/dns-and-alerts.md#smtp)。添加节点见 [接入节点](nodes.md)；安装命令中的 `--server` 即 **系统设置** 的「节点通道」（没有保存地址时为 `EDGEWEIR_NODE_API_URL`），修改见 [节点通道地址与证书](networking.md#节点通道地址与证书)。
+节点发布源与源站地址允许清单在 **系统设置** 配置，见 [集群与系统](../guide/system.md#系统设置)；GeoIP 数据库在 **防护设置**，见 [防护设置](../guide/system.md#防护设置)；SMTP 在 **告警** 页配置，见 [SMTP](../guide/alerts.md#smtp)。添加节点见 [接入节点](nodes.md)；安装命令中的 `--server` 即 **系统设置** 的「节点通道」（没有保存地址时为 `EDGEWEIR_NODE_API_URL`），修改见 [节点通道地址与证书](networking.md#节点通道地址与证书)。
 
 ## 节点通道端口
 
@@ -119,7 +119,7 @@ bash deploy.sh install
 | nginx `stream` 四层透传 | 控制台监听本机 `18443`，面板 nginx 在 `8443` 透传 TCP | 面板 nginx 需包含 stream 模块 |
 | 面板 HTTP 反向代理、CDN | 不支持 | 终结 TLS 使节点注册报 `CA pin mismatch`，mTLS 无法建立 |
 
-`stream` 块、原理与验证见 [networking.md](networking.md#节点通道四层透传)。宝塔 / aaPanel 上的步骤：
+`stream` 块、原理与验证见 [端口、反向代理与可信代理：节点通道四层透传](networking.md#节点通道四层透传)。宝塔 / aaPanel 上的步骤：
 
 1. 确认面板 nginx 包含 stream 模块：
 
@@ -210,7 +210,7 @@ bash deploy.sh install
 
 ### 不用编排：单独创建容器
 
-面板 **创建容器** 表单无法设置编排中的只读根文件系统、`tmpfs` 与 `no-new-privileges`。需要这些加固时在终端执行 [docker.md](docker.md#不用-compose单独的容器) 中的 `docker run` 命令。
+面板 **创建容器** 表单无法设置编排中的只读根文件系统、`tmpfs` 与 `no-new-privileges`。需要这些加固时在终端执行 [Docker Compose：不用 Compose：单独的容器](docker.md#不用-compose单独的容器) 中的 `docker run` 命令。
 
 1. 创建网络 `edgeweir`：宝塔 **Docker → 网络**；aaPanel **Docker → Network → Add Network**；或终端：
 
@@ -239,7 +239,7 @@ bash deploy.sh install
 
    - 表单无法把端口绑定到 `127.0.0.1` 时改用终端 `docker run`。
 
-3. 升级：拉取新 tag，删除 `edgeweir-console`，以相同参数和新 tag 重建。数据在 `edgeweir-postgres` 卷中。升级前备份，见 [backup.md](backup.md)。
+3. 升级：拉取新 tag，删除 `edgeweir-console`，以相同参数和新 tag 重建。数据在 `edgeweir-postgres` 卷中。升级前备份，见 [备份与恢复](backup.md)。
 
 ## 升级与备份
 
@@ -255,7 +255,7 @@ cd /www/dk_project/edgeweir
 
 轮换主密钥：`.env` 中把原值移到 `EDGEWEIR_MASTER_KEY_PREVIOUS`、写入新的 `EDGEWEIR_MASTER_KEY`，运行 `./deploy.sh restart`；`./deploy.sh logs console` 出现 `no envelope uses EDGEWEIR_MASTER_KEY_PREVIOUS any more` 后删除该行，再 `./deploy.sh restart`。说明见[轮换主密钥](docker.md#轮换主密钥)。
 
-命令、备份布局与中止行为见 [deploy-script.md](deploy-script.md)；版本策略与回退约束见 [upgrade.md](upgrade.md)；恢复见 [backup.md](backup.md)。
+命令、备份布局与中止行为见 [deploy.sh 参考](deploy-script.md)；版本策略见 [版本与升级](upgrade.md)，回退约束见 [降级](downgrade.md)；恢复见 [备份与恢复](backup.md)。
 
 | 场景 | 行为 |
 | --- | --- |

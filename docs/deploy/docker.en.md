@@ -2,7 +2,7 @@
 
 Deploy the console image with Docker Compose, or without Compose using `docker run`.
 
-Runtime requirements and other platforms: [deployment overview](README.en.md). BaoTa / aaPanel and `deploy.sh`: [baota.en.md](baota.en.md).
+Runtime requirements and other platforms: [deployment overview](README.en.md). BaoTa / aaPanel and `deploy.sh`: [BaoTa Panel and aaPanel](baota.en.md).
 
 ## Compose services
 
@@ -14,7 +14,7 @@ The `compose.yml` project name is `edgeweir`: the volume is `edgeweir_postgres-d
 | `postgres` | `postgres:18.6-alpine` (pinned by digest) | Default | Volume `postgres-data` mounted at `/var/lib/postgresql`; no published port; `console` starts after the `pg_isready` health check passes |
 | `clickhouse` | `clickhouse/clickhouse-server:26.9-alpine` (pinned by digest) | `COMPOSE_PROFILES=analytics` in `.env` | Volume `clickhouse-data` |
 
-The image is public; pulling needs no login. Tag rules: [versions, upgrades, and rollback](upgrade.en.md).
+The image is public; pulling needs no login. The default tag is `stable`; production pins a dated tag `<YYYYMMDD>-<commit>`; see [image tags](README.en.md#image-tags) and [pinning a version](upgrade.en.md#pinning-a-version).
 
 ## 1. Prepare
 
@@ -134,6 +134,7 @@ Common optional variables (uncomment in `.env`):
 | --- | --- | --- |
 | `EDGEWEIR_VERSION` | `stable` | Image tag to pull. Pin a dated tag in production; see [pinning a version](upgrade.en.md#pinning-a-version). |
 | `EDGEWEIR_NODE_API_URL` | `https://<host of EDGEWEIR_PUBLIC_URL>:8443` | URL nodes use for the node channel; a URL saved under "Node channel" in **System settings** wins; see [node channel URL and certificate](networking.en.md#node-channel-url-and-certificate). |
+| `EDGEWEIR_NODE_API_WEBSOCKET` | `false` | `true`: the default node channel URL becomes the WebSocket entry on the web port, `wss://<host[:port] of EDGEWEIR_PUBLIC_URL>`, for hosts that cannot open 8443; see [the node channel's WebSocket entry](networking.en.md#the-node-channels-websocket-entry). |
 | `EDGEWEIR_TRUSTED_PROXIES` | Empty | Reverse proxy addresses; see [trusted proxies](networking.en.md#trusted-proxies-and-client-ip). |
 | `EDGEWEIR_HTTP_PORT`, `EDGEWEIR_NODE_API_PORT` | `127.0.0.1:3000`, `8443` | Published host ports, optionally with a bind address. The web port is local only by default: ports Docker publishes bypass ufw and firewalld, so a reverse proxy serves it; `EDGEWEIR_HTTP_PORT=3000` publishes it on every interface. When `EDGEWEIR_NODE_API_PORT` is not `8443`, also set `EDGEWEIR_NODE_API_URL` (or save the node channel URL in System settings): the default URL uses the container's port `8443`. |
 | `BETTER_AUTH_SECRET` | Empty, derived from the master key | Deployments that set it keep it; the console refuses to start once it is removed. |
@@ -170,9 +171,9 @@ Startup sequence:
    docker compose logs console | grep setupToken
    ```
 
-   An uninitialized console prints the same token at every start until it is used. The token is stored encrypted with the master key; a new master key yields a new token.
+   The log line is `first-run setup: open the console and enter this setup token`; its `setupToken` field is the token, its `url` field the setup wizard's address. An uninitialized console prints the same token at every start until it is used; the token is stored encrypted with the master key.
 
-2. Open `<EDGEWEIR_PUBLIC_URL>/setup` and enter the setup token, name, email, and password to create the console account. The console also creates the default cluster `default`. Setup wizard: [quick start](../guide/first-site.en.md).
+2. Open `<EDGEWEIR_PUBLIC_URL>/setup`, fill in "Setup token", "Name", "Email", and "Password" (at least 12 characters), and click "Create and continue". The console creates the single operator account and the default cluster `default`. Next steps: [quick start](../guide/first-site.en.md#1-complete-the-setup-wizard).
 
 Setup requests without a token or with a wrong token are rejected and written to the audit log. The token expires after a successful setup.
 
@@ -184,6 +185,20 @@ docker compose ps
 ```
 
 Expected: `{"status":"ok","version":"<image tag>"}`; `console` is `healthy`.
+
+The image's health check (`HEALTHCHECK`) requests `http://127.0.0.1:${PORT}/healthz` every 10 seconds with a 3-second timeout and a 30-second start period; 5 failures in a row make it `unhealthy`. With `ROLE=worker` it only checks that the process is alive.
+
+Address warnings in the startup log:
+
+| Log | Condition |
+| --- | --- |
+| `EDGEWEIR_PUBLIC_URL names this machine only` | The console URL is `localhost` or a loopback address: nodes on other hosts cannot download `install.sh` |
+| `EDGEWEIR_PUBLIC_URL is a private address` | The console URL is a private address |
+| `EDGEWEIR_PUBLIC_URL is plain HTTP` | The console URL is a public `http://` URL: `install.sh` travels unencrypted |
+| `the node channel URL names this machine only` | The node channel URL is `localhost` or a loopback address: nodes on other hosts cannot enroll |
+| `the node channel URL is a private address` | The node channel URL is a private address |
+
+The warnings do not stop the console; fix the URL as in [node channel URL and certificate](networking.en.md#node-channel-url-and-certificate).
 
 ## Optional components
 

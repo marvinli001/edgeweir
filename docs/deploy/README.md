@@ -1,6 +1,6 @@
 # 部署概览
 
-控制台的组件、运行要求、支持的平台与进程角色。
+控制台的组件、镜像 tag、运行要求、支持的平台、节点通道接入方式与进程角色。
 
 ## 组件
 
@@ -10,6 +10,16 @@
 | PostgreSQL 18 | 唯一外部依赖。保存全部状态、pg-boss 队列、认证限速计数；LISTEN/NOTIFY 在实例间广播配置变更。 | 是 |
 | ClickHouse | 原始访问日志与分钟级统计，`EDGEWEIR_ANALYTICS=clickhouse` 时启用，见 [访问日志与 AccessKey](../guide/access-logs.md)。 | 否 |
 | 边缘节点 | [edgeweir-node](https://github.com/marvinli001/edgeweir-node)，部署在独立主机，见 [接入节点](nodes.md)。 | — |
+
+## 镜像 tag
+
+| tag | 来源 | 用途 |
+| --- | --- | --- |
+| `<YYYYMMDD>-<commit>` | master 上 CI 通过的每个提交，由 `release.yml` 构建发布；`<commit>` 为 7 位提交号 | 生产环境固定此 tag |
+| `stable` | 维护者手动运行 `promote.yml`，指向一个已发布日期 tag 的 digest；不重新构建 | 各编排文件与平台模板的默认值 |
+| `latest` | master 最新提交的日期 tag | 评估环境 |
+
+每个镜像包含 linux/amd64 与 linux/arm64，带 cosign keyless 签名、SBOM 与构建来源证明。固定版本、签名校验与升级见 [版本与升级](upgrade.md)，回退见 [降级](downgrade.md)。
 
 ## 运行要求
 
@@ -26,16 +36,26 @@
 
 ## 支持的平台
 
-| 平台 | 方式 | 文档 | 状态 |
+| 平台 | 方式 | 节点通道接入 | 文档 |
 | --- | --- | --- | --- |
-| Docker Compose | `compose.yml`：控制台与内置 PostgreSQL 18 | [docker.md](docker.md) | 支持 |
-| docker run | 专用 Docker 网络上的控制台与 PostgreSQL 容器 | [docker.md](docker.md#不用-compose单独的容器) | 支持 |
-| 宝塔 / aaPanel，或任意 Docker 主机 | `deploy.sh` 与 `compose.baota.yml`（内置 PostgreSQL）或 `compose.baota-host.yml`（本机或云 PostgreSQL，host 网络） | [baota.md](baota.md)、[deploy-script.md](deploy-script.md) | 支持 |
-| Railway | 控制台镜像与 Railway PostgreSQL 18；网页控制台，可选 Railway CLI | [railway.md](railway.md) | 支持 |
-| Fly.io | 控制台镜像与外部 PostgreSQL 18；flyctl 部署，Dashboard 管理 secret、IP、证书与日志 | [fly.md](fly.md) | 支持 |
-| bunny.net Magic Containers | 控制台镜像与外部 PostgreSQL 18；CDN 端点承载 Web，Anycast IP 承载节点通道；Dashboard，可选 bunny CLI | [bunny.md](bunny.md) | 支持 |
-| Render | `render.yaml` 一键创建控制台与 Render Postgres 18，或 Dashboard 手动创建；节点经 WebSocket 入口连接（edgeweir-node 0.2.0 及以上） | [render.md](render.md) | 支持 |
-| Zeabur | `zeabur.yaml` 模板一键创建控制台与 PostgreSQL 18，或 Dashboard 手动创建；运行在 Zeabur Server，节点经 WebSocket 入口连接（edgeweir-node 0.2.0 及以上），可改为 TCP 端口转发直连 | [zeabur.md](zeabur.md) | 支持 |
+| Docker Compose | `compose.yml`：控制台与内置 PostgreSQL 18；可选 ClickHouse（`analytics` profile） | 8443 直连；nginx `stream` 四层透传；WebSocket 入口 | [Docker Compose](docker.md) |
+| docker run | 专用 Docker 网络上的控制台与 PostgreSQL 容器 | 8443 直连；nginx `stream` 四层透传；WebSocket 入口 | [Docker Compose：不用 Compose：单独的容器](docker.md#不用-compose单独的容器) |
+| 宝塔 / aaPanel，或任意 Docker 主机 | `deploy.sh` 与 `compose.baota.yml`（内置 PostgreSQL，Docker 网桥）或 `compose.baota-host.yml`（本机或云 PostgreSQL，host 网络） | 8443 直连；面板 nginx `stream` 四层透传 | [宝塔面板 / aaPanel](baota.md)、[deploy.sh 参考](deploy-script.md) |
+| Railway | 控制台镜像与 Railway PostgreSQL 18；网页控制台，可选 Railway CLI | 四层透传：Railway TCP Proxy → 容器 8443 | [Railway](railway.md) |
+| Fly.io | 控制台镜像与外部 PostgreSQL 18；`fly.toml` 与 flyctl 部署，Dashboard 管理 secret、证书与日志 | 四层透传：Fly Proxy 在独享 IPv4 / IPv6 的 8443 按 TCP 转发 | [Fly.io](fly.md) |
+| bunny.net Magic Containers | 控制台镜像与外部 PostgreSQL 18；CDN 端点承载 Web；Dashboard，可选 bunny CLI | 四层透传：Anycast IPv4 的 8443 → 容器 8443 | [bunny.net Magic Containers](bunny.md) |
+| Render | `render.yaml` Blueprint 一键创建控制台与 Render Postgres 18，或 Dashboard 手动创建 | WebSocket 入口 | [Render](render.md) |
+| Zeabur | `zeabur.yaml` 模板（`5MQJR2`）一键创建控制台与 PostgreSQL 18，或 Dashboard 手动创建；运行在 Zeabur Server | WebSocket 入口（默认）；四层透传：TCP 端口转发 → 容器 8443 | [Zeabur](zeabur.md) |
+
+### 节点通道接入方式
+
+| 方式 | 节点通道地址 | 条件 |
+| --- | --- | --- |
+| 8443 直连 | `https://<主机>:8443` | 8443/TCP 公网可达，防火墙与安全组放行 |
+| 四层透传 | `https://<代理主机>:<端口>` | 代理按 TCP 转发，不终结 TLS：nginx `stream`、平台 TCP 代理；见 [节点通道四层透传](networking.md#节点通道四层透传) |
+| WebSocket 入口 | `wss://<EDGEWEIR_PUBLIC_URL 的主机[:端口]>` | Web 端口的 HTTP 入口转发 WebSocket 升级；edgeweir-node 0.2.0 及以上；见 [节点通道的 WebSocket 入口](networking.md#节点通道的-websocket-入口) |
+
+三种方式中节点通道的 TLS 均由控制台终结，注册后强制 mTLS。地址在 **系统设置** 的「节点通道」中修改，见 [节点通道地址与证书](networking.md#节点通道地址与证书)。
 
 ### 平台条件
 
@@ -66,10 +86,11 @@ worker 定时任务：
 | 周期 | 任务 |
 | --- | --- |
 | 每 10 秒 | 探针判定的地址可达性与智能调度规则求值（同一时间只有一个进程） |
-| 每分钟 | 告警检查；DNS 同步；流量统计与访问日志汇总、节点升级超时处理；证书签发与续期 |
-| 每小时 | 清理旧配置版本；过期未送达的刷新预热任务 |
+| 每分钟 | 告警检查；自动缓解求值；配置金丝雀推进；DNS 同步；流量统计、用量保护、访问日志汇总与节点升级超时处理；证书签发与续期 |
+| 每 10 分钟 | 删除过期封禁；删除超出保留期或条数上限的节点日志 |
 | 每 30 分钟 | 删除过期或使用超过 7 天的注册 token |
-| 启动时 | 升级改变了配置的编译结果时，为每个集群重新发布一次配置（原因「升级后重新编译配置」） |
+| 每小时 | 轮换挑战密钥（满 1 天）与 TLS 会话票据密钥（满 12 小时）；到期前 30 天更换回源客户端证书；清理旧配置版本、安全事件、幂等键；过期未送达的刷新预热任务 |
+| 启动时 | 升级改变了配置的编译结果时，为每个集群重新发布一次配置（原因「升级后重新编译配置」）；标记节点无法加载的证书；关联 ACME 账户 |
 
 ### 扩展
 
@@ -93,6 +114,7 @@ worker 定时任务：
 | [Zeabur](zeabur.md) | 模板一键创建、Dashboard 手动创建与 Zeabur CLI |
 | [端口、反向代理与可信代理](networking.md) | 3000 与 8443、nginx 示例、节点通道的 WebSocket 入口、`EDGEWEIR_TRUSTED_PROXIES` |
 | [接入节点](nodes.md) | 安装命令、`install.sh` 校验、区域探针、下载镜像 |
-| [版本、升级与回滚](upgrade.md) | 镜像 tag、固定版本、升级、回滚、签名校验 |
+| [版本与升级](upgrade.md) | 版本与渠道、固定版本、签名校验、升级步骤、节点兼容 |
+| [降级](downgrade.md) | 回退到较早版本 |
 | [备份与恢复](backup.md) | 数据库与主密钥备份、恢复验收 |
 | [环境变量](../reference/environment.md) | 全部变量与默认值 |

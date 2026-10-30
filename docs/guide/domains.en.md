@@ -1,6 +1,6 @@
 # Domains and unknown hosts
 
-The four forms of site domains, internationalized domain names, how unknown hosts and requests by node IP are handled, scan protection, and CNAME prefixes.
+The Domains tab, domain forms and precedence, internationalized names, DNS checks, unknown hosts and node IP access, scan protection, CNAME prefixes.
 
 ## Concepts
 
@@ -15,6 +15,63 @@ The four forms of site domains, internationalized domain names, how unknown host
 | Node IP access | A request whose Host is an IP address (`203.0.113.5`, `[2001:db8::1]`) or empty. |
 | Default site | An enabled site of the cluster that unknown hosts or node IP access can be handed to. |
 | CNAME prefix | The first label of the CNAME target `<prefix>.<cluster domain>` of a site or L4 app. |
+| Edge addresses | The primary scheduling addresses of the cluster's online active nodes (configured scheduling addresses, else the public addresses the nodes report): the addresses the domains' A / AAAA records should point to. |
+| Pointing state | How the console's lookup of a site domain compares with the addresses of the cluster's nodes, see [pointing states](#pointing-states). |
+
+## The Domains tab
+
+Page: **Sites → (site) → Domains** (`/sites/<site ID>?tab=domains`), three cards from top to bottom:
+
+| Card | Content |
+| --- | --- |
+| **CNAME target** or **Edge addresses** | **CNAME target** when the cluster has [DNS steering](dns.en.md), else **Edge addresses**; below it the [pointing state](#pointing-states) of every domain, see [CNAME target and edge addresses](#cname-target-and-edge-addresses) |
+| **Domains** | The site's domain list and the input to add domains |
+| **Ports** | The HTTP and HTTPS listener ports the site is bound to, see [site ports](https.en.md#site-ports) |
+
+### Editing domains
+
+1. In the **Domains** card, type one or more domains into the input (separated by spaces or commas; commas inside a pattern do not separate) and press Enter or click **Add domain** to add them to the list. Forms: [domain forms](#domain-forms).
+2. Click the delete button (**Remove**) next to a domain to take it off the list; the last domain cannot be removed.
+3. Click **Save**. Domains still in the input and not added yet are saved too.
+
+- Saving is `PATCH /api/v1/sites/{id}` (`domains` replaced as a whole): the cluster publishes a new configuration revision (reason "Site {site} updated") and the audit entry "Site updated" is written; the notice "Saved" follows the nodes, see [site enabling](clusters.en.md#site-enabling).
+- The browser checks the form before adding a domain to the list and shows "Invalid domain: …" for a malformed one. A domain the list already holds (compared in the stored form: Unicode and Punycode count as the same) is not added again.
+- On a site with a certificate, new domains must be covered by one of the site's certificates. When the first certificate is one the console requested with automatic renewal on, it takes the new domains and is reissued ("Certificate … is being reissued for the new domains"); otherwise saving fails with "Certificate domains do not match the site or DNS zone: …" (`CERTIFICATE_DOMAIN_MISMATCH`). See [adding domains to an HTTPS site](https.en.md#adding-domains-to-an-https-site).
+- Removed domains also leave the HTTPS **Domains not redirected**.
+
+### CNAME target and edge addresses
+
+| State | Card | Content |
+| --- | --- | --- |
+| The cluster has a DNS binding (Automatic or Manual mode) | **CNAME target** | `<CNAME prefix>.<cluster domain>` with a copy button; a status badge (table below); with resolution lines in the binding, one row per line: the line name and its target (`<line name>.<CNAME prefix>.<cluster domain>` with **Keep per-site line targets**, else `<line name>.<cluster domain>`); **Regenerate**, **Customize** and the old names in their transition, see [CNAME prefixes](#cname-prefixes) |
+| The cluster has no DNS binding | **Edge addresses** | The cluster's edge addresses, each marked `A` or `AAAA`, with copy buttons. "No public address" when online nodes report no public address, "No online nodes" when no node is online |
+
+| **CNAME target** badge | Condition |
+| --- | --- |
+| **Published** | Automatic mode; the cluster's latest DNS revision is applied at the DNS provider and holds the site's CNAME record |
+| **No healthy nodes** | Automatic mode, published, but the cluster's all-lines record holds no A / AAAA record (every node removed by health checks, see [health removal and repair](dns.en.md#health-removal-and-repair)) |
+| **Pending** | Automatic mode; the DNS revision is not applied yet, or [mass removal protection](dns.en.md#mass-removal-protection) holds the CNAME record back |
+| **Manual** | Manual mode: the console writes no records; create the records listed on the **DNS** tab of **Clusters & nodes**, see [manual mode](dns.en.md#manual-mode) |
+
+- **CNAME target** refreshes every 15 seconds and the pointing states are checked every 30 seconds; **Check again** at the card's top right checks both at once.
+- In the **Edge addresses** card each checkable domain also gets a command that bypasses DNS and asks the first edge address directly, for example `curl -sI --resolve www.example.com:443:203.0.113.5 https://www.example.com/`. It uses 443 and `https` when the site's certificate covers the domain, else 80 and `http`; a wildcard domain uses the fixed name `edgeweir-check.<domain>` below it.
+
+### Pointing states
+
+The console looks up the A and AAAA records of every domain with the system DNS resolvers of its host (3 seconds a try, 2 tries) when asked, and compares them with the addresses of the cluster's active nodes (configured scheduling addresses or reported public addresses, backup addresses and offline nodes included):
+
+| State | Meaning | Counted in **DNS pointed** |
+| --- | --- | --- |
+| **Points here** | Every address it resolves to belongs to an active node of the cluster | Yes (pointed) |
+| **Points elsewhere** | At least one address belongs to no active node of the cluster (say it still points to the origin or a former CDN) | Yes (not pointed) |
+| **Not resolved** | No A or AAAA record (a name that does not exist included) | Yes (not pointed) |
+| **Not checked** | The lookup failed (a timeout or the like), or no node address of the cluster is known | Yes (not pointed, not listed as failing) |
+| **Not checkable** | A `.` suffix or pattern domain: it names no single host | No |
+
+- A wildcard domain `*.example.com` is looked up as the fixed name `edgeweir-check.example.com`.
+- Behind a CNAME, the addresses the chain finally resolves to must belong to the cluster's nodes as well.
+- A resolver's cached answer (also "no such name") holds until its TTL ends: right after a DNS change **Check again** may still show the old result.
+- Pointing states are advisory: they do not decide whether nodes serve a domain.
 
 ## Domain forms
 
@@ -25,7 +82,7 @@ The four forms of site domains, internationalized domain names, how unknown host
 | `.` | `.example.com` | `img.example.com`, `a.img.example.com` | `example.com` |
 | `~pattern` | `~(www\|m)\.example\.com` | `www.example.com`, `m.example.com` | `wwwx.example.com`, `www.example.com.evil` |
 
-- In the input of the site's **Domains** tab, enter one per line or separate them with spaces or commas (commas inside a pattern do not separate), click **Add domain**, then **Save**. The same applies when creating a site.
+- Domains are entered on the site's **Domains** tab (see [editing domains](#editing-domains)) or in the **New site** dialog; when creating a site, one per line or separated by spaces or commas (commas inside a pattern do not separate).
 - Host names are case-insensitive and stored in lowercase; a trailing `.`, a port, and the scheme and path of a pasted URL are removed.
 - A site has 1–50 domains, at most 10 of them patterns. A name in one form belongs to one site only (`*.a.com` and `.a.com` are different forms and may belong to different sites); a taken one shows "Domain already in use: …" (`DOMAIN_IN_USE`).
 - In the list, wildcard, suffix and pattern domains carry the badges **Wildcard**, **All subdomains** and **Pattern**.
@@ -73,7 +130,7 @@ Purges find sites by Host as nodes do: among each cluster's enabled sites, with 
 | HTTP-01 | Answered for exact domains only: hosts matched by a suffix or pattern cannot be issued for by HTTP-01 |
 | HTTPS | Handshakes complete only for host names the certificate covers (the same name, or `*.` one label up); other names abort the handshake |
 | Bulk redirects | A source's host must be an exact domain or one label below a `*.` domain; hosts only a suffix or pattern matches are refused with `BULK_REDIRECT_HOST_UNKNOWN` |
-| HTTPS redirect | **Excluded domains** lists exact and `*.` domains only; Force HTTPS does not redirect suffix or pattern hosts the certificate does not name (their handshake would fail) |
+| HTTPS redirect | **Domains not redirected** lists exact and `*.` domains only; Force HTTPS does not redirect suffix or pattern hosts the certificate does not name (their handshake would fail) |
 | Ports | A site not bound to the port a request arrived on handles it as an unknown host. In a cluster with suffix or pattern domains or a default site, such a request gets the server-level settings (HTTP/2, compression, ciphers) of the default site (when unknown hosts are handed to it and it listens on that port) or the node's defaults; otherwise it may get those of another site on that port whose `*.` domain matches the host |
 | Purge paths | A path alone expands to URLs on the exact domains only |
 
@@ -118,7 +175,7 @@ Purges find sites by Host as nodes do: among each cluster's enabled sites, with 
 
 ## CNAME prefixes
 
-Once the cluster has [DNS scheduling](dns-and-alerts.en.md), the CNAME target of a site or L4 app is `<CNAME prefix>.<cluster domain>`.
+Once the cluster has [DNS steering](dns.en.md), the CNAME target of a site or L4 app is `<CNAME prefix>.<cluster domain>`.
 
 | Object | Prefix |
 | --- | --- |
@@ -128,7 +185,7 @@ Once the cluster has [DNS scheduling](dns-and-alerts.en.md), the CNAME target of
 ### Regenerate and customize
 
 1. Open the **CNAME target** card on the site's **Domains** tab, or **CNAME target** on the L4 app's page.
-2. Click **Regenerate** and confirm to get a new random prefix, or click **Customize**, fill in **CNAME prefix** and click **Save**.
+2. Click **Regenerate** and confirm ("Regenerate the CNAME prefix?", "The old name keeps resolving for 24 hours") to get a new random prefix, or click **Customize**, fill in **CNAME prefix** and click **Save**.
 3. The console shows "CNAME prefix changed". In Automatic mode it publishes a DNS revision of the cluster at once (reason "CNAME prefix of … changed"); in Manual mode it writes no records: create the new name from the records the DNS tab lists.
 4. Point the CNAME records of the domains at the new target. The old name is shown struck through with "Resolves until …".
 
@@ -137,7 +194,7 @@ Once the cluster has [DNS scheduling](dns-and-alerts.en.md), the CNAME target of
 | Format | 1–30 lowercase letters, digits or `-`, not starting or ending with `-` (uppercase is lowered) |
 | Unique | Unique across all sites and L4 apps; an old prefix of another object still in its transition is taken too |
 | Reserved | `all`, `all-<digits>`, and every all-lines record name and line name of the clusters' DNS bindings |
-| Conflict | `CNAME_PREFIX_CONFLICT` ("CNAME prefix … is taken or reserved"); a malformed prefix is a validation error |
+| Conflict | `CNAME_PREFIX_CONFLICT` ("CNAME prefix … is taken or reserved"); a malformed prefix shows "1–30 lowercase letters, digits or -, not starting or ending with -" under the input, and the API returns a 400 validation error; a UUID is accepted only as the object's own prefix from before the upgrade (its current prefix or an old one in its transition), any other UUID is `CNAME_PREFIX_INVALID` ("Invalid CNAME prefix …") |
 | Records already in the zone | In Automatic mode a custom prefix whose `<prefix>.<cluster domain>` (with **Keep per-site line targets** also `<line name>.<prefix>.<cluster domain>`) already holds a record in the DNS provider's zone that the cluster does not manage is `CNAME_PREFIX_CONFLICT` too; not checked when the zone cannot be read within 15 seconds |
 | Transition | The old prefix keeps resolving for 24 hours: the DNS plan keeps both CNAMEs (and the old name's line targets with **Keep per-site line targets**); afterwards the per-minute DNS job deletes the old name, and in Automatic mode publishes a DNS revision (reason "Replaced CNAME prefixes expired"); in Manual mode delete the old record yourself |
 | Names never published | In Automatic mode a prefix never written to the DNS provider (say the zone could not be read when it was saved, and syncing then failed on a record already there) is not kept when replaced: it leaves the plan at once |
@@ -164,21 +221,36 @@ While an active node of the cluster lacks `domains-v2`, the **Domains** tab and 
 
 | Operation | Method and path |
 | --- | --- |
+| Change a site's domains | `PATCH /api/v1/sites/{id}` (`{"domains": ["a.com", "*.a.com"]}`, replaced as a whole) |
+| Read the CNAME target | `GET /api/v1/sites/{siteId}/cname` (`target`, `mode`, `published`, `healthy`, `lines`, `retired`; `target` is `null` without a DNS binding) |
+| Launch check (edge addresses, pointing states, certificate coverage) | `GET /api/v1/sites/{id}/launch` |
+| Whether nodes support suffix and pattern domains | `GET /api/v1/sites/{id}/features` (`domainsV2`) |
 | Read the unknown host settings | `GET /api/v1/clusters/{clusterId}/unknown-hosts` |
 | Save the unknown host settings | `PUT /api/v1/clusters/{clusterId}/unknown-hosts` |
-| Site CNAME prefix changed | `PUT /api/v1/sites/{id}/cname-prefix` (`{"prefix": "shop"}`; without `prefix` a new random one) |
-| L4 app CNAME prefix changed | `PUT /api/v1/l4-apps/{id}/cname-prefix` |
+| Change a site's CNAME prefix | `PUT /api/v1/sites/{id}/cname-prefix` (`{"prefix": "shop"}`; without `prefix` a new random one) |
+| Change an L4 app's CNAME prefix | `PUT /api/v1/l4-apps/{id}/cname-prefix` |
 
-Fields: [API reference](../reference/api.en.md).
+Fields: [API reference](../reference/api/sites.en.md#sites). A read-only AccessKey can call `GET` only. Service accounts can call only `GET /sites/{siteId}/cname` and `GET /sites/{id}/launch` (`sites:read`).
 
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| Saving domains shows "Invalid domain: …" | A Unicode name UTS #46 refuses, or a pattern with uppercase letters, `"`, whitespace or a comma, more than two repeating quantifiers, branches multiplying to more than 16, or outside the syntax subset | Correct the name; write the letters of patterns in lowercase; enter several domains separately; use fewer `*` or `+` quantifiers and `\|` or `?` branches, or a suffix domain |
+| Saving domains shows "Invalid domain: …" (`DOMAIN_INVALID`) | A Unicode name UTS #46 refuses, or a pattern with uppercase letters, `"`, whitespace or a comma, more than two repeating quantifiers, branches multiplying to more than 16, or outside the syntax subset | Correct the name; write the letters of patterns in lowercase; enter several domains separately; use fewer `*` or `+` quantifiers and `\|` or `?` branches, or a suffix domain |
 | Force HTTPS does not redirect a suffix or pattern host | The site's certificate does not name the host | Use a certificate that names it |
 | `x.a.com` goes to another site | Another site has `x.a.com`, `*.a.com` or a longer suffix | Check the sites' domains against the [precedence](#precedence) |
 | HTTPS handshakes fail below a suffix domain | The certificate covers one level (`*.a.com`); deeper host names are not in it | Use a certificate covering the deeper host names that need HTTPS, or exact domains |
 | Unknown domains get no response at all | **Unknown domains** is **Close the connection (444)** | Switch to **Unknown host page (404)** |
 | A client suddenly gets 403 `ip-banned` | Scan protection banned the address | Lift it under **IP lists & bans → Bans**, or add the address to a platform allow list |
 | The old name stopped resolving after a prefix change | The 24-hour transition is over | Point the domains' CNAME records at the new target |
+| Saving domains shows "Domain already in use: …" (`DOMAIN_IN_USE`) | A name in that form already belongs to another site | Remove it from that site, or use another form (`*.a.com` and `.a.com` may belong to different sites) |
+| Saving domains shows "Certificate domains do not match the site or DNS zone: …" (`CERTIFICATE_DOMAIN_MISMATCH`) | The site's certificate does not cover the new domains and cannot grow by them (an uploaded certificate, automatic renewal off, a wildcard for an HTTP-01 certificate, a name outside a DNS-01 certificate's zone, or more than 100 names) | Upload or request a certificate covering the new domains first, see [adding domains to an HTTPS site](https.en.md#adding-domains-to-an-https-site) |
+| Saving suffix or pattern domains shows "Some nodes in the cluster do not support suffix and pattern domains" | An active node of the cluster lacks `domains-v2` | Upgrade the nodes, see [node upgrades](node-upgrades.en.md) |
+| A domain shows **Points elsewhere** | It still resolves to the origin, a former CDN or another address outside the cluster | Point its A / AAAA records at the **Edge addresses**, or its CNAME at the **CNAME target** |
+| A domain shows **Not resolved** | It has no A or AAAA record | Add the records; right after adding them, wait for resolver caches to expire and click **Check again** |
+| A domain shows **Not checked** | DNS lookups on the console's host time out or fail, or no node address of the cluster is known | Check DNS resolution on the console's host; make sure nodes are online and report public addresses, or configure scheduling addresses |
+| **CNAME target** stays **Pending** | The DNS revision could not be applied at the provider, or mass removal protection holds it back | See the DNS revisions on the **DNS** tab of **Clusters & nodes**, see [DNS revisions and rollback](dns.en.md#dns-revisions-and-rollback) |
+| **CNAME target** shows **No healthy nodes** | Every node of the cluster is removed by health checks | Check the nodes, see [health removal and repair](dns.en.md#health-removal-and-repair) |
+| **Edge addresses** shows "No public address" | Online nodes report no public address and have no scheduling addresses | Configure scheduling addresses for the nodes, see [scheduling addresses and backup IPs](scheduling.en.md#scheduling-addresses-and-backup-ips) |
+| Saving the unknown host settings shows "The default site must be an enabled site of this cluster" (`DEFAULT_SITE_INVALID`) | The default site is in another cluster or disabled | Choose an enabled site of this cluster |
+| Saving the unknown host settings shows "The default site has no certificate" (`DEFAULT_SITE_CERTIFICATE_REQUIRED`) | **Default site's certificate for unknown SNI** is on and the default site has no certificate | Give the default site a certificate first, or turn the switch off |

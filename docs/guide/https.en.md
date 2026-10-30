@@ -1,39 +1,78 @@
 # HTTPS and certificates
 
-Certificate upload, ACME requests and renewal, and a site's HTTPS, several certificates, client certificates, TLS session resumption, HTTP/2, HTTP/3, and compression settings.
+Uploads, ACME requests and renewal, DNS credentials and origin protection on the Certificates page; a site's HTTPS tab, compression, listener and site ports.
 
 ## Concepts
 
 | Term | Definition |
 | --- | --- |
-| Certificate | A certificate chain and private key. A site can select any certificate that covers all of its domains. |
+| Certificate | A certificate chain and private key. Every domain of a site must be covered by one of the site's certificates. |
 | ACME certificate | A certificate the console requests from Let's Encrypt, ZeroSSL, Google Trust Services or a custom ACME directory and renews automatically. |
 | ACME account | An account the console registered with a CA, one per directory, EAB key ID and email, shared by the certificates of that combination. |
-| DNS credential | A DNS provider credential that DNS-01 validation uses to write TXT records. Separate from the provider credentials of DNS steering. |
-| HTTPS settings | The certificates (up to 4), redirect, HSTS, TLS, HTTP/2, HTTP/3, and client certificate options on a site's **HTTPS** tab; compression is set in the **Compression** card of the **Cache** tab. |
+| DNS credential | A DNS provider credential that DNS-01 validation uses to write TXT records. Separate from the provider accounts of DNS steering. |
+| HTTPS settings | The certificates (up to 4), redirect, HSTS, TLS, HTTP/2, HTTP/3, OCSP stapling and client certificate options on a site's **HTTPS** tab; compression is set in the **Compression** card of the **Cache** tab and stored in the same group of fields. |
 | Client certificate | A certificate a visitor presents in the TLS handshake, issued by a CA the site trusts (mutual TLS). |
 | Listener ports | The ports nodes take HTTP and HTTPS traffic on: 80, 443 and the cluster's extra ports; a site chooses some of them in its **Ports** card. |
+| Origin protection | The Origin CA issues origin certificates only the nodes trust; the origin client CA issues the client certificates nodes present to origins. |
+
+## The Certificates page
+
+Page: **Certificates** (`/certificates`), sidebar group **Sites**. Tabs: **Certificates** (default), **Origin certificates** (`/certificates?tab=origin-ca`, see [Origin CA](#origin-ca)) and **Origin client** (`/certificates?tab=origin-client`, see [Origin client certificates](#origin-client-certificates)). `/certificates?request=true` (the command menu's request action) opens the **Request certificate** dialog.
+
+The **Certificates** tab's page actions are **Add DNS credential**, **Upload certificate** and **Request certificate**; below them come the certificate list, the **DNS credentials** card and the **ACME accounts** card. The list refreshes every 5 seconds; without certificates it shows **No certificates yet** and **Request certificate**.
+
+| Certificate row | Content |
+| --- | --- |
+| Name and status | See the table below |
+| Names | Every name of the certificate |
+| Reason | Why issuance failed or nodes cannot load it, see [Troubleshooting](#troubleshooting) |
+| Node reports | "{nodes} cannot load this certificate and refuse its TLS handshakes" or "{nodes} cannot load this certificate and still serve its earlier version", see [Upload a certificate](#upload-a-certificate) |
+| Validity | "Expires {date} · {N} days remaining"; once past, "Expired {date}" |
+| Renewal | **Automatic renewal enabled** or **Automatic renewal disabled**; when enabled also "Next renewal: {date}" |
+| **⋯** | **Renew now** (ACME certificates only, unavailable while **Pending** or **Issuing**) and **Delete** |
+
+The list footer shows "{count} total".
+
+| Status | Condition |
+| --- | --- |
+| Pending | An ACME certificate waits for background jobs to issue or renew it |
+| Issuing | Background jobs are issuing it |
+| Ready | Issued and not expired |
+| Issuance failed | The last issuance or renewal failed; an issued certificate stays in use |
+| Expired | Past its validity; a certificate being renewed keeps **Pending** or **Issuing** |
+| Unusable | An uploaded certificate with explicit curve parameters (nodes cannot load it), or a node reports it cannot load it and has no earlier version |
 
 ## Upload a certificate
 
 1. Open **Certificates** and click **Upload certificate**.
 2. Enter **Name**.
-3. In **Certificate chain (PEM)**, choose a file or paste the content: leaf certificate first, then the intermediates in order.
-4. In **Private key (PEM)**, choose a file or paste the content.
+3. In **Certificate chain (PEM)**, choose a file (`.pem`, `.crt`, `.cer`) or paste the content: leaf certificate first, then the intermediates in order.
+4. In **Private key (PEM)**, choose a file (`.pem`, `.key`) or paste the content.
 5. Click **Upload certificate**.
-6. Verify: the certificate card shows **Ready** and "Expires … · … days remaining".
+6. Verify: the certificate row shows **Ready** and "Expires … · … days remaining".
 
 | Requirement | Value |
 | --- | --- |
+| Name | 1–100 characters |
 | Chain | 1–10 certificates, up to 128 KiB; each signed by the next; certificates only: PEM with a private key in it is refused ("The chain may contain only certificates; put the private key in its own field") |
 | Leaf | Not a CA certificate, has DNS SANs, currently valid |
 | Key type | The leaf's key is RSA (2048 bits or more) or ECDSA P-256, P-384 or P-521; other curves (secp256k1, Brainpool, SM2, P-224), Ed25519, Ed448, ML-DSA, RSA-PSS and DSA are refused |
-| Private key | Matches the leaf, up to 32 KiB |
+| Private key | Matches the leaf, not encrypted, up to 32 KiB |
 | EC keys | Certificates and private key use a named curve (the curve's OID); explicit curve parameters are refused |
+| Origin CA | Certificates of the Origin CA are refused ("Origin CA certificates are for origins only") |
 
-Only the re-encoded certificates and the PKCS #8 private key are stored; any other text in the pasted content is not. Uploaded certificates do not renew automatically (**Automatic renewal disabled**); before expiry, upload a new certificate and select it on the sites. An expired certificate's card shows **Expired** and "Expired …".
+Only the re-encoded certificates and the PKCS #8 private key are stored; any other text in the pasted content is not. An upload is audited as `certificate.upload`. Uploaded certificates do not renew automatically (**Automatic renewal disabled**); before expiry, upload a new certificate and select it on the sites.
 
-Nodes cannot load certificates with explicit curve parameters uploaded earlier either. Nodes 1.1.0 and later skip a certificate they cannot load and apply the rest of the revision: a node that still holds the certificate's previous version keeps serving it, otherwise it refuses the TLS handshakes that need it, never answering with another certificate; on earlier nodes no node of the cluster applies the revision. Once nodes report it, the certificate's card shows "{nodes} cannot load this certificate and still serve its earlier version" or "… and refuse its TLS handshakes" (the latter with status **Unusable**), the node's card shows "N certificates not loaded", and the alert "A node cannot load a certificate" fires. A background job checks the uploaded certificates at every start: such a certificate's card shows **Unusable** with the reason, and the audit log records "Certificate marked unloadable" with the sites that use it. Sites can no longer select it; a site that uses it is not changed automatically: upload a named-curve certificate (see [Troubleshooting](#troubleshooting)), select it on the site's **HTTPS** tab and save, or choose **HTTP only**, then delete the old certificate.
+Nodes cannot load certificates with explicit curve parameters uploaded earlier either:
+
+| Item | Behavior |
+| --- | --- |
+| Background check | A background job checks the uploaded certificates at every start: such a certificate shows **Unusable** with the reason, and the audit log records "Certificate marked unloadable" (`certificate.unloadable`) with the sites and L4 apps that use it |
+| Sites | Sites and the **Existing certificate** list no longer offer it; a site that uses it is not changed automatically, and saving its **HTTPS** tab answers with the same error |
+| Nodes 1.1.0 and later | Skip a certificate they cannot load and apply the rest of the revision: a node that still holds the certificate's previous version keeps serving it, otherwise it refuses the TLS handshakes that need it, never answering with another certificate |
+| Earlier nodes | No node of the cluster applies the revision |
+| Reports | Once nodes report it, the certificate row shows the node report (status **Unusable** when handshakes are refused), the node shows "Certificates not loaded: N", and the alert "A node cannot load a certificate" fires |
+| Fix | Upload a named-curve certificate (see [Troubleshooting](#troubleshooting)), select it on those sites' **HTTPS** tab and save, or choose **HTTP only**, then delete the old certificate |
 
 ## Add a DNS credential
 
@@ -42,24 +81,31 @@ DNS-01 validation needs a credential first.
 1. Open **Certificates** and click **Add DNS credential**.
 2. Enter **Name**, select **DNS provider**, and fill in the credential fields the form shows.
 3. For providers that can list zones, click **List zones** and pick the **Zone**; otherwise type the **Zone**.
-4. Click **Test connection** and check that **Connected** appears.
+4. Click **Test connection** and check that "Connected: N records in the zone" appears.
 5. Click **Create**. Saving first runs the same test as **Test connection**; when it fails, the dialog shows the error and the button becomes **Save anyway**.
 6. Verify: the credential appears in the **DNS credentials** card with its zone and provider.
 
-The fields and least permissions of every provider are in [Providers and credentials](dns-and-alerts.en.md#providers-and-credentials); DNS steering uses the same provider catalog. Credentials are envelope-encrypted with the master key and are write-only; a click on the credential's row opens the edit dialog, which renames the credential or rotates the secrets with **Replace credentials**; new secrets are tested before saving too, a rename alone is not, and after a failed test changing any field makes the next save test again. After a rotation, certificates using the credential that show **Issuance failed** and TXT records still to clean up are retried at once.
+| Field | Values |
+| --- | --- |
+| Name | 1–100 characters |
+| DNS provider | A provider of the provider catalog, see [Providers and credentials](dns.en.md#providers-and-credentials) |
+| Credential fields | 1–10 fields, each up to 16384 characters; fields and least permissions in [Providers and credentials](dns.en.md#providers-and-credentials) |
+| Zone | A domain, not a wildcard; certificate names must be the zone itself or names below it |
+
+Credentials are envelope-encrypted with the master key and are write-only. A click on the credential's row opens the **Edit** dialog: rename it, or turn on **Replace credentials** to rotate the secrets; provider and zone cannot change. New secrets are tested before saving too; a rename alone is not; after a failed test, changing any field makes the next save test again. After a rotation, certificates using the credential that show **Issuance failed** and TXT records still to clean up are retried at once. Audit: `dns_credential.create`, `dns_credential.update`, `dns_credential.delete`.
 
 ## Request an ACME certificate
 
 Prerequisites:
 
-- HTTP-01: every certificate name is a domain of a site (not a wildcard), resolves to the nodes, and port 80 on the nodes is reachable from the internet; the clusters serving the names have online nodes, all of them supporting `http01-v1`.
+- HTTP-01: every certificate name is an exact domain of a site (not a wildcard) and resolves to the nodes of the cluster serving that site, and port 80 on the nodes is reachable from the internet; that cluster has online nodes, all of them supporting `http01-v1`.
 - DNS-01: a DNS credential exists whose zone covers every certificate name; the names need not be on a site.
 
 1. Open **Certificates** and click **Request certificate**.
 2. Enter **Name**, **Domains**, and **Account email**.
 3. Select **Certificate authority**, **Key type**, and **Validation method**. For DNS-01, select the **DNS credentials** entry; for ZeroSSL or Google Trust Services, enter **EAB key ID** and **EAB HMAC key**.
 4. Click **Request certificate**.
-5. Verify: the certificate card moves through **Pending**, **Issuing**, and **Ready**, and shows **Automatic renewal enabled** and "Next renewal: …".
+5. Verify: the certificate row moves through **Pending**, **Issuing**, and **Ready**, and shows **Automatic renewal enabled** and "Next renewal: …".
 
 ### Request fields
 
@@ -70,12 +116,12 @@ Prerequisites:
 | Account email | Email address | None | ACME account contact |
 | Certificate authority | Let's Encrypt / ZeroSSL / Google Trust Services / Custom ACME directory | Let's Encrypt; the custom ACME directory while its URL comes from `EDGEWEIR_ACME_DIRECTORY` only | The issuing CA, see [Certificate authorities](#certificate-authorities); **Custom ACME directory** appears once it is configured in [system settings](system.en.md#certificate-authorities), and the form then shows its URL |
 | Key type | ECDSA P-256 / RSA 2048 | ECDSA P-256 | The type of the certificate's private key, kept on renewal. To serve old RSA-only clients too, request an RSA certificate as well and add it to the site, see [Several certificates](#several-certificates) |
-| Validation method | HTTP-01 / DNS-01 | HTTP-01 | Domain control validation; wildcards require DNS-01, and with HTTP-01 the form shows "Wildcards need DNS-01" under **Domains** |
-| DNS credentials | A DNS credential that has been added | The first credential | Account DNS-01 writes TXT records with; one zone per certificate |
+| Validation method | HTTP-01 / DNS-01 | HTTP-01 | Domain control validation; wildcards require DNS-01, and with HTTP-01 the form shows "Wildcards need DNS-01" under **Domains** and does not submit |
+| DNS credentials | A DNS credential that has been added | The first by name | DNS-01 only: the credential TXT records are written with; one zone per certificate |
 | Skip the DNS check | On / off | Off | HTTP-01 only: do not check that the names resolve to the nodes (at the request and before each issuance), for example with a load balancer in front of the nodes |
-| EAB key ID / EAB HMAC key | EAB credentials from the CA | None | Required for ZeroSSL and Google Trust Services, both or neither; for the custom directory, empty fields use the system settings' EAB (placeholder "Leave empty to use the system EAB"). Stored encrypted |
+| EAB key ID / EAB HMAC key | EAB credentials from the CA, up to 256 / 1024 characters | None | Not shown for Let's Encrypt; required for ZeroSSL and Google Trust Services; both or neither; for the custom directory, empty fields use the system settings' EAB (placeholder "Leave empty to use the system EAB"). Stored encrypted |
 
-Certificates with the same ACME directory, EAB key ID, and account email share one ACME account: CAs limit the accounts an IP address may register (Let's Encrypt: 10 in 3 hours). Accounts are listed in the **ACME accounts** card, see [ACME accounts](#acme-accounts).
+A request is audited as `certificate.request`. Certificates with the same ACME directory, EAB key ID, and account email share one ACME account: CAs limit the accounts an IP address may register (Let's Encrypt: 10 in 3 hours). Accounts are listed in the **ACME accounts** card, see [ACME accounts](#acme-accounts).
 
 ### Certificate authorities
 
@@ -84,56 +130,63 @@ Certificates with the same ACME directory, EAB key ID, and account email share o
 | Let's Encrypt | `https://acme-v02.api.letsencrypt.org/directory` | Not needed | `letsencrypt.org` |
 | ZeroSSL | `https://acme.zerossl.com/v2/DV90` | Required (generated in the ZeroSSL dashboard) | `sectigo.com`, `trust-provider.com`, `usertrust.com` |
 | Google Trust Services | `https://dv.acme-v02.api.pki.goog/directory` | Required (`gcloud publicca external-account-keys create`; use within 7 days, registers once) | `pki.goog` |
-| Custom ACME directory | The URL in **System settings → Certificate authorities**, or `EDGEWEIR_ACME_DIRECTORY` | When the directory requires it; empty request fields use the system settings' EAB | The names in the directory's `meta.caaIdentities`; without them CAA is not checked |
+| Custom ACME directory | The URL in **System settings → Certificate authorities**, or `EDGEWEIR_ACME_DIRECTORY` | When the directory requires it; empty request fields use the system settings' EAB | The names in the `meta.caaIdentities` of the directory saved in system settings; without them, or while the URL comes from the environment variable only, CAA is not checked |
 
 The custom directory's URL, EAB and CA certificates: [system settings](system.en.md#certificate-authorities); a value saved there wins over `EDGEWEIR_ACME_DIRECTORY` and `EDGEWEIR_ACME_CA_FILE`. An API request without a CA uses the custom directory while its URL comes from the environment variable only, Let's Encrypt otherwise: deployments that only used the environment variable behave the same after upgrading, and certificates issued that way are recorded as **Custom ACME directory** when background jobs start, so they renew from that directory. Once the custom directory's configuration is removed, certificates that chose it fail to renew ("No custom ACME directory is configured any more").
 
 ### ACME accounts
 
-The **ACME accounts** card of the **Certificates** page lists the accounts the console registered: email, CA, directory URL, EAB key ID, creation time and **Certificates using it**. An account no certificate uses can be deleted (confirm "Delete the ACME account {email}?"): only the account and key the console stores are deleted, the account is not deactivated at the CA. While certificates use it the delete button is disabled and the API answers "The ACME account is used by certificates: …". Deletion is audited as `acme_account.delete`. A later request with the same directory, EAB and email registers a new account.
+The **ACME accounts** card lists the accounts the console registered: email, CA, directory URL, **EAB key ID**, "Created …" and "Certificates using it: N"; without accounts it shows **No ACME accounts yet**. An account no certificate uses can be deleted (confirm "Delete the ACME account {email}?"): only the account and key the console stores are deleted, the account is not deactivated at the CA. While certificates use it the delete button is disabled and the API answers "The ACME account is used by certificates: …". Deletion is audited as `acme_account.delete`. A later request with the same directory, EAB and email registers a new account.
 
 ### Validation methods
 
 | Method | Behavior |
 | --- | --- |
-| HTTP-01 | Each name must be a non-wildcard domain of a site, or the request is refused ("Certificate domains do not match the site or DNS zone"): only the clusters serving a name answer its challenge. The console publishes all challenges of a certificate to those clusters at once (one revision per cluster, also when the site is disabled); every online node there must support `http01-v1` and apply it within 40 seconds before the CA is asked to validate, four names at a time. At the request and before each issuance the console resolves every name with the system's DNS (3 seconds a try, 2 tries): a name without A/AAAA records, or resolving to an address that is not one of the cluster's active nodes' (their configured scheduling addresses or reported public addresses), refuses the request ("These names do not resolve to the nodes: …") and fails the issuance without contacting the CA ("A domain does not resolve to the nodes"); lookups that time out and nodes without a known public address never stop it. Challenges are answered on port 80 without redirect or caching and expire after 10 minutes or when the issuance ends (other HTTP-01 tokens go to the origin, uncached and unchallenged, so that it can obtain certificates of its own); challenge revisions do not count toward the kept configuration revisions |
-| DNS-01 | Each name must be inside the DNS credential's zone (the zone itself or a name below it), or the request is refused. Writes TXT records at `_acme-challenge.<domain>` and waits up to 3 minutes for propagation. When issuance ends, times out, or the process is interrupted, the TXT values it wrote are deleted; a failed deletion is retried after 1 minute, doubling up to 6 hours, and a zone the provider no longer has counts as deleted |
+| HTTP-01 | Each name must be an exact domain of a site, or the request is refused ("Certificate domains do not match the site or DNS zone: …"): only the clusters serving a name answer its challenge. At the request the console checks, in this order: every online node of those clusters supports `http01-v1` ("Nodes do not support HTTP-01 validation yet: …"), the clusters have online nodes ("No online node can answer HTTP-01 in cluster …"), the names resolve to the nodes ("These names do not resolve to the nodes: …"). The console publishes all challenges of a certificate to those clusters at once (one revision per cluster, reason "ACME challenge updated", also when the site is disabled); every online node there must apply it within 40 seconds before the CA is asked to validate, four names at a time. At the request and before each issuance the console resolves every name with the system's DNS (3 seconds a try, 2 tries): a name without A/AAAA records, or resolving to an address that is not one of the cluster's active nodes' (their configured scheduling addresses or reported public addresses), refuses the request and fails the issuance without contacting the CA ("A domain does not resolve to the nodes"); lookups that time out and nodes without a known public address never stop it. Challenges are answered on port 80 without redirect or caching and expire after 10 minutes or when the issuance ends (other HTTP-01 tokens go to the origin, uncached and unchallenged, so that it can obtain certificates of its own); challenge revisions do not count toward the kept configuration revisions |
+| DNS-01 | Each name must be inside the DNS credential's zone (the zone itself or a name below it), or the request is refused ("Certificate domains do not match the site or DNS zone: …"). Writes TXT records at `_acme-challenge.<domain>` and waits up to 3 minutes for propagation. Only one issuance at a time writes records with the same credential. When issuance ends, times out, or the process is interrupted, the TXT values it wrote are deleted; a failed deletion is retried after 1 minute, doubling up to 6 hours, and a zone the provider no longer has counts as deleted |
 
 ### Renewal
 
 | Item | Behavior |
 | --- | --- |
-| Automatic renewal | On for certificates requested in the console |
-| Renewal time | The CA's ARI (ACME Renewal Information) window when offered; otherwise when two thirds of the certificate lifetime have passed; at the latest 1 minute before expiry. The card shows "Next renewal: …" |
-| Window changes | After issuance, the ARI window is read again at the CA's suggested interval (1–24 hours, 6 by default); when the window moves before the next renewal (for example, the CA is going to revoke certificates early), the renewal moves into the new window and the audit log records `certificate.renewal_rescheduled` |
+| Automatic renewal | On for certificates requested in the console; the API turns it off with `autoRenew: false` |
+| Renewal time | The CA's ARI (ACME Renewal Information) window when offered; otherwise when two thirds of the certificate lifetime have passed; at the latest 1 minute before expiry. The row shows "Next renewal: …" |
+| Window changes | After issuance, the ARI window is read again at the CA's suggested interval (1–24 hours, 6 by default; 1 hour after a failed read); when the window moves before the next renewal (for example, the CA is going to revoke certificates early), the renewal moves to a random time in the new window and the audit log records `certificate.renewal_rescheduled` |
 | Check interval | A background job checks due certificates every minute, up to 10 at a time: new requests and **Renew now** first, then by renewal time, three issuances at once; it needs a console process with `ROLE=worker` or `ROLE=all` |
-| Renewed names | An HTTP-01 renewal drops the names no site uses any more, as long as at least one name is left; every domain of a site that uses the certificate is kept, so the site stays covered. After a successful renewal the certificate's name list is updated. For a site's new domains see [Adding domains](#adding-domains-to-an-https-site) |
-| Effect | After issuance or renewal, a new revision is published for the clusters of the sites that use the certificate |
-| Failure | Status changes to **Issuance failed**, the card shows the reason, and the current certificate is kept; the next attempt waits a tenth of the certificate's remaining validity (10 minutes to 12 hours), 1 hour for a first issuance, see [Troubleshooting](#troubleshooting). An HTTP-01 certificate that failed because names did not resolve to the nodes ("A domain does not resolve to the nodes") has its names looked up again every 5 minutes and is retried as soon as they all point to the nodes |
-| Expiry | When renewals keep failing until the certificate expires, its status shows **Expired** and the card still shows the reason; while a retry runs the status is **Pending** or **Issuing** and the card shows "Expired …" |
-| Manual | **Renew now** under **⋯** on an ACME certificate's card, which runs at the next check; unavailable while **Issuing** |
+| Renewed names | An HTTP-01 renewal drops the names no site uses any more, as long as at least one name is left; every domain of a site that uses the certificate is kept, so the site stays covered. After a successful issuance the certificate's name list is updated. For a site's new domains see [Adding domains to an HTTPS site](#adding-domains-to-an-https-site) |
+| Effect | After issuance or renewal, the audit log records `certificate.issued` and a new revision is published for the clusters of the sites that use the certificate (reason "Certificate policy for {certificate} updated") |
+| Failure | Status changes to **Issuance failed**, the row shows the reason, and the current certificate is kept; the next attempt waits a tenth of the certificate's remaining validity (10 minutes to 12 hours), 1 hour for a first issuance, see [Troubleshooting](#troubleshooting). An HTTP-01 certificate that failed because names did not resolve to the nodes ("A domain does not resolve to the nodes") has its names looked up again every 5 minutes and is retried as soon as they all point to the nodes |
+| Expiry | When renewals keep failing until the certificate expires, its status shows **Expired** and the row still shows the reason |
+| Manual | **Renew now** under **⋯** sets the status to **Pending**, runs at the next check, and is audited as `certificate.renew` |
 | Interruption | **Issuing** for more than 10 minutes counts as interrupted and runs again at the next check; one issuance run is limited to 8 minutes |
 
 ### Deletion
 
-**Delete** sits under **⋯** on a certificate's card and at the end of a DNS credential's row, confirmed. Deleting a certificate used by sites returns "The certificate is used by sites: …" (up to 5 sites); while it is **Issuing**, "Certificate operation is already in progress". A certificate with DNS-01 TXT records still to clean up is deleted, and those records are no longer cleaned up: `leftDnsRecords` of the `certificate.delete` audit entry lists them for removal at the DNS provider. A DNS credential referenced by any certificate cannot be deleted ("The DNS credential is used by certificates: …").
+**Delete** sits under **⋯** at the end of a certificate row and of a DNS credential row, confirmed ("Delete {name}?").
+
+| Object | Rule |
+| --- | --- |
+| Certificate | Used by sites (first or further certificate): "The certificate is used by sites: …"; used by an L4 app's TLS termination: "The certificate is still used by L4 apps: …" (up to 5 each); while **Issuing**: "Certificate operation is already in progress". A certificate with DNS-01 TXT records still to clean up is deleted, and those records are no longer cleaned up: `leftDnsRecords` of the `certificate.delete` audit entry lists them for removal at the DNS provider |
+| DNS credential | Referenced by any certificate: "The DNS credential is used by certificates: …" (up to 5) |
 
 ## Enable HTTPS with one click
 
-While a site has no usable certificate, its **HTTPS** tab shows only **Enable HTTPS**.
+While a site has no certificate, or its first certificate is an unissued or expired upload, its **HTTPS** tab shows only the **HTTPS is off** card.
 
 1. Open **Sites**, select the site, and open the **HTTPS** tab.
-2. The console first checks whether a certificate can be issued; anything in the way is listed line by line and the button is unavailable. After fixing it, click **Check again**.
-3. Click **Enable HTTPS**.
-4. Verify: the tab shows **Requesting a certificate**; once issued it switches to the HTTPS settings, with the new certificate under **Certificates**. **Redirect HTTP to HTTPS** stays off; turn it on in the HTTPS settings when wanted.
+2. The console first checks whether a certificate can be issued; anything in the way is listed line by line and **Enable HTTPS** is unavailable. After fixing it, click **Check again**.
+3. When needed, click **Customize** to change **Certificate authority** or **Account email**, or to turn on **Skip the DNS check**.
+4. Click **Enable HTTPS**.
+5. Verify: the card title changes to **Requesting a certificate**; once issued the tab switches to the HTTPS settings, with the new certificate under **Certificates**. **Redirect HTTP to HTTPS** stays off; turn it on in the HTTPS settings when wanted.
 
 | Item | Value |
 | --- | --- |
-| Certificate name, names | The site's name; the site's exact and wildcard domains, `*.a.com` for a suffix domain `.a.com`, no names for pattern domains ([domains and unknown hosts](domains.en.md#limits-of-suffix-and-pattern-domains)) |
-| Validation | HTTP-01; DNS-01 with the first DNS credential whose zone covers every name when the site has a wildcard or suffix domain |
-| Account email | The email of the last ACME account or request, else the console account's email; editable under **Customize** |
-| Certificate authority | The default of **Request certificate**; another under **Customize** (ZeroSSL and Google Trust Services need EAB credentials) |
+| Certificate name, names | The site's name (first 100 characters); the site's exact and wildcard domains, `*.a.com` for a suffix domain `.a.com`, no names for pattern domains ([limits of suffix and pattern domains](domains.en.md#limits-of-suffix-and-pattern-domains)) |
+| Validation | HTTP-01; DNS-01 when the site has a wildcard or suffix domain, with the first DNS credential by name whose zone covers every name |
+| Account email | The email of the most recently registered ACME account, else of the last request, else the console account's email; editable under **Customize** |
+| Certificate authority | The default of **Request certificate**; another under **Customize** (ZeroSSL and Google Trust Services need EAB credentials; without them the button is unavailable) |
 | Key type | ECDSA P-256 |
+| Automatic renewal | On |
 | Once issued | The certificate is bound to the site (**Redirect HTTP to HTTPS** and the other settings stay as they are), the site's cluster is published, and the audit log records `site.https_update` (actor system); domains added to the site since the request are reissued right away. A site that has another usable certificate by then is left unchanged |
 
 | Check | Cause |
@@ -141,19 +194,19 @@ While a site has no usable certificate, its **HTTPS** tab shows only **Enable HT
 | "Cluster … has no online node" | HTTP-01: the site's cluster has no online active node |
 | "These nodes need an upgrade to answer HTTP-01: …" | HTTP-01: online nodes lack `http01-v1` |
 | "… has no DNS record yet", "… does not point to the nodes" | HTTP-01: the name has no A/AAAA record, or resolves to addresses that are not the cluster's nodes; nothing is reported when lookups time out or no node address is known. When the console resolves names differently from the CA (split-horizon DNS, a load balancer in front), turn on **Skip the DNS check** under **Customize**: these two no longer stop the request, and the issuance does not check them either |
-| "Wildcards need a DNS credential whose zone covers …" | DNS-01: there is no such DNS credential; click **Add DNS credential** |
+| "Wildcards need a DNS credential whose zone covers …" | DNS-01: there is no such DNS credential; **Add DNS credential** next to the line opens the add dialog |
 | "DNS credential …: …" | DNS-01: the credential's connection test failed |
 | "The site has only pattern domains: no name to issue for" | Every domain of the site is a pattern domain |
 | "CAA records of … do not allow …" | CAA records of the name or a parent domain do not allow the chosen CA (issuers: [Certificate authorities](#certificate-authorities)), `issuewild` and `validationmethods` included; not checked for a custom directory without `meta.caaIdentities` |
 
-While the certificate is issued, the tab refreshes its status every 3 seconds. A failure shows the classified reason (as on the certificate card) with **Retry** and **Cancel** (which deletes this certificate). When usable certificates already cover every domain of the site, the tab lists them under **Existing certificate**; **Use** selects one. When the site's ACME certificate is reissued or fails, the same status shows above the HTTPS settings.
+Check results are cached for 30 seconds. While the certificate is issued, the tab refreshes its status every 3 seconds. A failure shows the classified reason (as on the certificate row) with **Retry** and **Cancel** (which deletes this certificate after the confirmation "Delete {name}?"). When usable certificates already cover every domain of the site, the tab shows **Existing certificate**; **Use** selects one. While the site's ACME certificate is being issued or has failed, the same status, with **Retry**, shows above the HTTPS settings.
 
 ## Configure a site's HTTPS
 
 1. Open **Sites**, select the site, and open the **HTTPS** tab (for a site without a certificate see [Enable HTTPS with one click](#enable-https-with-one-click)).
-2. Select a certificate in **Certificates**. The list contains every issued, unexpired certificate nodes can load; **HTTP only** disables HTTPS. For more certificates click **Add certificate**, see [Several certificates](#several-certificates).
+2. Select a certificate in **Certificates**. The list contains every issued, unexpired certificate nodes can load, and the certificates the site already uses; **HTTP only** disables HTTPS. For more certificates click **Add certificate**, see [Several certificates](#several-certificates).
 3. Set **Minimum TLS version**, **Cipher profile**, **HSTS lifetime (seconds)**, and the switches.
-4. Click **Save**. The console shows **Saved** and publishes a new configuration revision.
+4. Click **Save**. The console shows **Saved**, publishes a new configuration revision for the site's cluster (reason "Certificate policy for {site} updated"), and audits `site.https_update`.
 5. Verify: after the node applies the revision:
 
    ```bash
@@ -162,19 +215,54 @@ While the certificate is issued, the tab refreshes its status every 3 seconds. A
 
    The response is `HTTP/2 200` (with HTTP/2 on); it contains `strict-transport-security` with HSTS on, and `alt-svc: h3=":443"; ma=86400` with HTTP/3 on.
 
-A configuration is in effect on a node only once the node reports the revision as applied.
+A configuration is in effect on a node only once the node reports the revision as applied. The form checks its fields before saving and shows "Check “{field}”" for an invalid one.
+
+### HTTPS fields
+
+| Field | Values | Default | Effect |
+| --- | --- | --- | --- |
+| Certificates | A usable certificate / HTTP only | HTTP only | The site's first certificate. Every domain of the site must be covered by one of the site's certificates; a wildcard site domain `*.example.com` requires the same `*.example.com` SAN. For domains added later see [Adding domains to an HTTPS site](#adding-domains-to-an-https-site) |
+| Certificate 2–4 | A usable certificate | None | Further certificates added with **Add certificate**, each once, see [Several certificates](#several-certificates) |
+| Minimum TLS version | TLS 1.2 / TLS 1.3 | TLS 1.2 | Lowest version accepted in the handshake |
+| Cipher profile | Modern / Compatible | Modern | TLS 1.2 cipher suites, see below |
+| HSTS lifetime (seconds) | 0–63072000 | 0 | Above 0, HTTPS responses carry `Strict-Transport-Security`; not editable without a certificate |
+| Redirect HTTP to HTTPS | On / off | Off | HTTP requests are redirected to `https://<Host><request URI>`, status and port as in [HTTPS redirect options](#https-redirect-options); unavailable without a certificate; ACME challenge paths are not redirected |
+| HTTP/2 | On / off | On | HTTPS connections for the site negotiate HTTP/2 |
+| HTTP/3 | On / off | Off | Serves QUIC on the UDP port of the same number as the site's HTTPS port and sends `Alt-Svc: h3=":<port>"; ma=86400`; unavailable with client certificates on |
+| HSTS for subdomains | On / off | Off | Adds `includeSubDomains` to HSTS |
+| HSTS preload | On / off | Off | Adds `preload` to HSTS |
+| OCSP stapling | On / off | Off | Staples an OCSP response in the handshake, see [OCSP stapling](#ocsp-stapling) |
+| Client certificates | Off / Optional / Required | Off | See [Client certificates](#client-certificates) |
+
+Selecting **HTTP only** turns off **Redirect HTTP to HTTPS**, resets the HSTS lifetime to 0, drops the further certificates and client certificates, and sets the redirect port back to 443.
+
+| Cipher profile | TLS 1.2 suites |
+| --- | --- |
+| Modern | `ECDHE-ECDSA-AES128-GCM-SHA256`, `ECDHE-RSA-AES128-GCM-SHA256`, `ECDHE-ECDSA-CHACHA20-POLY1305`, `ECDHE-RSA-CHACHA20-POLY1305` |
+| Compatible | The modern suites plus `ECDHE-ECDSA-AES256-GCM-SHA384` and `ECDHE-RSA-AES256-GCM-SHA384` |
+
+| Check on save | Error |
+| --- | --- |
+| Every certificate is issued and unexpired | "The certificate is not issued yet or has expired" |
+| Nodes can load every certificate | "The EC private key uses explicit curve parameters; convert it to a named curve", "A certificate's EC key uses explicit curve parameters; reissue it with a named-curve key" |
+| Every domain of the site is covered by one of the certificates (except domains the first ACME certificate is being reissued for) | "Certificate domains do not match the site or DNS zone: …" |
+| Client certificates are not on together with HTTP/3 | "Client certificates and HTTP/3 cannot be on together" |
+| The client CA is valid | "The client CA must be 1 to 10 current CA certificates in PEM" |
+| The redirect port is 443 or an HTTPS port of the site | "Redirect port {port} is not an HTTPS port of the site" |
+| Excluded domains are exact or wildcard domains of the site | "The site has no such domains: …" |
+| Without a certificate the site still has a usable port | "The site needs at least one usable port" |
 
 ### HTTPS redirect options
 
-With **Force HTTPS** on, the redirect options appear below the switches:
+With **Redirect HTTP to HTTPS** on, the redirect options appear below the switch:
 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
 | Redirect status | 301, 302, 303, 307, 308 | 301 | Status of the redirect |
-| Redirect port | 443 or an HTTPS port the site is bound to | 443 | Port of the target URL; with 443 the URL has no port ("Redirect port {port} is not an HTTPS port of the site") |
-| Domains not redirected | Exact and wildcard domains of the site, at most 50 | None | These domains are not redirected by **Force HTTPS**; a wildcard is written `*.example.com`, and an exact domain of the site is not covered by it. Hosts of suffix and pattern domains the certificate does not name are never redirected |
+| Redirect port | 443 or an HTTPS port the site is bound to | 443 | Port of the target URL; with 443 the URL has no port |
+| Domains not redirected | Exact and wildcard domains of the site, at most 50 | None | These domains are not redirected by **Redirect HTTP to HTTPS**; a wildcard is written `*.example.com`, and an exact domain of the site is not covered by it. Shown only when the site has more than one exact or wildcard domain. Hosts of suffix and pattern domains the certificate does not name are never redirected |
 
-A [config rule](rules.en.md)'s `forceHttps` still turns the redirect on or off per request: when a rule turns it on, the status and port above apply and excluded domains are redirected too. Removing the HTTPS port the redirect goes to is refused; choosing no certificate sets the redirect port back to 443, and removing a domain from the site also removes it from the excluded domains. Configurations with values other than the defaults need `edge-ports-v1`.
+A [config rule](rules.en.md)'s `forceHttps` still turns the redirect on or off per request: when a rule turns it on, the status and port above apply and excluded domains are redirected too. Removing the HTTPS port the redirect goes to is refused; removing a domain from the site also removes it from the excluded domains. Configurations with values other than the defaults need `edge-ports-v1`; while an active node of the cluster lacks it, the three options are unavailable with "Some nodes in the cluster do not support it".
 
 Verify:
 
@@ -184,44 +272,9 @@ curl -sI -H 'Host: www.example.com' http://<node IP>:8081/a
 
 The chosen status returns with `location: https://www.example.com:9443/a` (redirect port 9443).
 
-### Adding domains to an HTTPS site
-
-When new domains are saved on the site's **Domains** tab:
-
-| The site's certificate | Behavior |
-| --- | --- |
-| One of the site's certificates covers the new domains (including a wildcard `*.example.com` one label up) | Saved |
-| The first certificate was requested in the console with automatic renewal on | Saved; the certificate's names grow by the new domains and it is reissued right away ("Certificate … is being reissued for the new domains", audit `certificate.names_extended`). Until then the new domains are served over HTTP only: no TLS handshake, no HTTPS redirect, no HSTS, while the other domains keep the current certificate; once the new certificate is issued they get HTTPS too. While an active node of the cluster lacks `tls-pending-domains-v1`, the new domains take effect only once the new certificate is issued. HTTP-01 challenges are answered meanwhile. When the certificate is issuing, it is issued once more right after that attempt |
-| Uploaded, or automatic renewal off | Refused with "Certificate domains do not match the site or DNS zone: …", naming the uncovered domains |
-
-An HTTP-01 certificate cannot grow by wildcards, and a DNS-01 certificate only by names inside its DNS credential's zone; a certificate has at most 100 names. `.` suffix and pattern domains do not grow a certificate: nodes complete handshakes only for the host names it covers (the same name or `*.` one label up) and abort the others, see [limits of suffix and pattern domains](domains.en.md#limits-of-suffix-and-pattern-domains).
-
-### HTTPS fields
-
-| Field | Values | Default | Effect |
-| --- | --- | --- | --- |
-| Certificates | An unexpired certificate / HTTP only | HTTP only | The site's first certificate. Every domain of the site must be covered by one of the site's certificates; a wildcard site domain `*.example.com` requires the same `*.example.com` SAN. For domains added later see [Adding domains](#adding-domains-to-an-https-site) |
-| Certificate 2–4 | An unexpired certificate | None | Further certificates added with **Add certificate**, each once, see [Several certificates](#several-certificates) |
-| Minimum TLS version | TLS 1.2 / TLS 1.3 | TLS 1.2 | Lowest version accepted in the handshake |
-| Cipher profile | Modern / Compatible | Modern | TLS 1.2 cipher suites, see below |
-| HSTS lifetime (seconds) | 0–63072000 | 0 | Above 0, HTTPS responses carry `Strict-Transport-Security`; needs a certificate |
-| Redirect HTTP to HTTPS | On / off | Off | HTTP requests get a 301 to `https://<Host><request URI>` (port 443); needs a certificate; ACME challenge paths are not redirected |
-| HTTP/2 | On / off | On | HTTPS connections for the site negotiate HTTP/2 |
-| HTTP/3 | On / off | Off | Serves QUIC on UDP 443 and sends `Alt-Svc: h3=":443"; ma=86400` |
-| HSTS for subdomains | On / off | Off | Adds `includeSubDomains` to HSTS |
-| HSTS preload | On / off | Off | Adds `preload` to HSTS |
-| OCSP stapling | On / off | Off | Staples an OCSP response in the handshake |
-
-Selecting **HTTP only** turns off **Redirect HTTP to HTTPS**, resets the HSTS lifetime to 0, and drops the further certificates and client certificates.
-
-| Cipher profile | TLS 1.2 suites |
-| --- | --- |
-| Modern | `ECDHE-ECDSA-AES128-GCM-SHA256`, `ECDHE-RSA-AES128-GCM-SHA256`, `ECDHE-ECDSA-CHACHA20-POLY1305`, `ECDHE-RSA-CHACHA20-POLY1305` |
-| Compatible | The modern suites plus `ECDHE-ECDSA-AES256-GCM-SHA384` and `ECDHE-RSA-AES256-GCM-SHA384` |
-
 ### Several certificates
 
-A site has up to 4 certificates: **Certificates** is the first, **Add certificate** adds up to 3 more (**Certificate 2** … **Certificate 4**), and the remove button next to each drops it.
+A site has up to 4 certificates: **Certificates** is the first, **Add certificate** adds up to 3 more (**Certificate 2** … **Certificate 4**), and the **Remove certificate** button next to each drops it. **Add certificate** shows once a first certificate is selected and another usable certificate is left.
 
 | Item | Behavior |
 | --- | --- |
@@ -229,7 +282,7 @@ A site has up to 4 certificates: **Certificates** is the first, **Add certificat
 | Choice per handshake | Each handshake presents one: among the certificates covering the SNI, only key types the client can use count (ECDSA needs the scheme of the certificate's curve among its signature algorithms, and TLS 1.3 or an `ECDHE-ECDSA-*` suite of the profile; all of them when it can use none); of those an exact name wins over a wildcard, then ECDSA, then the site's order. Without a certificate covering the SNI, the first one |
 | ECDSA and RSA | With an ECDSA and an RSA certificate for the same names, modern clients get the ECDSA one and old RSA-only clients the RSA one |
 | OCSP stapling | Staples the chosen certificate's own OCSP response |
-| Adding domains | New domains only grow the first certificate (when the console requested it with automatic renewal), see [Adding domains](#adding-domains-to-an-https-site) |
+| Adding domains | New domains only grow the first certificate (when the console requested it with automatic renewal), see [Adding domains to an HTTPS site](#adding-domains-to-an-https-site) |
 | Deleting a certificate | Any of a site's certificates counts as used: deletion answers "The certificate is used by sites: …" |
 | Node capability | More than one certificate needs `multi-certificate-v1`; while an active node of the cluster lacks it, **Add certificate** is disabled with "Some nodes in the cluster do not support it" |
 
@@ -248,10 +301,12 @@ The first shows the certificate covering `a.example.com` (`256 bit` for ECDSA); 
 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
-| Client certificates | Off / Optional / Required | Off | Optional: the handshake asks for a certificate, requests without one or with one that fails verification go on and rules can read the outcome; Required: 403 without a verified certificate |
-| CA certificates (PEM) | 1–10 current CA certificates, at most 64 KiB | None | The CAs issuing client certificates; only the re-encoded certificates are stored |
+| Client certificates | Off / Optional / Required | Off | Optional: the handshake asks for a certificate, requests without one or with one that fails verification go on and rules can read the outcome; Required: 403 without a verified certificate. Unavailable without a certificate, with HTTP/3 on, or without node support |
 | Verification depth | 1–5 | 2 | Maximum depth of the client's certificate chain |
+| CA certificates (PEM) | 1–10 current CA certificates (`CA:TRUE`), at most 64 KiB; keys as for an uploaded leaf, EC on a named curve | None | The CAs issuing client certificates; only the re-encoded certificates are stored |
 | Send certificate details to the origin | On / off | Off | Sends the request headers below to the origin |
+
+**Verification depth**, **CA certificates (PEM)** and **Send certificate details to the origin** appear once **Optional** or **Required** is selected.
 
 | Item | Behavior |
 | --- | --- |
@@ -259,10 +314,10 @@ The first shows the certificate covering `a.example.com` (`256 bit` for ECDSA); 
 | Plain HTTP | Requests reaching a Required site over HTTP are redirected when **Redirect HTTP to HTTPS** is on, and get the same 403 otherwise; HTTP-01 challenges are answered |
 | Request headers | `X-Client-Verify` (`SUCCESS`, `FAILED` or `NONE`) always; `X-Client-Cert-SHA256` (SHA-256 of the DER, lowercase hex), `X-Client-Cert-Subject` (the subject, RFC 2253) and `X-Client-Cert-Serial` (serial number, uppercase hex) only for a verified certificate |
 | Visitors' own headers | Every site removes these four headers from visitors' requests, so the values origins see only come from the node |
-| Rule fields | `tls.client.verified` (boolean), `tls.client.cert_sha256`, `tls.client.subject` (strings); `false` and empty without a verified certificate, see [rule fields](rules.en.md) |
+| Rule fields | `tls.client.verified` (boolean), `tls.client.cert_sha256`, `tls.client.subject` (strings); `false` and empty without a verified certificate, see [rule fields](rules.en.md#fields) |
 | Session resumption | A resumed session keeps the first handshake's verification outcome |
-| HTTP/3 | Cannot be on together with HTTP/3 ("Client certificates and HTTP/3 cannot be on together"): with client certificates on, the HTTP/3 switch is disabled |
-| Node capability | `client-cert-v1`; while an active node of the cluster lacks it the setting is disabled |
+| HTTP/3 | Cannot be on together with HTTP/3: with client certificates on, the HTTP/3 switch is disabled; with HTTP/3 on, "Client certificates and HTTP/3 cannot be on together" shows |
+| Node capability | `client-cert-v1`; while an active node of the cluster lacks it the setting is disabled with "Some nodes in the cluster do not support it" |
 
 Check:
 
@@ -273,15 +328,27 @@ curl -s --cert client.pem --key client.key --resolve m.example.com:443:<node IP>
 
 With Required the first answers 403 and the second the origin's content; with the details sent, the origin sees `X-Client-Verify: SUCCESS`.
 
+### Adding domains to an HTTPS site
+
+When new domains are saved on the site's **Domains** tab:
+
+| The site's certificate | Behavior |
+| --- | --- |
+| One of the site's certificates covers the new domains (including a wildcard `*.example.com` one label up) | Saved |
+| The first certificate was requested in the console with automatic renewal on | Saved; the certificate's names grow by the new domains and it is reissued right away ("Certificate {name} is being reissued for the new domains", audit `certificate.names_extended`). Until then the new domains are served over HTTP only: no TLS handshake, no HTTPS redirect, no HSTS, while the other domains keep the current certificate; once the new certificate is issued they get HTTPS too. While an active node of the cluster lacks `tls-pending-domains-v1`, the new domains take effect only once the new certificate is issued. HTTP-01 challenges are answered meanwhile. When the certificate is issuing, it is issued once more right after that attempt |
+| Uploaded, or automatic renewal off | Refused with "Certificate domains do not match the site or DNS zone: …", naming the uncovered domains |
+
+An HTTP-01 certificate cannot grow by wildcards, and a DNS-01 certificate only by names inside its DNS credential's zone; a certificate has at most 100 names. `.` suffix and pattern domains do not grow a certificate: nodes complete handshakes only for the host names it covers (the same name or `*.` one label up) and abort the others, see [limits of suffix and pattern domains](domains.en.md#limits-of-suffix-and-pattern-domains).
+
 ### TLS session resumption
 
 | Item | Behavior |
 | --- | --- |
 | Session cache | 16 MiB of shared memory per node (about 64,000 sessions), sessions last 1 hour; TLS 1.2 session IDs resume on the same node only |
-| Session tickets | TLS 1.2 and TLS 1.3 tickets are encrypted with keys the cluster shares, so any node of the cluster resumes them; the keys rotate every 12 hours (revision reason "TLS session ticket keys rotated", audit `cluster.session_ticket_keys_rotate`), and tickets issued before a rotation still resume until the next one |
+| Session tickets | TLS 1.2 and TLS 1.3 tickets are encrypted with keys the cluster shares, so any node of the cluster resumes them; each cluster has 3 keys whose roles rotate every 12 hours (revision reason "TLS session ticket keys rotated", audit `cluster.session_ticket_keys_rotate`); nodes encrypt with the current key and decrypt with all 3, so a ticket resumes within the 1-hour session lifetime |
 | Per site | A session resumes on the site that created it only: with site A's session and site B's SNI the handshake is a full one |
 | 0-RTT | TLS 1.3 early data is never accepted: tickets allow none and the node configuration turns it off explicitly |
-| Ticket keys | Generated by the console and stored envelope-encrypted; nodes fetch them over mTLS into their state directory (0600). Older nodes ignore them and do not resume sessions |
+| Ticket keys | Generated by the console when a configuration of the cluster first carries a site with a certificate, and stored envelope-encrypted; nodes fetch them over mTLS into their state directory (0600). Older nodes ignore them and do not resume sessions. The UI never shows them |
 
 Check:
 
@@ -292,6 +359,15 @@ openssl s_client -connect <node IP>:443 -servername www.example.com -sess_in ses
 
 The second prints `Reused, TLSv1.3` (`TLSv1.2` with `-tls1_2`).
 
+### OCSP stapling
+
+| Item | Behavior |
+| --- | --- |
+| Response checks | Only responses whose signature, certificate identity, and validity check out and whose status is good; the issuer certificate must be in the chain |
+| Outbound limits | Refuses private and other special-purpose addresses and redirects; 5-second connect, 8-second request, responses up to 1 MiB |
+| Refresh | Checked every 5 minutes and on every configuration apply; refreshed when less than 1 hour of validity remains |
+| No OCSP URL | Certificates without an OCSP responder URL get no staple |
+
 ### Compression
 
 The **Compression** card on a site's **Cache** tab has a group of settings each for Zstandard, Brotli, and Gzip, saved on their own (unsaved changes on the **HTTPS** tab stay):
@@ -299,18 +375,19 @@ The **Compression** card on a site's **Cache** tab has a group of settings each 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
 | On | On / off | Gzip on, Brotli and Zstandard off | Compresses responses with the algorithm |
-| Level | Brotli 1–11, Zstandard 1–19, Gzip 1–9 | Brotli 6, Zstandard 3, Gzip empty (the node default 1) | Higher levels compress more and use more CPU; a Gzip level other than the default needs the node capability `site-content-v1` |
+| Level | Brotli 1–11, Zstandard 1–19, Gzip 1–9 | Brotli 6, Zstandard 3, Gzip empty (placeholder "Default", the node default 1) | Higher levels compress more and use more CPU; a Gzip level other than the default needs the node capability `site-content-v1` |
 | Minimum compression size (bytes) | 1–1048576 | 256 | Shorter responses are not compressed |
 | Compressed content types | MIME types, separated by commas or spaces, up to 32 | `text/html`, `text/plain`, `text/css`, `application/javascript`, `application/json`, `image/svg+xml` | Response types to compress; `text/html` is always compressed |
-| Largest compressed (bytes) | 0 or more, shared by the three algorithms | Empty (no limit) | Responses whose `Content-Length` exceeds it are not compressed; responses of unknown length (chunked) are compressed as usual. Needs `site-content-v1` |
+| Largest compressed (bytes) | 0 or more, shared by the three algorithms | Empty (placeholder "No limit") | Responses whose `Content-Length` exceeds it are not compressed; responses of unknown length (chunked) are compressed as usual. Needs `site-content-v1` |
 
 | Behavior | Description |
 | --- | --- |
+| Effect | Saved through `PUT /sites/{id}/https`, which publishes the site's cluster (reason "Certificate policy for {site} updated"); sites without a certificate are compressed too |
 | Negotiation | One enabled algorithm is chosen by the q-values of the request's `Accept-Encoding`; at equal q-values the order is zstd > br > gzip, and `q=0` means not acceptable. Each response is compressed by one algorithm only |
 | `Vary` | Compressed responses carry `Vary: Accept-Encoding` |
 | No double compression | Responses that already have a `Content-Encoding` (for example compressed by the origin) are passed through |
 | Cache | The cache keeps uncompressed or origin-encoded content and each response is compressed for its request; cache hits negotiate the encoding the same way |
-| Rules | Override settings turn an algorithm off or back on per request, and compression rules limit the algorithms of a response and their order at equal q-values; both choose only among the algorithms that are on and never bypass the cache, see [Rules](rules.en.md#override-settings) |
+| Rules | Override settings turn an algorithm off or back on per request, and compression rules limit the algorithms of a response and their order at equal q-values; both choose only among the algorithms that are on and never bypass the cache, see [Override settings](rules.en.md#override-settings) |
 | Capabilities | Brotli needs `brotli-v1` on every active node of the cluster, Zstandard needs `zstd-v1`. While a node lacks it, the switch is unavailable with "Some nodes in the cluster do not support it"; an algorithm already on can still be turned off |
 
 Verify after the node applies the revision:
@@ -332,63 +409,59 @@ They return `content-encoding: zstd` and `content-encoding: br`, with `vary: Acc
 | The cluster's extra HTTPS ports | HTTPS (HTTP/1.1, HTTP/2) | Always |
 | UDP of the same number as an HTTPS port | HTTP/3 (QUIC) | A site on that port turns on HTTP/3 |
 
-The SNI of an HTTPS request must equal its `Host`; otherwise the node returns 421 (except requests handed to the [default site](domains.en.md#unknown-hosts-and-node-ip-access)). `Alt-Svc` names the port of the request's `Host` (443 without one). Adding or removing ports is structural: the node renders `nginx.conf` again and reloads, old workers keep serving open connections.
+The SNI of an HTTPS request must equal its `Host`; otherwise the node returns 421 (`X-Edgeweir-Error: sni-host-mismatch`; except requests handed to the [default site](domains.en.md#unknown-hosts-and-node-ip-access)). `Alt-Svc` names the port of the request's `Host` (443 without one). Adding or removing ports is structural: the node renders `nginx.conf` again and reloads, old workers keep serving open connections.
 
 ### The cluster's listener ports
 
 1. Open **Clusters & nodes**, select the cluster and switch to the **Settings** tab (`/clusters?tab=network`).
-2. In the **Listener ports** card fill in **Extra HTTP ports** and **Extra HTTPS ports**, separated by commas or spaces.
-3. Click **Save**. The console shows **Saved** and publishes a new configuration revision.
-4. Open the ports in the node hosts' firewalls and cloud security groups (UDP too for an HTTPS port with HTTP/3 sites), see [Ports and firewalls](../deploy/nodes.en.md#ports-and-firewalls).
+2. In the **Listener ports** card fill in **Extra HTTP ports** and **Extra HTTPS ports**, separated by commas or spaces; 80 and 443 are shown as **Always on**.
+3. Click **Save**. The console shows **Saved** and publishes a new configuration revision (reason "Listener ports updated").
+4. Open the ports in the node hosts' firewalls and cloud security groups (UDP too for an HTTPS port with HTTP/3 sites), see [Ports and firewall](../deploy/nodes.en.md#ports-and-firewall).
 
 | Item | Rule |
 | --- | --- |
-| Ports | 1–65535 except 80 and 443; at most 16 extra HTTP and 16 extra HTTPS ports; a port is HTTP or HTTPS, not both ("Port {port} cannot be both HTTP and HTTPS") |
-| Port pools | Never inside one of the cluster's [L4 port pools](l4.en.md) ("Port {port} is inside port pools: …"); port pools never hold listener ports either |
+| Ports | 1–65535 except 80 and 443; at most 16 extra HTTP and 16 extra HTTPS ports, deduplicated and sorted; an invalid form shows "Ports 1–65535 except 80 and 443, at most 16 of each"; a port is HTTP or HTTPS, not both ("Port {port} cannot be both HTTP and HTTPS") |
+| Port pools | Never inside one of the cluster's [L4 port pools](l4.en.md#set-up-port-pools) ("Port {port} is inside port pools: …"); port pools never hold listener ports either |
 | Removing | A port sites are bound to stays ("Port {port} is still used by sites: …") |
-| Audit | `cluster.listen_ports_update`, with the ports before and after |
+| No change | Ports equal to the current ones publish nothing and are not audited |
+| Audit | `cluster.listen_ports_update`, with the ports before and after and the revision number |
 | Node capability | Configurations with extra ports need `edge-ports-v1`; while an active node of the cluster lacks it, the card shows "Some nodes in the cluster do not support it" and ports can only be removed |
 
 ### Site ports
 
-The **Ports** card on a site's **Domains** tab chooses where the site is served: HTTP on 80 and the cluster's extra HTTP ports, HTTPS on 443 and its extra HTTPS ports. Default: 80 and 443.
+The **Ports** card on a site's **Domains** tab chooses where the site is served: **HTTP** on 80 and the cluster's extra HTTP ports, **HTTPS** on 443 and its extra HTTPS ports. Default: 80 and 443. **Save** publishes the site's cluster.
 
 | Item | Rule |
 | --- | --- |
-| At least one | The site is served on at least one usable port ("The site needs at least one usable port"); without a certificate HTTPS ports are unusable |
-| HTTPS ports | Need a certificate: without one only the default 443 may stay ("HTTPS port {port} needs a certificate"); a site losing its certificate must keep an HTTP port |
+| At least one | The site is served on at least one usable port (the form shows "Choose at least one port", the API answers "The site needs at least one usable port"); without a certificate HTTPS ports do not count as usable |
+| HTTPS ports | Need a certificate: without one only the default 443 may stay, and the card shows "HTTPS ports need a certificate" (the API answers "HTTPS port {port} needs a certificate"); a site losing its certificate must keep an HTTP port |
+| Cluster ports | Only the cluster's listener ports ("Port {port} is not a listener port of the cluster") |
+| Redirect port | Removing the redirect port of the [HTTPS redirect options](#https-redirect-options) is refused ("Redirect port {port} is not an HTTPS port of the site") |
 | Other ports | A request on a port the site is not bound to is treated like one for an [unknown host](domains.en.md#unknown-hosts-and-node-ip-access): by default 404 with the platform page over HTTP (`X-Edgeweir-Error: unknown-host`), the TLS handshake is aborted over HTTPS |
 | ACME | HTTP-01 challenges are always answered on 80; the origin's own HTTP-01 tokens still reach it on 80 |
 | Cache | The cache key holds no port: every port of a site shares its cached objects |
-| No extra ports | A site on the default ports compiles byte for byte as before and needs no `edge-ports-v1` |
-
-### OCSP stapling
-
-| Item | Behavior |
-| --- | --- |
-| Response checks | Only responses whose signature, certificate identity, and validity check out and whose status is good; the issuer certificate must be in the chain |
-| Outbound limits | Refuses private and other special-purpose addresses and redirects; 5-second connect, 8-second request, responses up to 1 MiB |
-| Refresh | Checked every 5 minutes and on every configuration apply; refreshed when less than 1 hour of validity remains |
-| No OCSP URL | Certificates without an OCSP responder URL get no staple |
+| Node capability | Ports other than the defaults need `edge-ports-v1`; while an active node of the cluster lacks it, ports other than 80 and 443 that are not selected yet are disabled with "Some nodes in the cluster do not support it". A site on the default ports compiles byte for byte as before and needs no `edge-ports-v1` |
 
 ## Origin protection
 
-Makes origins accept connections from the edge nodes only: the nodes present a client certificate the console issued (the origin verifies it), and origins use certificates of the console's Origin CA (which only the nodes trust). Use either or both; they are managed in the **Origin certificates** and **Origin client** tabs of **Certificates** and turned on in the site's **Origin pool settings**.
+Makes origins accept connections from the edge nodes only: the nodes present a client certificate the console issued (the origin verifies it), and origins use certificates of the console's Origin CA (which only the nodes trust). Use either or both; they are managed in the **Origin certificates** and **Origin client** tabs of **Certificates** and turned on in the site's **Pool settings** on its **Origins** tab (**Verify origin certificates**, **Trust** and **Present client certificate** under **Origin TLS**, see [Origins and cache](origins-and-cache.en.md)).
 
 ### Origin CA
 
-Create the Origin CA in the **Origin certificates** tab, then issue origin certificates. The Origin CA is for origins only: browsers and other clients do not trust it, and its certificates cannot be uploaded as site certificates ("Origin CA certificates are for origins only").
+**Origin certificates** tab: without an Origin CA it shows **No Origin CA yet** and **Create Origin CA**; the page action is **Issue certificate**. The Origin CA is for origins only: browsers and other clients do not trust it, and its certificates cannot be uploaded as site certificates ("Origin CA certificates are for origins only").
 
 | Item | Description |
 | --- | --- |
-| Origin CA | ECDSA P-256, valid for 20 years, private key envelope-encrypted in the console; separate from the node channel's CA and the origin client CA |
-| Host names | 1–50, one per line: domains, `*.` wildcards or IP addresses; they must cover the name nodes verify (the origin's **SNI**, else its **Origin Host** or address) |
+| Origin CA | ECDSA P-256, valid for 20 years, private key envelope-encrypted in the console; separate from the node channel's CA and the origin client CA. Its card shows "Valid until …", **CA fingerprint** and **Download CA certificate** |
+| Host names | 1–50, one per line: domains, `*.` wildcards or IP addresses, duplicates kept once; they must cover the name nodes verify (the origin's **SNI**, else its **Origin Host** or address) |
 | Validity | 1, 3, 5, 10 or 15 years, 15 by default; never past the Origin CA's expiry |
 | Key type | ECDSA P-256 (default) or RSA 2048 |
-| CSR | Optional: with a CSR the key stays on the origin and the console only takes its public key (RSA 2048–4096 or ECDSA P-256 / P-384); host names come from the form; an invalid signature or unsupported key is refused |
-| Private key | A key the console generates is shown once after issuing and never stored |
-| Download | The certificate and the CA certificate download as PEM; the origin only needs its own certificate and key |
-| Revoke | The console signs a new certificate revocation list (CRL), shipped with the configuration, and publishes every cluster that trusts the Origin CA; nodes then refuse the certificate, and so do the active health checks. Revocations cannot be undone, and rolling a configuration back keeps them |
+| CSR (optional) | With a CSR the key stays on the origin and the console only takes its public key (RSA 2048–4096 or ECDSA P-256 / P-384, at most 16 KiB); host names come from the form; an invalid signature or unsupported key is refused |
+| Private key | A key the console generates is shown once in the **Certificate issued** dialog ("The private key is shown once") with **Download key**, and never stored |
+| Download | **Download certificate** on a certificate row and **Download CA certificate** give PEM; the origin only needs its own certificate and key |
+| Revoke | **Revoke** is confirmed ("Revoke the certificate for {name}?"); the console signs a new certificate revocation list (CRL), shipped with the configuration, and publishes every cluster that trusts the Origin CA (reason "Origin certificate revoked"); nodes then refuse the certificate, and so do the active health checks. The certificate is marked **Revoked**; revocations cannot be undone, and rolling a configuration back keeps them |
+
+Audit: `origin_ca.create`, `origin_certificate.issue`, `origin_certificate.revoke`.
 
 Use the certificate on the origin, for example with nginx:
 
@@ -397,24 +470,24 @@ ssl_certificate     /etc/nginx/origin.pem;
 ssl_certificate_key /etc/nginx/origin.key;
 ```
 
-Then set **Trust** in the site's **Origin pool settings** to **Origin CA** (needs **Verify origin certificates**). The site then accepts only unrevoked origin certificates of the Origin CA, never those of public CAs; S3 origins use public certificates and cannot be combined with it ("S3 origins cannot be verified against the Origin CA").
+Then set **Trust** in the site's **Pool settings** to **Origin CA** (needs **Verify origin certificates**). The site then accepts only unrevoked origin certificates of the Origin CA, never those of public CAs; S3 origins use public certificates and cannot be combined with it ("S3 origins cannot be verified against the Origin CA").
 
 ### Origin client certificates
 
-Create the origin client CA in the **Origin client** tab, download its certificate and configure it on the origin, for example with nginx:
+**Origin client** tab: without an origin client CA it shows **No origin client CA yet** and **Create origin client CA**. Once created, click **Download CA certificate** and configure it on the origin, for example with nginx:
 
 ```nginx
 ssl_client_certificate /etc/nginx/origin-client-ca.pem;
 ssl_verify_client      on;
 ```
 
-Then turn on **Present client certificate** in the site's **Origin pool settings**.
+Then turn on **Present client certificate** in the site's **Pool settings**.
 
 | Item | Description |
 | --- | --- |
 | Origin client CA | ECDSA P-256, valid for 10 years, private key envelope-encrypted |
-| Cluster certificate | One per cluster, CN the cluster id, `O=Edgeweir Origin Client`, TLS client authentication only, valid for 90 days; issued when the first site turning it on is saved, replaced automatically 30 days before expiry |
-| Replacement | The new certificate ships with a new configuration; the previous one stays valid until it expires, open connections are not interrupted |
+| Cluster certificate | The **Cluster certificates** card lists one per cluster, CN the cluster id, `O=Edgeweir Origin Client`, TLS client authentication only, valid for 90 days; issued when the first site turning it on is saved, replaced by an hourly background job 30 days before expiry; without such a site it shows **No site presents a client certificate yet** |
+| Replacement | The new certificate ships with a new configuration (reason "Origin client certificate replaced"); the previous one stays valid until it expires, open connections are not interrupted |
 | Presented to | The site's HTTPS origins over HTTP/1.1, HTTP/2 and gRPC, and by the active health checks; not to S3 origins |
 | Private key | Delivered over the node channel (mTLS) only; the key file on the node has mode 0600 |
 | Connection reuse | Requests with and without a client certificate, or with another trust, never share an origin connection |
@@ -423,40 +496,42 @@ Origins can further restrict on the certificate's CN (the cluster id), for examp
 
 ### Rotating the CAs
 
-Both CAs can be replaced; while that happens the old and the new one are used side by side, so connections and certificates keep working. A new CA's name carries its generation (for example `Edgeweir Origin CA G2`), and its private key is envelope-encrypted as well; every step is written to the audit log.
+Both CAs can be replaced; while that happens the old and the new one are used side by side, so connections and certificates keep working. A new CA's name carries its generation (for example `Edgeweir Origin CA G2`), and its private key is envelope-encrypted as well; every step is confirmed and written to the audit log.
 
 The Origin CA (**Origin certificates** tab):
 
-1. **Rotate CA**: the new CA issues origin certificates from now on; the clusters trusting the Origin CA publish a configuration (reason "Origin CA rotation started") in which nodes trust both CAs, each checked against its own CRL. Every active node of those clusters must support `origin-ca-rotation-v1`, otherwise the step is refused ("Nodes do not support Origin CA rotation yet: …").
-2. Issue the origins new certificates from the new CA and deploy them. The previous CA's card shows how many of its certificates are still valid; in the list they are marked **Previous CA**. They can still be revoked during the overlap.
-3. **Retire previous CA**: the previous CA and its key are deleted, the clusters publish a configuration (reason "Previous Origin CA retired") and nodes stop trusting its certificates (marked **CA retired**). The confirmation shows how many valid certificates stop working.
+1. **Rotate CA** (confirm "Start rotating the Origin CA?"): the new CA issues origin certificates from now on; the clusters trusting the Origin CA publish a configuration (reason "Origin CA rotation started") in which nodes trust both CAs, each checked against its own CRL. Every active node of those clusters must support `origin-ca-rotation-v1`, otherwise the step is refused ("Nodes do not support Origin CA rotation yet: …"). Audit `origin_ca.rotation_start`.
+2. Issue the origins new certificates from the new CA and deploy them. The **Previous Origin CA** card shows how many of its certificates are still valid ("Valid certificates: N"); in the list they are marked **Previous CA**. They can still be revoked during the overlap.
+3. **Retire previous CA** (confirm "Retire the previous Origin CA?", noting "Nodes stop trusting the previous CA's valid certificates (N)"): the previous CA and its key are deleted, the clusters publish a configuration (reason "Previous Origin CA retired") and nodes stop trusting its certificates (marked **CA retired**). Audit `origin_ca.retire`.
 
-**Cancel rotation** deletes the new CA and makes the previous one issue again, as long as the new CA has issued no certificate that is still valid. Rolling a configuration back during the overlap uses the two current CAs; after retiring, a rollback never trusts the previous CA again.
+**Cancel rotation** (confirm "Cancel the rotation and delete the new CA?") deletes the new CA and makes the previous one issue again, as long as the new CA has issued no certificate that is still valid; the clusters publish a configuration (reason "Origin CA rotation cancelled"), audit `origin_ca.rotation_cancel`. Rolling a configuration back during the overlap uses the two current CAs; after retiring, a rollback never trusts the previous CA again.
 
 The origin client CA (**Origin client** tab):
 
-1. **Rotate CA**: a new CA is generated but does not sign anything yet. **Download trust bundle** (both CA certificates) and replace the origins' `ssl_client_certificate` with it.
-2. **Activate new CA**: every cluster switches to a certificate of the new CA and publishes a configuration (reason "origin client certificate replaced"); the old certificates stay valid until they expire. Clusters that could not switch yet are listed on the previous CA's card and retried hourly.
-3. **Retire previous CA**: possible once every cluster presents a certificate of the new CA; origins then only need the new CA (download the trust bundle again).
+1. **Rotate CA** (confirm "Start rotating the origin client CA?"): a **New origin client CA** is generated but does not sign anything yet. **Download trust bundle** (both CA certificates) and replace the origins' `ssl_client_certificate` with it. Audit `origin_client_ca.rotation_start`.
+2. **Activate new CA** (confirm "Activate the new origin client CA?"): every cluster switches to a certificate of the new CA and publishes a configuration (reason "Origin client certificate replaced"); the old certificates stay valid until they expire. Clusters that could not switch yet are listed on the **Previous origin client CA** card ("Still presenting the previous certificate: …") and retried hourly. Audit `origin_client_ca.activate`.
+3. **Retire previous CA** (confirm "Retire the previous origin client CA?"): possible once every cluster presents a certificate of the new CA; origins then only need the new CA (download the trust bundle again). Audit `origin_client_ca.retire`.
 
-The rotation can be cancelled before activation.
-
+**Cancel rotation** is possible before activation, audit `origin_client_ca.rotation_cancel`.
 
 | Error | Cause |
 | --- | --- |
-| Create the Origin CA first | A site trusts the Origin CA, or a certificate is issued, before the Origin CA exists |
-| Create the origin client CA first | A site presents a client certificate before the origin client CA exists |
-| Trusting the Origin CA requires verifying origin certificates | Trust cannot be chosen with verification off |
-| A rotation is already under way | The previous rotation was neither retired nor cancelled |
-| These clusters still present certificates of the previous CA | Retiring the previous origin client CA before every cluster switched |
-| The new CA has issued valid certificates; the rotation cannot be cancelled | Cancelling an Origin CA rotation while certificates of the new CA are valid; revoke them or finish the rotation |
+| "Create the Origin CA first (Certificates → Origin certificates)" | A site trusts the Origin CA, or a certificate is issued, before the Origin CA exists |
+| "Create the origin client CA first (Certificates → Origin client)" | A site presents a client certificate before the origin client CA exists |
+| "Trusting the Origin CA requires verifying origin certificates" | Trust cannot be chosen with verification off |
+| "A rotation is already under way" | The previous rotation was neither retired nor cancelled |
+| "This step does not apply to the rotation's current stage" | For example activating without a new CA, or retiring without a previous one |
+| "These clusters still present certificates of the previous CA: …" | Retiring the previous origin client CA before every cluster switched |
+| "The new CA has issued valid certificates (N); the rotation cannot be cancelled" | Cancelling an Origin CA rotation while certificates of the new CA are valid; revoke them or finish the rotation |
+| "The CSR cannot be read, its signature fails, or its key is not RSA 2048–4096 or ECDSA P-256 / P-384" | The CSR submitted when issuing is unusable |
+| "The certificate is already revoked" | Revoking twice |
 
 ## Certificates on nodes
 
 | Item | Behavior |
 | --- | --- |
-| Delivery | Nodes fetch certificate material separately over mTLS; only certificate IDs and fingerprints referenced by the cluster's current target configuration are released |
-| Checks | Nodes verify the fingerprint, the key match, and name coverage (except for domains served over HTTP until a new certificate covers them); when one certificate cannot be loaded, the whole revision is not applied, the node keeps its previous configuration and retries at every sync |
+| Delivery | Nodes fetch certificate material separately over mTLS; only certificate IDs and fingerprints referenced by the revisions the cluster's nodes may run (stable, candidate and latest) are released |
+| Checks | Nodes verify the fingerprint, the key match, and name coverage (except for domains served over HTTP until a new certificate covers them); nodes 1.1.0 and later skip a certificate they cannot load and report it, see [Upload a certificate](#upload-a-certificate); on earlier nodes one certificate that cannot be loaded keeps the whole revision from applying, the node keeps its previous configuration and retries at every sync |
 | Storage | `certificates.json` (0600) in the node state directory; private keys on the node are not encrypted, and the host administrator can read them |
 | Hot updates | Certificate content and minimum TLS version changes do not reload nginx |
 | Ticket keys | On rotation nodes write the new key files and reload nginx |
@@ -472,62 +547,104 @@ ACME account keys, certificate private keys, EAB HMAC keys (of certificates and 
 
 | Capability | Needed for |
 | --- | --- |
-| `tls-v1` | Sites whose **HTTPS** tab has been saved |
+| `tls-v1` | A cluster with sites (a site's HTTPS and compression settings are always shipped) |
 | `http01-v1` | HTTP-01 validation |
 | `http3-v1` | Any site with HTTP/3 on |
 | `brotli-v1` | Any site with Brotli on |
 | `zstd-v1` | Any site with Zstandard on |
+| `site-content-v1` | Any site with a Gzip level or a largest compressed length set (and other content settings) |
 | `tls-pending-domains-v1` | New domains of an HTTPS site are served over HTTP until the certificate covers them; without it they take effect once the new certificate is issued, and nothing is refused |
 | `edge-ports-v1` | The cluster has extra listener ports, a site is bound to ports other than the defaults, or the HTTPS redirect uses a status, port or excluded domains other than the defaults |
 | `multi-certificate-v1` | A site has more than one certificate |
 | `client-cert-v1` | A site has client certificates on, or a rule reads a `tls.client.*` field |
+| `certificate-isolation-v1` | Never required; nodes with it (1.1.0 and later) skip certificates they cannot load and report them |
 | `origin-mtls-v1` | A site presents a client certificate to its origins |
 | `origin-ca-v1` | A site trusts the Origin CA |
 | `origin-ca-rotation-v1` | A site trusts the Origin CA while it is being rotated |
 
-A change saved in the console or with an AccessKey is published even when it needs a capability some active nodes of the cluster lack; those nodes keep their last-known-good configuration and **Clusters & nodes** shows **Upgrade required**, see [Node upgrades](node-upgrades.en.md). A configuration published by a service account or a background job that introduces a capability an active node lacks is refused (`NODE_CAPABILITY_REQUIRED`) and the configuration stays unchanged.
+A change saved in the console or with an AccessKey is published even when it needs a capability some active nodes of the cluster lack; those nodes keep their last-known-good configuration and **Clusters & nodes** shows **Upgrade required**, see [Node upgrades](node-upgrades.en.md). A configuration published by a service account or a background job that introduces a capability an active node lacks is refused (`NODE_CAPABILITY_REQUIRED`) and the configuration stays unchanged. HTTP-01 requests and Origin CA rotation are refused outright while nodes lack the capability.
+
+## API
+
+Paths are relative to `/api/v1` and authenticated with an AccessKey (`x-api-key`); service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`), see [API and endpoints](../reference/api.en.md#accesskey). Error codes: [Error codes](../reference/errors.en.md).
+
+| Procedure | Method and path | Notes |
+| --- | --- | --- |
+| `certificates.list` | `GET /certificates` | Every certificate: `id`, `name`, `names`, `source` (`upload` / `acme`), `status` (`pending` / `issuing` / `ready` / `error`), `fingerprint`, `notBefore`, `notAfter`, `autoRenew`, `renewAt`, `lastError` (failure code or empty), `bindSiteId`, `nodeFailures` |
+| `certificates.settings` | `GET /certificates/settings` | `acmeDirectory` (the custom directory in effect, or `null`), `acmeDirectoryEab`, `defaultCa` (`letsencrypt` / `custom`) |
+| `certificates.upload` | `POST /certificates/upload` | `{ name, chainPem, privateKeyPem }`; `chainPem` 32–131072 characters, `privateKeyPem` 32–32768 characters |
+| `certificates.request` | `POST /certificates/request` | `name`, `names`, `email`, `ca` (`letsencrypt` / `zerossl` / `google` / `custom`, `defaultCa` when omitted), `keyType` (`ec256` / `rsa2048`), `challenge` (`http01` / `dns01`), `dnsCredentialId` (required for DNS-01), `eabKid`, `eabHmacKey`, `autoRenew` (default `true`), `skipDnsCheck` (default `false`), `bindSiteId` (bind to that site once issued; `names` must cover every domain of the site, one such request per site, 409 `CERTIFICATE_BUSY`) |
+| `certificates.renew` | `POST /certificates/{id}/renew` | ACME certificates only; 409 `CERTIFICATE_BUSY` for an upload or while issuing |
+| `certificates.delete` | `DELETE /certificates/{id}` | 409 `CERTIFICATE_IN_USE`, `CERTIFICATE_IN_USE_BY_L4`, `CERTIFICATE_BUSY` |
+| `acmeAccounts.list` | `GET /acme-accounts` | `{ id, directoryUrl, ca, email, eabKid, createdAt, certificates }` |
+| `acmeAccounts.delete` | `DELETE /acme-accounts/{id}` | 409 `ACME_ACCOUNT_IN_USE` |
+| `dnsCredentials.list` | `GET /dns-credentials` | `{ id, name, provider, zone }`, never the secrets |
+| `dnsCredentials.create` | `POST /dns-credentials` | `{ name, provider, zone, credentials }`; the API does not test before saving, call `dnsCredentials.test` first |
+| `dnsCredentials.update` | `PUT /dns-credentials/{id}` | `name` and / or `credentials` (every field) |
+| `dnsCredentials.delete` | `DELETE /dns-credentials/{id}` | 409 `DNS_CREDENTIAL_IN_USE` |
+| `dnsCredentials.zones` | `POST /dns-credentials/zones` | `{ id }` or `{ provider, credentials }`; up to 1000 zones; `DNS_ZONES_UNSUPPORTED` for providers that cannot list zones |
+| `dnsCredentials.test` | `POST /dns-credentials/test` | `{ id }` or `{ provider, credentials, zone }`; returns `{ ok, records }` |
+| `https.get` | `GET /sites/{id}/https` | The site's HTTPS and compression settings |
+| `https.update` | `PUT /sites/{id}/https` | `settings` replaces them all, omitted fields take their defaults; `GET` first, then modify. Publishes the site's cluster |
+| `https.check` | `GET /sites/{id}/https/check` | Query parameter `ca`; returns the one-click `request`, the `blockers`, and the `certificates` covering every domain |
+| `sites.update` | `PATCH /sites/{id}` | `ports`: `{ http, https }`, up to 17 each, deduplicated and sorted |
+| `sites.features` | `GET /sites/{id}/features` | Availability of features in the site's cluster, including `edgePorts`, `multiCertificate`, `clientCertificate`, `brotli`, `zstd`, `siteContent` |
+| `clusters.listenPorts` | `GET /clusters/{clusterId}/listen-ports` | `httpPorts`, `httpsPorts` (without 80 and 443), `nodesWithout` (active nodes lacking `edge-ports-v1`) |
+| `clusters.setListenPorts` | `PUT /clusters/{clusterId}/listen-ports` | `{ httpPorts, httpsPorts }`, replaced as a whole |
+| `originCa.get` / `originCa.create` | `GET` / `POST /origin-ca` | The Origin CA (`authority`, `previous`, `previousCertificates`); `create` returns an existing one unchanged |
+| `originCa.rotate` / `originCa.retire` / `originCa.cancel` | `POST /origin-ca/rotation`, `POST /origin-ca/rotation/retire`, `DELETE /origin-ca/rotation` | The rotation's three steps |
+| `originCertificates.list` / `originCertificates.issue` | `GET` / `POST /origin-certificates` | `issue`: `hostnames`, `validityYears` (1, 3, 5, 10, 15, default 15), `keyType` (`ec256` / `rsa2048`), `csrPem`; `privateKeyPem` of the response is returned once (empty for a CSR) |
+| `originCertificates.revoke` | `POST /origin-certificates/{id}/revoke` | Revokes |
+| `originClientCa.get` / `originClientCa.create` | `GET` / `POST /origin-client-ca` | The origin client CA (`authority`, `next`, `previous`, `trustBundlePem`, `certificates`, `pendingClusters`) |
+| `originClientCa.rotate` / `activate` / `retire` / `cancel` | `POST /origin-client-ca/rotation`, `POST …/rotation/activate`, `POST …/rotation/retire`, `DELETE /origin-client-ca/rotation` | The rotation's steps |
+| `settings.acmeDirectory` / `settings.setAcmeDirectory` | `GET` / `PUT /settings/acme-directory` | The custom ACME directory, see [system settings](system.en.md#certificate-authorities) |
 
 ## Limits
 
 | Item | Description |
 | --- | --- |
 | Certificate authorities | Let's Encrypt, ZeroSSL and Google Trust Services are built in; other CAs through one custom ACME directory, see [system settings](system.en.md#certificate-authorities) |
-| Certificates | At most 4 per site; ACME key types are ECDSA P-256 and RSA 2048 only |
+| Certificates | At most 4 per site; at most 100 names per ACME certificate; ACME key types are ECDSA P-256 and RSA 2048 only |
 | Client certificates | Not together with HTTP/3; revocation (CRL, OCSP) is not checked |
-| Session resumption | Resuming a TLS 1.2 session under another domain of the same site answers 421 (`sni-host-mismatch`); browsers keep sessions per host name and are not affected. TLS termination of L4 apps does not resume sessions |
+| Session resumption | Resuming a TLS 1.2 session under another domain of the same site answers 421 (`sni-host-mismatch`); browsers keep sessions per host name and are not affected. [TLS termination of L4 apps](l4.en.md#tls-termination) does not resume sessions |
 | 0-RTT | TLS 1.3 early data is not supported |
 | TLS versions | TLS 1.0 and 1.1 are not supported |
 | Cipher suites | Only the **Modern** and **Compatible** profiles; no custom nginx configuration |
 | Compression | Gzip, Brotli, and Zstandard |
 | Node packages | Nodes use OpenResty 1.31.1.1 built for Edgeweir (`edgeweir-openresty`) with HTTP/2, HTTP/3, Brotli, and Zstandard, see [Adding nodes](../deploy/nodes.en.md) |
-| Failure reasons | The card shows a classified reason: the CA's problem type (RFC 8555), a DNS provider error, or the console's own reason. The text a CA or DNS provider returned is neither stored nor logged; `certificate operation failed` in the console log records the certificate ID, the `code`, and the console's own reason |
+| Failure reasons | The row shows a classified reason: the CA's problem type (RFC 8555), a DNS provider error, or the console's own reason; an unknown code shows as "Issuance failed ({code})". The text a CA or DNS provider returned is neither stored nor logged; `certificate operation failed` in the console log records the certificate ID, the `code`, and the console's own reason |
 
 ## Troubleshooting
 
 | Symptom | Cause | Action |
 | --- | --- | --- |
 | "The chain must hold 1 to 10 readable PEM certificates" | The chain is empty, has more than 10 certificates, or is damaged | Export the chain as PEM again |
+| "The chain may contain only certificates; put the private key in its own field" | The chain holds a private key or another PEM block | Keep only `CERTIFICATE` blocks in the chain and put the key in **Private key (PEM)** |
 | "The private key cannot be read; encrypted keys are not supported" | The key is damaged or protected by a passphrase | Remove the passphrase with `openssl pkey -in key.pem -out plain.pem` and upload that |
 | "The private key does not belong to the certificate" | The key belongs to another certificate | Upload the key of the leaf certificate |
 | "The EC private key uses explicit curve parameters; convert it to a named curve" | The key spells out the curve's parameters instead of naming the curve, which nodes cannot load; when saving a site's HTTPS, the selected certificate was uploaded with such a key earlier. LibreSSL, the `openssl` shipped with macOS, does this by default for `openssl req -newkey ec` and `openssl genpkey` | Convert it with OpenSSL 3 and upload the result: `openssl pkey -in key.pem -ec_param_enc named_curve -out key-named.pem` (LibreSSL cannot convert it); add `-pkeyopt ec_param_enc:named_curve` when generating keys |
 | "A certificate's EC key uses explicit curve parameters; reissue it with a named-curve key" | The certificate was issued for such a key, for example a self-signed certificate made with LibreSSL; when saving a site's HTTPS, the selected certificate was uploaded earlier | Reissue it with the converted key, or create a new one: `openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -pkeyopt ec_param_enc:named_curve …` |
 | Certificate status **Unusable**, reason "Nodes cannot load it: a certificate's EC key uses explicit curve parameters" or "Nodes cannot load it: the EC private key uses explicit curve parameters" | The certificate was uploaded earlier with explicit curve parameters | Convert or reissue it as in the two rows above and upload it, select it on the sites that use the old one, then delete the old one |
-| A node shows **Apply failed** with `invalid certificate material` (such as `x509: invalid ECDSA parameters` or `unknown elliptic curve`) | The cluster's configuration references a certificate nodes cannot load, so the whole revision is not applied | Find the **Unusable** certificate in the list and proceed as in the row above; the revision published once another certificate is selected applies |
+| The certificate row shows "… cannot load this certificate and refuse its TLS handshakes", the node shows "Certificates not loaded: N" | The node cannot load the certificate material and has no earlier version | Check the certificate as in the rows above; the revision published once a loadable certificate is selected applies |
+| A node shows **Apply failed** with `invalid certificate material` (such as `x509: invalid ECDSA parameters` or `unknown elliptic curve`) | A node older than 1.1.0 met a certificate it cannot load, so the whole revision is not applied | Find the **Unusable** certificate in the list and proceed as in the rows above; or upgrade the node, see [Node upgrades](node-upgrades.en.md) |
 | "Wrong chain order: the leaf certificate first, then each issuer" | An intermediate comes before the leaf, or a certificate is not issued by the next one | Order the PEM as leaf then intermediates |
 | "The certificate is not valid now (valid from … to …)" | Not yet valid or expired (times in UTC) | Check the server clock, or use a valid certificate |
 | "The certificate has no DNS names (subject alternative names)" | The certificate has only IP addresses or only a CN | Use a certificate with DNS SANs |
-| "Unsupported key type; use RSA (2048 bits or more) or ECDSA P-256, P-384 or P-521" | Nodes cannot load the leaf's key (curves such as secp256k1, Brainpool or SM2; Ed448, RSA-PSS, DSA; RSA with a public exponent above 2³¹−1), or browsers cannot use it (P-224, Ed25519, ML-DSA, RSA under 2048 bits); a key the nodes cannot load would fail the revision on every node of the cluster | The "Public Key Algorithm" part of `openssl x509 -in cert.pem -noout -text` shows the key type and size; reissue the certificate with an RSA 2048-bit or ECDSA P-256 key, for example `openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -pkeyopt ec_param_enc:named_curve -out key.pem` |
+| "Unsupported key type; use RSA (2048 bits or more) or ECDSA P-256, P-384 or P-521" | Nodes cannot load the leaf's key (curves such as secp256k1, Brainpool or SM2; Ed448, RSA-PSS, DSA; RSA with a public exponent above 2³¹−1), or browsers cannot use it (P-224, Ed25519, ML-DSA, RSA under 2048 bits) | The "Public Key Algorithm" part of `openssl x509 -in cert.pem -noout -text` shows the key type and size; reissue the certificate with an RSA 2048-bit or ECDSA P-256 key, for example `openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -pkeyopt ec_param_enc:named_curve -out key.pem` |
+| "Origin CA certificates are for origins only" | The uploaded certificate was issued by the console's Origin CA | Use a certificate of a public CA or an ACME certificate for sites |
 | "The certificate is not issued yet or has expired" | The certificate selected for a site is still pending, or has expired | Wait for issuance, or renew it first |
 | "These names do not resolve to the nodes: …" | HTTP-01 names have no records, or resolve to the origin, another proxy, or other addresses that are not the cluster's nodes | Point the names to the nodes; with a load balancer in front of the nodes or a DNS change in progress, turn on **Skip the DNS check** |
 | "No online node can answer HTTP-01 in cluster …" | The cluster serving the names has no online active node | Check the nodes, or use DNS-01 |
-| "Nodes do not support http01-v1 yet: …" | The listed online nodes lack `http01-v1` | Upgrade them, see [Node upgrades](node-upgrades.en.md) |
-| "Certificate domains do not match the site or DNS zone: …" | The listed names: an HTTP-01 name is not a domain of any site; the DNS credential zone does not cover them; the selected certificate does not cover these site domains; a domain added to the site is not in its uploaded certificate, or is a wildcard an HTTP-01 certificate cannot get or a name outside a DNS-01 certificate's credential zone | Add the domain to a site first, or use DNS-01; use a matching DNS credential or certificate |
-| Certificate shows **Issuance failed** | The reason on the card, see the rows below | Fix it and click **Renew now**; otherwise it retries after the [retry interval](#renewal) |
+| "Nodes do not support HTTP-01 validation yet: …" | The listed online nodes lack `http01-v1` | Upgrade them, see [Node upgrades](node-upgrades.en.md) |
+| "Certificate domains do not match the site or DNS zone: …" | The listed names: an HTTP-01 name is not an exact domain of any site; the DNS credential zone does not cover them; the selected certificate does not cover these site domains; a domain added to the site is not in its uploaded certificate, or is a wildcard an HTTP-01 certificate cannot get or a name outside a DNS-01 certificate's credential zone | Add the domain to a site first, or use DNS-01; use a matching DNS credential or certificate |
+| Certificate shows **Issuance failed** | The reason on the row, see the rows below | Fix it and click **Renew now**; otherwise it retries after the [retry interval](#renewal) |
 | "The CA did not accept the domain validation", "The CA received a wrong challenge answer", "The CA could not connect to the domain" | HTTP-01: the domain does not resolve to the nodes, port 80 is blocked, or another proxy is in front; DNS-01: the TXT record went to another zone | Check the DNS records and port 80 |
 | "The CA could not resolve the domain" | The domain has no records, or its authoritative DNS fails | Add the records |
 | "A CAA record does not allow this CA" | The domain's CAA records do not list the chosen CA | Add the CA's issuer (see [Certificate authorities](#certificate-authorities)) to CAA, or remove CAA |
 | "CA rate limit reached" | Too many orders for the domain or account | Wait for the CA's limit window |
 | "The CA requires EAB credentials" | ZeroSSL, Google Trust Services or the custom directory need EAB | Request again with the EAB key ID and HMAC key; for the custom directory they can be saved in system settings |
+| "The CA account needs attention (such as new terms)", "The ACME account no longer exists at the CA" | The account's state at the CA | Delete the unused account in the **ACME accounts** card and request again, or act as the CA asks |
+| "The CA is unreachable", "The ACME directory is unreachable" | The console cannot reach the CA's ACME directory (outbound network, proxy, the custom directory's TLS certificate) | Check the outbound network of the console process that runs background jobs; for a custom directory see "The URL does not answer with an ACME directory" below |
 | "The TXT record did not propagate within 3 minutes" | The DNS provider syncs slowly, or the credential's zone is not the domain's authoritative zone | Retry later; check the credential's zone |
 | "Provider authentication failed" and other DNS provider reasons | The DNS provider refused the DNS-01 TXT record | Edit the DNS credential; certificates retry right after new credentials are saved |
 | "No online node can answer HTTP-01 (http01-v1)", "Nodes did not apply the challenge within 40 seconds" | The cluster serving the domain has no online node, a node lacks `http01-v1`, or nodes apply configurations slowly | Check the cluster's nodes and upgrade them if needed |
@@ -535,24 +652,29 @@ A change saved in the console or with an AccessKey is published even when it nee
 | "A domain does not resolve to the nodes" | The check before the issuance found a name that does not resolve to the cluster's nodes; the CA was not contacted | Fix the DNS records; it is retried within 5 minutes, or click **Renew now** |
 | "Issuance failed; see the console log" | An unclassified error | Find `certificate operation failed` in the log of the console process that runs background jobs and follow its `reason` |
 | Certificate stays **Pending** | No console process runs background jobs | Make sure a process with `ROLE=worker` or `ROLE=all` runs |
-| "Certificate operation is already in progress" | The certificate is **Issuing**; or a request for the site is already waiting to be bound | Wait for issuance to finish; retry or cancel that request on the site's **HTTPS** tab |
+| "Certificate operation is already in progress" | The certificate is **Issuing**; a request for the site is already waiting to be bound; or an uploaded certificate was renewed | Wait for issuance to finish; retry or cancel that request on the site's **HTTPS** tab |
 | "The certificate is used by sites: …" | The listed sites selected the certificate (first or further) | Select or remove another certificate on their **HTTPS** tab first |
+| "The certificate is still used by L4 apps: …" | The listed L4 apps terminate TLS with the certificate | Select another certificate on those L4 apps first, see [TLS termination](l4.en.md#tls-termination) |
+| "Check “CA certificates (PEM)”" | Client certificates are **Optional** or **Required** but the CA field is empty | Paste the CA issuing the client certificates |
 | 403, `X-Edgeweir-Error: client-cert-required` | The site requires client certificates and the request presented no valid certificate of the CA, or came over plain HTTP | Present one with `curl --cert … --key …`; check the CA certificates and the depth; for HTTP turn on **Redirect HTTP to HTTPS** |
 | 403 although the client presented a certificate of the CA, or the origin sees `X-Client-Verify: FAILED` | The chain is signed with SHA-1 or has a weak key (RSA under 2048 bits), which the node's OpenSSL refuses; macOS LibreSSL's `openssl x509 -req` signs with SHA-1 by default. Or the certificate expired or is not valid yet (check the node's clock), or the chain is deeper than **Verification depth** | `openssl x509 -in client.pem -noout -text \| grep 'Signature Algorithm'` shows the signature; reissue with `-sha256`; check validity and depth |
-| "The client CA must be 1 to 10 current CA certificates in PEM" | The CA field is empty, not a CA certificate (`CA:TRUE`), expired, or has more than 10 | Paste the CA issuing the client certificates |
+| "The client CA must be 1 to 10 current CA certificates in PEM" | The CA field holds no CA certificate (`CA:TRUE`), an expired one, one with an unsupported key or explicit curve parameters, or more than 10 | Paste the CA issuing the client certificates |
 | "Client certificates and HTTP/3 cannot be on together" | The site has HTTP/3 on | Turn HTTP/3 off first |
+| "Redirect port {port} is not an HTTPS port of the site" | The redirect port is neither 443 nor one of the site's HTTPS ports, or was removed in the **Ports** card | Choose another redirect port, or bind the port in the **Ports** card first |
 | "Configure a custom ACME directory in the system settings first", "No custom ACME directory is configured any more" | The custom ACME directory was chosen, but neither system settings nor the environment have its URL | Enter it in **System settings → Certificate authorities**, or choose another CA |
 | "The URL does not answer with an ACME directory" | The console cannot read an ACME directory there: wrong URL, untrusted TLS certificate (no CA certificates entered), a timeout, or not a directory | Check the URL with `curl`; for a private CA paste its issuer into **CA certificates (PEM)** |
 | "Enter the EAB HMAC key with its key ID" | Only the EAB key ID was entered and no key for that ID is saved | Enter both, or neither |
 | "The ACME account is used by certificates: …" | The listed certificates were issued with the account | Delete those certificates first |
-| `openssl s_client -sess_in` always prints `New` | Another site's SNI; a node from before session resumption; a session older than 1 hour; a TLS 1.2 session ID (`-no_ticket`) on another node | Use the same SNI and check the node version |
 | "The DNS credential is used by certificates: …" | The listed certificates use the credential for DNS-01 | Delete those certificates first |
+| "This provider cannot list zones; enter the zone" | The provider cannot list zones | Type the **Zone** |
+| `openssl s_client -sess_in` always prints `New` | Another site's SNI; a node from before session resumption; a session older than 1 hour; a TLS 1.2 session ID (`-no_ticket`) on another node | Use the same SNI and check the node version |
 | A node shows **Upgrade required** | The node lacks a capability the configuration needs (such as `http3-v1`) and keeps its last-known-good configuration | Upgrade the node, see [Node upgrades](node-upgrades.en.md) |
 | 404 with `X-Edgeweir-Error: unknown-host` for a configured site | The request reached a port the site is not bound to | Bind the port in the **Ports** card of the **Domains** tab, or use the site's ports |
 | TLS handshake fails on an extra HTTPS port | The site is not bound to that port, or has no certificate | Bind the port and choose a certificate |
-| Connections to an extra port time out | The node's firewall or security group does not allow it; a container node does not publish it | Open it as described in [Ports and firewalls](../deploy/nodes.en.md#ports-and-firewalls) |
+| Connections to an extra port time out | The node's firewall or security group does not allow it; a container node does not publish it | Open it as described in [Ports and firewall](../deploy/nodes.en.md#ports-and-firewall) |
+| "Port {port} is still used by sites: …" | Removing an extra cluster port that sites are bound to | Unbind the port in those sites' **Ports** card first |
 | 421 with `X-Edgeweir-Error: sni-host-mismatch` | TLS SNI differs from `Host`, for example a client reused a connection opened for another domain | The client opens a connection for the requested domain |
-| Browsers do not use HTTP/3 | UDP of the site's HTTPS port (UDP 443, UDP 9443…) is blocked; the node lacks `http3-v1`; clients read `Alt-Svc` only after a first visit | Open UDP 443 and check node capabilities |
-| Responses are not compressed | The content type is not listed; the response is below the minimum size; the client sent no `Accept-Encoding`; the origin response already has a `Content-Encoding` | Check the **Compression** settings on the **Cache** tab |
+| Browsers do not use HTTP/3 | UDP of the site's HTTPS port (UDP 443, UDP 9443…) is blocked; the node lacks `http3-v1`; clients read `Alt-Svc` only after a first visit | Open the matching UDP port and check node capabilities |
+| Responses are not compressed | The content type is not listed; the response is below the minimum size or above the largest compressed length; the client sent no `Accept-Encoding`; the origin response already has a `Content-Encoding` | Check the **Compression** settings on the **Cache** tab |
 | gzip instead of br or zstd | The client's `Accept-Encoding` lacks the algorithm or gives it a lower q-value; the algorithm is off | Check the request header and the **Compression** settings |
 | The Brotli or Zstandard switch is unavailable | An active node of the cluster lacks `brotli-v1` / `zstd-v1` | Upgrade the nodes |

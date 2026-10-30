@@ -8,7 +8,7 @@
 | --- | --- |
 | Fly.io | 可创建应用的组织 |
 | flyctl | `fly` CLI，已执行 `fly auth login`；创建应用、部署与升级使用 flyctl，见 [操作方式](#操作方式) |
-| 控制台镜像 | `ghcr.io/marvinli001/edgeweir:stable`，公开拉取：维护者验证过的版本，每次更新附一个 [GitHub Release](https://github.com/marvinli001/edgeweir/releases)；渠道与 tag 规则见 [版本、升级与回滚](upgrade.md) |
+| 控制台镜像 | `ghcr.io/marvinli001/edgeweir:stable`，公开拉取：维护者验证过的版本，每次更新附一个 [GitHub Release](https://github.com/marvinli001/edgeweir/releases)；渠道与 tag 规则见 [版本与升级](upgrade.md) |
 | PostgreSQL | PostgreSQL 18，Machine 可达。Fly Managed Postgres 只提供 16 与 17（2026 年 10 月），不满足要求 |
 | 公网地址 | 独享 IPv4（每月 2 美元）与独享 IPv6 |
 | 主密钥 | `openssl rand -base64 32` 生成；保存在 Fly.io 之外，与数据库备份分开 |
@@ -168,7 +168,7 @@ fly ips list
 
 1. Dashboard → `edgeweir-console` → **Logs & Errors** → **Search logs in Grafana**，查询 `"first-run setup"`。日志保留 7 天。
 2. 该行 `setupToken` 字段为 setup token，`url` 字段为初始化向导地址（`<EDGEWEIR_PUBLIC_URL>/setup`）。
-3. 打开向导，填入 setup token，见 [快速上手](../guide/first-site.md#1-完成初始化向导)。
+3. 打开向导，在「初始化令牌」填入 setup token，填写「姓名」「邮箱」「密码」（至少 12 位），点击「创建并继续」；见 [快速上手](../guide/first-site.md#1-完成初始化向导)。
 
 flyctl：
 
@@ -263,7 +263,7 @@ openssl s_client -connect edgeweir-console.fly.dev:8443 -servername edgeweir-con
 
    预期：`version` 为 GitHub Releases 最新一条的日期 tag。
 
-固定版本或回滚：把 `[build] image` 中的 `stable` 换成日期 tag，再 `fly deploy`。迁移、签名校验与回滚见 [版本、升级与回滚](upgrade.md)。
+固定版本或回滚：把 `[build] image` 中的 `stable` 换成日期 tag，再 `fly deploy`。迁移与签名校验见 [版本与升级](upgrade.md)，回退见 [降级](downgrade.md)。
 
 ## 限制
 

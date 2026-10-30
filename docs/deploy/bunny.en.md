@@ -8,7 +8,7 @@ Deploy the console on bunny.net Magic Containers from the console image, with an
 | --- | --- |
 | bunny.net | An account with a verified payment card. Trial accounts are limited to one app and 1 CPU, 4 GiB of memory per instance |
 | bunny CLI | Optional: `npm install -g @bunny.net/cli` (0.19), then `bunny login`; usage and limits in [Methods](#methods) |
-| Console image | `ghcr.io/marvinli001/edgeweir:stable`, public: a version the maintainer verified, each update with a [GitHub Release](https://github.com/marvinli001/edgeweir/releases). Magic Containers runs linux/amd64 only, which the image includes. Channels and tag rules in [Versions, upgrades, and rollback](upgrade.en.md) |
+| Console image | `ghcr.io/marvinli001/edgeweir:stable`, public: a version the maintainer verified, each update with a [GitHub Release](https://github.com/marvinli001/edgeweir/releases). Magic Containers runs linux/amd64 only, which the image includes. Channels and tag rules in [versions and upgrades](upgrade.en.md) |
 | PostgreSQL | PostgreSQL 18 reachable from the container. When it filters by source address, allow the addresses listed at `https://api.bunny.net/mc/nodes/plain`; the list changes. bunny Database is libSQL and does not replace PostgreSQL |
 | Public address | One Anycast IPv4 (USD 2 per month); Anycast has no IPv6. It can be added after deployment, see [Adding the Anycast IP later](#adding-the-anycast-ip-later) |
 | Master key | Generated with `openssl rand -base64 32`; stored outside bunny.net and apart from database backups |
@@ -196,7 +196,7 @@ An uninitialized console logs the same setup token on every start.
 
 1. In the app's **Logging → Logs → Application**, search for `first-run setup`. Logs are kept for 5 days and may hold setup tokens from before a database change: use the latest line.
 2. The `setupToken` field of that line is the setup token; the `url` field is the setup wizard (`<EDGEWEIR_PUBLIC_URL>/setup`).
-3. Open the wizard and enter the setup token, see [Getting started](../guide/first-site.en.md#1-complete-the-setup-wizard).
+3. Open the wizard, enter the setup token in "Setup token", fill in "Name", "Email", and "Password" (at least 12 characters), and click "Create and continue"; see [quick start](../guide/first-site.en.md#1-complete-the-setup-wizard).
 
 Without that line, restart the app (the app's **Restart**, or `bunny apps restart`) and search again.
 
@@ -307,7 +307,7 @@ bunny api PATCH /mc/apps/<app ID>/containers/<container ID> --body '{"imageDiges
 
 `bunny apps deploy <image>` removes the health checks and is not used for upgrades.
 
-Pinning a version or rolling back: in **Container Settings → Edit**, pick a dated tag, click **Update Container**, then **Save Changes** and confirm; with the bunny CLI, `bunny api PATCH /mc/apps/<app ID>/containers/<container ID> --body '{"imageTag":"<dated tag>"}'`. Migrations, signature verification, and rollback: [Versions, upgrades, and rollback](upgrade.en.md).
+Pinning a version or rolling back: in **Container Settings → Edit**, pick a dated tag, click **Update Container**, then **Save Changes** and confirm; with the bunny CLI, `bunny api PATCH /mc/apps/<app ID>/containers/<container ID> --body '{"imageTag":"<dated tag>"}'`. Migrations and signature verification: [versions and upgrades](upgrade.en.md); going back: [downgrade](downgrade.en.md).
 
 ## Limits
 

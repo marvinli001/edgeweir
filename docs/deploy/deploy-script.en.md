@@ -17,7 +17,7 @@ curl -fsSL -o deploy.sh https://raw.githubusercontent.com/marvinli001/edgeweir/m
 sudo bash deploy.sh install
 ```
 
-Save the script to a file before running it: through a pipe (`curl … | bash`) or process substitution (`bash <(curl …)`) it exits with 1. After install, a copy lives at `<install directory>/deploy.sh`; run the other commands there as `./deploy.sh <command>`. Full flow on BaoTa / aaPanel: [baota.en.md](baota.en.md).
+Save the script to a file before running it: through a pipe (`curl … | bash`) every command exits with 1; through process substitution (`bash <(curl …)`) `install` exits with 1. After install, a copy lives at `<install directory>/deploy.sh`; run the other commands there as `./deploy.sh <command>`. Full flow on BaoTa / aaPanel: [BaoTa Panel and aaPanel](baota.en.md).
 
 ## Commands
 
@@ -81,7 +81,7 @@ Variables supply the defaults; in unattended mode they are the answers. A set `E
 | Install directory | Absolute path; missing, empty, or holding only `deploy.sh`; no container named `edgeweir-console` on the host |
 | Existing data | bundled: aborts when the Docker volume `edgeweir_postgres-data` (the database of an earlier install) exists; host: see [Database check](#database-check) |
 | Console URL | `http(s)://host[:port]` with a port of 1–65535, without a path; a trailing `/` is removed; a warning when it is not `https://` |
-| Node channel URL | `https://host[:port]` without a path; its port is the public node channel port, 443 when omitted |
+| Node channel URL | `https://host[:port]` without a path; its port is the public node channel port, 443 when omitted. `wss://` and `ws://` are refused: a WebSocket entry URL is saved in the "Node channel" card of **System settings**; see [the node channel's WebSocket entry](networking.en.md#the-node-channels-websocket-entry) |
 | Connection string | `postgres://` or `postgresql://`; with user name and database name; a single host; no whitespace, quotes, backticks, `\`, `$`, or `#` (URL-encode special characters in the password, e.g. `$` as `%24`) |
 | Ports | The web and node channel ports are numbers and differ; the install aborts when the node channel port is in use, and in host mode when it is below 1024 (the console does not run as root) |
 
@@ -176,7 +176,7 @@ The check and backups connect according to `sslmode` in `DATABASE_URL`:
 6. Print the rollback command `./deploy.sh update <previous version>` (valid only when no migration was added between the two versions).
 7. When `/app/deploy.sh` in the new image differs from this script, ask whether to replace this script, default yes.
 
-Version policy and rollback constraints: [upgrade.en.md](upgrade.en.md).
+Version policy: [Versions and upgrades](upgrade.en.md); rollback constraints: [Downgrade](downgrade.en.md).
 
 ### Version resolution
 
@@ -215,7 +215,7 @@ Interactive only; in unattended mode or without a terminal it aborts; edit `.env
 | Value written | The IPv4 gateway of the network the `postgres` container is on |
 | Left unchanged | Lists or CIDR ranges; host mode (template default `127.0.0.1,::1`) |
 
-Meaning of trusted proxies: [networking.en.md](networking.en.md#trusted-proxies-and-client-ip).
+Meaning of trusted proxies: [Ports, reverse proxy, and trusted proxies: Trusted proxies and client IP](networking.en.md#trusted-proxies-and-client-ip).
 
 After a host mode start, the script checks where the node channel listens, in this order, and stops at the first warning:
 
@@ -257,6 +257,7 @@ Identical content is left alone. A replacement is written to a new file (700) an
 | `EDGEWEIR_NODE_API_URL` | All | Node channel URL |
 | `EDGEWEIR_VERSION` | All | Pinned image tag |
 | `EDGEWEIR_TRUSTED_PROXIES` | bundled | Docker gateway address; written at the first start |
+| `EDGEWEIR_POSTGRES_IMAGE` | All | Written when the PostgreSQL image in use is not the pinned one (`EDGEWEIR_POSTGRES_IMAGE`, or the local `postgres:18.6-alpine` used under `EDGEWEIR_NO_PULL`) |
 
 Values are unquoted. Changing a key keeps the other lines and mode 600. Other variables: [Environment variables](../reference/environment.en.md).
 
@@ -287,7 +288,7 @@ Values are unquoted. Changing a key keeps the other lines and mode 600. Other va
 | Master key | Not in the backup: it is only in `.env` (or the file named by `EDGEWEIR_MASTER_KEY_FILE`); keep it offline separately, restoring the database needs it |
 | Scope | No ClickHouse data |
 
-Restore with [restore](#restore); manual restores and restore acceptance: [backup.en.md](backup.en.md).
+Restore with [restore](#restore); manual restores and restore acceptance: [Backup and recovery](backup.en.md).
 
 ## restore
 

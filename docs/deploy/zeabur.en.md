@@ -1,6 +1,6 @@
 # Zeabur
 
-Deploy the console on a Zeabur Server with the console image and PostgreSQL 18: one-click template deployment, manual creation in the Dashboard, and the Zeabur CLI equivalents.
+Deploy the console on a Zeabur Server with the console image and PostgreSQL 18: template deployment, manual Dashboard creation, and Zeabur CLI equivalents.
 
 [![Deploy on Zeabur](https://zeabur.com/button.svg)](https://zeabur.com/templates/5MQJR2)
 
@@ -10,7 +10,7 @@ Deploy the console on a Zeabur Server with the console image and PostgreSQL 18: 
 | --- | --- |
 | Zeabur | Dev plan or higher: services on the Free plan sleep when idle, which stops the worker and the node channel |
 | Zeabur Server | Bought from Zeabur (**Servers → Create → Buy a Server from Zeabur**), or your own server (at least 1 CPU and 2 GB RAM, with 22, 80, 443, 4222, 6443, and 30000–32767 open). Zeabur's shared clusters no longer accept new services |
-| Console image | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`, public; linux/amd64, linux/arm64. Tag rules: [Versions, upgrades and rollback](upgrade.en.md) |
+| Console image | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`, public; linux/amd64, linux/arm64. Tag rules: [versions and upgrades](upgrade.en.md) |
 | PostgreSQL | PostgreSQL 18, in the same project as the console |
 | Master key | Generated with `openssl rand -base64 32`; keep it outside Zeabur, apart from database backups |
 | Nodes | edgeweir-node 0.2.0 or later: nodes reach the node channel through its [WebSocket entry](networking.en.md#the-node-channels-websocket-entry) by default |
@@ -109,7 +109,7 @@ An uninitialized console logs the same setup token on every start.
 
 1. `edgeweir` service **Logs**, filter for `first-run setup`. After a restart or redeploy the previous instance's logs are gone; the latest instance logs the token again.
 2. The line's `setupToken` field is the setup token and its `url` field the setup wizard (`<EDGEWEIR_PUBLIC_URL>/setup`).
-3. Open the wizard and enter the setup token; see [Quick start](../guide/first-site.en.md#1-complete-the-setup-wizard).
+3. Open the wizard, enter the setup token in "Setup token", fill in "Name", "Email", and "Password" (at least 12 characters), and click "Create and continue"; see [quick start](../guide/first-site.en.md#1-complete-the-setup-wizard).
 
 CLI: `npx zeabur@latest deployment log -t=runtime --service-name edgeweir | grep setupToken`.
 
@@ -179,7 +179,7 @@ Moving enrolled nodes to another node channel URL: [Node channel URL and certifi
 
    Expected: `version` is the new tag.
 
-Migrations, signature verification, and rollback: [Versions, upgrades and rollback](upgrade.en.md).
+Migrations and signature verification: [versions and upgrades](upgrade.en.md); going back: [downgrade](downgrade.en.md).
 
 ## Direct node channel
 

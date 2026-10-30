@@ -342,9 +342,9 @@ revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节�
 | stdout 输出上限 | `dns.*` 命令 16 MiB，其他 2 MiB |
 | stderr | 丢弃（依赖库的诊断信息可能包含凭据） |
 | 命令 | `version`、`providers`、`obtain`、`renew`、`revoke`、`renewal-info`、`dns.list`、`dns.set`、`dns.present`、`dns.cleanup`、`dns.zones`、`dns.test` |
-| DNS 服务商 | 服务商目录 `helpers/certd/catalog.json`，见 [服务商与凭据](docs/guide/dns-and-alerts.md#服务商与凭据) |
+| DNS 服务商 | 服务商目录 `helpers/certd/catalog.json`，见 [服务商与凭据](docs/guide/dns.md#服务商与凭据) |
 
-DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动）：`dns.reconcile` 每分钟按健康节点与网站域名计算每个自动模式集群的记录（每个集群一份地址记录，`all.<域名>` 按解析线路各一组，每个网站一条 CNAME；节点地址与备用节点组见[区域探针与智能调度](#区域探针与智能调度)），生成该集群的 `dns_revision`，写入绑定所选服务商账号（`platform_dns_provider`）的区域；各集群各自发布与对账，一个服务商不可用不影响其他集群；同一集群同一时间只有一个进程在写（`dns_lease`）。节点在新版本发布后 2 分钟内应用期间保留在记录中。写入外部记录之前先在 `dns_managed_name` 登记名称，部分写入可修复；新记录先于被替换的记录写入。手动模式只生成需要手动创建的记录与 zone 文件，不写 DNS。DNS 调度的服务商账号与 DNS-01 凭据使用同一份服务商目录。网站的域名保存后即参与路由，一个域名只属于一个网站。行为说明见 [HTTPS 与证书](docs/guide/https.md) 与 [DNS 调度与告警](docs/guide/dns-and-alerts.md)。
+DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动）：`dns.reconcile` 每分钟按健康节点与网站域名计算每个自动模式集群的记录（每个集群一份地址记录，`all.<域名>` 按解析线路各一组，每个网站一条 CNAME；节点地址与备用节点组见[区域探针与智能调度](#区域探针与智能调度)），生成该集群的 `dns_revision`，写入绑定所选服务商账号（`platform_dns_provider`）的区域；各集群各自发布与对账，一个服务商不可用不影响其他集群；同一集群同一时间只有一个进程在写（`dns_lease`）。节点在新版本发布后 2 分钟内应用期间保留在记录中。写入外部记录之前先在 `dns_managed_name` 登记名称，部分写入可修复；新记录先于被替换的记录写入。手动模式只生成需要手动创建的记录与 zone 文件，不写 DNS。DNS 调度的服务商账号与 DNS-01 凭据使用同一份服务商目录。网站的域名保存后即参与路由，一个域名只属于一个网站。行为说明见 [HTTPS 与证书](docs/guide/https.md) 与 [DNS 调度与告警](docs/guide/dns.md)。
 
 ## 网站 TLS：多证书、客户端证书与会话复用
 

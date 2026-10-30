@@ -1,21 +1,38 @@
 # 备份与恢复
 
-数据库、主密钥与节点状态的备份、恢复与恢复验收。
+数据库、主密钥、ClickHouse 与节点状态的备份、恢复、节点重新同步、恢复验收与恢复演练。
 
 ## 备份对象
 
 | 对象 | 位置 | 方式 | 约束 |
 | --- | --- | --- | --- |
-| PostgreSQL | 数据库 `edgeweir` | `pg_dump --format=custom` | 使用与服务器同主版本的 PostgreSQL 工具。 |
-| `EDGEWEIR_MASTER_KEY` | `.env` | 离线副本，与数据库备份分开保存 | 缺失时库中加密的 CA 私钥、证书私钥、S3 源站密钥、DNS 与通知凭据不可解密。 |
-| `BETTER_AUTH_SECRET` | `.env`（设置过时） | 与主密钥一起保存 | 未设置时会话密钥由主密钥派生。 |
-| 部署配置 | `.env`、`compose.yml` | 文件副本 | — |
-| ClickHouse | 卷 `clickhouse-data`（启用时） | 另行备份 | 与 PostgreSQL 来自同一恢复点，见 [ClickHouse](#clickhouse)。 |
-| 节点状态 | 每个节点的 `/var/lib/edgeweir-node` | 节点本机备份 | 含节点私钥与 `config/receipts.json`；私钥不上传到控制台。 |
-| 节点缓存 | 每个节点的 `/var/cache/edgeweir-node` | 不备份 | 可重建。 |
+| PostgreSQL | 数据库 `edgeweir` | `pg_dump --format=custom` | 使用与服务器同主版本的 PostgreSQL 工具（`compose.yml` 为 PostgreSQL 18） |
+| `EDGEWEIR_MASTER_KEY` | `.env`，或 `EDGEWEIR_MASTER_KEY_FILE` 指定的文件 | 离线副本，与数据库备份分开保存 | 缺失时数据库中的加密数据不可解密，见 [主密钥加密的数据](#主密钥加密的数据) |
+| `EDGEWEIR_MASTER_KEY_PREVIOUS` | 轮换期间的 `.env` | 与主密钥一起保存 | 轮换完成前的备份需要它 |
+| `BETTER_AUTH_SECRET` | `.env`（设置过时） | 与主密钥一起保存 | 未设置时会话密钥由主密钥派生 |
+| 部署配置 | `.env`、`compose.yml`、`compose.override.yml` | 文件副本 | 含密钥的 `.env` 按密钥的方式保存 |
+| ClickHouse | 卷 `clickhouse-data`（`EDGEWEIR_ANALYTICS=clickhouse` 时） | 卷副本 | 与 PostgreSQL 来自同一恢复点，见 [ClickHouse](#clickhouse) |
+| 节点状态 | 每个节点的 `/var/lib/edgeweir-node` | 节点本机备份 | 含节点私钥与 `config/receipts.json`；私钥不上传到控制台 |
+| 节点缓存 | 每个节点的 `/var/cache/edgeweir-node` | 不备份 | 可重建 |
+
+`EDGEWEIR_ANALYTICS=lite`（默认）时访问日志与统计在 PostgreSQL 中，随数据库备份。
 
 > [!WARNING]
-> 备份文件含账户信息与日志，限制读取权限。数据库凭据经受限的 `.pgpass` 或环境变量提供，不写入命令行或 Git。
+> 备份文件含账户信息、审计日志与访问日志，限制读取权限。数据库凭据经受限的 `.pgpass` 或环境变量提供，不写入命令行或 Git。
+
+### 主密钥加密的数据
+
+主密钥加密以下数据后才写入数据库，每份密文绑定其所在的表、列与记录：
+
+| 数据 | 用途 |
+| --- | --- |
+| 节点通道 CA 与 Origin CA 的私钥 | 签发节点证书、节点通道服务器证书、源站证书与回源客户端证书 |
+| 证书私钥、ACME 账户 | 网站 HTTPS 与证书续期 |
+| DNS 凭据、DNS 服务商凭据 | ACME DNS-01 与 DNS 调度 |
+| S3 源站密钥、网站密钥、访问鉴权密钥、回源客户端证书私钥 | 回源与访问控制 |
+| 告警渠道配置、SMTP 设置 | 告警通知 |
+| 挑战密钥、TLS 会话票据密钥 | 节点上的挑战与 TLS 会话复用 |
+| 自定义 ACME 目录设置、setup token、轮换后保存的会话密钥 | 系统设置与登录 |
 
 ## 1. 制作备份
 
@@ -39,11 +56,37 @@ pg_restore --list edgeweir.dump > edgeweir.dump.list
 
 ```bash
 grep -c 'TABLE DATA' edgeweir.dump.list
+grep -c '__drizzle_migrations' edgeweir.dump.list
 ```
 
-预期：大于 0。
+预期：两个数都大于 0。
 
-`deploy.sh` 部署执行 `./deploy.sh backup`（`update` 前自动执行），写出同格式的 `edgeweir.dump` 以及 `.env`（不含主密钥与 `BETTER_AUTH_SECRET`）与编排文件，保留最近 5 份，见 [deploy.sh 参考](deploy-script.md#备份)。主密钥另行离线保存。
+| 部署 | 备份方式 |
+| --- | --- |
+| `deploy.sh` | `./deploy.sh backup`（`update` 前自动执行）：写出同格式的 `edgeweir.dump`、`.env` 副本（主密钥、`EDGEWEIR_MASTER_KEY_PREVIOUS` 与 `BETTER_AUTH_SECRET` 改为注释）与编排文件，保留最近 `EDGEWEIR_BACKUP_KEEP` 份（默认 5），见 [deploy.sh 参考](deploy-script.md#备份) |
+| Render | 数据库页 **Recovery → Create export**，见 [Render](render.md#升级) |
+| Zeabur | `postgresql` 服务中执行 `pg_dump`，或该服务的 **Backup** 页，见 [Zeabur](zeabur.md#升级) |
+| 其他平台 | 平台数据库的快照或导出，或在可访问数据库的主机上执行 `pg_dump` |
+
+### 定期备份
+
+Docker Compose 部署的 crontab 示例，每天 03:00 备份，保留 14 天：
+
+```bash title="crontab"
+0 3 * * * cd /opt/edgeweir && umask 077 && docker compose exec -T postgres pg_dump -U edgeweir -d edgeweir --format=custom > backups/edgeweir-$(date +\%Y\%m\%d).dump && find backups -name 'edgeweir-*.dump' -mtime +14 -delete
+```
+
+`deploy.sh` 部署：
+
+```bash title="crontab"
+0 3 * * * cd /www/dk_project/edgeweir && ./deploy.sh backup
+```
+
+| 项目 | 要求 |
+| --- | --- |
+| 存放位置 | 复制到另一台主机或对象存储；与主密钥分开 |
+| 校验 | 每份备份执行 `pg_restore --list` |
+| 演练 | 定期按 [恢复演练](#恢复演练) 恢复到隔离环境 |
 
 ## 2. 恢复
 
@@ -51,11 +94,11 @@ grep -c 'TABLE DATA' edgeweir.dump.list
 
 | 项目 | 要求 |
 | --- | --- |
-| 主密钥 | 原 `EDGEWEIR_MASTER_KEY`。备份之后[轮换](docker.md#轮换主密钥)过主密钥时，用新主密钥并把原主密钥设为 `EDGEWEIR_MASTER_KEY_PREVIOUS`。 |
-| `BETTER_AUTH_SECRET` | 设置过时使用原值；未设置时由主密钥派生。 |
-| 节点通道地址 | 原 `EDGEWEIR_NODE_API_URL` 与 `EDGEWEIR_NODE_API_HOSTNAMES`：已注册节点按注册时的名称校验证书。**系统设置** 中保存的地址在数据库中，随备份恢复。 |
-| 控制台版本 | 与备份相同或更新：迁移只向前执行。 |
-| 后台任务 | 同一时间只允许一个恢复环境对真实 DNS 服务商与告警渠道执行后台任务；演练使用本地模拟服务。 |
+| 主密钥 | 备份时的 `EDGEWEIR_MASTER_KEY`。备份之后[轮换](maintenance.md#主密钥轮换)过主密钥时，用新主密钥并把原主密钥设为 `EDGEWEIR_MASTER_KEY_PREVIOUS`。主密钥不符时控制台拒绝启动：`EDGEWEIR_MASTER_KEY does not match this database` |
+| `BETTER_AUTH_SECRET` | 设置过时使用原值；未设置时由主密钥派生 |
+| 节点通道地址 | 原 `EDGEWEIR_NODE_API_URL` 与 `EDGEWEIR_NODE_API_HOSTNAMES`：已注册节点按注册时的名称校验证书。**系统设置** 中保存的地址在数据库中，随备份恢复 |
+| 控制台版本 | 与备份相同或更新：迁移只向前执行，见 [降级](downgrade.md) |
+| 后台任务 | 同一时间只允许一个恢复环境对真实 DNS 服务商与告警渠道执行后台任务；演练使用 `ROLE=app` 或本地模拟服务 |
 
 ### deploy.sh
 
@@ -92,6 +135,8 @@ grep -c 'TABLE DATA' edgeweir.dump.list
 
 5. 验证：`curl -s http://127.0.0.1:3000/healthz` 返回 `"status":"ok"`。
 
+替换现有部署的数据库时，先停止 `console`，用 `dropdb --force` 与 `createdb` 重建数据库再导入，步骤见 [按备份回退](downgrade.md#docker-compose)。
+
 ### 外部 PostgreSQL
 
 1. 恢复到新数据库：
@@ -113,10 +158,10 @@ grep -c 'TABLE DATA' edgeweir.dump.list
 
 | 规则 | 说明 |
 | --- | --- |
-| 新版本号 | max（数据库最新配置版本，本集群节点经回执验证的最大已应用版本）+ 1。 |
-| 内容未变 | 节点版本领先时仍生成更高版本号；节点不会停留在最后可用配置。 |
-| 回执 | 绑定节点、集群、版本号与内容哈希，由原主密钥认证；未经验证的版本号不参与计算。 |
-| 示例 | 备份时版本 112 → 节点已应用 113 → 恢复后首次发布 114。 |
+| 新版本号 | max（数据库最新配置版本，本集群节点经回执验证的最大已应用版本）+ 1 |
+| 内容未变 | 节点版本领先时仍生成更高版本号；节点不会停留在最后可用配置 |
+| 回执 | 绑定节点、集群、版本号与内容哈希，由主密钥认证；未经验证的版本号不参与计算 |
+| 示例 | 备份时版本 112 → 节点已应用 113 → 恢复后首次发布 114 |
 
 旧版节点在备份前升级并完成一次配置同步；节点状态备份保留 `config/receipts.json`。
 
@@ -124,20 +169,45 @@ grep -c 'TABLE DATA' edgeweir.dump.list
 
 | 检查项 | 通过条件 |
 | --- | --- |
-| 控制台 | `/healthz` 返回 `"status":"ok"`。 |
-| 节点 | **集群与节点** 中状态为「在线」。 |
-| 配置 | 节点为「已同步」：已应用版本等于最新配置版本，内容哈希相同。 |
-| 数据面 | 节点数据面健康；经节点的 HTTP 与 HTTPS 请求成功。 |
+| 控制台 | `/healthz` 返回 `"status":"ok"`；日志无 `"level":"error"` 行 |
+| 登录 | 原账户以原密码与两步验证登录成功 |
+| 加密数据 | 日志无 `cannot re-seal`、`cannot upgrade a legacy envelope`；**证书** 页面的证书状态与备份时一致 |
+| 节点 | **集群与节点** 中状态为「在线」 |
+| 配置 | 节点为「已同步」：已应用版本等于最新配置版本，内容哈希相同 |
+| 数据面 | 节点数据面健康；经节点的 HTTP 与 HTTPS 请求成功 |
 
 验收通过后保留旧数据库，按备份保留策略处理。
 
 ## ClickHouse
 
-- ClickHouse 与 PostgreSQL 来自同一恢复点，或改用新的 ClickHouse 数据库（`EDGEWEIR_CLICKHOUSE_DATABASE`）开始写入。
-- 恢复较旧的 PostgreSQL 游标而继续使用较新的 ClickHouse 表，可能与已有批次序号冲突。
-- 跨存储恢复不自动完成；PostgreSQL 恢复成功不代表 ClickHouse 已恢复。
+Docker Compose（`COMPOSE_PROFILES=analytics`）的卷备份：
 
-## 演练
+```bash
+docker compose stop clickhouse
+docker run --rm -v edgeweir_clickhouse-data:/data:ro -v "$PWD":/backup alpine \
+  tar czf /backup/clickhouse-data.tar.gz -C /data .
+docker compose start clickhouse
+```
+
+卷名为 `<Compose 项目名>_clickhouse-data`，`compose.yml` 的项目名为 `edgeweir`。
+
+| 规则 | 说明 |
+| --- | --- |
+| 恢复点 | ClickHouse 与 PostgreSQL 来自同一恢复点，或改用新的 ClickHouse 数据库（`EDGEWEIR_CLICKHOUSE_DATABASE`）开始写入 |
+| 批次序号 | 恢复较旧的 PostgreSQL 游标而继续使用较新的 ClickHouse 表，可能与已有批次序号冲突 |
+| 跨存储 | 恢复不自动完成；PostgreSQL 恢复成功不代表 ClickHouse 已恢复 |
+| 不备份时 | 访问日志按[保留期](../guide/access-logs.md#保留期)本就会删除；可放弃旧日志，用新数据库开始写入 |
+
+## 恢复演练
+
+手动演练，在与生产隔离的主机上：
+
+1. 按 [Docker Compose](#docker-compose) 恢复最近一份备份，`.env` 使用生产的主密钥，另设 `ROLE=app`（`compose.override.yml` 中的 `services.console.environment.ROLE`），不运行 worker，不对真实 DNS 服务商与告警渠道执行任务。
+2. 不让生产节点连接演练环境：不修改 DNS，不开放节点通道端口。
+3. 按 [恢复验收](#4-恢复验收) 检查控制台、登录与加密数据。
+4. 记录恢复耗时与备份时间点，删除演练环境：`docker compose down -v`。
+
+自动演练脚本：
 
 ```bash
 node scripts/e2e-restore.mjs
@@ -145,7 +215,7 @@ node scripts/e2e-restore.mjs
 
 | 项目 | 说明 |
 | --- | --- |
-| 范围 | 仅针对 `compose.e2e.yml` 的测试数据库。`pnpm e2e` 包含此演练；单独运行需要已启动的 e2e 环境与此前步骤生成的 `.e2e/m5-state.json`。 |
-| 步骤 | 执行真实 `pg_dump`；节点应用高于备份的配置版本；新建数据库并执行 `pg_restore`；切换控制台连接；收到新心跳后发布相同内容；确认节点接受更高版本。随后切回原测试数据库并重新同步，保留恢复出的数据库供检查。 |
-| 结果 | `.e2e/restore-result.json`。 |
-| 约束 | 测试数据与凭据不得用于正式部署。 |
+| 范围 | 仅针对 `compose.e2e.yml` 的测试数据库。`pnpm e2e` 包含此演练；单独运行需要已启动的 e2e 环境与此前步骤生成的 `.e2e/m5-state.json` |
+| 步骤 | 执行真实 `pg_dump`；节点应用高于备份的配置版本；新建数据库并执行 `pg_restore`；切换控制台连接；收到新心跳后发布相同内容；确认节点接受更高版本。随后切回原测试数据库并重新同步，保留恢复出的数据库供检查 |
+| 结果 | `.e2e/restore-result.json` |
+| 约束 | 测试数据与凭据不得用于正式部署 |

@@ -7,7 +7,7 @@
 | 项目 | 要求 |
 | --- | --- |
 | Railway | 可创建项目的账户；[命令行部署](#命令行部署) 另需 `railway` CLI，已执行 `railway login` |
-| 控制台镜像 | `ghcr.io/marvinli001/edgeweir:stable`，公开拉取：维护者验证过的版本，每次更新附一个 [GitHub Release](https://github.com/marvinli001/edgeweir/releases)；渠道与 tag 规则见 [版本、升级与回滚](upgrade.md) |
+| 控制台镜像 | `ghcr.io/marvinli001/edgeweir:stable`，公开拉取：维护者验证过的版本，每次更新附一个 [GitHub Release](https://github.com/marvinli001/edgeweir/releases)；渠道与 tag 规则见 [版本与升级](upgrade.md) |
 | PostgreSQL | Railway PostgreSQL 服务，镜像 `ghcr.io/railwayapp-templates/postgres-ssl:18` |
 | 主密钥 | `openssl rand -base64 32` 生成；保存在 Railway 之外，与数据库备份分开 |
 | 常驻运行 | 控制台服务关闭 Serverless |
@@ -99,7 +99,7 @@ openssl rand -base64 32 > edgeweir-master-key
 
 1. `edgeweir` 服务 **Deployments** → 当前部署 → **Deploy Logs**，过滤框输入 `"first-run setup"`。
 2. 该行 `setupToken` 字段为 setup token，`url` 字段为初始化向导地址（`<EDGEWEIR_PUBLIC_URL>/setup`）。
-3. 打开向导，填入 setup token，见 [快速上手](../guide/first-site.md#1-完成初始化向导)。
+3. 打开向导，在「初始化令牌」填入 setup token，填写「姓名」「邮箱」「密码」（至少 12 位），点击「创建并继续」；见 [快速上手](../guide/first-site.md#1-完成初始化向导)。
 
 ## 命令行部署
 
@@ -242,7 +242,7 @@ railway redeploy --service edgeweir --from-source --yes
 
 不要为该服务配置自动更新（**Settings → Source → Configure Auto Updates**）：自动更新在维护窗口内无人值守地重新部署，不会先备份 `Postgres` 服务的数据库。
 
-固定版本或回滚：**Settings → Source** 中把镜像的 `stable` 换成日期 tag，暂存横幅点击 **Deploy**；命令行先执行 `railway service source connect --service edgeweir --image ghcr.io/marvinli001/edgeweir:<日期 tag>`，再执行上面的 `railway redeploy`。迁移、签名校验与回滚见 [版本、升级与回滚](upgrade.md)。
+固定版本或回滚：**Settings → Source** 中把镜像的 `stable` 换成日期 tag，暂存横幅点击 **Deploy**；命令行先执行 `railway service source connect --service edgeweir --image ghcr.io/marvinli001/edgeweir:<日期 tag>`，再执行上面的 `railway redeploy`。迁移与签名校验见 [版本与升级](upgrade.md)，回退见 [降级](downgrade.md)。
 
 ## 限制
 

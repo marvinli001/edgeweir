@@ -1,25 +1,58 @@
 # Adding nodes
 
-Generate an install command for a cluster, then install and enroll an edge node on a Linux host; node ports and firewall; run regional probes.
+Install and enroll edge nodes: requirements, releases and verification, install command, manual installs, enrollment, ports, client IP, probes, mirror.
+
+Components, ports and files at a glance: [Node overview](../node/README.en.md).
 
 ## Requirements
 
 | Item | Requirement |
 | --- | --- |
-| System | Linux, amd64 or arm64, glibc 2.34 or later: RHEL, Rocky, AlmaLinux 9 or later, Debian 12 or later, Ubuntu 22.04 or later; systemd (not required with `--no-start`) |
+| System | Linux, amd64 or arm64, glibc 2.34 or later: RHEL, Rocky, AlmaLinux 9 or later, Debian 12 or later, Ubuntu 22.04 or later; systemd (not required with `--no-start` or in a container) |
 | Privileges | root or sudo |
-| Commands | `curl`, `sha256sum`, `tar` |
+| Commands | `curl`, `sha256sum`, `tar`; `openssl` (optional, checks the node channel's CA before installing) |
 | Console access | `EDGEWEIR_PUBLIC_URL` (`/install.sh`, `/downloads/*`) and the node channel URL ("Node channel" in **System settings**, 8443 by default); see [ports and reverse proxy](networking.en.md) |
-| External access | GitHub Releases and `api.github.com` (unless `--mirror-only`) |
+| External access | `github.com` and `api.github.com` (unless `--mirror-only`) |
+| Ports | 80, 443 and the others not used by another program, see [Ports and firewall](#ports-and-firewall) |
 
-Nodes use OpenResty built for Edgeweir, released with edgeweir-node and listed in the same signed `checksums.txt`:
+## Releases
 
-| Package | Contents | Installed |
-| --- | --- | --- |
-| `edgeweir-openresty` | OpenResty 1.31.1.1 with HTTP/2, HTTP/3, Brotli, and Zstandard; `/usr/lib/edgeweir-openresty/` (nginx at `/usr/lib/edgeweir-openresty/nginx/sbin/nginx`) | `edgeweir-node` depends on it; always installed |
-| `edgeweir-openresty-modsecurity` | The ModSecurity dynamic module `/usr/lib/edgeweir-openresty/modules/ngx_http_modsecurity_module.so` and the OWASP CRS rules in `/usr/share/edgeweir-openresty/crs/` | Recommended by `edgeweir-node`; `install.sh` installs it unless `--no-modsecurity` is given, in which case the node does not support [OWASP CRS](../guide/waf.en.md) |
+Published on [GitHub Releases](https://github.com/marvinli001/edgeweir-node/releases); `<version>` is the version number without `v`.
 
-Both packages come as deb and rpm only (amd64, arm64). The openresty.org repositories are no longer used; an openresty.org repository and `openresty` package added by an earlier `install.sh` can be removed.
+| File | Content |
+| --- | --- |
+| `edgeweir-node_<version>_amd64.deb`, `_arm64.deb` | Agent, Lua modules, systemd units, `/etc/default/edgeweir-node`; depends on `edgeweir-openresty (>= 1.31.1.1-3)`, recommends `edgeweir-openresty-modsecurity` and `nftables` |
+| `edgeweir-node-<version>-1.x86_64.rpm`, `.aarch64.rpm` | As above |
+| `edgeweir-node_<version>_linux_amd64.tar.gz`, `_linux_arm64.tar.gz` | Directory `edgeweir-node_<version>_linux_<arch>/`: `edgeweir-node`, `lua/edgeweir/`, `systemd/edgeweir-node.service`, `systemd/edgeweir-probe.service`, `LICENSE`, `NOTICE` |
+| `edgeweir-openresty_1.31.1.1-3_<arch>.deb`, `edgeweir-openresty-1.31.1.1-3.<arch>.rpm` | OpenResty in `/usr/lib/edgeweir-openresty/`; deb and rpm only |
+| `edgeweir-openresty-modsecurity_1.31.1.1-3_<arch>.deb`, `.rpm` | ModSecurity module and OWASP CRS 4.29.0; without it the node does not support [OWASP CRS](../guide/waf.en.md) |
+| `*.sbom.json` | SBOM (SPDX) of every archive, package and edgeweir-openresty |
+| `checksums.txt`, `checksums.txt.sigstore.json` | SHA-256 of every file and the keyless cosign signature |
+| Image `ghcr.io/marvinli001/edgeweir-node:<version>` | amd64, arm64; also tagged `X.Y` and `latest`; cosign signature and build provenance |
+
+The openresty.org repositories are no longer used; an openresty.org repository and `openresty` package added by an earlier `install.sh` can be removed.
+
+### Verifying releases
+
+`install.sh` checks signatures and SHA-256 itself. Before a manual install run:
+
+```bash title="Download directory"
+cosign verify-blob \
+  --bundle checksums.txt.sigstore.json \
+  --certificate-identity "https://github.com/marvinli001/edgeweir-node/.github/workflows/release.yml@refs/tags/v<version>" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+sha256sum --ignore-missing -c checksums.txt
+gh attestation verify edgeweir-node_<version>_linux_amd64.tar.gz --repo marvinli001/edgeweir-node
+```
+
+| Step | Expected |
+| --- | --- |
+| `cosign verify-blob` | `Verified OK` |
+| `sha256sum` | `OK` for every downloaded file |
+| `gh attestation verify` | Build provenance from the release workflow of `marvinli001/edgeweir-node`; for the image use `gh attestation verify oci://ghcr.io/marvinli001/edgeweir-node:<version> --repo marvinli001/edgeweir-node` |
+
+GitHub Actions builds the releases from the tag, reproducibly (`-trimpath`, timestamps from the commit).
 
 ## 1. Generate the install command
 
@@ -30,12 +63,12 @@ Both packages come as deb and rpm only (amd64, arm64). The openresty.org reposit
 
 | Item | Behavior |
 | --- | --- |
-| Enrollment token | Prefix `ewt_`, single use, stored as SHA-256 only; generating one writes an audit entry. |
-| `--server` | The "Node channel" URL in **System settings**; see [Node channel URL and certificate](networking.en.md#node-channel-url-and-certificate). |
-| `--ca-sha256` | SHA-256 fingerprint of the node channel internal CA, the same as "CA fingerprint" in **System settings**. |
-| API | `POST /api/v1/enrollment-tokens`, `ttlMinutes` 5–10080, default 60; `GET /api/v1/enrollment-tokens/{id}` returns `usedAt` and the enrolled node. See [API and endpoints](../reference/api.en.md). |
-| Address warnings | When the console URL (where `install.sh` comes from) or the node channel URL is localhost, a loopback or a private address, the dialog warns about each and **System settings** marks the URL "This machine only" or "Private address"; a public console URL over plain HTTP gets "Console URL is plain HTTP: install.sh is sent unencrypted" and the mark "Unencrypted". The console logs a warning for each at startup; generating is not refused. |
-| Cleanup | Tokens expired or used more than 7 days ago are deleted every 30 minutes. |
+| Enrollment token | Prefix `ewt_`, single use, stored as SHA-256 only; generating one writes an audit entry |
+| `--server` | The "Node channel" URL in **System settings**; see [Node channel URL and certificate](networking.en.md#node-channel-url-and-certificate) |
+| `--ca-sha256` | SHA-256 fingerprint of the node channel internal CA, the same as "CA fingerprint" in **System settings** |
+| API | `POST /api/v1/enrollment-tokens`, `ttlMinutes` 5–10080, default 60; `GET /api/v1/enrollment-tokens/{id}` returns `usedAt` and the enrolled node. See [API and endpoints](../reference/api.en.md) |
+| Address warnings | When the console URL (where `install.sh` comes from) or the node channel URL is localhost, a loopback or a private address, the dialog warns about each and **System settings** marks the URL "This machine only" or "Private address"; a public console URL over plain HTTP gets "Console URL is plain HTTP: install.sh is sent unencrypted" and the mark "Unencrypted". The console logs a warning for each at startup; generating is not refused |
+| Cleanup | Tokens expired or used more than 7 days ago are deleted every 30 minutes |
 
 ### Node channel connection check
 
@@ -46,7 +79,7 @@ The console makes a TLS handshake with its own node channel at the node channel 
 | Reachable / Node channel reachable | The handshake completed and the chain includes the internal CA |
 | The console cannot connect to this URL / The console cannot connect to the node channel URL | No handshake within 3 seconds: wrong address or DNS, a closed port, or the console's network cannot reach the address |
 | Certificate mismatch: a proxy or CDN may be in front / Node channel certificate mismatch: a proxy or CDN may be in front | Another certificate chain answered: a proxy or CDN terminates TLS, or the URL points at another service, and node mTLS will fail; see [Node channel passthrough](networking.en.md#node-channel-passthrough). A refused WebSocket handshake for a `wss://` or `ws://` URL (the entry is closed, or the URL points at another service) gives this result too; see [The node channel's WebSocket entry](networking.en.md#the-node-channels-websocket-entry) |
-| The outbound policy does not allow this address / The outbound policy does not allow the node channel address | The URL saved in **System settings** resolves to a private, loopback, or other special-purpose address that `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` does not allow: the console does not connect, as with other targets saved in the web UI. `EDGEWEIR_NODE_API_URL` and the default are not limited this way |
+| The outbound policy does not allow this address / The outbound policy does not allow the node channel address | The URL saved in **System settings** resolves to a private, loopback, or other special-purpose address that `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` does not allow: the console does not connect. `EDGEWEIR_NODE_API_URL` and the default are not limited this way |
 
 The check is advisory and blocks nothing: the console reaching its own address does not prove that nodes on other networks do, and where the console's network cannot reach its own public address (no NAT hairpinning) the check fails while nodes may still enroll. A result is reused for 30 seconds and checked again when the URL changes. API: `GET /api/v1/settings/node-channel-check` returns `{ url, result, checkedAt }`, with `result` `ok`, `unreachable`, `mismatch`, or `refused`.
 
@@ -60,7 +93,23 @@ curl -fsSL https://cdn-admin.example.com/install.sh | sudo --preserve-env=EDGEWE
   --server https://cdn-admin.example.com:8443 --ca-sha256 <CA fingerprint>
 ```
 
-The token travels only in the `EDGEWEIR_TOKEN` environment variable or through `--token-file PATH`, never in process arguments; `--token` is rejected. All options: [command line](../reference/cli.en.md).
+The token travels only in the `EDGEWEIR_TOKEN` environment variable or through `--token-file PATH`, never in process arguments; `--token` is rejected.
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `--server URL` | required | Node channel URL: `https://`, or the WebSocket entry `wss://` / `ws://` (node 0.2.0 or later) |
+| `--ca-sha256 HEX` | required | SHA-256 of the internal CA, 64 lowercase hex characters |
+| `--token-file PATH` | none | Read the token from a file; wins over `EDGEWEIR_TOKEN` |
+| `--version VER` | `latest` | Version to install, `v` prefix allowed; `latest` is the mirror's `latest` file, then the latest GitHub release |
+| `--format auto\|deb\|rpm\|tar` | `auto` | deb with `dpkg` and `apt-get`, rpm with `rpm` and `dnf`/`yum`, else tar |
+| `--mirror URL` | `<EDGEWEIR_PUBLIC_URL>/downloads/edgeweir-node` | Release mirror, see [Downloads mirror](#downloads-mirror) |
+| `--mirror-only` | off | No fallback to GitHub |
+| `--no-modsecurity` | off | Do not install `edgeweir-openresty-modsecurity` |
+| `--no-start` | off | Install and enroll only: no systemd required, no service start, no health check |
+| `--force` | off | Enroll an enrolled host again with a new token |
+| `--allow-unsigned` | off | Skip the cosign signature check, development only; the SHA-256 is still verified |
+
+Exit codes: `0` done, `1` any step failed (stderr shows `[edgeweir] error: <reason>`), `2` a required option is missing or `--help`. See also [Command line](../reference/cli.en.md#node-install-script).
 
 ## 3. Verify
 
@@ -68,51 +117,136 @@ The token travels only in the `EDGEWEIR_TOKEN` environment variable or through `
 
 ```bash title="Node"
 systemctl status edgeweir-node
-journalctl -u edgeweir-node -f
+sudo edgeweir-node diagnose
 ```
 
-Expected: `edgeweir-node.service` is `active (running)`; in **Clusters & nodes** the node is "Online" and **Applied** shows a revision number. After enrolling and before its first connection to the node channel the node shows "Awaiting heartbeat"; online without a configuration yet, **Applied** shows "Awaiting configuration".
+Expected: `edgeweir-node.service` is `active (running)`; every `diagnose` line is `ok`; in **Clusters & nodes** the node is "Online" and **Applied** shows a revision number. After enrolling and before its first connection to the node channel the node shows "Awaiting heartbeat"; online without a configuration yet, **Applied** shows "Awaiting configuration".
 
 ## install.sh flow
 
 | Step | Behavior | On failure |
 | --- | --- | --- |
 | 1 | Reads the token (`EDGEWEIR_TOKEN` or `--token-file`), checks the `ewt_` format, and removes it from the environment so child processes do not inherit it. On an enrolled host (`identity.json` in the state directory) no token is needed, and one given is not used; with `--force` the token is required | Exit |
-| 2 | Checks Linux, root, `curl`, `sha256sum`, `tar`, systemd, and architecture; with `--format auto`, picks deb when `dpkg` and `apt-get` exist, rpm when `rpm` and `dnf`/`yum` exist, else tar.gz. Unless the host is enrolled, then checks the node channel: `--server` must answer HTTP (any status; no token is sent), and with `openssl` on the host, the last certificate the server presents must be the CA pinned by `--ca-sha256`. For a `wss://` or `ws://` URL it requests `https://` (`http://` for `ws://`) `<host[:port]>/node-channel` instead, which must answer 426 (the entry is open); the CA is checked inside the WebSocket at enrollment in step 9 | Exit, naming an unreachable channel, a TLS-terminating proxy, or a closed WebSocket entry |
+| 2 | Checks Linux, root, `curl`, `sha256sum`, `tar`, systemd, and architecture, and picks the package format. Unless the host is enrolled, then checks the node channel: `--server` must answer HTTP (any status; no token is sent), and with `openssl` on the host, the last certificate the server presents must be the CA pinned by `--ca-sha256`. For a `wss://` or `ws://` URL it requests `https://` (`http://` for `ws://`) `<host[:port]>/node-channel` instead, which must answer 426 (the entry is open); the CA is checked inside the WebSocket at enrollment in step 9 | Exit, naming an unreachable channel, a TLS-terminating proxy, or a closed WebSocket entry |
 | 3 | Resolves the version: `--version`, or the `latest` file of the downloads mirror, falling back to the latest GitHub release. On an enrolled host without `--version` and `--force`, steps 3–9 are skipped: nothing is downloaded or installed. Enrolling through a `wss://` or `ws://` URL needs version 0.2.0 or later | Exit, asking for `--version` |
 | 4 | Downloads `checksums.txt` and `checksums.txt.sigstore.json`: mirror first, then GitHub | Exit |
 | 5 | Verifies the signature with `cosign verify-blob`: the certificate identity must be `https://github.com/marvinli001/edgeweir-node/.github/workflows/release.yml@refs/tags/v<version>`, the issuer `https://token.actions.githubusercontent.com`. Without cosign on the host, downloads cosign v3.1.3, checks it against the SHA-256 pinned in the script, and installs it to `/usr/local/bin/cosign` | Exit |
 | 6 | Picks the package for this host from the signed `checksums.txt`, and `edgeweir-openresty` and `edgeweir-openresty-modsecurity` of the same release (exactly one file per package, format, and architecture); exits on glibc older than 2.34; downloads them (mirror first, then GitHub) and verifies their SHA-256 | Exit |
 | 7 | Installs `edgeweir-openresty` and `edgeweir-openresty-modsecurity` first. A tar.gz install uses the host's `dpkg` or `rpm` for them; without either, `edgeweir-openresty` must already be installed | Exit |
-| 8 | Installs the deb, rpm, or tar.gz | Exit |
+| 8 | Installs the deb (`apt-get install`, `dpkg -i` without apt-get), rpm (`dnf`, `yum` or `rpm -Uvh`) or tar.gz | Exit |
 | 9 | `edgeweir-node enroll`: checks the CA fingerprint before sending the token, generates the private key locally, and exchanges a CSR for the node certificate; from then on, mTLS only. Skipped on an enrolled host; with `--force`, stops `edgeweir-node.service` and replaces the identity with `edgeweir-node enroll --force` and the new token; step 10 starts it again | Exit |
 | 10 | Disables `openresty.service`, enables and starts `edgeweir-node.service` (`--no-start` skips steps 10 and 11); a tar.gz install and a rerun that skipped the install first restart a running service (deb and rpm package scripts do that themselves) | Exit |
 | 11 | Runs `edgeweir-node healthcheck` every 3 seconds for up to 90 seconds, until the data plane has applied its configuration; on success prints `done: edgeweir-node is healthy (revision N, M sites)` | Exit code 1, pointing to `journalctl -u edgeweir-node -n 50` |
 
-- Nothing downloaded runs before steps 5 and 6 pass. `--allow-unsigned` skips step 5 for development only; the SHA-256 is still verified.
+- Nothing downloaded runs before steps 5 and 6 pass.
 - The script consists of functions and calls `main` on its last line: a truncated download executes nothing.
 - An enrolled host can run the same command again: nothing is downloaded or reinstalled, the service is started (restarted when running) and health-checked; with `--version <version>` that version is installed first. Without `/usr/bin/edgeweir-node` on the host, the latest version is installed.
-- To enroll again (for example after the certificate expired): generate a new install command in the console and run it with `--force` appended; then delete the old node in the console.
-- When the node channel URL changes, nodes from v1.2.0 follow it on their own; a node that lost the console because the old address went down first runs `sudo edgeweir-node set-server --server <new URL>` instead of enrolling again, see [Changing the node channel URL](networking.en.md#changing-the-node-channel-url).
 - The console never stores SSH credentials; the node private key never leaves the node.
 
-Installed files:
+The deb and rpm package scripts create the `edgeweir` user, `/var/lib/edgeweir-node` (0700) and `/var/cache/edgeweir-node` (0750); for tar.gz `install.sh` creates them and installs the unit to `/etc/systemd/system/`. Installed files: [Files and directories](../node/README.en.md#files-and-directories).
 
-| Path | Contents |
+## Manual installation
+
+Without `install.sh`, first [verify the releases](#verifying-releases), then follow the install form. Put the token in a file only root can read and delete it after enrollment.
+
+### deb / rpm
+
+```bash title="Node (Debian, Ubuntu)"
+sudo apt-get install ./edgeweir-openresty_1.31.1.1-3_amd64.deb \
+  ./edgeweir-openresty-modsecurity_1.31.1.1-3_amd64.deb ./edgeweir-node_<version>_amd64.deb
+```
+
+```bash title="Node (RHEL, Rocky, AlmaLinux)"
+sudo dnf install ./edgeweir-openresty-1.31.1.1-3.x86_64.rpm \
+  ./edgeweir-openresty-modsecurity-1.31.1.1-3.x86_64.rpm ./edgeweir-node-<version>-1.x86_64.rpm
+```
+
+```bash title="Node"
+sudo install -m 0600 /dev/stdin /root/edgeweir-token <<< '<one-time token>'
+sudo edgeweir-node enroll --server https://cdn-admin.example.com:8443 \
+  --token-file /root/edgeweir-token --ca-sha256 <CA fingerprint>
+sudo rm /root/edgeweir-token
+sudo systemctl disable --now openresty 2>/dev/null || true
+sudo systemctl enable --now edgeweir-node
+```
+
+The packages do not enable the service: enable it after enrollment. On a host with OpenResty's own packages, disable their `openresty.service` (the unit declares `Conflicts=openresty.service`).
+
+### tar.gz
+
+Needs `edgeweir-openresty` installed (deb or rpm).
+
+```bash title="Node"
+tar -xzf edgeweir-node_<version>_linux_amd64.tar.gz
+cd edgeweir-node_<version>_linux_amd64
+sudo groupadd --system edgeweir
+sudo useradd --system --gid edgeweir --home-dir /var/lib/edgeweir-node --no-create-home \
+  --shell /usr/sbin/nologin edgeweir
+sudo install -m 0755 edgeweir-node /usr/bin/edgeweir-node
+sudo install -d -m 0755 /usr/share/edgeweir-node/lua/edgeweir
+sudo install -m 0644 lua/edgeweir/*.lua /usr/share/edgeweir-node/lua/edgeweir/
+sudo install -D -m 0644 systemd/edgeweir-node.service /etc/systemd/system/edgeweir-node.service
+sudo install -d -o edgeweir -g edgeweir -m 0700 /var/lib/edgeweir-node
+sudo install -d -o edgeweir -g edgeweir -m 0750 /var/cache/edgeweir-node
+sudo systemctl daemon-reload
+```
+
+Then enroll and start as in [deb / rpm](#deb--rpm).
+
+### Docker
+
+```bash title="Node"
+docker run -d --name edgeweir-node --restart unless-stopped \
+  -p 80:80 -p 443:443 -p 443:443/udp \
+  -v edgeweir-node:/var/lib/edgeweir-node \
+  -v edgeweir-node-cache:/var/cache/edgeweir-node \
+  ghcr.io/marvinli001/edgeweir-node:<version>
+read -rs EDGEWEIR_TOKEN && export EDGEWEIR_TOKEN
+docker exec -e EDGEWEIR_TOKEN edgeweir-node edgeweir-node enroll \
+  --server https://cdn-admin.example.com:8443 --ca-sha256 <CA fingerprint>
+```
+
+| Item | Behavior |
 | --- | --- |
-| `/usr/bin/edgeweir-node` | Agent |
-| `/usr/share/edgeweir-node/lua/edgeweir/` | OpenResty Lua modules |
-| `/usr/lib/edgeweir-openresty/` | OpenResty (`edgeweir-openresty`); the ModSecurity module in `modules/` |
-| `/usr/share/edgeweir-openresty/crs/` | OWASP CRS rules (`edgeweir-openresty-modsecurity`; the version is fixed by the package, nothing is downloaded at run time) |
-| `/var/lib/edgeweir-node/` | State directory (user `edgeweir`, 0700): `node.key`, `node.crt`, `ca.crt`, `identity.json`, `config/` (last-known-good configuration and `receipts.json`) |
-| `/var/cache/edgeweir-node/` | Cache directory (user `edgeweir`, 0750) |
-| `edgeweir-node.service` | deb, rpm: `/usr/lib/systemd/system/`; tar.gz: `/etc/systemd/system/` |
+| Entry point | `edgeweir-node supervise --manage-nginx`; the agent, nginx master and workers run as uid 10001 |
+| Enrollment | The running node checks the state directory every 2 seconds and connects once `enroll` has written the identity; before that every host answers `404 unknown-host` |
+| Volumes | `/var/lib/edgeweir-node`: identity and LKG configuration, deleting it loses the enrollment; `/var/cache/edgeweir-node`: cache, removed with the container when not mounted |
+| Health check | Built-in `edgeweir-node healthcheck`, every 10 seconds, 15-second start period, `unhealthy` after 3 failures |
+| Ports | Publish extra listener ports and L4 port pools as well, or use `--network host`, see [Ports and firewall](#ports-and-firewall) |
+| Flags | `-e EDGEWEIR_<FLAG>=<value>`, see [Node configuration](../node/configuration.en.md) |
+| GeoIP | IPinfo Lite (countries, ASNs) is bundled |
 
-For deb and rpm, the package scripts create the `edgeweir` user and directories; for tar.gz, `install.sh` does.
+## Enrollment and mTLS
+
+| Item | Behavior |
+| --- | --- |
+| Token | One-time, prefix `ewt_`; given through `EDGEWEIR_TOKEN`, `--token-file` (`EDGEWEIR_TOKEN_FILE`) or `--token`; command-line flags win over environment variables, and a token plus a token file on the same level is an error; removed from the environment once read; `--token` shows in the process list and prints a warning |
+| CA pinning | One certificate of the chain the node channel presents must have the DER SHA-256 given by `--ca-sha256`; it is the only root for verifying the server certificate and host name (the host of `--server` unless `--server-name` is given); the token is sent only after that |
+| Keys | The node generates an ECDSA P-256 key and CSR; the console issues the node certificate (valid for 30 days) and returns the CA certificate, whose hash, issuer, usage and public key the node checks |
+| Files | `node.key` (0600), `node.crt`, `ca.crt`, then `identity.json` last; run as root with a state directory owned by `edgeweir`, the files are handed to that user |
+| Afterwards | Every RPC uses mTLS and trusts only the internal CA; the certificate renews itself when less than a third of its lifetime remains, see [Certificate rotation](../node/operations.en.md#certificate-rotation) |
+| Already enrolled | `enroll` refuses an existing identity unless `--force` is given; `--force` is refused while the node runs (stop the service first) and deletes the old identity and LKG configuration |
+| Failures | A used or expired token: `console rejected the enrollment token (expired or already used)`; wrong CA: `CA pin mismatch` |
+
+`enroll` flags:
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--server` | required | Node channel URL: `https://<host>:8443`, or the WebSocket entry `wss://<host>` (`ws://` for a plain-HTTP console), no path |
+| `--ca-sha256` | required | SHA-256 of the internal CA certificate (DER), hex (a `sha256:` prefix and colons are accepted) |
+| `--token-file` | none | Token file (surrounding whitespace ignored) |
+| `--token` | none | Token; prefer `EDGEWEIR_TOKEN` or `--token-file` |
+| `--server-name` | host of `--server` | TLS server name to verify |
+| `--state-dir` | `/var/lib/edgeweir-node` | State directory |
+| `--force` | off | Replace an existing identity |
+| `--timeout` | `30s` | Enrollment RPC timeout |
+| `--log-level`, `--log-format` | `info`, `text` | Log level and format |
+
+WebSocket entry: TLS runs inside the WebSocket and is terminated by the console, so CA pinning and mTLS are unchanged; the certificate of the `wss://` address itself is checked against the system roots; the handshake follows `HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY`. See [The node channel's WebSocket entry](networking.en.md#the-node-channels-websocket-entry).
 
 ## Ports and firewall
 
-Nodes accept user traffic on these ports; open them in the host firewall and the cloud security group. Nodes only connect out to the console's node channel and need no inbound port for the console.
+Nodes accept user traffic on these ports; open them in the host firewall and the cloud security group. Nodes only connect out to the console's node channel and need no inbound port for the console. Outbound destinations: [Ports](../node/README.en.md#ports).
 
 | Port | Use | When |
 | --- | --- | --- |
@@ -125,11 +259,11 @@ Nodes accept user traffic on these ports; open them in the host firewall and the
 
 | Item | Notes |
 | --- | --- |
-| Privileges | Port pools hold 1024–65535 only: the systemd unit and the image need no extra privileges |
+| Privileges | Port pools hold 1024–65535 only; extra ports below 1024 are bound by the nginx master like 80 and 443; the systemd unit and the image need no extra privileges |
 | Container nodes | Publish the ports of the pools, for example `-p 9000:9000 -p 9000:9000/udp`, a range as `-p 20000-20100:20000-20100`; use host networking (`--network host`) for large pools |
-| Port changes | Creating or deleting an L4 app or changing its port, and adding or removing the cluster's extra listener ports, reload the node; old workers keep serving open connections, see [Reloads and long connections](../guide/l4.en.md#reloads-and-long-connections) |
-| Extra ports below 1024 | Bound by the nginx master like 80 and 443: no extra privileges |
+| Port changes | Creating or deleting an L4 app or changing its port, and adding or removing the cluster's extra listener ports, reload the node; old workers keep serving open connections, see [Reloads and long connections](../guide/l4.en.md#reloads-and-long-connections) and [How long old workers stay](../node/configuration.en.md#how-long-old-workers-stay) |
 | Port ranges | Every port takes a listening socket; with UDP one per worker (`reuseport`). The node raises `worker_connections` by the number of listening sockets and its own open-file soft limit to the hard limit |
+| Port in use | The reload does not take effect, the revision is recorded as failed and the node keeps serving the previous configuration, see [Node troubleshooting](../node/troubleshooting.en.md#port-conflicts) |
 
 ## Client IP
 
@@ -154,21 +288,6 @@ Nodes accept user traffic on these ports; open them in the host firewall and the
 
 > [!WARNING]
 > With the PROXY protocol, any client that reaches a node port directly can claim any address in the header: open the nodes' HTTP and HTTPS ports to the load balancer only. List only the addresses your proxies actually use as trusted CIDRs: an address there can claim any visitor address.
-
-### How long old workers stay
-
-After a reload, old workers serve their open connections (long layer-4 connections, HTTP keep-alive, WebSocket) until these end by default, so frequent structural changes leave several sets of old workers. The node option `--stream-shutdown-timeout` (environment variable `EDGEWEIR_STREAM_SHUTDOWN_TIMEOUT`) bounds that time:
-
-| Value | Behavior |
-| --- | --- |
-| `0` (default) | No bound; an old worker exits after its last connection |
-| A duration such as `30m` or `2h` | After that long, old workers close every connection they still serve (nginx `worker_shutdown_timeout`): layer-4, HTTP, and WebSocket connections alike |
-
-```bash title="/etc/default/edgeweir-node"
-EDGEWEIR_STREAM_SHUTDOWN_TIMEOUT=30m
-```
-
-Then run `sudo systemctl restart edgeweir-node`. Container nodes take `-e EDGEWEIR_STREAM_SHUTDOWN_TIMEOUT=30m`.
 
 ## Regional probes
 
@@ -213,7 +332,7 @@ volumes:
 
 ### systemd
 
-The edgeweir-node deb and rpm packages include `edgeweir-probe.service` (not enabled), and the tar.gz has the same unit under `systemd/`. The packages depend on `edgeweir-openresty`, which probe mode does not start; verify the release files first as described in [SECURITY.md](../../SECURITY.en.md#verifying-releases), and do not enable `edgeweir-node.service` on a probe host.
+The edgeweir-node deb and rpm packages include `edgeweir-probe.service` (not enabled), and the tar.gz has the same unit under `systemd/`. The packages depend on `edgeweir-openresty`, which probe mode does not start; [verify the releases](#verifying-releases) first, and do not enable `edgeweir-node.service` on a probe host.
 
 ```bash title="Probe host"
 sudo tee /etc/default/edgeweir-probe >/dev/null <<'CONF'
@@ -241,7 +360,7 @@ edgeweir-node probe [--state-dir DIR]     # enrolled
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--server` | None (required on the first run) | Node channel URL |
+| `--server` | None (required on the first run) | Node channel URL, same forms as `enroll` |
 | `--ca-sha256` | None (required on the first run) | SHA-256 of the node channel's internal CA certificate (DER), hex |
 | `--token-file` | None | File with the enrollment token (first run) |
 | `--token` | None | Enrollment token (first run); visible in the process list, prefer `EDGEWEIR_TOKEN` or `--token-file` |
@@ -283,13 +402,13 @@ Layout:
 ```text
 downloads/
   edgeweir-node/
-    latest                      # version number, e.g. 0.2.0
-    v0.2.0/
+    latest                      # version number, e.g. 1.6.2
+    v1.6.2/
       checksums.txt
       checksums.txt.sigstore.json
-      edgeweir-node_0.2.0_amd64.deb
-      edgeweir-node-0.2.0-1.x86_64.rpm
-      edgeweir-node_0.2.0_linux_amd64.tar.gz
+      edgeweir-node_1.6.2_amd64.deb
+      edgeweir-node-1.6.2-1.x86_64.rpm
+      edgeweir-node_1.6.2_linux_amd64.tar.gz
       edgeweir-openresty_1.31.1.1-3_amd64.deb
       edgeweir-openresty-1.31.1.1-3.x86_64.rpm
       edgeweir-openresty-modsecurity_1.31.1.1-3_amd64.deb
@@ -314,39 +433,32 @@ Enable it with `compose.yml`:
 
    Expected: the version number.
 
-The release source for agent self-upgrades is set in **System settings → Node release source** and is independent of this mirror; see [node upgrades](../guide/node-upgrades.en.md).
+The release source for signed node upgrades is set in **System settings → Node release source** and in the node's `EDGEWEIR_UPGRADE_SOURCE`, independent of this mirror; see [Node upgrades](../guide/node-upgrades.en.md#private-mirrors-and-own-releases).
 
 ## Troubleshooting
 
-A node's warnings, errors and key events are also in the **Logs** tab of its details, see [Node logs](../guide/node-logs.en.md).
+Errors during installation and enrollment. Connection, configuration, certificate and cache problems of running nodes: [Node troubleshooting](../node/troubleshooting.en.md).
 
-On the node, `sudo edgeweir-node diagnose` (from v1.5.0) checks the identity, the node certificate, the connection to the console, the clock offset from the console, the running agent, the configuration and the data plane, one line each (`ok`, `warn`, `fail`, `skip`), and exits with 1 when a check fails; `--json` prints the full results. To look into the agent itself, `sudo edgeweir-node pprof heap --output heap.pb.gz` (or `profile`, `goroutine`, …) fetches a Go profile from the node's local diagnostics socket.
-
-| Symptom | Cause | Action |
+| Symptom | Cause | Fix |
 | --- | --- | --- |
-| **Clock offset** on the node's details is marked **Skewed**, or a **Node clock skewed** alert arrives | The node's host does not synchronize its time: its clock is ahead or behind the console's by the alert rule's seconds or more | Turn on NTP on the node (for example `timedatectl set-ntp true`, or chrony); later heartbeats update the offset. |
-| `no enrollment token` | `sudo` dropped `EDGEWEIR_TOKEN` | Run the generated command unchanged: `export` and `sudo --preserve-env=EDGEWEIR_TOKEN`. |
-| `the enrollment token is malformed (expected ewt_...)` | Token copied incompletely | Copy the install command again. |
-| `systemd is required` | No systemd on the host | Use a systemd host, or add `--no-start` to install and enroll only. |
-| `could not determine the latest edgeweir-node version; pass --version` | No `latest` in the mirror, and GitHub unreachable or without a release | Add `--version`, or set up the downloads mirror. |
-| `edgeweir-openresty needs glibc 2.34 or later` | The distribution is too old | Use RHEL, Rocky, AlmaLinux 9, Debian 12, Ubuntu 22.04, or later. |
-| `checksums.txt does not list exactly one ... package of edgeweir-openresty...` | The mirror or release lacks the package, or lists several versions for the architecture | Complete the mirror directory from `checksums.txt`; add `--no-modsecurity` when the release has no ModSecurity module. |
-| `edgeweir-openresty comes as .deb and .rpm only` | A tar.gz install on a host without `dpkg`, `rpm`, or an installed `edgeweir-openresty` | Use a host with deb or rpm package management. |
-| `cosign signature verification FAILED`, `SHA-256 verification FAILED` | Downloaded content does not match the signature or checksum | Check the download source and the mirror contents; do not skip verification. |
-| `CA pin mismatch`, `does not present the console's node CA` | A proxy or CDN terminates TLS on 8443 (a proxied Cloudflare record included), or `--server` points at another service | Connect directly or use [layer-4 passthrough](networking.en.md#node-channel-passthrough); set the Cloudflare record to DNS only. |
-| `cannot reach the node channel` | The `--server` address or its DNS name is wrong, a firewall or security group blocks the port, or the node channel URL is a local or private address | Check the address and DNS, open the port; `curl -k https://<address>:8443/` on the node should return 404. When the URL is wrong, change "Node channel" in **System settings** and generate a new install command. |
-| `console rejected the enrollment token (expired or already used)` | Token expired or already used | Generate a new install command. |
-| `edgeweir-node is installed but not healthy after 90s` | The node did not apply its configuration within 90 seconds: it cannot reach the node channel, its certificate is rejected, or OpenResty failed to start | Read `journalctl -u edgeweir-node -n 50`; after fixing, run the same command again (it only restarts and checks the service). |
-| `node is already enrolled (use --force to replace the identity)` | The host already has a node identity (`/var/lib/edgeweir-node/identity.json`) | Keep the existing enrollment; to replace the identity, run a new install command with `--force` appended, or stop the node (`systemctl stop edgeweir-node`; a running node refuses), run `edgeweir-node enroll --force` with a new token, then start it; flags in [edgeweir-node](https://github.com/marvinli001/edgeweir-node). |
-| Node log `client certificate expired at ...`, the console marks the node **Certificate expired** | The node was offline longer than its certificate had left and could not renew it; the node channel refuses it with `client certificate has expired (CERT_HAS_EXPIRED)` | Generate a new install command; run it on the node with `--force` appended (or `systemctl stop edgeweir-node`, run `edgeweir-node enroll --force` with the new token, then start it); delete the old node in the console. |
-| `x509: certificate is valid for ..., not ...` | The name the node connects to is not in the node channel certificate: the node enrolled with an `EDGEWEIR_NODE_API_URL` that has since changed | Add the name to `EDGEWEIR_NODE_API_HOSTNAMES` and restart the console; see [node channel URL and certificate](networking.en.md#node-channel-url-and-certificate). |
-| Enrollment times out, or the node stays offline | Firewall or security group blocks 8443; the node channel URL resolves incorrectly | Open 8443; check DNS resolution. |
-| Enrolled nodes go offline after the node channel URL changed | Nodes before v1.2.0 keep the URL they enrolled with; or the old address went down before the nodes switched | Restore the old address (endpoint, DNS record, or port forwarding) and let the nodes switch (upgrade nodes before v1.2.0 first); on a v1.2.0 or later node that already lost the console run `sudo edgeweir-node set-server --server <new URL>`; enroll earlier nodes again by running a new install command with `--force` appended, then delete the old node in the console. |
-| A node shows "Cannot switch" | The node's check of the new URL failed; the reason is in the tooltip and the node details: cannot reach it, no WebSocket entry at the URL, a certificate that is not this console's (a proxy or CDN in front terminates TLS) and so on | Make sure the new URL is reachable from the node's network and passed through at layer 4; once fixed, the node switches at its next retry (60 minutes at most), or at once when its service restarts. |
-| The node stays "Awaiting heartbeat" | Enrolled, but the agent has not connected to the node channel over mTLS yet: the service is not running (for example `--no-start`), or the connection fails | Run `systemctl status edgeweir-node` and `journalctl -u edgeweir-node -n 50` on the node. |
-| The connection check shows "Certificate mismatch: a proxy or CDN may be in front" | The node channel URL points at a proxy, CDN, or other service that terminates TLS | Connect directly or use [layer-4 passthrough](networking.en.md#node-channel-passthrough), or change it in **System settings** to an address that reaches the console directly. |
-| Connections to an L4 app's port time out | The node firewall or security group does not open the port pools; a container node does not publish the ports | Open or publish them as in [Ports and firewall](#ports-and-firewall). |
-| `probe is not enrolled: the first run needs --server, --ca-sha256 and a probe token` | A probe's first start lacks the enrollment settings (exit status 2) | Set `EDGEWEIR_SERVER`, `EDGEWEIR_CA_SHA256`, and `EDGEWEIR_TOKEN`, then start it again. |
-| `probe enrollment failed: console rejected the enrollment token (expired or already used)` | The probe token expired or was already used | **Add probe** again for a new token. |
-| A probe container shows `unhealthy` | The image's health check asks the data plane | Turn the container health check off, see [Container](#container). |
-
+| `no enrollment token` | `sudo` did not keep `EDGEWEIR_TOKEN` | Run the generated command as is: `export` and `sudo --preserve-env=EDGEWEIR_TOKEN` |
+| `the enrollment token is malformed (expected ewt_...)` | The token was copied incompletely | Copy the install command again |
+| `--server must be an https://, wss:// or ws:// URL` | Missing or wrong scheme | Use the "Node channel" URL from **System settings** |
+| `systemd is required (use --no-start to only install and enroll)` | No systemd on the host | Use a systemd host, add `--no-start` to install and enroll only, or use [Docker](#docker) |
+| `unsupported architecture: …` | Neither amd64 nor arm64 | Use an amd64 or arm64 host |
+| `could not determine the latest edgeweir-node version; pass --version` | The mirror has no `latest`, and GitHub is unreachable or has no release | Pass `--version`, or set up the [downloads mirror](#downloads-mirror) |
+| `edgeweir-openresty needs glibc 2.34 or later` | The distribution is too old | Use RHEL, Rocky, AlmaLinux 9, Debian 12, Ubuntu 22.04 or later |
+| `checksums.txt does not list exactly one ... package of edgeweir-openresty...` | The mirror or release lacks the package, or holds several versions for one architecture | Complete the mirror directory from `checksums.txt`; add `--no-modsecurity` for a release without the ModSecurity module |
+| `edgeweir-openresty comes as .deb and .rpm only` | A tar.gz install on a host without `dpkg`, `rpm` and an installed `edgeweir-openresty` | Use a host with deb or rpm package management, or [Docker](#docker) |
+| `cosign signature verification FAILED`, `SHA-256 verification FAILED` | Downloaded content does not match the signature or checksum | Check the download source and the mirror directory; never skip verification |
+| `cannot reach the node channel` | Wrong address or DNS for `--server`, the firewall or security group blocks the port, or the node channel URL is a local or private address | Check the address and DNS and open the port; `curl -k https://<address>:8443/` on the node should return 404. For a wrong address, change "Node channel" in **System settings** and generate a new install command |
+| `does not present the console's node CA`, `CA pin mismatch` | A proxy or CDN terminates TLS in front of the node channel (including a proxied Cloudflare record), or `--server` points at another service | Connect directly or through [layer-4 passthrough](networking.en.md#node-channel-passthrough); switch a Cloudflare record to DNS only |
+| `answers 404: the console's WebSocket entry is closed` | The WebSocket entry of a `wss://` / `ws://` URL is closed | Save a `wss://` node channel URL in **System settings** or set `EDGEWEIR_NODE_API_WEBSOCKET=true`, see [The node channel's WebSocket entry](networking.en.md#the-node-channels-websocket-entry) |
+| `cannot connect through <URL>: wss:// and ws:// node channel URLs need 0.2.0 or later` | `--version` names a version before 0.2.0 | Use 0.2.0 or later |
+| `console rejected the enrollment token (expired or already used)` | The token expired or was used | Generate a new install command |
+| `node is already enrolled (use --force to replace the identity)` | The host already has a node identity (`/var/lib/edgeweir-node/identity.json`) | Keep the enrollment; to replace the identity see [Re-enrollment](../node/operations.en.md#re-enrollment) |
+| `edgeweir-node is installed but not healthy after 90s` | The node did not apply a configuration within 90 seconds: node channel unreachable, certificate refused, a port in use, or OpenResty failed to start | Run `sudo edgeweir-node diagnose` and `journalctl -u edgeweir-node -n 50`; after fixing, run the same command again (it only restarts and checks) |
+| Enrollment times out, or the node stays at "Awaiting heartbeat" | The service is not running (for example `--no-start`), or the mTLS connection fails | See [Node troubleshooting](../node/troubleshooting.en.md#connection) |
+| `probe is not enrolled: the first run needs --server, --ca-sha256 and a probe token` | The probe's first start lacks enrollment settings (exit status 2) | Set `EDGEWEIR_SERVER`, `EDGEWEIR_CA_SHA256` and `EDGEWEIR_TOKEN`, then start again |
+| `probe enrollment failed: console rejected the enrollment token (expired or already used)` | The probe token expired or was used | Generate a new one with **Add probe** |
+| A probe container shows `unhealthy` | The image's health check asks the data plane | Turn the container health check off, see [Container](#container) |

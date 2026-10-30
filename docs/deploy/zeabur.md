@@ -10,7 +10,7 @@
 | --- | --- |
 | Zeabur | Dev 计划及以上：Free 计划的服务空闲后自动休眠，会停止 worker 与节点通道 |
 | Zeabur Server | 向 Zeabur 购买（**Servers → Create → Buy a Server from Zeabur**），或接入自有服务器（至少 1 CPU、2 GB 内存，放行 22、80、443、4222、6443、30000–32767）。Zeabur 的共享集群已不接受新服务 |
-| 控制台镜像 | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`，公开拉取；linux/amd64、linux/arm64。tag 规则见 [版本、升级与回滚](upgrade.md) |
+| 控制台镜像 | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`，公开拉取；linux/amd64、linux/arm64。tag 规则见 [版本与升级](upgrade.md) |
 | PostgreSQL | PostgreSQL 18，与控制台在同一项目 |
 | 主密钥 | `openssl rand -base64 32` 生成；保存在 Zeabur 之外，与数据库备份分开 |
 | 节点 | edgeweir-node 0.2.0 及以上：节点默认经 [WebSocket 入口](networking.md#节点通道的-websocket-入口) 连接节点通道 |
@@ -109,7 +109,7 @@
 
 1. `edgeweir` 服务 **Logs**，过滤 `first-run setup`。服务重启或重新部署后看不到之前实例的日志，搜索最新实例即可。
 2. 该行 `setupToken` 字段为 setup token，`url` 字段为初始化向导地址（`<EDGEWEIR_PUBLIC_URL>/setup`）。
-3. 打开向导，填入 setup token，见 [快速上手](../guide/first-site.md#1-完成初始化向导)。
+3. 打开向导，在「初始化令牌」填入 setup token，填写「姓名」「邮箱」「密码」（至少 12 位），点击「创建并继续」；见 [快速上手](../guide/first-site.md#1-完成初始化向导)。
 
 CLI：`npx zeabur@latest deployment log -t=runtime --service-name edgeweir | grep setupToken`。
 
@@ -179,7 +179,7 @@ CLI：`npx zeabur@latest deployment log -t=runtime --service-name edgeweir | gre
 
    预期：`version` 为新 tag。
 
-迁移、签名校验与回滚见 [版本、升级与回滚](upgrade.md)。
+迁移与签名校验见 [版本与升级](upgrade.md)，回退见 [降级](downgrade.md)。
 
 ## 节点通道直连
 

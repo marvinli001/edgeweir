@@ -1,41 +1,13 @@
 ---
 title: Edgeweir documentation
-description: Welcome to the official Edgeweir documentation.
+description: Deployment, usage, operations and API documentation for the self-hosted CDN, WAF and edge scheduling platform.
 ---
 
-Edgeweir is a self-hosted CDN, WAF and intelligent edge scheduling platform. The system has two core parts:
+| Component | Role |
+| --- | --- |
+| Console (control plane) | Web UI, `/api/v1`, certificate issuance, rule compilation, configuration revisions; one image, depends on PostgreSQL 18 |
+| Edge node (data plane) | Go agent syncs configuration with the console over mTLS; OpenResty proxies, caches and fetches from origins |
 
-- **Console (control plane)**: handles the web UI, the OpenAPI, certificate issuance, rule compilation and configuration delivery to edge nodes. Ships as a single image and depends only on PostgreSQL 18.
-- **Edge nodes (data plane)**: run on your Linux edge servers. The Go agent keeps the mTLS connection to the console alive and syncs configuration; OpenResty proxies traffic and fetches from origins at high throughput.
+## Editions
 
-Whether you want an acceleration gateway for your own sites on a single VPS or a multi-region, multi-cluster edge network, start with the deployment guides below.
-
-## Deployment
-
-<Cards>
-  <Card title="Deployment overview" href="/en/deploy" description="Components, requirements, supported platforms" />
-  <Card title="Docker Compose" href="/en/deploy/docker" description="Compose file, secrets, startup, operations" />
-  <Card title="BT Panel / aaPanel" href="/en/deploy/baota" description="deploy.sh install, panel reverse proxy" />
-  <Card title="Railway" href="/en/deploy/railway" description="Image service, PostgreSQL, TCP Proxy" />
-  <Card title="Fly.io" href="/en/deploy/fly" description="fly.toml, dedicated IPv4, TCP passthrough" />
-  <Card title="bunny.net" href="/en/deploy/bunny" description="Magic Containers, CDN endpoint, Anycast IP" />
-  <Card title="Adding nodes" href="/en/deploy/nodes" description="Enrollment command, installer checks, release mirror" />
-</Cards>
-
-## Usage
-
-<Cards>
-  <Card title="Quick start" href="/en/guide/first-site" description="Setup, first node, first site" />
-  <Card title="Account and sign-in" href="/en/guide/account" description="Console navigation, 2FA, passkeys, sessions" />
-  <Card title="Clusters and system" href="/en/guide/system" description="Clusters, regions, system settings, audit log" />
-  <Card title="Origins and cache" href="/en/guide/origins-and-cache" description="Origin pools, cache rules, purge and prefetch" />
-</Cards>
-
-## Reference
-
-<Cards>
-  <Card title="Environment variables" href="/en/reference/environment" />
-  <Card title="Command line" href="/en/reference/cli" />
-  <Card title="API and endpoints" href="/en/reference/api" />
-  <Card title="Architecture" href="/en/project/architecture" />
-</Cards>
+{/* editions */}

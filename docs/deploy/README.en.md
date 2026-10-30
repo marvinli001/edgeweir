@@ -1,6 +1,6 @@
 # Deployment overview
 
-Console components, runtime requirements, supported platforms, and process roles.
+Console components, image tags, runtime requirements, supported platforms, node channel access, and process roles.
 
 ## Components
 
@@ -10,6 +10,16 @@ Console components, runtime requirements, supported platforms, and process roles
 | PostgreSQL 18 | Only external dependency. Holds all state, the pg-boss queues, and the sign-in rate-limit counters; LISTEN/NOTIFY broadcasts configuration changes between instances. | Yes |
 | ClickHouse | Raw access logs and per-minute statistics, enabled with `EDGEWEIR_ANALYTICS=clickhouse`; see [access logs and AccessKeys](../guide/access-logs.en.md). | No |
 | Edge nodes | [edgeweir-node](https://github.com/marvinli001/edgeweir-node) on separate hosts; see [adding nodes](nodes.en.md). | — |
+
+## Image tags
+
+| Tag | Source | Use |
+| --- | --- | --- |
+| `<YYYYMMDD>-<commit>` | Every master commit whose CI run passed, built and published by `release.yml`; `<commit>` is the 7-character commit id | Pin this tag in production |
+| `stable` | Moved by hand by a maintainer running `promote.yml` to the digest of a published dated tag; nothing is rebuilt | Default of every compose file and platform template |
+| `latest` | The dated tag of the newest master commit | Evaluation |
+
+Every image contains linux/amd64 and linux/arm64 and carries a cosign keyless signature, an SBOM, and build provenance. Pinning, signature verification, and upgrades: [versions and upgrades](upgrade.en.md); going back: [downgrade](downgrade.en.md).
 
 ## Runtime requirements
 
@@ -26,16 +36,26 @@ Console components, runtime requirements, supported platforms, and process roles
 
 ## Supported platforms
 
-| Platform | Method | Documentation | Status |
+| Platform | Method | Node channel access | Documentation |
 | --- | --- | --- | --- |
-| Docker Compose | `compose.yml`: console and bundled PostgreSQL 18 | [docker.en.md](docker.en.md) | Supported |
-| docker run | Console and PostgreSQL containers on a dedicated Docker network | [docker.en.md](docker.en.md#without-compose-standalone-containers) | Supported |
-| BaoTa / aaPanel, or any Docker host | `deploy.sh` with `compose.baota.yml` (bundled PostgreSQL) or `compose.baota-host.yml` (local or cloud PostgreSQL, host network) | [baota.en.md](baota.en.md), [deploy-script.en.md](deploy-script.en.md) | Supported |
-| Railway | Console image with Railway PostgreSQL 18; web console, optional Railway CLI | [railway.en.md](railway.en.md) | Supported |
-| Fly.io | Console image with an external PostgreSQL 18; flyctl deployment, Dashboard for secrets, IPs, certificates, and logs | [fly.en.md](fly.en.md) | Supported |
-| bunny.net Magic Containers | Console image with an external PostgreSQL 18; a CDN endpoint for the web console, an Anycast IP for the node channel; Dashboard, optional bunny CLI | [bunny.en.md](bunny.en.md) | Supported |
-| Render | `render.yaml` creates the console and Render Postgres 18 in one click, or manual creation in the Dashboard; nodes connect through the WebSocket entry (edgeweir-node 0.2.0 or later) | [render.en.md](render.en.md) | Supported |
-| Zeabur | The `zeabur.yaml` template creates the console and PostgreSQL 18 in one click, or manual creation in the Dashboard; runs on a Zeabur Server, nodes connect through the WebSocket entry (edgeweir-node 0.2.0 or later), or directly through TCP port forwarding | [zeabur.en.md](zeabur.en.md) | Supported |
+| Docker Compose | `compose.yml`: console and bundled PostgreSQL 18; optional ClickHouse (`analytics` profile) | 8443 direct; nginx `stream` layer-4 passthrough; WebSocket entry | [Docker Compose](docker.en.md) |
+| docker run | Console and PostgreSQL containers on a dedicated Docker network | 8443 direct; nginx `stream` layer-4 passthrough; WebSocket entry | [Docker Compose: Without Compose: standalone containers](docker.en.md#without-compose-standalone-containers) |
+| BaoTa / aaPanel, or any Docker host | `deploy.sh` with `compose.baota.yml` (bundled PostgreSQL, Docker bridge) or `compose.baota-host.yml` (local or cloud PostgreSQL, host network) | 8443 direct; panel nginx `stream` layer-4 passthrough | [BaoTa Panel and aaPanel](baota.en.md), [deploy.sh reference](deploy-script.en.md) |
+| Railway | Console image with Railway PostgreSQL 18; web console, optional Railway CLI | Layer-4 passthrough: Railway TCP Proxy → container 8443 | [Railway](railway.en.md) |
+| Fly.io | Console image with an external PostgreSQL 18; `fly.toml` and flyctl deployment, Dashboard for secrets, certificates, and logs | Layer-4 passthrough: Fly Proxy forwards 8443 as TCP on a dedicated IPv4 / IPv6 | [Fly.io](fly.en.md) |
+| bunny.net Magic Containers | Console image with an external PostgreSQL 18; a CDN endpoint for the web console; Dashboard, optional bunny CLI | Layer-4 passthrough: 8443 on an Anycast IPv4 → container 8443 | [bunny.net Magic Containers](bunny.en.md) |
+| Render | The `render.yaml` Blueprint creates the console and Render Postgres 18 in one click, or manual creation in the Dashboard | WebSocket entry | [Render](render.en.md) |
+| Zeabur | The `zeabur.yaml` template (`5MQJR2`) creates the console and PostgreSQL 18 in one click, or manual creation in the Dashboard; runs on a Zeabur Server | WebSocket entry (default); layer-4 passthrough: TCP port forwarding → container 8443 | [Zeabur](zeabur.en.md) |
+
+### Node channel access
+
+| Access | Node channel URL | Condition |
+| --- | --- | --- |
+| 8443 direct | `https://<host>:8443` | 8443/TCP publicly reachable, allowed by the firewall and security group |
+| Layer-4 passthrough | `https://<proxy host>:<port>` | The proxy forwards TCP and does not terminate TLS: nginx `stream`, a platform TCP proxy; see [node channel passthrough](networking.en.md#node-channel-passthrough) |
+| WebSocket entry | `wss://<host[:port] of EDGEWEIR_PUBLIC_URL>` | The web port's HTTP entry forwards WebSocket upgrades; edgeweir-node 0.2.0 or later; see [the node channel's WebSocket entry](networking.en.md#the-node-channels-websocket-entry) |
+
+In all three, the console terminates the node channel's TLS and enforces mTLS after enrollment. The URL is changed in the "Node channel" card of **System settings**; see [node channel URL and certificate](networking.en.md#node-channel-url-and-certificate).
 
 ### Platform conditions
 
@@ -66,10 +86,11 @@ Worker schedules:
 | Interval | Jobs |
 | --- | --- |
 | Every 10 seconds | Probe-driven address reachability and scheduling rule evaluation (one process at a time) |
-| Every minute | Alert checks; DNS sync; traffic and access-log rollups, node upgrade timeouts; certificate issuance and renewal |
-| Hourly | Pruning old revisions; expiring undelivered purge and prefetch tasks |
+| Every minute | Alert checks; automatic mitigation evaluation; configuration canary progress; DNS sync; traffic, usage protection, and access-log rollups, node upgrade timeouts; certificate issuance and renewal |
+| Every 10 minutes | Deleting expired bans; deleting node logs past their retention or row limit |
 | Every 30 minutes | Deleting enrollment tokens expired or used more than 7 days ago |
-| At startup | When an upgrade changes what the stored configuration compiles to, republishing every cluster once (reason "Configuration recompiled after an upgrade") |
+| Hourly | Rotating challenge keys (after 1 day) and TLS session ticket keys (after 12 hours); replacing origin client certificates 30 days before they expire; pruning old revisions, security events, and idempotency keys; expiring undelivered purge and prefetch tasks |
+| At startup | When an upgrade changes what the stored configuration compiles to, republishing every cluster once (reason "Configuration recompiled after an upgrade"); marking certificates nodes cannot load; linking ACME accounts |
 
 ### Scaling
 
@@ -93,6 +114,7 @@ Worker schedules:
 | [Zeabur](zeabur.en.md) | One-click template, manual creation in the Dashboard, Zeabur CLI |
 | [Ports, reverse proxy, and trusted proxies](networking.en.md) | 3000 and 8443, nginx examples, the node channel's WebSocket entry, `EDGEWEIR_TRUSTED_PROXIES` |
 | [Adding nodes](nodes.en.md) | Install command, `install.sh` checks, regional probes, downloads mirror |
-| [Versions, upgrades, and rollback](upgrade.en.md) | Image tags, pinning, upgrade, rollback, signature verification |
+| [Versions and upgrades](upgrade.en.md) | Versions and channels, pinning, signature verification, upgrade steps, node compatibility |
+| [Downgrade](downgrade.en.md) | Going back to an earlier version |
 | [Backup and recovery](backup.en.md) | Database and master key backup, restore acceptance |
 | [Environment variables](../reference/environment.en.md) | Every variable and its default |

@@ -18,8 +18,8 @@ The console parses expressions and checks their fields, types, and actions befor
 ## Edit site rules
 
 1. Open **Sites**, select the site, and open the **Rules** tab.
-2. Click **Add rule** next to the target phase.
-3. Enter the rule name and **Expression**. **Insert condition** appends a common condition (path prefix, Host equals, file extension, IP range, IP list, country, ASN, User-Agent contains, request method, Cookie equals, query parameter equals, User-Agent wildcard, Referer wildcard) and selects its example value, so typing replaces it; **Insert field** appends a field, and for **Cookie**, **Query parameter**, and **Request header** you first enter the name in the field that appears and press Enter or click **Insert**; both join with `and`. When the expression is invalid, "Character N: reason" appears below the editor, for example "Character 11: Ordered comparisons need a number field"; an expression the console refuses on save shows its position and reason the same way.
+2. Click **Add rule** in the header of the target phase's card. With 64 rules on the site (32 global rules) the button is disabled with "At most 64 rules" ("At most 32 rules" for global rules).
+3. Enter the rule name (1–100 characters, **New rule** by default) and **Expression**. **Insert condition** appends a common condition and selects its example value, so typing replaces it: Path prefix, Host equals, File extension, IP range, Country, ASN, User-Agent contains, Request method, Cookie equals, Query parameter equals, User-Agent wildcard, Referer wildcard, Form field equals, JSON field equals, Request body contains, Uploaded file name contains, Verified crawler, and one "IP list `<name>`" per list; the five before the lists appear in the request phases only. **Insert field** appends a field available in the phase; for **Cookie**, **Query parameter**, and **Request header**, first enter the name in the field that appears and press Enter or click **Insert**; both join with `and`. While the cluster's nodes lack a capability, both menus leave out its conditions and fields, see [Node capabilities and publishing](#node-capabilities-and-publishing). When the expression is invalid, "Character N: reason" appears below the editor, for example "Character 11: Ordered comparisons need a number field"; an expression the console refuses on save shows its position and reason the same way.
 4. Select **Action**, fill in its fields, and turn on **Enabled**. A new rule starts disabled with the expression `true` (every request), as does a rule saved through the API without `enabled`; check the condition and the action before you save.
 5. Drag the handle on the left of a rule to reorder rules within a phase.
 6. Click **Save**. The console shows **Saved** and publishes a new configuration revision ("Rules and IP lists updated").
@@ -31,9 +31,25 @@ The console parses expressions and checks their fields, types, and actions befor
 
    The response is 403 with `X-Edgeweir-Error: policy-denied`.
 
-Global rules are edited on the **Global rules** page with the same editor (**Origin override** has no **Origin group**), apply to every site, and are published to every cluster on save. API: `GET` and `PUT /api/v1/platform-rules`.
+Global rules are edited under **Access control → Global rules** (`/rules`), apply to every site, and are published to every cluster on save. The editor is the same as for site rules, with these differences:
+
+| Item | Site rules | Global rules |
+| --- | --- | --- |
+| Rule limit | 64 | 32 |
+| **Origin group** of **Origin override** | Yes | No |
+| **Scope** of **Ban** | No (always this site) | **This site** or **Global** |
+| **Rules body limit** card | Yes | No |
+| Node capability notes and locks | By the site's cluster | None |
+| Audit | "Site rules updated" | "Global rules updated" |
 
 Disabled rules are not sent to nodes.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET`, `PUT` | `/api/v1/sites/{id}/rules` | Reads or replaces a site's rules (at most 64) |
+| `GET`, `PUT` | `/api/v1/platform-rules` | Reads or replaces the global rules (at most 32) |
+| `POST` | `/api/v1/rules/validate` | Checks an expression: `kind` is `condition` (a rule condition, default), `value` (a value expression), or `cacheRule` (a cache rule condition, up to 16384 characters); returns `valid`, `position`, `message`, `code`, `params` |
+| `GET` | `/api/v1/sites/{id}/rules/logged` | The most-matched **Log** rules, parameters `range` (default `24h`) and `limit` (1–50, default 10) |
 
 ## Version history and restore
 
@@ -41,7 +57,7 @@ Each time a save (including the API, settings copy and restores) creates, change
 
 - View and compare: the "Version history" button beside a saved rule's name lists its versions, newest first; open one to see the fields that differ from the saved rule (the current value struck through, expression and action lines marked removed or added).
 - Restore: click "Restore" beside a version and confirm. A restore is a new save: the rule takes that version's content (keeping its position), gets a new version with the source "Restored from version N", a new configuration revision is published and the audit log records "Site rule version restored" / "Global rule version restored". Unsaved edits in the editor are lost. A version equal to the saved rule cannot be restored.
-- Deleted rules: when a site has deleted rules, "Deleted rules (N)" appears above the rules. It lists each rule as it was before deletion; "Restore" adds it back at the end of its phase with its old rule ID and history.
+- Deleted rules: when a site or the global rules have deleted rules, "Deleted rules (N)" appears above the rules. It lists each rule as it was before deletion; "Restore" adds it back at the end of its phase with its old rule ID and history.
 - Restores pass today's rule checks: a version whose action is no longer valid, that references an IP list or origin group that no longer exists, or a deleted rule that would exceed 64 rules (32 global rules) is refused and nothing changes.
 - Retention: the last 50 versions of each rule; per site and for global rules, the 100 most recently deleted rules (older deleted rules lose their history). Deleting a site deletes its rule versions.
 - The read-only demo account and read-only AccessKeys can view versions but not restore.
@@ -77,7 +93,7 @@ Phases run in the order of this table.
 | Rewrite path | Keep query string | On / off | On |
 | Redirect / Rewrite path | Set query parameters | Up to 16 pairs of **Parameter name** and **Parameter value**, one more per **Add parameter**; names are 1–64 letters, digits, or `.` `_` `~` `-`, unique; a **Static** value is printable ASCII, up to 256 characters, an **Expression** value a value expression, see [Header and query parameter values](#header-and-query-parameter-values) | None |
 | Redirect / Rewrite path | Remove query parameters | Parameter names, comma-separated, up to 16; not also in **Set query parameters** | Empty |
-| Request header / Response header | Header name | 1–64 token characters, not a protected header | `x-custom` |
+| Request header / Response header | Header name | 1–64 token characters, saved in lowercase, not a protected header | `x-custom` |
 | Request header / Response header | Value | **Static**: up to 4096 characters, no control characters. **Expression**: a value expression, see [Header and query parameter values](#header-and-query-parameter-values) | Static, empty |
 | Request header / Response header | Remove header | On / off; a removed header has no value | Off |
 | Response header | Append | On / off; on, adds a line next to the response's lines of the same header (for example `Link` or `Vary`); off, replaces them | Off |
@@ -90,11 +106,11 @@ Phases run in the order of this table.
 | Rate limit | Preset | Loose (300 per minute), Standard (100 per minute), Strict (20 per minute), or Custom; Custom shows the next two fields | Standard |
 | Rate limit | Requests per window | 1–100000 | 100 |
 | Rate limit | Window (seconds) | 1–3600 | 60 |
-| Rate limit | Rate limit key | `ip.src`, `http.host`, `tls.ja4`, or `http.request.headers.<name>` (pick **Request header** and enter the name) | `ip.src` |
+| Rate limit | Rate limit key | `ip.src`, `http.host`, `tls.ja4`, or `http.request.headers.<name>` (pick **Request header** and enter the name in **Header name**: 1–64 lowercase letters, digits, or `-`; prefilled with `x-client-id`) | `ip.src` |
 | Rate limit | Status code | 429 / 403 | 429 |
 | Rate limit | Ban when exceeded (s) | 0 or 60–86400; 0 bans nothing | 0 |
 | Log | Write access log | On / Off | Off |
-| Ban | Duration (s) | 60–604800 | 3600 |
+| Ban | Duration | 1 h, 6 h, 1 d, 3 d, 7 d, or **Custom**; **Custom** shows **Duration (seconds)**, 60–604800 | 1 h |
 | Ban | Scope | This site / Global (global rules only) | This site |
 | Ban | IPv4 prefix, IPv6 prefix | IPv4 /16–/32; IPv6 /48–/64 | /32, /64 |
 | Custom response | Status code | 200, 204, 400–499, 500–599 | 403 |
@@ -204,7 +220,7 @@ Ban, Custom response, Close connection, Skip, Write access log and Ban when exce
 
 | Item | Behavior |
 | --- | --- |
-| Allow and block lists | Run first. An address in a block list gets 403; an address in an allow list is exempt from the block lists but not from rules; an address in both is allowed. The site's [access control](access-control.en.md#order) (site lists, geo, CORS preflights, hotlink protection, user agents) and access authentication follow, and only then the rule phases |
+| Allow and block lists | Run after the [ban](bans.en.md) check and before every rule. An address in a block list gets 403 (`X-Edgeweir-Error: policy-denied`); an address in both is allowed. Allow lists exempt from block lists, the site's block lists, and bans, not from rules, see [IP lists](#ip-lists). The site's [access control](access-control.en.md#order) (site lists, geo, CORS preflights, hotlink protection, user agents) and access authentication follow, and only then the rule phases |
 | Access authentication | The site's [access authentication](access-control.en.md) runs after the lists and before every phase; refused requests run no rules. Signed URLs have lost their signature before: expressions never see the signature parameters or path segments |
 | Scope | In each phase, global rules run before site rules; within a scope, in list order |
 | Terminating actions | Block, redirect (bulk redirects included), exceeding a rate limit, Ban, Custom response and Close connection end the request |
@@ -218,7 +234,7 @@ Ban, Custom response, Close connection, Skip, Write access log and Ban when exce
 
 | Action | Behavior |
 | --- | --- |
-| Rewrite path | Changes the path and query string sent to the origin; expressions in later phases see the rewritten path, query string, query parameters, and extension (`http.request.full_uri` stays the same); cache rules, the cache key, purges, and bulk redirects still use the request before the rewrite |
+| Rewrite path | Changes the path and query string sent to the origin; expressions in later phases see the rewritten path, query string, `http.request.uri`, query parameters, and extension (`http.request.full_uri` stays the same); cache rules, the cache key, purges, and bulk redirects still use the request before the rewrite |
 | Response transform | Applies to cache hits and origin responses |
 | Override settings: Gzip, Brotli, Zstandard | Affect only the response and never bypass the cache. On sites that compress at the edge (any algorithm on), the cache still holds the same uncompressed object; on sites that do not, **Gzip** off removes `Accept-Encoding` towards the origin and the cache tells variants apart by the origin's `Vary`; when the origin sends no `Vary: Accept-Encoding`, the request may hit a previously cached compressed object |
 | Override settings: Redirect HTTP to HTTPS | Requests get 503 when the site has no certificate |
@@ -227,7 +243,7 @@ Ban, Custom response, Close connection, Skip, Write access log and Ban when exce
 | Compression algorithms | Only algorithms on the list that the site has on and override settings did not turn off are negotiated by the q-values of the request's `Accept-Encoding`, with the list order breaking ties; **No compression** turns compression off; the cache is not bypassed |
 | Block, rate limit exceeded | Response header `X-Edgeweir-Error: policy-denied`; rate-limited responses also carry `Retry-After` (the window in seconds) |
 | Challenge | A request with a pass of a sufficient level continues with the following rules; otherwise it gets the challenge page (non-GET/HEAD requests get 403 with `X-Edgeweir-Challenge: required`). Allow rules skip Under Attack and CC challenges, but a challenge rule that matched before the allow still applies. See [Challenges and CC mitigation](challenges.en.md) |
-| Log | Does not change the response. Nodes count the matching requests per rule and minute (not the node's own prefetches), and the **Log rule matches** card on the site's **Attacks** tab lists the most-matched rules over a time range (global rules marked "(global)", deleted rules shown as "Deleted rule"); the numbers are approximate: each node reports at most 20 rules per minute. While some nodes of the site's cluster lack the capability `rule-log-v1`, the card shows "Some nodes in the cluster do not report rule matches". Each rule also writes at most one NOTICE-level nginx error log line per node per 60 seconds, containing the site ID and rule ID; nginx appends the client IP, request line, and Host to log lines written during a request |
+| Log | Does not change the response. Nodes count the matching requests per rule and minute (not the node's own prefetches), and the **Log rule matches** card on the site's **Attacks** tab lists the most-matched rules over a time range (global rules marked "(global)", deleted rules shown as "Deleted rule"); the numbers are approximate: each node reports at most 20 rules per site and minute. While some nodes of the site's cluster lack the capability `rule-log-v1`, the card shows "Some nodes in the cluster do not report rule matches". Each rule also writes at most one NOTICE-level nginx error log line per node per 60 seconds, `edgeweir: WAF match site=<site ID> rule=<rule ID>`; nginx appends the client IP, request line, and Host to log lines written during a request |
 
 ### Rate limiting
 
@@ -235,7 +251,7 @@ Ban, Custom response, Close connection, Skip, Write access log and Ban when exce
 | --- | --- |
 | Scope | A fixed window per node, not a network-wide quota; each site counts separately, and rate limits in the global rules are also counted per site |
 | Key | Counted by an MD5 digest of the scope, rule ID, and key value |
-| Memory | A fixed 256 KiB shared memory partition per published site (node flag `--rate-limit-dict-kb`), holding about 1980 counters, never borrowed across sites; at most 512 published sites per cluster (128 MiB in total by default); log deduplication uses another 1 MiB |
+| Memory | A fixed 256 KiB shared memory partition per published site (node flag `--rate-limit-dict-kb`, 64–65536), holding about 1980 counters, never borrowed across sites; at most 512 published sites per cluster (128 MiB in total by default); log deduplication uses another 1 MiB |
 | Out of memory | When a site's partition is full, requests of new clients pass uncounted while clients that already have a counter stay limited; the node writes at most one WARN-level nginx error log line per site per minute with the running total. A node without the site's partition returns 503 (`X-Edgeweir-Error: rate-limit-unavailable`) |
 | Reload and restart | Counters survive an nginx reload; they reset when the node restarts or when a site is removed and added back |
 | Hot updates | Rule and list changes for the same set of sites do not reload; adding or removing sites reloads, and existing partitions keep their names and sizes |
@@ -269,9 +285,9 @@ substring(sha256(http.request.uri.path), 0, 8) eq "a1b2c3d4"
 | `http.request.uri.path` | String | The path after nginx normalization |
 | `http.request.uri.path.extension` | String | The text after the last `.` of the path's last segment, lowercase; empty string without one |
 | `http.request.uri.query` | String | The query string without `?` |
-| `http.request.uri` | String | The raw request URI (path plus query), without a signed URL's signature |
+| `http.request.uri` | String | The raw request URI (path plus query), without a signed URL's signature; after a rewrite, the rewritten path plus query |
 | `http.request.full_uri` | String | `scheme://`, the Host (lowercase, without port), and the raw request URI; rewrites do not change it |
-| `http.request.headers["name"]` | String | Case-insensitive name; multiple values joined with `, ` |
+| `http.request.headers["name"]` | String | The name is 1–64 token characters, case-insensitive; multiple values joined with `, `; empty string without the header |
 | `http.request.cookies["name"]` | String | The raw value (not decoded, quotes kept) of the first cookie of that name in the request's `Cookie` header; the name is case-sensitive, 1–64 token characters; empty string without one. Cookies are separated by `;`, spaces and tabs around a pair, its name, and its value are ignored, and a part without `=` is skipped; several `Cookie` headers are joined with `; ` |
 | `http.request.uri.args["name"]` | String | The raw value of the first query parameter of that name (neither name nor value decoded; combine with `url_decode`); the name is the part before the first `=`, case-sensitive, 1–64 printable ASCII characters other than `"` `#` `&` `=`; a parameter without `=` has an empty value; empty string without the parameter; follows rewrites |
 | `http.referer`, `http.user_agent` | String | The same as `http.request.headers["referer"]` and `["user-agent"]`, changed by request header rules too |
@@ -281,7 +297,7 @@ substring(sha256(http.request.uri.path), 0, 8) eq "a1b2c3d4"
 | `http.request.timestamp.sec` | Integer | Unix seconds when the node received the request |
 | `edge.server_port` | Integer | The port of the listener that received the request |
 | `http.response.code` | Integer | Response status; response transform and compression phases only |
-| `http.response.headers["name"]` | String | Response header; response transform and compression phases only |
+| `http.response.headers["name"]` | String | Response header, names as for request headers; response transform and compression phases only |
 | `http.response.content_type.media_type` | String | The response's `Content-Type` without parameters, lowercase; response transform and compression phases only |
 | `http.response.cache_status` | String | The edge cache's status: `HIT`, `MISS`, `BYPASS`, `EXPIRED`, `STALE`, `UPDATING`, or `REVALIDATED` (as `X-Cache`); empty string for responses the node made itself (blocks, redirects, error pages) and for WebSocket and gRPC, which never pass the cache; response transform and compression phases only |
 | `ip.src` | IP | The visitor address under the cluster's [client IP](../deploy/nodes.en.md#client-ip) setting: the TCP client address when direct; the address in the PROXY header with the PROXY protocol (the UDP peer for HTTP/3); the address the trusted proxies' header names in the trusted header mode |
@@ -295,12 +311,12 @@ substring(sha256(http.request.uri.path), 0, 8) eq "a1b2c3d4"
 | `tls.client.verified` | Boolean | `true` when the visitor presented a client certificate the site's CA issued and it passed verification, see [Client certificates](https.en.md#client-certificates); `false` on sites without client certificates and over plain HTTP |
 | `tls.client.cert_sha256` | String | SHA-256 of the verified client certificate's DER (lowercase hex); empty string otherwise |
 | `tls.client.subject` | String | Subject of the verified client certificate (RFC 2253, such as `CN=svc,O=Example`); empty string otherwise |
-| `http.request.body.size` | Integer | The request's `Content-Length`; -1 without one. Reads no body. See [Request body](#request-body) |
+| `http.request.body.size` | Integer | The request's `Content-Length`; -1 without one. Reads no body. Request body fields work in the request phases only, see [Request body](#request-body) |
 | `http.request.body.raw` | String | The body read; an empty string when it was not read (truncated) |
 | `http.request.body.truncated` | Boolean | `true` when the body was not read, see [Request body](#request-body) |
 | `http.request.body.filenames` | String | The (non-empty) file names of a `multipart/form-data` upload, joined by line breaks in their order |
-| `http.request.bot.verified` | Boolean | The visitor claims to be a search engine crawler and the node's reverse and forward DNS confirmed it, see [Verified search engine crawlers](challenges.en.md#verified-search-engine-crawlers) |
-| `http.request.bot.name` | String | The verified crawler: `googlebot`, `bingbot`, `baiduspider`, `yandexbot` or `applebot`; empty string otherwise |
+| `http.request.bot.verified` | Boolean | The visitor claims to be a search engine crawler and the node's reverse and forward DNS confirmed it, see [Verified search engine crawlers](challenges.en.md#verified-search-engine-crawlers); request phases only |
+| `http.request.bot.name` | String | The verified crawler: `googlebot`, `bingbot`, `baiduspider`, `yandexbot` or `applebot`; empty string otherwise; request phases only |
 
 ### Operators and literals
 
@@ -313,9 +329,9 @@ substring(sha256(http.request.uri.path), 0, 8) eq "a1b2c3d4"
 | `wildcard "pattern"` | String | Whole-string wildcard match: `*` matches zero or more bytes (at most 8 of them), `\*` and `\\` are literals, other backslashes are invalid; ASCII letters are case-insensitive; patterns are at most 1024 bytes without control characters |
 | `strict wildcard "pattern"` | String | As `wildcard`, case-sensitive |
 | `in {…}` | All | Set, elements separated by whitespace |
-| `in $name` | IP | References an IP list; fields only, not function results |
+| `in $name` | IP | References an IP list; IP fields only (`ip.src`, `ip.peer`), not function results; names as in [IP lists](#ip-lists) |
 | `not`, `and`, `or`, `( )` | — | Precedence `not` → `and` → `or` |
-| Literals | — | Strings in double quotes (JSON escapes); integers; `true` / `false`; IPs and CIDRs unquoted; a bare `true` is a valid expression |
+| Literals | — | Strings in double quotes (JSON escapes); integers (optionally with `-`); `true` / `false`; IPs and CIDRs unquoted; a bare `true` or `false` is a valid expression |
 | `function(argument, …)` | — | A function can be the left side of a comparison, with the operators of its return type; a function that returns a boolean can be a condition on its own |
 
 ### Functions
@@ -423,7 +439,7 @@ A site's table of exact-match redirects: each entry redirects one source to one 
 
 1. Open **Sites**, select the site, and open the **Bulk redirects** tab.
 2. Click **Add redirect**, enter **Source** and **Target**, select **Status code**, and turn on **Keep query string** as needed.
-3. Or click **Import**, enter one entry per line in **Import redirects** ("One per line: source target [status]"), turn on **Replace existing entries** as needed, and click **Import**.
+3. Or click **Import**, enter one entry per line in **Import redirects** ("One per line: source target [status]"), turn on **Replace existing entries** as needed, and click **Import**. The console shows "Imported N" and puts the imported entries first; importing changes only the list in the editor, which still needs saving.
 4. Click **Save**. The console shows **Saved** and publishes a new configuration revision ("Rules and IP lists updated").
 5. Verify:
 
@@ -453,27 +469,27 @@ A site's table of exact-match redirects: each entry redirects one source to one 
 
 ## IP lists
 
-1. Open **IP lists** and click **Create list**.
+1. Open **Access control → IP lists & bans** (`/ip-lists`) and click **Create list** on the **IP lists** tab. The **Bans** and **Greylist** tabs of the same page are covered in [Bans](bans.en.md), **IP check** in [IP check](access-control.en.md#ip-check).
 2. Enter **Name**: starts with a letter or underscore, contains only letters, digits, and underscores, 1–64 characters.
 3. Select **Action**: **Referenced by rules**, **Block**, or **Allow**.
 4. Enter entries in **IP addresses and CIDRs**, separated by newlines, spaces, or commas.
-5. Click **Save**.
+5. Click **Save**. An invalid entry shows "Invalid IP address or CIDR: `<entry>`".
 6. Verify: the list shows `$name`, "N entries", and the first entries (with more than 6, the first 5 and the count of the rest), block and allow lists also a **Block** or **Allow** badge; reference it in rules or cache rule conditions with `ip.src in $name`.
 
 | Action | Effect |
 | --- | --- |
 | Referenced by rules | Only a set for rules to reference |
 | Block | A block list: applies to every site of every cluster without a rule; matching addresses get 403 before any rule runs |
-| Allow | An allow list: applies to every site of every cluster; matching addresses are exempt from block lists and bans, but not from rules |
+| Allow | An allow list: applies to every site of every cluster; matching addresses are exempt from block lists, the sites' block lists, bans (rule bans and CC per-IP bans included; no new rule ban is written), and Under Attack and CC challenges, but not from rules |
 
 | Item | Behavior |
 | --- | --- |
 | Name | All lists share one namespace and names are unique; a name cannot change after creation; saving rules binds names to list IDs |
 | References | Any site rule, global rule, or cache rule condition can reference any list, block and allow lists included; the **Allow lists** and **Block lists** of [L4 apps](l4.en.md#ip-lists-and-connection-limits) and the [site lists](access-control.en.md#site-lists) of sites can use any list as well |
 | L4 apps | The **Block** and **Allow** actions apply to sites only; L4 apps check only the lists they selected |
-| Changes | A click on the list's row opens the edit dialog; entries and **Action** can change at any time; creating, changing, or deleting a list publishes a new revision to every cluster ("Rules and IP lists updated"); nodes apply it without reload |
-| Deletion | **Delete** under **⋯** at the end of the list's row, confirmed; a list referenced by a rule, a cache rule condition, an L4 app or chosen by a site as a site list cannot be deleted ("The IP list is used by …", naming the first 5 users: rule names, site rules with their site; sites whose cache rules use it or that chose it; L4 app names) |
-| Entries | IPv4 / IPv6 addresses or CIDRs; host bits cleared, deduplicated, sorted; leading zeros and zone IDs refused |
+| Changes | A click on the list's card opens the **Edit** dialog, where the name cannot change; entries and **Action** can change at any time; creating, changing, or deleting a list publishes a new revision to every cluster ("Rules and IP lists updated"); nodes apply it without reload |
+| Deletion | **Delete** under **⋯** at the top right of the list's card, confirmed; a list referenced by a rule, a cache rule condition, an L4 app or chosen by a site as a site list cannot be deleted ("The IP list is used by …", naming the first 5 users: rule names, site rules with their site; sites whose cache rules use it or that chose it; L4 app names) |
+| Entries | IPv4 / IPv6 addresses or CIDRs, up to 64 characters each; host bits cleared, deduplicated, sorted; leading zeros and zone IDs refused, see [IP semantics](#ip-semantics) |
 | Quota | Up to 128 lists and 50,000 entries in total; up to 10,000 entries per list; a change that does not add entries always saves |
 | Rollback | Site configuration rollbacks keep the current lists and global rules; a rollback that references a deleted list is refused |
 
@@ -483,15 +499,15 @@ API: `GET` and `POST /api/v1/ip-lists`, `PUT` and `DELETE /api/v1/ip-lists/{id}`
 
 | Item | Behavior |
 | --- | --- |
-| Capabilities | Rules and block/allow lists need the node capability `rules-v1`; `ip.geoip.country` and `ip.geoip.subdivision` need `geoip-city-v1`; `ip.geoip.asnum` needs `geoip-asn-v1`; the challenge action needs `challenge-v1`; `tls.ja4` (field or rate limit key) needs `ja4-v1`; `tls.client.*` needs `client-cert-v1`; when `ip.geoip.subdivision` is used, the console also checks `geoip-subdivision-v1` (not written into the configuration) |
+| Capabilities | Rules and block/allow lists need the node capability `rules-v1`; `ip.geoip.country` and `ip.geoip.subdivision` need `geoip-city-v1`; `ip.geoip.asnum` and `ip.geoip.as_name` need `geoip-asn-v1`; the challenge action and override settings that turn Under Attack on need `challenge-v1`; `tls.ja4` (field or rate limit key) needs `ja4-v1`; `tls.client.*` needs `client-cert-v1`; when `ip.geoip.subdivision` is used, the console also checks `geoip-subdivision-v1` (not written into the configuration) |
 | Rule engine extensions | Any of these needs `rules-v2`: functions and `http.request.full_uri`, `http.request.uri.path.extension`, `http.response.content_type.media_type`; expression targets, query parameter edits, and a redirect with **Keep query string** on or a rewrite with it off; origin overrides; the compression phase; the overrides available only in the configuration phase and **Gzip** On; cache rule conditions not in the [builder](origins-and-cache.en.md#request-conditions)'s shape and **Browser TTL (s)**; bulk redirects; origin groups other than the default group |
 | Expression fields and header values | Any of these needs `rules-v3`: `http.request.cookies[…]`, `http.request.uri.args[…]`, `http.referer`, `http.user_agent`, `http.request.version`, `http.request.scheme`, `http.request.id`, `http.request.timestamp.sec`, `edge.server_port`, `ip.geoip.as_name` (also `geoip-asn-v1`), `http.response.cache_status`; `url_encode`, `base64_encode`, `base64_decode`, `md5`, `sha1`, `sha256`, `substring`, `to_string`; `wildcard` and `strict wildcard`; expression values of request headers, response headers, and query parameters; response header **Append**; redirect status 303; `{{time}}` and `{{path}}` in [error pages](error-pages.en.md) |
 | Direct peer | Configurations that read `ip.peer` need `client-ip-v1` |
 | WAF actions and request bodies | Ban, Custom response, Close connection, Skip, Write access log, Ban when exceeded and the **OWASP CRS** override need `waf-v2`; request body fields, `form_value` and `json_value` need `rules-body-v1`; `http.request.bot.*` needs `challenge-v2`. Configurations without them do not change |
 | Existing configurations | Configurations that use none of the extensions stay as they were and do not need `rules-v2`; cache rules in the builder's shape are still sent as the former structured conditions; configurations that use none of the `rules-v3` items stay byte for byte the same as well |
 | Console and AccessKeys | A save is published even when an active node of the cluster lacks a required capability; such nodes keep their last-known-good configuration and **Clusters & nodes** shows **Upgrade required**, see [Node upgrades](node-upgrades.en.md) |
-| Service accounts and background jobs | When a configuration they publish introduces a new capability, every active node of the cluster is checked, including temporarily offline ones; if any lacks it, the publish is refused (`NODE_CAPABILITY_REQUIRED`, "Nodes do not support … yet: {nodes}") and the configuration and revision stay unchanged |
-| UI | While an active node of the cluster lacks `rules-v2`, the **Rules**, **Cache**, and **Bulk redirects** tabs show "Some nodes in the cluster do not support rule extensions"; the extensions cannot be picked there, and settings already in place can still be changed or cleared; **Bulk redirects** is read-only. While one lacks `rules-v3`, the **Rules** tab shows "Some nodes in the cluster do not support it": the menus leave out the `rules-v3` fields and conditions, and **Expression** values, **Append**, and 303 cannot be newly picked, while those in place can still be changed or cleared; the **Error pages** tab leaves out `{{time}}` and `{{path}}` and shows the same note when a template uses them |
+| Service accounts and background jobs | When a configuration they publish introduces a new capability, every active node of the cluster is checked, including temporarily offline ones; if any lacks it, the publish is refused (`NODE_CAPABILITY_REQUIRED`, "Nodes do not support … yet: `<nodes>`") and the configuration and revision stay unchanged |
+| UI | While an active node of the cluster lacks `rules-v2`, the **Rules**, **Cache**, and **Bulk redirects** tabs show "Some nodes in the cluster do not support rule extensions"; the extensions cannot be picked there (the **Origin override** and **Compression algorithms** actions, **Add rule** of the compression phase, the overrides of the configuration phase only, and so on), and settings already in place can still be changed or cleared; **Bulk redirects** is read-only. Otherwise, while one lacks `rules-v3`, `waf-v2`, `rules-body-v1`, or `challenge-v2`, the **Rules** tab shows "Some nodes in the cluster do not support it": without `rules-v3` the menus leave out the `rules-v3` fields and conditions, and **Expression** values, **Append**, and 303 cannot be newly picked; without `waf-v2` Ban, Custom response, Close connection, and Skip cannot be newly picked, and **Write access log**, **Ban when exceeded (seconds)**, and the **OWASP CRS** override cannot be newly set; without `rules-body-v1` or `challenge-v2` the menus leave out the request body or crawler fields and conditions. Settings already in place can still be changed or cleared. The **Error pages** tab leaves out `{{time}}` and `{{path}}` and shows the same note when a template uses them. The global rules page makes none of these checks |
 | Unknown capabilities | Nodes reject configurations with unknown capabilities or enum values and keep last-known-good |
 
 ## Configure GeoIP databases
@@ -509,7 +525,7 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 | Precedence | Country and ASN come from IPinfo Lite first, then from the City / ASN MMDB when IPinfo has no record |
 | Subdivision | Comes only from the City MMDB, and only when the City MMDB's country matches the final country |
 | Bundled data | `/usr/share/edgeweir-node/geoip/ipinfo_lite.mmdb`, checked at build time against the sha256 IPinfo publishes; `NOTICE` in the same directory records the download time and sha256 |
-| Console attribution | **Protection settings → GeoIP databases** carries the IPinfo attribution link |
+| Console | The **GeoIP databases** card under **Access control → Protection settings** (`/protection`): a row per node with **Country**, **Subdivision**, and **ASN** showing **Ready** or **Unavailable** (the node's `geoip-city-v1`, `geoip-subdivision-v1`, and `geoip-asn-v1`), refreshed every 30 seconds; **Configure databases** beside the title links to this page, and the IPinfo attribution link is at the bottom |
 
 1. Container nodes running a release image need no configuration for country and ASN; for newer data, pull a newer image, or mount a separately downloaded copy and set `EDGEWEIR_GEOIP_IPINFO`.
 2. Package or archive nodes: download `ipinfo_lite.mmdb` from IPinfo. To match on subdivisions, also download a City MMDB. Check source, license, and integrity, and record the download date.
@@ -527,7 +543,7 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
    sudo systemctl restart edgeweir-node
    ```
 
-5. Verify: in **Protection settings → GeoIP databases**, the node's row shows "Ready" under "Country" and "ASN", and under "Subdivision" too when a City MMDB is configured.
+5. Verify: in **Access control → Protection settings → GeoIP databases**, the node's row shows **Ready** under **Country** and **ASN**, and under **Subdivision** too when a City MMDB is configured.
 
 | Variable | Flag | Default | Description |
 | --- | --- | --- | --- |
@@ -537,11 +553,11 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 
 | Item | Behavior |
 | --- | --- |
-| Capability reporting | A node with country data (IPinfo Lite or a City MMDB) reports `geoip-city-v1`, one with a City MMDB reports `geoip-subdivision-v1`, one with ASN data reports `geoip-asn-v1`; current nodes also report `geoip-country-v1` |
+| Capability reporting | A node with country data (IPinfo Lite or a City MMDB) reports `geoip-city-v1` and `geoip-country-v1`, one with a City MMDB reports `geoip-subdivision-v1`, one with ASN data (IPinfo Lite or an ASN MMDB) reports `geoip-asn-v1` |
 | Older nodes | A node that does not report `geoip-country-v1` reports `geoip-city-v1` only with a City MMDB, and the console treats it as having `geoip-subdivision-v1` |
 | Missing capability | A node rejects configurations that use GeoIP fields it lacks and keeps last-known-good |
 | Invalid file | The node agent does not start when a configured MMDB file is invalid or of the wrong database type; an invalid bundled IPinfo Lite database is logged and left unused |
-| Lookups | The agent reads the files and serves results to Lua workers over a local Unix socket with mode 0600; each worker caches up to 10,000 results for 5 minutes; a lookup times out after 200 milliseconds |
+| Lookups | The agent reads the files and serves results to Lua workers over a local Unix socket with mode 0600; each worker caches up to 10,000 results for 5 minutes; lookups of rules and access control time out after 200 milliseconds and are tried every time |
 | Lookup failure | When site rules, global rules (value expressions included), or cache rule conditions use GeoIP fields, every request of that site needs a lookup; while the service is unavailable, those requests get 503 |
 | Updates | Replace the file or image on one node, restart, and verify before updating the others; never overwrite an MMDB file in use |
 
@@ -566,23 +582,23 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 | Symptom | Cause | Action |
 | --- | --- | --- |
 | "Character N: reason" below the editor | Unsupported syntax, field, type, function, or regular expression at that position; the reason names the problem | Fix it using the syntax tables above |
-| Saving shows "Check field of rule “name”" | That field of the rule is invalid, for example the target format, a repeated parameter name, or a parameter both set and removed; an invalid expression shows the position and reason | Fix it using the action field table |
-| Saving shows "Invalid rule" | The action does not belong to the phase, a protected header, or an invalid redirect target or rewrite path; an origin override picks an origin group the site does not have | Fix it using the action field table; add an origin of that group on the **Origins** tab first |
+| Saving shows "Check `<field>` of rule “`<name>`”" | That field of the rule is invalid, for example the target format, a repeated parameter name, or a parameter both set and removed; an invalid expression shows "Rule “`<name>`”, `<field>`, character N: `<reason>`" | Fix it using the action field table |
+| Saving shows "Invalid rule" | An origin override picks an origin group the site does not have; a saved rule or cache rule condition no longer passes validation (see [Regular expressions](#regular-expressions)); the restored version is no longer valid; an origin group still used by an origin override rule is deleted on the **Origins** tab | Fix it using the action field table; add an origin of that group on the **Origins** tab first, or change the rules that use the group first |
 | "The site does not serve …" | A bulk redirect source names a host that is not a domain of the site | Use a domain of the site, or write `/path` |
 | "Line N is invalid" | The field count, source, target, or status code of that imported line is invalid | Fix the line and import again |
 | "N invalid" | The bulk redirect table has invalid entries or repeated sources | Fix the marked entries |
 | "Some nodes in the cluster do not support rule extensions" | An active node of the cluster lacks `rules-v2` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
-| "No such IP list: …" | The referenced lists (named) do not exist | Create the list in **IP lists** first, or fix the name |
+| "No such IP list: …" | The referenced lists (the first 5 named) do not exist | Create the list under **IP lists & bans → IP lists** first, or fix the name |
 | Restoring shows "Rule limit of N reached" | Restoring the deleted rule would exceed 64 site rules or 32 global rules | Delete or merge other rules first |
 | Restoring shows "Rule version not found" | Retention removed the version, or it belongs to another site | Reopen the version history and choose a kept version |
 | "IP list name already exists" | A list with that name exists | Use another name |
 | "The IP list is used by …" | Deleting a list the listed rules, sites' cache rule conditions or L4 apps still reference, or sites chose as a site list | Remove the reference from those rules, L4 apps and site lists first |
 | "IP list limit reached (128 lists, 50,000 entries)" | Over quota | Merge or delete lists |
 | A node shows **Upgrade required** | The node lacks a capability the configuration needs (`rules-v1`, `rules-v2`, a GeoIP capability, and so on) and keeps its last-known-good configuration | Upgrade the node or configure the GeoIP databases |
-| "Nodes do not support … yet: {nodes}" | A configuration published by a service account or a background job needs `rules-v1`, `rules-v2`, or a GeoIP capability that an active node of the cluster lacks | Upgrade the nodes or configure the GeoIP databases |
+| "Nodes do not support … yet: `<nodes>`" | A configuration published by a service account or a background job introduces a capability an active node of the cluster lacks (such as `rules-v1`, `rules-v2`, `rules-v3`, `waf-v2`, or a GeoIP capability) | Upgrade the nodes or configure the GeoIP databases |
 | 503 with `X-Edgeweir-Error: policy-unavailable` | A regular expression exceeded its budget, a function result exceeded 8192 bytes, a dynamic target, rewrite path, or query parameter value expression was invalid, or a GeoIP lookup failed | Simplify the pattern or expression; check what the value expression computes; check the node's GeoIP service |
 | A request or response header with an expression value is missing, and the node logs `header value skipped site=… rule=…` | The value the rule computed exceeds 4096 bytes, has a control character, or its evaluation failed; the node skips that header action | Limit or clean the value with `substring`, `url_encode`, and the like; a rule logs once per 60 seconds |
-| "Some nodes in the cluster do not support it" (Rules tab) | An active node of the cluster lacks `rules-v3` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
+| "Some nodes in the cluster do not support it" (Rules tab) | An active node of the cluster lacks `rules-v3`, `waf-v2`, `rules-body-v1`, or `challenge-v2` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
 | A rule that redirects HTTP to HTTPS makes requests return 503 | The site has no certificate | Select a certificate on the **HTTPS** tab |
 | Rate limits are not shared across nodes | Rate limits count per node | Scale the threshold by the number of nodes |
 | A rule on body fields does not apply | The body exceeds the rules body limit, is chunked, or the request is HTTP/2 or HTTP/3 without `Content-Length`: it was not read | Raise the limit, or also check `http.request.body.truncated` |

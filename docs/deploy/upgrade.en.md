@@ -1,41 +1,42 @@
-# Versions, upgrades, and rollback
+# Versions and upgrades
 
-Console image versions and channels, pinning, signature verification, upgrades, and rollback.
+Console image versions and channels, version pinning, signature verification, upgrade steps per deployment, startup migrations, and node compatibility.
 
 ## Versioning
 
 | Item | Rule |
 | --- | --- |
-| Image | `ghcr.io/marvinli001/edgeweir`, linux/amd64, linux/arm64, public |
-| Tag | `<YYYYMMDD>-<commit>`: UTC commit date and the first 7 characters of the commit ID, e.g. `20260929-a1b2c3d`; the same commit always yields the same tag (`scripts/image-version.sh`) |
-| Publishing | After a push to `master` passes CI, the release workflow builds the commit CI verified and pushes its tag; no semantic version numbers |
-| `stable` | Default channel: a dated tag the maintainer has verified; the promote workflow points it at the same digest (no rebuild, no new signature). Each move comes with a [GitHub Release](https://github.com/marvinli001/edgeweir/releases) naming the compatible node versions and upgrade notes |
-| `latest` | Preview channel: follows `master`, moving only while that commit is still the tip of `master`; never moves backwards |
-| Manual release | Rebuilds the tip of `master` and pushes a new digest under the same tag |
+| Image | `ghcr.io/marvinli001/edgeweir`, linux/amd64 and linux/arm64, public |
+| Tag | `<YYYYMMDD>-<commit>`: UTC commit date and the first 7 characters of the commit ID, e.g. `20260929-a1b2c3d`; the same commit always gets the same tag (`scripts/image-version.sh`). No semantic version numbers |
+| Release | After a push to `master` passes CI, the release workflow builds that commit and pushes its dated tag |
+| `stable` | Default channel: a maintainer points it, through the promote workflow, at the digest of a published dated tag (no rebuild, no new signature); every move comes with a [GitHub Release](https://github.com/marvinli001/edgeweir/releases) naming the matching node version, proto version, new database migrations, and upgrade steps |
+| `latest` | Preview channel: follows `master`; moves only while the built commit is still the tip of `master`, never backwards |
+| Manual release | Rebuilds the tip of `master` and pushes a new digest under the same dated tag |
 | Source build | Version `dev` |
-| Image labels | `org.opencontainers.image.version` is the tag; `org.opencontainers.image.revision` is the full commit ID |
-| Signatures | cosign keyless, with SBOM and SLSA provenance |
-| All tags | [GitHub Packages](https://github.com/marvinli001/edgeweir/pkgs/container/edgeweir); the changes of a tag's commit are at `https://github.com/marvinli001/edgeweir/commit/<commit ID>` |
+| Image labels | `org.opencontainers.image.version` is the dated tag; `org.opencontainers.image.revision` is the full commit ID |
+| Signing | cosign keyless signature, with SBOM and SLSA provenance |
+| All tags | [GitHub Packages](https://github.com/marvinli001/edgeweir/pkgs/container/edgeweir); a commit's changes are at `https://github.com/marvinli001/edgeweir/commit/<commit ID>` |
 
-Edge nodes use separate semantic versions `vX.Y.Z`; see [node upgrades](../guide/node-upgrades.en.md).
+Edge nodes use their own semantic versions `vX.Y.Z`; see [node upgrades](../guide/node-upgrades.en.md). Security fixes land only on `master` and ship with the next `stable` and node patch release; they are not backported.
 
 ## Node compatibility
 
-| Node version | With a `stable` console |
+| Item | Rule |
 | --- | --- |
-| 1.x | Every minor version is supported |
-| 0.x | Keeps working with the capabilities the node reports: when a configuration needs one the node lacks, that node keeps its last good configuration and **Clusters & nodes** shows **Upgrade required**; such a publish by a service account or a background job is refused (`NODE_CAPABILITY_REQUIRED`). See [node capabilities](../guide/node-upgrades.en.md#node-capabilities) |
-| Below 0.2.0 | Cannot enroll through the node channel's WebSocket entry |
-
-Security fixes go into `master` only and ship with the next `stable` and node patch release; they are not backported.
+| Matching versions | The "Compatibility" section of each `stable` GitHub Release names the matching edgeweir-node and proto versions |
+| Basis | The console judges nodes by the [capabilities](../guide/node-upgrades.en.md#node-capabilities) they report, never by version number |
+| Nodes lacking a capability | Keep their last good configuration and show "Upgrade required" under **Clusters & nodes**; the console account can publish such configurations, service accounts and background jobs get 409 `NODE_CAPABILITY_REQUIRED` |
+| WebSocket entry | A `wss://` or `ws://` node channel URL needs edgeweir-node 0.2.0 or later; `install.sh` refuses older versions |
+| Order | Upgrade the console first, then the nodes |
 
 ## Checking versions
 
-| Target | Command or location |
+| Object | Command or location |
 | --- | --- |
-| Running version | `version` from `curl -s http://127.0.0.1:3000/healthz`; "Version" on the **System settings** page |
-| Tag behind a channel | `docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' ghcr.io/marvinli001/edgeweir:stable` (after a pull; likewise `latest`) |
-| Digest of a tag | `Digest` in the output of `docker buildx imagetools inspect ghcr.io/marvinli001/edgeweir:<tag>` |
+| Running version | `version` in `curl -s http://127.0.0.1:3000/healthz`; "Version" under "System" in **System settings** |
+| Dated tag of a channel | `docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' ghcr.io/marvinli001/edgeweir:stable` (after pulling; same for `latest`) |
+| Digest of a tag | `Digest` in `docker buildx imagetools inspect ghcr.io/marvinli001/edgeweir:<tag>` |
+| Migrations applied | `docker compose exec -T postgres psql -U edgeweir -d edgeweir -Atc 'select count(*) from drizzle.__drizzle_migrations'` |
 
 ## Pinning a version
 
@@ -48,11 +49,11 @@ EDGEWEIR_VERSION=20260929-a1b2c3d
 
 | Item | Constraint |
 | --- | --- |
-| `stable` | Compose's default when `EDGEWEIR_VERSION` is unset; `deploy.sh` resolves it to the dated tag and pins that. |
+| `stable` | Default in `compose.yml` when `EDGEWEIR_VERSION` is unset; `deploy.sh` resolves it to a dated tag and pins that |
 | `latest` | Evaluation environments only |
-| Digest | A manual release pushes a new digest under the same tag; pin the digest for an immutable reference. |
-| Automatic updates | Do not follow `latest` unattended with tools such as Watchtower: every start may run migrations, and upgrades follow a backup. |
-| `docker run` | The tag in the image reference selects the version; `EDGEWEIR_VERSION` stays out of the container environment. |
+| Digest | A manual release pushes a new digest under the same tag; pin the digest for an immutable reference |
+| Automatic updates | Do not let Watchtower or a platform's auto-update follow a channel unattended: a start may run migrations, and upgrades follow a backup |
+| `docker run` | The tag in the image reference sets the version; `EDGEWEIR_VERSION` is not passed into the container (inside the image it names the running version) |
 
 ## Verifying the image signature
 
@@ -64,99 +65,116 @@ cosign verify ghcr.io/marvinli001/edgeweir:<tag> \
 gh attestation verify oci://ghcr.io/marvinli001/edgeweir:<tag> --repo marvinli001/edgeweir
 ```
 
-The certificate identity is the release workflow on the `master` branch. Node packages and other artifacts: [SECURITY.en.md](../../SECURITY.en.md).
+The certificate identity is the release workflow on `master`; `stable` and its dated tag are the same digest with the same signature. Verifying node packages and other release artifacts: [安全策略](../../SECURITY.md).
+
+## Pre-upgrade checks
+
+| Check | Method |
+| --- | --- |
+| Current version | Note `version` from `/healthz`, for a [downgrade](downgrade.en.md) |
+| Release notes | Read "Compatibility" and "Upgrade" in every GitHub Release after the current version; note new migrations and required node versions |
+| Database backup | Back up as in [backup and recovery](backup.en.md); confirm `pg_restore --list` reads it |
+| Keys | `EDGEWEIR_MASTER_KEY` (and `BETTER_AUTH_SECRET`, if set) has an offline copy |
+| Signature | Verify the target tag as in the previous section |
+| Nodes | Nodes under **Clusters & nodes** are "Online" and "In sync"; note each node's "Agent / engine" version |
+| Disk | Free space on the database volume's disk exceeds the database size: a migration may rewrite tables |
 
 ## Upgrade
 
 Docker Compose:
 
-1. Back up the database and `.env`; see [backup and recovery](backup.en.md).
-2. Verify the signature of the new tag as in the previous section.
-3. Change `EDGEWEIR_VERSION`:
+1. Complete the [pre-upgrade checks](#pre-upgrade-checks).
+2. Set `EDGEWEIR_VERSION`:
 
    ```bash
    sed -i 's|^#* *EDGEWEIR_VERSION=.*|EDGEWEIR_VERSION=20260930-b2c3d4e|' .env
    ```
 
-4. Pull and recreate:
+3. Pull and recreate:
 
    ```bash
    docker compose pull
    docker compose up -d
    ```
 
-5. Verify:
+4. Check as in [post-upgrade verification](#post-upgrade-verification).
 
-   ```bash
-   curl -s http://127.0.0.1:3000/healthz
-   docker compose ps
-   ```
+### Other deployment methods
 
-   Expected: `version` is the new tag; `console` is `healthy`.
+| Deployment | Upgrade | Details |
+| --- | --- | --- |
+| BaoTa / aaPanel (`deploy.sh`) | `./deploy.sh update` (`stable` channel) or `./deploy.sh update <tag>`; backs up to `backups/<time>-before-<target>/` first | [deploy.sh reference](deploy-script.en.md#update) |
+| BaoTa / aaPanel panel | Set `EDGEWEIR_VERSION` in `.env` and update the image in the panel (aaPanel **Update Image**); the panel does not back up the database, back it up first | [BaoTa / aaPanel](baota.en.md#upgrades-and-backups) |
+| `docker run` | `docker pull ghcr.io/marvinli001/edgeweir:<new tag>`; `docker rm -f edgeweir-console`; recreate it with the same options and the new tag | [Standalone containers](docker.en.md#without-compose-standalone-containers) |
+| Railway | The update button in the `edgeweir` service's **Settings**, or `railway redeploy --service edgeweir --from-source --yes` | [Railway](railway.en.md#upgrade) |
+| Fly.io | `fly deploy` in the directory of `fly.toml` | [Fly.io](fly.en.md#upgrade) |
+| bunny.net | **Apply Update** on the app page, or update the container's digest with `bunny api` | [bunny.net](bunny.en.md#upgrade) |
+| Render | Set the image URL to the new tag, then **Manual Deploy → Deploy latest reference** | [Render](render.en.md#upgrade) |
+| Zeabur | Set the tag in **Settings → Service Image** to the new version, or `npx zeabur@latest service update tag -t <new tag>` | [Zeabur](zeabur.en.md#upgrade) |
+| Source build | Check out the target commit and run `docker compose up -d --build` | — |
 
-At startup:
+Railway, Render, bunny.net and Zeabur start the new instance and stop the old one after its health check passes: both versions run briefly side by side, and node channel connections to the old instance drop and reconnect.
 
-| Behavior | Description |
+### Startup steps
+
+Every console start runs these steps in order. If one fails, the process exits non-zero and the container restarts per its restart policy.
+
+| Order | Step | Log on failure |
+| --- | --- | --- |
+| 1 | Validate environment variables | One line per problem: `invalid configuration: <variable>: <reason>` |
+| 2 | Wait for the database, up to 60 seconds | `database not reachable yet` (with `attempt`); certificate errors add a `hint` |
+| 3 | Apply migrations not yet applied: serialized by an advisory lock, all migrations in one transaction; safe with several instances starting at once | The migration's SQL error; the transaction rolls back and the schema stays as before |
+| 4 | Check that the master key matches the database | `EDGEWEIR_MASTER_KEY does not match this database` |
+| 5 | Check the session secret | `BETTER_AUTH_SECRET is not set, but this database was used with another secret` |
+| 6 | Re-encrypt legacy ciphertexts not bound to their record ID | `cannot upgrade a legacy envelope` |
+| 7 | After a master key rotation, re-encrypt ciphertexts of the previous key with the new key | `cannot re-seal an envelope of the previous master key` |
+| 8 | Start web, API and node channel (`ROLE` `all`, `app`) and the worker (`ROLE` `all`, `worker`) | — |
+
+| Rule | Description |
 | --- | --- |
-| Database migrations | Run at startup, serialized by an advisory lock; instances may start at the same time. Migrations only move forward; there are no down scripts. |
-| Legacy ciphertext | Envelopes written by older versions without a record-id binding are re-encrypted with the master key at startup; new versions no longer read the old format, so all console instances are upgraded together. |
-| Nodes | Not upgraded with the console; see [node upgrades](../guide/node-upgrades.en.md). |
+| Migration direction | Forward only, no down scripts; to go back see [downgrade](downgrade.en.md) |
+| Legacy ciphertexts | Newer versions no longer read the legacy format: upgrade all console instances together |
+| Configuration recompile | When an upgrade changes what stored data compiles to, the worker publishes every cluster once (reason "Configuration recompiled after an upgrade"); a cluster whose publish fails keeps its revision, log `recompile after upgrade failed` |
+| Nodes | Not upgraded with the console; see [node upgrades](../guide/node-upgrades.en.md) |
 
-Other deployment methods:
+## Post-upgrade verification
 
-| Deployment | Upgrade |
+| Check | Pass condition |
 | --- | --- |
-| `deploy.sh` | `./deploy.sh update` (the `stable` channel) or `./deploy.sh update <tag>`, which backs up first; see [deploy.sh reference](deploy-script.en.md). |
-| `docker run` | `docker pull ghcr.io/marvinli001/edgeweir:<new tag>`, `docker rm -f edgeweir-console`, then recreate it with the same parameters and the new tag; data stays in the `edgeweir-postgres` volume. |
-| Source build | Check out the target commit and run `docker compose up -d --build`. |
+| Version | `curl -s http://127.0.0.1:3000/healthz` returns `{"status":"ok","version":"<new tag>"}` |
+| Container | `console` is `healthy` in `docker compose ps` |
+| Migrations | The log has `database migrated` and no error lines: `docker compose logs console \| grep '"level":"error"'` prints nothing |
+| Worker | The log has `worker started` |
+| Nodes | Nodes under **Clusters & nodes** are "Online" and "Applied" is "In sync" |
+| Sign-in | The existing account signs in; two-factor authentication works |
+
+On failure see [troubleshooting](troubleshooting.en.md); to go back see [downgrade](downgrade.en.md).
 
 ## Upgrading a multi-organization console
 
-The console has one account and no organizations, members, roles, or separate admin area. When a version with several organizations or accounts is upgraded, migrations `0033`–`0036` run automatically at startup.
+The console has one account and no organizations, members, roles, or separate admin area. Upgrading from a version with several organizations or accounts runs migrations `0033`–`0036` automatically at startup.
 
 Before the upgrade:
 
-1. Back up the database: these migrations delete account and organization data, and only the pre-upgrade backup can roll them back; see [Rollback](#rollback).
-2. Make sure the earliest platform administrator who is not disabled can sign in: after the upgrade it is the only account.
-3. Review domains pending verification: after the upgrade they route at once; delete those that must not route.
+1. Back up the database: these migrations delete account and organization data, and going back requires the pre-upgrade backup; see [downgrade](downgrade.en.md).
+2. Confirm that the earliest-created platform administrator who is not disabled can sign in: after the upgrade it is the only account.
+3. Review pending domains: after the upgrade they route directly; delete domains that should not route.
 
-Result of the migrations:
-
-| Item | After the upgrade |
+| Object | After the upgrade |
 | --- | --- |
-| Accounts | The earliest platform administrator who is not disabled becomes the only account and keeps its password, two-factor authentication, and passkeys; every other account is deleted with its sessions, passkeys, and AccessKeys |
-| Alert subscriptions | The other accounts' subscriptions merge into the remaining account: one per channel, covering their sites, with the alert kinds combined |
-| Data | Sites, certificates, DNS credentials, bans, IP lists, rules, alerts, analytics, and audit log entries of every organization stay |
-| IP lists | Organization lists become **Referenced by rules** lists (before, only the platform allow and block lists applied at the edge); a list whose name is taken gets the suffix `_<6 hex digits>`, and the rules of its organization's sites follow the new name |
-| Site state | Enabled or disabled only: sites in any other offline state become disabled |
-| Domains | Domains pending verification route at once; a name on several sites stays on one: the verified one, else the one added first |
-| Removed settings | Organization technical limits, organization two-factor requirements and default clusters, the switch that let tenants turn on OWASP CRS, the ownership check DNS setting, and service account scopes for organizations |
-| Environment | `EDGEWEIR_DNS_RESOLVERS` is no longer read and can be removed from `.env` |
-| Configuration | The worker republishes every cluster once (reason "Configuration recompiled after an upgrade"), so previously unverified domains and the merged IP lists reach the nodes; a cluster whose publication fails keeps its revision, the console logs `recompile after upgrade failed`, and the cluster's next configuration change updates it |
+| Account | The earliest-created platform administrator who is not disabled becomes the only account and keeps its password, two-factor authentication, and passkeys; other accounts are deleted with their sessions, passkeys, and AccessKeys |
+| Alert subscriptions | Subscriptions of other accounts move to the kept account: one per channel, with those subscriptions' sites and the union of their alert kinds |
+| Data | Sites, certificates, DNS credentials, bans, IP lists, rules, alerts, statistics, and audit logs of every organization are kept |
+| IP lists | Organization lists become "Referenced by rules"; a name already taken gets the suffix `_<6 hex digits>`, and that organization's site rules follow the new name |
+| Site state | Enabled or disabled only: sites in another offline state become disabled |
+| Domains | Pending domains route directly; a domain on several sites stays on one: the verified one first, otherwise the earliest added |
+| Removed settings | Organization technical limits, organization two-factor requirement and default cluster, the per-organization OWASP CRS switch, the ownership-check DNS setting, organization scopes of service accounts |
+| Environment | `EDGEWEIR_DNS_RESOLVERS` is no longer read; remove it from `.env` |
+| Configuration | The worker publishes every cluster once, so formerly unverified domains and merged IP lists reach the nodes |
+| Pages | Bookmarks `/admin/<page>` open the matching page (`/admin/settings` opens `/system`); other `/admin` URLs open the overview |
 
-The former `/admin/*` pages are part of the one console: a bookmark of `/admin/<page>` redirects to that page (`/admin/settings` to `/system`), and any other `/admin` address opens the overview.
-
-API changes; integrations that use these must change:
-
-| Change | Interface |
+| API change | Interfaces |
 | --- | --- |
-| Removed | `organizations.*`, `members.*`, `invitations.*`, `users.*`, `admin.*` (including `/admin/sites`, `/admin/organizations/{id}/limits`, and `/admin/bans`), `platformIpLists.*` (`/platform-ip-lists`), `domainOwnership.*` and `/sites/{id}/ownership*`, `settings.waf`, `settings.dnsResolvers` |
-| Fields | Sites, bans, certificates, usage records, and audit entries no longer carry an organization field |
-| Paths | Node upgrades are at `/api/v1/node-upgrades` and `/api/v1/node-releases/{version}`, without the `/admin` prefix; bans use `/api/v1/bans` only, IP lists `/api/v1/ip-lists` only |
-
-## Rollback
-
-1. Check for new migrations between the two versions (in a repository checkout; commit IDs come from the tags):
-
-   ```bash
-   git diff --name-only <old commit> <new commit> -- packages/db/migrations/
-   ```
-
-2. Roll back according to the result:
-
-   | Result | Rollback |
-   | --- | --- |
-   | No output: no new migrations | Set `EDGEWEIR_VERSION` back to the old tag and run `docker compose up -d`. With `deploy.sh`, run `./deploy.sh update <old tag>`. |
-   | Migration files listed | Restore the pre-upgrade backup and start the old tag; see [backup and recovery](backup.en.md). With `deploy.sh`, set `EDGEWEIR_VERSION` in `.env` back to the old tag, then run `./deploy.sh restore backups/<time>-before-<new tag>`. |
-
-3. Verify: `version` from `curl -s http://127.0.0.1:3000/healthz` is the old tag.
+| Removed | `organizations.*`, `members.*`, `invitations.*`, `users.*`, `admin.*` (including `/admin/sites`, `/admin/organizations/{id}/limits`, `/admin/bans`), `platformIpLists.*` (`/platform-ip-lists`), `domainOwnership.*` and `/sites/{id}/ownership*`, `settings.waf`, `settings.dnsResolvers` |
+| Fields | Site, ban, certificate, usage, and audit records no longer carry organization fields |
+| Paths | Node upgrades are `/api/v1/node-upgrades` and `/api/v1/node-releases/{version}`, without the `/admin` prefix; bans only `/api/v1/bans`, IP lists only `/api/v1/ip-lists` |

@@ -7,7 +7,7 @@ Deploy the console on Railway from the console image, with Railway PostgreSQL 18
 | Item | Requirement |
 | --- | --- |
 | Railway | An account that can create projects; [CLI deployment](#cli-deployment) also needs the `railway` CLI after `railway login` |
-| Console image | `ghcr.io/marvinli001/edgeweir:stable`, public: a version the maintainer verified, each update with a [GitHub Release](https://github.com/marvinli001/edgeweir/releases); channels and tag rules in [Versions, upgrades, and rollback](upgrade.en.md) |
+| Console image | `ghcr.io/marvinli001/edgeweir:stable`, public: a version the maintainer verified, each update with a [GitHub Release](https://github.com/marvinli001/edgeweir/releases); channels and tag rules in [versions and upgrades](upgrade.en.md) |
 | PostgreSQL | Railway PostgreSQL service, image `ghcr.io/railwayapp-templates/postgres-ssl:18` |
 | Master key | Generated with `openssl rand -base64 32`; stored outside Railway and apart from database backups |
 | Always on | Serverless disabled on the console service |
@@ -99,7 +99,7 @@ An uninitialized console logs the same setup token on every start.
 
 1. `edgeweir` service, **Deployments** → current deployment → **Deploy Logs**, filter by `"first-run setup"`.
 2. The line's `setupToken` field is the setup token; its `url` field is the setup wizard address (`<EDGEWEIR_PUBLIC_URL>/setup`).
-3. Open the wizard and enter the setup token; see [Quick start](../guide/first-site.en.md#1-complete-the-setup-wizard).
+3. Open the wizard, enter the setup token in "Setup token", fill in "Name", "Email", and "Password" (at least 12 characters), and click "Create and continue"; see [quick start](../guide/first-site.en.md#1-complete-the-setup-wizard).
 
 ## CLI deployment
 
@@ -242,7 +242,7 @@ railway redeploy --service edgeweir --from-source --yes
 
 Do not configure auto updates for the service (**Settings → Source → Configure Auto Updates**): they redeploy unattended in the maintenance window and do not back up the `Postgres` service's database first.
 
-Pinning a version or rolling back: in **Settings → Source**, replace `stable` in the image with a dated tag and click **Deploy** in the staged-changes banner; with the CLI, run `railway service source connect --service edgeweir --image ghcr.io/marvinli001/edgeweir:<dated tag>`, then the `railway redeploy` above. Migrations, signature verification, and rollback: [Versions, upgrades, and rollback](upgrade.en.md).
+Pinning a version or rolling back: in **Settings → Source**, replace `stable` in the image with a dated tag and click **Deploy** in the staged-changes banner; with the CLI, run `railway service source connect --service edgeweir --image ghcr.io/marvinli001/edgeweir:<dated tag>`, then the `railway redeploy` above. Migrations and signature verification: [versions and upgrades](upgrade.en.md); going back: [downgrade](downgrade.en.md).
 
 ## Limits
 

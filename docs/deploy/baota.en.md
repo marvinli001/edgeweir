@@ -17,7 +17,7 @@ Deploy the console with Docker Compose on BaoTa Panel (宝塔) or aaPanel: compo
 | `EDGEWEIR_TRUSTED_PROXIES` | Default `127.0.0.1,::1` | Docker gateway address, written by `deploy.sh` and synced at startup |
 | Port column in the panel's container list | Empty (host networking has no port mappings) | Shows the mappings |
 
-The image `ghcr.io/marvinli001/edgeweir` is public; the panel needs no registry entry or login. Tag format and version pinning: [upgrade.en.md](upgrade.en.md).
+The image `ghcr.io/marvinli001/edgeweir` is public; the panel needs no registry entry or login. Tag format and version pinning: [Versions and upgrades](upgrade.en.md).
 
 ## 1. Prepare
 
@@ -28,7 +28,7 @@ The image `ghcr.io/marvinli001/edgeweir` is public; the panel needs no registry 
 | Cloud security group | Open the same port | — | — |
 | Domain | Console domain (e.g. `cdn-admin.example.com`) resolves to this host | — | — |
 | Database (host) | PostgreSQL 18; an empty database and its owner user; a cloud database allow list that includes this host's IP | **数据库 → PgSQL → 添加数据库** | **Databases → PgSQL → Add DB** |
-| Images | Access to `ghcr.io`; otherwise `docker load` beforehand, see `EDGEWEIR_NO_PULL` in [deploy-script.en.md](deploy-script.en.md#unattended-install) | — | — |
+| Images | Access to `ghcr.io`; otherwise `docker load` beforehand, see `EDGEWEIR_NO_PULL` in [deploy.sh reference: Unattended install](deploy-script.en.md#unattended-install) | — | — |
 | Shell | root | **终端** or SSH | **Terminal** or SSH |
 
 Other requirements: [Deployment overview](README.en.md#runtime-requirements).
@@ -41,7 +41,7 @@ Other requirements: [Deployment overview](README.en.md#runtime-requirements).
    curl -fsSL -o deploy.sh https://raw.githubusercontent.com/marvinli001/edgeweir/master/deploy.sh
    ```
 
-2. Run the installer and answer the prompts for install directory, database mode, database connection, console URL, and node channel URL. Prompts and defaults: [deploy-script.en.md](deploy-script.en.md#install).
+2. Run the installer and answer the prompts for install directory, database mode, database connection, console URL, and node channel URL. Prompts and defaults: [deploy.sh reference: install](deploy-script.en.md#install).
 
    ```bash
    sudo bash deploy.sh install
@@ -52,9 +52,9 @@ Other requirements: [Deployment overview](README.en.md#runtime-requirements).
 3. Record the setup token printed at the end.
 
 > [!IMPORTANT]
-> `.env` in the install directory holds `EDGEWEIR_MASTER_KEY`. Back it up offline; losing it makes encrypted data unrecoverable. See [backup.en.md](backup.en.md).
+> `.env` in the install directory holds `EDGEWEIR_MASTER_KEY`. Back it up offline; losing it makes encrypted data unrecoverable. See [Backup and recovery](backup.en.md).
 
-Unattended install (run as root; variables: [deploy-script.en.md](deploy-script.en.md#unattended-install)):
+Unattended install (run as root; variables: [deploy.sh reference: Unattended install](deploy-script.en.md#unattended-install)):
 
 ```bash
 EDGEWEIR_YES=1 EDGEWEIR_DB=host \
@@ -79,7 +79,7 @@ The panel's nginx terminates HTTPS and proxies to `http://127.0.0.1:3000` (repla
 - Keep the default sent domain (`Host`): the console checks request origins against `EDGEWEIR_PUBLIC_URL` only.
 - If the console URL given at install time is not `https://`, run `./deploy.sh config` after the certificate is active and change it to `https://`.
 
-Generic nginx configuration and headers: [networking.en.md](networking.en.md#reverse-proxy-for-the-web-console).
+Generic nginx configuration and headers: [Ports, reverse proxy, and trusted proxies: Reverse proxy for the web console](networking.en.md#reverse-proxy-for-the-web-console).
 
 ## 4. Set up and verify
 
@@ -90,7 +90,7 @@ Generic nginx configuration and headers: [networking.en.md](networking.en.md#rev
    ./deploy.sh setup-token
    ```
 
-2. Open `https://cdn-admin.example.com/setup` and enter the setup token, name, email, and password to create the console account. Setup wizard: [Quick start](../guide/first-site.en.md).
+2. Open `https://cdn-admin.example.com/setup`, fill in "Setup token", "Name", "Email", and "Password" (at least 12 characters), and click "Create and continue". Next steps: [quick start](../guide/first-site.en.md#1-complete-the-setup-wizard).
 
 3. Verify the web console:
 
@@ -109,7 +109,7 @@ Generic nginx configuration and headers: [networking.en.md](networking.en.md#rev
 
    Expected: the issuer contains `Edgeweir Node Channel CA`.
 
-Node release source and origin allow list are configured in **System settings**, see [Clusters and system](../guide/system.en.md#system-settings); GeoIP databases in **Protection settings**, see [Protection settings](../guide/system.en.md#protection-settings); SMTP on the **Alerts** page, see [SMTP](../guide/dns-and-alerts.en.md#smtp). Adding nodes: [Adding nodes](nodes.en.md); `--server` in the install command is "Node channel" in **System settings** (`EDGEWEIR_NODE_API_URL` while none is saved); to change it, see [Node channel URL and certificate](networking.en.md#node-channel-url-and-certificate).
+Node release source and origin allow list are configured in **System settings**, see [Clusters and system](../guide/system.en.md#system-settings); GeoIP databases in **Protection settings**, see [Protection settings](../guide/system.en.md#protection-settings); SMTP on the **Alerts** page, see [SMTP](../guide/alerts.en.md#smtp). Adding nodes: [Adding nodes](nodes.en.md); `--server` in the install command is "Node channel" in **System settings** (`EDGEWEIR_NODE_API_URL` while none is saved); to change it, see [Node channel URL and certificate](networking.en.md#node-channel-url-and-certificate).
 
 ## Node channel port
 
@@ -119,7 +119,7 @@ Node release source and origin allow list are configured in **System settings**,
 | nginx `stream` passthrough | The console listens on local `18443`; the panel's nginx passes TCP through on `8443` | The panel's nginx must include the stream module |
 | Panel HTTP reverse proxy, CDN | Not supported | Terminating TLS makes node enrollment fail with `CA pin mismatch`; mTLS cannot be established |
 
-`stream` block, mechanism, and verification: [networking.en.md](networking.en.md#node-channel-passthrough). Steps on BaoTa / aaPanel:
+`stream` block, mechanism, and verification: [Ports, reverse proxy, and trusted proxies: Node channel passthrough](networking.en.md#node-channel-passthrough). Steps on BaoTa / aaPanel:
 
 1. Check that the panel's nginx includes the stream module:
 
@@ -210,7 +210,7 @@ Node release source and origin allow list are configured in **System settings**,
 
 ### Standalone containers without Compose
 
-The panel's **Create Container** form cannot set the read-only root filesystem, `tmpfs`, and `no-new-privileges` hardening of the compose files. For that hardening, run the `docker run` commands in [docker.en.md](docker.en.md#without-compose-standalone-containers) from the terminal.
+The panel's **Create Container** form cannot set the read-only root filesystem, `tmpfs`, and `no-new-privileges` hardening of the compose files. For that hardening, run the `docker run` commands in [Docker Compose: Without Compose: standalone containers](docker.en.md#without-compose-standalone-containers) from the terminal.
 
 1. Create the network `edgeweir`: BaoTa **Docker → 网络**; aaPanel **Docker → Network → Add Network**; or in the terminal:
 
@@ -239,7 +239,7 @@ The panel's **Create Container** form cannot set the read-only root filesystem, 
 
    - If the form cannot bind the port to `127.0.0.1`, use `docker run` in the terminal.
 
-3. Upgrade: pull the new tag, remove `edgeweir-console`, and recreate it with the same settings and the new tag. Data stays in the `edgeweir-postgres` volume. Back up first, see [backup.en.md](backup.en.md).
+3. Upgrade: pull the new tag, remove `edgeweir-console`, and recreate it with the same settings and the new tag. Data stays in the `edgeweir-postgres` volume. Back up first, see [Backup and recovery](backup.en.md).
 
 ## Upgrades and backups
 
@@ -255,7 +255,7 @@ cd /www/dk_project/edgeweir
 
 Rotating the master key: in `.env`, move the old value to `EDGEWEIR_MASTER_KEY_PREVIOUS`, write the new `EDGEWEIR_MASTER_KEY`, and run `./deploy.sh restart`; once `./deploy.sh logs console` shows `no envelope uses EDGEWEIR_MASTER_KEY_PREVIOUS any more`, delete that line and run `./deploy.sh restart` again. Details: [Rotating the master key](docker.en.md#rotating-the-master-key).
 
-Commands, backup layout, and abort behavior: [deploy-script.en.md](deploy-script.en.md). Version policy and rollback constraints: [upgrade.en.md](upgrade.en.md). Restore: [backup.en.md](backup.en.md).
+Commands, backup layout, and abort behavior: [deploy.sh reference](deploy-script.en.md). Version policy: [Versions and upgrades](upgrade.en.md); rollback constraints: [Downgrade](downgrade.en.md). Restore: [Backup and recovery](backup.en.md).
 
 | Case | Behavior |
 | --- | --- |

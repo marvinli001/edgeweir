@@ -8,7 +8,7 @@ Deploy the console on Fly.io from the console image, with an external PostgreSQL
 | --- | --- |
 | Fly.io | An organization that can create apps |
 | flyctl | The `fly` CLI after `fly auth login`; app creation, deployment, and upgrades use flyctl, see [Methods](#methods) |
-| Console image | `ghcr.io/marvinli001/edgeweir:stable`, public: a version the maintainer verified, each update with a [GitHub Release](https://github.com/marvinli001/edgeweir/releases); channels and tag rules in [Versions, upgrades, and rollback](upgrade.en.md) |
+| Console image | `ghcr.io/marvinli001/edgeweir:stable`, public: a version the maintainer verified, each update with a [GitHub Release](https://github.com/marvinli001/edgeweir/releases); channels and tag rules in [versions and upgrades](upgrade.en.md) |
 | PostgreSQL | PostgreSQL 18 reachable from the Machine. Fly Managed Postgres offers only 16 and 17 (October 2026) and does not qualify |
 | Public addresses | Dedicated IPv4 (USD 2 a month) and dedicated IPv6 |
 | Master key | Generated with `openssl rand -base64 32`; stored outside Fly.io and apart from database backups |
@@ -168,7 +168,7 @@ An uninitialized console logs the same setup token on every start.
 
 1. Dashboard → `edgeweir-console` → **Logs & Errors** → **Search logs in Grafana**, query `"first-run setup"`. Logs are kept for 7 days.
 2. The line's `setupToken` field is the setup token; its `url` field is the setup wizard address (`<EDGEWEIR_PUBLIC_URL>/setup`).
-3. Open the wizard and enter the setup token; see [Quick start](../guide/first-site.en.md#1-complete-the-setup-wizard).
+3. Open the wizard, enter the setup token in "Setup token", fill in "Name", "Email", and "Password" (at least 12 characters), and click "Create and continue"; see [quick start](../guide/first-site.en.md#1-complete-the-setup-wizard).
 
 flyctl:
 
@@ -263,7 +263,7 @@ Each update of `stable` comes with a [GitHub Release](https://github.com/marvinl
 
    Expected: `version` is the dated tag of the latest GitHub Release.
 
-Pinning a version or rolling back: replace `stable` in `[build] image` with a dated tag, then `fly deploy`. Migrations, signature verification, and rollback: [Versions, upgrades, and rollback](upgrade.en.md).
+Pinning a version or rolling back: replace `stable` in `[build] image` with a dated tag, then `fly deploy`. Migrations and signature verification: [versions and upgrades](upgrade.en.md); going back: [downgrade](downgrade.en.md).
 
 ## Limits
 

@@ -8,7 +8,7 @@
 | --- | --- |
 | bunny.net | 已验证付款卡的账户。试用账户限 1 个应用，每个实例 1 CPU、4 GiB 内存 |
 | bunny CLI | 可选：`npm install -g @bunny.net/cli`（0.19），再执行 `bunny login`；用法与限制见 [操作方式](#操作方式) |
-| 控制台镜像 | `ghcr.io/marvinli001/edgeweir:stable`，公开拉取：维护者验证过的版本，每次更新附一个 [GitHub Release](https://github.com/marvinli001/edgeweir/releases)。Magic Containers 只运行 linux/amd64，镜像包含该架构。渠道与 tag 规则见 [版本、升级与回滚](upgrade.md) |
+| 控制台镜像 | `ghcr.io/marvinli001/edgeweir:stable`，公开拉取：维护者验证过的版本，每次更新附一个 [GitHub Release](https://github.com/marvinli001/edgeweir/releases)。Magic Containers 只运行 linux/amd64，镜像包含该架构。渠道与 tag 规则见 [版本与升级](upgrade.md) |
 | PostgreSQL | PostgreSQL 18，容器可达。按来源地址放行时，放行 `https://api.bunny.net/mc/nodes/plain` 列出的地址，该列表会变化。bunny Database 是 libSQL，不能替代 PostgreSQL |
 | 公网地址 | 一个 Anycast IPv4（每月 2 美元）；Anycast 不提供 IPv6。可以在部署后再添加，见 [后加 Anycast IP](#后加-anycast-ip) |
 | 主密钥 | `openssl rand -base64 32` 生成；保存在 bunny.net 之外，与数据库备份分开 |
@@ -196,7 +196,7 @@ bunny api POST /pullzone/<pull zone ID>/setForceSSL --body '{"Hostname":"mc-<id>
 
 1. 应用 **Logging → Logs → Application**，搜索 `first-run setup`。日志保留 5 天，可能含有更换数据库之前的 setup token：取最新一行。
 2. 该行 `setupToken` 字段为 setup token，`url` 字段为初始化向导地址（`<EDGEWEIR_PUBLIC_URL>/setup`）。
-3. 打开向导，填入 setup token，见 [快速上手](../guide/first-site.md#1-完成初始化向导)。
+3. 打开向导，在「初始化令牌」填入 setup token，填写「姓名」「邮箱」「密码」（至少 12 位），点击「创建并继续」；见 [快速上手](../guide/first-site.md#1-完成初始化向导)。
 
 没有该行时重启应用（应用 **Restart**，或 `bunny apps restart`）后重新搜索。
 
@@ -306,7 +306,7 @@ bunny api PATCH /mc/apps/<应用 ID>/containers/<容器 ID> --body '{"imageDiges
 
 `bunny apps deploy <镜像>` 会删除健康检查，不用于升级。
 
-固定版本或回滚：**Container Settings → Edit** 中 tag 选择日期 tag，点击 **Update Container**，再 **Save Changes** 并确认；bunny CLI 为 `bunny api PATCH /mc/apps/<应用 ID>/containers/<容器 ID> --body '{"imageTag":"<日期 tag>"}'`。迁移、签名校验与回滚见 [版本、升级与回滚](upgrade.md)。
+固定版本或回滚：**Container Settings → Edit** 中 tag 选择日期 tag，点击 **Update Container**，再 **Save Changes** 并确认；bunny CLI 为 `bunny api PATCH /mc/apps/<应用 ID>/containers/<容器 ID> --body '{"imageTag":"<日期 tag>"}'`。迁移与签名校验见 [版本与升级](upgrade.md)，回退见 [降级](downgrade.md)。
 
 ## 限制
 

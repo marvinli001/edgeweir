@@ -1,34 +1,60 @@
 # Command line
 
-`deploy.sh`, the node installer `install.sh`, Docker Compose operations, the container entrypoint, account recovery, and development commands.
+Parameters, variables and exit codes of `deploy.sh` and the node `install.sh`, Compose operations, the container entry point, account recovery and dev commands.
 
 ## deploy.sh
 
-Installer and operations script for 宝塔 / aaPanel Compose deployments. Usage: `./deploy.sh <command>`.
+Install and operations script for 宝塔 / aaPanel and any Linux host with Docker and Compose v2. Usage: `./deploy.sh <command> [arguments]`. Behaviour, files written and backup layout: [deploy.sh reference](../deploy/deploy-script.en.md).
 
-| Command | Effect |
+### Commands
+
+| Command | Arguments | Effect |
+| --- | --- | --- |
+| `install` | — | Interactive install: database mode (`host` or `bundled`), `.env` and Compose file, start. The script must be downloaded to a file first (`curl … \| bash` does not work) |
+| `update` | `[tag]`, `--no-backup` | Backs up, then upgrades to `tag` (default `stable`; `latest` follows master builds, or a dated tag). A channel resolves to the dated tag written to `EDGEWEIR_VERSION` in `.env`. `--no-backup` skips the backup. Alias `upgrade` |
+| `backup` | — | Backs up the database, `.env` (without the master key) and the Compose file to `backups/`; how many are kept: `EDGEWEIR_BACKUP_KEEP` |
+| `restore` | `<backup>`, `--no-backup` | Backs up the current database, then replaces it with the backup's `edgeweir.dump`; `.env` is unchanged. Needs `EDGEWEIR_YES=1` when not run interactively |
+| `config` | — | Changes the console URL and the node channel URL |
+| `start` | — | Starts, applying `.env` changes |
+| `stop` | — | Stops |
+| `restart` | — | Recreates the console container and starts it, applying `.env` changes |
+| `status` | — | Container status, deployment directory, mode and running version |
+| `logs` | `[service]` | Follows the logs from the last 200 lines; service `console` or `postgres` |
+| `setup-token` | — | Prints the first-run setup token; fails once setup is done or while the container is not running |
+| `template` | `host` \| `bundled` | Prints a Compose template for pasting into a panel by hand |
+| `self-update` | — | Replaces the script with the `/app/deploy.sh` of the current image; without one, downloads `EDGEWEIR_SCRIPT_URL` |
+| `help`, `-h`, `--help` | — | Prints the usage |
+
+### Environment variables
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `EDGEWEIR_YES` | Unset | Non-empty: no questions on `/dev/tty`; defaults or the variables below are used (unattended); `restore` asks for no confirmation |
+| `EDGEWEIR_DB` | Interactive: asked; unattended: `bundled` | Database mode of `install`: `host` (local or cloud PostgreSQL, host network) or `bundled` (PostgreSQL in the Compose project); any other value fails |
+| `DATABASE_URL` | None | Connection string of the `host` mode of `install`; required unattended. No whitespace, quotes, `$` or `#` |
+| `EDGEWEIR_PUBLIC_URL` | None | Console URL of `install`; required unattended |
+| `EDGEWEIR_NODE_API_URL` | `https://<console host>:<EDGEWEIR_NODE_API_PORT>` | Node channel URL of `install`; must be `https://`; its port is the node channel port. In `host` mode the port is at least 1024 |
+| `EDGEWEIR_NODE_API_PORT` | `8443` | Port in the default node channel URL of `install` |
+| `EDGEWEIR_HTTP_PORT` | `3000` | Web port of `install` (the number after the last `:`); a port in use is asked again interactively and fails unattended |
+| `EDGEWEIR_VERSION` | `stable` | Image tag of `install`; a channel resolves to a dated tag |
+| `EDGEWEIR_DIR` | `/opt/edgeweir`; `/www/dk_project/edgeweir` when `/www/server/panel` exists | Install directory of `install` (absolute, empty). The other commands look for a deployment in: `EDGEWEIR_DIR`, the script's directory, the current directory, `/www/dk_project/edgeweir`, `/opt/edgeweir` |
+| `EDGEWEIR_NO_PULL` | Unset | Non-empty: never pull, use images already on the host (`docker load`) |
+| `EDGEWEIR_POSTGRES_IMAGE` | `postgres:18.6-alpine` (pinned by digest) | PostgreSQL image of the `bundled` mode, and the image of the `host` mode's checks and backups |
+| `EDGEWEIR_BACKUP_KEEP` | `5` | Backups kept; `0` keeps all; a non-number fails |
+| `EDGEWEIR_SCRIPT_URL` | `https://raw.githubusercontent.com/marvinli001/edgeweir/master/deploy.sh` | Fallback download URL of `self-update` |
+
+### Exit codes
+
+| Exit code | Meaning |
 | --- | --- |
-| `install` | Interactive install: choose the database mode, write `.env`, start |
-| `update [tag]` | Back up, then upgrade to the version of the `stable` channel or the given tag; `--no-backup` skips the backup. Alias `upgrade` |
-| `backup` | Back up the database, `.env` (without the master key), and the Compose file to `backups/`, keeping the newest 5 |
-| `restore <backup>` | Back up the current database, then replace it with the backup's `edgeweir.dump`; `.env` stays, `--no-backup` skips the backup |
-| `config` | Change the console URL and the node channel URL |
-| `start`, `stop` | Start (applying `.env` changes), stop |
-| `restart` | Recreate the console container and start, applying `.env` changes |
-| `status` | Container status and the running version |
-| `logs [service]` | Follow logs; service is `console` or `postgres` |
-| `setup-token` | Print the first-run setup token |
-| `template <host\|bundled>` | Print a Compose template for pasting into the panel |
-| `self-update` | Replace the script with the `deploy.sh` shipped in the current image, or the GitHub version when the image has none |
-| `help` | Print usage |
+| `0` | Done, or `help` |
+| `1` | A check or step failed (stderr prints `✗` and the reason), or an unknown command (with the usage) |
 
-Arguments, unattended variables, files written, backup layout, and exit behavior: [deploy.sh reference](../deploy/deploy-script.en.md).
+## Node install script
 
-## Node installer
+The console serves `install.sh` at `/install.sh`; it installs and enrolls `edgeweir-node` on a node. Install commands generated by the console fill in `--server` and `--ca-sha256`; see [Adding nodes](../deploy/nodes.en.md).
 
-The console serves `install.sh` at `/install.sh`; it installs and enrolls `edgeweir-node` on a node. The install command generated by the console already carries `--server` and `--ca-sha256`; see [Adding nodes](../deploy/nodes.en.md).
-
-```bash title="Node"
+```bash title="node"
 export EDGEWEIR_TOKEN='<one-time token>'
 curl -fsSL https://<console>/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- \
   --server https://<console>:8443 --ca-sha256 <CA fingerprint>
@@ -40,48 +66,56 @@ curl -fsSL https://<console>/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bas
 
 | Option | Argument | Default | Effect |
 | --- | --- | --- | --- |
-| `--server` | URL | Required | Node channel URL; must be `https://`. |
-| `--ca-sha256` | HEX | Required | SHA-256 fingerprint of the console's node CA, 64 lowercase hex characters; pinned during enrollment. |
-| `--token-file` | PATH | None | Read the enrollment token from a file (whitespace removed); takes precedence over `EDGEWEIR_TOKEN`. |
-| `--version` | VER | `latest` | edgeweir-node version to install; a semantic version, optional `v` prefix. `latest` is resolved from the mirror's `latest` file, then the latest GitHub release. Without it (and without `--force`), an enrolled host downloads and installs nothing; the service is only started and checked. |
-| `--format` | `auto`\|`deb`\|`rpm`\|`tar` | `auto` | Package format. `auto`: deb with `dpkg` and `apt-get`; rpm with `rpm` and `dnf` or `yum`; otherwise tar. |
-| `--mirror` | URL | `<console>/downloads/edgeweir-node` | edgeweir-node release mirror, with files at `URL/latest` and `URL/v<version>/<file>`; cosign comes from the sibling `cosign/v<version>/`. Each file is tried from the mirror first, then from GitHub. |
-| `--mirror-only` | None | Off | Never fall back to GitHub. |
-| `--no-modsecurity` | None | Off | Do not install `edgeweir-openresty-modsecurity`: the node does not support OWASP CRS. |
-| `--no-start` | None | Off | Install and enroll only: do not require systemd, do not enable or start the service, no health check. |
-| `--force` | None | Off | Enroll an enrolled host again (needs a new token): stops `edgeweir-node`, replaces its identity, and starts it again. |
-| `--allow-unsigned` | None | Off | Skip the cosign signature check; development only. SHA-256 is still verified. |
-| `-h`, `--help` | None | None | Print usage. |
+| `--server` | URL | Required | Node channel URL: `https://host[:port]` (the node channel port, default 443), or `wss://`, `ws://host[:port]` (the WebSocket entry on the web port; needs edgeweir-node 0.2.0 or later) |
+| `--ca-sha256` | HEX | Required | SHA-256 fingerprint of the console's node CA, 64 lowercase hex characters; pinned at enrollment |
+| `--token-file` | PATH | None | Reads the enrollment token from a file (all whitespace removed); wins over `EDGEWEIR_TOKEN` |
+| `--version` | VER | `latest` | edgeweir-node version, semantic version, optional `v` prefix. `latest` resolves from the mirror's `latest` file, then GitHub's latest release. On an enrolled host without this option (and without `--force`) nothing is downloaded or installed: the service is started or restarted and checked |
+| `--format` | `auto` \| `deb` \| `rpm` \| `tar` | `auto` | Package format. `auto`: deb with `dpkg` and `apt-get`; rpm with `rpm` and `dnf` or `yum`; otherwise tar |
+| `--mirror` | URL | `<console>/downloads/edgeweir-node` | edgeweir-node release mirror (`http`, `https`), files at `URL/latest` and `URL/v<version>/<file>`; cosign from the sibling `cosign/v<version>/`. Each file is tried on the mirror first, then GitHub |
+| `--mirror-only` | — | Off | Never fall back to GitHub |
+| `--no-modsecurity` | — | Off | Skip `edgeweir-openresty-modsecurity`: the node does not support OWASP CRS |
+| `--no-start` | — | Off | Install and enroll only: no systemd needed, the service is not enabled or started, no health check |
+| `--force` | — | Off | Enroll an enrolled host again (needs a new token): packages are installed as on a new host, `edgeweir-node` is stopped, its identity replaced and the service started |
+| `--allow-unsigned` | — | Off | Skip the cosign signature check, development only; SHA-256 is still verified |
+| `-h`, `--help` | — | — | Prints the usage |
 
 | Environment variable | Effect |
 | --- | --- |
-| `EDGEWEIR_TOKEN` | One-time enrollment token, format `ewt_…`. The script removes it from its environment after reading, so other child processes do not inherit it; it reaches `edgeweir-node enroll` through the environment. |
+| `EDGEWEIR_TOKEN` | One-time enrollment token, `ewt_` followed by `[A-Za-z0-9_-]`. The script reads it and removes it from the environment, so no other child process inherits it; it reaches `edgeweir-node enroll` through the environment. Not used on an enrolled host without `--force` |
 
-`--token` and `--token=…` are rejected: command-line arguments are visible in the process list.
+`--token` and `--token=…` are refused: command-line arguments are visible in the process list.
 
-### Verification
+### Requirements and checks
 
-| Object | Check |
+| Check | Fails when |
 | --- | --- |
-| `checksums.txt` | Keyless cosign signature (`checksums.txt.sigstore.json`). Certificate identity: `https://github.com/marvinli001/edgeweir-node/.github/workflows/release.yml@refs/tags/v<version>`; OIDC issuer: `https://token.actions.githubusercontent.com` |
-| Package | SHA-256 against the signed `checksums.txt` |
-| cosign | Without cosign on the machine, v3.1.3 is downloaded and checked against the SHA-256 pinned in the script |
+| System | Not Linux; not root; no `curl`, `sha256sum` or `tar`; no systemd without `--no-start` |
+| Architecture | Not `x86_64` (`amd64`) or `aarch64` (`arm64`) |
+| glibc | Older than 2.34 (RHEL / Rocky / AlmaLinux 9, Debian 12, Ubuntu 22.04 or later) |
+| Node channel (`https://`) | Unreachable; with `openssl` installed, the SHA-256 of the last certificate the server presents is not `--ca-sha256` (a proxy or CDN terminates TLS) |
+| Node channel (`wss://`, `ws://`) | `<web URL>/node-channel` answers 404 (WebSocket entry closed) or any status other than 426 |
 
-Nothing downloaded runs before these checks pass. System requirements, the full flow, and installed files: [Adding nodes](../deploy/nodes.en.md#installsh-flow).
+| Object | Verification |
+| --- | --- |
+| `checksums.txt` | cosign keyless signature (`checksums.txt.sigstore.json`). Certificate identity: `https://github.com/marvinli001/edgeweir-node/.github/workflows/release.yml@refs/tags/v<version>`; OIDC issuer: `https://token.actions.githubusercontent.com` |
+| Packages | SHA-256 against the signed `checksums.txt` |
+| cosign | Without cosign on the machine, v3.1.3 is downloaded and checked against the SHA-256 built into the script |
+
+Nothing downloaded runs before verification passes. Steps and results: [Adding nodes](../deploy/nodes.en.md#installsh-flow).
 
 ### Exit codes
 
-| Code | Meaning |
+| Exit code | Meaning |
 | --- | --- |
-| `0` | Installed and enrolled, and `edgeweir-node healthcheck` passed (not checked with `--no-start`) |
-| `1` | A check or step failed, including a health check that did not pass within 90 seconds; stderr shows `[edgeweir] error:` and the reason |
-| `2` | `--server` or `--ca-sha256` missing, or `-h`/`--help` given |
+| `0` | Installed and enrolled; `edgeweir-node healthcheck` passed (not checked with `--no-start`) |
+| `1` | A check or step failed, including an unknown option or a health check that did not pass within 90 seconds; stderr prints `[edgeweir] error:` and the reason |
+| `2` | `--server` or `--ca-sha256` missing, an option without its argument, or `-h`, `--help`; stderr prints the usage |
 
-The script neither upgrades nor uninstalls. Node upgrades: [Node upgrades](../guide/node-upgrades.en.md).
+The script does not uninstall. Node upgrades: [Node upgrades](../guide/node-upgrades.en.md).
 
 ## Docker Compose
 
-Run in the directory of `compose.yml`; add `-f <file>` for other Compose files.
+Run in the directory of `compose.yml`; other Compose files with `-f <file>`.
 
 | Operation | Command |
 | --- | --- |
@@ -92,15 +126,15 @@ Run in the directory of `compose.yml`; add `-f <file>` for other Compose files.
 | Restart (does not apply `.env` changes) | `docker compose restart console` |
 | Status | `docker compose ps` |
 | Follow logs | `docker compose logs -f console` |
-| Show the setup token log line | `docker compose logs console \| grep setupToken` |
+| Setup token log line | `docker compose logs console \| grep setupToken` |
 | Health check (host) | `curl -s http://127.0.0.1:3000/healthz` |
 | Health check (in the container) | `docker compose exec console edgeweir-healthcheck` |
-| Recover the account (reset the password, turn two-factor off) | `docker compose exec console node dist/server/recover.js --reset-password --disable-two-factor`, see [Account recovery](#account-recovery) |
-| Pull the image set by `EDGEWEIR_VERSION` and recreate | `docker compose pull && docker compose up -d` |
-| Start ClickHouse | `COMPOSE_PROFILES=analytics` in `.env`, then `docker compose up -d` (later commands include it) |
+| Account recovery | `docker compose exec console node dist/server/recover.js <options>`; see [Account recovery](#account-recovery) |
+| Pull the image `EDGEWEIR_VERSION` names and recreate | `docker compose pull && docker compose up -d` |
+| Start ClickHouse | Set `COMPOSE_PROFILES=analytics` in `.env`, then `docker compose up -d` |
 
 > [!WARNING]
-> `docker compose down -v` removes named volumes such as `postgres-data`, that is, all data.
+> `docker compose down -v` deletes the named volumes such as `postgres-data`: all data.
 
 Print only the setup token:
 
@@ -109,32 +143,37 @@ docker compose logs --no-color --no-log-prefix console \
   | sed -n 's/.*"setupToken":"\([^"]*\)".*/\1/p' | tail -n 1
 ```
 
-`/healthz` returns `{"status":"ok","version":"<version>"}`. When `EDGEWEIR_HTTP_PORT` is not `3000`, use that port. Upgrade and rollback steps: [Versions, upgrades, and rollback](../deploy/upgrade.en.md).
+`/healthz` returns `{"status":"ok","version":"<version>"}`. Use `EDGEWEIR_HTTP_PORT` instead of `3000` when it differs. Upgrade and rollback steps: [Versions, upgrades and rollback](../deploy/upgrade.en.md).
 
 ## Container
 
 | Item | Value |
 | --- | --- |
-| Image | `ghcr.io/marvinli001/edgeweir:<tag>`, linux/amd64 and linux/arm64 |
-| Entrypoint | `/sbin/tini --` |
+| Image | `ghcr.io/marvinli001/edgeweir:<tag>`, linux/amd64, linux/arm64 |
+| Entry point | `/sbin/tini --` |
 | Command | `node --enable-source-maps dist/server/main.js`, working directory `/app` |
 | User | `node` |
 | Ports | `3000` (web, API), `8443` (node channel) |
+| Environment defaults | `NODE_ENV=production`, `ROLE=all`, `HOST=0.0.0.0`, `PORT=3000`, `NODE_API_PORT=8443`, `EDGEWEIR_VERSION=<build version>`, `EDGEWEIR_CERTD_BIN=/usr/local/bin/edgeweir-certd` |
 | Health check | `edgeweir-healthcheck`; interval 10 s, timeout 3 s, start period 30 s, 5 retries |
-| Bundled files | `/usr/local/bin/edgeweir-certd`, `/usr/local/bin/edgeweir-healthcheck`, `/app/deploy.sh` |
-| Stop signals | `SIGTERM`, `SIGINT`: close the HTTP and node channel listeners and end the nodes' watch streams, give requests in flight up to 3 seconds and pg-boss up to 5 seconds at the same time, exit with 0; after 8 seconds exit with 1 |
+| Bundled files | `/usr/local/bin/edgeweir-certd`, `/usr/local/bin/edgeweir-healthcheck`, `/app/deploy.sh`, `/app/dist/server/recover.js` |
+| Stop signals | `SIGTERM`, `SIGINT`: the HTTP and node channel listeners close and nodes' watch streams end, requests in flight get up to 3 s while pg-boss gets up to 5 s, and the process exits 0; not done within 8 s, it exits 1 |
 
-`edgeweir-healthcheck`: with `ROLE=worker` it returns 0; other roles request `http://127.0.0.1:${PORT}/healthz` with a 2-second timeout and return non-zero on failure.
-
-Environment defaults of the image: [Environment variables](environment.en.md#runtime).
+`edgeweir-healthcheck`: with `ROLE=worker` it returns 0; other roles request `http://127.0.0.1:${PORT}/healthz` (`PORT` default 3000) with a 2-second timeout and return non-zero on failure.
 
 ### ROLE
 
-Values: `all` (default), `app`, and `worker`. Components, listeners, and scaling per role: [Deployment overview](../deploy/README.en.md#process-roles).
+| Value | Components |
+| --- | --- |
+| `all` (default) | Web and API, node channel, pg-boss worker |
+| `app` | Web and API, node channel |
+| `worker` | pg-boss worker; no listeners |
+
+Scaling: [Deployment overview](../deploy/README.en.md#process-roles).
 
 ## Account recovery
 
-`dist/server/recover.js` resets the password of the console's only account, turns two-factor authentication off or clears the login IP allow list, for when nobody can sign in. It reads the same environment variables as the console (`DATABASE_URL`, `EDGEWEIR_MASTER_KEY`, and so on) and changes the database directly, without the web UI or HTTP. Steps: [Account recovery](../guide/account.en.md#account-recovery).
+`dist/server/recover.js` resets the password of the console's only account, turns off its two-factor authentication or clears the login IP allow list, for when signing in is no longer possible. It reads the console's environment variables (`DATABASE_URL`, `EDGEWEIR_MASTER_KEY`, …) and changes the database directly, not through the web UI or HTTP. Steps: [Account recovery](../guide/account.en.md#account-recovery).
 
 ```bash
 docker compose exec console node dist/server/recover.js --reset-password --disable-two-factor
@@ -145,45 +184,45 @@ docker compose exec console node dist/server/recover.js --reset-password --disab
 | Docker Compose | `docker compose exec console node dist/server/recover.js <options>` |
 | Docker Compose, console container not running | `docker compose run --rm console node dist/server/recover.js <options>` |
 | 宝塔 / aaPanel (`deploy.sh`) | `docker exec -it edgeweir-console node dist/server/recover.js <options>` |
-| Source (`pnpm dev`) | `pnpm --filter @edgeweir/console recover <options>`, see [Commands](#commands) |
+| Source | `pnpm --filter @edgeweir/console recover <options>`; see [Commands](#commands-1) |
 
 ### Options
 
 | Option | Effect |
 | --- | --- |
-| `--reset-password` | Set a new password, 12–128 characters |
-| `--disable-two-factor` | Turn two-factor authentication off; delete the TOTP secret and backup codes |
-| `--clear-login-allowlist` | Clear the [login IP allow list](../guide/system.en.md#login-ip-allow-list), so every address may sign in again |
-| `-h`, `--help` | Print usage |
+| `--reset-password` | Sets a new password, 12–128 characters |
+| `--disable-two-factor` | Turns two-factor authentication off and deletes the TOTP secret and backup codes |
+| `--clear-login-allowlist` | Clears the [login IP allow list](../guide/system.en.md#login-ip-allow-list): every address may sign in again |
+| `-h`, `--help` | Prints the usage to standard output |
 
-At least one of `--reset-password`, `--disable-two-factor` and `--clear-login-allowlist` is required.
+Give at least one of `--reset-password`, `--disable-two-factor`, `--clear-login-allowlist`.
 
 ### New password
 
-| Standard input | How it is read |
+| Standard input | Read as |
 | --- | --- |
-| Terminal (allocated by default by `docker compose exec` and `docker exec -it`) | Prompts `New password:` and `Repeat new password:` without echo; nothing changes when the two entries differ. Ctrl-C cancels |
-| Pipe or file | The first line, without its `\n` or `\r\n` ending |
+| Terminal (allocated by default by `docker compose exec` and `docker exec -it`) | Prompts `New password:` and `Repeat new password:` without echo; nothing changes when they differ. Ctrl-C cancels |
+| Pipe or file | The first line, without a trailing `\n` or `\r\n`; empty fails |
 
 ```bash
 docker compose exec -T console node dist/server/recover.js --reset-password < new-password.txt
 ```
 
-`-T` allocates no terminal; use it only with a pipe or file, because a password typed at the terminal is then shown on screen. The password is never taken from a command-line argument or an environment variable: arguments are visible in the process list and the shell history.
+`-T` allocates no terminal; use it only with a pipe or file: typed at a terminal, the password would be shown on screen. The password is never taken from a command-line argument or environment variable: arguments are visible in the process list and the shell history.
 
 ### Result
 
-These changes commit in one transaction with the audit entry; if any step fails, nothing changes:
+The changes and the audit entry commit in one transaction; any failure rolls back all of them:
 
 | Change | Description |
 | --- | --- |
-| Password | Hashed by better-auth (scrypt) and stored on the account's password credential |
-| Two-factor authentication | Off; the TOTP secret and backup codes are deleted |
-| Login IP allow list | Removed; session cookies taken outside the list would work again, so the sessions are deleted as well |
-| Sessions | All sessions of the account are deleted, as are sign-ins waiting for their two-factor code and trusted-device records |
-| Audit log | `account.recover`, actor System (name `recover`); metadata `passwordReset`, `twoFactorDisabled`, `sessionsRevoked`, and `loginAllowListCleared` (the ranges before) when clearing the allow list |
+| Password | Hashed by better-auth (scrypt) into the account's password credential |
+| Two-factor authentication | Off; TOTP secret and backup codes deleted |
+| Login IP allow list | Removed |
+| Sessions | Every session of the account deleted, with pending two-factor sign-ins and trusted-device records |
+| Audit log | `account.recover`, actor system (name `recover`); metadata `passwordReset`, `twoFactorDisabled`, `sessionsRevoked`, and `loginAllowListCleared` (the ranges before clearing) when the allow list is cleared |
 
-Name, email, passkeys, and AccessKeys do not change. Standard output shows the account's name and email and what changed, never the password, its hash, or a session token:
+Name, e-mail, passkeys and AccessKeys stay. Standard output shows the account's name and e-mail and what was done, never the password, its hash or a session token:
 
 ```text
 Account: Ops <admin@example.com>
@@ -192,19 +231,23 @@ Two-factor authentication turned off.
 Signed out 2 sessions.
 ```
 
-`--clear-login-allowlist` prints `Login allow list cleared (N ranges).`, or `The login allow list was already off.` when it was empty.
+| Operation | Output |
+| --- | --- |
+| `--disable-two-factor` | `Two-factor authentication turned off.`; `Two-factor authentication was already off.` when it was not on |
+| `--clear-login-allowlist` | `Login allow list cleared (N ranges).`; `The login allow list was already off.` when it was empty |
+| Sessions | `Signed out N sessions.` (always) |
 
 ### Exit codes
 
 | Exit code | Meaning |
 | --- | --- |
-| `0` | Done, or `-h` / `--help` |
-| `1` | Nothing changed: no account (setup not completed), password length out of range, entries differ, cancelled, invalid configuration, or the database connection or write failed; stderr shows `error:` and the reason |
-| `2` | Unknown option, extra argument, or no action given; stderr shows the usage |
+| `0` | Done, or `-h`, `--help` |
+| `1` | Nothing changed: no account (setup not done), password length out of range, the two entries differ, no password on standard input, cancelled, invalid configuration, database connection or write failed; stderr prints `error:` and the reason |
+| `2` | Unknown option, extra argument or no operation; stderr prints the usage |
 
 ## Development
 
-Requirements: Node.js 24.11.0 or later, pnpm 12.6.0, Docker; `helpers/certd` and `pnpm e2e` also need Go 1.27.2. buf is installed with the dev dependencies.
+Requirements: Node.js 24.11.0 or later, pnpm 12.6.0, Docker; `helpers/certd` and `pnpm e2e` also need Go 1.27.2. buf comes with the development dependencies.
 
 ### Run locally
 
@@ -214,7 +257,7 @@ Requirements: Node.js 24.11.0 or later, pnpm 12.6.0, Docker; `helpers/certd` and
    pnpm install
    ```
 
-2. Start the development database (`compose.dev.yml`; port: [`DEV_POSTGRES_PORT`](environment.en.md#compose-host-variables)).
+2. Start the development database (`compose.dev.yml`, port in [`DEV_POSTGRES_PORT`](environment.en.md#compose-host-variables)).
 
    ```bash
    docker compose -f compose.dev.yml up -d
@@ -232,7 +275,7 @@ Requirements: Node.js 24.11.0 or later, pnpm 12.6.0, Docker; `helpers/certd` and
    pnpm dev
    ```
 
-5. Verify.
+5. Check.
 
    ```bash
    curl -s http://localhost:3000/healthz
@@ -240,31 +283,32 @@ Requirements: Node.js 24.11.0 or later, pnpm 12.6.0, Docker; `helpers/certd` and
 
    Expected output: `{"status":"ok","version":"dev"}`.
 
-Certificate issuance needs the certificate helper: `cd helpers/certd && go build -o bin/edgeweir-certd .`, then set its absolute path in `EDGEWEIR_CERTD_BIN`.
+Issuing certificates needs the certificate helper: `cd helpers/certd && go build -o bin/edgeweir-certd .`, then put its absolute path in `EDGEWEIR_CERTD_BIN`.
 
 ### Commands
 
-Run from the repository root.
+Run in the repository root.
 
 | Command | Effect |
 | --- | --- |
-| `pnpm dev` | One process runs the API, the node channel, and Vite HMR; loads the repository `.env` when present; web listens on `PORT` |
-| `pnpm build` | Turborepo build of all packages; the console goes to `apps/console/dist` |
-| `pnpm typecheck` | Type checking |
+| `pnpm dev` | API, node channel and Vite HMR in one process; reads `.env` in the repository root when present; web on `PORT` |
+| `pnpm build` | Turborepo build of every package; the console goes to `apps/console/dist` |
+| `pnpm typecheck` | Type check |
 | `pnpm test` | Vitest; the database is PGlite, no Docker needed |
-| `pnpm lint` | `biome check .` and `buf lint proto` |
+| `pnpm lint` | `biome check .`, `buf lint proto` and `knip` |
 | `pnpm format` | `biome check --write .` |
 | `pnpm proto:lint` | `buf lint proto` |
-| `pnpm proto:gen` | Generate `packages/proto/src/gen` from `proto/` |
-| `pnpm db:generate` | Generate an SQL migration in `packages/db/migrations` from `packages/db/src/schema` (drizzle-kit) |
-| `pnpm e2e` | Run `scripts/e2e.sh` |
-| `pnpm --filter @edgeweir/console start` | Run the built `dist/server/main.js` |
-| `pnpm --filter @edgeweir/console recover <options>` | Run the [account recovery](#account-recovery) command from source; reads `.env` in the repository root when present. No `--` before the options |
+| `pnpm proto:breaking` | Checks `proto/` for breaking changes (`scripts/proto-breaking.sh`) |
+| `pnpm proto:gen` | Generates `packages/proto/src/gen` from `proto/` |
+| `pnpm db:generate` | Generates SQL migrations from `packages/db/src/schema` into `packages/db/migrations` (drizzle-kit) |
+| `pnpm e2e` | Runs `scripts/e2e.sh` |
+| `pnpm --filter @edgeweir/console start` | Runs the built `dist/server/main.js` |
+| `pnpm --filter @edgeweir/console recover <options>` | [Account recovery](#account-recovery) from source; reads `.env` in the repository root when present. No `--` before the options |
 | `pnpm --filter @edgeweir/console test:e2e` | Playwright tests |
 
 ### End-to-end tests
 
-`scripts/e2e.sh` runs against `compose.e2e.yml`. It needs `curl`, `jq`, `docker`, and `node`; the installer step also needs goreleaser v2, syft, Go 1.27.2, and the sibling `edgeweir-node` checkout, and the signed upgrade step needs cosign v3.1.3; the run needs access to deb.debian.org and openresty.org.
+`scripts/e2e.sh` runs against `compose.e2e.yml`. It needs `curl`, `jq`, `docker` and `node`; the installer step also needs goreleaser v2, syft, Go 1.27.2 and the sibling `edgeweir-node` checkout, the signed upgrade step cosign v3.1.3; the run needs access to deb.debian.org and openresty.org.
 
 ```bash
 docker compose -f compose.e2e.yml up -d --build
@@ -273,27 +317,33 @@ pnpm e2e
 
 | Argument | Effect |
 | --- | --- |
-| `--up` | Run `docker compose -f compose.e2e.yml up -d --build` first |
-| `--down` | Run `docker compose -f compose.e2e.yml --profile '*' down -v` at the end, removing the profile services (ClickHouse, upgrade test node, regional probes) and their volumes as well |
-| `--skip-ui` | Skip the Playwright browser tests |
+| `--up` | Runs `docker compose -f compose.e2e.yml up -d --build` first |
+| `--down` | Runs `docker compose -f compose.e2e.yml --profile '*' down -v` at the end, removing the profile services and their volumes too |
+| `--skip-ui` | Skips the Playwright browser tests |
+| `--only <section,…>` | Runs the named sections, and on a fresh stack the sections they need |
+| `--from <section>` | Runs from that section to the end |
+| `--list` | Lists the sections with what each needs |
+| `--plan` | Prints the sections a run would take, then exits |
+| `--serial` | No parallel lanes: every section in turn |
 
-Arguments follow the script: `bash scripts/e2e.sh --up --down`.
+Arguments go after the script: `bash scripts/e2e.sh --up --down`; an unknown argument exits 2. A fresh stack runs the `core` section first; on a stack that got past `core`, the run continues where it stopped (`.e2e/run.env`, `.e2e/run.done`). Every section's time is printed at the end and kept in `.e2e/timings.tsv`.
 
 | Variable | Default | Effect |
 | --- | --- | --- |
 | `COMPOSE_PROJECT_NAME` | `edgeweir-e2e` | Compose project name |
 | `E2E_CONSOLE_PORT` | `13000` | Console host port |
 | `E2E_NODE_PORT` | `18080` | Node HTTP host port |
-| `E2E_NODE_TLS_PORT` | `18443` | Node HTTPS host port (TCP and UDP) |
+| `E2E_NODE_TLS_PORT` | `18443` | Node HTTPS host port (TCP, UDP) |
 | `E2E_TAG` | `e2e` | Tag of the built images |
-| `E2E_SUBNET` | `172.28.213.0/24` | Default network subnet; the script adds it to the origin allow list |
-| `E2E_ISOLATED_SUBNET` | `172.28.214.0/24` | Isolated network subnet; stays outside the allow list |
-| `E2E_INSTALL_IMAGE` | `debian:bookworm-slim@sha256:…` | Clean system image for the `install.sh` test |
+| `E2E_SUBNET` | `172.28.213.0/24` | Default network's subnet; the script adds it to the origin allow list |
+| `E2E_ISOLATED_SUBNET` | `172.28.214.0/24` | Isolated network's subnet; stays off the allow list |
+| `E2E_INSTALL_IMAGE` | `debian:bookworm-slim@sha256:…` | Clean system image for testing `install.sh` |
 | `E2E_ANALYTICS` | `lite` | The console's `EDGEWEIR_ANALYTICS` |
+| `E2E_STATS_INTERVAL` | `5s` | Statistics report interval of the test nodes |
 | `E2E_CLICKHOUSE_PORT` | `19123` | ClickHouse HTTP port, bound to `127.0.0.1` |
 | `E2E_ACME_PORT` | `14000` | Pebble ACME port, bound to `127.0.0.1` |
 | `E2E_ACME_MGMT_PORT` | `15000` | Pebble management port, bound to `127.0.0.1` |
-| `E2E_MOCK_PORT` | `19090` | Mock services port |
+| `E2E_MOCK_PORT` | `19090` | Mock service port |
 | `EDGEWEIR_NODE_CONTEXT` | `../edgeweir-node` | edgeweir-node source directory |
 
-For a second environment on the same machine, change `COMPOSE_PROJECT_NAME`, the ports, `E2E_TAG`, `E2E_SUBNET`, and `E2E_ISOLATED_SUBNET`.
+For a second stack on the same machine, change `COMPOSE_PROJECT_NAME`, the ports, `E2E_TAG`, `E2E_SUBNET` and `E2E_ISOLATED_SUBNET`.

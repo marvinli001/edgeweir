@@ -1,101 +1,143 @@
 # Attacks and automatic mitigation
 
-A site's **Attacks** tab shows what the site is blocking, who is attacking it and which rules match, and jumps from any row into the access logs filtered the same way. **Automatic mitigation** turns on the site's Under Attack when its CC level reaches a threshold and turns it off again once the attack is over.
+What a site's "Attacks" tab shows about blocks, sources and matches, and automatic mitigation, which turns a site's Under Attack on and off by its CC level.
 
 ## Concepts
 
 | Term | Definition |
 | --- | --- |
-| Block reason | Why a request was blocked, see [Access logs](access-logs.en.md#block-reasons). |
-| CC level | The site's challenge level on a node, from low to high: Normal, Cookie redirect, JavaScript, Proof of work, Image captcha, see [Challenges and CC protection](challenges.en.md). |
-| Trigger level | The CC level at which automatic mitigation turns on Under Attack. Never Normal. |
-| Hold | Minutes (5–1440) Under Attack stays on after the level was last at the trigger level. |
+| Block reason | Why a request was refused or challenged, see [Access logs](access-logs.en.md#block-reasons). |
+| CC level | The site's challenge level on a node, from low to high: "Normal", "Cookie redirect", "JavaScript", "Proof of work", "Image captcha", see [Challenges and CC mitigation](challenges.en.md). |
+| Site level | The highest CC level the site holds on the online, active nodes of its cluster. |
+| Trigger level | The CC level at which automatic mitigation turns on Under Attack. Never "Normal". |
+| Hold | Minutes (5–1440) Under Attack stays on after the site level was last at the trigger level. |
 | Holding | Automatic mitigation has turned Under Attack on and has not turned it off yet. |
 
 ## The Attacks tab
 
-The range at the top (1 hour, 6 hours, 24 hours, 7 days, 30 days) applies to every card below it:
+Page: **Sites → (site) → Attacks** (`/sites/<site ID>?tab=attacks`). The "Range" at the top right ("Last hour", "Last 6 hours", "Last 24 hours" (default), "Last 7 days", "Last 30 days") applies to every card but "Automatic mitigation" and "Current level per node"; it is kept as `range` in the URL (`1h`, `6h`, `24h`, `7d`, `30d`, shared with the "Analytics" tab).
 
 | Card | Content |
 | --- | --- |
 | Automatic mitigation | Settings and current state, see [Automatic mitigation](#automatic-mitigation) |
-| Block reasons | Requests per block reason over time as a stacked chart and a list; **View logs** at the end of a row opens the access logs filtered to that reason and the same range |
-| Current level per node | The site's level, online state and escalated paths on every active node of the cluster (refreshed every 15 seconds) |
-| Top addresses, Top paths | Heaviest addresses and paths in the events (approximate); clicking an address or a path opens the access logs filtered to that value and the same range; **⋯** at the end of a row offers **Ban IP** or **Purge URL** |
-| Most-matched CRS rules | The CRS rule IDs the WAF matched most; **Exclude CRS rule** or **Exclude by path**, see [WAF](waf.en.md) |
-| Log rule matches | Matches of rules that only log, see [Rules](rules.en.md) |
-| Challenge pass rate | Challenges issued, passes granted once they were solved, and their ratio |
-| Authentication failures | Failed external authentication, see [Access control](access-control.en.md) |
-| Events | Timeline of level changes, escalated paths and automatic bans, filterable by type |
+| Block reasons | From the statistics: the five block reasons with the most requests over time as stacked bars (the rest as "Other"), and the reasons ranked by requests; "View logs" at the end of a row opens the access logs filtered to that reason and the same range |
+| Current level per node | Every active node of the cluster with its name, "Online" / "Offline", the site's level and "N escalated paths"; refreshed every 15 seconds |
+| Top addresses and paths | The heaviest addresses and paths in the security events of the range (approximate); "View logs" at the end of a row opens the access logs filtered to that address (or path) and the same range; **⋯** → "Ban IP" on an address, **⋯** → "Purge URL" on a path |
+| Most-matched CRS rules | The 10 CRS rule IDs the WAF matched most (approximate); **⋯** on a detection rule → "Exclude CRS rule {id}" or "Exclude by path", see [WAF](waf.en.md) |
+| Log rule matches | The 10 rules with the log action matched most (approximate); global rules marked "(global)", deleted ones shown as "Deleted rule", see [Rules](rules.en.md) |
+| Challenge pass rate | "Pass rate" (passed / issued, at most 100%), "Issued", "Passed" |
+| Authentication failures | Requests the site's access authentication refused, see [Access control](access-control.en.md) |
+| Events | Timeline of level changes, path escalations and automatic bans, see [Events](#events) |
 
-Top addresses, Top paths and Events come only from the security events nodes report. Each event carries the busiest addresses and paths at that moment, so the results are approximate. Events are kept as set in [Challenges and CC protection](challenges.en.md#state-and-events); a range beyond the retention has no data.
+When nodes of the cluster do not report the data, a card shows "Some nodes in the cluster do not report these statistics", "… rule matches" or "… authentication failures".
 
-Jumps from other pages carry the log filters and the time window in the link: `/sites/<site ID>?tab=logs` (the **Logs** tab) accepts `blockReason`, `ip`, `cidr`, `path`, `from` and `to`. Changing the tab clears them.
+"Top addresses and paths" and "Events" come only from the security events the nodes report; each event carries the heaviest addresses and paths at that moment, so the results are approximate. For how long events are kept, see [State and events](challenges.en.md#state-and-events); a range beyond that has no data.
+
+### Events
+
+20 per page, refreshed every 30 seconds; "Event type" is "All", "Site level", "Path level" or "Automatic ban".
+
+| Field | Content |
+| --- | --- |
+| Type | "Site level", "Path level", "Automatic ban" |
+| Change | The level change "{from} → {to}", with the path for path levels; the banned address for automatic bans |
+| Node | The node that reported the event; "Deleted node" once it is deleted |
+| Trigger | "{metric} {observed} / {threshold}", metrics such as "Site QPS", "Per-URL QPS", "Per-IP QPS", "Origin error rate", "Cooldown" |
+| Time | How long ago, the exact time on hover |
+
+"View logs" at the end of a row opens the access logs from 5 minutes before to 5 minutes after the event (filtered to the address for automatic bans and to the path for path levels). **⋯** on an automatic ban: "Ban on all sites" opens the ban dialog with the scope "Global"; "Unban" lifts the site's bans of that address (a covering range stays), see [Bans](bans.en.md#ban-from-other-pages).
+
+### Access log links
+
+The link `/sites/<site ID>?tab=logs` opens the "Logs" tab with its query parameters as filters:
+
+| Parameter | Content |
+| --- | --- |
+| `blockReason` | A block reason, `any` for any reason |
+| `ip`, `cidr` | Client address or range (at most 64 characters) |
+| `path` | Path (at most 2048 characters) |
+| `from`, `to` | Time window, ISO 8601 |
+
+Switching tabs clears them.
 
 ## Automatic mitigation
 
-On the **Attacks** tab, click **Set up** in the **Automatic mitigation** card and fill in:
+On the "Automatic mitigation" card click "Set up" ("Edit" at the top right of the card once set up), fill in the fields and click "Save":
 
-| Field | Default | Description |
+| Field | Default | Notes |
 | --- | --- | --- |
-| Enabled | On | Off stops automatic turn-on; a hold in progress turns Under Attack off at once |
-| Trigger level | Proof of work | Cookie redirect, JavaScript, Proof of work or Image captcha |
+| Enabled | On | Off: it no longer turns Under Attack on; while holding, Under Attack is turned off at once |
+| Trigger level | Proof of work | "Cookie redirect", "JavaScript", "Proof of work", "Image captcha" |
 | Hold below trigger (minutes) | 30 | 5–1440 |
 
-1. On any online, active node of the cluster, the site's CC level reaches the trigger level.
-2. Automatic mitigation turns on the site's Under Attack (the challenge type follows the site's **Challenge type**) and publishes the configuration of the site's cluster. The card shows **Under Attack on until …** and the site's Under Attack card shows **Automatic until …**.
-3. While the level stays at or above the trigger level, the end time keeps moving to now plus the hold; no new configuration version is published.
-4. Once the level is below the trigger level and the end time has passed, Under Attack is turned off and a configuration version is published.
+Sites not set up have no automatic mitigation; the card shows "Not set up". The card refreshes every 15 seconds and shows "State" ("On", "Armed", "Off"), "Trigger level", "Hold" and "Level now" (the site level).
+
+1. The site level reaches the trigger level or goes above it.
+2. Automatic mitigation turns on the site's Under Attack (with the "Challenge type" of the site's Under Attack card) and publishes the site's cluster. The card shows "Under Attack on until {time}" and "End now"; the Under Attack card on the site's "Security" tab shows "Automatic until {time}".
+3. While the site level stays at the trigger level or above, the expiry moves to "now + hold", without a new revision.
+4. Once the site level is below the trigger level and the expiry has passed, Under Attack is turned off again and the cluster is published.
+
+| Condition | Behavior |
+| --- | --- |
+| Start | Enabled, not paused, the site enabled, the site's own Under Attack off, the site level at the trigger level |
+| Site level | The highest of the online, active nodes: the level a node's last heartbeat carried; a "Site level" event of that node received after the heartbeat (within 5 minutes) wins |
+| CC off | The card shows "CC is off for this site; the level cannot rise" |
+| CC maximum below the trigger | The card shows "CC stops at {max}, below the trigger level" |
 
 > [!NOTE]
-> The site's CC protection must be on and its **maximum level** at least the trigger level, otherwise the level cannot reach it; the card shows a hint in both cases. Every request counts toward a site's QPS on the node, so the level stays high while Under Attack is on and falls back step by step only after the attack stops: the hold does not end in the middle of an attack.
+> CC counts every request of the site on a node, so with Under Attack on the level stays high and only drops step by step once the attack stops: the expiry does not end Under Attack in the middle of an attack.
 
-### By hand
+### Manual actions
 
-Automatic mitigation only turns off an Under Attack it turned on itself:
+Automatic mitigation only turns off the Under Attack it turned on itself:
 
 | Action | Result |
 | --- | --- |
-| Under Attack was already on, turned on by a person | Left alone and never turned off |
-| Turn Under Attack on during a hold | Counts as turned on by hand; automatic mitigation no longer turns it off and its state is cleared |
-| Turn Under Attack off during a hold | The hold ends, the card shows **Ended by hand**, and nothing starts until the level is below the trigger level |
-| **End now** | Turns Under Attack off and pauses the same way; with no hold it returns 409 `AUTO_MITIGATION_NOT_ACTIVE` |
-| Change the settings | Disabling turns it off at once; shortening the hold shortens the end time; the pause is cleared |
-| Site disabled | Nothing starts |
+| Under Attack turned on by hand before it starts | Left alone and never turned off |
+| Under Attack turned on by hand while holding | Counts as turned on by hand: automatic mitigation no longer turns it off, and its hold is cleared |
+| Under Attack turned off by hand while holding | The hold ends and the mitigation pauses: the card shows "Ended by hand; stays off until the level drops below {level}" |
+| "End now" and confirm | Turns Under Attack off and pauses as above; without a hold, 409 `AUTO_MITIGATION_NOT_ACTIVE` ("Automatic mitigation holds no Under Attack") |
+| Changing the settings | Clears the pause and the error; disabling turns Under Attack off at once; a shorter hold caps the expiry at "now + new hold" |
+| Site disabled | Does not start |
 
-**Copy site settings** neither copies an Under Attack held by automatic mitigation nor turns it off on a target that holds it; copying with Under Attack on counts as turned on by hand.
+The pause ends once the site level is below the trigger level. "Copy site settings" does not copy Under Attack that automatic mitigation holds, and does not turn it off on a target that holds it; a copy that turns Under Attack on counts as turned on by hand.
 
 ### Failure and retry
 
-When the change cannot be published (for example an active node of the cluster lacks `challenge-v1`), it is rolled back, the card shows **Not applied; retried every minute**, the error code is kept in `lastError` and the change is retried every minute.
+When turning Under Attack on or off cannot be published (for example an active node of the cluster lacks a needed capability, `NODE_CAPABILITY_REQUIRED`), that change is rolled back, its error code is kept as `lastError`, the card shows "Not applied; retried every minute", and every later evaluation retries it.
 
 ### How it runs
 
-The background job `mitigation.evaluate` checks every site with automatic mitigation each minute; when a node reports a site's level going up, that site is checked at once instead of at the next minute. The end time is stored in the database, so a console restart loses nothing.
-
-The site's level is the highest among its online, active nodes: the level from the node's last heartbeat, replaced by a level-change event received after it (within 5 minutes).
+The pg-boss job `mitigation.evaluate` evaluates every site that is enabled, holding or paused once a minute; when a node reports a site's level going up, that site is evaluated at once instead of at the next minute. Each evaluation is one transaction; the hold and its expiry are stored in the database, so a console restart or a repeated job changes nothing.
 
 ## Permissions and audit
 
-Changes need a console session or a read-write AccessKey; a read-only AccessKey can only read; service accounts cannot call these endpoints (`SERVICE_ACCOUNT_FORBIDDEN`). Audit:
+Changes need a console session or a read-write AccessKey; read-only AccessKeys and the demo account can only read (403 `ACCESS_KEY_READ_ONLY` / `DEMO_READ_ONLY`); service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`).
 
-| Action | When |
-| --- | --- |
-| `site.auto_mitigation_update` | Settings changed |
-| `site.auto_mitigation_apply` | Under Attack turned on automatically (the actor is the system; metadata has `level`, `threshold`, `durationMinutes`, `revision`) |
-| `site.auto_mitigation_release` | Under Attack turned off automatically (also `reason`: `expired` or `disabled`, and `since`) |
-| `site.auto_mitigation_restore` | **End now** |
+| Audit action | When | Metadata |
+| --- | --- | --- |
+| `site.auto_mitigation_update` | Settings changed | `from`, `to` |
+| `site.auto_mitigation_apply` | Under Attack turned on automatically (actor: system) | `level`, `threshold`, `durationMinutes`, `revision` |
+| `site.auto_mitigation_release` | Under Attack turned off: expired (actor: system) or disabled in the settings (actor: whoever saved them) | `reason` (`expired` / `disabled`), `since`, `revision` |
+| `site.auto_mitigation_restore` | "End now" | `level`, `threshold`, `since`; `revision` when a revision was published |
 
-The configuration versions carry the reasons "Automatic mitigation turned on / off Under Attack for {site}" (`auto_mitigation_started` / `auto_mitigation_ended`).
+The revisions published have the reasons "Automatic mitigation turned on Under Attack for {site}" and "Automatic mitigation turned off Under Attack for {site}" (`auto_mitigation_started` / `auto_mitigation_ended`).
 
 ## API
 
-| Procedure | Endpoint |
-| --- | --- |
-| `autoMitigation.get` | `GET /sites/{id}/auto-mitigation` |
-| `autoMitigation.update` | `PUT /sites/{id}/auto-mitigation` |
-| `autoMitigation.restore` | `POST /sites/{id}/auto-mitigation/restore` |
-| `analytics.breakdown` (`by=block_reason`) | Requests per block reason |
-| `security.state`, `security.events` | Node levels, tops and events of the last `hours` (up to 720) |
+Paths are under `/api/v1`.
 
-Fields: [API and endpoints](../reference/api.en.md#automatic-mitigation).
+| Procedure | Endpoint | Notes |
+| --- | --- | --- |
+| `autoMitigation.get` | `GET /sites/{id}/auto-mitigation` | `settings` (`null` when not set up), `updatedAt`, `level`, `active` (`since`, `expiresAt`, `level`), `paused`, `lastError` |
+| `autoMitigation.update` | `PUT /sites/{id}/auto-mitigation` | `enabled`, `threshold` (`cookie302` / `js` / `pow` / `captcha`), `durationMinutes`; optional `expectedUpdatedAt`, 409 `UPDATED_AT_MISMATCH` when it differs |
+| `autoMitigation.restore` | `POST /sites/{id}/auto-mitigation/restore` | Ends it now |
+| `analytics.breakdown` | `GET /analytics/breakdown?by=block_reason&siteId=…&range=…` | Requests per block reason over time |
+| `analytics.dimensions` | `GET /analytics/dimensions?siteId=…&range=…` | Block reasons, challenges issued and passed |
+| `security.state` | `GET /sites/{id}/security?hours=…` | Current level per node, and the top addresses and paths of the last `hours` (1–720, 24 by default) |
+| `security.events` | `GET /sites/{id}/security/events` | Events; query parameters `kind` (`site_level` / `path_level` / `ip_banned`), `hours` (1–720), `page`, `pageSize` |
+| `waf.topRules` | `GET /sites/{id}/waf/rules?range=…&limit=…` | Most-matched CRS rules |
+| `rules.topLogged` | `GET /sites/{id}/rules/logged?range=…&limit=…` | Matches of rules with the log action |
+| `authRules.failures` | `GET /sites/{id}/auth-rules/failures?range=…` | Authentication failures |
+
+`range` is `1h`, `6h`, `24h` (default), `7d` or `30d`. Fields: [API and endpoints](../reference/api/sites.en.md#automatic-mitigation).

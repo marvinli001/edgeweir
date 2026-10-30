@@ -2,7 +2,7 @@
 
 控制台镜像的 Docker Compose 部署，以及不用 Compose 的 `docker run` 部署。
 
-运行要求与其他平台见 [部署概览](README.md)。宝塔 / aaPanel 与 `deploy.sh` 见 [baota.md](baota.md)。
+运行要求与其他平台见 [部署概览](README.md)。宝塔 / aaPanel 与 `deploy.sh` 见 [宝塔面板 / aaPanel](baota.md)。
 
 ## 编排服务
 
@@ -14,7 +14,7 @@
 | `postgres` | `postgres:18.6-alpine`（按 digest 固定） | 默认 | 卷 `postgres-data` 挂载到 `/var/lib/postgresql`；端口不发布；`pg_isready` 健康检查通过后 `console` 才启动 |
 | `clickhouse` | `clickhouse/clickhouse-server:26.9-alpine`（按 digest 固定） | `.env` 中 `COMPOSE_PROFILES=analytics` | 卷 `clickhouse-data` |
 
-镜像公开，拉取无需登录。tag 规则见 [版本、升级与回滚](upgrade.md)。
+镜像公开，拉取无需登录。默认 tag 为 `stable`；生产环境固定日期 tag `<YYYYMMDD>-<commit>`，见 [镜像 tag](README.md#镜像-tag) 与 [固定版本](upgrade.md#固定版本)。
 
 ## 1. 准备
 
@@ -134,6 +134,7 @@ sed -i "s|^EDGEWEIR_PUBLIC_URL=.*|EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.
 | --- | --- | --- |
 | `EDGEWEIR_VERSION` | `stable` | 拉取的镜像 tag。生产环境固定日期 tag，见 [固定版本](upgrade.md#固定版本)。 |
 | `EDGEWEIR_NODE_API_URL` | `https://<EDGEWEIR_PUBLIC_URL 的主机名>:8443` | 节点连接节点通道的地址；**系统设置** 的「节点通道」中保存的地址优先，见 [节点通道地址与证书](networking.md#节点通道地址与证书)。 |
+| `EDGEWEIR_NODE_API_WEBSOCKET` | `false` | `true`：节点通道默认地址改为 Web 端口上的 WebSocket 入口 `wss://<EDGEWEIR_PUBLIC_URL 的主机[:端口]>`，用于 8443 无法对外开放的主机，见 [节点通道的 WebSocket 入口](networking.md#节点通道的-websocket-入口)。 |
 | `EDGEWEIR_TRUSTED_PROXIES` | 空 | 反向代理地址，见 [可信代理](networking.md#可信代理与客户端-ip)。 |
 | `EDGEWEIR_HTTP_PORT`、`EDGEWEIR_NODE_API_PORT` | `127.0.0.1:3000`、`8443` | 宿主机发布端口，可带绑定地址。Web 端口默认只在本机：Docker 发布的端口绕过 ufw、firewalld，由反向代理对外；`EDGEWEIR_HTTP_PORT=3000` 发布到所有接口。`EDGEWEIR_NODE_API_PORT` 不是 `8443` 时同时设置 `EDGEWEIR_NODE_API_URL`（或在系统设置中保存节点通道地址）：默认地址的端口是容器内的 `8443`。 |
 | `BETTER_AUTH_SECRET` | 空，由主密钥派生 | 已设置的部署保留原值；移除后控制台拒绝启动。 |
@@ -170,9 +171,9 @@ docker compose logs -f console
    docker compose logs console | grep setupToken
    ```
 
-   未初始化的控制台每次启动输出同一个 token，直到使用。token 经主密钥加密存于数据库；主密钥更换后重新生成。
+   日志行为 `first-run setup: open the console and enter this setup token`，`setupToken` 字段为 token，`url` 字段为初始化向导地址。未初始化的控制台每次启动输出同一个 token，直到使用；token 经主密钥加密存于数据库。
 
-2. 打开 `<EDGEWEIR_PUBLIC_URL>/setup`，填入 setup token 与姓名、邮箱、密码，创建控制台账户。控制台同时创建默认集群 `default`。初始化向导见 [快速上手](../guide/first-site.md)。
+2. 打开 `<EDGEWEIR_PUBLIC_URL>/setup`，填写「初始化令牌」（setup token）、「姓名」「邮箱」「密码」（至少 12 位），点击「创建并继续」。控制台创建唯一的运营者账户与默认集群 `default`。后续步骤见 [快速上手](../guide/first-site.md#1-完成初始化向导)。
 
 无 token 或 token 错误的初始化请求被拒绝，并写入审计日志。token 在初始化成功后失效。
 
@@ -184,6 +185,20 @@ docker compose ps
 ```
 
 预期：`{"status":"ok","version":"<镜像 tag>"}`；`console` 状态为 `healthy`。
+
+镜像的健康检查（`HEALTHCHECK`）每 10 秒请求一次 `http://127.0.0.1:${PORT}/healthz`，超时 3 秒，启动宽限 30 秒，连续 5 次失败为 `unhealthy`；`ROLE=worker` 只检查进程存活。
+
+启动日志中的地址警告：
+
+| 日志 | 条件 |
+| --- | --- |
+| `EDGEWEIR_PUBLIC_URL names this machine only` | 控制台地址是 `localhost` 或回环地址：其他主机上的节点无法下载 `install.sh` |
+| `EDGEWEIR_PUBLIC_URL is a private address` | 控制台地址是私有地址 |
+| `EDGEWEIR_PUBLIC_URL is plain HTTP` | 控制台地址为公网 `http://`：`install.sh` 以明文传输 |
+| `the node channel URL names this machine only` | 节点通道地址是 `localhost` 或回环地址：其他主机上的节点无法注册 |
+| `the node channel URL is a private address` | 节点通道地址是私有地址 |
+
+警告不阻止启动；按 [节点通道地址与证书](networking.md#节点通道地址与证书) 修正地址。
 
 ## 可选组件
 

@@ -372,7 +372,8 @@ feat(console)!: drop the public landing page from the open core
 
 - 发布的文档是纯 GitHub Markdown：`name.md`（简体中文，默认）与 `name.en.md`（英文，章节与 `name.md` 相同）。
 - 文档站点位于 `doc/`（Fumadocs，Next.js 静态导出），是独立的 pnpm workspace（`doc/pnpm-workspace.yaml`、`doc/pnpm-lock.yaml`）。`.github/workflows/docs.yml` 在 PR 中构建站点，在 `master` 推送后发布到 GitHub Pages：<https://marvinli001.github.io/edgeweir/>。
-- `doc/scripts/sync-content.mjs` 保存页面表（`SECTIONS`）并转换 Markdown。新页面须加入页面表。
+- `doc/scripts/sync-content.mjs` 保存本仓库版本的页面表（`OSS.sections`，站点路径 `/<lang>/oss/<分组>/<页面>`）并转换 Markdown。新页面须加入页面表；`LEGACY` 中的旧 URL 生成跳转页（`doc/public`）。
+- `DOCS_EDITIONS`（逗号分隔的 `edition.json` 路径）加入其他版本：各为同类型的根目录，侧边栏切换时保留页面路径；未设置时只构建本仓库版本。
 
 | Markdown | 站点 |
 | --- | --- |

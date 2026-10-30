@@ -9,7 +9,7 @@
 | 项目 | 要求 |
 | --- | --- |
 | Render | 可使用付费计划的账户。Free 计划的 Web 服务无流量 15 分钟后休眠，Free Postgres 创建 30 天后过期，都不能使用 |
-| 控制台镜像 | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`，公开拉取；Render 运行 linux/amd64，镜像包含该架构。tag 规则见 [版本、升级与回滚](upgrade.md) |
+| 控制台镜像 | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`，公开拉取；Render 运行 linux/amd64，镜像包含该架构。tag 规则见 [版本与升级](upgrade.md) |
 | PostgreSQL | Render Postgres，PostgreSQL 18 |
 | 节点 | edgeweir-node 0.2.0 及以上：Render 不转发 TCP，节点经 [WebSocket 入口](networking.md#节点通道的-websocket-入口) 连接节点通道 |
 | 主密钥 | Blueprint 生成，或 `openssl rand -base64 32` 生成；保存在 Render 之外，与数据库备份分开 |
@@ -93,7 +93,7 @@ Render 的每个 Web 服务只转发一个 HTTP 端口，并在负载均衡上�
 
 1. `edgeweir` 服务 **Logs**，搜索 `first-run setup`。
 2. 该行 `setupToken` 字段为 setup token，`url` 字段为初始化向导地址（`<EDGEWEIR_PUBLIC_URL>/setup`）。
-3. 打开向导，填入 setup token，见 [快速上手](../guide/first-site.md#1-完成初始化向导)。
+3. 打开向导，在「初始化令牌」填入 setup token，填写「姓名」「邮箱」「密码」（至少 12 位），点击「创建并继续」；见 [快速上手](../guide/first-site.md#1-完成初始化向导)。
 
 ## 变量
 
@@ -149,7 +149,7 @@ Render 的每个 Web 服务只转发一个 HTTP 端口，并在负载均衡上�
 
    预期：`version` 为新 tag。
 
-迁移、签名校验与回滚见 [版本、升级与回滚](upgrade.md)。
+迁移与签名校验见 [版本与升级](upgrade.md)，回退见 [降级](downgrade.md)。
 
 ## Render CLI
 

@@ -124,7 +124,7 @@ server {
    | --- | --- |
    | `compose.yml`、`compose.baota.yml` | `.env`：`EDGEWEIR_NODE_API_PORT=127.0.0.1:18443` |
    | 进程直接监听（`pnpm dev`、非容器运行） | `NODE_API_HOST=127.0.0.1`、`NODE_API_PORT=18443` |
-   | `compose.baota-host.yml` | `.env`：`EDGEWEIR_NODE_API_HOST=127.0.0.1`、`EDGEWEIR_NODE_API_PORT=18443`；不写在 `compose.override.yml`：宝塔 / aaPanel 以 `docker compose -f` 执行编排时不读取它，见 [baota.md](baota.md#节点通道端口) |
+   | `compose.baota-host.yml` | `.env`：`EDGEWEIR_NODE_API_HOST=127.0.0.1`、`EDGEWEIR_NODE_API_PORT=18443`；不写在 `compose.override.yml`：宝塔 / aaPanel 以 `docker compose -f` 执行编排时不读取它，见 [宝塔面板 / aaPanel：节点通道端口](baota.md#节点通道端口) |
 
    `EDGEWEIR_NODE_API_URL` 保持对外的 `:8443`。
 
@@ -144,7 +144,7 @@ server {
    }
    ```
 
-   不写 `ssl`、`proxy_ssl`、`proxy_protocol`：只转发 TCP。`listen 8443;` 只监听 IPv4，节点通道域名有 AAAA 记录时再加 `listen [::]:8443;`。主配置已有 `stream` 块时（宝塔 / aaPanel 见 [baota.md](baota.md#节点通道端口)）把 `server` 放进已有的块；发行版软件包把 stream 编译为动态模块时（如 Debian 的 `libnginx-mod-stream`）先安装并加载该模块。
+   不写 `ssl`、`proxy_ssl`、`proxy_protocol`：只转发 TCP。`listen 8443;` 只监听 IPv4，节点通道域名有 AAAA 记录时再加 `listen [::]:8443;`。主配置已有 `stream` 块时（宝塔 / aaPanel 见 [宝塔面板 / aaPanel：节点通道端口](baota.md#节点通道端口)）把 `server` 放进已有的块；发行版软件包把 stream 编译为动态模块时（如 Debian 的 `libnginx-mod-stream`）先安装并加载该模块。
 
 3. 检查并重载 nginx：
 
@@ -172,6 +172,8 @@ server {
 | 开放条件 | `EDGEWEIR_NODE_API_WEBSOCKET=true`；或生效的节点通道地址是 `wss://`、`ws://`；或在 **系统设置** 保存地址时，此前生效的或新保存的地址是这样的地址（经入口注册的节点改地址后仍能连接）。其余情况返回 404 |
 | 拒绝 | 带 `Origin` 头的请求（浏览器）返回 403；没有请求子协议 `edgeweir-node-channel` 返回 400 |
 | 普通请求 | `GET /node-channel` 在入口开放时返回 426，关闭时返回 404；`install.sh` 以 426 判断可达 |
+| 连接上限 | 每个控制台进程最多 1024 个 WebSocket 连接；设置了 `EDGEWEIR_TRUSTED_PROXIES` 时每个客户端地址（IPv6 按 /64）最多 64 个。超出时返回 503，日志 `node channel WebSocket entry full`（每分钟最多一条） |
+| 超时 | 连接 30 秒内没有出示经校验的客户端证书时关闭（无客户端证书的连接只用于注册）；双向 120 秒没有数据时关闭，节点每 15 秒在流上发送数据 |
 | 来源地址 | 节点详情的「连接来源地址」为 WebSocket 请求的客户端地址，按 [可信代理与客户端 IP](#可信代理与客户端-ip) 解析 |
 | 节点版本 | edgeweir-node 0.2.0 及以上；`install.sh` 拒绝用更早的版本经 `wss://`、`ws://` 地址注册 |
 

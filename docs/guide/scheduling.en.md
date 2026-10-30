@@ -6,7 +6,7 @@ Regional probes, node metrics, scheduling addresses with backup IP levels, and s
 
 | Term | Definition |
 | --- | --- |
-| Region | A geographic label for node groups and probes (for example East China), see [Regions](system.en.md#regions). |
+| Region | A geographic label for node groups and probes (for example East China), see [Regions](clusters.en.md#regions). |
 | Regional probe | A process running `edgeweir-node probe` in a region that probes every node's scheduling addresses from there. It runs no OpenResty and listens on no port. |
 | Prober | A regional probe, or a node with **Also probes** on. |
 | Scheduling address | A node address DNS and probes use, with a level: primary, backup 1, backup 2. |
@@ -19,7 +19,7 @@ Regional probes, node metrics, scheduling addresses with backup IP levels, and s
 2. Every 10 seconds the console decides whether each address is reachable and evaluates every rule for every node; a probe report triggers another evaluation right away.
 3. When a node moves to a backup address, or a rule's action takes effect or recovers, the console publishes the cluster's DNS revision and writes it to the provider.
 
-Only clusters whose DNS mode is **Automatic** are affected, see [DNS steering and alerts](dns-and-alerts.en.md#configure-dns-steering).
+Only clusters whose DNS mode is **Automatic** are affected, see [DNS steering and alerts](dns.en.md#configure-dns-steering).
 
 ## Regional probes
 
@@ -81,7 +81,7 @@ Compose, binary flags, the state directory, and re-enrollment: [Adding nodes](..
 | Results | Attempts sent, attempts lost, the median RTT of successful attempts (ms), and the error code of the last failure |
 | Rounds | The next round starts one **Interval** after the current one started, or right away when the current one takes longer |
 
-Health endpoint: on every edge listener, a node answers `GET /.edgeweir/health` for any Host with `200 ok` before any site lookup; it is not cached, not counted in statistics or access logs, and not affected by bans or rules. HTTPS listeners answer handshakes with SNI `health.edgeweir.invalid`, or without SNI, with a self-signed certificate the node generates at startup; such connections reach the health endpoint only, and other requests get 421. Nodes report the capability `probe-health-v1`.
+Health endpoint: on every edge listener, a node answers `GET /.edgeweir/health` for any Host with `200 ok` before any site lookup; it is not cached, not counted in statistics or access logs, and not affected by bans or rules. HTTPS listeners answer handshakes with SNI `health.edgeweir.invalid`, or without SNI, with a self-signed certificate the node generates (kept in the state directory, valid for 10 years, replaced 30 days before expiry, loaded at startup); such connections reach the health endpoint only, and other requests get 421. Nodes report the capability `probe-health-v1`.
 
 ### Probe settings
 
@@ -102,7 +102,7 @@ The **Probe settings** card on the **Monitoring** tab applies to every prober; p
 | --- | --- |
 | Probe | Name and host name |
 | Region | Region name and code |
-| Status | **Online**: asked for targets or reported within 3 intervals (at least 30 seconds); **Offline**; **Disabled** |
+| Status | **Online**: asked for targets or reported within 3 intervals (at least 30 seconds); **Offline**; **Disabled**; **Not enrolled** before enrollment completes |
 | Last seen | When it last asked for targets or reported |
 | Version | The probe's agent version; a probe not on the current node channel URL yet is also marked **Not switched**, **Cannot switch**, **On fallback**, or **Upgrade to switch**, see [Changing the node channel URL](../deploy/networking.en.md#changing-the-node-channel-url) |
 | Last round | Loss, mean RTT of the answering targets, and targets that lost every attempt (**N targets unreachable**) |
@@ -111,9 +111,9 @@ The **Probe settings** card on the **Monitoring** tab applies to every prober; p
 | Action | Description |
 | --- | --- |
 | Probe results | The probe's latest result for every node address and port; clicking the probe's row opens it too |
-| Rename | At most 64 characters |
-| Disable / Enable | Disabling deletes its results, which no longer count; the node channel refuses it, except for certificate renewal |
-| Delete | After confirming **Delete probe {name}? Its certificate is revoked**, revokes its certificate and deletes its results; joining again needs a new token |
+| Rename | At most 64 characters; audited as `probe.update` |
+| Disable / Enable | Disabling deletes its results, which no longer count; the node channel refuses it, except for certificate renewal and the node channel check; audited as `probe.update` |
+| Delete | After confirming **Delete probe {name}? Its certificate is revoked**, revokes its certificate and deletes its results, audited as `probe.delete`; joining again needs a new token |
 
 The **Last round** card below the list is a matrix of the latest results of every prober (probes, and nodes that also probe, marked **Node**) against every node: each cell is the median RTT (ms) of the node's answering addresses and ports, shaded by band (< 30, 30–80, 80–150, 150–250, ≥ 250 ms); a yellow dot in the corner marks loss; red cells lost every attempt and show the loss; **—** means no result (such as the node itself). The console keeps only the latest result per target, so the matrix shows the last round, not a history; it is hidden until there are results.
 
@@ -123,10 +123,10 @@ Probe result columns: **Prober** (in node details) or **Node** (in a probe's res
 | --- | --- | --- |
 | Timed out | `timeout` | The attempt exceeded the timeout |
 | Connection refused | `refused` | The port refused the connection |
-| Connection reset | `reset` | The peer reset the connection |
+| Connection reset | `reset` | The peer reset, aborted or closed the connection early (EOF included) |
 | TLS handshake failed | `tls` | The handshake with an HTTPS listener failed |
-| Unexpected status | `status` | The health endpoint did not answer 200 |
-| Unreachable | `unreachable` | The network is unreachable |
+| Unexpected status | `status` | The health endpoint did not answer 200, or the reply is not HTTP |
+| Unreachable | `unreachable` | Any other connection error (such as an unreachable network) |
 
 Only the latest result per prober, node, address, and port is kept; results not updated for 1 hour are deleted.
 
@@ -137,7 +137,7 @@ Only the latest result per prober, node, address, and port is kept; results not 
 
 | Item | Behavior |
 | --- | --- |
-| Region | The region of the node's node group; without one the switch is unavailable and shows **The node group has no region** |
+| Region | The region of the node's node group; without one the switch cannot be turned on and shows **The node group has no region**; a switch already on can still be turned off |
 | Probing | The node runs the same probes with its own certificate and skips itself; its results are marked **Node** in the **Prober** column |
 | Stopping | Turning the switch off deletes its results; once the node is disabled or its node group loses its region, the console no longer accepts its probes |
 | Audit | `node.set_probe` |
@@ -160,7 +160,7 @@ Nodes with `metrics-v1` (Linux) report host metrics in every heartbeat (15 secon
 | Load (1 / 5 / 15 min) | `/proc/loadavg` |
 | Memory | Used (`MemTotal − MemAvailable`) and total |
 | Egress | Send rate of the non-loopback interfaces between two heartbeats |
-| Connections | nginx active connections, [L4 app](l4.en.md) client connections, upstream connections, and UDP sessions included |
+| Connections | nginx active connections (`$connections_active`), without the status request itself |
 
 The two rates are 0 in a node's first heartbeat. For a node in a container, CPU, load, and memory are the host's values and egress is the container interface's. Scheduling rules treat metrics older than 60 seconds as missing.
 
@@ -194,9 +194,9 @@ Saving publishes the cluster's DNS revision (reason **Binding saved**) and is au
 
 | Item | Behavior |
 | --- | --- |
-| Failing | Among the probers that reported the address within the window (3 intervals, at least 15 seconds), more than half (a strict majority) see a loss of at least **Loss that fails an address** over all its ports |
-| Unreachable | Failing for **Failing before unreachable** (30 seconds by default) |
-| Reachable again | Not failing for **Answering before reachable** (60 seconds by default) after being unreachable |
+| Failing | Among the probers that reported the address within the window (3 intervals, at least 15 seconds), more than half (a strict majority) see a loss of at least **Failure loss threshold (%)** over all its ports |
+| Unreachable | Failing for **Down after (seconds)** (30 by default) |
+| Reachable again | Not failing for **Up after (seconds)** (60 by default) after being unreachable |
 | No results | Does not count as failing |
 | Only a few regions cannot reach it | Not failing; region-scoped [scheduling rules](#scheduling-rules) handle it |
 
@@ -208,7 +208,7 @@ Only results of enabled probes and of enabled nodes that still probe count.
 | --- | --- |
 | Normal | The reachable addresses of the lowest level that has any |
 | Primary unreachable | The next level with a reachable address; back to primary once it is reachable again |
-| Every level unreachable | The node has no address; its line may fall below its minimum of healthy addresses and use its [backup node groups](dns-and-alerts.en.md#backup-node-groups); if still empty, the [mass removal protection](dns-and-alerts.en.md#mass-removal-protection) keeps the previous records |
+| Every level unreachable | The node has no address; its line may fall below its minimum of healthy addresses and use its [backup node groups](dns.en.md#backup-node-groups); if still empty, the [mass removal protection](dns.en.md#mass-removal-protection) keeps the previous records |
 | A **Switch to backup IP** action in effect | At least backup 1; the higher of the two levels applies. Unchanged when the node has no reachable backup address |
 
 A level change publishes the cluster's DNS revision (reason **Node health changed**) without another audit entry. **Target addresses** entered for a node in the DNS binding take precedence over scheduling addresses: on that line the node does not switch levels. **Manual** mode lists primary addresses only and does not follow reachability.
@@ -237,7 +237,7 @@ The switch on a rule's row enables or disables it, **Edit rule** changes it, and
 | Match | All conditions / Any condition | All conditions | AND / OR between conditions |
 | Hold at least (seconds) | 0–86400 | 300 | Shortest time an action stays in effect |
 | Recover after (seconds) | 0–86400 | 300 | How long the conditions stay clear before the action recovers |
-| Enabled | On / Off | On | Disabled rules are not evaluated |
+| Enabled | On / Off | On | Disabled rules do not act on DNS and stay **Idle**; the preview marks them **Disabled** |
 
 Each rule has 1–8 conditions:
 
@@ -258,7 +258,7 @@ Each rule has 1–8 conditions:
 | Egress bandwidth | Mbps | Reported by the node |
 | Active connections | — | Reported by the node |
 | Probe loss | % | Each prober's share of lost attempts over all ports of the node's primary addresses (lowest level), combined by **Aggregate** |
-| Probe latency | ms | Each prober's mean of the median RTTs of answering targets, combined by **Aggregate** |
+| Probe latency | ms | Each prober's mean of the median RTTs of the answering targets on the node's primary (lowest-level) addresses, combined by **Aggregate** |
 
 Node metrics show **No data** when the node lacks `metrics-v1` or sent no heartbeat within 60 seconds; probe metrics show **No data** without fresh prober results. A comparison without data does not hold.
 
@@ -298,8 +298,8 @@ Node metrics show **No data** when the node lacks `metrics-v1` or sent no heartb
 | --- | --- |
 | DNS | Every activation and recovery publishes one DNS revision of the cluster, reason **Scheduling: {rule} on {node}**, followed by the action and **Activated** or **Recovered** |
 | Audit | Actor **System**: `scheduling.activate`, `scheduling.recover`, with node, action, line, condition values, and DNS revision in the metadata. Rule changes are audited as `scheduling.rule_create`, `scheduling.rule_update`, `scheduling.rule_delete` |
-| Alert | Activation fires **Scheduling rule acting on a node** (`scheduling_action`, named "rule · node"); recovery resolves it; see [Cluster and DNS alerts](dns-and-alerts.en.md#cluster-and-dns-alerts) |
-| Protection | Removals remain subject to the [mass removal protection](dns-and-alerts.en.md#mass-removal-protection) |
+| Alert | Activation fires **Scheduling rule acting on a node** (`scheduling_action`, named "rule · node"); recovery resolves it; see [Cluster and DNS alerts](alerts.en.md#cluster-and-dns-alerts) |
+| Protection | Removals remain subject to the [mass removal protection](dns.en.md#mass-removal-protection) |
 | Rule list | **Acting on** lists the nodes in **Active** or **Recovering** |
 
 ### Evaluation
@@ -319,8 +319,8 @@ Node metrics show **No data** when the node lacks `metrics-v1` or sent no heartb
 | --- | --- |
 | Acts at the next evaluation | The conditions match; the next evaluation starts the action |
 | Recovers at the next evaluation | Recovery is due; the next evaluation ends the action |
-| In effect, recovers {time} at the earliest | The action is in effect; earliest end if the conditions stay clear |
-| In effect | The action is in effect and the conditions still hold |
+| In effect, recovers {time} at the earliest | The action is in effect; {time} is when **Hold at least (seconds)** ends; recovery also needs the conditions cleared for **Recover after (seconds)** |
+| In effect | The action is in effect, without a recorded start time |
 | No change | — |
 
 The preview writes nothing and refreshes with the rule list.
@@ -339,11 +339,11 @@ The preview writes nothing and refreshes with the rule list.
 | --- | --- |
 | DNS mode | Applies only to clusters in **Automatic** DNS mode; **Manual** mode lists primary addresses only and applies neither rules nor backup node groups |
 | Conditions | At most 8 per rule, combined in one all / any level |
-| One report | At most 10,000 results per prober and round |
+| One report | At most 10,000 results per prober and round; a larger report is rejected whole (with more than 10,000 targets every round fails) |
 | Scale | A prober's target count is the enabled nodes' scheduling addresses × listener ports. With every target unreachable, a round takes about ⌈targets / 32⌉ × attempts per round × timeout per attempt; when that exceeds the interval the next round starts right after, and decisions slow down accordingly. Probes × targets is what the console stores per round |
 | Results | Only the latest result per prober, node, address, and port; no time series |
 | Host metrics | Linux nodes only |
-| Resolution lines | Answering with different nodes per carrier or region works only with providers that support it, see [Resolution lines](dns-and-alerts.en.md#resolution-lines) |
+| Resolution lines | Answering with different nodes per carrier or region works only with providers that support it, see [Resolution lines](dns.en.md#resolution-lines) |
 | Authoritative DNS | Edgeweir runs no authoritative DNS; scheduling writes records through provider APIs only |
 
 ## Troubleshooting

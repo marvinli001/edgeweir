@@ -124,7 +124,7 @@ Use nginx `stream` layer-4 passthrough when 8443 must go through nginx.
    | --- | --- |
    | `compose.yml`, `compose.baota.yml` | `.env`: `EDGEWEIR_NODE_API_PORT=127.0.0.1:18443` |
    | Process listening directly (`pnpm dev`, outside a container) | `NODE_API_HOST=127.0.0.1`, `NODE_API_PORT=18443` |
-   | `compose.baota-host.yml` | `.env`: `EDGEWEIR_NODE_API_HOST=127.0.0.1`, `EDGEWEIR_NODE_API_PORT=18443`; not in `compose.override.yml`, which BaoTa / aaPanel skip when they run the project with `docker compose -f`, see [baota.en.md](baota.en.md#node-channel-port) |
+   | `compose.baota-host.yml` | `.env`: `EDGEWEIR_NODE_API_HOST=127.0.0.1`, `EDGEWEIR_NODE_API_PORT=18443`; not in `compose.override.yml`, which BaoTa / aaPanel skip when they run the project with `docker compose -f`, see [BaoTa Panel and aaPanel: Node channel port](baota.en.md#node-channel-port) |
 
    `EDGEWEIR_NODE_API_URL` keeps the public `:8443`.
 
@@ -144,7 +144,7 @@ Use nginx `stream` layer-4 passthrough when 8443 must go through nginx.
    }
    ```
 
-   Leave out `ssl`, `proxy_ssl`, and `proxy_protocol`: the server forwards TCP only. `listen 8443;` listens on IPv4 only; add `listen [::]:8443;` when the node channel's DNS name has an AAAA record. When the main configuration already has a `stream` block (BaoTa / aaPanel: see [baota.en.md](baota.en.md#node-channel-port)), put the `server` into it; when the distribution builds stream as a dynamic module (such as Debian's `libnginx-mod-stream`), install and load that module first.
+   Leave out `ssl`, `proxy_ssl`, and `proxy_protocol`: the server forwards TCP only. `listen 8443;` listens on IPv4 only; add `listen [::]:8443;` when the node channel's DNS name has an AAAA record. When the main configuration already has a `stream` block (BaoTa / aaPanel: see [BaoTa Panel and aaPanel: Node channel port](baota.en.md#node-channel-port)), put the `server` into it; when the distribution builds stream as a dynamic module (such as Debian's `libnginx-mod-stream`), install and load that module first.
 
 3. Test and reload nginx:
 
@@ -172,6 +172,8 @@ When the platform forwards HTTP only (for example Render), or 8443 cannot be ope
 | When it is open | `EDGEWEIR_NODE_API_WEBSOCKET=true`; or the node channel URL in effect is a `wss://` or `ws://` one; or, when a URL was saved in **System settings**, the URL in effect before or the one saved was such a URL (nodes enrolled through the entry keep connecting after the URL changes). Otherwise it answers 404 |
 | Refused | Requests with an `Origin` header (browsers) get 403; requests without the subprotocol `edgeweir-node-channel` get 400 |
 | Plain requests | `GET /node-channel` answers 426 while the entry is open and 404 while it is closed; `install.sh` takes 426 as reachable |
+| Connection limits | At most 1024 WebSocket connections per console process; with `EDGEWEIR_TRUSTED_PROXIES` set, at most 64 per client address (IPv6 per /64). Beyond that: 503 and the log line `node channel WebSocket entry full` (at most once a minute) |
+| Timeouts | A connection that has not presented a verified client certificate within 30 seconds is closed (a connection without one can only enroll); a connection with no data either way for 120 seconds is closed, and nodes send on their streams every 15 seconds |
 | Source address | The "connection source address" of a node is the client address of the WebSocket request, resolved as in [Trusted proxies and client IP](#trusted-proxies-and-client-ip) |
 | Node version | edgeweir-node 0.2.0 or later; `install.sh` refuses to enroll an earlier version through a `wss://` or `ws://` URL |
 

@@ -1,6 +1,6 @@
-# API 与端点
+# API 概览
 
-控制台 HTTP 端点、公开 API 的认证与错误格式，以及节点通道概要。
+控制台 HTTP 端点、公开 API 的认证、权限、请求格式、幂等键、并发控制与分页，以及节点通道概要。
 
 ## 端点
 
@@ -10,65 +10,78 @@
 | --- | --- | --- |
 | `/api/v1/*` | `x-api-key` | 公开 API（OpenAPI）；请求中的 Cookie 被剥离 |
 | `/api/v1/openapi.json` | 无 | OpenAPI 文档 |
-| `/rpc/*` | 会话 Cookie + `x-csrf-token: orpc` | Web UI 专用（oRPC）；请求中的 `x-api-key` 被剥离 |
-| `/api/auth/*` | 按端点 | better-auth 白名单端点，其余返回 404 |
+| `/rpc/*` | 会话 Cookie + `x-csrf-token: orpc` | Web UI 专用（oRPC RPC 协议）；请求中的 `x-api-key` 被剥离 |
+| `/api/auth/*` | 按端点 | better-auth 允许列表中的端点，见[认证端点](#认证端点) |
 | `/healthz` | 无 | 健康检查 |
 | `/install.sh` | 无 | 节点安装脚本 |
 | `/downloads/*` | 无 | 发布文件镜像；未设置 `EDGEWEIR_DOWNLOADS_DIR` 时返回 404 |
+| `/node-channel` | 节点通道 mTLS | 节点通道的 WebSocket 入口；入口开放时普通请求返回 426，关闭时 404 |
 | 其他路径 | 无 | Web UI |
 
-`/api/*`、`/rpc/*`、`/downloads/*`、`/install.sh`、`/healthz` 下未匹配的请求返回 404 与 `{"error":"not found"}`，不回退到 Web UI。
+`/api/*`、`/rpc/*`、`/downloads/*`、`/install.sh`、`/healthz`、`/node-channel` 下未匹配的请求返回 404 与 `{"error":"not found"}`，不回退到 Web UI。全部响应在未设置 `cache-control` 时带 `cache-control: no-store`。
 
-## 公开 API
+## 资源
 
-`/api/v1` 与 `/rpc` 由 `packages/contract` 中的同一份 oRPC 契约生成。OpenAPI 文档位于 `/api/v1/openapi.json`，其 `servers` 为 `<EDGEWEIR_PUBLIC_URL>/api/v1`；**系统设置** 的「OpenAPI」链接到该文档。
+`/api/v1` 与 `/rpc` 由 `packages/contract` 中的同一份 oRPC 契约生成，共 275 个过程。
+
+| 页面 | 资源 | 过程数 |
+| --- | --- | --- |
+| [网站](api/sites.md) | 网站、网站启停、标签与批量操作、复制与克隆、缓存任务、错误页与维护模式、访问鉴权、访问控制、图片格式转换、用量保护、自动缓解 | 51 |
+| [访问控制](api/security.md) | 网站规则、全局规则、批量重定向、IP 名单、IP 检查、封禁、灰名单、挑战与 CC 防护、OWASP CRS | 32 |
+| [证书](api/certificates.md) | 证书、ACME 账户、DNS 凭据、回源客户端 CA、Origin CA、源站证书 | 28 |
+| [集群与节点](api/clusters.md) | 集群、配置版本与金丝雀、集群网络设置、注册 token、节点组、节点、节点日志、区域、节点升级、端口池与 L4 应用 | 60 |
+| [DNS 与调度](api/dns.md) | DNS 服务商、DNS 绑定与记录、DNS 版本与对账、区域探针、智能调度规则 | 28 |
+| [概览、统计与告警](api/monitoring.md) | 概览、统计、访问日志、用量、审计日志、告警 | 29 |
+| [系统与账户](api/system.md) | 初始化与状态、账户、AccessKey、服务账号、系统设置 | 47 |
+
+## OpenAPI 文档
+
+`GET /api/v1/openapi.json` 返回 OpenAPI 文档：`info.version` 为控制台版本，`servers` 为 `<EDGEWEIR_PUBLIC_URL>/api/v1`，安全方案 `apiKey`（请求头 `x-api-key`）。**系统设置** 的「OpenAPI」链接到该文档。
 
 ```bash
 curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 ```
 
-### 认证
+## 认证
 
-- 请求头 `x-api-key: <key>`：AccessKey（`ewk_` 开头）或服务账号 key（`ews_` 开头）。
-- AccessKey 以运营者（初始化向导创建的唯一账户）身份调用，可调用的过程由其权限范围决定，见 [AccessKey](#accesskey)。服务账号 key 只能调用[服务账号](#服务账号)中列出的过程。
-- 密钥无效、已吊销或缺失：401。
-- 请求体：无有效密钥时至多 1 MiB，有有效密钥（或界面的会话）时至多 16 MiB；超出返回 413 `PAYLOAD_TOO_LARGE`，在读取请求体之前判断。
-- 每个 AccessKey 有自己的「每分钟请求数」（默认 600，1–100000，或不限）：连续请求最多这么多次，距上一次请求超过 60 秒时计数清零。超出返回 429 `API_KEY_RATE_LIMITED`，`data.retryAfterSeconds` 为需等待的秒数。不限的 AccessKey 不计数；服务账号 key 也不计数。
-- 无需密钥的过程（OpenAPI 中 `security: []`）：`GET /system/status`、`POST /system/setup`。
-- `GET /me` 返回调用方：`{ user: { id, name, email, twoFactorEnabled }, serviceAccount }`；使用 AccessKey 时 `serviceAccount` 为 `null`。
+| 凭据 | 前缀 | 使用位置 | 身份 |
+| --- | --- | --- | --- |
+| AccessKey | `ewk_` | `/api/v1`，请求头 `x-api-key` | 运营者（初始化向导创建的唯一账户）；审计操作者类型 `api_key` |
+| 服务账号 key | `ews_` | `/api/v1`，请求头 `x-api-key` | 服务账号；审计操作者类型 `service_account` |
+| 会话 Cookie | — | `/rpc`，另需请求头 `x-csrf-token: orpc` | 登录的账户；审计操作者类型 `user` |
+
+- 缺少凭据，或密钥无效、已吊销、已过期，或服务账号已停用：401 `UNAUTHORIZED`。
+- 无需凭据的过程（OpenAPI 中 `security: []`）：`system.status`（`GET /system/status`）、`system.setup`（`POST /system/setup`）。
+- `GET /me`（`account.me`）返回调用方，见[系统与账户](api/system.md#accountme)。
+- AccessKey 只能在已登录的会话中创建与修改（`accessKeys.create`、`accessKeys.update`）；经 `/api/v1` 调用返回 403 `ACCESS_KEY_SESSION_REQUIRED`。
+- 登录 IP 白名单只限制会话（`/rpc`、`/api/auth`），不限制 `/api/v1` 的密钥。
 
 ### AccessKey
 
-在 **个人设置 → AccessKey**（用户菜单）中管理；也可在已登录的会话中经 `/rpc` 调用 `accessKeys.*`。
+AccessKey 在 **个人设置**（用户菜单）的「AccessKey」卡片中管理，或在已登录的会话中经 `/rpc` 调用 `accessKeys.*`。
 
-| 操作 | 位置 | 说明 |
-| --- | --- | --- |
-| 创建 | 填写「名称」（最长 64 字符），选择「权限范围」与「每分钟请求数」，点击「创建」 | 默认「读写」、600 次/分钟；「每分钟请求数」留空为不限（`requestsPerMinute: null`）。密钥只显示一次。只能在已登录的控制台会话中创建；经 `/api/v1` 用密钥调用 `POST /access-keys` 返回 403 `ACCESS_KEY_SESSION_REQUIRED`。 |
-| 编辑 | 密钥行的编辑按钮；`PATCH /api/v1/access-keys/{id}` | 修改「名称」与「每分钟请求数」（`name`、`requestsPerMinute`，省略的字段不变）。新的上限重新计数。只能在已登录的控制台会话中修改，用密钥调用返回 403 `ACCESS_KEY_SESSION_REQUIRED`；已吊销的密钥返回 409 `ACCESS_KEY_REVOKED` |
-| 查看 | 密钥列表；`GET /api/v1/access-keys` | 前缀、权限范围、每分钟请求数（`requestsPerMinute`，`null` 为不限）、状态、最后使用时间 |
-| 吊销 | 「吊销密钥」；`DELETE /api/v1/access-keys/{id}` | 吊销后使用该密钥的请求返回 401；列表中保留并标记「已吊销」 |
-
-| 权限范围 | 可调用的过程 |
+| 属性 | 值 |
 | --- | --- |
-| 只读 | `GET` 过程，以及 `POST /rules/validate`；其他方法返回 403 `ACCESS_KEY_READ_ONLY` |
-| 读写 | 全部过程，创建与修改 AccessKey 除外 |
+| 权限范围 | 「只读」或「读写」（默认读写），见[权限](#权限) |
+| 每分钟请求数 | 默认 600，1–100000，或不限，见[速率限制](#速率限制) |
+| 密钥 | `ewk_` 开头，只在创建时显示一次 |
+| 吊销 | 吊销后使用该密钥的请求返回 401；列表中保留 |
+| 审计 | `api_key.create`、`api_key.update`、`api_key.revoke` |
 
-未设置权限范围的密钥按读写处理。创建、修改与吊销写入审计日志（`api_key.create`、`api_key.update`、`api_key.revoke`；修改记录前后的名称与每分钟请求数）；经 AccessKey 执行的操作在审计日志中的操作者类型为 `api_key`。better-auth 的 `/api/auth/api-key/*` 端点不开放，返回 404。
+过程与字段见[系统与账户](api/system.md#accesskey)。better-auth 的 `/api/auth/api-key/*` 端点不开放，返回 404。
+
+## 权限
+
+| 级别 | 过程 | 可调用的调用方 |
+| --- | --- | --- |
+| 读 | 全部 `GET` 过程与 `rules.validate` | 会话、全部 AccessKey、演示账号 |
+| 写 | 其余过程 | 会话、「读写」AccessKey；「只读」AccessKey 返回 403 `ACCESS_KEY_READ_ONLY`，演示账号返回 403 `DEMO_READ_ONLY` |
+
+AccessKey 的权限范围为「只读」或「读写」（未设置的密钥按读写处理）。资源页中每个过程标注 **读** 或 **写**。
 
 ### 服务账号
 
-服务账号是供集成调用 `/api/v1` 的机器身份。它不能登录：没有密码、passkey 或会话，只有 key。在 **系统设置 → 服务账号** 中管理。
-
-| 操作 | 说明 |
-| --- | --- |
-| 新建、编辑 | 名称（最长 64 字符，唯一）、scope、启用状态。停用后该账号的全部 key 返回 401 |
-| 新建 key | key 以 `ews_` 开头，只显示一次；只保存 SHA-256。列表显示前缀与最后使用时间（精度 1 分钟） |
-| 吊销 key | 吊销后使用该 key 的请求返回 401 |
-| 删除 | 同时删除全部 key |
-
-以上变更写入审计日志（`service_account.create`、`service_account.update`、`service_account.delete`、`service_account.key_create`、`service_account.key_revoke`）；服务账号执行的操作在审计日志中的操作者类型为 `service_account`。服务账号 key 只在 `/api/v1` 生效。
-
-服务账号只能调用下表列出的过程，每个过程需要对应的 scope：
+服务账号只能调用下表中的过程，每个过程需要对应的 scope；其他过程返回 403 `SERVICE_ACCOUNT_FORBIDDEN`，缺少 scope 返回 403 `SCOPE_REQUIRED`（`data.scope` 为所需的 scope）。scope 只用于服务账号。
 
 | 过程 | 端点 | scope |
 | --- | --- | --- |
@@ -77,84 +90,12 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 | `dns.catalog` | `GET /dns/catalog` | — |
 | `settings.get` | `GET /settings` | `system:read` |
 | `clusters.list`、`clusters.get` | `GET /clusters`、`GET /clusters/{id}` | `clusters:read` |
-| `sites.list`、`sites.get` | `GET /sites`、`GET /sites/{id}` | `sites:read` |
-| `sites.launch` | `GET /sites/{id}/launch` | `sites:read` |
-| `sites.setEnabled` | `PUT /sites/{id}/enabled` | `sites:write` |
+| `sites.list`、`sites.get`、`sites.launch` | `GET /sites`、`GET /sites/{id}`、`GET /sites/{id}/launch` | `sites:read` |
 | `dns.siteTarget` | `GET /sites/{siteId}/cname` | `sites:read` |
+| `sites.setEnabled` | `PUT /sites/{id}/enabled` | `sites:write` |
 | `usage.list`、`usage.changes` | `GET /usage`、`GET /usage/changes` | `usage:read` |
 
-| 情况 | 响应 |
-| --- | --- |
-| 缺少 scope | 403 `SCOPE_REQUIRED`，`data.scope` 为所需的 scope |
-| 过程不在上表 | 403 `SERVICE_ACCOUNT_FORBIDDEN` |
-| key 无效、已吊销，或账号已停用 | 401 |
-| 修改需要集群活动节点缺少的能力 | 409 `NODE_CAPABILITY_REQUIRED`，见[节点能力](#节点能力) |
-
-`GET /me` 对服务账号返回 `serviceAccount: { id, name, scopes }`，`user` 为服务账号的 id 与名称（`email` 为空，`twoFactorEnabled` 为 `false`）。scope 只用于服务账号；AccessKey 使用只读 / 读写权限范围。
-
-### 幂等键
-
-`/api/v1` 的 `POST`、`PUT`、`PATCH` 接受请求头 `Idempotency-Key`：1–255 个可打印 ASCII 字符，可写成 RFC 8941 字符串（`"key"`）或原样。
-
-| 情况 | 响应 |
-| --- | --- |
-| 第一次请求 | 正常执行，保存方法、路径（含查询串）、请求体 SHA-256 与最终响应 |
-| 同一调用方、同一 key、同一请求 | 返回保存的响应（状态码与响应体），带 `Idempotent-Replayed: true` |
-| 同一 key、不同的方法、路径或请求体 | 422 `IDEMPOTENCY_KEY_MISMATCH` |
-| 第一次请求仍在执行 | 409 `IDEMPOTENCY_IN_PROGRESS` |
-| key 格式无效 | 400 `IDEMPOTENCY_KEY_INVALID` |
-| 响应里有只显示一次的凭据：`POST /access-keys`、`POST /service-accounts/{id}/keys`、`POST /enrollment-tokens`、`POST /probe-tokens`、`POST /sites/{id}/auth-rules/{ruleId}/sign` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`，不执行；不带该请求头重新发送 |
-
-- key 按调用方区分：全部 AccessKey 共用一份，每个服务账号单独一份。
-- 保存 24 小时，每小时清理过期记录。
-- 5xx 响应不保存，调用方可以用同一个 key 重试；401 与 429（未进入过程）也不保存。4xx 响应保存，重放返回同一错误。
-- 执行中的记录 10 分钟后视为中断（控制台实例崩溃），下一个请求接管并重新执行。
-- `GET` 与 `DELETE` 忽略该请求头。
-
-### 乐观并发
-
-以下写操作接受可选的 `expectedUpdatedAt`（ISO 8601，调用方读取时的 `updatedAt`）。值不一致时返回 409 `UPDATED_AT_MISMATCH`，`data.updatedAt` 为当前值。
-
-| 过程 | 资源的 `updatedAt` |
-| --- | --- |
-| `sites.setEnabled` | 网站 |
-| `clusters.setRolloutPolicy` | 集群金丝雀策略的 `policyUpdatedAt`（发布与金丝雀进度不改变它；传入当时读取的 `updatedAt` 也可，前提是此后没有任何变化） |
-| `l4Apps.update`、`l4Apps.setEnabled` | L4 应用 |
-
-网站或 L4 应用已经是请求的启停状态时，`sites.setEnabled`、`l4Apps.setEnabled` 直接返回当前状态，不比较 `expectedUpdatedAt`。
-
-### 网站启停
-
-`PUT /sites/{id}/enabled`（过程 `sites.setEnabled`），请求体 `{"enabled":false}`。运营者（会话或读写 AccessKey）与 `sites:write` 服务账号可以调用。
-
-- 停用的网站不下发到节点，节点对其域名的 HTTP 请求返回 503（`X-Edgeweir-Error: site-disabled`），HTTPS 请求在 TLS 握手时失败；DNS 记录保留；证书续期继续，HTTP-01 挑战照常应答。
-- 状态有变化时生成新的配置版本（原因码 `site_enabled`、`site_disabled`）并写审计（`site.enable`、`site.disable`）；没有变化时返回当前状态，不生成版本、不写审计。
-- 对停用的网站清缓存或预热：409 `SITE_DISABLED`。
-- 响应为 `{ site, revision }`；`site.enabled` 为当前状态。
-
-### 网站生效与上线检查
-
-网站（`sites.list`、`sites.get` 与各写操作返回的 `site`）带 `delivery`：
-
-| 字段 | 说明 |
-| --- | --- |
-| `state` | `pending`：没有在线节点运行该网站；`partial`：部分在线节点运行旧版本或数据面异常；`live`：全部在线节点运行最新版本；`disabled`：已停用 |
-| `totalNodes` | 网站所在集群的在线活动节点数 |
-| `servingNodes` | 其中已应用的配置含该网站（任意版本）的节点数；停用的网站为仍在运行它的节点数 |
-| `currentNodes` | 其中运行该网站最新版本（含金丝雀候选版本）且数据面正常的节点数 |
-| `canary` | 集群的配置金丝雀让非金丝雀节点在窗口内继续运行该网站的旧版本时为 `{ endsAt, autoPromote }`（窗口结束时间；`autoPromote` 为 `false` 时等待手动推进），否则为 `null` |
-
-新建网站（`POST /sites`）时 `name` 可省略，默认为第一个域名（超过 100 字符时截断）。
-
-`GET /sites/{id}/launch`（过程 `sites.launch`）当场解析网站的每个域名，耗时可达数秒：
-
-| 字段 | 说明 |
-| --- | --- |
-| `addresses` | 集群的边缘地址（A / AAAA 记录的值）：在线活动节点的主调度地址，节点配置了调度地址时用配置的地址，否则用节点上报的公网地址；IPv4 在前 |
-| `domains[]` | `name`（网站上的写法：`a.com`、`*.a.com`、`.a.com`、`~正则`，国际化域名为 Punycode）、`probe`（实际解析的名称；泛域名解析其下的固定名称 `edgeweir-check.example.com`）、`pointing` |
-| `domains[].pointing` | `ok`：解析到的全部地址都属于集群的活动节点（配置的地址或上报的公网地址，含备用地址与离线节点）；`elsewhere`：有地址不属于；`unresolved`：没有 A / AAAA 记录；`unchecked`：`.` 后缀或正则域名（不对应单个主机名，`probe` 为空）；`unknown`：解析失败（超时等），或集群节点没有已知地址 |
-| `certificate` | `state`：`none`（网站没有证书）、`covered`（证书链覆盖全部域名）、`uncovered`（不覆盖 `uncovered` 中的域名）、`issuing`（ACME 签发排队或进行中）、`failed`（上次签发失败，`error` 为失败代码）、`expired`；另有 `id`、`name`、`uncovered`、`error` |
-| `delivery` | 同上 |
+服务账号与 key 的管理过程见[系统与账户](api/system.md#服务账号)。
 
 ### 节点能力
 
@@ -163,919 +104,95 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 | 调用方 | 结果 |
 | --- | --- |
 | 运营者（会话或 AccessKey） | 保存并发布；缺少能力的节点保留原配置，在 **集群与节点** 中显示「需要升级」 |
-| 服务账号 | 409 `NODE_CAPABILITY_REQUIRED`，`data.features` 为缺少的能力（逗号分隔），`data.nodes` 为缺少能力的节点（前 5 个，逗号分隔，更多时以 `+N` 结尾）；修改不保存 |
+| 服务账号、控制台的自动任务 | 409 `NODE_CAPABILITY_REQUIRED`，`data.features` 为缺少的能力（逗号分隔），`data.nodes` 为缺少能力的节点（前 5 个，更多时以 `+N` 结尾）；修改不保存 |
 
-控制台的自动任务发布配置时与服务账号受同样的限制。升级节点见[节点升级](../guide/node-upgrades.md)。
+升级节点见[节点升级](../guide/node-upgrades.md)。
 
-### 封禁
+## 请求格式
 
-| 过程 | 端点 |
+| 项 | 规则 |
 | --- | --- |
-| `bans.list` | `GET /bans` |
-| `bans.create` | `POST /bans` |
-| `bans.delete` | `DELETE /bans/{id}` |
-| `settings.bans`、`settings.setBans` | `GET`、`PUT /settings/bans` |
-
-服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。范围 `scope`：`site` 针对一个网站，`platform` 针对全部网站（界面显示为「全局」）。
-
-| 请求 | 字段 |
-| --- | --- |
-| `POST /bans` | `scope`（`site` / `platform`）、`siteId`（`site` 必须带，`platform` 不能带）、`cidr`（IP 地址或 CIDR）、`reason`（`abuse`、`attack`、`scanner`、`spam`、`other`）、`durationSeconds`（60–604800） |
-| `GET /bans` | 查询参数 `scope`、`siteId`、`source`（`manual` / `auto` / `rule`）、`address`（IP 或 CIDR，列出覆盖它或在它之内的封禁；无效时 400 `BAN_INVALID_CIDR`）、`page`、`pageSize`（1–100，默认 50） |
-| `PUT /settings/bans` | `maxTotal`（100–100000，默认 10000）、`shareAutoBans`（默认 `true`） |
-
-列表响应 `{ items, total }`，只含有效的封禁（未到期、未解封），按创建时间倒序。封禁字段：
-
-| 字段 | 说明 |
-| --- | --- |
-| `id`、`scope`、`cidr` | `cidr` 为规范化的 CIDR，如 `203.0.113.7/32` |
-| `reason`、`source` | `source` 为 `manual`、`auto` 或 `rule`（规则做出的封禁）；自动封禁的 `reason` 为 `cc_ip_rate`、`unknown_host_scan` 或 `challenge_failures`，规则封禁为 `waf_rule` 或 `rate_limit` |
-| `siteId`、`siteName` | `platform` 封禁为 `null` |
-| `node`、`trigger` | 自动与规则封禁的来源节点 `{ id, name }` 与触发条件 `{ metric, observed, threshold, windowSeconds, ruleId? }`；手动封禁为 `null` |
-| `rule` | 规则封禁的规则 `{ id, name, platform }`（规则已删除时 `name` 为 `null`）；其他为 `null` |
-| `createdBy` | 手动封禁的操作者 `{ type, id, name }` |
-| `createdAt`、`expiresAt` | ISO 8601 |
-| `seq` | 封禁变化序号（十进制字符串） |
-| `distributed` | 是否下发到节点；未共享的自动封禁为 `false` |
-| `unappliedNodes` | 上报未能保存该封禁的在线节点数 |
-
-- 同一范围、网站与地址已有有效的手动封禁时，`create` 更新 `reason` 与到期时间并返回同一 `id`，审计 `ban.update`；否则审计 `ban.create`。`delete` 解除任一有效封禁（手动或自动），审计 `ban.delete`。
-- `maxTotal` 是有效手动封禁的上限，网站与全局封禁合计；续期不计入新增。`shareAutoBans` 决定自动封禁是否下发到同一集群的其他节点。`setBans` 审计 `system.bans_update`。
-- 节点的封禁状态：`GET /nodes/{id}` 的 `banStatus`（`appliedSequence`、`entries`、`capacity`、`unappliedIds`、`unapplied`、`kernelEntries`、`autoEvicted`、`reportedAt`），节点未上报时为 `null`；节点能力见 `supportedFeatures`（`bans-v1`、`kernel-ban-v1`）。
-
-| 错误代码 | 状态 | 场景 |
-| --- | --- | --- |
-| `BAN_INVALID_CIDR` | 400 | 不是 IP 地址或 CIDR |
-| `BAN_PREFIX_TOO_SHORT` | 400 | 前缀短于 `/16`（IPv4）或 `/48`（IPv6）；`data.min` 为下限 |
-| `BAN_EXPIRY_OUT_OF_RANGE` | 400 | `durationSeconds` 不在 60–604800 |
-| `BAN_PROTECTED_ADDRESS` | 400 | 包含节点地址、回环或未指定地址，或与「放行」类 IP 名单重叠；`data.address` 为冲突的地址 |
-| `BAN_PLATFORM_LIMIT` | 409 | 有效的手动封禁达到 `maxTotal`；`data.limit` |
-| `BAN_NOT_FOUND` | 404 | 封禁不存在、已到期或已解封 |
-| `SITE_NOT_FOUND` | 404 | `siteId` 对应的网站不存在 |
-
-```bash
-curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
-  -d '{"scope":"platform","cidr":"203.0.113.0/24","reason":"attack","durationSeconds":86400}' \
-  https://cdn-admin.example.com/api/v1/bans
-```
-
-行为见 [封禁](../guide/bans.md)。
-
-### 灰名单与连接数限制
-
-| 过程 | 端点 |
-| --- | --- |
-| `greylist.list` | `GET /greylist` |
-| `greylist.create` | `POST /greylist` |
-| `greylist.delete` | `DELETE /greylist/{id}` |
-| `clusters.connectionLimits`、`clusters.setConnectionLimits` | `GET`、`PUT /clusters/{clusterId}/connection-limits` |
-
-权限与封禁相同：服务账号不能调用，只读 AccessKey 只能调用 `GET`。
-
-| 请求 | 字段 |
-| --- | --- |
-| `POST /greylist` | 同 `POST /bans`，另加 `action`：`{ kind: "challenge", challenge }`（`cookie302`、`js`、`pow`、`captcha`）或 `{ kind: "rate_limit", requests, windowSeconds }`（1–100000、1–3600） |
-| `GET /greylist` | 查询参数 `scope`、`siteId`、`address`、`page`、`pageSize` |
-| `PUT /clusters/{clusterId}/connection-limits` | `settings`：`enabled`、`perIp`（0–100000）、`newPerSecond`（0–100000）、`burst`（0–1000000，0 或不小于 `newPerSecond`）、`ports`（`[{ start, end }]`，1–64 段，不重叠；`null` 为集群的监听与 TCP L4 端口） |
-
-- 灰名单列表响应 `{ items, total, unsupportedNodes }`；条目字段 `id`、`scope`、`cidr`、`reason`、`siteId`、`siteName`、`action`、`createdBy`、`createdAt`、`expiresAt`、`unappliedNodes`。同一范围、网站与地址再次 `create` 返回同一 `id`，审计 `greylist.update`；错误代码与封禁相同（`BAN_*`）。
-- 连接数限制响应 `{ clusterId, settings, effectivePorts, nodes: { total, enforcing, unsupported, failing } }`；`setConnectionLimits` 发布配置版本（原因 `connection_limits_updated`），审计 `cluster.connection_limits_update`。
-- 节点状态：`banStatus.connectionLimitsActive`、`connectionLimitsError`；能力 `greylist-v1`、`conn-limit-v1`。
-
-行为见 [灰名单](../guide/bans.md#灰名单)、[连接数限制](../guide/bans.md#连接数限制)。
-
-### 挑战与 CC 防护
-
-| 过程 | 端点 |
-| --- | --- |
-| `protection.get` | `GET /sites/{id}/protection` |
-| `protection.update` | `PATCH /sites/{id}/protection` |
-| `security.state` | `GET /sites/{id}/security` |
-| `security.events` | `GET /sites/{id}/security/events` |
-| `settings.protection`、`settings.setProtection` | `GET`、`PUT /settings/protection` |
-| `settings.ccTemplate`、`settings.setCcTemplate` | `GET`、`PUT /settings/cc-template` |
-
-服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。挑战类型与 CC 级别取值：`cookie302`、`js`、`pow`、`captcha`（级别另有 `normal`）。
-
-| 请求 | 字段 |
-| --- | --- |
-| `PATCH /sites/{id}/protection` | 只修改给出的字段：`underAttack`、`underAttackChallenge`、`passTtlSeconds`（300–86400）、`powDifficulty`（8–24）、`powHighDifficulty`（8–26，不低于 `powDifficulty`）、`logJa4`、`cc`（部分字段，合并到已保存的策略） |
-| `cc` | `enabled`、`followTemplate`、`maxLevel`、`highPowInsteadOfCaptcha`、`windowSeconds`（5–60）、`siteQps`、`urlQps`、`ipQps`（0–1000000，0 关闭该条件）、`ipBanSeconds`（60–86400）、`originErrorPercent`（0–100）、`originErrorMinRequests`、`escalateAfterSeconds`（1–3600）、`cooldownSeconds`（1–86400） |
-| `GET /sites/{id}/security` | 查询参数 `hours`（1–720，默认 24） |
-| `GET /sites/{id}/security/events` | 查询参数 `kind`（`site_level` / `path_level` / `ip_banned`）、`hours`（1–720，只返回近这些小时的事件，省略时不限）、`page`、`pageSize`（1–100，默认 50） |
-| `PUT /settings/protection` | `underAttack`（全局 Under Attack）、`underAttackChallenge`、`eventRetentionDays`（7–365，默认 30） |
-| `PUT /settings/cc-template` | `cc` 中除 `enabled`、`followTemplate` 外的全部字段 |
-
-响应：
-
-| 过程 | 内容 |
-| --- | --- |
-| `protection.get`、`protection.update` | 上述字段，另有 `siteId`、`cc`（跟随模板时阈值为模板值）、`ccTemplate`（当前 CC 模板）、`effectiveCc`（节点使用的阈值，策略关闭时为 `null`）、`platformUnderAttack`（全局 Under Attack 是否开启）、`updatedAt` |
-| `security.state` | `nodes`：集群中每个活动节点的 `{ id, name, online, level, escalatedPaths, reportedAt }`；`topIps`、`topPaths`：近 `hours` 小时事件中的 `{ value, count }`（各最多 10 个，近似值）；`hours` |
-| `security.events` | `{ items, total }`，按发生时间倒序；事件字段 `id`、`node`（`{ id, name }`，节点删除后为 `null`）、`occurredAt`、`kind`、`level`、`previousLevel`、`path`、`address`、`metric`、`observed`、`threshold`、`topIps`、`topPaths` |
-
-- 修改发布网站所在集群的配置版本（原因 `site_protection_updated`），审计 `site.protection_update`；全局 Under Attack 变化时发布所有集群（`platform_protection_updated`），审计 `system.protection_update`；修改 CC 模板发布有网站跟随模板的集群（`cc_template_updated`），审计 `system.cc_template_update`。挑战密钥每日轮换发布 `challenge_keys_rotated`。
-- 挑战、Under Attack 与 CC 需要节点能力 `challenge-v1`，`logJa4` 另需 `ja4-v1`；集群有活动节点缺少时见[节点能力](#节点能力)。
-
-| 错误代码 | 状态 | 场景 |
-| --- | --- | --- |
-| `PROTECTION_POW_DIFFICULTY` | 400 | `powHighDifficulty` 低于 `powDifficulty`；`data.min` 为最小允许值 |
-| `SITE_NOT_FOUND` | 404 | 网站不存在 |
-
-```bash
-curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
-  -d '{"underAttack":true,"underAttackChallenge":"pow","cc":{"enabled":true,"followTemplate":true}}' \
-  https://cdn-admin.example.com/api/v1/sites/<网站 ID>/protection
-```
-
-行为见 [挑战与 CC 防护](../guide/challenges.md)。
-
-### 自动缓解
-
-| 过程 | 端点 | 说明 |
-| --- | --- | --- |
-| `autoMitigation.get` | `GET /sites/{id}/auto-mitigation` | 设置（未设置时 `settings` 与 `updatedAt` 为 `null`）、`level`（集群在线活动节点中该网站的最高 CC 级别）、`active { since, expiresAt, level }`（自动缓解正在保持的 Under Attack，没有时为 `null`）、`paused`（手动结束或手动关闭后到级别降到触发级别以下前不再开启）、`lastError`（开启或关闭发布失败的错误码，没有时为空） |
-| `autoMitigation.update` | `PUT /sites/{id}/auto-mitigation` | 新建或整体替换设置，下一次检查（1 分钟内）生效；禁用时立即关闭正在保持的 Under Attack，缩短 `durationMinutes` 时到期时间随之缩短，并清除 `paused`。可选 `expectedUpdatedAt`（不一致时 409 `UPDATED_AT_MISMATCH`）。审计 `site.auto_mitigation_update`（`from`、`to`） |
-| `autoMitigation.restore` | `POST /sites/{id}/auto-mitigation/restore` | 关闭正在保持的 Under Attack 并暂停，级别降到触发级别以下之前不再开启；审计 `site.auto_mitigation_restore`。没有保持时 409 `AUTO_MITIGATION_NOT_ACTIVE` |
-
-设置的字段（`update` 另加 `id`）：
-
-| 字段 | 类型 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| `enabled` | 布尔 | `true` | |
-| `threshold` | `cookie302`、`js`、`pow`、`captcha` | `pow` | 触发级别 |
-| `durationMinutes` | 整数，5–1440 | 30 | 级别最后一次达到触发级别后保持的分钟数 |
-
-级别达到 `threshold` 时系统开启网站的 Under Attack 并发布网站所在集群的配置版本（原因 `auto_mitigation_started`，审计 `site.auto_mitigation_apply`）；到期且级别低于 `threshold`，或被禁用时关闭（`auto_mitigation_ended`，`site.auto_mitigation_release`）。操作者为系统，元数据含 `level`、`threshold`、`durationMinutes`、`revision`。发布失败（例如 `NODE_CAPABILITY_REQUIRED`）时回滚并把错误码记入 `lastError`，每分钟重试。`protection.update` 修改 `underAttack` 时视为手动操作：开启即接管，关闭即结束保持并暂停。只读 AccessKey 只能调用 `GET`；服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）。行为见[攻击与自动缓解](../guide/attack-dashboard.md)。
-
-### 压缩与 OWASP CRS
-
-| 过程 | 端点 |
-| --- | --- |
-| `https.get`、`https.update` | `GET`、`PUT /sites/{id}/https` |
-| `https.check` | `GET /sites/{id}/https/check` |
-| `sites.features` | `GET /sites/{id}/features` |
-| `waf.get` | `GET /sites/{id}/waf` |
-| `waf.update` | `PATCH /sites/{id}/waf` |
-| `waf.topRules` | `GET /sites/{id}/waf/rules` |
-
-服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
-
-| 请求 | 字段 |
-| --- | --- |
-| `PUT /sites/{id}/https` | `settings` 替换网站的全部 HTTPS 设置，缺省字段取默认值；先 `GET` 再修改。压缩字段：`brotli`、`brotliLevel`（1–11，默认 6）、`brotliMinLength`、`brotliTypes`，`zstd`、`zstdLevel`（1–19，默认 3）、`zstdMinLength`、`zstdTypes`，`gzip`、`gzipMinLength`、`gzipTypes`；最小长度 1–1048576（默认 256），类型为 MIME 类型数组（最多 32 个） |
-| `PATCH /sites/{id}/waf` | 只修改给出的字段：`mode`（`off` / `detect` / `block`）、`paranoiaLevel`（1–4）、`anomalyThreshold`（1–1000）、`exclusions`（排除条目，见 [WAF 动作、请求体字段、CRS 按路径与已验证爬虫](#waf-动作请求体字段crs-按路径与已验证爬虫)；初始化与拦截判定规则 901xxx、949xxx、959xxx、980xxx 返回 400 `WAF_RULE_NOT_EXCLUDABLE`，`data.ids` 列出它们）、`requestBodyLimit`（0–134217728 字节） |
-| `GET /sites/{id}/waf/rules` | 查询参数 `range`（`1h` / `6h` / `24h` / `7d` / `30d`，默认 `24h`）、`limit`（1–50，默认 10） |
-| `GET /sites/{id}/https/check` | 查询参数 `ca`（`letsencrypt` / `zerossl` / `google` / `custom`，默认为 `GET /certificates/settings` 的 `defaultCa`）：检查其 CAA 许可的 CA |
-
-响应：
-
-| 过程 | 内容 |
-| --- | --- |
-| `sites.features` | `brotli`、`zstd`、`crs`，各为 `{ available, reason }`；集群有活动节点缺少 `brotli-v1` / `zstd-v1` / `modsecurity-v1` 时 `available` 为 `false`、`reason` 为 `nodes`，否则 `reason` 为 `null` |
-| `waf.get`、`waf.update` | `siteId`、上述字段、`updatedAt`（从未保存时为 `null`，此时为默认值：`off`、1、5、`[]`、131072） |
-| `waf.topRules` | `{ approximate: true, items: [{ ruleId, requests }] }`，按命中次数倒序；只含检测规则，不含 901xxx、949xxx、959xxx、980xxx |
-| `https.check` | `request`：一键启用 HTTPS 发送的申请（`name`、`names`、`email`、`challenge`、`dnsCredentialId`）；`blockers`：全部阻碍，每项为 `code` 与参数：`nodes_offline`（`cluster`）、`nodes_lack_http01`（`nodes`）、`dns_not_pointing`（`name`、`pointing`：`unresolved` / `elsewhere`）、`dns_credential_missing`（`names`）、`dns_credential_failed`（`credential`、`error`：API 错误代码）、`caa_forbidden`（`name`）；`certificates`：已签发、未过期且覆盖网站全部域名的证书 `{ id, name }` |
-
-- `https.update` 发布网站所在集群（原因 `certificate_updated`），审计 `site.https_update`；`waf.update` 发布（`site_waf_updated`），审计 `site.waf_update`。
-- `POST /certificates/request` 的 `bindSiteId`：证书签发后绑定到该网站（`forceHttps` 等其他设置不变），发布网站所在集群，审计 `site.https_update`（操作者 system）；`names` 须覆盖网站全部域名（400 `CERTIFICATE_DOMAIN_MISMATCH`），每个网站同时只有一个这样的申请（409 `CERTIFICATE_BUSY`）。证书的 `bindSiteId` 在签发前为该网站 ID，签发后为 `null`。
-- `available` 为 `false` 时仍可经 API 开启，见[节点能力](#节点能力)。
-- 网站不存在：404 `SITE_NOT_FOUND`。
-
-```bash
-curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
-  -d '{"mode":"block","paranoiaLevel":1,"exclusions":[{"ruleIds":[920350]}]}' \
-  https://cdn-admin.example.com/api/v1/sites/<网站 ID>/waf
-curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
-  'https://cdn-admin.example.com/api/v1/sites/<网站 ID>/waf/rules?range=1h'
-```
-
-行为见 [HTTPS 与证书](../guide/https.md#压缩) 与 [OWASP CRS 托管规则](../guide/waf.md)。
-
-### 清缓存、预热、源站与错误页
-
-| 过程 | 端点 |
-| --- | --- |
-| `cacheTasks.create`、`cacheTasks.get`、`cacheTasks.list` | `POST /cache-tasks`、`GET /cache-tasks/{id}`、`GET /cache-tasks` |
-| `sites.purgeAll` | `POST /sites/{id}/purge`：全站刷新，等同 `POST /cache-tasks` 的 `{"type":"site","siteIds":["<网站 ID>"]}`，返回任务（不再发布配置版本、不再修改 `cacheGeneration`） |
-| `sites.update` | `PATCH /sites/{id}`（`originSettings`、`cacheSettings`） |
-| `sites.originHealth` | `GET /sites/{id}/origin-health` |
-| `sites.originQuality` | `GET /sites/{id}/origins/quality` |
-| `errorPages.get` | `GET /sites/{id}/error-pages` |
-| `errorPages.update` | `PUT /sites/{id}/error-pages` |
-| `settings.errorPages`、`settings.setErrorPages` | `GET`、`PUT /settings/error-pages` |
-
-服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
-
-| 请求 | 字段 |
-| --- | --- |
-| `POST /cache-tasks` | `type`：`url`、`prefix`、`site`、`prefetch`、`host`、`tag`、`sitemap`。`host`：`hosts`（最多 500 个主机名，不带端口或通配符）；`tag`：`siteIds`（1–100）与 `tags`（1–500，去首尾空格后按小写保存，每个 1–128 字节可打印 ASCII，不含逗号）；`sitemap`：`urls` 恰好一个站点地图 URL、`maxUrls`（1–10000，默认 1000）；`prefetch` 与 `sitemap`：`variants`（`desktop` / `mobile`，默认 `["desktop"]`） |
-| `PATCH /sites/{id}` | `originSettings.activeHealthCheck`：`enabled`、`path`、`method`（`GET` / `HEAD`）、`expectedStatusMin`、`expectedStatusMax`、`host`、`intervalSeconds`（5–300）、`timeoutSeconds`（1–60，不超过间隔）、`healthyThreshold`、`unhealthyThreshold`（1–10）；`originSettings.sessionAffinity`：`enabled`、`ttlSeconds`（60–604800）；`originSettings.protocol`（`http1` / `http2`）、`originSettings.grpc`（只能在 `http2` 下为 `true`，否则 400 `ORIGIN_GRPC_REQUIRES_HTTP2`）；`cacheSettings.keepCacheTag`。省略这五项时保持原值；`originSettings`、`cacheSettings` 的其他字段仍整体替换，先 `GET` 再修改 |
-| `POST /sites`、`PATCH /sites/{id}` | `origins[].hostHeader`：空（跟随请求），或主机名、IP，可带端口：IPv6 带端口时写成 `[2001:db8::1]:8443`，不带端口时不加方括号；最长 259 字节，不含空白、引号、`/`、`\`。节点不接受的值返回 400 `ORIGIN_HOST_HEADER_INVALID`；已保存的值照常读出 |
-| `PUT /sites/{id}/error-pages` | `pages`：`[{ status, template }]`，`status` 为 403、429、502、503、504，各至多一个，`template` 1–65536 字节（UTF-8）；`interceptOriginErrors`；可选 `expectedUpdatedAt`。整体替换。模板含 `{{time}}` 或 `{{path}}` 时配置要求节点能力 `rules-v3` |
-| `PUT /settings/error-pages` | `unknownHost`、`siteDisabled`：模板，空字符串表示内置页面，每个最多 65536 字节；含 `{{time}}` 或 `{{path}}` 时所有集群的配置要求节点能力 `rules-v3` |
-
-响应：
-
-| 过程 | 内容 |
-| --- | --- |
-| `cacheTasks.*` | 任务对象增加 `variants`（清缓存任务为 `[]`）与 `maxUrls`（站点地图任务以外为 `null`）；`targets` 为 Host、规范化后的标签或站点地图 URL；节点结果的错误码增加 `sitemap_failed`、`sitemap_empty` |
-| `sites.originHealth` | 每个源站的 `nodes` 按节点和来源各一项，增加 `source`（`passive` / `active`）；`downNodes` 统计有任一来源不健康的在线节点，每个节点计一次 |
-| `sites.features` | 增加 `activeHealthCheck`、`sessionAffinity`、`originHttp2`、`errorPages`、`purgeByTag`、`prefetchVariants` |
-| `errorPages.get`、`errorPages.update` | `siteId`、`pages`（按状态码排序）、`interceptOriginErrors`、`updatedAt`（从未保存时为 `null`） |
-| `logs.query`、`logs.export` | 查询参数 `requestId`（精确匹配，最长 128）；日志条目增加 `requestId`，CSV 增加 `requestId` 列 |
-
-- `errorPages.update` 发布网站所在集群（原因 `site_error_pages_updated`），审计 `site.error_pages_update`；`settings.setErrorPages` 发布所有集群（`error_pages_updated`），审计 `system.error_pages_update`。
-
-| 错误代码 | 状态 | 场景 |
-| --- | --- | --- |
-| `ORIGIN_HOST_HEADER_INVALID` | 400 | 源站的 `hostHeader` 不是节点接受的主机名或 IP（见上）；`data.hostHeader` |
-| `CACHE_TASK_HOST_INVALID` | 400 | Host 带端口、通配符或不是合法主机名；`data.hosts` |
-| `CACHE_TASK_TAG_INVALID` | 400 | 标签不符合规则；`data.tags` |
-| `CACHE_TASK_HOST_UNKNOWN` | 400 | Host 或站点地图的 Host 不属于任何网站；`data.hosts` |
-| `NODE_CAPABILITY_REQUIRED` | 409 | 任务：集群内有活动节点缺少 `purge-tag-v1`（Host、标签）或 `prefetch-v2`（移动端、站点地图）；`data.features`、`data.nodes` |
-| `ERROR_PAGE_TOO_LARGE` | 400 | 模板超过 65536 字节；`data.status`、`data.limit`（平台模板的 `status` 为 404 或 503） |
-
-```bash
-curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
-  -d '{"type":"tag","siteIds":["<网站 ID>"],"tags":["product-42"]}' \
-  https://cdn-admin.example.com/api/v1/cache-tasks
-curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
-  -d '{"type":"sitemap","urls":["https://www.example.com/sitemap.xml"],"maxUrls":2000,"variants":["desktop","mobile"]}' \
-  https://cdn-admin.example.com/api/v1/cache-tasks
-```
-
-行为见 [源站与缓存](../guide/origins-and-cache.md) 与 [错误页](../guide/error-pages.md)。
-
-### 缓存区、PURGE 方法、内容设置与维护模式
-
-| 过程 | 端点 |
-| --- | --- |
-| `clusters.setCache` | `PUT /clusters/{id}/cache` |
-| `nodes.setCache` | `PUT /nodes/{id}/cache` |
-| `maintenance.get`、`maintenance.update` | `GET`、`PUT /sites/{id}/maintenance` |
-
-服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
-
-| 请求 | 字段 |
-| --- | --- |
-| `PUT /clusters/{id}/cache` | `maxSizeGb`（1–65536）、`inactiveDays`（1–90）；发布集群（原因 `cluster_cache_updated`），审计 `cluster.cache_update` |
-| `PUT /nodes/{id}/cache` | `maxSizeGb`（1–65536，`null` 跟随集群）；发布节点所在集群（`node_cache_updated`），审计 `node.cache_update` |
-| `PUT /sites/{id}/maintenance` | `enabled`、`template`（0–65536 字节，空为内置维护页）、`retryAfterSeconds`（0–86400）、`allowedCidrs`（最多 64 个，按 IP 名单的规则规范化：IPv4 映射前缀保存为 IPv4，短于 /96 的映射前缀被拒）、`allowedPathPrefixes`（以 `/` 开头，不含 `?`、`#` 与控制字符，每个最长 1024 字节 UTF-8，最多 32 个）、可选 `expectedUpdatedAt`（不一致时 409 `UPDATED_AT_MISMATCH`）；发布（`site_maintenance_updated`），审计 `site.maintenance_update` |
-| `POST /sites`、`PATCH /sites/{id}` | `originSettings.tries`（1–5，默认 3）、`originSettings.statusRetry`（默认 `true`）；`cacheSettings.cacheKey.query` 增加 `exclude`，此时 `queryParams` 为去掉的参数，名称可以以 `*` 结尾；`cacheSettings.xCache`（默认 `true`）；`cacheSettings.purgeMethod`：`{ enabled, key? }`，`key` 为 16–256 个可打印字符，只写，省略时保留已保存的密钥，开启时没有密钥返回 400 `PURGE_KEY_REQUIRED`；`cacheRules[].cacheSetCookie`（默认 `false`）；`contentSettings`：`charset`（`{ name, force, uppercase }`，`name` 为 `off`、`utf-8`、`gbk`、`gb18030`、`gb2312`、`big5`、`iso-8859-1`、`shift_jis`、`euc-kr`）、`requestBodyLimit`（字节，0–10737418240，默认 104857600，0 不限）。`PATCH` 省略 `xCache`、`purgeMethod`、`originSettings.tries`、`originSettings.statusRetry` 时保持原值 |
-| `PUT /sites/{id}/https` | 增加 `gzipLevel`（0–9，0 为节点默认）、`compressMaxLength`（字节，0 不限） |
-| `PUT /sites/{id}/error-pages` | `status` 增加 400、401、404、405、410、500 与 `"4xx"`、`"5xx"`；每页增加 `redirectUrl`（与 `template` 二选一，见[跳转页面](../guide/error-pages.md#跳转页面)）与 `responseStatus`（200–599，0 不改；跳转页面只能为 0） |
-| `PUT /sites/{id}/rules` | 配置动作增加 `requestBodyLimit`（字节，0–10737418240） |
-
-响应：
-
-| 过程 | 内容 |
-| --- | --- |
-| `clusters.list`、`clusters.get` | 增加 `cache: { maxSizeGb, inactiveDays }` |
-| `nodes.list`、`nodes.get` | 增加 `cache: { maxSizeGb, usage }`：`maxSizeGb` 为节点自己的容量（`null` 跟随集群），`usage` 为最近一次上报的 `{ usedBytes, maxBytes, measuredAt }`（尚未上报时为 `null`） |
-| `sites.get` | `cacheSettings.purgeMethod` 为 `{ enabled, keySet }`，不返回密钥；增加 `contentSettings` |
-| `sites.features` | 增加 `siteContent` |
-| `maintenance.get`、`maintenance.update` | `siteId`、上述字段、`updatedAt`（从未保存时为 `null`） |
-| `cacheTasks.*` | `source` 增加 `purge_method`（PURGE 请求创建，`createdByName` 为节点名） |
-
-用到新字段的配置需要节点能力 `site-content-v1`（节点自己的缓存容量需要 `cache-zone-v1`），见[节点能力](#节点能力)。行为见[源站与缓存](../guide/origins-and-cache.md)与[错误页](../guide/error-pages.md)。
-
-### 规则与批量重定向
-
-| 过程 | 端点 |
-| --- | --- |
-| `rules.get`、`rules.save` | `GET`、`PUT /sites/{id}/rules` |
-| `platformRules.get`、`platformRules.save`（全局规则） | `GET`、`PUT /platform-rules` |
-| `rules.validate` | `POST /rules/validate` |
-| `rules.topLogged`（记录命中） | `GET /sites/{id}/rules/logged` |
-| `rules.versions`、`platformRules.versions`（规则版本） | `GET /sites/{id}/rules/{ruleId}/versions`、`GET /platform-rules/{ruleId}/versions` |
-| `rules.deleted`、`platformRules.deleted`（已删除的规则） | `GET /sites/{id}/rules/deleted`、`GET /platform-rules/deleted` |
-| `rules.restore`、`platformRules.restore`（恢复版本） | `POST /sites/{id}/rules/{ruleId}/restore`、`POST /platform-rules/{ruleId}/restore` |
-| `bulkRedirects.get` | `GET /sites/{id}/bulk-redirects` |
-| `bulkRedirects.save` | `PUT /sites/{id}/bulk-redirects` |
-
-服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET` 与 `POST /rules/validate`。
-
-| 请求 | 字段 |
-| --- | --- |
-| `PUT /sites/{id}/rules`、`PUT /platform-rules` | `rules`：整体替换，网站最多 64 条、平台最多 32 条；每条 `id`（可选；不是该网站或平台已有规则的 `id` 时重新生成，可直接保存从别处读取的规则）、`name`（1–100 字符）、`phase`、`expression`（最长 4096 字符）、`enabled`（默认 `false`：省略时规则保存为停用）、`action`。`phase`：`request-transform`、`redirect`、`config`、`waf-custom`、`ratelimit`、`cache`、`origin`、`response-transform`、`compression` |
-| `action`（`kind: "redirect"`） | `value`（静态目标）与 `target`（值表达式）恰好填一个；`statusCode`（301、302、303、307、308，默认 301）；`preserveQuery`（默认 `false`）；`setQuery`（`[{ name, value, expression }]`，最多 16 个，名称不重复）；`removeQuery`（参数名，最多 16 个，不能与 `setQuery` 重名）。参数名 `[A-Za-z0-9._~-]{1,64}`，`value` 为可打印 ASCII，最长 256 字符；`expression`（值表达式，默认 `""`）不为空时 `value` 须为空，节点按请求求值后百分号编码 |
-| `action`（`kind: "rewrite"`） | 同 `redirect`，没有 `statusCode`；`preserveQuery` 默认 `true` |
-| `action`（`kind: "request_header"`、`"response_header"`） | `header`（1–64 个 token 字符，转为小写，不能是受保护头）、`value`（静态值，最长 4096 字符，不含控制字符）、`expression`（值表达式，默认 `""`，不为空时 `value` 须为空）、`remove`（默认 `false`，开启时 `value` 与 `expression` 为空）；`response_header` 另有 `append`（默认 `false`，在已有同名头之外再加一行，不能与 `remove` 同时开启）。表达式算出的值超过 4096 字节或含控制字符时节点跳过该动作 |
-| `action`（`kind: "config"`） | 至少一项。`cacheBypass`、`forceHttps`、`gzip`（布尔）；只在 `config` 阶段：`brotli`、`zstd`、`websocket`、`underAttack`、`ccEnabled`（布尔），`ccMaxLevel`（`cookie302`、`js`、`pow`、`captcha`），`originConnectTimeoutMs`（100–120000），`originSendTimeoutMs`、`originReadTimeoutMs`（100–3600000），`logSampleRate`（0–10000，万分比）。省略的字段不覆盖 |
-| `action`（`kind: "origin"`） | `origin` 阶段。`originGroup`（网站的源站组，空为默认组；全局规则只能为空）、`hostHeader`（写法同源站的 `hostHeader`，空不覆盖）、`sni`（主机名，空不覆盖）、`port`（0–65535，0 不覆盖），至少修改一项 |
-| `action`（`kind: "compression"`） | `compression` 阶段。`algorithms`：`zstd`、`br`、`gzip` 中不重复的若干个，按优先顺序；`[]` 不压缩 |
-| `POST /sites`、`PATCH /sites/{id}` | `cacheRules[]` 增加 `expression`（`cache` 阶段的条件，最长 16384 字符；为空时由 `pathPrefixes`、`paths`、`extensions` 生成；不为空时这三项为空或等于它的构建器形式）与 `browserTtlSeconds`（0–31536000，0 保留源站的 `Cache-Control`）；`origins[]` 增加 `group`（`[a-z0-9_-]{0,32}`，空为默认组，至少一个源站在默认组） |
-| `PUT /sites/{id}/bulk-redirects` | `redirects`：整体替换，最多 5000 条，`source` 不重复；每条 `source`（`/路径` 或 `域名/路径`，2–512 字节，不含空白、`?` 与控制字符，域名小写）、`target`（静态重定向目标，最长 1024 字节）、`statusCode`（默认 301）、`preserveQuery`（默认 `false`） |
-| `POST /rules/validate` | `expression`（最长 16384 字符）、`phase`、`kind`：`condition`（默认，规则条件）、`value`（`phase` 阶段的值表达式：重定向目标、改写路径、报头值或查询参数值）、`cacheRule`（缓存规则条件，忽略 `phase`） |
-| `POST /sites/{id}/rules/{ruleId}/restore`、`POST /platform-rules/{ruleId}/restore` | `version`：该规则保留的版本号。规则存在时原位替换内容，已删除时加到同阶段最后并沿用原 `id`；按保存时的检查校验，失败返回 400 `RULE_INVALID`、`IP_LIST_REFERENCE_UNKNOWN`、`RULE_LIMIT_REACHED`（`limit`）；版本不存在（已清除或属于其他网站）返回 404 `RULE_VERSION_NOT_FOUND` |
-| `GET /sites/{id}/rules/logged` | `range`（`1h`、`6h`、`24h`（默认）、`7d`、`30d`）、`limit`（1–50，默认 10） |
-
-响应：
-
-| 过程 | 内容 |
-| --- | --- |
-| `rules.get`、`rules.save`、`platformRules.*` | 规则数组，按保存顺序，带 `id` |
-| `rules.versions`、`platformRules.versions` | `[{ ruleId, version, change, source, restoredFrom, rule, actor, createdAt }]`，版本号大的在前：`change` 为 `created`、`updated`、`deleted`（`rule` 为删除前的内容）；`source` 为 `ui`、`api`、`restore`、`copy`、`initial`；`restoredFrom` 为恢复的版本号；`rule` 为 `{ name, phase, expression, enabled, action }`；`actor` 为 `{ type, id, name }`。每条规则保留最近 50 个版本；其他网站的规则返回空数组 |
-| `rules.deleted`、`platformRules.deleted` | 已删除规则各自的最后一个版本（同上），最近删除的在前；每个网站与全局各保留最近删除的 100 条 |
-| `rules.restore`、`platformRules.restore` | 恢复后的规则数组（同 `rules.save`） |
-| `rules.topLogged` | `{ approximate: true, items: [{ ruleId, name, platform, requests }], unsupportedNodes }`：网站的「记录」规则与全局「记录」规则命中的请求数，多的在前；`name` 为规则当前名称，规则已删除时为 `null`；`platform` 为全局规则；`unsupportedNodes` 为网站所在集群中不上报命中（缺少节点能力 `rule-log-v1`）的活动节点数 |
-| `bulkRedirects.*` | `[{ source, target, statusCode, preserveQuery }]`，按保存顺序 |
-| `sites.get`；`sites.create`、`sites.update` 的 `site` | `cacheRules[]` 总带 `expression`（`"true"` 匹配所有请求）；条件是构建器形状时 `pathPrefixes`、`paths`、`extensions` 为其结构化形式，否则为空；另有 `browserTtlSeconds`。`origins[]` 带 `group` |
-| `rules.validate` | `{ valid, position, message, code?, params? }`；无效时 `position` 为出错的字符位置（从 0 计），`message` 为英文原因，`code` 为稳定的原因代码（如 `unknown_field`、`ordered_comparison`、`expected_token`），`params` 为原因中的值（如 `expected_token` 的 `token`） |
-| `sites.features` | 增加 `rulesV2`、`rulesV3`；`reason` 为 `nodes` 时集群有活动节点缺少 `rules-v2` 或 `rules-v3` |
-
-- `rules.save` 发布网站所在集群（原因 `rules_updated`），审计 `site.rules_update`；`platformRules.save` 发布所有集群，审计 `platform.rules_update`；`rules.restore`、`platformRules.restore` 同样发布，审计 `site.rule_restore`、`platform.rule_restore`（规则 `id` 与名称、版本号）；`bulkRedirects.save` 发布网站所在集群（`rules_updated`），审计 `site.bulk_redirects_update`（条目数）。
-- 用到函数、新字段、值表达式、查询参数编辑、`origin` 或 `compression` 动作、`config` 阶段的新字段、`gzip: true`、非构建器形状的缓存规则条件、`browserTtlSeconds`、批量重定向或非默认源站组的配置要求节点能力 `rules-v2`。
-- 用到 `rules-v3` 字段（`http.request.cookies[…]`、`http.request.uri.args[…]`、`http.referer`、`http.user_agent`、`http.request.version`、`http.request.scheme`、`http.request.id`、`http.request.timestamp.sec`、`edge.server_port`、`ip.geoip.as_name`、`http.response.cache_status`）、函数（`url_encode`、`base64_encode`、`base64_decode`、`md5`、`sha1`、`sha256`、`substring`、`to_string`）、`wildcard` / `strict wildcard`、报头或查询参数的 `expression`、`append`、`statusCode: 303`，或错误页模板含 `{{time}}`、`{{path}}` 的配置要求节点能力 `rules-v3`。批量重定向的 `statusCode` 仍为 301、302、307、308。
-- `rules.validate` 的 `code` 增加 `cookie_name`、`argument_name`、`integer_argument`（`params` 为 `min`、`max`）。
-
-| 错误代码 | 状态 | 场景 |
-| --- | --- | --- |
-| `ORIGIN_HOST_HEADER_INVALID` | 400 | `origin` 动作的 `hostHeader` 不是节点接受的主机名或 IP；`data.hostHeader` |
-| `RULE_INVALID` | 400 | `origin` 动作选择了网站没有的源站组，或全局规则选择源站组；`sites.update` 移除仍被规则选择的源站组；已保存的规则或缓存规则条件无法编译 |
-| `BULK_REDIRECT_HOST_UNKNOWN` | 400 | `域名/路径` 来源的域名不是网站的域名（网站泛域名下一级的子域名可以）；`data.hosts`（逗号分隔，最多 5 个） |
-| `IP_LIST_REFERENCE_UNKNOWN` | 404 | 规则或缓存规则条件引用的 IP 名单不存在；`data.lists` 为名单名称（前 5 个） |
-| `NODE_CAPABILITY_REQUIRED` | 409 | 集群内有活动节点缺少 `rules-v2` 或 `rules-v3`（服务账号与后台任务发布时）；`data.features`、`data.nodes` |
-| `SITE_NOT_FOUND` | 404 | 网站不存在或不在调用方范围内 |
-
-```bash
-curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
-  -d '{"redirects":[{"source":"/old","target":"/new","statusCode":301,"preserveQuery":true}]}' \
-  https://cdn-admin.example.com/api/v1/sites/<网站 ID>/bulk-redirects
-curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
-  -d '{"expression":"regex_replace(http.request.uri.path, \"^/old/\", \"/new/\")","phase":"redirect","kind":"value"}' \
-  https://cdn-admin.example.com/api/v1/rules/validate
-```
-
-行为见 [规则、IP 名单与 GeoIP](../guide/rules.md) 与 [源站与缓存](../guide/origins-and-cache.md#源站组)。
-
-### 用量
-
-每个网站、每个 UTC 5 分钟窗口 `[windowStart, windowEnd)` 一条记录，数值为该窗口内全部节点上报的分钟统计之和。
-
-| 过程 | 端点 | 查询参数 |
-| --- | --- | --- |
-| `usage.list` | `GET /usage` | `from`、`to`（按 5 分钟对齐，UTC，半开区间）、`siteId`、`cursor`、`limit`（1–5000，默认 1000） |
-| `usage.changes` | `GET /usage/changes` | `afterSeq`（默认 `"0"`）、`limit`（1–5000，默认 1000） |
-
-记录字段：
-
-| 字段 | 说明 |
-| --- | --- |
-| `id` | `<siteId>.<windowStart 的 Unix 秒>`，同一网站同一窗口永远相同 |
-| `siteId` | 网站删除后记录仍保留 |
-| `windowStart`、`windowEnd` | ISO 8601 |
-| `requests`、`bytesSent`、`bytesReceived` | 十进制整数字符串（出站、入站字节），超过 2^53 时仍精确 |
-| `revision` | 从 1 开始；重算后数值变化时加 1 |
-| `seq` | 全局单调递增（十进制字符串，可有间隔）；创建或修订时分配 |
-| `updatedAt` | 最近一次写入时间 |
-
-- `usage.list` 按（窗口，网站）排序，响应 `{ items, nextCursor, completeUntil }`；`nextCursor` 为 `null` 时没有下一页。`from`、`to` 未对齐或 `to` 不晚于 `from`：400 `USAGE_RANGE_INVALID`；游标无效：400 `USAGE_CURSOR_INVALID`。
-- `usage.changes` 按 `seq` 返回 `afterSeq` 之后创建或修订的记录，响应 `{ items, lastSeq, completeUntil }`；下次以 `lastSeq` 作为 `afterSeq`。被修订的记录会再次出现。
-- 没有流量的窗口没有记录。
-- 窗口结束后每分钟重算一次；迟到数据改变数值时 `revision` 加 1 并分配新的 `seq`，数值不变时两者都不变。同一统计批次重复上报不改变结果。
-- 保留期默认 100 天，**系统设置 → 用量** 可调（35–400 天）。
-
-`completeUntil`（ISO 8601 或 `null`）：结束时间不晚于它的窗口，已包含当时所有活动节点的数据。
-
-| 规则 | 说明 |
-| --- | --- |
-| 节点水位 | 节点在全部统计批次确认后上报 `complete_until`：最近一次成功取出统计时所在分钟的开始，之前的分钟都已上报。控制台不可达时节点照常把统计存入本地缓冲，节点退出前先存下包括当前分钟在内的统计；缓冲超出上限丢弃过统计时，水位停在丢弃的最早一分钟，24 小时后恢复 |
-| 参与的节点 | 状态为启用、且在离线阈值内上报过心跳的节点。阈值默认 60 分钟，**系统设置 → 用量** 可调（5–1440 分钟） |
-| 计算 | 参与节点水位的最小值；从未上报水位的节点（旧版本节点）按注册时间计；落后超过离线阈值的节点按「当前时间减阈值」计（与离线节点一样，它之后补报的数据按修订处理）；尚未重算的窗口不计入；向下取整到 5 分钟 |
-| 单调 | 只前移不后退。离线超过阈值的节点恢复后，它补报的更早窗口的数据按修订处理（`revision` 加 1） |
-| 停用或删除的节点 | 不参与 |
-
-### 集群与概览
-
-| 过程 | 端点 | 说明 |
-| --- | --- | --- |
-| `clusters.list`、`clusters.get` | `GET /clusters`、`GET /clusters/{id}` | 集群与其概要 |
-| `clusters.rollout` | `GET /clusters/{id}/rollout` | 配置金丝雀的策略、当前发布与金丝雀节点 |
-| `clusters.rollbackPreview` | `GET /clusters/{id}/rollback-preview` | 回滚到查询参数 `revision` 会发布的变化；按回滚的规则拒绝，不写入 |
-| `overview.get` | `GET /overview` | 概览：集群、节点与网站数，最近发布，待处理事项 |
-| `hiddenCards.get`、`hiddenCards.update` | `GET /hidden-cards`、`PATCH /hidden-cards` | 调用方在概览与网站统计中隐藏的卡片 |
-| `settings.nodeChannelCheck` | `GET /settings/node-channel-check` | 控制台对自己的节点通道地址做的 TLS 握手检查 |
-
-`clusters:read` 服务账号可以调用 `clusters.list`、`clusters.get`；其他过程服务账号不能调用（403 `SERVICE_ACCOUNT_FORBIDDEN`）。除 `hiddenCards.update` 外都是 `GET`，只读 AccessKey 可以调用。
-
-| 过程 | 响应字段 |
-| --- | --- |
-| `clusters.list`、`clusters.get` | `liveNodeCount`：在线的已启用节点数；`appliedNodeCount`：其中运行目标版本的节点数（金丝雀进行中时，金丝雀节点的目标为候选版本，其他节点为稳定版本） |
-| `clusters.rollout` | `candidateChanges`：发布进行中时为 `{ sites: { added, changed, removed }, reasons }`，`sites` 为候选版本相对稳定版本新增、修改、移除的网站（`[{ id, name }]`），`reasons` 为稳定版本之后发布的版本（与 `GET /clusters/{id}/revisions` 的元素相同，原因不重复）；没有进行中的发布时为 `null` |
-| `clusters.rollbackPreview` | `{ revision, currentRevision, unchanged, sites: { added, changed, removed } }`：`currentRevision` 为集群最新版本（没有时为 `null`）；`unchanged` 为 `true` 时内容与最新版本相同；`sites` 为相对最新版本的变化 |
-| `overview.get` | `attention`：`[{ kind, clusterId, clusterName, revision, at, count, version }]`，按下列 `kind` 的顺序排列，没有事项时为 `[]`。`kind`：`nodes_unhealthy`、`dns_failed`、`dns_blocked`、`upgrade_failed`、`canary_rolled_back`、`canary_awaiting_promotion`、`canary_running`、`nodes_lagging`、`nodes_no_address`。`revision`：DNS 版本或候选版本；`at`：`canary_running` 的窗口结束时间、`canary_rolled_back` 的回滚时间；`count`：节点数；`version`：`upgrade_failed` 的目标版本。不适用的字段为 `null`、`0` 或空字符串 |
-| `hiddenCards.get`、`hiddenCards.update` | `{ overview, site }`：概览与网站「统计」页签（所有网站共用）隐藏的卡片 id，按页面上的顺序，未列出的卡片都显示。`update` 只替换请求中给出的页面（至少一个，否则 400 `BAD_REQUEST`），id 去重；不属于该页面的 id 为 400 `BAD_REQUEST`。概览：`live-requests`、`live-egress`、`live-hit-ratio`、`live-nodes`、`requests`、`data-transfer`、`edge-network`、`hit-ratio`、`peak-bandwidth`、`4xx-rate`、`5xx-rate`、`status-codes`、`top-sites`、`top-nodes`、`top-countries`、`top-urls`、`top-ips`、`revisions`、`recents`、`sites`、`nodes`；网站：`requests`、`data-transfer`、`hit-ratio`、`peak-bandwidth`、`4xx-rate`、`5xx-rate`、`status-codes`、`top-urls`、`top-ips`、`countries`、`asns`、`referers`、`clients`、`protocols` |
-| `settings.nodeChannelCheck` | `{ url, result, checkedAt }`：`url` 为当前的节点通道地址；`result` 为 `ok`（证书链含节点通道 CA）、`unreachable`（3 秒内没有完成握手）、`mismatch`（出示了其他证书链，或地址不是 `https`）或 `refused`（系统设置中保存的地址解析到出站策略不允许的特殊用途地址，不连接）。结果缓存 30 秒，只作提示 |
-
-| 错误代码 | 状态 | 场景 |
-| --- | --- | --- |
-| `ROLLBACK_RESOURCE_UNAVAILABLE` | 409 | `rollbackPreview` 与 `rollback`：所选版本引用的网站、域名、证书或 IP 名单已删除或不可用，或证书已过期 |
-| `REVISION_NOT_FOUND` | 404 | 集群没有该版本 |
-| `CLUSTER_NOT_FOUND` | 404 | 集群不存在 |
-
-行为见[集群与系统](../guide/system.md)与[接入节点](../deploy/nodes.md#节点通道连接检查)。
-
-### 节点通道地址
-
-| 过程 | 端点 | 说明 |
-| --- | --- | --- |
-| `settings.nodeChannel` | `GET /settings/node-channel` | `{ url, effectiveUrl, source, serverName, previousNames, webSocket, adoption }`：`url` 为系统设置中保存的地址（未保存时为空字符串）；`effectiveUrl` 为安装命令使用、已注册节点与探针跟随的地址，`serverName` 为节点在该地址校验的名称；`source` 为 `setting`、`environment`（`EDGEWEIR_NODE_API_URL`）或 `default`；`previousNames` 为此前地址留在证书中的名称 `[{ name, nodes, probes }]`（不含环境变量的名称，计数为仍用它连接的节点与探针）；`webSocket` 为 `{ open, closable, nodes, probes }`；`adoption` 为 `{ nodes, nodesCurrent, probes, probesCurrent }`（证书仍有效的节点与探针，以及已用上 `effectiveUrl` 的） |
-| `settings.setNodeChannel` | `PUT /settings/node-channel` | 请求体 `{ url }`：`https://`、`wss://` 或 `ws://主机[:端口]`，不含路径、查询参数、片段与账号，否则 400；保存为 origin 形式。空字符串清除保存的地址。响应同 `settings.nodeChannel`。立即生效，节点通道证书加入新地址的名称；写审计 `system.node_channel_update` |
-| `settings.removeNodeChannelName` | `DELETE /settings/node-channel/names/{name}` | 从证书中去掉 `previousNames` 中的名称，响应同 `settings.nodeChannel`；仍有节点或探针用它连接时 409 `NODE_CHANNEL_NAME_IN_USE`（`data`：`nodes`、`probes`），不是此前地址留下的名称（含当前地址与环境变量的名称）时 404 `NODE_CHANNEL_NAME_NOT_FOUND`；写审计 `system.node_channel_update`（`removedName`） |
-| `settings.closeNodeChannelWebSocket` | `DELETE /settings/node-channel/websocket` | 关闭此前 `wss://`、`ws://` 地址打开的 WebSocket 入口，响应同 `settings.nodeChannel`；仍有节点或探针经入口连接时 409 `NODE_CHANNEL_WEBSOCKET_IN_USE`，`EDGEWEIR_NODE_API_WEBSOCKET=true` 或当前地址需要入口时 409 `NODE_CHANNEL_WEBSOCKET_REQUIRED`；写审计 `system.node_channel_update`（`webSocket: closed`） |
-
-服务账号不能调用（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `settings.nodeChannel`。已注册的节点与探针（`channel-follow-v1`）跟随 `effectiveUrl`，见 [更换节点通道地址](../deploy/networking.md#更换节点通道地址)。
-
-`nodes.list`、`nodes.get` 与 `probes.list` 的每一项带 `channel`（还没有连接过记录它的控制台时为 `null`）：`url`、`serverName`（在用的地址；不支持 `channel-follow-v1` 的节点 `url` 为 `null`）、`fallbackUrl`、`fallbackServerName`、`onFallback`、`source`（`enroll`、`console`、`command`）、`switchedAt`、`error`（`{ code, message, url, serverName, at }`，`code` 为 `unreachable`、`websocket_refused`、`tls_untrusted`、`rejected`、`wrong_identity`、`invalid_address` 之一）、`observedServerName`、`observedWebSocket`、`observedAt`（最近一次连接的 TLS 服务器名与是否经 WebSocket 入口）。
-
-### 节点升级
-
-| 过程 | 端点 | 说明 |
-| --- | --- | --- |
-| `upgrades.release` | `GET /node-releases/{version}` | 发布源中该版本各架构的发布物 |
-| `upgrades.latestVersion` | `GET /node-upgrades/latest-version` | `{ version }`：发布源的最新版本，无法得知时为 `null`；缓存 10 分钟 |
-| `upgrades.list` | `GET /node-upgrades` | 升级任务；查询参数 `clusterId` |
-| `upgrades.create` | `POST /node-upgrades` | `{ version, nodeGroupId }`：`version` 开头的 `v` 会被去掉，`nodeGroupId` 为金丝雀节点组 |
-| `upgrades.promote` | `POST /node-upgrades/{id}/promote` | 推进剩余节点 |
-| `upgrades.cancel` | `POST /node-upgrades/{id}/cancel` | 取消「等待金丝雀组」与「待执行」的节点任务 |
-
-服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
-
-| 错误代码 | 状态 | 场景 |
-| --- | --- | --- |
-| `UPGRADE_RELEASE_UNAVAILABLE` | 502 | 发布源中读不到该版本的清单，或清单中没有支持的归档 |
-| `UPGRADE_NODES_UNAVAILABLE` | 409 | 集群中有已启用节点不满足升级前提；`data.nodes` 列出这些节点（最多 10 个，其余为「+N」） |
-| `UPGRADE_CANARY_EMPTY` | 409 | 所选节点组没有已启用节点 |
-| `UPGRADE_TOO_MANY_NODES` | 409 | 集群的已启用节点超过 `data.limit`（1000） |
-| `UPGRADE_BUSY` | 409 | 节点已有未完成的升级，或取消时有节点正在升级；`data.nodes` 列出这些节点 |
-| `UPGRADE_FINISHED` | 409 | 取消已结束的升级任务 |
-| `UPGRADE_NOT_READY` | 409 | 金丝雀组尚未满足推进条件 |
-| `UPGRADE_NOT_FOUND` | 404 | 升级任务不存在 |
-
-前提、状态与节点侧校验见[节点升级](../guide/node-upgrades.md)。
-
-### 区域探针、调度地址与智能调度
-
-| 过程 | 端点 | 说明 |
-| --- | --- | --- |
-| `probes.list` | `GET /probes` | 全部探针 |
-| `probes.createToken` | `POST /probe-tokens` | 一次性探针注册令牌 |
-| `probes.update` | `PATCH /probes/{id}` | 改名、停用或启用 |
-| `probes.delete` | `DELETE /probes/{id}` | 删除探针并吊销其证书 |
-| `probes.results` | `GET /probe-results` | 最新探测结果 |
-| `settings.probes`、`settings.setProbes` | `GET`、`PUT /settings/probes` | 探测设置 |
-| `nodes.setAddresses` | `PUT /nodes/{id}/addresses` | 节点的调度地址与级别 |
-| `nodes.setProbe` | `PUT /nodes/{id}/probe` | 节点兼任探针 |
-| `scheduling.list` | `GET /scheduling/rules` | 调度规则；查询参数 `clusterId`（可选） |
-| `scheduling.create` | `POST /scheduling/rules` | 新建规则，返回 201 |
-| `scheduling.update` | `PATCH /scheduling/rules/{id}` | 只修改给出的字段 |
-| `scheduling.delete` | `DELETE /scheduling/rules/{id}` | 删除规则；生效中的动作恢复 |
-| `scheduling.preview` | `GET /clusters/{clusterId}/scheduling/preview` | 按当前指标预览全部规则，不写入 |
-
-服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。`POST /probe-tokens` 不接受 `Idempotency-Key`（见[幂等键](#幂等键)）。
-
-| 请求 | 字段 |
-| --- | --- |
-| `POST /probe-tokens` | `name`（1–64 字符）、`regionId`、`ttlMinutes`（5–10080，默认 60） |
-| `PATCH /probes/{id}` | `name`（1–64 字符）、`enabled`，均可选。停用时删除该探针的结果 |
-| `GET /probe-results` | 查询参数 `probeId`（探针 ID，或兼任探针的节点 ID）、`nodeId`（被探测的节点），均可选 |
-| `PUT /settings/probes` | 整体替换：`intervalSeconds`（5–60）、`timeoutMs`（500–10000，不超过 `intervalSeconds × 1000`）、`attempts`（1–10）、`lossPercent`（1–100）、`ipDownSeconds`、`ipUpSeconds`（5–3600） |
-| `PUT /nodes/{id}/addresses` | `addresses`：整体替换，至多 8 个 `{ address, level }`；`address` 为单个单播 IP（可为私网地址），不重复；`level` 为 0（主）、1（备 1）、2（备 2），非空时须有 `level` 0；`[]` 恢复为上报地址。发布集群的 DNS 版本（原因 `manual`） |
-| `PUT /nodes/{id}/probe` | `enabled`；关闭时删除该节点的探测结果 |
-| `POST /scheduling/rules` | `clusterId`、`lineName`（集群 DNS 绑定中的线路名称，`null` 为全部线路，默认 `null`；`backup_group` 必须有）、`name`（1–100 字符）、`enabled`（默认 `true`）、`match`（`all` 默认 / `any`）、`conditions`、`action`（`remove_node`、`backup_group`、`backup_ip`）、`holdSeconds`、`recoverSeconds`（0–86400，默认 300） |
-| `conditions[]` | 1–8 个：`metric`（`cpu_percent`、`load1`、`memory_percent`、`egress_mbps`、`connections`、`probe_loss_percent`、`probe_latency_ms`）、`aggregate`（`avg` 默认 / `max` / `min`）、`comparator`（`gt`、`ge`、`lt`、`le`）、`threshold`（0–10¹²）、`durationSeconds`（0–3600，默认 0）、`regionId`（只用于 `probe_loss_percent`、`probe_latency_ms`，默认 `null`） |
-| `PATCH /scheduling/rules/{id}` | `POST` 中除 `clusterId` 外的字段，均可选。`enabled: false`，或 `lineName`、`match`、`action`、`conditions` 与当前不同时，生效中的动作先恢复，状态重新开始；只修改 `name`、`holdSeconds`、`recoverSeconds` 时不影响。`lineName` 只在修改 `lineName` 或 `action` 时检查 |
-
-| 过程 | 响应 |
-| --- | --- |
-| `probes.list`、`probes.update` | 探针：`id`、`name`、`regionId`、`regionName`、`regionCode`、`enabled`、`online`、`lastSeenAt`、`enrolledAt`、`hostname`、`agentVersion`、`os`、`arch`、`certNotAfter`、`targets`、`lastRound`（`{ checkedAt, results, failed, lossPercent, avgRttMs }`，没有结果时为 `null`）、`createdAt` |
-| `probes.createToken` | `tokenId`、`token`（`ewp_…`，只返回一次）、`expiresAt`、`serverUrl`（节点通道）、`caSha256`、`command`（`docker run` 启动命令） |
-| `probes.delete`、`scheduling.delete` | `{ ok: true }` |
-| `probes.results` | 按节点、地址、端口、探测方排序，至多 5000 条：`proberKind`（`probe` / `node`）、`proberId`、`proberName`、`regionId`、`regionName`、`nodeId`、`nodeName`、`address`、`port`、`method`（`tcp` / `http` / `https`）、`sent`、`lost`、`lossPercent`、`rttMs`（成功尝试的中位数，全部丢失时为 0）、`error`（`timeout`、`refused`、`reset`、`tls`、`status`、`unreachable`）、`checkedAt` |
-| `settings.probes`、`settings.setProbes` | 探测设置；从未保存时为默认值 10、3000、3、50、30、60 |
-| `nodes.*` 返回的节点 | 增加 `probeEnabled`；`metrics`（`{ cpuPercent, load1, load5, load15, memoryUsedBytes, memoryTotalBytes, egressBps, activeConnections, reportedAt }`，最近一次心跳没有指标（节点缺少 `metrics-v1`）时为 `null`）；`schedulingAddresses`（`[{ address, level, source, reachable }]`，`source` 为 `reported` 或 `configured`）；`schedulingLevel`（DNS 当前使用的级别）；`remoteAddress`（节点注册与最近一次心跳连接的源地址，经代理时为代理的地址）；`dnsIssue`（没有调度地址时为 `no_public_address`，否则 `null`）；`authError`（自最近一次心跳以来节点通道拒绝该节点自己证书的原因，如 `CERT_HAS_EXPIRED`，否则 `null`） |
-| `scheduling.list`、`scheduling.create`、`scheduling.update` | 规则：`id`、`clusterId`、请求中的字段（条件补齐默认值）、`activeNodes`（`[{ nodeId, nodeName, since }]`，生效中与恢复中的节点）、`createdAt`、`updatedAt` |
-| `scheduling.preview` | `{ clusterId, evaluatedAt, rules }`。每条规则：`ruleId`、`ruleName`、`enabled`、`lineName`、`match`、`action`、`nodes`。每个节点：`nodeId`、`nodeName`、`state`（`idle`、`pending`、`active`、`recovering`）、`conditions`（条件字段与 `value`（没有数据为 `null`）、`holds`、`heldSeconds`、`satisfied`）、`matches`、`inEffect`、`wouldActivate`、`wouldRecover`、`activeSince`、`recoveringSince`、`recoversAt` |
-
-DNS 绑定与记录的新增字段：
-
-| 请求或响应 | 字段 |
-| --- | --- |
-| `PUT /clusters/{clusterId}/dns` 的 `binding.lines[]` | 增加 `resolutionLine`（`default` 默认、`telecom`、`unicom`、`mobile`、`edu`、`overseas`）、`backupNodeGroupIds`（本集群的节点组，至多 4 个，不重复，不含本线路的节点组，默认 `[]`）、`minHealthyIps`（1–64，默认 1）。`GET` 对此前保存的线路返回默认值 |
-| `GET /clusters/{clusterId}/dns` 与 `GET /clusters/{clusterId}/dns/export` 的 `records[]` | 增加 `line`：记录的解析线路；默认线路的记录没有此字段 |
-| DNS 版本（`revision`、`blocked`、`GET /clusters/{clusterId}/dns/revisions` 等） | `reason` 为 `manual`、`health`、`rollback`、`force` 或 `scheduling`；增加 `reasonParams`：`scheduling` 为 `ruleId`、`rule`、`nodeId`、`node`、`action`、`event`（`activated` / `recovered`），其他原因为 `{}` |
-| `GET /dns/catalog` | `capabilities.lines` 由布尔值改为服务商支持的解析线路数组 |
-
-| 错误代码 | 状态 | 场景 |
-| --- | --- | --- |
-| `DNS_LINE_UNSUPPORTED` | 400 | 绑定线路的 `resolutionLine` 不在服务商账号支持的线路中；`data.line` |
-| `REGION_IN_USE` | 409 | 删除仍有探针的区域（`regions.delete`）；`data.probes` 为探针数 |
-| `PROBE_NOT_FOUND` | 404 | 探针不存在；`probes.results` 的 `probeId` 既不是探针也不是节点 |
-| `NODE_REGION_REQUIRED` | 409 | `nodes.setProbe` 开启时，节点的节点组没有区域 |
-| `NODE_ADDRESS_INVALID` | 400 | 调度地址不是单个单播 IP（CIDR、主机名、回环、链路本地、组播等）或重复；`data.address` |
-| `SCHEDULING_RULE_NOT_FOUND` | 404 | 规则不存在 |
-| `SCHEDULING_RULE_INVALID` | 400 | `backup_group` 没有 `lineName`，或 `lineName` 不在集群的 DNS 绑定中 |
-| `REGION_NOT_FOUND` | 404 | `probes.createToken` 的 `regionId` 或条件的 `regionId` 不存在 |
-| `NODE_NOT_FOUND` | 404 | 节点不存在，含 `probes.results` 的 `nodeId` |
-| `CLUSTER_NOT_FOUND` | 404 | 规则或预览的集群不存在 |
-| `BAD_REQUEST` | 400 | 输入校验失败，例如 `timeoutMs` 超过探测间隔、调度地址没有 `level` 0、非探测指标带 `regionId` |
-
-行为见[区域探针与智能调度](../guide/scheduling.md)与[DNS 调度与告警](../guide/dns-and-alerts.md#按解析线路写入)。
-
-### 监听端口与访客 IP
-
-| 过程 | 端点 | 说明 |
-| --- | --- | --- |
-| `clusters.listenPorts` | `GET /clusters/{clusterId}/listen-ports` | 集群的附加 HTTP / HTTPS 端口与缺少 `edge-ports-v1` 的节点 |
-| `clusters.setListenPorts` | `PUT /clusters/{clusterId}/listen-ports` | 整体替换附加端口，发布配置版本 |
-| `clusters.clientIp` | `GET /clusters/{clusterId}/client-ip` | 访客 IP 设置与缺少 `client-ip-v1` 的节点 |
-| `clusters.setClientIp` | `PUT /clusters/{clusterId}/client-ip` | 替换访客 IP 设置，发布配置版本 |
-
-服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
-
-| 请求 | 字段 |
-| --- | --- |
-| `PUT /clusters/{clusterId}/listen-ports` | `httpPorts`、`httpsPorts`：各最多 16 个 1–65535 的端口，不含 80、443，去重排序；同一端口不能同时出现在两者中（`LISTEN_PORT_CONFLICT`），不能在端口池内（`LISTEN_PORT_IN_POOL`），移除仍被网站使用的端口返回 `LISTEN_PORT_IN_USE` |
-| `PUT /clusters/{clusterId}/client-ip` | `settings`：`mode`（`direct` / `proxy_protocol` / `header`，默认 `direct`）；`header` 模式必填 `trustedCidrs`（1–64 个 IP 或 CIDR，规范化、去重排序；不接受 IPv4 映射的 IPv6）与 `header`（小写报头名，`[a-z0-9-]`，1–64 字符，不能是 hop-by-hop、`Host`、`Cookie`、`Authorization`、`X-Request-Id` 或 `X-Edgeweir-*`）；`direct` 模式可选 `dropForwardedFor` |
-
-网站的端口经 `PATCH /sites/{id}` 的 `ports`（`{ http, https }`）修改，`POST /sites` 可选同一字段（省略为 80 与 443）；网站响应带 `ports`。错误码：`SITE_PORT_UNAVAILABLE`、`SITE_PORTS_EMPTY`、`SITE_HTTPS_PORT_NEEDS_CERTIFICATE`。`PUT /sites/{id}/https` 的设置新增 `redirectStatus`（301、302、303、307、308，默认 301）、`redirectPort`（443 或网站的 HTTPS 端口，默认 443，`HTTPS_REDIRECT_PORT_INVALID`）与 `redirectExcludedDomains`（网站的域名，最多 50 个，`HTTPS_REDIRECT_DOMAIN_INVALID`）。`GET /sites/{id}/features` 新增 `edgePorts`、`clientIp`；`GET /clusters` 的集群新增 `clientIpMode`。
-
-### 域名、未知域名与 CNAME 前缀
-
-网站的 `domains`（`POST /sites`、`PATCH /sites/{id}`）接受四种写法：`a.com`、`*.a.com`（最左一级）、`.a.com`（任意层级子域名，不含 `a.com`）、`~正则`（对小写 Host 整串匹配，最长 256 字符，字母小写，不含 `"`、`\\`、空白与 `{n,m}` 之外的逗号，最多两个可重复的量词，分支与可选部分的组合最多 16 种；详见[域名](../guide/domains.md)）；1–50 个，正则最多 10 个。Unicode 主机名按 UTS #46（非过渡处理）转为 Punycode 保存，响应只返回 Punycode；转换失败返回 400 `DOMAIN_INVALID`（`data.domain`）；写法不合法或正则超出共用子集（如前瞻 `(?=…)`）属于输入校验错误（400 `BAD_REQUEST`）。同一写法的同一名称只能属于一个网站（`DOMAIN_IN_USE`）。`sites.list` 的 `search` 对 Unicode 搜索词另按 Punycode 与解码后名称的一部分匹配。网站响应新增 `cnamePrefix`；`GET /sites/{id}/features` 新增 `domainsV2`（集群的活动节点都支持 `domains-v2` 时可用）。刷新任务按节点的方式找网站：在每个集群的已启用网站中按优先级查找，几个集群都服务一个主机名时任务包含每个集群的那个网站；预热与站点地图预热只交给在全部集群的网站（含已停用的）中按优先级选出的那个网站所在的集群。
-
-| 过程 | 端点 | 说明 |
-| --- | --- | --- |
-| `clusters.unknownHosts` | `GET /clusters/{clusterId}/unknown-hosts` | 未知域名设置、默认网站（`{ id, name, enabled, certificate }` 或 `null`）与缺少 `unknown-host-v1` 的节点 |
-| `clusters.setUnknownHosts` | `PUT /clusters/{clusterId}/unknown-hosts` | 替换未知域名设置，发布配置版本（原因 `unknown_hosts_updated`），审计 `cluster.unknown_hosts_update` |
-| `sites.setCnamePrefix` | `PUT /sites/{id}/cname-prefix` | 修改网站的 CNAME 前缀，返回 `{ prefix, retired: [{ prefix, expiresAt }] }`，审计 `site.cname_update` |
-| `l4Apps.setCnamePrefix` | `PUT /l4-apps/{id}/cname-prefix` | 修改 L4 应用的 CNAME 前缀，审计 `l4.cname_update` |
-
-服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
-
-| 请求 | 字段 |
-| --- | --- |
-| `PUT /clusters/{clusterId}/unknown-hosts` | `settings`：`unknownHost`、`ipAccess`（`page` / `close` / `site`，默认 `page`）；`defaultSiteId`（选了 `site` 时必填，本集群已启用的网站，否则 `DEFAULT_SITE_INVALID`；没有 `site` 时不保存）；`defaultCertificate`（只在 `unknownHost` 为 `site` 时，默认网站须有证书，否则 `DEFAULT_SITE_CERTIFICATE_REQUIRED`）；`scan`：`enabled`（默认 `false`）、`threshold`（10–10000，默认 100）、`banSeconds`（60–86400，默认 3600） |
-| `PUT /sites/{id}/cname-prefix`、`PUT /l4-apps/{id}/cname-prefix` | `prefix`：1–30 位 `[a-z0-9-]`，不以 `-` 开头或结尾；省略时生成新的随机前缀；也可以是对象自己仍在过渡期内的旧前缀。UUID 只接受对象自己升级前的 UUID 前缀，且须仍在解析：当前前缀（不修改）或仍在过渡期内的旧前缀（取回）；其他 UUID（例如以随机前缀新建的对象自己的 ID）返回 400 `CNAME_PREFIX_INVALID`。已被使用、仍在 24 小时过渡期内、为 `all` / `all-<n>` 或任一 DNS 绑定的汇总记录名与线路名时返回 409 `CNAME_PREFIX_CONFLICT`（`data.prefix`）；自动模式下，DNS 服务商区域中该名称（打开「保留网站线路别名」时含 `<线路名称>.<前缀>.<集群域名>`）已有非本集群管理的记录时同样返回（区域读取失败或 15 秒内无响应时不检查）。自动模式下从未写入 DNS 服务商（含切换前的服务商）的旧前缀不进入过渡期 |
-
-`GET /sites/{siteId}/cname` 新增 `retired`（旧名称 `{ name, expiresAt }`）；DNS 版本的 `reason` 新增 `cname`（`reasonParams.name`）与 `cname_expired`。`GET /sites/{id}/https/check` 的 `blockers` 新增 `no_certificate_names`（网站只有正则域名）。自动封禁的 `reason` 新增 `unknown_host_scan`（`scope` 为 `platform`，`siteId` 为 `null`，`trigger.metric` 为 `unknown_host_requests`）。节点能力新增 `domains-v2`、`unknown-host-v1`。
-
-### 多证书、客户端证书、会话复用与 ACME CA
-
-| 过程 | 端点 | 说明 |
-| --- | --- | --- |
-| `acmeAccounts.list` | `GET /acme-accounts` | ACME 账户：`{ id, directoryUrl, ca, email, eabKid, createdAt, certificates }`；`ca` 为内置 CA、`custom`（自定义目录）或 `null`（其他目录），`certificates` 为使用它签发的证书数 |
-| `acmeAccounts.delete` | `DELETE /acme-accounts/{id}` | 删除没有证书使用的账户（只删控制台保存的账户与私钥），审计 `acme_account.delete`；仍被使用时 409 `ACME_ACCOUNT_IN_USE`（`data.certificates`，最多 5 张），不存在时 404 `ACME_ACCOUNT_NOT_FOUND` |
-| `settings.acmeDirectory` | `GET /settings/acme-directory` | `{ url, effectiveUrl, source, eabKid, eabHmacKeySet, caPem, caSource, caaIdentities }`：`url`、`eabKid`、`caPem` 为保存的值（未保存为空字符串），`effectiveUrl` 为生效的目录，`source` 与 `caSource` 为 `setting`、`environment`（`EDGEWEIR_ACME_DIRECTORY` / `EDGEWEIR_ACME_CA_FILE`）或 `default`；HMAC 密钥只返回是否已保存 |
-| `settings.setAcmeDirectory` | `PUT /settings/acme-directory` | 见下表；响应同 `settings.acmeDirectory`，审计 `system.acme_directory_update` |
-
-服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
-
-| 请求 | 字段 |
-| --- | --- |
-| `PUT /settings/acme-directory` | `url`：`https://` URL（不含账号、片段，最长 2048），空字符串清除保存的设置；保存前读取目录（10 秒、最大 1 MiB），不是 ACME 目录时 400 `ACME_DIRECTORY_INVALID`，允许内网地址。`eabKid`、`eabHmacKey`：同时提供或都为空；只提供与已保存相同的 `eabKid` 时保留原密钥，否则 400 `ACME_DIRECTORY_EAB_INCOMPLETE`。`caPem`：1–10 张 PEM 证书（最大 64 KiB），否则 400 `ACME_DIRECTORY_CA_INVALID` |
-| `POST /certificates/request` | 新增 `ca`（`letsencrypt` / `zerossl` / `google` / `custom`；省略时取 `GET /certificates/settings` 的 `defaultCa`）、`keyType`（`ec256` / `rsa2048`，默认 `ec256`）。`zerossl`、`google` 须带 `eabKid` 与 `eabHmacKey`；`custom` 可省略它们而使用系统设置中的 EAB；没有配置自定义目录时 409 `ACME_DIRECTORY_NOT_CONFIGURED` |
-| `PUT /sites/{id}/https` | `settings` 新增 `additionalCertificateIds`（0–3 个证书 ID，不重复、不含 `certificateId`；`certificateId` 为 `null` 时清空）与 `clientCertificate`：`mode`（`off` / `optional` / `required`，默认 `off`）、`caPem`（最多 65536 字节，非 `off` 时须为 1–10 张当前有效的 CA 证书，否则 400 `CLIENT_CA_INVALID`）、`depth`（1–5，默认 2）、`forwardHeaders`（默认 `false`）。网站每个域名须被这些证书之一覆盖（400 `CERTIFICATE_DOMAIN_MISMATCH`）；每张证书须已签发、未过期（409 `CERTIFICATE_UNAVAILABLE`）；客户端证书与 `http3` 同时开启时 400 `CLIENT_CERTIFICATE_HTTP3` |
-
-`GET /certificates/settings` 新增 `acmeDirectory`（生效的自定义目录，没有时为 `null`）、`acmeDirectoryEab`（自定义目录保存了 EAB）与 `defaultCa`（`letsencrypt`，自定义目录只来自环境变量时为 `custom`）；`GET /sites/{id}/https/check` 的 `ca` 增加 `google`、`custom`，省略时为 `defaultCa`。`GET /sites/{id}/features` 新增 `multiCertificate`、`clientCertificate`。证书的 `lastError` 新增 `acme_directory_not_configured`。配置版本的原因新增 `session_ticket_keys_rotated`，审计新增 `cluster.session_ticket_keys_rotate`。节点能力新增 `multi-certificate-v1`、`client-cert-v1`；节点通道新增 `GetSessionTicketKeys`。
-
-### 访问鉴权
-
-| 过程 | 端点 | 说明 |
-| --- | --- | --- |
-| `authRules.get` | `GET /sites/{id}/auth-rules` | `{ siteId, rules, updatedAt, formerIdentityHeaders }`（`formerIdentityHeaders`：节点仍从请求中删除的、已删除规则的身份头）；每条规则 `{ id, kind, enabled, scope, basic, forward, url }`，`kind` 为 `basic`、`forward`、`url_a`–`url_d`，不属于该类型的部分为 `null`。Basic 只返回用户名（`users: [{ name }]`），URL 鉴权只返回 `backupKey`（是否设置了备用密钥）；密码哈希与密钥从不返回 |
-| `authRules.update` | `PUT /sites/{id}/auth-rules` | 整体替换，最多 16 条，按数组顺序匹配；可带 `expectedUpdatedAt`（不一致 409 `UPDATED_AT_MISMATCH`）。发布配置版本（原因 `site_auth_updated`），审计 `site.auth_update` |
-| `authRules.forgetIdentityHeaders` | `POST /sites/{id}/auth-rules/forget-identity-headers` | `{ names, expectedUpdatedAt? }` → 同 `get`：不再清除这些已删除规则的身份头（`get` 的 `formerIdentityHeaders`，当前规则设置的头除外）；有变化时发布配置版本（原因 `site_auth_updated`），审计 `site.auth_identity_forget` |
-| `authRules.signUrl` | `POST /sites/{id}/auth-rules/{ruleId}/sign` | `{ url, validitySeconds? }` → `{ url, expiresAt }`：用规则的主密钥签名，`url` 为以 `/` 开头的路径或网站域名的 `http(s)` 网址；审计 `site.auth_sign_url` |
-| `authRules.failures` | `GET /sites/{id}/auth-rules/failures?range=` | `{ requests, unsupportedNodes }`：时间范围内被鉴权拒绝的请求数；`unsupportedNodes` 为不上报的活动节点数（缺少 `access-auth-v1`） |
-
-服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`（生成签名 URL 是 `POST`）。
-
-| 字段 | 取值 |
-| --- | --- |
-| `id` | 省略为新规则；已有规则的 ID 沿用它保存的密码与密钥，不属于该网站或重复时 404 `AUTH_RULE_NOT_FOUND` |
-| `kind`、`enabled` | 见上；`enabled` 默认 `true`。每条规则只带与 `kind` 对应的 `basic`、`forward` 或 `url` |
-| `scope` | `domains`（网站的域名，写法同 `GET /sites/{id}` 的 `domains`；不属于网站时 400 `AUTH_DOMAIN_UNKNOWN`）、`pathPrefixes`（≤ 32）、`extensions`（≤ 64，不带点）、`excludePathPrefixes`（≤ 32） |
-| `basic` | `realm`（1–64 字符，不含 `"`、`\`）、`keepAuthorization`（默认 `false`）、`userHeader`（默认 `false`）、`users`：1–100 个 `{ name, password? }`；`password` 8–128 字符，省略时保留该用户已保存的密码，新用户省略时 400 `AUTH_PASSWORD_REQUIRED`（`data.user`） |
-| `forward` | `url`（`http(s)`，IP 字面量按源站地址策略检查，不允许时 400 `ORIGIN_ADDRESS_FORBIDDEN`）、`method`（`GET` / `HEAD`）、`timeoutMs`（100–10000，默认 5000）、`requestHeaders`（≤ 16，默认 `authorization`、`cookie`）、`responseHeaders`（≤ 8）、`cacheSeconds`（0–300）、`passRedirects`、`allowUnavailable` |
-| `url` | `validitySeconds`（1–31536000，默认 1800）、`skewSeconds`（0–600，默认 300）、`signParam`、`timeParam`（`[A-Za-z0-9_-]{1,32}`，默认 `sign`、`t`；D 的两者不能相同）、`primaryKey`（16–128 个可打印 ASCII，省略时保留已保存的主密钥，没有时 400 `AUTH_KEY_REQUIRED`）、`backupKey`（省略保留，`null` 删除） |
-
-签名 URL 的错误：规则不是 URL 鉴权 400 `AUTH_RULE_NOT_URL`；网址不是路径或网站域名的 `http(s)` 网址 400 `AUTH_SIGN_URL_INVALID`；`validitySeconds` 超过规则的有效期 400 `AUTH_SIGN_VALIDITY`（`data.max`）。`GET /sites/{id}/features` 新增 `accessAuth`。节点能力新增 `access-auth-v1`；节点通道的 `GetOriginCredentials` 同时返回鉴权规则的密钥，`ReportStats` 的 `MinuteStats.auth_failures` 为被拒绝的请求数。
-
-### 访问控制
-
-| 过程 | 端点 | 说明 |
-| --- | --- | --- |
-| `accessControl.get` | `GET /sites/{id}/access-control` | `{ siteId, siteLists, hotlink, userAgents, cors, geo, websocket, securityHeaders, encodedPaths, updatedAt }`；从未保存过的网站返回各项默认值，`updatedAt` 为 `null` |
-| `accessControl.update` | `PATCH /sites/{id}/access-control` | 只替换请求中出现的项，其余不变；可带 `expectedUpdatedAt`（不一致 409 `UPDATED_AT_MISMATCH`）。发布配置版本（原因 `site_access_control_updated`），审计 `site.access_control_update` |
-| `ipCheck.check` | `GET /ip-check?ip=&siteId=` | `{ ip, site, lists, bans, clusters, verdict }`，见下 |
-
-服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
-
-| 项 | 字段 |
-| --- | --- |
-| `siteLists` | `blockListIds`、`allowListIds`：IP 名单 ID，各 ≤ 16；名单不存在 404 `IP_LIST_NOT_FOUND`，同一名单在两边 400 `SITE_LIST_CONFLICT`（`data.lists`） |
-| `hotlink` | `enabled`、`allowEmpty`（默认 `true`）、`allowSiteDomains`（默认 `true`）、`allowed`、`denied`（各 ≤ 200，`a.com`、`*.a.com`、`.a.com` 或 `*`）、`checkOrigin`、`extensions`（≤ 64，默认 49 个常见类型）、`pathPrefixes`、`excludePathPrefixes`（各 ≤ 32）、`action`（`deny` / `redirect`）、`redirectUrl`（`redirect` 时必填，本站路径或 `http(s)` URL，≤ 2048） |
-| `userAgents` | `rules`：≤ 200 个 `{ pattern, action }`（`action` 为 `allow` / `deny`，`pattern` 为 `wildcard` 模式，≤ 512 个可打印 ASCII 字符，可为空）；`pathPrefixes`、`excludePathPrefixes` |
-| `cors` | `enabled`、`allowedOrigins`（≤ 100，`scheme://host[:port]`、`https://*.a.com` 或 `*`；开启时至少一个）、`allowCredentials`（与 `*` 同时出现 400 `CORS_CREDENTIALS_WILDCARD`）、`allowedMethods`（1–16，默认 7 个）、`allowedHeaders`、`exposedHeaders`（各 ≤ 64）、`echoRequestHeaders`、`maxAgeSeconds`（0–86400，默认 600）、`preflightToOrigin`、`keepOriginHeaders`、`pathPrefixes` |
-| `geo` | `enabled`、`mode`（`deny` / `allow`）、`countries`（二位代码）、`subdivisions`（`CC-行政区`）、`asns`（各 ≤ 256；开启时至少一项）、`pathPrefixes`、`exceptPathPrefixes` |
-| `websocket` | `allowAllOrigins`（默认 `true`）、`origins`（≤ 100，不允许时至少一个，不能用单独的 `*`）、`idleTimeoutSeconds`（60–86400，默认 3600） |
-| `securityHeaders` | `nosniff`、`frameOptions`（`off` / `DENY` / `SAMEORIGIN`）、`referrerPolicy`（`off` 或 8 个标准值）、`permissionsPolicy`（≤ 1024 个可打印 ASCII 字符，空为不设置）、`hideServer`、`removePoweredBy` |
-| `encodedPaths` | `exemptions`（≤ 32）：`{ prefix, encodedSlash, semicolon }`，`prefix` 为原始路径前缀（以 `/` 开头，≤ 256 字节可打印 ASCII，不含 `%`、`;`、`\`、`#`、`?`、空格、`//` 与点路径段，不能重复），`encodedSlash` 与 `semicolon` 至少一个为 `true` |
-
-`ipCheck.check` 的 `ip` 为 IPv4 或 IPv6 地址（不是 CIDR，否则 400 `IP_ADDRESS_INVALID`），IPv4 映射地址按 IPv4 返回。`lists`：含有该地址的名单 `{ id, name, kind, entries, siteRole }`（`entries` 为命中的条目，`siteRole` 为 `block` / `allow` / `null`）；`bans`：覆盖该地址的有效封禁（与 `GET /bans` 的元素相同；带 `siteId` 时只有全局与该网站的）；`clusters`：`{ id, name, clientIp, trustedProxy, nodeAddress }`；`verdict`：带 `siteId` 时为 `{ outcome, platformAllowed, siteAllowed }`，`outcome` 为 `platform_banned`、`site_banned`、`platform_blocked`、`site_blocked`、`allowed` 或 `none`，否则为 `null`。
-
-`GET /sites/{id}/features` 新增 `accessControl`。配置版本原因新增 `site_access_control_updated`，审计新增 `site.access_control_update`。节点能力新增 `access-control-v1`；配置新增 `Site.access_control`（proto `v0.28.0`）。
-
-### WAF 动作、请求体字段、CRS 按路径与已验证爬虫
-
-规则、CRS 与防护沿用上文的过程（`rules.*`、`platformRules.*`、`waf.*`、`protection.*`、`sites.update`），新增的字段如下。服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
-
-| 请求 | 字段 |
-| --- | --- |
-| `action`（`kind: "ban"`） | `waf-custom` 阶段。`banSeconds`（60–604800，默认 3600）、`banScope`（`site`，默认；`platform` 只用于全局规则，网站规则 400）、`banPrefixV4`（16–32，默认 32）、`banPrefixV6`（48–64，默认 64） |
-| `action`（`kind: "respond"`） | `waf-custom` 阶段。`statusCode`（200、204、400–599，默认 403）、`contentType`（`text/plain`（默认）、`text/html`、`application/json`）、`body`（≤ 8192 字节，不含制表符与换行以外的控制字符；204 时为空）、`errorPage`（默认 `false`；只用于 4xx、5xx，开启时 `body` 为空） |
-| `action`（`kind: "close"`） | `waf-custom` 阶段，没有字段 |
-| `action`（`kind: "skip"`） | `waf-custom` 阶段。`skip`：`rules`、`rate_limits`、`crs`、`challenges` 中不重复的若干个，至少一个 |
-| `action`（`kind: "log"`） | 增加 `accessLog`（默认 `false`）：不论采样率写一条访问日志 |
-| `action`（`kind: "rate_limit"`） | 增加 `banSeconds`（0 或 60–86400，默认 0）：超额后封禁该地址 |
-| `action`（`kind: "config"`） | 增加 `crs`（`off`、`detect`、`block`），只在 `config` 阶段 |
-| `PATCH /sites/{id}/waf` | `exclusions` 取代 `excludedRuleIds`，整体替换：最多 100 个 `{ path, exact, ruleIds, targets }`；`path` 空为整站，或以 `/` 开头（≤ 1024 字节，不含 `?`、`#`、空白与控制字符）；`exact`（默认 `false`，前缀）；`ruleIds` 1–200 个（900000–999999，不重复；901xxx、949xxx、959xxx、980xxx 返回 400 `WAF_RULE_NOT_EXCLUDABLE`）；`targets` ≤ 16 个，`ARGS:名称`、`REQUEST_COOKIES:名称`（名称 1–64 个 `[A-Za-z0-9_.-[]]`）或 `REQUEST_HEADERS:名称`（`[A-Za-z0-9-]`） |
-| `PATCH /sites/{id}/protection` | 增加 `allowVerifiedBots`；`challengeText`（`{ titleZh, hintZh, titleEn, hintEn }`，各 ≤ 200 个字符，去掉首尾空白，不含控制字符，空为内置文案；整体替换）；`failureBan`（`{ enabled, threshold, banSeconds }`，`threshold` 3–100、`banSeconds` 60–86400，默认 10、600） |
-| `POST /sites`、`PATCH /sites/{id}` | `contentSettings.rulesBodyLimit`（1024–1048576 字节，默认 65536）；`PATCH` 省略时保持原值 |
-| `GET /bans` | `source` 增加 `rule` |
-
-响应：
-
-| 过程 | 内容 |
-| --- | --- |
-| `rules.*`、`platformRules.*` | 上述动作字段，`ban` 的默认值写出 |
-| `waf.get`、`waf.update` | `exclusions` 按保存顺序，`ruleIds` 升序、`targets` 排序，`path` 为空时 `exact` 为 `false`；从未保存时为 `[]` |
-| `protection.get`、`protection.update` | 增加 `allowVerifiedBots`、`challengeText`、`failureBan`（关闭时也返回保存的阈值与时长） |
-| `bans.list` | `source` 增加 `rule`（原因 `waf_rule`、`rate_limit`），自动封禁的原因增加 `challenge_failures`；`trigger` 增加 `ruleId`；新字段 `rule`：规则做出的封禁为 `{ id, name, platform }`（规则已删除时 `name` 为 `null`），其他为 `null` |
-| `logs.query`、`logs.export` | 日志增加 `ruleIds`：要求「写入访问日志」的记录规则 ID（至多 8 个）；CSV 末尾增加 `ruleIds` 列（空格分隔） |
-| `sites.features` | 增加 `wafV2`、`rulesBody`、`challengeV2`（能力 `waf-v2`、`rules-body-v1`、`challenge-v2`） |
-| `rules.validate` | `code` 增加 `request_field`（请求体与爬虫字段只能用于请求阶段）、`form_name`、`json_path` |
-
-- 用到新动作、`accessLog`、限速的 `banSeconds`、`config` 的 `crs` 或带路径、目标的 CRS 排除的配置要求节点能力 `waf-v2`；用到请求体字段与 `form_value`、`json_value` 的要求 `rules-body-v1`；`allowVerifiedBots`、`challengeText`、`failureBan` 与 `http.request.bot.*` 要求 `challenge-v2`。没有用到的配置不变。
-- 整站、不带目标的排除条目下发给节点时合并为原来的「排除的规则 ID」，旧节点照常执行。
-- 原有的 `excludedRuleIds` 已迁移为一个不带路径的条目，API 不再接受该字段。
-
-```bash
-curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
-  -d '{"exclusions":[{"path":"/api/","ruleIds":[942100]},{"path":"/login","exact":true,"ruleIds":[941100],"targets":["ARGS:password"]}]}' \
-  https://cdn-admin.example.com/api/v1/sites/<网站 ID>/waf
-```
-
-行为见 [规则](../guide/rules.md)、[OWASP CRS 托管规则](../guide/waf.md)、[挑战与 CC 防护](../guide/challenges.md) 与 [封禁](../guide/bans.md)。
-
-### 访问日志字段、保留期与统计维度
-
-日志沿用 `logs.*`，新增系统设置 `settings.logRetention` / `settings.setLogRetention` 与统计过程 `analytics.dimensions`。服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
-
-| 请求 | 字段 |
-| --- | --- |
-| `PUT /sites/{siteId}/logs/settings` | 各字段都可省略，省略时保持原值：`sampleRate`（0–10000）、`logBlocked`、`logQuery`、`logPeer`（布尔）、`logHeaders`（≤ 8 个请求头名称，`[A-Za-z0-9-]`，1–64 个字符，转小写去重；`authorization`、`cookie`、`proxy-authorization` 返回 400） |
-| `GET /sites/{siteId}/logs`、`/logs/export` | 新增筛选（都可省略，组合为「且」）：`host`（精确，不区分大小写）、`method`、`statusClass`（`1xx`–`5xx`）、`cacheStatus`（`HIT`、`MISS`、`BYPASS`、`EXPIRED`、`STALE`、`UPDATING`、`REVALIDATED`）、`blockReason`（下表的原因，或 `any`）、`country`（ISO 3166-1 两位字母）、`asn`（1–4294967295）、`ua`、`referer`（包含，不区分大小写，≤ 256）、`minDuration`（毫秒）、`cidr`（IPv4 或 IPv6 网段或单个地址，主机位清零） |
-| `PUT /settings/log-retention` | `postgresDays`（1–30）、`clickhouseDays`（1–90），两项都必填；审计 `system.log_retention_update` |
-| `GET /analytics/dimensions` | `range`（`1h`、`6h`、`24h`、`7d`、`30d`，默认 `24h`）、`siteId`（可省略：全部网站） |
-
-响应：
-
-| 过程 | 内容 |
-| --- | --- |
-| `logs.settings` | 增加 `retentionDays`（当前统计模式的保留天数）、`logBlocked`、`logQuery`、`logHeaders`、`logPeer` |
-| `logs.query`、`logs.export` | 日志增加 `userAgent`、`referer`（不含查询与片段）、`httpVersion`（`1.0`、`1.1`、`2`、`3`）、`scheme`、`country`（未知为空）、`asn`（未知为 0）、`asName`、`upstreamAddr`、`upstreamStatus`、`upstreamMs`（没有回源时为空、0、0）、`requestBytes`、`contentType`、`tlsVersion`（`1.2`、`1.3`，明文为空）、`blockReason`、`blockRuleId`，以及网站开启时的 `query`、`headers`（名称 → 值）、`peerIp`；CSV 末尾按此顺序增加这些列（`headers` 为 `名称: 值`，以 `; ` 连接） |
-| `settings.logRetention` | `postgresDays`、`clickhouseDays`、`storage`（`lite` 或 `clickhouse`：哪一项生效） |
-| `analytics.dimensions` | `countries`（`{ country, requests, bytesSent }`，按请求数，`country` 为空表示未知）、`asns`（`{ asn, name, requests }`，前 50，近似）、`referers`（`{ host, requests }`，前 50，近似）、`browsers`、`oses`、`devices`、`httpVersions`、`tlsVersions`、`blockReasons`（`{ key, requests }`）、`challenges`（`{ issued, passed }`）、`unsupportedNodes`（缺少 `stats-dims-v1` 的活动节点数，大于 0 时数据不完整） |
-| `sites.features` | 增加 `accessLogsV2`（能力 `access-logs-v2`） |
-
-`blockReason` 的取值：`ip_banned`、`ip_blocked`、`rule`、`rate_limit`、`crs`、`cc`、`challenge`、`auth`、`referer`、`user_agent`、`region`、`cors`、`websocket_origin`、`client_cert`、`maintenance`，含义见[访问日志](../guide/access-logs.md#拦截原因)。终端分类的键：浏览器 `chrome`、`edge`、`firefox`、`safari`、`opera`、`samsung`、`uc`、`qq`、`wechat`、`yandex`、`ie`、`crawler`、`tool`、`other`；操作系统 `windows`、`macos`、`ios`、`android`、`linux`、`chromeos`、`harmonyos`、`other`；设备 `desktop`、`mobile`、`tablet`、`crawler`、`other`；HTTP 版本 `1.0`、`1.1`、`2`、`3`、`other`；TLS 版本 `1.2`、`1.3`、`none`、`other`。
-
-- 用到 `logBlocked`、`logQuery`、`logHeaders`、`logPeer` 任一项的配置要求节点能力 `access-logs-v2`；都没用到时配置不变。
-- 统计维度来自节点能力 `stats-dims-v1`，只用于统计，不阻止发布。
-
-```bash
-curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
-  -d '{"logBlocked":true,"logHeaders":["x-request-source"]}' \
-  https://cdn-admin.example.com/api/v1/sites/<网站 ID>/logs/settings
-curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
-  "https://cdn-admin.example.com/api/v1/sites/<网站 ID>/logs?from=2026-10-10T00:00:00Z&to=2026-10-10T01:00:00Z&blockReason=any&country=US"
-```
-
-行为见[访问日志与 AccessKey](../guide/access-logs.md) 与[系统设置](../guide/system.md#访问日志)。
-
-### 网站标签、批量操作、复制设置与克隆
-
-| 过程 | 端点 | 说明 |
-| --- | --- | --- |
-| `sites.setTags` | `PUT /sites/{id}/tags` | `{ tags: [名称] }` → `{ tags: [{ id, name }] }`：整体替换网站的标签（≤ 10 个）。名称去首尾空白、NFC 规范化后 1–32 个字符，不能有控制字符；不区分大小写去重，已有标签沿用它的写法，新名称创建标签。不发布配置版本；审计 `site.tags_update`（`added`、`removed`、`tags`） |
-| `siteTags.list` | `GET /site-tags` | `[{ id, name, sites }]`，按名称排序；包括没有网站使用的标签 |
-| `siteTags.rename` | `PATCH /site-tags/{id}` | `{ name }` → `{ id, name, sites }`。新名称是另一个标签的名称（任意大小写）时两者合并：返回那个标签，原标签删除。审计 `site_tag.rename`；不存在 404 `SITE_TAG_NOT_FOUND` |
-| `siteTags.delete` | `DELETE /site-tags/{id}` | 从所有网站移除并删除；审计 `site_tag.delete`（`sites`） |
-| `sites.batchSetEnabled` | `POST /sites/batch/enabled` | `{ ids, enabled }` → `{ changed: [{ id, name }], revisions: [{ clusterId, revision, created }] }`：状态改变的网站各写审计 `site.enable` / `site.disable`（`batch`），每个集群发布一次（原因 `sites_enabled` / `sites_disabled`，`count`；集群只有一个网站变化时为 `site_enabled` / `site_disabled`） |
-| `sites.batchTags` | `POST /sites/batch/tags` | `{ ids, add?: [名称], remove?: [名称] }`（至少一项，同名不能既加又减）→ 同上，`revisions` 为空 |
-| `sites.batchDelete` | `POST /sites/batch/delete` | `{ ids }` → 同上；每个网站审计 `site.delete`，每个集群发布一次（`sites_deleted`） |
-| `sites.copySettingsPreview` | `GET /sites/{id}/copy-settings?targetIds[]=&parts[]=` | `{ source, targets: [{ id, name, changes, error }] }`：对每个目标试运行复制后回滚，不保存、不审计、不发布。`changes` 每个部分一项 `{ part, changed, before, after, fields }`：列表部分（`cacheRules`、`rules`、`bulkRedirects`、`errorPages`、`authRules`）给出前后条数，其他部分给出变化的设置数；`error` 为复制会失败的原因 `{ code, message, data }` |
-| `sites.copySettings` | `POST /sites/{id}/copy-settings` | `{ targetIds, parts }` → `{ targets: [{ id, name, ok, changed, revision, error }] }`：每个目标一个事务；失败的目标不变，其他目标照常。成功的目标发布所在集群（原因 `site_settings_copied`，`site`、`source`），审计 `site.settings_copied`（`source`、`parts`、`changed`、`revision`） |
-| `sites.clone` | `POST /sites/{id}/clone` | `{ name?, domains, tags? }` → 与 `sites.create` 相同（201）：在源网站的集群新建网站，带源的全部可复制部分、源站、PURGE 方法与密钥、内容设置与维护模式；不带证书（需要证书的 HTTPS 选项关闭，HTTPS 端口只保留 443）。`tags` 省略为源的标签。发布（原因 `site_cloned`），审计 `site.clone` |
-
-`ids`、`targetIds` 为 1–100 个网站 ID；`targetIds` 不能包含源网站（400）。网站不存在时批量操作整体失败 404 `SITE_NOT_FOUND`（复制时只有该目标失败）；加标签后超过 10 个 400 `SITE_TAG_LIMIT`（`data.site`、`data.limit`）。查询串里的数组用方括号写法（`targetIds[]=a&targetIds[]=b`），一个值也可以写 `targetIds=a`。
-
-`parts` 的取值：`cacheRules`、`cacheKey`（缓存键与分片）、`cacheTag`、`compression`、`https`（不含证书与不跳转的域名）、`rules`（含 `rulesBodyLimit`）、`bulkRedirects`、`errorPages`（不含维护模式）、`waf`、`protection`（不含 `logJa4`）、`accessControl`、`authRules`（密钥为目标重新加密）、`originSettings`（不含源站列表）、`logs`（采样率、`logBlocked`、`logQuery`、`logHeaders`、`logPeer` 与 `logJa4`）、`imageConvert`（图片格式转换）。复制的部分整体替换目标的该部分；内容与源相同的部分不写入。目标缺少设置用到的对象时该目标失败：规则选择的源站组不存在 400 `ORIGIN_GROUP_UNKNOWN`（`data.group`、`data.rule`）、没有证书却要复制 HTTPS 跳转 / HSTS / 客户端证书 400 `HTTPS_REQUIRES_CERTIFICATE`、跳转端口不是目标的 HTTPS 端口 400 `HTTPS_REDIRECT_PORT_INVALID`、批量重定向的来源主机不是目标的域名 400 `BULK_REDIRECT_HOST_UNKNOWN`、访问鉴权范围的域名不是目标的域名 400 `AUTH_DOMAIN_UNKNOWN`、IP 名单不存在 404 `IP_LIST_NOT_FOUND`。克隆时这些错误使整个克隆失败（证书相关的除外，它们被关闭）。
-
-`sites.list` 新增 `tagIds`（`tagIds[]=…`，≤ 10）与 `tagMatch`（`any` 默认 / `all`），`search` 也匹配标签名；网站对象新增 `tags: [{ id, name }]`；`sites.create` 新增 `tags`。只读 AccessKey 只能调用 `GET`（标签列表、预览）；服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）。
-
-### 图片格式转换
-
-| 过程 | 端点 | 说明 |
-| --- | --- | --- |
-| `imageConvert.get` | `GET /sites/{id}/image-convert` | 网站的 WebP / AVIF 转换设置，从未保存时为默认值（关闭） |
-| `imageConvert.update` | `PUT /sites/{id}/image-convert` | 整体替换设置并发布所在集群（热更新；关闭期间的修改不改变节点配置，不产生新修订）。审计 `site.image_convert_update`（`changed`、`enabled`） |
-| `imageConvert.savings` | `GET /sites/{id}/image-convert/savings?range=` | `{ bytesSaved, unsupportedNodes }`：时间范围（`1h`、`6h`、`24h` 默认、`7d`、`30d`）内以变体完整返回的 200 GET 响应比原图少的字节数之和；`unsupportedNodes` 为集群中不支持 `image-convert-v1` 的活动节点数 |
-
-设置的字段（`update` 全部必填，另加 `id`）：
-
-| 字段 | 类型 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| `enabled` | 布尔 | `false` | |
-| `webp`、`avif` | 布尔 | `true`、`false` | 至少一个为 `true` |
-| `webpQuality`、`avifQuality` | 1–100 | 80、50 | |
-| `jpeg`、`png` | 布尔 | `true`、`true` | 源类型，至少一个为 `true` |
-| `minSize`、`maxSize` | 字节 | 1024、10485760 | `minSize` 0–67108864，`maxSize` 1–67108864，`minSize` ≤ `maxSize` |
-| `maxPixels` | 像素 | 16000000 | 1–50000000 |
-
-不满足上述条件（含关闭时）返回 400。只读 AccessKey 只能调用 `GET`；服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）。`sites.features` 增加 `imageConvert`（能力 `image-convert-v1`）；开启的设置要求节点能力 `image-convert-v1`，关闭时配置不变。复制设置的 `parts` 增加 `imageConvert`，克隆一并复制。行为见[图片格式转换](../guide/image-convert.md)。
-
-```bash
-curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
-  -d '{"enabled":true,"webp":true,"avif":true,"webpQuality":80,"avifQuality":50,"jpeg":true,"png":true,"minSize":1024,"maxSize":10485760,"maxPixels":16000000}' \
-  https://cdn-admin.example.com/api/v1/sites/<网站 ID>/image-convert
-curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
-  "https://cdn-admin.example.com/api/v1/sites/<网站 ID>/image-convert/savings?range=7d"
-```
-
-### 用量保护
-
-| 过程 | 端点 | 说明 |
-| --- | --- | --- |
-| `usageGuard.get` | `GET /sites/{id}/usage-guard` | 设置（未设置时 `settings` 等为 `null`）、本周期 `period { start, end }`、`usage { bytes, requests, bandwidthBps, bandwidthPeakBps }`（`bytes`、`requests` 为十进制字符串；带宽为最近 5 个完整分钟的平均，bit/s）、`held { action, metric, since }`（用量保护执行且仍在生效的动作）、`pausedUntil`（手动恢复后到此时间前不执行动作）、`lastError`（动作发布失败的错误码，没有时为空） |
-| `usageGuard.update` | `PUT /sites/{id}/usage-guard` | 新建或整体替换设置，下一次检查（1 分钟内）生效；取消手动恢复带来的暂停。可选 `expectedUpdatedAt`（不一致时 409 `UPDATED_AT_MISMATCH`）。审计 `site.usage_guard_update`（`from`、`to`） |
-| `usageGuard.delete` | `DELETE /sites/{id}/usage-guard` | 删除设置，并解除它正在执行的动作（发布 `usage_limit_released`，审计 `site.usage_guard_release`）；审计 `site.usage_guard_delete`。没有设置时不做任何事 |
-| `usageGuard.restore` | `POST /sites/{id}/usage-guard/restore` | 解除正在执行的动作（发布 `usage_limit_released`），本周期结束前不再执行；审计 `site.usage_guard_restore`。没有正在执行的动作时 409 `USAGE_GUARD_NOT_HELD` |
-
-设置的字段（`update` 另加 `id`）：
-
-| 字段 | 类型 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| `period` | `day`、`month` | `month` | 自然日 / 自然月 |
-| `timeZone` | IANA 时区 | 必填 | 周期从该时区的 0 点开始 |
-| `bytesLimit`、`requestsLimit` | 十进制字符串或 `null` | `null` | 正整数，最多 38 位 |
-| `bandwidthBps` | 整数或 `null` | `null` | 1000–10000000000000 bit/s |
-| `warnPercent` | 1–99 或 `null` | 80 | `null` 不预警 |
-| `action` | `alert`、`maintenance`、`disable` | `maintenance` | |
-| `recovery` | `auto`、`manual` | `auto` | |
-| `bandwidthHoldMinutes` | 5–1440 | 30 | 自动恢复时带宽超限后保持的分钟数 |
-
-三个上限都为 `null` 或其他不满足上述条件的输入返回 400。系统执行与解除动作时发布的修订原因为 `usage_limit_reached` / `usage_limit_released`，审计 `site.usage_guard_apply` / `site.usage_guard_release`（操作者为系统，元数据含 `action`、`metric`、`period`、`usage`、`limits`、`revision`）。告警种类 `usage_warning`、`usage_limit` 的 `resourceId` 为 `bytes`、`requests` 或 `bandwidth`。只读 AccessKey 只能调用 `GET`；服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）。行为见[用量保护](../guide/usage-protection.md)。
-
-### 端口池与 L4 应用
-
-| 过程 | 端点 | 说明 |
-| --- | --- | --- |
-| `clusters.portPools` | `GET /clusters/{clusterId}/port-pools` | 集群的端口池、保留端口与缺少 `l4-v1`、`l4-v2` 的节点 |
-| `clusters.setPortPools` | `PUT /clusters/{clusterId}/port-pools` | 整体替换端口池；不发布配置版本 |
-| `l4Apps.list` | `GET /l4-apps` | L4 应用，按端口、协议排序；查询参数 `clusterId`（可选） |
-| `l4Apps.get` | `GET /l4-apps/{id}` | 一个应用 |
-| `l4Apps.create` | `POST /l4-apps` | 新建应用，返回 201 |
-| `l4Apps.update` | `PATCH /l4-apps/{id}` | 只修改给出的字段 |
-| `l4Apps.setEnabled` | `PUT /l4-apps/{id}/enabled` | 停用或启用 |
-| `l4Apps.delete` | `DELETE /l4-apps/{id}` | 删除应用、源站与统计 |
-| `l4Apps.stats` | `GET /l4-apps/{id}/stats` | 按分钟的统计 |
-
-服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
-
-| 请求 | 字段 |
-| --- | --- |
-| `PUT /clusters/{clusterId}/port-pools` | `pools`：整体替换，最多 64 个 `{ protocol, from, to }`；`protocol` 为 `tcp`、`udp` 或 `both`，`from`、`to` 为 1024–65535，`from` 不大于 `to` |
-| `POST /l4-apps` | `clusterId`、`name`（1–100 字符，去掉首尾空格）、`protocol`（`tcp` / `udp`）、`port`（1024–65535）、`origins`；可选：`portEnd`（端口段的结束端口，大于 `port`，最多 1000 个端口，默认 `null`）、`originPortMode`（`fixed` / `same`，默认 `fixed`）、`certificateId`（只用于 TCP，节点终结 TLS，默认 `null`）、`tlsMinimumVersion`（`1.2` / `1.3`，默认 `1.2`）、`enabled`（默认 `true`）、`acceptProxyProtocol`（默认 `false`）、`proxyProtocolVersion`（0–2，0 不发送，默认 0）、`maxFails`（1–100，默认 3）、`failTimeoutSeconds`（1–3600，默认 30）、`connectTimeoutMs`（100–60000，默认 5000）、`idleTimeoutSeconds`（1–86400，省略时 TCP 为 600、UDP 为 30）、`allowListIds`、`blockListIds`（IP 名单 ID，各最多 16 个，去重，默认 `[]`）、`maxConnections`（0–10000000）、`newConnectionsPerSecond`（0–1000000），后两项 0 表示不限，默认 0 |
-| `origins[]` | 1–32 个 `{ address, port, weight, backup }`：`address` 为主机名或 IP，规则同网站源站；`port` 1–65535，`originPortMode` 为 `same` 时省略（保存为 0）；`weight` 1–100，默认 1；`backup` 默认 `false`。至少一个源站的 `backup` 为 `false` |
-| `PATCH /l4-apps/{id}` | `POST` 中除 `clusterId`、`enabled` 外的字段，均可选；`origins` 整体替换，地址与端口不变的源站保留 ID（节点上的被动健康状态随之保留）；修改 `protocol` 不改变 `idleTimeoutSeconds`；可选 `expectedUpdatedAt` |
-| `PUT /l4-apps/{id}/enabled` | `enabled`；可选 `expectedUpdatedAt` |
-| `GET /l4-apps/{id}/stats` | 查询参数 `from`、`to`（ISO 8601），`from` 早于 `to`，范围最长 7 天 |
-
-| 过程 | 响应 |
-| --- | --- |
-| `clusters.portPools`、`clusters.setPortPools` | `clusterId`；`pools`（按起始端口、协议排序）；`reservedPorts`（集群 HTTP / HTTPS 监听的端口，含附加端口，不能进入端口池）；`nodesWithoutL4`（`[{ id, name }]`，集群中不上报 `l4-v1` 的活动节点）；`nodesWithoutL4V2`（不上报 `l4-v2` 的活动节点） |
-| `l4Apps.list`、`l4Apps.get` 与其他过程返回的应用 | `id`、`clusterId`、`clusterName`、`name`、`protocol`、`port`、`enabled`、`acceptProxyProtocol`、`proxyProtocolVersion`、`portEnd`、`originPortMode`、`certificateId`、`certificateName`、`tlsMinimumVersion`、`origins`（`[{ id, address, port, weight, backup }]`，按保存顺序）、`maxFails`、`failTimeoutSeconds`、`connectTimeoutMs`、`idleTimeoutSeconds`、`allowListIds`、`blockListIds`、`maxConnections`、`newConnectionsPerSecond`、`dnsTarget`、`dnsLines`、`createdAt`、`updatedAt` |
-| `cnamePrefix` | CNAME 前缀：新建应用为随机 8 位，升级前的应用为其 ID |
-| `dnsTarget` | 客户端连接的 CNAME `<cnamePrefix>.<集群域名>`，只在应用启用时发布；集群 DNS 为「不管理」时为 `null` |
-| `dnsLines` | 每条绑定线路 `{ name, target }`：开启线路别名时 `target` 为 `<线路>.<cnamePrefix>.<集群域名>`，否则为 `<线路>.<集群域名>` |
-| `dnsRetired` | 修改前缀后 24 小时内仍解析的旧名称 `{ name, expiresAt }` |
-| `l4Apps.create`、`l4Apps.update`、`l4Apps.setEnabled` | `{ app, revision }` |
-| `l4Apps.delete` | `{ revision }` |
-| `l4Apps.stats` | `appId`、`from`、`to`；`bucketSeconds`：范围不超过 1 天为 60，不超过 5 天为 300，否则 3600；`points`：从 `from` 所在的桶起每桶一项，最早在前，空桶为 0；`totals`；`nodes`：每个上报节点 `{ nodeId, nodeName, … }`，连接数多的在前 |
-| 统计计数 | `connections`（接受的连接或 UDP 会话）、`refused`（被 IP 名单或上限拒绝）、`peakConcurrent`、`bytesReceived`（来自客户端）、`bytesSent`（发往客户端）。`peakConcurrent` 在 `points`、`totals` 中为每分钟各节点峰值之和在桶或范围内的最大值，在 `nodes` 中为该节点自己的最大值 |
-
-- `create`、`update` 发布集群的配置版本（原因 `l4_app_created`、`l4_app_updated`），审计 `l4_app.create`、`l4_app.update`；`setEnabled` 状态变化时发布（`l4_app_updated`），审计 `l4_app.enable`、`l4_app.disable`，状态不变时返回最新版本，不发布、不写审计；`delete` 发布（`l4_app_deleted`），审计 `l4_app.delete`。`setPortPools` 审计 `cluster.port_pools_update`。
-- 配置中有启用的应用时要求节点能力 `l4-v1`，见[节点能力](#节点能力)。
-
-| 错误代码 | 状态 | 场景 |
-| --- | --- | --- |
-| `L4_APP_NOT_FOUND` | 404 | 应用不存在 |
-| `L4_APP_LIMIT` | 409 | 集群已有 256 个应用（含停用的）；`data.limit` |
-| `L4_PORT_OUTSIDE_POOL` | 400 | 端口不在集群该协议的端口池内；`data.port` |
-| `L4_PORT_IN_USE` | 409 | 同一集群同一协议的端口已有应用（含停用的），或新的端口池会把应用的端口留在池外；`data.apps`（`名称 (端口/协议)`，逗号分隔） |
-| `L4_PORT_RESERVED` | 400 | 端口池或应用端口是集群 HTTP / HTTPS 监听的端口；`data.port` |
-| `L4_PORT_POOL_OVERLAP` | 400 | 同一协议的端口池重叠，`both` 与 `tcp`、`udp` 都重叠；`data.pools`（`起始-结束/协议`，逗号分隔） |
-| `L4_PROXY_PROTOCOL_UNSUPPORTED` | 400 | UDP 应用设置了 `acceptProxyProtocol` 或非 0 的 `proxyProtocolVersion` |
-| `IP_LIST_NOT_FOUND` | 404 | `allowListIds` 或 `blockListIds` 中的名单不存在 |
-| `IP_LIST_IN_USE` | 409 | `DELETE /ip-lists/{id}` 删除仍被规则、缓存规则条件或 L4 应用引用的名单；`data.users` 列出前 5 个引用者：规则名（网站规则带网站名，如 `拦截 (shop)`）、缓存规则所在的网站名、L4 应用名 |
-| `ORIGIN_ADDRESS_FORBIDDEN` | 400 | 源站为特殊用途地址且不在源站地址允许清单内；`data.address`、`data.range` |
-| `UPDATED_AT_MISMATCH` | 409 | `expectedUpdatedAt` 不是当前值 |
-| `CLUSTER_NOT_FOUND` | 404 | 集群不存在 |
-| `BAD_REQUEST` | 400 | 输入校验失败，例如端口低于 1024、`from` 大于 `to`、源站全为备用、统计范围超过 7 天 |
-
-```bash
-curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
-  -d '{"pools":[{"protocol":"both","from":20000,"to":20100}]}' \
-  https://cdn-admin.example.com/api/v1/clusters/<集群 ID>/port-pools
-curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
-  -d '{"clusterId":"<集群 ID>","name":"game","protocol":"tcp","port":20000,"origins":[{"address":"game-origin.example.com","port":7000}],"proxyProtocolVersion":2}' \
-  https://cdn-admin.example.com/api/v1/l4-apps
-```
-
-行为见[L4 转发](../guide/l4.md)。
-
-### 源站保护
-
-| 过程 | 端点 | 说明 |
-| --- | --- | --- |
-| `originClientCa.get` | `GET /origin-client-ca` | `{ authority, next, previous, trustBundlePem, certificates, pendingClusters }`：`authority` 为在用（签发）的 CA `{ certificatePem, fingerprint, notBefore, notAfter }`，未创建时为 `null`；`next` 为轮换中尚未启用的新 CA，`previous` 为轮换替换下来、尚未退役的旧 CA，平时都是 `null`；`trustBundlePem` 为源站此时应信任的全部 CA 证书（在用的在前）；`certificates` 为每个集群当前的回源客户端证书 `{ id, clusterId, clusterName, serial, fingerprint, notBefore, notAfter, authority }`（不含私钥，`authority` 为 `active`、`previous` 或 `retired`）；`pendingClusters` 为有旧 CA 时仍出示旧 CA 证书的集群 `{ clusterId, clusterName }` |
-| `originClientCa.create` | `POST /origin-client-ca` | 创建回源客户端 CA（ECDSA P-256，10 年）；已存在时原样返回。审计 `origin_client_ca.create` |
-| `originClientCa.rotate` | `POST /origin-client-ca/rotation` | 生成新 CA（`next`，名称带代数如 `G2`），还不签发；已在轮换时 409 `CA_ROTATION_IN_PROGRESS`。审计 `origin_client_ca.rotation_start` |
-| `originClientCa.activate` | `POST /origin-client-ca/rotation/activate` | 新 CA 改为在用、原来的成为 `previous`，并为每个有网站出示客户端证书的集群签发新证书、发布配置（原因 `origin_client_certificate_rotated`）；失败的集群由每小时的更换任务重试。审计 `origin_client_ca.activate` |
-| `originClientCa.retire` | `POST /origin-client-ca/rotation/retire` | 删除旧 CA；还有集群出示旧 CA 的证书时 409 `CA_ROTATION_INCOMPLETE`（`clusters`）。审计 `origin_client_ca.retire` |
-| `originClientCa.cancel` | `DELETE /origin-client-ca/rotation` | 启用前删除新 CA。审计 `origin_client_ca.rotation_cancel` |
-| `originCa.get` | `GET /origin-ca` | `{ authority, previous, previousCertificates }`：在用的 CA、轮换中仍受信任的旧 CA（平时 `null`）与旧 CA 签发、未吊销未过期的证书数 |
-| `originCa.create` | `POST /origin-ca` | 创建 Origin CA（ECDSA P-256，20 年）；已存在时原样返回。审计 `origin_ca.create` |
-| `originCa.rotate` | `POST /origin-ca/rotation` | 生成新 CA 并立即用它签发，原来的成为 `previous`；有网站信任 Origin CA 的集群发布配置（原因 `origin_ca_rotation_started`），节点同时信任两者。这些集群的活动节点缺少 `origin-ca-rotation-v1` 时 409 `NODE_CAPABILITY_REQUIRED`；已在轮换时 409 `CA_ROTATION_IN_PROGRESS`。审计 `origin_ca.rotation_start` |
-| `originCa.retire` | `POST /origin-ca/rotation/retire` | 删除旧 CA，集群发布配置（原因 `origin_ca_retired`），节点不再信任旧 CA 的证书。审计 `origin_ca.retire`（`validCertificates`） |
-| `originCa.cancel` | `DELETE /origin-ca/rotation` | 删除新 CA、旧 CA 恢复在用（原因 `origin_ca_rotation_cancelled`）；新 CA 签发的证书仍有效时 409 `CA_ROTATION_IN_USE`（`count`）。审计 `origin_ca.rotation_cancel` |
-| `originCertificates.list` | `GET /origin-certificates` | Origin CA 签发的证书，新的在前：`{ id, hostnames, keyType, source, serial, fingerprint, certificatePem, notBefore, notAfter, revokedAt, createdAt, authority }`；`keyType` 为 `ec256`、`ec384`、`rsa2048`、`rsa3072`、`rsa4096`，`source` 为 `generated` 或 `csr`，`authority` 为签发它的 CA：`active`、`previous`（轮换中的旧 CA）或 `retired`（已退役或取消） |
-| `originCertificates.issue` | `POST /origin-certificates` | 见下表；响应同列表项，另有 `privateKeyPem`（控制台生成的 PKCS#8 私钥，只返回这一次；提交 CSR 时为空字符串）。审计 `origin_certificate.issue`（不含私钥） |
-| `originCertificates.revoke` | `POST /origin-certificates/{id}/revoke` | 吊销并由签发它的 CA 重新签发 CRL，为有网站信任 Origin CA 的集群发布配置版本（原因 `origin_certificate_revoked`；已退役 CA 的证书只做标记，不发布）；已吊销 409 `ORIGIN_CERTIFICATE_REVOKED`，不存在 404 `ORIGIN_CERTIFICATE_NOT_FOUND`。审计 `origin_certificate.revoke` |
-
-服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
-
-| 请求 | 字段 |
-| --- | --- |
-| `POST /origin-certificates` | `hostnames`：1–50 个域名、`*.` 泛域名或 IP 地址（去重）；`validityYears`：1、3、5、10、15，默认 15，不超过 Origin CA 到期；`keyType`：`ec256`（默认）或 `rsa2048`；`csrPem`：可选，最长 16384 字节，只取公钥（RSA 2048–4096、ECDSA P-256 / P-384），无法读取、签名无效或密钥不支持时 400 `ORIGIN_CERTIFICATE_CSR_INVALID`。Origin CA 未创建时 409 `ORIGIN_CA_NOT_FOUND` |
-| `POST /sites`、`PATCH /sites/{id}` | `originSettings` 新增 `tlsTrust`（`system` / `originCa`，默认 `system`）与 `clientCertificate`（默认 `false`）；`PATCH` 省略时保留原值。`originCa` 需要 `tlsVerify`（400 `ORIGIN_TLS_TRUST_REQUIRES_VERIFY`）、池中没有 S3 源站（400 `ORIGIN_CA_S3`）且 Origin CA 已创建（409 `ORIGIN_CA_NOT_FOUND`）；`clientCertificate` 需要回源客户端 CA（409 `ORIGIN_CLIENT_CA_NOT_FOUND`），集群没有当前证书时随保存签发。复制设置与克隆同样检查 |
-| `POST /certificates/upload` | Origin CA 签发的证书 400 `CERTIFICATE_ORIGIN_CA` |
-
-`GET /sites/{id}/features` 新增 `originMtls`、`originCa`。配置版本的原因新增 `origin_certificate_revoked`、`origin_client_certificate_rotated`，审计新增 `origin_client_certificate.rotate`（每小时的更换为 system，启用新 CA 时为操作者）。轮换另加原因 `origin_ca_rotation_started`、`origin_ca_rotation_cancelled`、`origin_ca_retired`，错误 `CA_ROTATION_IN_PROGRESS`、`CA_ROTATION_STEP_UNAVAILABLE`（当前阶段不能执行这一步）、`CA_ROTATION_INCOMPLETE`、`CA_ROTATION_IN_USE`；Origin CA 轮换期间 `originCa` 还要求 `origin-ca-rotation-v1`。节点能力新增 `origin-mtls-v1`、`origin-ca-v1`、`origin-ca-rotation-v1`；节点通道的 `GetCertificates` 也返回本集群已发布配置引用的回源客户端证书。
-
-### 示例
-
-列出网站（过程 `sites.list`，`GET /api/v1/sites`）：
+| 基址 | `<EDGEWEIR_PUBLIC_URL>/api/v1` |
+| 路径参数 | 路径中的 `{name}` |
+| 其他输入 | `GET`：查询参数；`POST`、`PUT`、`PATCH`、`DELETE`：JSON 请求体（`content-type: application/json`） |
+| 查询参数中的数组 | `name[]=a&name[]=b` |
+| 请求体上限 | 无有效凭据 1 MiB，有有效凭据 16 MiB；超出返回 413 `PAYLOAD_TOO_LARGE`，在执行过程前判断 |
+| 时间 | ISO 8601 字符串，带时区偏移（如 `2026-10-30T08:00:00Z`） |
+| ID | UUID |
+| 响应 | 过程输出的 JSON；状态 200，创建类过程按资源页标注返回 201 |
+| 输入校验失败 | 400 `BAD_REQUEST`，`data.issues` 为校验问题 |
+
+错误响应格式与全部错误码见[错误码](errors.md)。
 
 ```bash
 curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
   "https://cdn-admin.example.com/api/v1/sites?page=1&pageSize=20"
 ```
 
-| 查询参数 | 说明 |
-| --- | --- |
-| `search` | 匹配网站名称或任一域名，最长 100 字符 |
-| `clusterId` | 集群 UUID |
-| `page` | 页码，默认 `1` |
-| `pageSize` | 每页条数，1–100，默认 `20` |
-
-响应：`{"items":[…],"total":<总数>}`。
-
-### 错误格式
-
-```json
-{
-  "defined": false,
-  "code": "ACCESS_KEY_READ_ONLY",
-  "status": 403,
-  "message": "access key is read only",
-  "data": {}
-}
+```bash
+curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"enabled":false}' \
+  https://cdn-admin.example.com/api/v1/sites/<网站 ID>/enabled
 ```
 
-| 字段 | 说明 |
-| --- | --- |
-| `code` | 稳定错误代码。代码与 HTTP 状态的完整列表：[`packages/contract/src/errors.ts`](https://github.com/marvinli001/edgeweir/blob/master/packages/contract/src/errors.ts) |
-| `status` | HTTP 状态码 |
-| `message` | 英文说明，供不识别代码的客户端使用 |
-| `data` | 消息参数 |
+## 速率限制
 
-认证与输入校验失败使用 oRPC 通用代码：`UNAUTHORIZED`（401）、`BAD_REQUEST`（400）。
+每个 AccessKey 有自己的「每分钟请求数」：默认 600，1–100000，或不限（`requestsPerMinute: null`）。
+
+| 规则 | 说明 |
+| --- | --- |
+| 窗口 | 固定 60 秒窗口，从上一个窗口结束后该密钥的第一个请求开始；窗口内最多「每分钟请求数」个请求 |
+| 超出 | 429 `API_KEY_RATE_LIMITED`，`data.retryAfterSeconds` 为距窗口结束的秒数（至少 1） |
+| 计数 | 保存在控制台进程内：每个实例分别计数，重启后清零；修改上限后重新计数 |
+| 不计数 | 不限的 AccessKey、服务账号 key |
+
+`/api/auth` 的登录类端点另有 better-auth 的限速（`NODE_ENV=production`，计数存于 PostgreSQL）。
+
+## 幂等键
+
+`/api/v1` 的 `POST`、`PUT`、`PATCH` 接受请求头 `Idempotency-Key`：1–255 个可打印 ASCII 字符，可写成 RFC 8941 字符串（`"key"`）或原样。`GET` 与 `DELETE` 忽略该请求头。
+
+| 情况 | 响应 |
+| --- | --- |
+| 第一次请求 | 正常执行，保存方法、路径（含查询串）、请求体 SHA-256 与最终响应 |
+| 同一调用方、同一 key、同一请求 | 返回保存的响应（状态码与响应体），带 `Idempotent-Replayed: true` |
+| 同一 key、不同的方法、路径或请求体 | 422 `IDEMPOTENCY_KEY_MISMATCH` |
+| 第一次请求仍在执行 | 409 `IDEMPOTENCY_IN_PROGRESS` |
+| key 格式无效 | 400 `IDEMPOTENCY_KEY_INVALID` |
+| 响应里有只显示一次的凭据：`accessKeys.create`、`serviceAccounts.createKey`、`clusters.createEnrollmentToken`、`probes.createToken`、`authRules.signUrl` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`，不执行；不带该请求头重新发送 |
+
+- key 按调用方区分：全部 AccessKey 共用一份（同一账户），每个服务账号单独一份。
+- 保存 24 小时，每小时清理过期记录。
+- 5xx 响应不保存，可用同一个 key 重试；401 与 429（未进入过程）也不保存。4xx 响应保存，重放返回同一错误。
+- 执行中的记录 10 分钟后视为中断，下一个请求接管并重新执行。
+
+## 乐观并发
+
+以下写操作接受可选的 `expectedUpdatedAt`（ISO 8601，调用方读取时的 `updatedAt`）。与资源当前的值不一致时返回 409 `UPDATED_AT_MISMATCH`，`data.updatedAt` 为当前值（尚无值时为空字符串）。省略时不比较。
+
+| 过程 | 比较的 `updatedAt` |
+| --- | --- |
+| `sites.setEnabled` | 网站；已经是请求的状态时直接返回，不比较 |
+| `accessControl.update` | 网站的访问控制 |
+| `authRules.update`、`authRules.forgetIdentityHeaders` | 网站的访问鉴权 |
+| `errorPages.update` | 网站的错误页 |
+| `maintenance.update` | 网站的维护模式 |
+| `usageGuard.update` | 网站的用量保护 |
+| `autoMitigation.update` | 网站的自动缓解 |
+| `clusters.setRolloutPolicy` | 集群金丝雀策略的 `policyUpdatedAt`（发布与金丝雀进度不改变它；传入当时读取的 `updatedAt` 也可） |
+| `l4Apps.update`、`l4Apps.setEnabled` | L4 应用；`setEnabled` 已经是请求的状态时直接返回，不比较 |
+
+## 分页
+
+| 方式 | 请求 | 响应 | 过程 |
+| --- | --- | --- | --- |
+| 页码 | `page`（≥1，默认 1）、`pageSize` | `{ items, total }` | `sites.list`、`cacheTasks.list`（`pageSize` 1–100，默认 20）；`bans.list`、`greylist.list`、`security.events`（1–100，默认 50） |
+| 偏移 | `offset`（≥0，默认 0）、`limit`（1–200，默认 50） | `{ items, total }` | `auditLogs.list` |
+| 游标 | `cursor`（上一页的 `nextCursor`）、`limit` | `nextCursor`；`null` 为最后一页 | `usage.list`、`nodes.logs` |
+| 序号 | `afterSeq`（上次收到的最大 `seq`，默认 `"0"`）、`limit` | 按 `seq` 排序的记录 | `usage.changes`（增量同步） |
+| 条数 | `limit` | 列表 | 统计与访问日志查询，上限见各过程 |
+
+无效游标返回 400（`USAGE_CURSOR_INVALID`、`NODE_LOG_CURSOR_INVALID`）。各过程的参数范围见资源页。
 
 ## Web UI 接口
 
@@ -1084,38 +201,41 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
 | 要求 | 说明 |
 | --- | --- |
 | 会话 Cookie | 由 `/api/auth` 的登录端点签发 |
-| `x-csrf-token: orpc` | 缺少时返回 403 |
+| `x-csrf-token: orpc` | 缺少时返回 403 `CSRF_TOKEN_MISMATCH` |
 | `x-api-key` | 被剥离，不能代替会话 Cookie |
+| 登录 IP 白名单 | 客户端 IP 不在白名单内时返回 403 `LOGIN_IP_NOT_ALLOWED`（演示账号除外） |
 
 第三方集成使用 `/api/v1`。
 
 ## 认证端点
 
-`/api/auth/*` 由 better-auth 处理，只放行下表中的路径与方法。匹配为精确匹配（不接受前缀、编码变体或结尾斜杠），其余请求返回 404。请求中的 `x-api-key` 被剥离；客户端 IP 按 `EDGEWEIR_TRUSTED_PROXIES` 解析后传入。控制台不开放注册，唯一的账户由初始化向导创建；AccessKey 经 `accessKeys.*` 管理。`NODE_ENV=production` 时启用限速，计数存于 PostgreSQL。
+`/api/auth/*` 由 better-auth 处理，只放行下表中的路径与方法（`AUTH_HTTP_ROUTES`）。匹配为精确匹配（不接受前缀、编码变体或结尾斜杠），其余请求返回 404。请求中的 `x-api-key` 被剥离；客户端 IP 按 `EDGEWEIR_TRUSTED_PROXIES` 解析后传入。请求体上限 64 KiB。控制台不开放注册，唯一的账户由初始化向导创建。
 
-| 路径 | 方法 |
-| --- | --- |
-| `/api/auth/get-session` | `GET` |
-| `/api/auth/sign-in/email` | `POST` |
-| `/api/auth/sign-out` | `POST` |
-| `/api/auth/change-password` | `POST` |
-| `/api/auth/two-factor/enable` | `POST` |
-| `/api/auth/two-factor/disable` | `POST` |
-| `/api/auth/two-factor/verify-totp` | `POST` |
-| `/api/auth/two-factor/verify-backup-code` | `POST` |
-| `/api/auth/passkey/generate-register-options` | `GET` |
-| `/api/auth/passkey/verify-registration` | `POST` |
-| `/api/auth/passkey/generate-authenticate-options` | `GET` |
-| `/api/auth/passkey/verify-authentication` | `POST` |
-| `/api/auth/passkey/list-user-passkeys` | `GET` |
-| `/api/auth/passkey/delete-passkey` | `POST` |
+| 路径 | 方法 | 登录 IP 白名单 | 演示账号 |
+| --- | --- | --- | --- |
+| `/api/auth/get-session` | `GET` | 限制 | 允许 |
+| `/api/auth/sign-in/email` | `POST` | 限制 | 允许 |
+| `/api/auth/sign-out` | `POST` | 不限制 | 允许 |
+| `/api/auth/change-password` | `POST` | 限制 | 403 `DEMO_READ_ONLY` |
+| `/api/auth/two-factor/enable` | `POST` | 限制 | 403 `DEMO_READ_ONLY` |
+| `/api/auth/two-factor/disable` | `POST` | 限制 | 403 `DEMO_READ_ONLY` |
+| `/api/auth/two-factor/verify-totp` | `POST` | 限制 | 允许 |
+| `/api/auth/two-factor/verify-backup-code` | `POST` | 限制 | 允许 |
+| `/api/auth/passkey/generate-register-options` | `GET` | 限制 | 403 `DEMO_READ_ONLY` |
+| `/api/auth/passkey/verify-registration` | `POST` | 限制 | 403 `DEMO_READ_ONLY` |
+| `/api/auth/passkey/generate-authenticate-options` | `GET` | 限制 | 允许 |
+| `/api/auth/passkey/verify-authentication` | `POST` | 限制 | 允许 |
+| `/api/auth/passkey/list-user-passkeys` | `GET` | 限制 | 允许 |
+| `/api/auth/passkey/delete-passkey` | `POST` | 限制 | 403 `DEMO_READ_ONLY` |
+
+客户端 IP 不在登录 IP 白名单内时，受限制的端点在 better-auth 处理前返回 403 `LOGIN_IP_NOT_ALLOWED`（演示账号的登录与会话除外）。`NODE_ENV=production` 时启用 better-auth 的限速，计数存于 PostgreSQL。
 
 ## 健康检查
 
 `GET /healthz` 返回 200：
 
 ```json
-{ "status": "ok", "version": "20260929-a1b2c3d" }
+{ "status": "ok", "version": "20261029-0c26898" }
 ```
 
 | 字段 | 说明 |
@@ -1127,7 +247,7 @@ HTTP 服务监听即返回，不检查数据库。容器健康检查见[命令�
 
 ## 安装脚本与发布镜像
 
-`GET /install.sh` 返回节点安装脚本（`text/x-shellscript`，`cache-control: no-store`），脚本中的控制台地址替换为 `EDGEWEIR_PUBLIC_URL`。选项见[命令行](cli.md#节点安装脚本)。
+`GET /install.sh` 返回节点安装脚本（`text/x-shellscript; charset=utf-8`，`cache-control: no-store`），脚本中的控制台地址替换为 `EDGEWEIR_PUBLIC_URL`。选项见[命令行](cli.md#节点安装脚本)。
 
 `GET`、`HEAD` `/downloads/*` 从 `EDGEWEIR_DOWNLOADS_DIR` 提供文件，URL 路径与目录中的相对路径相同：
 
@@ -1144,9 +264,10 @@ HTTP 服务监听即返回，不检查数据库。容器健康检查见[命令�
 | --- | --- |
 | 协议 | Connect-RPC，HTTPS（HTTP/2，兼容 HTTP/1.1），TLS 1.2 及以上 |
 | 监听 | `NODE_API_HOST:NODE_API_PORT`，默认 `8443` |
-| 服务 | `edgeweir.node.v1.NodeService`（节点）与 `edgeweir.node.v1.ProbeService`（区域探针与兼任探针的节点），定义见 [`proto/edgeweir/node/v1/node.proto`](https://github.com/marvinli001/edgeweir/blob/master/proto/edgeweir/node/v1/node.proto) 与 [`probe.proto`](https://github.com/marvinli001/edgeweir/blob/master/proto/edgeweir/node/v1/probe.proto) |
-| 服务器证书 | 控制台内部 CA 在每次启动时签发，名称见[环境变量](environment.md#访问地址与网络) |
-| 认证 | `Enroll`、`EnrollProbe`：一次性注册 token（`ewt_`、`ewp_`），节点或探针预先固定内部 CA 的 SHA-256 指纹。其他 RPC：内部 CA 签发的客户端证书（mTLS），CN 为节点 ID（`O=Edgeweir Node`）或探针 ID（`O=Edgeweir Probe`）；探针证书只能调用 `ProbeService`，节点证书只在节点兼任探针时调用 `GetProbeTargets`、`ReportProbeResults` |
+| WebSocket 入口 | Web 端口上的 `/node-channel`：节点通道的 TLS 在 WebSocket 内由控制台终结。节点通道地址为 `wss://`、`ws://` 或设置了 `EDGEWEIR_NODE_API_WEBSOCKET` 时开放 |
+| 服务 | `edgeweir.node.v1.NodeService`（节点）与 `edgeweir.node.v1.ProbeService`（区域探针与兼任探针的节点），定义见 [`proto/edgeweir/node/v1/node.proto`](../../proto/edgeweir/node/v1/node.proto) 与 [`probe.proto`](../../proto/edgeweir/node/v1/probe.proto) |
+| 服务器证书 | 控制台内部 CA 签发，名称见[环境变量](environment.md#访问地址与网络) |
+| 认证 | `Enroll`、`EnrollProbe`：一次性注册 token（节点 `ewt_`、探针 `ewp_`），节点或探针预先固定内部 CA 的 SHA-256 指纹。其他 RPC：内部 CA 签发的客户端证书（mTLS），CN 为节点 ID（`O=Edgeweir Node`）或探针 ID（`O=Edgeweir Probe`）；探针证书只能调用 `ProbeService`，节点证书只在节点兼任探针时调用 `GetProbeTargets`、`ReportProbeResults` |
 | 其他路径 | 404 |
 
 > [!WARNING]

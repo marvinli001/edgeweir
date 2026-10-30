@@ -1,25 +1,58 @@
 # 接入节点
 
-为集群生成安装命令，在 Linux 主机上安装并注册边缘节点；节点端口与防火墙；运行区域探针。
+在 Linux 主机或容器中安装边缘节点并注册到集群：要求、发布物与校验、安装命令、手动安装、注册与 mTLS、端口、访客 IP、区域探针与下载镜像。
+
+组件、端口与文件总表见 [节点概览](../node/README.md)。
 
 ## 要求
 
 | 项目 | 要求 |
 | --- | --- |
-| 系统 | Linux，amd64 或 arm64，glibc 2.34 及以上：RHEL、Rocky、AlmaLinux 9 及以上，Debian 12 及以上，Ubuntu 22.04 及以上；systemd（`--no-start` 时不要求） |
+| 系统 | Linux，amd64 或 arm64，glibc 2.34 及以上：RHEL、Rocky、AlmaLinux 9 及以上，Debian 12 及以上，Ubuntu 22.04 及以上；systemd（`--no-start` 与容器不要求） |
 | 权限 | root 或 sudo |
-| 命令 | `curl`、`sha256sum`、`tar` |
+| 命令 | `curl`、`sha256sum`、`tar`；`openssl`（可选，用于安装前核对节点通道的 CA） |
 | 访问控制台 | `EDGEWEIR_PUBLIC_URL`（`/install.sh`、`/downloads/*`）与节点通道地址（**系统设置** 的「节点通道」，默认 8443），见 [端口与反向代理](networking.md) |
-| 访问外部 | GitHub Releases 与 `api.github.com`（未使用 `--mirror-only` 时） |
+| 访问外部 | `github.com` 与 `api.github.com`（未使用 `--mirror-only` 时） |
+| 端口 | 80、443 等未被其他程序占用，见 [端口与防火墙](#端口与防火墙) |
 
-节点使用为 Edgeweir 构建的 OpenResty，与 edgeweir-node 一起发布，列在同一个已签名的 `checksums.txt` 中：
+## 发布物
 
-| 软件包 | 内容 | 安装 |
-| --- | --- | --- |
-| `edgeweir-openresty` | OpenResty 1.31.1.1，含 HTTP/2、HTTP/3、Brotli、Zstandard；`/usr/lib/edgeweir-openresty/`（nginx 为 `/usr/lib/edgeweir-openresty/nginx/sbin/nginx`） | `edgeweir-node` 依赖它，始终安装 |
-| `edgeweir-openresty-modsecurity` | ModSecurity 动态模块 `/usr/lib/edgeweir-openresty/modules/ngx_http_modsecurity_module.so` 与 OWASP CRS 规则 `/usr/share/edgeweir-openresty/crs/` | `edgeweir-node` 推荐安装；`install.sh` 默认安装，`--no-modsecurity` 跳过，此时节点不支持 [OWASP CRS](../guide/waf.md) |
+发布在 [GitHub Releases](https://github.com/marvinli001/edgeweir-node/releases)，`<版本>` 为不带 `v` 的版本号。
 
-两个软件包只有 deb 与 rpm 格式（amd64、arm64）。不再使用 openresty.org 的软件源；早先由 `install.sh` 添加的 openresty.org 软件源与 `openresty` 软件包可以自行删除。
+| 文件 | 内容 |
+| --- | --- |
+| `edgeweir-node_<版本>_amd64.deb`、`_arm64.deb` | agent、Lua 模块、systemd 单元、`/etc/default/edgeweir-node`；依赖 `edgeweir-openresty (>= 1.31.1.1-3)`，推荐 `edgeweir-openresty-modsecurity` 与 `nftables` |
+| `edgeweir-node-<版本>-1.x86_64.rpm`、`.aarch64.rpm` | 同上 |
+| `edgeweir-node_<版本>_linux_amd64.tar.gz`、`_linux_arm64.tar.gz` | 目录 `edgeweir-node_<版本>_linux_<架构>/`：`edgeweir-node`、`lua/edgeweir/`、`systemd/edgeweir-node.service`、`systemd/edgeweir-probe.service`、`LICENSE`、`NOTICE` |
+| `edgeweir-openresty_1.31.1.1-3_<架构>.deb`、`edgeweir-openresty-1.31.1.1-3.<架构>.rpm` | OpenResty，`/usr/lib/edgeweir-openresty/`；只有 deb 与 rpm |
+| `edgeweir-openresty-modsecurity_1.31.1.1-3_<架构>.deb`、`.rpm` | ModSecurity 模块与 OWASP CRS 4.29.0；不安装时该节点不支持 [OWASP CRS](../guide/waf.md) |
+| `*.sbom.json` | 每个压缩包、安装包与 edgeweir-openresty 的 SBOM（SPDX） |
+| `checksums.txt`、`checksums.txt.sigstore.json` | 全部文件的 SHA-256 与 cosign 无密钥签名 |
+| 镜像 `ghcr.io/marvinli001/edgeweir-node:<版本>` | amd64、arm64；另有 `X.Y` 与 `latest` 标签；cosign 签名与构建来源证明 |
+
+不再使用 openresty.org 的软件源；早先由 `install.sh` 添加的 openresty.org 软件源与 `openresty` 软件包可以删除。
+
+### 校验发布物
+
+`install.sh` 自动执行签名与 SHA-256 校验。手动安装前执行：
+
+```bash title="下载目录"
+cosign verify-blob \
+  --bundle checksums.txt.sigstore.json \
+  --certificate-identity "https://github.com/marvinli001/edgeweir-node/.github/workflows/release.yml@refs/tags/v<版本>" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+sha256sum --ignore-missing -c checksums.txt
+gh attestation verify edgeweir-node_<版本>_linux_amd64.tar.gz --repo marvinli001/edgeweir-node
+```
+
+| 步骤 | 预期 |
+| --- | --- |
+| `cosign verify-blob` | `Verified OK` |
+| `sha256sum` | 每个已下载的文件为 `OK` |
+| `gh attestation verify` | 构建来源证明属于 `marvinli001/edgeweir-node` 的发布工作流；镜像用 `gh attestation verify oci://ghcr.io/marvinli001/edgeweir-node:<版本> --repo marvinli001/edgeweir-node` |
+
+发布物由 GitHub Actions 从 tag 构建，可复现（`-trimpath`，时间戳取提交时间）。
 
 ## 1. 生成安装命令
 
@@ -30,12 +63,12 @@
 
 | 项目 | 行为 |
 | --- | --- |
-| 注册 token | `ewt_` 前缀，单次有效，数据库只存 SHA-256；生成操作写入审计日志。 |
-| `--server` | **系统设置** 中的「节点通道」地址，见 [节点通道地址与证书](networking.md#节点通道地址与证书)。 |
-| `--ca-sha256` | 节点通道内部 CA 的 SHA-256 指纹，与 **系统设置** 中的「CA 指纹」相同。 |
-| API | `POST /api/v1/enrollment-tokens`，`ttlMinutes` 取值 5–10080，默认 60；`GET /api/v1/enrollment-tokens/{id}` 返回 `usedAt` 与注册的节点。见 [API 与端点](../reference/api.md)。 |
-| 地址提醒 | 控制台地址（`install.sh` 从此下载）或节点通道地址是 localhost、回环或内网地址时，对话框逐条提醒，**系统设置** 中的地址旁显示「仅本机可达」或「内网地址」；控制台地址是公网 HTTP 地址时提醒「控制台地址未加密，install.sh 将以明文传输」，**系统设置** 中标「未加密」。控制台启动时为每条提醒写一条警告日志；不阻止生成。 |
-| 清理 | 过期或使用超过 7 天的 token 每 30 分钟删除一次。 |
+| 注册 token | `ewt_` 前缀，单次有效，数据库只存 SHA-256；生成操作写入审计日志 |
+| `--server` | **系统设置** 中的「节点通道」地址，见 [节点通道地址与证书](networking.md#节点通道地址与证书) |
+| `--ca-sha256` | 节点通道内部 CA 的 SHA-256 指纹，与 **系统设置** 中的「CA 指纹」相同 |
+| API | `POST /api/v1/enrollment-tokens`，`ttlMinutes` 取值 5–10080，默认 60；`GET /api/v1/enrollment-tokens/{id}` 返回 `usedAt` 与注册的节点。见 [API 与端点](../reference/api.md) |
+| 地址提醒 | 控制台地址（`install.sh` 从此下载）或节点通道地址是 localhost、回环或内网地址时，对话框逐条提醒，**系统设置** 中的地址旁显示「仅本机可达」或「内网地址」；控制台地址是公网 HTTP 地址时提醒「控制台地址未加密，install.sh 将以明文传输」，**系统设置** 中标「未加密」。控制台启动时为每条提醒写一条警告日志；不阻止生成 |
+| 清理 | 过期或使用超过 7 天的 token 每 30 分钟删除一次 |
 
 ### 节点通道连接检查
 
@@ -46,7 +79,7 @@
 | 连接正常 / 节点通道连接正常 | 握手成功，证书链含节点通道内部 CA |
 | 控制台无法连接该地址 / 控制台无法连接节点通道地址 | 3 秒内没有完成握手：地址或解析错误，端口未放行，或控制台所在网络到不了该地址 |
 | 证书不符，前面可能有代理或 CDN / 节点通道证书不符，前面可能有代理或 CDN | 出示了其他证书链：代理或 CDN 终结了 TLS，或地址指向其他服务，节点 mTLS 会失败，见 [节点通道四层透传](networking.md#节点通道四层透传)；`wss://`、`ws://` 地址的 WebSocket 握手被拒绝（入口未开放或地址指向其他服务）也是此结果，见 [节点通道的 WebSocket 入口](networking.md#节点通道的-websocket-入口) |
-| 出站策略不允许连接该地址 / 出站策略不允许连接节点通道地址 | **系统设置** 中保存的地址解析到内网、回环等特殊用途地址，`EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 未放行：控制台不连接，与其他在 Web 界面保存的目标相同。`EDGEWEIR_NODE_API_URL` 与默认地址不受此限制 |
+| 出站策略不允许连接该地址 / 出站策略不允许连接节点通道地址 | **系统设置** 中保存的地址解析到内网、回环等特殊用途地址，`EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 未放行：控制台不连接。`EDGEWEIR_NODE_API_URL` 与默认地址不受此限制 |
 
 检查只作提示，不阻止任何操作：控制台能连上自己的地址，不代表其他网络的节点也能连上；控制台所在网络不支持访问自己的公网地址（NAT 回流）时，结果为无法连接，节点仍可能正常注册。结果缓存 30 秒，地址改变后重新检查。API：`GET /api/v1/settings/node-channel-check`，返回 `{ url, result, checkedAt }`，`result` 为 `ok`、`unreachable`、`mismatch` 或 `refused`。
 
@@ -60,7 +93,23 @@ curl -fsSL https://cdn-admin.example.com/install.sh | sudo --preserve-env=EDGEWE
   --server https://cdn-admin.example.com:8443 --ca-sha256 <CA 指纹>
 ```
 
-token 只经 `EDGEWEIR_TOKEN` 环境变量或 `--token-file PATH` 传递，不出现在进程参数中；`--token` 参数被拒绝。全部选项见 [命令行](../reference/cli.md)。
+token 只经 `EDGEWEIR_TOKEN` 环境变量或 `--token-file PATH` 传递，不出现在进程参数中；`--token` 被拒绝。
+
+| 选项 | 默认值 | 作用 |
+| --- | --- | --- |
+| `--server URL` | 必需 | 节点通道地址：`https://`，或 WebSocket 入口 `wss://`、`ws://`（节点 0.2.0 及以上） |
+| `--ca-sha256 HEX` | 必需 | 内部 CA 的 SHA-256，64 位小写十六进制 |
+| `--token-file PATH` | 无 | 从文件读取 token，优先于 `EDGEWEIR_TOKEN` |
+| `--version VER` | `latest` | 安装的版本，可带 `v`；`latest` 依次取镜像的 `latest` 文件与 GitHub 最新发布 |
+| `--format auto\|deb\|rpm\|tar` | `auto` | 有 `dpkg` 与 `apt-get` 用 deb，有 `rpm` 与 `dnf`/`yum` 用 rpm，否则 tar |
+| `--mirror URL` | `<EDGEWEIR_PUBLIC_URL>/downloads/edgeweir-node` | 发布镜像，见 [下载镜像](#下载镜像) |
+| `--mirror-only` | 关 | 不回退到 GitHub |
+| `--no-modsecurity` | 关 | 不安装 `edgeweir-openresty-modsecurity` |
+| `--no-start` | 关 | 只安装与注册：不要求 systemd，不启动服务，不做健康检查 |
+| `--force` | 关 | 已注册的主机以新 token 重新注册 |
+| `--allow-unsigned` | 关 | 跳过 cosign 签名校验，仅用于开发；仍校验 SHA-256 |
+
+退出码：`0` 完成，`1` 任一步骤失败（stderr 为 `[edgeweir] error: <原因>`），`2` 缺少必需选项或 `--help`。另见 [命令行](../reference/cli.md#节点安装脚本)。
 
 ## 3. 验证
 
@@ -68,51 +117,136 @@ token 只经 `EDGEWEIR_TOKEN` 环境变量或 `--token-file PATH` 传递，不�
 
 ```bash title="节点"
 systemctl status edgeweir-node
-journalctl -u edgeweir-node -f
+sudo edgeweir-node diagnose
 ```
 
-预期：`edgeweir-node.service` 为 `active (running)`；**集群与节点** 中该节点状态为「在线」，**已应用版本** 显示配置版本号。节点注册后、首次连接节点通道前状态为「等待心跳」；在线但尚未应用配置时 **已应用版本** 标「待应用配置」。
+预期：`edgeweir-node.service` 为 `active (running)`；`diagnose` 每项为 `ok`；**集群与节点** 中该节点状态为「在线」，**已应用版本** 显示配置版本号。节点注册后、首次连接节点通道前状态为「等待心跳」；在线但尚未应用配置时 **已应用版本** 标「待应用配置」。
 
 ## install.sh 流程
 
 | 步骤 | 行为 | 失败时 |
 | --- | --- | --- |
 | 1 | 读取 token（`EDGEWEIR_TOKEN` 或 `--token-file`），校验 `ewt_` 格式，从环境中移除，子进程不继承。状态目录已有 `identity.json`（已注册）时不需要 token，给出也不使用；加 `--force` 时仍需要 token | 退出 |
-| 2 | 检查 Linux、root、`curl`、`sha256sum`、`tar`、systemd、架构；`--format auto` 时有 `dpkg` 与 `apt-get` 选 deb，有 `rpm` 与 `dnf`/`yum` 选 rpm，否则 tar.gz。未注册时再检查节点通道：`--server` 须有 HTTP 响应（任意状态码，不发送 token）；主机有 `openssl` 时，服务器出示的最后一张证书须为 `--ca-sha256` 固定的 CA。`wss://`、`ws://` 地址改为请求 `https://`（`ws://` 为 `http://`）`<主机[:端口]>/node-channel`，须返回 426（入口开放）；CA 在第 9 步注册时于 WebSocket 内核对 | 退出，指出无法连接、前面有终结 TLS 的代理，或 WebSocket 入口未开放 |
+| 2 | 检查 Linux、root、`curl`、`sha256sum`、`tar`、systemd、架构，选择安装格式。未注册时再检查节点通道：`--server` 须有 HTTP 响应（任意状态码，不发送 token）；主机有 `openssl` 时，服务器出示的最后一张证书须为 `--ca-sha256` 固定的 CA。`wss://`、`ws://` 地址改为请求 `https://`（`ws://` 为 `http://`）`<主机[:端口]>/node-channel`，须返回 426（入口开放）；CA 在第 9 步注册时于 WebSocket 内核对 | 退出，指出无法连接、前面有终结 TLS 的代理，或 WebSocket 入口未开放 |
 | 3 | 解析版本：`--version`，或下载镜像的 `latest` 文件，再回退到 GitHub 最新发布。已注册的主机未给 `--version` 与 `--force` 时跳过第 3–9 步，不下载、不安装。经 `wss://`、`ws://` 地址注册时版本须为 0.2.0 及以上 | 退出，提示传入 `--version` |
 | 4 | 下载 `checksums.txt` 与 `checksums.txt.sigstore.json`：先下载镜像，后 GitHub | 退出 |
 | 5 | `cosign verify-blob` 校验签名：证书身份必须为 `https://github.com/marvinli001/edgeweir-node/.github/workflows/release.yml@refs/tags/v<版本>`，签发者 `https://token.actions.githubusercontent.com`。主机无 cosign 时下载 cosign v3.1.3，核对脚本内固定的 SHA-256 后安装到 `/usr/local/bin/cosign` | 退出 |
 | 6 | 从已签名的 `checksums.txt` 选出本机的安装包，以及同一发布的 `edgeweir-openresty`、`edgeweir-openresty-modsecurity`（每个软件包、格式、架构恰好一个文件）；glibc 低于 2.34 时退出；下载（先镜像，后 GitHub）并校验 SHA-256 | 退出 |
 | 7 | 先安装 `edgeweir-openresty` 与 `edgeweir-openresty-modsecurity`。tar.gz 安装时按主机的 `dpkg` 或 `rpm` 选择格式；两者都没有时要求已安装 `edgeweir-openresty` | 退出 |
-| 8 | 安装 deb、rpm 或 tar.gz | 退出 |
+| 8 | 安装 deb（`apt-get install`，无 apt-get 时 `dpkg -i`）、rpm（`dnf`、`yum` 或 `rpm -Uvh`）或 tar.gz | 退出 |
 | 9 | `edgeweir-node enroll`：核对 CA 指纹后提交 token，本机生成私钥，以 CSR 换取节点证书；此后仅经 mTLS 通信。已注册时跳过；加 `--force` 时先停止 `edgeweir-node.service`，以新 token 执行 `edgeweir-node enroll --force` 替换身份，第 10 步再启动 | 退出 |
 | 10 | 停用 `openresty.service`，启用并启动 `edgeweir-node.service`（`--no-start` 时跳过第 10、11 步）；tar.gz 安装与跳过安装的重新运行先重启运行中的服务（deb、rpm 由包脚本重启） | 退出 |
 | 11 | 每 3 秒执行一次 `edgeweir-node healthcheck`，最多 90 秒，直到数据面已应用配置；通过时输出 `done: edgeweir-node is healthy (revision N, M sites)` | 退出码 1，提示 `journalctl -u edgeweir-node -n 50` |
 
-- 第 5、6 步通过前不执行任何下载的程序。`--allow-unsigned` 跳过第 5 步，仅用于开发，仍校验 SHA-256。
+- 第 5、6 步通过前不执行任何下载的程序。
 - 脚本全部由函数组成，最后一行才调用 `main`：下载中断时不执行任何内容。
 - 已注册的主机可以重新运行同一命令：不下载、不重装，启动服务（运行中则重启）并做健康检查；加 `--version <版本>` 时先安装该版本。主机上没有 `/usr/bin/edgeweir-node` 时安装最新版本。
-- 重新注册（例如证书已过期）：在控制台生成新的安装命令，在命令末尾加 `--force` 执行；之后删除控制台中原来的节点。
-- 节点通道地址改变后，节点 v1.2.0 起自动跟随新地址；旧地址已下线、节点失联时，在节点上执行 `sudo edgeweir-node set-server --server <新地址>`，不必重新注册，见 [更换节点通道地址](networking.md#更换节点通道地址)。
 - 控制台不保存 SSH 凭据；节点私钥不离开节点。
 
-安装结果：
+deb、rpm 由包脚本创建 `edgeweir` 用户、`/var/lib/edgeweir-node`（0700）与 `/var/cache/edgeweir-node`（0750）；tar.gz 由 `install.sh` 创建，并把单元安装到 `/etc/systemd/system/`。安装后的文件见 [文件与目录](../node/README.md#文件与目录)。
 
-| 路径 | 内容 |
+## 手动安装
+
+不使用 `install.sh` 时，先 [校验发布物](#校验发布物)，再按安装形式执行。token 写入只有 root 可读的文件，注册后删除。
+
+### deb / rpm
+
+```bash title="节点（Debian、Ubuntu）"
+sudo apt-get install ./edgeweir-openresty_1.31.1.1-3_amd64.deb \
+  ./edgeweir-openresty-modsecurity_1.31.1.1-3_amd64.deb ./edgeweir-node_<版本>_amd64.deb
+```
+
+```bash title="节点（RHEL、Rocky、AlmaLinux）"
+sudo dnf install ./edgeweir-openresty-1.31.1.1-3.x86_64.rpm \
+  ./edgeweir-openresty-modsecurity-1.31.1.1-3.x86_64.rpm ./edgeweir-node-<版本>-1.x86_64.rpm
+```
+
+```bash title="节点"
+sudo install -m 0600 /dev/stdin /root/edgeweir-token <<< '<一次性 token>'
+sudo edgeweir-node enroll --server https://cdn-admin.example.com:8443 \
+  --token-file /root/edgeweir-token --ca-sha256 <CA 指纹>
+sudo rm /root/edgeweir-token
+sudo systemctl disable --now openresty 2>/dev/null || true
+sudo systemctl enable --now edgeweir-node
+```
+
+软件包不自动启用服务：注册后再启用。主机装有 OpenResty 官方包时停用其 `openresty.service`（单元声明 `Conflicts=openresty.service`）。
+
+### tar.gz
+
+需要已安装 `edgeweir-openresty`（deb 或 rpm）。
+
+```bash title="节点"
+tar -xzf edgeweir-node_<版本>_linux_amd64.tar.gz
+cd edgeweir-node_<版本>_linux_amd64
+sudo groupadd --system edgeweir
+sudo useradd --system --gid edgeweir --home-dir /var/lib/edgeweir-node --no-create-home \
+  --shell /usr/sbin/nologin edgeweir
+sudo install -m 0755 edgeweir-node /usr/bin/edgeweir-node
+sudo install -d -m 0755 /usr/share/edgeweir-node/lua/edgeweir
+sudo install -m 0644 lua/edgeweir/*.lua /usr/share/edgeweir-node/lua/edgeweir/
+sudo install -D -m 0644 systemd/edgeweir-node.service /etc/systemd/system/edgeweir-node.service
+sudo install -d -o edgeweir -g edgeweir -m 0700 /var/lib/edgeweir-node
+sudo install -d -o edgeweir -g edgeweir -m 0750 /var/cache/edgeweir-node
+sudo systemctl daemon-reload
+```
+
+之后按 [deb / rpm](#deb--rpm) 的注册与启动步骤执行。
+
+### Docker
+
+```bash title="节点"
+docker run -d --name edgeweir-node --restart unless-stopped \
+  -p 80:80 -p 443:443 -p 443:443/udp \
+  -v edgeweir-node:/var/lib/edgeweir-node \
+  -v edgeweir-node-cache:/var/cache/edgeweir-node \
+  ghcr.io/marvinli001/edgeweir-node:<版本>
+read -rs EDGEWEIR_TOKEN && export EDGEWEIR_TOKEN
+docker exec -e EDGEWEIR_TOKEN edgeweir-node edgeweir-node enroll \
+  --server https://cdn-admin.example.com:8443 --ca-sha256 <CA 指纹>
+```
+
+| 项目 | 行为 |
 | --- | --- |
-| `/usr/bin/edgeweir-node` | agent |
-| `/usr/share/edgeweir-node/lua/edgeweir/` | OpenResty Lua 模块 |
-| `/usr/lib/edgeweir-openresty/` | OpenResty（`edgeweir-openresty`）；`modules/` 下为 ModSecurity 模块 |
-| `/usr/share/edgeweir-openresty/crs/` | OWASP CRS 规则（`edgeweir-openresty-modsecurity`，版本随软件包固定，运行时不下载） |
-| `/var/lib/edgeweir-node/` | 状态目录（`edgeweir` 用户，0700）：`node.key`、`node.crt`、`ca.crt`、`identity.json`、`config/`（最后可用配置与 `receipts.json`） |
-| `/var/cache/edgeweir-node/` | 缓存目录（`edgeweir` 用户，0750） |
-| `edgeweir-node.service` | deb、rpm：`/usr/lib/systemd/system/`；tar.gz：`/etc/systemd/system/` |
+| 入口 | `edgeweir-node supervise --manage-nginx`；agent、nginx 主进程与 worker 以 uid 10001 运行 |
+| 注册 | 运行中的节点每 2 秒检查状态目录，`enroll` 写入身份后自动连接；注册前所有域名返回 `404 unknown-host` |
+| 卷 | `/var/lib/edgeweir-node`：身份与 LKG 配置，删除即丢失注册；`/var/cache/edgeweir-node`：缓存，不挂载时随容器删除 |
+| 健康检查 | 镜像内置 `edgeweir-node healthcheck`，间隔 10 秒，启动宽限 15 秒，3 次失败为 `unhealthy` |
+| 端口 | 附加监听端口与 L4 端口池须另行发布，或使用 `--network host`，见 [端口与防火墙](#端口与防火墙) |
+| 参数 | `-e EDGEWEIR_<参数>=<值>`，见 [节点配置](../node/configuration.md) |
+| GeoIP | 镜像内置 IPinfo Lite（国家、ASN） |
 
-deb、rpm 由包脚本创建 `edgeweir` 用户与目录；tar.gz 由 `install.sh` 创建。
+## 注册与 mTLS
+
+| 项目 | 行为 |
+| --- | --- |
+| token | 一次性，`ewt_` 前缀；经 `EDGEWEIR_TOKEN`、`--token-file`（`EDGEWEIR_TOKEN_FILE`）或 `--token` 传入，命令行参数优先于环境变量，同一层同时给出 token 与 token 文件时报错；读取后从环境中删除；`--token` 出现在进程列表中，使用时输出警告 |
+| CA 固定 | 节点通道出示的证书链中须有一张证书的 DER SHA-256 等于 `--ca-sha256`，并以它为唯一根校验服务器证书与主机名（默认取 `--server` 的主机，`--server-name` 可覆盖）；通过后才发送 token |
+| 密钥 | 节点生成 ECDSA P-256 私钥与 CSR；控制台签发节点证书（有效期 30 天）并返回 CA 证书，节点核对 CA 哈希、签发者、用途与公钥 |
+| 写入 | `node.key`（0600）、`node.crt`、`ca.crt`，最后写 `identity.json`；以 root 执行且状态目录属于 `edgeweir` 时文件交给该用户 |
+| 之后 | 每个 RPC 使用 mTLS，只信任内部 CA；证书剩余不足三分之一时自动续期，见 [证书轮换](../node/operations.md#证书轮换) |
+| 已注册 | 状态目录已有身份时 `enroll` 拒绝，加 `--force` 替换；`--force` 在节点运行时拒绝（先停止服务），并删除旧身份与旧 LKG 配置 |
+| 失败 | token 已用或过期：`console rejected the enrollment token (expired or already used)`；CA 不符：`CA pin mismatch` |
+
+`enroll` 参数：
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `--server` | 必填 | 节点通道地址：`https://<主机>:8443`，或 WebSocket 入口 `wss://<主机>`（明文 HTTP 控制台为 `ws://`），不带路径 |
+| `--ca-sha256` | 必填 | 内部 CA 证书（DER）的 SHA-256，十六进制（也接受 `sha256:` 前缀与冒号分隔） |
+| `--token-file` | 无 | token 文件（忽略首尾空白） |
+| `--token` | 无 | token；优先用 `EDGEWEIR_TOKEN` 或 `--token-file` |
+| `--server-name` | `--server` 的主机名 | 校验的 TLS 服务器名 |
+| `--state-dir` | `/var/lib/edgeweir-node` | 状态目录 |
+| `--force` | 关 | 替换已有身份 |
+| `--timeout` | `30s` | 注册 RPC 超时 |
+| `--log-level`、`--log-format` | `info`、`text` | 日志级别与格式 |
+
+WebSocket 入口：TLS 在 WebSocket 内运行并由控制台终结，CA 固定与 mTLS 不变；`wss://` 地址本身的证书按系统根证书校验；握手遵循 `HTTPS_PROXY`、`HTTP_PROXY`、`NO_PROXY`。见 [节点通道的 WebSocket 入口](networking.md#节点通道的-websocket-入口)。
 
 ## 端口与防火墙
 
-节点在以下端口接受用户流量，主机防火墙与云安全组需要放行；节点只主动连接控制台的节点通道，不需要为控制台开放入站端口。
+节点在以下端口接受用户流量，主机防火墙与云安全组需要放行；节点只主动连接控制台的节点通道，不需要为控制台开放入站端口。出站目标见 [端口](../node/README.md#端口)。
 
 | 端口 | 用途 | 条件 |
 | --- | --- | --- |
@@ -125,11 +259,11 @@ deb、rpm 由包脚本创建 `edgeweir` 用户与目录；tar.gz 由 `install.sh
 
 | 项目 | 说明 |
 | --- | --- |
-| 权限 | 端口池只含 1024–65535，systemd 单元与镜像不需要额外权限 |
+| 权限 | 端口池只含 1024–65535；1024 以下的附加端口与 80、443 相同由 nginx 主进程绑定，systemd 单元与镜像不需要额外权限 |
 | 容器节点 | 发布端口池中的端口，例如 `-p 9000:9000 -p 9000:9000/udp`，区间写成 `-p 20000-20100:20000-20100`；端口池较大时使用 host 网络（`--network host`） |
-| 端口变化 | 新建、删除 L4 应用或修改其端口，增删集群的附加监听端口时节点 reload，已有连接由旧 worker 继续服务，见 [reload 与长连接](../guide/l4.md#reload-与长连接) |
-| 1024 以下的附加端口 | 与 80、443 相同由 nginx 主进程绑定，不需要额外权限 |
+| 端口变化 | 新建、删除 L4 应用或修改其端口，增删集群的附加监听端口时节点 reload，已有连接由旧 worker 继续服务，见 [reload 与长连接](../guide/l4.md#reload-与长连接) 与 [旧 worker 的关闭时间](../node/configuration.md#旧-worker-的关闭时间) |
 | 端口段 | 每个端口占一个监听 socket；UDP 端口段每个 worker 各占一个（`reuseport`）。节点按监听 socket 数提高 `worker_connections`，并把自身的打开文件数软限制提到硬限制 |
+| 端口被占用 | reload 不生效，该配置版本记为失败，节点继续服务原配置，见 [节点故障排查](../node/troubleshooting.md#端口冲突) |
 
 ## 访客 IP
 
@@ -154,21 +288,6 @@ deb、rpm 由包脚本创建 `edgeweir` 用户与目录；tar.gz 由 `install.sh
 
 > [!WARNING]
 > PROXY protocol 模式下，能直接连到节点端口的客户端可以在头中声明任意地址；只对负载均衡器开放节点的 HTTP / HTTPS 端口。可信 CIDR 只写代理实际使用的地址：列表中的地址可以为任意访客声明地址。
-
-### 旧 worker 的关闭时间
-
-reload 后，旧 worker 默认一直服务已有的连接（四层长连接、HTTP keep-alive、WebSocket），直到连接结束；频繁的结构性变更会留下多组旧 worker。节点参数 `--stream-shutdown-timeout`（环境变量 `EDGEWEIR_STREAM_SHUTDOWN_TIMEOUT`）限制这段时间：
-
-| 值 | 行为 |
-| --- | --- |
-| `0`（默认） | 不限时，旧 worker 在最后一个连接结束后退出 |
-| 时长，如 `30m`、`2h` | 到时间后旧 worker 关闭仍在服务的全部连接（nginx `worker_shutdown_timeout`），四层、HTTP 与 WebSocket 连接都受影响 |
-
-```bash title="/etc/default/edgeweir-node"
-EDGEWEIR_STREAM_SHUTDOWN_TIMEOUT=30m
-```
-
-修改后执行 `sudo systemctl restart edgeweir-node`。容器节点用 `-e EDGEWEIR_STREAM_SHUTDOWN_TIMEOUT=30m`。
 
 ## 区域探针
 
@@ -213,7 +332,7 @@ volumes:
 
 ### systemd
 
-edgeweir-node 的 deb、rpm 软件包含 `edgeweir-probe.service`（默认不启用），tar.gz 在 `systemd/` 目录中提供同一单元。软件包依赖 `edgeweir-openresty`，探针模式不启动它；安装前按 [SECURITY.md](../../SECURITY.md#验证发布物) 校验发布物，探针主机不启用 `edgeweir-node.service`。
+edgeweir-node 的 deb、rpm 软件包含 `edgeweir-probe.service`（默认不启用），tar.gz 在 `systemd/` 目录中提供同一单元。软件包依赖 `edgeweir-openresty`，探针模式不启动它；安装前 [校验发布物](#校验发布物)，探针主机不启用 `edgeweir-node.service`。
 
 ```bash title="探针主机"
 sudo tee /etc/default/edgeweir-probe >/dev/null <<'CONF'
@@ -241,7 +360,7 @@ edgeweir-node probe [--state-dir DIR]     # 已注册
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
-| `--server` | 无（首次运行必填） | 节点通道地址 |
+| `--server` | 无（首次运行必填） | 节点通道地址，格式同 `enroll` |
 | `--ca-sha256` | 无（首次运行必填） | 节点通道内部 CA 证书（DER）的 SHA-256，十六进制 |
 | `--token-file` | 无 | 注册令牌文件（首次运行） |
 | `--token` | 无 | 注册令牌（首次运行）；出现在进程列表中，优先用 `EDGEWEIR_TOKEN` 或 `--token-file` |
@@ -283,13 +402,13 @@ edgeweir-node probe [--state-dir DIR]     # 已注册
 ```text
 downloads/
   edgeweir-node/
-    latest                      # 版本号，例如 0.2.0
-    v0.2.0/
+    latest                      # 版本号，例如 1.6.2
+    v1.6.2/
       checksums.txt
       checksums.txt.sigstore.json
-      edgeweir-node_0.2.0_amd64.deb
-      edgeweir-node-0.2.0-1.x86_64.rpm
-      edgeweir-node_0.2.0_linux_amd64.tar.gz
+      edgeweir-node_1.6.2_amd64.deb
+      edgeweir-node-1.6.2-1.x86_64.rpm
+      edgeweir-node_1.6.2_linux_amd64.tar.gz
       edgeweir-openresty_1.31.1.1-3_amd64.deb
       edgeweir-openresty-1.31.1.1-3.x86_64.rpm
       edgeweir-openresty-modsecurity_1.31.1.1-3_amd64.deb
@@ -314,39 +433,32 @@ downloads/
 
    预期：输出版本号。
 
-节点 agent 自升级使用的发布源在 **系统设置 → 节点发布源** 配置，与本镜像无关，见 [节点升级](../guide/node-upgrades.md)。
+节点签名升级使用的发布源在 **系统设置 → 节点发布源** 与节点的 `EDGEWEIR_UPGRADE_SOURCE` 配置，与本镜像无关，见 [节点升级](../guide/node-upgrades.md#私有镜像与自有发行)。
 
 ## 排障
 
-节点的警告、错误与关键事件也在节点详情的「日志」页签，见[节点日志](../guide/node-logs.md)。
-
-在节点上执行 `sudo edgeweir-node diagnose`（v1.5.0 起）逐项检查身份、节点证书、控制台连通性、与控制台的时钟偏差、运行中的 agent、配置与数据面，每项一行（`ok`、`warn`、`fail`、`skip`），有 `fail` 时退出码 1；`--json` 输出完整结果。需要分析 agent 本身时，`sudo edgeweir-node pprof heap --output heap.pb.gz`（或 `profile`、`goroutine` 等）从本机诊断 socket 取 Go profile。
+安装与注册阶段的错误。运行中的连接、配置、证书与缓存问题见 [节点故障排查](../node/troubleshooting.md)。
 
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
-| 节点详情的「时钟偏差」标「偏差过大」，或收到「节点时钟偏差过大」告警 | 节点主机没有时间同步，时钟比控制台快或慢超过告警规则的秒数 | 在节点上开启 NTP（如 `timedatectl set-ntp true`，或 chrony），之后的心跳会更新偏差。 |
-| `no enrollment token` | `sudo` 未保留 `EDGEWEIR_TOKEN` | 原样执行生成的命令：`export` 与 `sudo --preserve-env=EDGEWEIR_TOKEN`。 |
-| `the enrollment token is malformed (expected ewt_...)` | token 复制不完整 | 重新复制安装命令。 |
-| `systemd is required` | 主机无 systemd | 使用 systemd 主机，或加 `--no-start` 只安装与注册。 |
-| `could not determine the latest edgeweir-node version; pass --version` | 下载镜像无 `latest`，且 GitHub 不可达或无发布 | 加 `--version`，或配置下载镜像。 |
-| `edgeweir-openresty needs glibc 2.34 or later` | 发行版过旧 | 使用 RHEL、Rocky、AlmaLinux 9，Debian 12，Ubuntu 22.04 或更新的系统。 |
-| `checksums.txt does not list exactly one ... package of edgeweir-openresty...` | 镜像或发布缺少该软件包，或同一架构有多个版本 | 按 `checksums.txt` 补齐镜像目录；发布不含 ModSecurity 模块时加 `--no-modsecurity`。 |
-| `edgeweir-openresty comes as .deb and .rpm only` | tar.gz 安装，主机没有 `dpkg` 与 `rpm`，也没有安装 `edgeweir-openresty` | 改用有 deb 或 rpm 包管理的主机。 |
-| `cosign signature verification FAILED`、`SHA-256 verification FAILED` | 下载内容与签名或校验和不符 | 检查下载源与镜像目录内容；不跳过校验。 |
-| `CA pin mismatch`、`does not present the console's node CA` | 8443 被代理或 CDN 终结 TLS（包括开启了代理的 Cloudflare 记录），或 `--server` 指向其他服务 | 直连或 [四层透传](networking.md#节点通道四层透传)；Cloudflare 记录改为仅 DNS。 |
-| `cannot reach the node channel` | `--server` 的地址或域名解析错误，防火墙或安全组未放行该端口，或节点通道地址是本机或内网地址 | 核对地址与解析，放行端口；在节点上执行 `curl -k https://<地址>:8443/` 应返回 404。地址错误时在 **系统设置** 的「节点通道」修改，再生成新的安装命令。 |
-| `console rejected the enrollment token (expired or already used)` | token 已过期或已使用 | 重新生成安装命令。 |
-| `edgeweir-node is installed but not healthy after 90s` | 节点 90 秒内未应用配置：连不上节点通道、证书被拒绝，或 OpenResty 未能启动 | 查看 `journalctl -u edgeweir-node -n 50`；处理后重新运行同一命令（只重启服务并检查）。 |
-| `node is already enrolled (use --force to replace the identity)` | 主机已有节点身份（`/var/lib/edgeweir-node/identity.json`） | 保留现有注册；替换身份时用新的安装命令加 `--force` 执行 `install.sh`，或先停止节点（`systemctl stop edgeweir-node`，运行中的节点会拒绝），用新 token 执行 `edgeweir-node enroll --force` 后再启动，参数见 [edgeweir-node](https://github.com/marvinli001/edgeweir-node)。 |
-| 节点日志 `client certificate expired at ...`，控制台节点标 **证书已过期** | 节点离线超过证书剩余有效期，未能续期；节点通道拒绝并说明 `client certificate has expired (CERT_HAS_EXPIRED)` | 生成新的安装命令，在节点上以 `--force` 执行新的安装命令（或 `systemctl stop edgeweir-node`，用新 token 执行 `edgeweir-node enroll --force` 后启动）；删除控制台中原来的节点。 |
-| `x509: certificate is valid for ..., not ...` | 节点连接的名称不在节点通道证书中：注册时的地址来自已经改掉的 `EDGEWEIR_NODE_API_URL` | 将该名称加入 `EDGEWEIR_NODE_API_HOSTNAMES`，重启控制台，见 [节点通道地址与证书](networking.md#节点通道地址与证书)。 |
-| 注册超时，或节点一直离线 | 防火墙或安全组未放行 8443；节点通道地址解析错误 | 放行 8443；核对域名解析。 |
-| 修改节点通道地址后，已注册的节点离线 | v1.2.0 以前的节点一直使用注册时的地址；或旧地址在节点切换前就已下线 | 恢复原地址（端点、DNS 记录或端口转发），等节点切换（先升级 v1.2.0 以前的节点）；已失联的 v1.2.0 及以上节点执行 `sudo edgeweir-node set-server --server <新地址>`；更早的节点以 `--force` 执行新的安装命令重新注册，再删除控制台中原来的节点。 |
-| 节点标「无法切换」 | 节点检查新地址失败，原因在悬停提示与节点详情中：无法连接、该地址没有 WebSocket 入口、证书不是本控制台签发的（前面有代理或 CDN 终结了 TLS）等 | 从节点所在网络确认新地址可达且为四层透传；修正后节点在下一次重试（至多 60 分钟）时切换，重启节点服务会立即重试。 |
-| 节点一直显示「等待心跳」 | 已注册，但 agent 还没有经 mTLS 连上节点通道：服务未启动（如 `--no-start`），或连接失败 | 在节点上执行 `systemctl status edgeweir-node` 与 `journalctl -u edgeweir-node -n 50`。 |
-| 连接检查显示「证书不符，前面可能有代理或 CDN」 | 节点通道地址指向终结 TLS 的代理、CDN 或其他服务 | 直连或 [四层透传](networking.md#节点通道四层透传)，或在 **系统设置** 改为直连的地址。 |
-| L4 应用的端口连接超时 | 节点防火墙或安全组未放行端口池；容器节点未发布端口 | 按 [端口与防火墙](#端口与防火墙) 放行或发布端口。 |
-| `probe is not enrolled: the first run needs --server, --ca-sha256 and a probe token` | 探针首次启动缺少注册参数（退出码 2） | 设置 `EDGEWEIR_SERVER`、`EDGEWEIR_CA_SHA256` 与 `EDGEWEIR_TOKEN` 后重新启动。 |
-| `probe enrollment failed: console rejected the enrollment token (expired or already used)` | 探针令牌已过期或已使用 | 重新「添加探针」生成令牌。 |
-| 探针容器显示 `unhealthy` | 镜像健康检查查询数据面 | 关闭容器健康检查，见[容器](#容器)。 |
-
+| `no enrollment token` | `sudo` 未保留 `EDGEWEIR_TOKEN` | 原样执行生成的命令：`export` 与 `sudo --preserve-env=EDGEWEIR_TOKEN` |
+| `the enrollment token is malformed (expected ewt_...)` | token 复制不完整 | 重新复制安装命令 |
+| `--server must be an https://, wss:// or ws:// URL` | 地址缺少协议或协议错误 | 使用 **系统设置** 中的「节点通道」地址 |
+| `systemd is required (use --no-start to only install and enroll)` | 主机无 systemd | 使用 systemd 主机，或加 `--no-start` 只安装与注册，或使用 [Docker](#docker) |
+| `unsupported architecture: …` | 不是 amd64 或 arm64 | 使用 amd64 或 arm64 主机 |
+| `could not determine the latest edgeweir-node version; pass --version` | 下载镜像无 `latest`，且 GitHub 不可达或无发布 | 加 `--version`，或配置 [下载镜像](#下载镜像) |
+| `edgeweir-openresty needs glibc 2.34 or later` | 发行版过旧 | 使用 RHEL、Rocky、AlmaLinux 9，Debian 12，Ubuntu 22.04 或更新的系统 |
+| `checksums.txt does not list exactly one ... package of edgeweir-openresty...` | 镜像或发布缺少该软件包，或同一架构有多个版本 | 按 `checksums.txt` 补齐镜像目录；发布不含 ModSecurity 模块时加 `--no-modsecurity` |
+| `edgeweir-openresty comes as .deb and .rpm only` | tar.gz 安装，主机没有 `dpkg` 与 `rpm`，也没有安装 `edgeweir-openresty` | 改用有 deb 或 rpm 包管理的主机，或使用 [Docker](#docker) |
+| `cosign signature verification FAILED`、`SHA-256 verification FAILED` | 下载内容与签名或校验和不符 | 检查下载源与镜像目录内容；不跳过校验 |
+| `cannot reach the node channel` | `--server` 的地址或域名解析错误，防火墙或安全组未放行该端口，或节点通道地址是本机或内网地址 | 核对地址与解析，放行端口；在节点上执行 `curl -k https://<地址>:8443/` 应返回 404。地址错误时在 **系统设置** 的「节点通道」修改，再生成新的安装命令 |
+| `does not present the console's node CA`、`CA pin mismatch` | 节点通道被代理或 CDN 终结 TLS（包括开启了代理的 Cloudflare 记录），或 `--server` 指向其他服务 | 直连或 [四层透传](networking.md#节点通道四层透传)；Cloudflare 记录改为仅 DNS |
+| `answers 404: the console's WebSocket entry is closed` | `wss://`、`ws://` 地址的 WebSocket 入口未开放 | 在 **系统设置** 保存 `wss://` 节点通道地址，或设置 `EDGEWEIR_NODE_API_WEBSOCKET=true`，见 [节点通道的 WebSocket 入口](networking.md#节点通道的-websocket-入口) |
+| `cannot connect through <地址>: wss:// and ws:// node channel URLs need 0.2.0 or later` | `--version` 指定的版本低于 0.2.0 | 使用 0.2.0 及以上版本 |
+| `console rejected the enrollment token (expired or already used)` | token 已过期或已使用 | 重新生成安装命令 |
+| `node is already enrolled (use --force to replace the identity)` | 主机已有节点身份（`/var/lib/edgeweir-node/identity.json`） | 保留现有注册；替换身份见 [重新注册](../node/operations.md#重新注册) |
+| `edgeweir-node is installed but not healthy after 90s` | 节点 90 秒内未应用配置：连不上节点通道、证书被拒绝、端口被占用，或 OpenResty 未能启动 | 执行 `sudo edgeweir-node diagnose` 与 `journalctl -u edgeweir-node -n 50`；处理后重新运行同一命令（只重启服务并检查） |
+| 注册超时，或节点一直显示「等待心跳」 | 服务未启动（如 `--no-start`），或 mTLS 连接失败 | 见 [节点故障排查](../node/troubleshooting.md#连接) |
+| `probe is not enrolled: the first run needs --server, --ca-sha256 and a probe token` | 探针首次启动缺少注册参数（退出码 2） | 设置 `EDGEWEIR_SERVER`、`EDGEWEIR_CA_SHA256` 与 `EDGEWEIR_TOKEN` 后重新启动 |
+| `probe enrollment failed: console rejected the enrollment token (expired or already used)` | 探针令牌已过期或已使用 | 重新「添加探针」生成令牌 |
+| 探针容器显示 `unhealthy` | 镜像健康检查查询数据面 | 关闭容器健康检查，见 [容器](#容器) |

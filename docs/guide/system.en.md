@@ -1,272 +1,8 @@
-# Clusters and system
+# System settings and audit
 
-Clusters, node groups, and nodes; revisions and the configuration canary; what needs attention; site enabling; regions; service accounts; the audit log; and system settings.
+System settings (General, Monitoring and Service accounts tabs), the audit log, and the protection settings page.
 
-For **Global rules** and **IP lists**, see [Rules, IP lists, and GeoIP](rules.en.md); for **Bans**, [Bans](bans.en.md); for **DNS steering** and **Alerts**, [DNS steering and alerts](dns-and-alerts.en.md); for regional probes, scheduling addresses, and scheduling rules, [Regional probes and scheduling](scheduling.en.md). Every page of the sidebar: [Console navigation](account.en.md#console-navigation).
-
-## Clusters and nodes
-
-Page: **Clusters & nodes** (`/clusters`); the **Clusters | Regions** switch at the top moves between clusters and [regions](#regions) (`/clusters?view=regions`), and with several clusters **Select cluster** beside it switches between them. The clusters view has the page actions **New cluster** and **Add node**, then a summary of the current cluster. A cluster without nodes shows only its node section (with **Add node**); the summary and the tabs appear once it has a node. The **Nodes** tab (the default) holds the node table and node groups; the **Releases** tab (`/clusters?tab=releases`) holds revisions, configuration canary, and node upgrades; the **DNS** tab holds the cluster's DNS binding, see [Bind a cluster](dns-and-alerts.en.md#bind-a-cluster); the **Scheduling** tab holds the cluster's scheduling rules and their preview, see [Scheduling rules](scheduling.en.md#scheduling-rules); the **Settings** tab (`/clusters?tab=network`) holds [listener ports](https.en.md#the-clusters-listener-ports), [client IP](../deploy/nodes.en.md#client-ip), [unknown hosts](domains.en.md#unknown-hosts-and-node-ip-access), and the cache zone; the **Port pools** tab (`/clusters?tab=ports`) holds the port ranges the cluster's L4 apps may use, see [Set up port pools](l4.en.md#set-up-port-pools).
-
-| Summary | Content |
-| --- | --- |
-| **Nodes online** | Online nodes / all nodes |
-| **Sites** | The cluster's sites |
-| **Latest revision** | The cluster's latest revision, such as `#12 · 7/8 applied`: 8 online enabled nodes, 7 of which run their target revision. While a canary runs, the canary nodes' target is the candidate and the other nodes' the stable revision, see [Configuration canary](#configuration-canary) |
-
-### Clusters
-
-A cluster is a set of nodes plus the sites assigned to them; each cluster has its own revision sequence.
-
-| Action | Description |
-| --- | --- |
-| **New cluster** | **Cluster name**: lowercase letters, digits, and `-`, starting with a letter or digit, at most 64 characters, unique; **Description**: at most 500 characters. Creation adds the default node group `default` and publishes revision #1 |
-| **Edit cluster** | Change name and description |
-| **Delete** | Only when the cluster has no nodes and no sites, its DNS is not **Automatic**, and its written DNS records are removed |
-
-| Rule | Description |
-| --- | --- |
-| Cluster of a site | With several clusters, the new-site form has a **Cluster** field (default: the oldest cluster); through `/api/v1`, `clusterId`. A site cannot change clusters later |
-| Capacity | A cluster publishes at most 512 enabled sites and has at most 256 [L4 apps](l4.en.md) |
-| Cache zone | The **Cache zone** card on the **Settings** tab sets the size and idle removal time of every node's cache zone, see [Cache zone](origins-and-cache.en.md#cache-zone) |
-
-### Node groups
-
-| Action | Description |
-| --- | --- |
-| **New node group** | **Node group**: name, at most 64 characters, unique within the cluster; **Region**: optional, see [Regions](#regions); **Canary group**: see [Configuration canary](#configuration-canary) |
-| **Edit node group** | Opens from a click on the node group's row; change name, region, and **Canary group** |
-| Delete | **Delete** under **⋯** at the end of the row; the default node group (marked **Default**) cannot be deleted; deleting another group moves its nodes back to the default group |
-
-Node groups serve as the lines and backup node groups of **DNS steering**, as canary groups for node upgrades, and as canary groups for the configuration canary. A node group's region is also the region its nodes probe from when they **Also probe**.
-
-### Adding a node
-
-The **Add node** dialog generates a one-time install command as it opens: the cluster's default node group, valid for 1 hour, no node name. **Options** shows the fields below; **Regenerate** generates a new command with them.
-
-| Field | Description |
-| --- | --- |
-| **Node name** | Optional, at most 64 characters |
-| **Node group** | Defaults to the cluster's default node group; hidden when the cluster has only one |
-| **Valid for** | 15 minutes, 1 hour (default), or 24 hours; the API accepts 5 minutes to 7 days |
-
-The dialog shows the **Install command** (with a countdown, shown once), address warnings, and one line with the node channel connection check (with a "Change" link to [Node channel](#node-channel) when it fails), then **Progress**. The CA fingerprint is in the command's `--ca-sha256` and in [System information](#system-information). Every opening of the dialog generates a new token; once closed, the command is not shown again. The token starts with `ewt_` and is single-use; the database keeps its SHA-256 and prefix, never the plaintext. Address warnings, the connection check, and the install flow: [Adding nodes](../deploy/nodes.en.md).
-
-### Nodes
-
-The node table on the **Nodes** tab has one row per node; the **Egress**, **Agent / engine**, and **Heartbeat** columns show on wide screens only.
-
-| Column | Content |
-| --- | --- |
-| **Node** | Name and first IP (hover for the host name); a node that also probes is marked **Also probes** |
-| **Status** | **Online** (heartbeat within 45 seconds), **Offline**, **Disabled**; an enrolled node that has not connected to the node channel since shows **Awaiting heartbeat** (grey); an online node that reports an unhealthy data plane is also marked **Data plane unhealthy**; an offline node whose certificate the node channel refuses is marked **Certificate expired** or **Certificate refused**; marked **No public address** when DNS has no address for the node, see [Nodes without a public address](scheduling.en.md#nodes-without-a-public-address) |
-| **Node group** | Node group and region |
-| **Load** | CPU and memory usage reported by the node (`metrics-v1`), with a dot in the warning color from 75% and in the error color from 90%; "—" when offline or without metrics |
-| **Egress** | Egress reported by the node |
-| **Applied** | The revision the node has applied; badge **In sync** (the node's target revision reached), **Behind**, **Apply failed** (hover for the reason), or **Upgrade required**; an online node without any configuration yet shows **Awaiting configuration** |
-| **Agent / engine** | Agent version, marked **Upgrade recommended** when due; a node not on the current [node channel URL](#node-channel) yet is also marked **Not switched**, **Cannot switch** (hover for the reason), **On fallback**, or **Upgrade to switch** (nodes before v1.2.0) |
-| **Heartbeat** | How long ago the last heartbeat came; hover for the time |
-
-**⋯** at the end of a row holds the actions below.
-
-| Action | Description |
-| --- | --- |
-| **Details** | Also by clicking anywhere in the node's row (`/clusters?node=<node ID>`): **Node group** (with region), **Applied** (marked **Apply failed** when applying failed), **Agent / engine** (agent version, engine, and engine version; marked **Upgrade recommended** when it applies), **Heartbeat** (how long ago the latest one was), **IP** (every unicast address in the node's latest heartbeat, replaced on every heartbeat, at most 64; for the addresses DNS and probes use, see [Scheduling addresses and backup IPs](scheduling.en.md#scheduling-addresses-and-backup-ips)), **Metrics** (gauges of CPU and memory usage, in the warning color from 75% and the error color from 90%, plus the 1 / 5 / 15 min load, egress, and connections; **No metrics** without metrics), **Data plane** (Healthy / Data plane unhealthy), **Connects from**, **Node channel** (the URL in use, the mark above, why the node cannot switch or runs on its fallback, and the fallback it keeps), **Certificate expires** (the client certificate; marked **Expires soon** with less than 10 days left, by when nodes normally renewed it already, and **Certificate expired** or **Certificate refused** once past or refused by the node channel), **Also probes**, **Scheduling addresses** (**Edit addresses**), and **Probe results**, see [Regional probes and scheduling](scheduling.en.md); **Cache** shows the cache usage and sets this node's own size, see [Cache zone](origins-and-cache.en.md#cache-zone) |
-| **Rename** | At most 64 characters |
-| **Move to group** | Node groups of the same cluster only |
-| **Disable** / **Enable** | A disabled node is refused by the node channel (except for certificate renewal, so its certificate is still valid when enabled) and keeps serving its last successfully applied configuration; its unfinished purge & prefetch deliveries are marked **Skipped**. Once the node is enabled and pulls tasks again, it gets one whole-site purge for every site those purges touched |
-| **Delete** | Revokes the node certificate; the node must enroll again with a new install command |
-
-### Node upgrades
-
-The **Node upgrades** section on the **Releases** tab runs signed upgrades with a canary node group and explicit promotion; see [Node upgrades](node-upgrades.en.md).
-
-### Configuration canary
-
-The **Configuration canary** card on the **Releases** tab sets the cluster's policy and shows the current rollout. Off by default.
-
-| Policy field | Values | Default |
-| --- | --- | --- |
-| **Enable canary** | On / off | Off |
-| **Observation window (minutes)** | 1–60 | 5 |
-| **Promote automatically** | On: promote to every node when the window passes; off: wait for **Promote to all now** | On |
-| **5xx ratio multiple of the baseline** | 1–100 | 2 |
-| **5xx ratio floor (%)** | 0.1–100 | 5 |
-| **Minimum requests** | 1–1000000 | 100 |
-
-| Item | Behavior |
-| --- | --- |
-| Canary nodes | Enabled nodes of **Canary group** node groups that are online when the window starts. They stay the same until the window ends: a node that leaves the group meanwhile remains a canary node, one that joins waits for the next window |
-| Target revisions | Canary nodes get the candidate, the other nodes the stable revision; a node never gets a revision newer than its target |
-| DNS | Each node is compared with its own target; non-canary nodes are not removed during the window |
-| 5xx statistics | Nodes report whole minutes. Each canary node counts from the first whole minute after it applied the candidate; requests before that, in the same minute included, do not count. The non-canary nodes count from the earliest of those minutes |
-| Window end | The observation window has passed and the canary nodes have reported every minute of the window and at least one whole minute of the candidate; late statistics hold it up to 2 more minutes, then it decides on what arrived. With fewer than the minimum requests (no traffic included) the 5xx ratio does not decide |
-| Rollback when (any, within the window) | A canary node fails to apply; its data plane is unhealthy or it goes offline; the canary 5xx ratio exceeds max(the non-canary nodes' 5xx ratio × multiple, floor) with at least the minimum requests; a canary node has not applied the candidate one window after the window ended |
-| Rollback | The stable content is published as a new revision and every node returns to it, without sites disabled or deleted and domains removed during the window, and with the current cache generations and certificates; audited as the system, and "Configuration canary rolled back" goes to the alert channels with **Receive every alert** on |
-| After a rollback | The cluster stays on the stable revision. The database keeps the change; the next publication goes through the canary again |
-| New publication during the window | The new candidate replaces the old one; the window keeps its start and its canary nodes. Only the new candidate's traffic counts; one applied at the very end extends the window to the end of its first whole minute |
-| No canary node online | The change goes to every node, `cluster.rollout_direct` is audited and an alert is sent; publishing is not blocked |
-| Changes that reach every node at once | ACME HTTP-01 challenges; disabling or deleting a site and removing a domain; disabling or deleting an L4 app; lowering the access log sampling rate; certificate renewals; challenge key rotation; **Under Attack** of sites and the global one. The stable revision takes these at once; other changes wait in the candidate for the window. **Roll back** in **Revisions** reaches every node at once too |
-| Turning the policy off | A running candidate is promoted to every node |
-
-| State | Meaning |
-| --- | --- |
-| **Idle** | No candidate |
-| **Canary** | The candidate runs on the canary nodes under observation |
-| **Awaiting promotion** | The window passed; waiting for manual promotion |
-| **Promoted** | The candidate is every node's revision |
-| **Rolled back** | The canary nodes returned to the stable revision |
-| **Published to all** | No canary node was online; the change went to every node |
-
-While a rollout runs, the card also shows:
-
-| Item | Content |
-| --- | --- |
-| **Changes** | Sites the candidate adds, changes, and removes against the stable revision, by name under **Added**, **Changed**, **Removed**; "No site changes" when no site differs |
-| **Reasons** | Why the revisions after the stable one were published, without repeats |
-| **Window ends** | A countdown; hover for the time |
-
-**Promote to all now** (audited as `cluster.rollout_promote`) and **Abort and roll back** (audited as `cluster.rollout_abort`) need confirmation and are available in **Canary** and **Awaiting promotion** only. Policy changes are audited as `cluster.rollout_policy_update`.
-
-### Revisions
-
-Every change that affects node configuration publishes a new revision in the cluster. The **Revisions** table on the **Releases** tab lists the latest 20: **Revision**, **Content hash**, **Sites**, **Reason**, **Time**. Each cluster keeps its latest 200 revisions; the stable and candidate revisions of the canary are never pruned. Revisions published only for ACME HTTP-01 challenges do not count and are deleted after an hour.
-
-| Reason | Trigger |
-| --- | --- |
-| Cluster {cluster} created | New cluster |
-| Site {site} created / updated / deleted | Site changes |
-| Site {site} enabled / disabled | [Site enabling](#site-enabling) |
-| L4 app {app} created / updated / deleted | [L4 app](l4.en.md) changes; disabling and enabling use "updated" |
-| Site {site} purged | **Purge cache** on a site in older consoles (now a node task that publishes no revision) |
-| Certificate policy for {site} updated | HTTPS settings changed; a certificate used by the site was issued or renewed |
-| ACME challenge updated | HTTP-01 challenge changes |
-| Rules and IP lists updated | Site rule, global rule, or IP list changes |
-| Protection of {site} updated | Under Attack, CC mitigation, or challenge settings changed on the site's **Security** tab |
-| OWASP CRS of {site} updated | OWASP CRS settings changed on the site's **Security** tab |
-| Global Under Attack updated | Global Under Attack changed in [Protection](#protection); every cluster publishes one revision |
-| CC template updated | [CC template](#cc-template) changed; every cluster with a site following the template publishes one revision |
-| Challenge keys rotated | The daily challenge key rotation; every cluster whose configuration carries challenge keys publishes one revision |
-| Origin allow list updated | [Origin allow list](#origin-allow-list) changed; every cluster publishes one revision |
-| Rolled back to #{revision} | **Roll back** |
-| Canary of revision {revision} rolled back | [Configuration canary](#configuration-canary) rollback |
-| Configuration recompiled after an upgrade | A console upgrade changed what the stored configuration compiles to; every cluster publishes one revision |
-
-**Roll back** publishes the content of the chosen revision as a new revision; history is kept. Sites and L4 apps that are currently disabled do not return through a rollback; IP lists, global rules, global Under Attack, and the origin allow list keep their current values. A rollback is refused when a site, domain, certificate, IP list, or L4 app the chosen revision references was deleted, an L4 app's port is no longer inside a port pool, or the certificate has expired.
-
-The confirmation of **Roll back** lists the sites the rollback adds, changes, and removes against the latest revision (**Added**, **Changed**, **Removed**); "Same as the current revision" when the content equals the latest revision, "No site changes" when only settings other than sites differ. When the rollback cannot be done (for example `ROLLBACK_RESOURCE_UNAVAILABLE`), the reason shows instead and the confirm button stays disabled. The preview writes nothing; for the API, see [Clusters and overview](../reference/api.en.md#clusters-and-overview).
-
-When a change needs a capability that active nodes of the cluster lack:
-
-| Publisher | Behavior |
-| --- | --- |
-| The console account (session or AccessKey) | Published anyway; nodes without the capability show **Upgrade required** and keep their configuration |
-| Service accounts | 409 `NODE_CAPABILITY_REQUIRED`; nothing is published |
-| Automatic console jobs | Nothing is published |
-
-## Needs attention
-
-**Needs attention** at the top of **Overview** (`/overview`) lists what needs the operator, each row with its cluster; a row opens the cluster (DNS items its **DNS** tab). It is hidden when nothing does. The sidebar shows the number of items beside **Overview**. Items come in this order:
-
-| Item | Condition |
-| --- | --- |
-| **Unhealthy nodes: N** | Enabled nodes that connected before and are now offline, failed to apply, have an unhealthy data plane (after applying a configuration), or whose certificate the node channel refuses |
-| **DNS revision #N failed** | The cluster's DNS is not **Not managed** and a DNS revision failed to publish |
-| **DNS publication held by mass removal protection** | [Mass removal protection](dns-and-alerts.en.md#mass-removal-protection) stopped the cluster's DNS publication |
-| **Upgrade to X failed** | The cluster's latest [node upgrade](node-upgrades.en.md) failed, within the last 24 hours |
-| **Canary #N rolled back** | The [configuration canary](#configuration-canary) rolled back, within the last 24 hours |
-| **Canary #N awaiting promotion** | The window passed; waiting for **Promote to all now** |
-| **Canary #N under observation** | The candidate runs on the canary nodes, with a countdown to the window's end |
-| **Lagging nodes: N** | Online, healthy nodes that do not run their target revision or need an upgrade |
-| **Nodes without a public address: N** | Online nodes without an address DNS can use, only in clusters whose DNS is not **Not managed**; see [Nodes without a public address](scheduling.en.md#nodes-without-a-public-address) |
-
-API: `attention` of `GET /api/v1/overview`, see [Clusters and overview](../reference/api.en.md#clusters-and-overview).
-
-## Site enabling
-
-**Disable** / **Enable** sits next to **Status** on the site's **Overview** tab (confirmed); for the API, see [Enabling and disabling sites](../reference/api.en.md#enabling-and-disabling-sites).
-
-| Item | Behavior |
-| --- | --- |
-| Status | The **Status** column of **Sites** and the site's **Overview** tab show whether the site runs on the nodes: **Not live yet** (the cluster has no online node, or no online node has applied a revision with the site), **Rolling out N/M** (N of the M online nodes run the site's latest configuration with a healthy data plane), **Active** (every online node runs it), **Disabled**. During a [configuration canary](#configuration-canary) window it shows **Canary N/M, all nodes at HH:MM** (the nodes outside the canary keep the previous version until the window ends; **awaiting promotion** when promotion is manual). Until the site is live the page refreshes every 5 seconds |
-| Notices | After saving, creating, enabling or disabling a site the notice follows the nodes: **Rolling out N/M** → **Live on every node** (the window's end during a canary; **Removing N/M** → **Removed from the nodes** when disabling), for up to 3 minutes |
-| Nodes | A disabled site is not shipped; nodes answer HTTP requests for its domains with 503 (`X-Edgeweir-Error: site-disabled`) and the **Site disabled** [platform error page](#platform-error-pages) or the built-in page; HTTPS requests fail in the TLS handshake |
-| DNS | Records stay |
-| Certificates | Renewal continues; HTTP-01 challenges are answered |
-| Purge & prefetch | Return `SITE_DISABLED` |
-| Rollback | Does not ship a disabled site again |
-| Revisions and audit | A change publishes a revision and writes an audit entry (`site.enable`, `site.disable`); an unchanged state does neither |
-
-## Regions
-
-Page: the **Regions** view of **Clusters & nodes** (`/clusters?view=regions`; `/regions` redirects there), with the page action **New region**. A region is a label for node groups and regional probes (for example East China), shown in the node group and node tables; scheduling conditions on probe metrics can count the probers of one region alone. Probes are on the **Monitoring** tab of **System settings**, see [Regional probes](scheduling.en.md#regional-probes).
-
-A dot map above the list marks the regions, placed by the city their code or name mentions (such as `ap-tokyo` or Tokyo); regions without a known city appear only in the list, and the map is hidden when none has one.
-
-| Action | Description |
-| --- | --- |
-| **New region** | **Name**: at most 64 characters; **Code**: lowercase letters, digits, and `-`, starting with a letter or digit, at most 32 characters, unique |
-| **Edit region** | Opens from a click on the region's row; change name and code |
-| Delete | **Delete** under **⋯** at the end of the row; refused while probes belong to the region (**N probes still belong to this region**); node groups that reference the region stay, without a region, and their nodes that also probe stop probing |
-
-## Service accounts
-
-Page: the **Service accounts** tab of **System settings** (`/system?tab=service-accounts`; `/service-accounts` redirects there), with the page action **New service account**. A service account is an identity integrations use on `/api/v1`: it cannot sign in to the console and calls only the procedures below, with a key (prefix `ews_`, header `x-api-key`).
-
-| Action | Description |
-| --- | --- |
-| **New service account** | **Name** (at most 64 characters, unique), **Scopes**, **Enabled** |
-| **Edit service account** | Under **⋯** at the end of the row; change name, scopes, and enabled state; keys of a disabled service account are refused |
-| **Keys** | Opens from a click on the service account's row; **New key** (optional **Key name**; the key is shown once); **Revoke** needs confirmation. The list shows **Revoked** and **Last used** |
-| Delete | **Delete** under **⋯** at the end of the row, confirmed; all of its keys stop working |
-
-| Scope | Callable procedures |
-| --- | --- |
-| No scope needed | `system.status`, `account.me`, `dns.catalog` |
-| `system:read` | `settings.get` |
-| `clusters:read` | `clusters.list`, `clusters.get` |
-| `sites:read` | `sites.list`, `sites.get`, `sites.launch`, `dns.siteTarget` |
-| `sites:write` | `sites.setEnabled` |
-| `usage:read` | `usage.list`, `usage.changes` |
-
-| Item | Behavior |
-| --- | --- |
-| Other procedures | 403 `SERVICE_ACCOUNT_FORBIDDEN` |
-| Missing scope | 403 `SCOPE_REQUIRED`; `data.scope` names the scope needed |
-| Node capabilities | A change that needs a capability active nodes of the cluster lack returns 409 `NODE_CAPABILITY_REQUIRED`; see [Revisions](#revisions) |
-| Audit | Changes made by a service account are audited with the actor **Service account**; changes to service accounts and their keys are audited as `service_account.*` |
-
-Endpoints and request format: [Service accounts](../reference/api.en.md#service-accounts).
-
-## Audit log
-
-Page: **Audit log** (`/audit`). Management actions are written to the audit log. The console's own changes commit together with their audit entry in one transaction; sign-in, password, two-factor, and passkey changes are completed by better-auth, and their entries are written after it commits, with write failures only logged. The audit log is never pruned automatically.
-
-| Field | Content |
-| --- | --- |
-| Time | When the action happened |
-| Actor | Type (**User**, **Access key**, **Service account**, **Node**, **Probe**, **System**), ID, name |
-| IP, User-Agent | Request origin; empty for actions no request carried (nodes, probes, the system). For how the IP is determined, see [Trusted proxies and client IP](../deploy/networking.en.md#trusted-proxies-and-client-ip) |
-| Action | A code such as `site.create`; the UI shows its name (e.g. **Site created**) |
-| Target | Type, ID, name; the name is recorded at the time of the action and stays readable after the target is deleted |
-| Metadata | JSON with the action's parameters and before/after values |
-
-The page shows **Time**, **Actor**, **Action** (name and code), and **Target**, 50 entries per page; filters for **Action**, **Target** type, and time range (**Any time**, **Last hour**, **Last 24 hours**, **Last 7 days**, **Last 30 days**). **Details** at the end of a row shows every field: the full time, the actor and target IDs, IP, User-Agent, and the metadata as formatted JSON. Older codes without a name are shown as they are. `/api/v1` returns every field; see [API and endpoints](../reference/api.en.md).
-
-| Action prefix | Content |
-| --- | --- |
-| `system.*` | Setup (including `system.setup_rejected` for a wrong setup token), node channel URL (`system.node_channel_update`), origin allow list, node release source, usage settings, ban settings, protection, CC template, probe settings (`system.probes_update`), recompilation after an upgrade |
-| `auth.*` | Successful (`auth.sign_in`, with the sign-in method) and failed (`auth.sign_in_failed`) sign-ins |
-| `account.*` | Password change, two-factor enable / disable, passkey add / delete, account recovery on the server (`account.recover`, see [Account recovery](account.en.md#account-recovery)) |
-| `api_key.*` | AccessKey create, revoke |
-| `service_account.*` | Service accounts and their keys |
-| `cluster.*`, `node_group.*`, `region.*`, `node.*`, `enrollment_token.*` | Clusters (including the configuration canary, rollbacks, challenge key rotation, and port pools `cluster.port_pools_update`), node groups, regions, nodes (including enrollment, certificate renewal, upgrades, scheduling addresses `node.set_addresses`, probing `node.set_probe`), install commands |
-| `probe.*` | Probe tokens (`probe.token_create`), enrollment (`probe.enroll`) and certificate renewal (`probe.certificate_renew`, actor **Probe**), renaming and enabling (`probe.update`), deletion (`probe.delete`) |
-| `scheduling.*` | Scheduling rule changes (`scheduling.rule_create`, `scheduling.rule_update`, `scheduling.rule_delete`); rule actions taking effect and recovering (`scheduling.activate`, `scheduling.recover`, actor **System**) |
-| `l4_app.*` | L4 apps: `l4_app.create`, `l4_app.update`, `l4_app.enable`, `l4_app.disable`, `l4_app.delete` |
-| `site.*`, `cache.*`, `certificate.*`, `dns_credential.*`, `ip_list.*`, `platform.*` | Sites (including enabling, HTTPS, logs, protection, OWASP CRS, and site rules), purge & prefetch, certificates, DNS credentials, IP lists, global rules |
-| `ban.*` | Manual bans: `ban.create`, `ban.update` (banned again), `ban.delete` (unbanned) |
-| `dns.*`, `alert.*` | DNS steering (including provider accounts, cluster bindings, rollbacks, mass removal protection, and forced publications), alert channels, alert rules, SMTP, alert subscriptions |
+Clusters, nodes and regions: [Clusters and nodes](clusters.en.md); DNS steering: [DNS steering](dns.en.md); alerts: [Alerts](alerts.en.md); regional probes and scheduling: [Regional probes and scheduling](scheduling.en.md); every page of the sidebar: [Console navigation](account.en.md#console-navigation).
 
 ## System settings
 
@@ -274,7 +10,7 @@ Page: **System settings** (`/system`), with the tabs:
 
 | Tab | Content |
 | --- | --- |
-| **General** | The sections below: system information, node channel, certificate authorities, origin allow list, node release source, usage, access logs, platform error pages, login IP allow list, demo account |
+| **General** | The sections below, in page order: system information, node channel, origin allow list, node release source, certificate authorities, usage, access logs, node log retention, platform error pages, login IP allow list, demo account |
 | **Monitoring** | `/system?tab=probes`: the regional probe list (page action **Add probe**), the **Last round** card (a latency matrix of probers × nodes) and the **Probe settings** card, see [Regional probes](scheduling.en.md#regional-probes); `/regions?tab=probes` redirects there |
 | **Service accounts** | `/system?tab=service-accounts`, see [Service accounts](#service-accounts) |
 
@@ -293,7 +29,7 @@ Read-only (card **System**).
 
 ### Node channel
 
-**URL**: where nodes and region probes reach the node channel, `--server` in the install command. While the field is empty, `EDGEWEIR_NODE_API_URL` applies, and when that is unset `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>`; the placeholder shows the URL in effect and the badge where it comes from.
+**URL**: where nodes and region probes reach the node channel, `--server` in the install command. While the field is empty, `EDGEWEIR_NODE_API_URL` applies; when that is unset, `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>`, or with `EDGEWEIR_NODE_API_WEBSOCKET=true` `wss://<host and port of EDGEWEIR_PUBLIC_URL>` (`ws://` when the console URL is `http://`); the placeholder shows the URL in effect and the badge where it comes from.
 
 | Constraint | Description |
 | --- | --- |
@@ -313,18 +49,6 @@ With enrolled nodes or probes, the URL is followed by **Nodes switched N/M** and
 
 Removing a name and closing the entry are audited as `system.node_channel_update` too (metadata `removedName`, `webSocket: closed`).
 
-### Certificate authorities
-
-The custom ACME directory: besides Let's Encrypt, ZeroSSL and Google Trust Services, **Certificate authority** of a certificate request offers **Custom ACME directory**, for example a private PKI or a staging CA.
-
-| Field | Values | Notes |
-| --- | --- | --- |
-| **Custom ACME directory** | `https://` URL, at most 2048 characters, no credentials or fragment; empty | The ACME directory URL. Before saving, the console reads it (10 seconds, at most 1 MiB, no redirects) and refuses an answer that is not an ACME directory (no `newNonce`, `newAccount` or `newOrder`): "The URL does not answer with an ACME directory". Private addresses are allowed; `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` does not apply. Saving an empty value falls back to the environment variable or to none |
-| **EAB key ID** / **EAB HMAC key** | Both or neither | The external account binding the directory requires; a request with empty EAB fields uses these. The HMAC key is envelope-encrypted and write-only: once saved the placeholder reads "Saved", and leaving it empty with the same key ID keeps it |
-| **CA certificates (PEM)** | 1–10 certificates, at most 64 KiB; empty | Issuers of the directory's HTTPS certificate, trusted in addition to the system trust store; empty: the system trust store only |
-
-The URL and the CA certificates each show their source badge (**Saved**, **Environment** or **Default**): a value saved here wins over `EDGEWEIR_ACME_DIRECTORY` and `EDGEWEIR_ACME_CA_FILE`. The directory's `meta.caaIdentities` show as **CAA issuers** and requests check CAA against them; without them CAA is not checked. Changes are audited as `system.acme_directory_update`. Requests and ACME accounts: [HTTPS and certificates](https.en.md#certificate-authorities).
-
 ### Origin allow list
 
 **Allowed ranges (one CIDR per line)**, at most 256 entries. Private, loopback, and other special-purpose addresses in the list become usable as origins. Saving publishes one revision in every cluster and is audited as `system.origin_allow_list_update`. For origin address rules, see [Origin address restrictions](origins-and-cache.en.md#origin-address-restrictions).
@@ -342,6 +66,18 @@ The URL and the CA certificates each show their source badge (**Saved**, **Envir
 
 Each node also pins its own release source and signature trust locally, out of the console's reach; see [Node upgrades](node-upgrades.en.md).
 
+### Certificate authorities
+
+The custom ACME directory: besides Let's Encrypt, ZeroSSL and Google Trust Services, **Certificate authority** of a certificate request offers **Custom ACME directory**, for example a private PKI or a staging CA.
+
+| Field | Values | Notes |
+| --- | --- | --- |
+| **Custom ACME directory** | `https://` URL, at most 2048 characters, no credentials or fragment; empty | The ACME directory URL. Before saving, the console reads it (10 seconds, at most 1 MiB, no redirects) and refuses an answer that is not an ACME directory (no `newNonce`, `newAccount` or `newOrder`): "The URL does not answer with an ACME directory". Private addresses are allowed; `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` does not apply. Saving an empty value falls back to the environment variable or to none |
+| **EAB key ID** / **EAB HMAC key** | Both or neither | The external account binding the directory requires; a request with empty EAB fields uses these. The HMAC key is envelope-encrypted and write-only: once saved the placeholder reads "Saved; leave empty to keep it", and leaving it empty with the same key ID keeps it |
+| **CA certificates (PEM)** | 1–10 certificates, at most 64 KiB; empty | Issuers of the directory's HTTPS certificate, trusted in addition to the system trust store; empty: the system trust store only |
+
+The URL and the CA certificates each show their source badge (**Saved**, **Environment** or **Default**): a value saved here wins over `EDGEWEIR_ACME_DIRECTORY` and `EDGEWEIR_ACME_CA_FILE`. The directory's `meta.caaIdentities` show as **CAA issuers** and requests check CAA against them; without them CAA is not checked. Changes are audited as `system.acme_directory_update`. Requests and ACME accounts: [HTTPS and certificates](https.en.md#certificate-authorities).
+
 ### Usage
 
 | Field | Values | Default | Description |
@@ -349,7 +85,7 @@ Each node also pins its own release source and signature trust locally, out of t
 | **Retention (days)** | 35–400 | 100 | How long usage records are kept |
 | **Offline nodes stop holding completeness (minutes)** | 5–1440 | 60 | Nodes without a heartbeat for longer no longer hold back `completeUntil` |
 
-Changes are audited as `system.usage_update`. The usage API and the definition of `completeUntil`: [Usage](../reference/api.en.md#usage).
+Changes are audited as `system.usage_update`. The usage API and the definition of `completeUntil`: [Usage](../reference/api/monitoring.en.md#usage).
 
 ### Access logs
 
@@ -358,6 +94,15 @@ Changes are audited as `system.usage_update`. The usage API and the definition o
 | **Retention (days)** | PostgreSQL 1–30, ClickHouse 1–90 | 7 | How long access logs are kept; the card shows the days of the current analytics mode (`EDGEWEIR_ANALYTICS`) only |
 
 Changes are audited as `system.log_retention_update`; the next minute's maintenance drops partitions by the new days (ClickHouse changes the TTL), see [access log retention](access-logs.en.md#retention).
+
+### Node log retention
+
+| Field | Values | Default | Description |
+| --- | --- | --- | --- |
+| **Days kept** | 1–30 | 7 | How long node log entries are kept |
+| **Entries per node** | 1000–100000 | 10000 | Most entries kept per node |
+
+Changes are audited as `system.node_log_retention_update`. When entries are deleted: [Node log retention](node-logs.en.md#retention).
 
 ### Platform error pages
 
@@ -418,7 +163,7 @@ A value saved in the console wins over the environment variable, which wins over
 
 | Setting | Location | Environment variable | Default |
 | --- | --- | --- | --- |
-| Node channel | **System settings → Node channel** | `EDGEWEIR_NODE_API_URL` | `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>` |
+| Node channel | **System settings → Node channel** | `EDGEWEIR_NODE_API_URL` | `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>`; with `EDGEWEIR_NODE_API_WEBSOCKET=true` `wss://<host and port of EDGEWEIR_PUBLIC_URL>` |
 | Node release source | **System settings → Node release source** | `EDGEWEIR_NODE_RELEASE_BASE_URL` | `https://github.com/marvinli001/edgeweir-node/releases/download` |
 | Custom ACME directory | **System settings → Certificate authorities** | `EDGEWEIR_ACME_DIRECTORY` | None |
 | CA certificates of the ACME directory | **System settings → Certificate authorities → CA certificates (PEM)** | `EDGEWEIR_ACME_CA_FILE` (path to a PEM file) | System trust store |
@@ -428,14 +173,90 @@ A value saved in the console wins over the environment variable, which wins over
 | Origin allow list | **System settings → Origin allow list** | None | Empty |
 | Login IP allow list | **System settings → Login IP allow list** | None | Empty (off) |
 | Usage | **System settings → Usage** | None | 100 days retention, 60-minute offline threshold |
+| Access log retention | **System settings → Access logs** | None | 7 days |
+| Node log retention | **System settings → Node log retention** | None | 7 days, 10000 entries per node |
 | Bans | **Protection settings → Bans** | None | Limit 10000, automatic bans shared |
 | Protection | **Protection settings → Protection** | None | Global Under Attack off, challenge type JavaScript, events kept 30 days |
 
 The badges of **Node channel**, **Node release source** and **Certificate authorities** show where the value in effect comes from: **Saved**, **Environment**, or **Default**. Release source addresses saved in system settings are bounded by `EDGEWEIR_OUTBOUND_ALLOW_CIDRS`; values in environment variables are set by the operator and skip that check. For every environment variable, see [Environment variables](../reference/environment.en.md).
 
+## Service accounts
+
+Page: the **Service accounts** tab of **System settings** (`/system?tab=service-accounts`; `/service-accounts` redirects there), with the page action **New service account**. A service account is an identity integrations use on `/api/v1`: it cannot sign in to the console and calls only the procedures below, with a key (prefix `ews_`, header `x-api-key`).
+
+| Action | Description |
+| --- | --- |
+| **New service account** | **Name** (at most 64 characters, unique), **Scopes**, **Enabled** |
+| **Edit service account** | Under **⋯** at the end of the row; change name, scopes, and enabled state; keys of a disabled service account are refused |
+| **Keys** | Opens from a click on the service account's row; **New key** (optional **Key name**; the key is shown once); **Revoke** needs confirmation. The list shows **Revoked** and **Last used** |
+| Delete | **Delete** under **⋯** at the end of the row, confirmed; all of its keys stop working |
+
+| Scope | Callable procedures |
+| --- | --- |
+| No scope needed | `system.status`, `account.me`, `dns.catalog` |
+| `system:read` | `settings.get` |
+| `clusters:read` | `clusters.list`, `clusters.get` |
+| `sites:read` | `sites.list`, `sites.get`, `sites.launch`, `dns.siteTarget` |
+| `sites:write` | `sites.setEnabled` |
+| `usage:read` | `usage.list`, `usage.changes` |
+
+| Item | Behavior |
+| --- | --- |
+| Other procedures | 403 `SERVICE_ACCOUNT_FORBIDDEN` |
+| Missing scope | 403 `SCOPE_REQUIRED`; `data.scope` names the scope needed |
+| Node capabilities | A change that needs a capability active nodes of the cluster lack returns 409 `NODE_CAPABILITY_REQUIRED`; see [Revisions](clusters.en.md#revisions) |
+| Audit | Changes made by a service account are audited with the actor **Service account**; changes to service accounts and their keys are audited as `service_account.*` |
+
+Endpoints and request format: [Service accounts](../reference/api.en.md#service-accounts).
+
+## Audit log
+
+Page: **Audit log** (`/audit`). Management actions are written to the audit log. The console's own changes commit together with their audit entry in one transaction; sign-in, password, two-factor, and passkey changes are completed by better-auth, and their entries are written after it commits, with write failures only logged. The audit log is never pruned automatically.
+
+| Field | Content |
+| --- | --- |
+| Time | When the action happened |
+| Actor | Type (**User**, **Access key**, **Service account**, **Node**, **Probe**, **System**), ID, name |
+| IP, User-Agent | Request origin; empty for actions no request carried (nodes, probes, the system). For how the IP is determined, see [Trusted proxies and client IP](../deploy/networking.en.md#trusted-proxies-and-client-ip) |
+| Action | A code such as `site.create`; the UI shows its name (e.g. **Site created**) |
+| Target | Type, ID, name; the name is recorded at the time of the action and stays readable after the target is deleted |
+| Metadata | JSON with the action's parameters and before/after values |
+
+The page shows **Time**, **Actor**, **Action** (name and code), and **Target**, 50 entries per page; filters for **Action**, **Target** type, and time range (**Any time**, **Last hour**, **Last 24 hours**, **Last 7 days**, **Last 30 days**). **Details** at the end of a row shows every field: the full time, the actor and target IDs, IP, User-Agent, and the metadata as formatted JSON. Older codes without a name are shown as they are. `/api/v1` returns every field; see [API and endpoints](../reference/api.en.md).
+
+| Action prefix | Content |
+| --- | --- |
+| `system.*` | Setup (`system.setup`; a wrong setup token is `system.setup_rejected`), node channel (`system.node_channel_update`), origin allow list (`system.origin_allow_list_update`), node release source (`system.release_source_update`), certificate authorities (`system.acme_directory_update`), usage (`system.usage_update`), access log retention (`system.log_retention_update`), node log retention (`system.node_log_retention_update`), platform error pages (`system.error_pages_update`), login IP allow list (`system.login_allow_list_update`), demo account (`system.demo_update`), ban settings (`system.bans_update`), protection (`system.protection_update`), CC template (`system.cc_template_update`), probe settings (`system.probes_update`), recompilation after an upgrade (`system.recompile`) |
+| `auth.*` | Successful (`auth.sign_in`, with the sign-in method) and failed (`auth.sign_in_failed`) sign-ins |
+| `account.*` | Password change, two-factor enable / disable, passkey add / delete, account recovery on the server (`account.recover`, see [Account recovery](account.en.md#account-recovery)) |
+| `api_key.*` | AccessKey create (`api_key.create`), name and requests-per-minute changes (`api_key.update`), revoke (`api_key.revoke`) |
+| `service_account.*` | Service accounts and their keys |
+| `cluster.*`, `node_group.*`, `region.*`, `node.*`, `enrollment_token.*` | Clusters (including the configuration canary, rollbacks, challenge and session ticket key rotation, listening ports, visitor IP, unknown hosts, cache zone, port pools `cluster.port_pools_update`, and connection limits `cluster.connection_limits_update`), node groups, regions, nodes (including enrollment, certificate renewal, upgrades, scheduling addresses `node.set_addresses`, probing `node.set_probe`, debug log pulls `node.debug_logs_pull`), install commands |
+| `probe.*` | Probe tokens (`probe.token_create`), enrollment (`probe.enroll`) and certificate renewal (`probe.certificate_renew`, actor **Probe**), renaming and enabling (`probe.update`), deletion (`probe.delete`) |
+| `scheduling.*` | Scheduling rule changes (`scheduling.rule_create`, `scheduling.rule_update`, `scheduling.rule_delete`); rule actions taking effect and recovering (`scheduling.activate`, `scheduling.recover`, actor **System**) |
+| `greylist.*` | Greylist: `greylist.create`, `greylist.update`, `greylist.delete` |
+| `origin_ca.*`, `origin_certificate.*`, `origin_client_ca.*`, `origin_client_certificate.*` | [Origin protection](https.en.md#origin-protection): creating, rotating, issuing, revoking and retiring the Origin CA and its certificates and the origin client CA and certificates |
+| `site_tag.*` | Site tag rename (`site_tag.rename`) and delete (`site_tag.delete`) |
+| `acme_account.*` | ACME account deletion (`acme_account.delete`) |
+| `l4.*` | An L4 app's CNAME prefix (`l4.cname_update`) |
+| `l4_app.*` | L4 apps: `l4_app.create`, `l4_app.update`, `l4_app.enable`, `l4_app.disable`, `l4_app.delete` |
+| `site.*`, `cache.*`, `certificate.*`, `dns_credential.*`, `ip_list.*`, `platform.*` | Sites (including enabling, HTTPS, logs, protection, OWASP CRS, and site rules), purge & prefetch, certificates, DNS credentials, IP lists, global rules |
+| `ban.*` | Manual bans: `ban.create`, `ban.update` (banned again), `ban.delete` (unbanned) |
+| `dns.*`, `alert.*` | DNS steering (including provider accounts, cluster bindings, rollbacks, mass removal protection, and forced publications), alert channels, alert rules, SMTP, alert subscriptions |
+
 ## Protection settings
 
-Page: **Protection settings** (`/protection`), under **Access control** in the sidebar.
+Page: **Protection settings** (`/protection`), under **Access control** in the sidebar. Cards in page order: protection, bans, CC template, connection limits, GeoIP databases.
+
+### Protection
+
+| Field | Values | Default | Description |
+| --- | --- | --- | --- |
+| **Global Under Attack** | On / off | Off | GET/HEAD requests without a pass are challenged first, on every site; switching asks for confirmation |
+| **Challenge type** | Cookie redirect / JavaScript / Proof of work / Image captcha | JavaScript | Challenge type of global Under Attack |
+| **Security event retention (days)** | 7–365 | 30 | How long CC mitigation events reported by nodes are kept |
+
+Switching global Under Attack, or changing the challenge type while it is on, publishes one revision in every cluster. Changes are audited as `system.protection_update`. Global Under Attack needs the node capability `challenge-v1`; nodes without it keep their configuration, see [Revisions](clusters.en.md#revisions). For a site's own Under Attack and CC mitigation, see [Challenges and CC mitigation](challenges.en.md).
 
 ### Bans
 
@@ -446,19 +267,24 @@ Page: **Protection settings** (`/protection`), under **Access control** in the s
 
 Changes are audited as `system.bans_update`. See [Bans](bans.en.md).
 
-### Protection
-
-| Field | Values | Default | Description |
-| --- | --- | --- | --- |
-| **Global Under Attack** | On / off | Off | GET/HEAD requests without a pass are challenged first, on every site; switching asks for confirmation |
-| **Challenge type** | Cookie redirect / JavaScript / Proof of work / Image captcha | JavaScript | Challenge type of global Under Attack |
-| **Security event retention (days)** | 7–365 | 30 | How long CC mitigation events reported by nodes are kept |
-
-Switching global Under Attack, or changing the challenge type while it is on, publishes one revision in every cluster. Changes are audited as `system.protection_update`. Global Under Attack needs the node capability `challenge-v1`; nodes without it keep their configuration, see [Revisions](#revisions). For a site's own Under Attack and CC mitigation, see [Challenges and CC mitigation](challenges.en.md).
-
 ### CC template
 
 Thresholds for sites whose CC mitigation is on and set to **Follow the default template**: highest level, high proof of work instead of the captcha, window, site QPS, per-URL QPS, per-IP QPS, IP ban duration, origin error rate, minimum origin requests, escalate after, step down after. **Preset** picks Loose, Standard, or Strict, or **Custom** to set each field; fields, ranges, defaults, and the presets' values: [CC mitigation](challenges.en.md#cc-mitigation). Saving publishes a revision to every cluster with a following site; changes are audited as `system.cc_template_update`.
+
+### Connection limits
+
+Limits the TCP connections of each client (an IPv4 address or an IPv6 /64) per cluster in the nodes' kernel; the setting travels in configuration revisions.
+
+| Field | Values | Description |
+| --- | --- | --- |
+| **Cluster** | A cluster | Shown with more than one cluster |
+| **Enabled** | On / off | — |
+| **Concurrent connections per IP** | 0–100000 | 0 is no limit |
+| **New connections per IP per second** | 0–100000 | 0 is no limit |
+| **Burst** | 0–1000000 | New connections a client may open above the rate at once; 0 takes the per-second value; not below the per-second value |
+| **Ports** | **Cluster listener ports** / **Custom ports** | Cluster listener ports are the cluster's HTTP / HTTPS listeners and TCP L4 app ports; with custom ports fill in the **Port list**, 1–64 ports or port ranges |
+
+Enabled limits need at least one limit ("Set at least one limit"). The card shows the **Limited ports** and "N / M nodes enforce it"; nodes that do not enforce it and "Nodes on an older version" (without `conn-limit-v1`) are listed one by one. Changes are audited as `cluster.connection_limits_update`, revision reason "Connection limits updated". Behavior and node requirements: [Connection limits](bans.en.md#connection-limits).
 
 ### GeoIP databases
 
@@ -468,15 +294,7 @@ Read-only. Shows, per node, the state of the **Country**, **Subdivision**, and *
 
 | Symptom | Cause | Action |
 | --- | --- | --- |
-| **The cluster still has N node(s) and M site(s)** | The cluster is not empty | Delete its nodes and sites, then retry |
-| **Turn the cluster's DNS off and wait for its records to be removed** | The cluster's DNS is still **Automatic** or still owns records | Switch to **Not managed** on the **DNS** tab, wait for cleanup, then retry |
-| **Cluster name already exists: …** / **Node group already exists: …** / **Region code already exists: …** / **A service account named … exists** | Duplicate name or code | Use another name or code |
-| **The default node group cannot be deleted** | Deleting the default node group | The default node group can only be renamed or given another region |
-| **N probes still belong to this region** | Deleting a region that still has probes | Delete those probes on the **Monitoring** tab of **System settings** first |
-| **The node group belongs to another cluster** | Moving a node across clusters | Nodes move only within their cluster; changing clusters means deleting and enrolling again |
-| **This cluster has reached its limit of 512 published sites** | The cluster's enabled sites reached the limit | Disable sites no longer in use, or create new sites in another cluster through `/api/v1` with `clusterId` |
-| **Cluster nodes need these capabilities first: …** | A change published by a service account or an automatic job needs a capability active nodes of the cluster lack | Upgrade the nodes; see [Node upgrades](node-upgrades.en.md) |
-| **The rollback references resources that are gone or unavailable** (in the rollback confirmation) | A site, domain, certificate, or IP list the chosen revision references was deleted, or the certificate has expired | Pick a more recent revision, or fix the current configuration |
+| **A service account named … exists** | Duplicate name | Use another name |
 | **Service accounts cannot call this** | A service account called a procedure outside the [Service accounts](#service-accounts) table | Use an AccessKey |
 | **Missing scope: …** | The service account lacks the scope the procedure needs | Edit its scopes on the **Service accounts** tab of **System settings** |
 | **The release source must use HTTPS and resolve to an allowed address** | Public HTTP URL, or a private address that is not allowed | Use HTTPS, or allow the range in `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |

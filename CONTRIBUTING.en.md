@@ -372,7 +372,8 @@ Version pinning, upgrades, and rollback: [Versions, upgrades, and rollback](docs
 
 - Published docs are plain GitHub Markdown: `name.md` (Simplified Chinese, default) and `name.en.md` (English, same sections as `name.md`).
 - The documentation site lives in `doc/` (Fumadocs, Next.js static export) as its own pnpm workspace (`doc/pnpm-workspace.yaml`, `doc/pnpm-lock.yaml`). `.github/workflows/docs.yml` builds the site on pull requests and publishes it to GitHub Pages on pushes to `master`: <https://marvinli001.github.io/edgeweir/>.
-- `doc/scripts/sync-content.mjs` holds the page map (`SECTIONS`) and converts the Markdown. A new page must be added to the page map.
+- `doc/scripts/sync-content.mjs` holds this repository's page map (`OSS.sections`, site paths `/<lang>/oss/<section>/<page>`) and converts the Markdown. A new page must be added to the page map; old URLs in `LEGACY` get redirect pages (`doc/public`).
+- `DOCS_EDITIONS` (comma-separated `edition.json` paths) adds other editions: root folders of one type that the sidebar switches between, keeping the page path. Unset, only this repository's edition is built.
 
 | Markdown | Site |
 | --- | --- |

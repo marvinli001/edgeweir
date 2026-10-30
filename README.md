@@ -256,10 +256,16 @@ doc/                       文档站（Fumadocs），发布至 GitHub Pages
 
 | 分类 | 文档 |
 | --- | --- |
-| 部署 | [部署概览](docs/deploy/README.md) · [Docker Compose](docs/deploy/docker.md) · [宝塔 / aaPanel](docs/deploy/baota.md) · [deploy.sh](docs/deploy/deploy-script.md) · [Railway](docs/deploy/railway.md) · [Fly.io](docs/deploy/fly.md) · [bunny.net](docs/deploy/bunny.md) · [Render](docs/deploy/render.md) · [Zeabur](docs/deploy/zeabur.md) · [端口与反向代理](docs/deploy/networking.md) · [接入节点](docs/deploy/nodes.md) · [版本与升级](docs/deploy/upgrade.md) · [备份与恢复](docs/deploy/backup.md) |
-| 使用 | [快速上手](docs/guide/first-site.md) · [账户与登录](docs/guide/account.md) · [集群与系统](docs/guide/system.md) · [源站与缓存](docs/guide/origins-and-cache.md) · [图片格式转换](docs/guide/image-convert.md) · [HTTPS 与证书](docs/guide/https.md) · [规则](docs/guide/rules.md) · [访问控制](docs/guide/access-control.md) · [管理多个网站](docs/guide/site-management.md) · [用量保护](docs/guide/usage-protection.md) · [封禁](docs/guide/bans.md) · [挑战与 CC 防护](docs/guide/challenges.md) · [攻击与自动缓解](docs/guide/attack-dashboard.md) · [OWASP CRS 托管规则](docs/guide/waf.md) · [DNS 调度与告警](docs/guide/dns-and-alerts.md) · [区域探针与智能调度](docs/guide/scheduling.md) · [四层转发](docs/guide/l4.md) · [访问日志与 AccessKey](docs/guide/access-logs.md) · [节点升级](docs/guide/node-upgrades.md) |
-| 参考 | [环境变量](docs/reference/environment.md) · [命令行](docs/reference/cli.md) · [API 与端点](docs/reference/api.md) |
-| 项目 | [架构](ARCHITECTURE.md) · [安全](SECURITY.md) · [贡献指南](CONTRIBUTING.md) · [许可证](LICENSING.md) |
+| 入门 | [核心概念](docs/guide/concepts.md) · [快速上手](docs/guide/first-site.md) |
+| 部署 | [部署概览](docs/deploy/README.md) · [Docker Compose](docs/deploy/docker.md) · [宝塔面板 / aaPanel](docs/deploy/baota.md) · [deploy.sh 参考](docs/deploy/deploy-script.md) · [Railway](docs/deploy/railway.md) · [Fly.io](docs/deploy/fly.md) · [bunny.net Magic Containers](docs/deploy/bunny.md) · [Render](docs/deploy/render.md) · [Zeabur](docs/deploy/zeabur.md) · [端口、反向代理与可信代理](docs/deploy/networking.md) |
+| 站点 | [概览](docs/guide/overview.md) · [网站管理](docs/guide/site-management.md) · [域名与未知域名](docs/guide/domains.md) · [源站与缓存](docs/guide/origins-and-cache.md) · [图片格式转换](docs/guide/image-convert.md) · [HTTPS 与证书](docs/guide/https.md) · [错误页](docs/guide/error-pages.md) · [L4 转发](docs/guide/l4.md) · [用量保护](docs/guide/usage-protection.md) · [统计与访问日志](docs/guide/access-logs.md) |
+| 访问控制 | [规则、IP 名单与 GeoIP](docs/guide/rules.md) · [访问控制](docs/guide/access-control.md) · [封禁](docs/guide/bans.md) · [挑战与 CC 防护](docs/guide/challenges.md) · [OWASP CRS 托管规则](docs/guide/waf.md) · [攻击与自动缓解](docs/guide/attack-dashboard.md) |
+| 基础设施 | [集群与节点](docs/guide/clusters.md) · [区域探针与智能调度](docs/guide/scheduling.md) · [DNS 调度](docs/guide/dns.md) |
+| 系统 | [账户与登录](docs/guide/account.md) · [告警](docs/guide/alerts.md) · [系统设置与审计](docs/guide/system.md) |
+| 节点 | [节点概览](docs/node/README.md) · [接入节点](docs/deploy/nodes.md) · [节点配置](docs/node/configuration.md) · [节点升级](docs/guide/node-upgrades.md) · [节点日志](docs/guide/node-logs.md) · [节点运维](docs/node/operations.md) · [节点排障](docs/node/troubleshooting.md) |
+| 运维 | [版本与升级](docs/deploy/upgrade.md) · [降级](docs/deploy/downgrade.md) · [备份与恢复](docs/deploy/backup.md) · [维护](docs/deploy/maintenance.md) · [故障排查](docs/deploy/troubleshooting.md) |
+| 参考 | [API 概览](docs/reference/api.md) · [API：网站](docs/reference/api/sites.md) · [API：访问控制](docs/reference/api/security.md) · [API：证书](docs/reference/api/certificates.md) · [API：集群与节点](docs/reference/api/clusters.md) · [API：DNS 与调度](docs/reference/api/dns.md) · [API：概览、统计与告警](docs/reference/api/monitoring.md) · [API：系统与账户](docs/reference/api/system.md) · [环境变量](docs/reference/environment.md) · [命令行](docs/reference/cli.md) · [错误码](docs/reference/errors.md) |
+| 项目 | [架构](ARCHITECTURE.md) · [安全策略](SECURITY.md) · [开发与贡献](CONTRIBUTING.md) · [许可证](LICENSING.md) |
 
 ## 许可证
 

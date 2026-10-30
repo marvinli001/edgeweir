@@ -8,10 +8,8 @@ From console setup to a first site served over HTTP and HTTPS by an edge node.
 2. **Enroll a node**: generate the install command in the console and run it on the node host; once enrolled, the node connects to the node channel over mTLS.
 3. **Create a site**: enter its domains, origin, and cache setting; the cluster publishes a new configuration revision.
 4. **Configure DNS**: point the site's domains at the edge addresses or the CNAME target listed on the site's **Domains** tab in the authoritative DNS and wait for the records to take effect.
-5. **Enable HTTPS**: click **Enable HTTPS** on the site's HTTPS tab; HTTPS turns on once the certificate is issued, see [HTTPS and certificates](https.en.md).
+5. **Enable HTTPS**: click **Enable HTTPS** on the site's **HTTPS** tab; the certificate is used once issued, see [HTTPS and certificates](https.en.md).
 6. **Verify**: every item of the **Launch check** on the site's **Overview** tab passes; check origin fetch and caching with curl.
-
-Node installation, DNS propagation, and certificate issuance each take time that depends on the network and the providers.
 
 ## Prerequisites
 
@@ -33,7 +31,7 @@ Node installation, DNS propagation, and certificate issuance each take time that
 
    The log line is JSON: the `setupToken` field holds the token (prefix `ews_`) and the `url` field the setup page. An uninitialized console prints the same token at every start. For log locations of other deployment methods, see [Docker Compose](../deploy/docker.en.md) and [BaoTa Panel and aaPanel](../deploy/baota.en.md).
 
-2. Open `EDGEWEIR_PUBLIC_URL` in a browser. An uninitialized console redirects to `/setup` (**Create your account**).
+2. Open `EDGEWEIR_PUBLIC_URL` in a browser. An uninitialized console redirects to `/setup` (**Create your account**); the steps at the top of the page are **Create account**, **Add a node**, **Add a site**.
 
 3. Fill in the form and click **Create and continue**.
 
@@ -44,7 +42,7 @@ Node installation, DNS propagation, and certificate issuance each take time that
    | **Email** | Sign-in email |
    | **Password** | 12–128 characters |
 
-4. Verify: the console signs in and opens **Clusters & nodes** with the **Add node** dialog of the cluster `default` (the next step); on **System settings**, the **System** card shows **Setup token** as **Used {time}**.
+4. Verify: the notice **Setup complete** shows, the console signs in and opens **Clusters & nodes** with the **Add node** dialog of the cluster `default` (the next step); on **System settings**, the **System** card shows **Setup token** as **Used {time}**.
 
 Objects created by setup:
 
@@ -85,22 +83,28 @@ The token is single-use. For the installer's checks, the download mirror, and fa
 
    | Field | Default | Description |
    | --- | --- | --- |
-   | **Name** | The first domain | At most 100 characters |
-   | **Domains** | None | One per line or comma-separated; wildcards as `*.example.com`, every subdomain as `.example.com`, patterns as `~pattern`, Unicode domains as they are, see [domains and unknown hosts](domains.en.md); 1–50 domains |
+   | **Name** | The first domain | 1–100 characters |
+   | **Cluster** | The oldest cluster | Shown with several clusters; a site cannot change clusters later |
+   | **Domains** | None | One per line or comma-separated; wildcards as `*.example.com`, every subdomain as `.example.com`, patterns as `~pattern`, Unicode domains as they are, see [Domains and unknown hosts](domains.en.md); 1–50 domains, at most 10 patterns. When a node of the cluster does not support the `.` suffix and pattern forms, the form shows **Some nodes in the cluster do not support suffix and pattern domains** and cannot be submitted |
    | **Origin** | None | IP address or host name. Pasting a URL (`https://origin.example.com:8443/app`) or `host:port` puts the port and protocol into their own fields |
-   | **Port** | 80 (HTTP) / 443 (HTTPS) | Origin port |
+   | **Port** | 80 (HTTP) / 443 (HTTPS) | 1–65535 |
    | **Protocol** | HTTP | HTTP or HTTPS |
-   | **Origin Host** | Same as request | `Host` sent to the origin |
-   | **Caching** | On | When on, creates one cache rule: **Path prefix** `/`, **TTL (seconds)** 3600, **Respect origin Cache-Control** on (3600 seconds when the origin sends neither `Cache-Control` nor `Expires`) |
+   | **Origin Host** | **Same as request** | `Host` sent to the origin: a host name or IP, optionally with a port; IPv6 with a port in brackets |
+   | **Caching** | On | When on, creates one cache rule with the three fields below; when off, no cache rule |
+   | **Path prefix** | `/` | Path prefix the cache rule matches |
+   | **TTL (seconds)** | 3600 | 0–31536000 |
+   | **Respect origin Cache-Control** | On | On: cache by the origin's `Cache-Control` / `Expires`, by the TTL when the origin sends neither; off: always by the TTL, also `private` and `no-store` responses |
 
-3. Click **Create**. The site's cluster publishes a new revision and the site page opens. The notice **Site created** follows the nodes: **Rolling out N/M** → **Live on every node** (**Canary N/M, all nodes at HH:MM** during a [configuration canary](system.en.md#configuration-canary)).
+   The site's ports are HTTP 80 and HTTPS 443. Tags, ports, origin pools and other cache settings are not in the form and are changed on the site's tabs after creation; the API takes them at creation (`tags`, `ports`, `originSettings`, `cacheSettings`, `contentSettings`).
+
+3. Click **Create**. The site's cluster publishes a new revision and the site page opens. The notice **Site created** follows the nodes: **Rolling out N/M** → **Live on every node** (**Canary N/M, all nodes at HH:MM** during a [configuration canary](clusters.en.md#configuration-canary)).
 
 | Rule | Description |
 | --- | --- |
 | Cluster | With several clusters, **Cluster** in the form (default: the oldest); through the API, `clusterId`. A site cannot change clusters later |
 | Domains | Domains are published to the nodes as soon as the site is saved. A domain (name and form) belongs to at most one site; when the forms of several sites cover the same Host, the [precedence](domains.en.md#precedence) picks one |
 | Origin address | Origins in special-purpose ranges are refused unless the origin allow list covers the range |
-| Disabling | **Disable** on the site's **Overview** tab: the site is no longer sent to the nodes, which answer HTTP requests for its domains with a 503 disabled page (`X-Edgeweir-Error: site-disabled`) and fail the TLS handshake of HTTPS requests; DNS records stay. **Enable** restores it, see [Site enabling](system.en.md#site-enabling) |
+| Disabling | **Disable** on the site's **Overview** tab: the site is no longer sent to the nodes, which answer HTTP requests for its domains with a 503 disabled page (`X-Edgeweir-Error: site-disabled`) and fail the TLS handshake of HTTPS requests; DNS records stay. **Enable** restores it, see [Site enabling](clusters.en.md#site-enabling) |
 
 For origin pools, cache rules, and cache keys, see [Origins and cache](origins-and-cache.en.md).
 
@@ -115,7 +119,7 @@ Add a record for every site domain in the domain's authoritative DNS.
 
 The card lists where each domain resolves now: **Points here** (every address belongs to a node of the cluster), **Points elsewhere**, **Not resolved**, **Not checked** (the lookup failed, or the nodes have no known address), **Not checkable** (`.` suffix and pattern domains name no single host; not counted in **DNS pointed N/M**). A wildcard is resolved as `edgeweir-check.<domain>`. The card and the **Launch check** resolve again every 30 seconds; **Check again** beside the card's title resolves now. A recursive resolver's cached answer (also "no such name") holds until its TTL ends.
 
-For lines, health-based removal, and TTL of DNS steering, see [Configure DNS steering](dns-and-alerts.en.md#configure-dns-steering).
+For lines, health-based removal, and TTL of DNS steering, see [Configure DNS steering](dns.en.md#configure-dns-steering).
 
 ## 5. Enable HTTPS
 
@@ -163,6 +167,19 @@ For issuance methods, renewal, TLS, and HTTP/3, see [HTTPS and certificates](htt
    ```
 
    Expected: `dig` returns the node address (preceded by the CNAME target with DNS steering); `curl` matches step 2.
+
+## API
+
+| Step | Endpoint |
+| --- | --- |
+| Setup | `POST /api/v1/system/setup` (no authentication; `setupToken`, `name`, `email`, `password`) |
+| Install command | `POST /api/v1/enrollment-tokens` (`clusterId`, `nodeGroupId`, `nodeName`, `ttlMinutes` 5–10080, default 60) |
+| Enrollment progress | `GET /api/v1/enrollment-tokens/{id}` |
+| New site | `POST /api/v1/sites` |
+| Launch check | `GET /api/v1/sites/{id}/launch` |
+| HTTPS check and certificate request | `GET /api/v1/sites/{id}/https/check`, `POST /api/v1/certificates/request` |
+
+`/api/v1` takes an AccessKey (`x-api-key` header), see [API reference](../reference/api.en.md).
 
 ## Troubleshooting
 

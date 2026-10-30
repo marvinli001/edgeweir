@@ -17,7 +17,7 @@ curl -fsSL -o deploy.sh https://raw.githubusercontent.com/marvinli001/edgeweir/m
 sudo bash deploy.sh install
 ```
 
-脚本必须先保存为文件再运行；经管道（`curl … | bash`）或进程替换（`bash <(curl …)`）运行时以 1 退出。安装后脚本副本位于 `<安装目录>/deploy.sh`，其余命令在该目录以 `./deploy.sh <命令>` 运行。宝塔 / aaPanel 上的完整流程见 [baota.md](baota.md)。
+脚本必须先保存为文件再运行：经管道（`curl … | bash`）运行时任何命令以 1 退出；经进程替换（`bash <(curl …)`）运行时 `install` 以 1 退出。安装后脚本副本位于 `<安装目录>/deploy.sh`，其余命令在该目录以 `./deploy.sh <命令>` 运行。宝塔 / aaPanel 上的完整流程见 [宝塔面板 / aaPanel](baota.md)。
 
 ## 命令
 
@@ -81,7 +81,7 @@ sudo bash deploy.sh install
 | 安装目录 | 绝对路径；不存在、为空或只有 `deploy.sh`；主机上没有名为 `edgeweir-console` 的容器 |
 | 已有数据 | bundled：Docker 卷 `edgeweir_postgres-data`（之前的安装留下的数据库）已存在时中止；host：见 [数据库检查](#数据库检查) |
 | 控制台地址 | `http(s)://主机[:端口]`，端口 1–65535，不含路径，末尾 `/` 被去除；不是 `https://` 时警告 |
-| 节点通道地址 | `https://主机[:端口]`，不含路径；其中的端口即对外的节点通道端口，省略时为 443 |
+| 节点通道地址 | `https://主机[:端口]`，不含路径；其中的端口即对外的节点通道端口，省略时为 443。不接受 `wss://`、`ws://`：WebSocket 入口地址在 **系统设置** 的「节点通道」保存，见 [节点通道的 WebSocket 入口](networking.md#节点通道的-websocket-入口) |
 | 连接串 | `postgres://` 或 `postgresql://`；含用户名与库名；单一主机；不含空白、引号、反引号、`\`、`$`、`#`，密码中的特殊字符做 URL 编码（`$` 写成 `%24`） |
 | 端口 | Web 端口与节点通道端口为数字且不同；节点通道端口已被占用时中止；host 模式下节点通道端口小于 1024 时中止（控制台不以 root 运行） |
 
@@ -176,7 +176,7 @@ host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-al
 6. 输出回退命令 `./deploy.sh update <原版本>`（仅适用于两个版本之间没有新增迁移时）。
 7. 新镜像中的 `/app/deploy.sh` 与本脚本不同时询问是否替换本脚本，默认替换。
 
-版本策略与回退约束见 [upgrade.md](upgrade.md)。
+版本策略见 [版本与升级](upgrade.md)，回退约束见 [降级](downgrade.md)。
 
 ### 版本解析
 
@@ -215,7 +215,7 @@ host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-al
 | 写入值 | `postgres` 容器所在网络的 IPv4 网关 |
 | 不改动 | 值为列表或 CIDR；host 模式（模板默认 `127.0.0.1,::1`） |
 
-可信代理的含义见 [networking.md](networking.md#可信代理与客户端-ip)。
+可信代理的含义见 [端口、反向代理与可信代理：可信代理与客户端 IP](networking.md#可信代理与客户端-ip)。
 
 host 模式启动后按顺序检查节点通道的监听地址，命中一项时警告并停止检查：
 
@@ -257,6 +257,7 @@ host 模式启动后按顺序检查节点通道的监听地址，命中一项时
 | `EDGEWEIR_NODE_API_URL` | 全部 | 节点通道地址 |
 | `EDGEWEIR_VERSION` | 全部 | 固定的镜像 tag |
 | `EDGEWEIR_TRUSTED_PROXIES` | bundled | Docker 网关地址；首次启动时写入 |
+| `EDGEWEIR_POSTGRES_IMAGE` | 全部 | 所用 PostgreSQL 镜像不是固定版本时写入（`EDGEWEIR_POSTGRES_IMAGE`，或 `EDGEWEIR_NO_PULL` 下改用的本机 `postgres:18.6-alpine`） |
 
 值不加引号。修改某个键时保留其他行与 600 权限。其余变量见 [环境变量](../reference/environment.md)。
 
@@ -287,7 +288,7 @@ host 模式启动后按顺序检查节点通道的监听地址，命中一项时
 | 主密钥 | 不在备份中：只在 `.env`（或 `EDGEWEIR_MASTER_KEY_FILE` 指定的文件）里，另行离线保存；恢复数据库需要它 |
 | 范围 | 不含 ClickHouse 数据 |
 
-恢复用 [restore](#restore)；手动恢复与恢复验收见 [backup.md](backup.md)。
+恢复用 [restore](#restore)；手动恢复与恢复验收见 [备份与恢复](backup.md)。
 
 ## restore
 

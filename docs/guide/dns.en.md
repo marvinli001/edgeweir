@@ -1,6 +1,6 @@
-# DNS steering and alerts
+# DNS steering
 
-DNS steering records (third-party DNS providers bound per cluster), and alert channels, subscriptions, and rules.
+Per-cluster DNS steering through third-party providers: provider accounts, cluster bindings, health removal and DNS revisions.
 
 ## Concepts
 
@@ -13,12 +13,12 @@ DNS steering records (third-party DNS providers bound per cluster), and alert ch
 | Resolution line | A provider line that answers differently by carrier or region: default, China Telecom, China Unicom, China Mobile, education network, overseas. |
 | Backup node group | A node group that answers, in order, while a line's own node group has too few healthy addresses. |
 | DNS revision | A snapshot of a cluster's DNS binding and its records, separate from node configuration revisions. |
-| Alert channel | A notification target: email, webhook, DingTalk, WeCom, Telegram, Alibaba Cloud SMS, or Tencent Cloud SMS. |
-| Alert subscription | Sends some alert kinds of a set of sites (or all sites) to one channel; one per channel. |
 
 ## Configure DNS steering
 
 DNS steering writes steering records for each cluster; the CNAME targets of sites and [L4 apps](l4.en.md#dns) point at the healthy nodes of their cluster. Edgeweir does not run an authoritative DNS server; it manages records through each provider's API.
+
+Page: **DNS steering** (`/dns`), under **Infrastructure** in the sidebar, with the page action **Add provider account**. Cards in page order: **DNS provider accounts**, **Cluster bindings**, **Mass removal protection**. A cluster's binding, records and DNS revisions are on the **DNS** tab of **Clusters & nodes**: the held-back change (only while held back), **DNS binding**, **Current records** (Automatic mode) or **Records to create** with the zone file (Manual mode), **DNS revisions**.
 
 ### Add a provider account
 
@@ -45,9 +45,9 @@ An account is one set of credentials and one zone; for several zones under the s
    ```
 
    The first prints `all.<cluster domain>.`, the second the addresses of the cluster's healthy nodes.
-7. In each site domain's DNS, CNAME the domain to the **CNAME target**. Below it the card lists where each domain resolves (**Points here**, **Points elsewhere**, **Not resolved**, **Not checked**); the **Launch check** on the site's **Overview** tab sums it up as **DNS pointed N/M**.
+7. In each site domain's DNS, CNAME the domain to the **CNAME target**. Below it the card lists where each domain resolves (**Points here**, **Points elsewhere**, **Not resolved**, **Not checked**; **Not checkable** for suffix and regex domains); the **Launch check** on the site's **Overview** tab sums it up as **DNS pointed N/M**.
 
-Clusters may use different provider accounts and cluster domains. The **Cluster bindings** table on the **DNS steering** page lists **Cluster**, **Cluster domain** (shown when a binding has one), and **Status** for each cluster: the publication state when the mode is **Automatic** and a revision was published, otherwise the mode (**Not managed**, **Manual**, **Automatic**); a click on the cluster's row opens its **DNS** tab.
+Clusters may use different provider accounts and cluster domains. The **Cluster bindings** table on the **DNS steering** page lists **Cluster**, **Cluster domain** (shown when a binding has one), and **Status** for each cluster: the state of the latest revision when the mode is **Automatic** and a DNS revision exists (**Published**, **Pending**, **Failed**, **Held back**, possibly with "Over the mass removal limit" or the revision's error), otherwise the mode (**Not managed**, **Manual**, **Automatic**); a click on the cluster's row opens its **DNS** tab.
 
 ### Binding fields
 
@@ -79,7 +79,7 @@ With a provider that has the default line only, **Resolution line** is unavailab
 | `<site's CNAME prefix>.<cluster domain>` | CNAME | `all.<cluster domain>`; one per site with at least one domain, disabled sites included; default line only |
 | `<app's CNAME prefix>.<cluster domain>` | CNAME | `all.<cluster domain>`; one per enabled [L4 app](l4.en.md), none for disabled apps; default line only |
 | `<old CNAME prefix>.<cluster domain>` | CNAME | `all.<cluster domain>`; kept for 24 hours after a prefix change, see [CNAME prefixes](domains.en.md#cname-prefixes) |
-| `<line name>.<CNAME prefix>.<cluster domain>` | CNAME | `<line name>.<cluster domain>`; one set per site and per enabled L4 app, only with **Keep per-site line targets**; default line only |
+| `<line name>.<CNAME prefix>.<cluster domain>` | CNAME | `<line name>.<cluster domain>`; one set per site and per enabled L4 app (prefixes replaced in the last 24 hours included), only with **Keep per-site line targets**; default line only |
 
 Address records are written once per cluster (`all.<cluster domain>` once per resolution line in use): the record count is "sites + enabled L4 apps + cluster addresses", plus "(sites + enabled L4 apps) × lines" with per-site line targets. With per-site line targets off, the line targets on a site's **Domains** tab and on an L4 app's page are `<line name>.<cluster domain>`.
 
@@ -164,7 +164,7 @@ Earlier versions had one global DNS steering configuration. On upgrade it become
 | Write order | Names are registered first; changed address RRsets are replaced as a whole, then CNAMEs, in batches of at most 100 records; records no longer needed are deleted; the result is read back. New records are written before the records they replace (for example, addresses moving from A to AAAA), so a name never resolves empty in between; only a name changing to or from a CNAME loses its old records first. On failure the registration stays and the next cycle retries |
 | TTL | A provider raising the TTL to its own minimum is not drift; after the binding's TTL changes, the next reconciliation rewrites the records with the new TTL |
 | Concurrency | One console process at a time reconciles a cluster (a 15-minute lease that expires if the process exits); **Repair records** waits for a reconciliation in progress and then runs one more, and returns `DNS_RECONCILE_BUSY` when the other is still running after 30 seconds |
-| Configuration canary | Each node is compared with its own target revision: during a canary window the non-canary nodes run the stable revision and stay, see [Configuration canary](system.en.md#configuration-canary) |
+| Configuration canary | Each node is compared with its own target revision: during a canary window the non-canary nodes run the stable revision and stay, see [Configuration canary](clusters.en.md#configuration-canary) |
 
 A failed DNS revision shows its reason: provider authentication failed, zone not found at the provider, provider unreachable, provider rate limit, a name has unmanaged records, a name belongs to another cluster, server address refused by the outbound policy, and so on.
 
@@ -185,7 +185,7 @@ When a publication would empty a cluster's previously non-empty `all.` or line r
 
 Each cluster has its own DNS revisions, which do not advance the node configuration revision. **Roll back DNS** restores the binding settings of the chosen revision (mode, account, cluster domain, TTL, lines with their resolution lines, backup node groups, and minimum healthy IPs); addresses are still computed from the current sites and node health, so offline nodes are not restored. Manual-mode revisions are **Published** as soon as they are saved. Each cluster keeps its latest 200 DNS revisions; the current, published, and **Blocked** revisions are never pruned.
 
-The **Reason** column of the **DNS revisions** table:
+Columns of the **DNS revisions** table: **Version**, **Status**, **Reason**, **Records**, **Created**. The **Current records** card shows the current revision's error above its table. The **Reason** column:
 
 | Reason | Trigger |
 | --- | --- |
@@ -211,20 +211,20 @@ Each provider adapter is tested only with recorded API exchanges (requests and a
 | Alibaba Cloud | AccessKey ID, AccessKey secret, region (optional), STS token (optional) | RAM: `alidns:AddDomainRecord`, `alidns:UpdateDomainRecord`, `alidns:DeleteDomainRecord` on `acs:alidns:*:<account ID>:domain/<domain>`; `alidns:DescribeDomainRecords` and, for zone listing, `alidns:DescribeDomains` on `*` | Yes | — | China and international accounts use the same endpoint; free edition TTL at least 600 (retried once at 600 when refused) |
 | Huawei Cloud | Access key ID, secret access key, region (default `cn-north-4`) | IAM: `dns:zone:list`, `dns:recordset:list`, `dns:recordset:create`, `dns:recordset:update`, `dns:recordset:delete` | Yes | — | Public zones are global; international accounts can use `ap-southeast-3` |
 | DNSPod (token) | API token (`ID,Token`) | A DNSPod token of the main account, covering the whole account; sub-accounts cannot use it | Yes | — | DNSPod marks the token API as legacy; prefer Tencent Cloud DNSPod (API 3.0) for new setups; free plan TTL at least 600 |
-| Tencent Cloud DNSPod (API 3.0) | SecretId, SecretKey, site (China / international) | CAM: `dnspod:DescribeRecordList`, `dnspod:CreateRecord`, `dnspod:ModifyRecord`, `dnspod:DeleteRecord` on `qcs::dnspod::uin/<main account UIN>:domain/<domain ID>`; `dnspod:DescribeDomainList` for zone listing | Yes | — | The international site uses the international endpoint; free plan TTL at least 600 |
+| Tencent Cloud DNSPod (API 3.0) | SecretId, SecretKey, site (shown as `site` in the form, options `cn` China / `intl` international) | CAM: `dnspod:DescribeRecordList`, `dnspod:CreateRecord`, `dnspod:ModifyRecord`, `dnspod:DeleteRecord` on `qcs::dnspod::uin/<main account UIN>:domain/<domain ID>`; `dnspod:DescribeDomainList` for zone listing | Yes | — | The international site uses the international endpoint; free plan TTL at least 600 |
 | Volcengine | Access key ID, secret access key | A custom policy allowing `ListZones`, `ListRecords`, `CreateRecord`, `UpdateRecord`, `DeleteRecord` (the preset DNSFullAccess is broader) | Yes | — | Free edition TTL at least 600 |
 | Baidu AI Cloud | Access key ID, secret access key | An IAM sub-user with a custom "operations" policy for Intelligent Cloud DNS limited to the zone (or the preset DNSOperatePolicy); the account must be real-name verified | Yes | — | Free edition TTL at least 300 |
-| West.cn | Username, API password | The API password covers the whole account | Yes | — | The API is for West.cn resellers; allow the console's egress IP at West.cn (error "ip 授权失败") |
+| West.cn | Username, API password | The API password covers the whole account | Yes | — | The API is for West.cn resellers; allow the console's egress IP at West.cn (error "ip 授权失败"); TTL within 60–86400 |
 | DNS.LA | API ID, API secret | An API key enabled under My account → API, covering the whole account | Yes | — | Minimum TTL depends on the plan |
-| Amazon Route 53 | Access key ID, secret access key, session token (optional), hosted zone ID (optional), partition (`aws` / `aws-cn` / `aws-us-gov`) | `route53:GetHostedZone`, `route53:ListResourceRecordSets`, `route53:ChangeResourceRecordSets` on `arn:aws:route53:::hostedzone/<ID>`; add `route53:ListHostedZonesByName` without a hosted zone ID and `route53:ListHostedZones` for zone listing (both on `*`) | Yes | — | Writes simple records only; alias records can only target AWS resources |
+| Amazon Route 53 | Access key ID, secret access key, session token (optional), hosted zone ID (optional), partition (shown as `partition` in the form: `aws` / `aws-cn` / `aws-us-gov`) | `route53:GetHostedZone`, `route53:ListResourceRecordSets`, `route53:ChangeResourceRecordSets` on `arn:aws:route53:::hostedzone/<ID>`; add `route53:ListHostedZonesByName` without a hosted zone ID and `route53:ListHostedZones` for zone listing (both on `*`) | Yes | — | Writes simple records only; alias records can only target AWS resources |
 | Google Cloud DNS | Service account key (JSON), project ID (optional), managed zone name (optional) | `dns.changes.create`, `dns.resourceRecordSets.create`, `.update`, `.delete`, `.list`, plus `dns.managedZones.get` (with a managed zone name) or `dns.managedZones.list`; `roles/dns.admin` covers all | Yes | ALIAS | ALIAS works in public zones only and not together with DNSSEC |
 | Azure DNS | Tenant ID, client ID, client secret, subscription ID, resource group | "DNS Zone Contributor" on the zone; zone listing also needs `Microsoft.Network/dnszones/read` on the resource group | Yes | — | Azure public cloud only |
 | DigitalOcean | API token | Custom scopes `domain:read` and `domain:update`, covering the account or team | Yes | — | TTL at least 30 |
 | Vultr | API key | The API key of a user with the `dns` permission | Yes | — | Allow the console's egress IPs (IPv4 and IPv6) in Vultr's API access control |
 | Akamai (Linode) | API token | A personal access token with Domains Read/Write; to limit it to one domain, create it as a restricted user granted `read_write` on that domain | Yes | — | TTLs snap to Linode's allowed values, at least 300 |
 | Hetzner | API token | A Hetzner Cloud project API token with Read & Write | Yes | — | Uses the Hetzner Cloud API; tokens from the old DNS Console do not work; TTL at least 60 |
-| OVHcloud | Endpoint (`ovh-eu` / `ovh-ca` / `ovh-us`), application key, application secret, consumer key | Consumer key access rules: `GET /domain/zone` (zone listing), `GET /domain/zone/<zone>/record`, `GET`, `PUT`, `DELETE /domain/zone/<zone>/record/*`, `POST /domain/zone/<zone>/record`, `POST /domain/zone/<zone>/refresh` | Yes | — | Reading records takes one request per record, slow for large zones |
-| Gandi LiveDNS | Personal access token | A personal access token restricted to the domain with "Manage domain name technical configurations" | Yes | ALIAS | TTL 300–2592000 |
+| OVHcloud | Endpoint (`ovh-eu` / `ovh-ca` / `ovh-us`), application key, application secret, consumer key | Consumer key access rules: `GET /domain/zone` (zone listing), `GET /domain/zone/<zone>/record`, `GET`, `PUT`, `DELETE /domain/zone/<zone>/record/*`, `POST /domain/zone/<zone>/record`, `POST /domain/zone/<zone>/refresh` | Yes | — | Reading records takes one request per record, slow for large zones; TTL at least 60 |
+| Gandi (LiveDNS API) | Personal access token | A personal access token restricted to the domain with "Manage domain name technical configurations" | Yes | ALIAS | TTL 300–2592000 |
 | GoDaddy | API token (`key:secret` or a personal access token) | Personal access token scopes `domains.domain:read` and `domains.dns:update` | Yes | — | The account must hold a domain or have a plan with domain management, otherwise 403; TTL at least 600 |
 | Porkbun | API key, secret API key | An API key pair, with API access enabled for the domain | Yes | ALIAS | TTL at least 600 |
 | NameSilo | API token | The account API key (sub-accounts cannot use it; it can be limited by IP) | Yes | — | TTL at least 3600; one request per key at a time |
@@ -308,173 +308,11 @@ Body:
 
 A success is a 2xx JSON answer (up to 16 MiB): `{"records":[...]}` for `list`, `append`, `set`, and `delete`; `{"zones":["example.com"]}` for `zones`. 401 or 403 means authentication failed, 404 an unknown zone, 501 on `zones` that the receiver cannot list zones; 429 is treated as rate limiting and 5xx as unavailable. Error answers may carry `{"error":"short text"}`. The signature covers only a timestamp, so a request can be replayed within 300 seconds: `set` and `delete` are idempotent, `append` needs deduplication by the receiver.
 
-## Alerts page
-
-Alerts are configured on the **Alerts** page, which has five cards:
-
-| Card | Contents |
-| --- | --- |
-| Alert channels | Notification targets, which can be added, edited, tested, enabled or disabled, and deleted |
-| SMTP | The mail server of email channels, see [SMTP](#smtp) |
-| Subscriptions | The sites and alert kinds each channel receives |
-| Recent events | The latest 100 alert events (fired or resolved), including cluster and DNS alerts |
-| Alert rules | The thresholds that raise alerts |
-
-## Configure alert channels
-
-1. Open **Alerts** and click **Add channel** in the **Alert channels** card.
-2. Enter **Name**, select **Channel type**, and fill in the fields for that type (see below).
-3. Select **Notification language**.
-4. Turn on **Receive every alert** as needed.
-5. Click **Create**.
-6. Verify: click **Send test** under **⋯** at the end of the channel row; the target receives a test notification and the channel row does not show **Notification delivery failed**.
-
-Email channels use the server in the **SMTP** card, see [SMTP](#smtp).
-
-### Channel fields
-
-| Channel type | Fields | Constraint |
-| --- | --- | --- |
-| Webhook | Webhook URL, Bearer token (optional) | HTTP POST with JSON; public targets require HTTPS |
-| Email | Recipient addresses | 1–20 addresses, separated by commas or spaces |
-| DingTalk | Webhook URL, Signing secret (optional) | Host must be `oapi.dingtalk.com`; with a signing secret, timestamp and HMAC-SHA256 signature are added |
-| WeCom | Webhook URL | Host must be `qyapi.weixin.qq.com` |
-| Telegram | Bot token, Chat ID | Calls the Bot API `sendMessage` with link previews disabled |
-| Alibaba Cloud SMS | AccessKey ID, AccessKey Secret, Signature name, Template code, Phone numbers, Variable length limit (default 35), Sends per hour / day (default 10 / 50) | Calls `SendSms` on `dysmsapi.aliyuncs.com` (2017-05-25, signature V3 ACS3-HMAC-SHA256) |
-| Tencent Cloud SMS | Region (Guangzhou, Beijing, Nanjing), SecretId, SecretKey, SDK AppID, Signature name, Template ID, Phone numbers, Variable length limit (default 6), Sends per hour / day (default 10 / 50) | Calls `SendSms` on `sms.tencentcloudapi.com` (2021-01-11, TC3-HMAC-SHA256 signature) |
-
-| Switch | Default | Effect |
-| --- | --- | --- |
-| Receive every alert | Off | The channel receives every alert without subscriptions: the alerts of all sites, and cluster and DNS alerts |
-
-Channels without this switch receive only the site alerts subscribed to them, see [Subscribe to alerts](#subscribe-to-alerts).
-
-At most 32 channels. A click on a channel's row opens the edit dialog; **⋯** at the end of the row holds **Send test**, **Enable** or **Disable**, and **Delete**. When editing a channel, turn on **Replace channel credentials** to re-enter the type and fields; otherwise the stored credentials are kept. A disabled channel sends no notifications and cannot be chosen for new subscriptions.
-
-### SMS channels
-
-An SMS carries three template variables and no link or time. Apply for a signature and a notification template in the provider's console first; the template uses the variables below:
-
-| Variable | Alibaba Cloud | Tencent Cloud | Content |
-| --- | --- | --- | --- |
-| Object | `${site}` | `{1}` | The site name; the cluster name for cluster alerts, the node name for node alerts, `Edgeweir` for tests |
-| Alert | `${alert}` | `{2}` | The alert kind, such as **Node offline**; usage alerts add the metric |
-| Status | `${status}` | `{3}` | **Active** or **Recovered** |
-
-Template examples: Alibaba Cloud `Edgeweir alert: ${site} ${alert}, ${status}`; Tencent Cloud `Edgeweir alert: {1} {2}, {3}`. A Tencent Cloud template must have exactly these three variables.
-
-| Item | Behavior |
-| --- | --- |
-| Phone numbers | 1–20, separated by commas or spaces; E.164 (`+8613800000000`), mainland China numbers may leave out `+86`; Tencent Cloud wants the numbers of one channel all domestic or all international |
-| Variable length | Each variable is cut to **Variable length limit** characters; link prefixes, brackets, control characters and emoji are removed. Alibaba Cloud notification template variables take at most 35 characters; Tencent Cloud depends on the account (6 by default for accounts opened after 2024-01-25), see the provider's console |
-| Names that look like links | When the provider refuses a variable as a link (Alibaba Cloud `isv.PARAM_NOT_SUPPORT_URL`, Tencent Cloud `InvalidParameterValue.ProhibitedUseUrlInTemplateParameter`), the object is sent once more with its `.` replaced by spaces |
-| Send rate | Each channel counts sends over a sliding hour and 24 hours, **Send test** included. At the limit, **Send test** reports **Send limit reached**; alerts wait until the window has room, without using one of the 5 attempts, and an alert that recovers meanwhile is not sent |
-| Provider rate limits | Alibaba Cloud `isv.BUSINESS_LIMIT_CONTROL` and similar, Tencent Cloud `LimitExceeded.*`, use an attempt and retry after an hour |
-| Partial success | On Tencent Cloud, any number answered `Ok` counts as sent; nothing is sent again |
-| Failures | The channel row and **Send test** show **SMS provider refused** with the provider's error code, such as `isv.SMS_TEMPLATE_ILLEGAL` or `AuthFailure.SignatureFailure` |
-
-AccessKey Secret and SecretKey are encrypted like other channel credentials and never returned. Use a RAM / CAM sub-account key that can only send SMS.
-
-### Webhook payload
-
-The request body is JSON with `id` (event ID), `siteId`, `siteName`, `kind`, `status` (`firing` / `resolved`), `occurredAt`, `resourceId` (the object of the alert, such as a node or certificate ID), `text`, and `url` (a console link). For cluster and DNS alerts, `siteId` is `null` and `siteName` is the cluster name; for **Node offline**, `siteId` is `null`, `siteName` is the node name and `resourceId` the node ID; and `url` points to **Clusters & nodes** or **DNS steering**; for `scheduling_action`, `siteName` is "rule · node" and `resourceId` is `<rule ID>:<node ID>`. With a bearer token, the request carries `Authorization: Bearer <token>`. A 2xx response counts as delivered.
-
-### SMTP
-
-The outgoing mail server of email channels, set in the **SMTP** card of the **Alerts** page and saved with **Save**. Until it is set, **Send test** on an email channel answers "SMTP is not configured", and a channel whose deliveries fail for that reason shows the same message.
-
-| Field | Default | Description |
-| --- | --- | --- |
-| **SMTP host** | None | At most 253 characters |
-| **SMTP port** | 465 | 1–65535 |
-| **Implicit TLS (off: STARTTLS)** | On | Off requires STARTTLS; certificate verification is always on |
-| **From address** | None | Email address |
-| **SMTP username** | None | Required |
-| **SMTP password** | None | Envelope-encrypted with the master key before storage; leave blank to keep the current password |
-| **CA certificates (PEM)** | Empty | PEM certificates only; when set, replaces the system trust store for this server |
-
-| Constraint | Description |
-| --- | --- |
-| Changing the destination | Changing host, port, TLS mode, username, or CA certificates requires the password again |
-| Outbound policy | The address is resolved and pinned for each delivery; private addresses must be allowed by `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
-
-## Set alert rules
-
-1. Open **Alerts** and change the thresholds in the **Alert rules** card.
-2. Click **Save**.
-
-| Field | Values | Default | Alert kind | Condition |
-| --- | --- | --- | --- | --- |
-| Offline threshold (seconds) | 45–3600 | 90 | Node offline | An enabled node has not reported for longer than the threshold, or reports an unhealthy data plane; one alert per node, not one per site it serves |
-| Certificate warning (hours) | 1–720 | 72 | Certificate expiring | The site's current certificate expires within the threshold |
-| Minimum requests | 1–1000000 | 100 | High server error ratio | Requests in the window reach this value |
-| Window (minutes) | 1–60 | 5 | High server error ratio | Time window for the 5xx ratio |
-| 5xx threshold (%) | 1–100 | 20 | High server error ratio | The 5xx ratio in the window reaches this value |
-| Clock skew (seconds) | 5–3600 | 30 | Node clock skewed | The clock offset (ahead or behind) a node reported within the offline threshold reaches this value; one alert per node, like Node offline. Nodes report it since v1.5.0; **Clock offset** on the node's details shows the last value |
-
-**Origin unavailable** has no threshold of its own: it fires when one node reports, within the offline threshold, every origin of the site unavailable. An origin is unavailable on that node when its passive or its active check result (either source) is unhealthy; see [Passive health check](origins-and-cache.en.md#passive-health-check) and [Active health check](origins-and-cache.en.md#active-health-check).
-
-**CC mitigation raised** (`cc_mitigation`) has no threshold of its own: it fires when a node reports that the site left the normal level, at most once per site in 15 minutes (a raise held back fires at the next minute check once the 15 minutes are over, if the site is still above normal), and resolves once no online node reports the site above normal. See [Challenges and CC mitigation](challenges.en.md#cc-mitigation).
-
-**Usage near its limit** (`usage_warning`) and **Usage limit reached** (`usage_limit`) come from a site's usage protection, whose thresholds are set in the site's **Usage protection** card; each metric alerts at most once per period and level, see [Usage protection](usage-protection.en.md#alerts).
-
-Site alerts cover only enabled sites with at least one domain; the two usage protection alerts also cover disabled sites.
-
-### Cluster and DNS alerts
-
-These alerts belong to a cluster, not to a site. They go only to channels with **Receive every alert** and cannot be subscribed to; **Recent events** lists them too.
-
-| Alert | Fires | Resolves |
-| --- | --- | --- |
-| Configuration canary rolled back | A canary rolled back automatically or was aborted | The next promotion in that cluster |
-| No canary node online; configuration published to every node | A publication in a cluster with the canary on found no canary node online | The next publication in that cluster with a canary node online |
-| Stored rule no longer valid; its last compiled form is kept | A publication found a stored rule the current validator refuses (see [Rules](rules.en.md)); the name is the rule's | The next publication after the rule is rewritten or deleted |
-| DNS mass removal blocked | The [mass removal protection](#mass-removal-protection) held a publication of a cluster back | The cluster's next publication that passes, or a forced one |
-| Scheduling rule acting on a node | A [scheduling rule](scheduling.en.md#scheduling-rules) took effect on a node; the name is "rule · node" | The action recovers; at once when the rule is disabled, deleted, or its line, conditions, or action change |
-| A node cannot load a certificate | A node reports it cannot load a certificate (see [HTTPS](https.en.md)); the name is the certificate's, `resourceId` its ID, the link points to **Certificates** | No node reports it any more |
-| DNS reconciliation failing | A cluster's DNS reconciliation has failed for 5 minutes in a row (provider unreachable, credentials no longer valid, a name conflict, …; the cause is the error of the cluster's DNS revision); the name is the cluster's, the link points to **DNS** | The cluster's next successful reconciliation, or the binding switched to manual / off with no records left to clean up |
-
-Deleting a cluster resolves its cluster alerts that are still firing.
-
-## Subscribe to alerts
-
-1. Open **Alerts** and click **Subscribe** in the **Subscriptions** card.
-2. Select **Alert channel**.
-3. Turn on **All sites**, or tick sites in the **Sites** list (**Search sites** finds them; ticked sites stay ticked across searches).
-4. Turn on the alert kinds to send and click **Save**.
-5. Verify: the subscription row shows the channel, the sites (or **All sites**), and the alert kinds; **Recent events** shows these sites' events.
-
-| Item | Behavior |
-| --- | --- |
-| Channels | One subscription per channel; **Subscribe** lists only enabled channels without a subscription and is unavailable when there is none |
-| Sites | **All sites** includes sites created later; otherwise tick at least one site |
-| Alert kinds | Node offline, Node clock skewed, Certificate expiring, Origin unavailable, High server error ratio, CC mitigation raised, Usage near its limit, Usage limit reached |
-| Changes | Click the subscription's row to change its sites, alert kinds, or **Enable**; a subscription with **Enable** off sends nothing and its row shows **Off** |
-| Deleted sites | The site leaves the subscription; a subscription left without sites is deleted with it |
-| Removal | **Unsubscribe** under **⋯** at the end of the subscription row, confirmed |
-| API | `POST /api/v1/alerts/subscriptions` (`channelId`, `kinds`, `allSites` or `siteIds`) creates the channel's subscription, replacing the one it has; `PUT /api/v1/alerts/subscriptions/{id}` changes it; both return `allSites` and `sites` (`id`, `name`). The former `siteId` field is gone |
-| Upgrades | A subscription used to cover one site; on upgrade, the subscriptions of a channel merge into one. If any of them is enabled, the result is enabled with the sites and alert kinds of the enabled ones; if all are paused, it stays paused with all their sites and alert kinds |
-
-## Delivery behavior
-
-| Item | Behavior |
-| --- | --- |
-| Events | A condition creates one event when it starts and one when it recovers; event IDs are stable |
-| Receiving channels | Channels with **Receive every alert** receive every alert; other channels receive only the alerts of the sites their subscription covers, and **Node offline** and **Node clock skewed** when the subscription covers any site in the node's cluster (or **All sites**) and includes that kind |
-| Retries | After a failure, retries back off 2, 4, 8, and 16 minutes; each channel gets 5 attempts |
-| Batches | Checked every minute; at most 200 notifications per check, and deliveries that would start after 40 seconds wait for the next minute |
-| Duplicates | A lost receipt can cause duplicate notifications; webhook receivers deduplicate by event ID |
-| Checks before delivery | Every delivery rechecks that the channel is enabled, that the event is still the condition's current state and less than 24 hours old, and that the subscription is enabled and still covers the site and the alert kind (except for channels with **Receive every alert**) |
-| Outbound policy | Resolves and pins the target IP; refuses special-purpose addresses; webhook-style targets and SMS APIs do not follow redirects; internal webhooks or SMTP need their network in `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
-| Timeouts and sizes | 10 seconds per delivery; request body up to 32 KiB, response body up to 64 KiB |
-| Retention | Alert events are kept for 90 days |
-| Sensitive fields | Channel APIs and failure records never return passwords, bot tokens, webhook secrets, SMS keys, or raw provider errors; SMS channels record only the provider's error code |
-
 ## Limits
 
 | Item | Description |
 | --- | --- |
-| Background jobs | DNS steering sync and alert checks and deliveries run every minute in background jobs, address reachability and scheduling rules every 10 seconds; they need at least one console process with `ROLE=worker` or `ROLE=all`, see [Deployment overview](../deploy/README.en.md) |
+| Background jobs | DNS reconciliation runs every minute, address reachability and scheduling rules every 10 seconds; they need at least one console process with `ROLE=worker` or `ROLE=all`, see [Deployment overview](../deploy/README.en.md) |
 | Resolution lines | Only six resolution lines (default, China Telecom, China Unicom, China Mobile, education network, overseas), and only with DNSPod, Tencent Cloud DNSPod, Alibaba Cloud, and Huawei Cloud; province lines and other providers' geographic resolution are not used |
 | Authoritative DNS | Edgeweir runs no authoritative DNS; it manages records through provider APIs |
 | One operation | Each provider call takes at most 2 minutes |
@@ -497,9 +335,3 @@ Deleting a cluster resolves its cluster alerts that are still firing.
 | "This DNS provider has no {line} resolution line" | A binding line uses a resolution line the account's provider does not support | Use **Default**, or an account whose provider supports the line |
 | "This cluster's DNS is still being synced; try again later" | **Repair records** waited 30 seconds for another reconciliation that is still running, usually behind a slow provider | Try again later and check the DNS revision's status |
 | Carrier users get the default line's addresses | The resolver is not on that carrier's network, or no binding line maps to that resolution line | Test with a resolver of that carrier; add a binding line for it |
-| Channel shows **Notification delivery failed** | The target refused or timed out, or the outbound policy refused the address | Reproduce with **Send test**; add internal targets to `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
-| "Alert channel limit reached" | 32 channels exist | Delete unused channels |
-| "SMTP is not configured" | An email channel was tested or delivered before the SMTP settings were saved | Fill in and save the **SMTP** card, then **Send test** |
-| "Enter a new password when changing the SMTP server or account" | The SMTP destination changed without a password | Enter the password and save |
-| "The CA bundle must contain PEM certificates only" | The CA field contains something other than certificates | Paste PEM certificates only |
-| **Subscribe** is unavailable | No channel is enabled, or every enabled channel has a subscription | Add or enable a channel; click an existing subscription's row to change it |
