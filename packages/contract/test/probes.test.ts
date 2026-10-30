@@ -26,6 +26,7 @@ describe("probe settings", () => {
       lossPercent: 50,
       ipDownSeconds: 30,
       ipUpSeconds: 60,
+      mode: "internal",
     });
   });
 
