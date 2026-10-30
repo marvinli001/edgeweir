@@ -36,7 +36,8 @@ const UA = {
   gptbot:
     "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.2; +https://openai.com/gptbot",
   claudebot: "Mozilla/5.0 (compatible; ClaudeBot/1.0; +claudebot@anthropic.com)",
-  perplexitybot: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot)",
+  perplexitybot:
+    "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot)",
   bytespider:
     "Mozilla/5.0 (Linux; Android 5.0) AppleWebKit/537.36 (KHTML, like Gecko) Mobile Safari/537.36 (compatible; Bytespider)",
   browser:
@@ -283,11 +284,21 @@ assert.ok(
   JSON.stringify(overview.paths),
 );
 assert.equal(overview.unsupportedNodes, 0);
+/** The site's access log lines of the last 15 minutes with the filters in `query`. */
+const logLines = async (query) => {
+  const now = Date.now();
+  const params = new URLSearchParams({
+    from: new Date(now - 15 * 60_000).toISOString(),
+    to: new Date(now).toISOString(),
+    ...query,
+  });
+  return (await admin.ok("GET", `/sites/${siteId}/logs?${params}`)).entries;
+};
 const logs = await waitFor(
   "access log lines of GPTBot",
   async () => {
-    const r = await admin.ok("GET", `/sites/${siteId}/logs?crawler=gptbot&limit=20`);
-    return r.entries.length > 0 ? { items: r.entries } : null;
+    const items = await logLines({ crawler: "gptbot", limit: "20" });
+    return items.length > 0 ? { items } : null;
   },
   120,
   5000,
@@ -296,13 +307,13 @@ assert.ok(
   logs.items.every((l) => l.crawler === "gptbot" && l.crawlerVerification === "failed"),
   JSON.stringify(logs.items.slice(0, 2)),
 );
-const any = await admin.ok("GET", `/sites/${siteId}/logs?crawler=any&limit=200`);
+const any = await logLines({ crawler: "any", limit: "200" });
 assert.ok(
-  any.entries.some((l) => l.crawler === "claudebot"),
+  any.some((l) => l.crawler === "claudebot"),
   "crawler=any finds every claim",
 );
 assert.ok(
-  any.entries.every((l) => l.crawler !== ""),
+  any.every((l) => l.crawler !== ""),
   "crawler=any leaves out browsers",
 );
 await writeFile(STATE, JSON.stringify({ siteId, host: HOST, requests: overview.totals.requests }));
