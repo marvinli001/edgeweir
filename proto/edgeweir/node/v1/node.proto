@@ -129,6 +129,12 @@ message NodeInfo {
   repeated string ip_addresses = 7;
   // Explicit capability negotiation also works for development builds.
   repeated string supported_features = 8;
+  // App-specific machine id: hex SHA-256 of "edgeweir-node:" + /etc/machine-id
+  // (empty when the host has none). Lets the console notice that a new
+  // enrollment comes from a machine that already is a node (reinstalled
+  // state directory, or a cloned image when two nodes share it). A hint,
+  // never an identity. Added in v1.8.0.
+  string machine_id = 9;
 }
 
 // GetCertificatesRequest names certificate references from the desired revision.
@@ -671,6 +677,9 @@ message NodeTask {
     // Added in v1.6.0 (feature debug-logs-v1); older nodes report
     // task_unsupported.
     DebugLogsTask debug_logs = 7;
+    // Added in v1.8.0 (feature decommission-v1); older nodes report
+    // task_unsupported.
+    DecommissionTask decommission = 8;
   }
 }
 
@@ -867,6 +876,16 @@ message ReportLogsResponse {
   uint64 batch_sequence = 1;
   uint32 accepted = 2;
 }
+
+// DecommissionTask retires the node without SSH. The node reports the
+// task SUCCEEDED first (it cannot report afterwards), then stops serving
+// (OpenResty stops), deletes its identity, last-known-good configuration and
+// cache, leaves a marker so that the service does not start serving again
+// (also after a reboot) until the host is enrolled anew, and exits. The
+// packages stay installed (removing them needs root on the host). After the
+// SUCCEEDED result the console should revoke the node's certificate and
+// delete the node. Failure: error_code decommission_failed {reason}.
+message DecommissionTask {}
 
 // UpgradeTask selects one signed release. Trust roots and allowed download
 // sources are configured on the node, never supplied by this task.
