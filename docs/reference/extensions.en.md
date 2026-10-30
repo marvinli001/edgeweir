@@ -343,12 +343,12 @@ Lifecycle: the agent starts the sidecar once the package is unpacked and the ext
 
 Isolation (Linux only; anything less is `unsupported` and the sidecar is not started):
 
-- **Own user.** The sidecar never runs as the agent's or nginx's user. Package installs (systemd) start it as the template unit `edgeweir-node-sidecar@<id>.service` with `DynamicUser=yes`, through a polkit rule that lets the node's user start and stop only those units; containers and other setups need the agent to run as root with `--sidecar-user USER` (the agent then switches to that user). `run --sidecar-mode auto|systemd|user|off` chooses; `off` refuses sidecars.
-- **Sandbox.** `NoNewPrivileges`, no capabilities, a read-only view of the system, a private `/tmp`, writable only its state directory; a seccomp filter refusing `ptrace`, `process_vm_*`, mounts, namespaces, BPF, perf, keyrings, kernel modules, reboot and clock changes; memory, task and CPU limits from the manifest (cgroup v2; `RLIMIT_DATA` as a fallback for memory); no core dumps.
-- **What it reaches.** Reads: its package's `sidecar/` and `assets/`, its data directory. Writes: its state directory `<state>/extensions/run/<id>/state`. Connects: its own socket directory and the network. It cannot read the node's state directory (keys, credentials, configuration), connect to the agent's or nginx's control sockets, or signal other processes.
+- **Own user.** The sidecar never runs as the agent's or nginx's user: the agent starts it as `--sidecar-user USER` (unprivileged, not the agent's user), for which the agent runs as root or holds `CAP_SETUID` and `CAP_SETGID` (the container image built with `--build-arg SIDECAR_CAPABILITY=true` gives the agent both as file capabilities and has the user `edgeweir-sidecar`: add `-e EDGEWEIR_SIDECAR_USER=edgeweir-sidecar`). An agent that is not root must be a member of that user's primary group (as in the image) to hand data and socket directories to the group. `run --sidecar-mode auto|user|off` chooses (`auto` is `user`); `off` refuses sidecars. A `systemd` mode starting sidecars as template units with `DynamicUser=yes` is not available yet.
+- **Sandbox.** The agent starts the sidecar through its own helper `edgeweir-node sidecar-exec`: it joins the sidecar's cgroup (when one can be made), sets resource limits, switches user and group (no supplementary groups), sets `PR_SET_NO_NEW_PRIVS`, loads a seccomp filter and executes the sidecar with a clean environment and no capabilities. The filter refuses `ptrace`, `process_vm_*`, mounts, namespaces (`unshare`, `setns`, `clone` with namespace flags; `clone3` gets `ENOSYS`), BPF, perf, keyrings, kernel modules, reboot, clock changes, swap and `userfaultfd`; system calls of another architecture kill the process. Memory, task and CPU limits come from the manifest (when the agent's cgroup v2 allows a child group; otherwise `RLIMIT_DATA` and `RLIMIT_NPROC` for memory and tasks, and no CPU limit); no core dumps.
+- **What it can reach.** One directory per extension under the sidecar directory (`--sidecar-dir`, by default the node's state directory plus `-sidecar`, `/var/lib/edgeweir-node-sidecar` in the container): `package/` (a copy of the package, read-only), `state/` (writable, `$EDGEWEIR_EXT_STATE`) and `data/` (read-only, `$EDGEWEIR_EXT_DATA`). There is no separate view of the file system beyond permissions: the node's state directory (keys, credentials, configuration) and the agent's and nginx's control sockets are open to the node's user only, so the sidecar cannot read or connect to them, nor signal other processes.
 - **Network.** Outbound connections are allowed (a function runtime calls APIs); the sidecar must refuse special-purpose destinations itself. To reach a site's own origin it uses the origin socket below, so private origin addresses never need to be reachable from it.
 
-Sockets (directory `/run/edgeweir-node/ext/<id>/`, group-shared between the sidecar user and nginx only):
+Sockets (directory: the control socket's directory plus `-ext/<id>/`, `/run/edgeweir-node-ext/<id>/` in the container; owned by nginx's user and the sidecar user's group, mode 2770, so only the two reach it):
 
 - `sidecar.sock`: created by the sidecar; nginx connects to it.
 - `origin.sock`: served by nginx for the sidecar. A request carrying `X-Edgeweir-Ext-Site: <site id>` goes to that site's origin as the edge layer would send it (origin pools, Host, TLS verification, origin rules, origin address policy), without the cache, the CRS or any extension hook. Sites that do not turn the extension on get 403; requests without the header 400.
@@ -373,21 +373,21 @@ Extensions with `data` accept opaque items per site, uploaded through the consol
 | `PUT /sites/{siteId}/extensions/{id}/data/{name}` | Body `{ "content": "<base64>" }` (requests up to 34 MiB); name `^[a-z0-9][a-z0-9._-]{0,63}$`; limits from the manifest's `data`; audited (`site.extension_data_put`), publishes a revision |
 | `DELETE /sites/{siteId}/extensions/{id}/data/{name}` | Audited (`site.extension_data_delete`), publishes a revision |
 
-Items are stored in the console's database. Configuration carries `{name, sha256, size}` per site and extension; nodes fetch missing items by digest over the node channel (`GetExtensionData`, mTLS, in chunks of 4 MiB), check the digest, and store them under `<state>/extensions/data/<id>/<site id>/<name>`, readable by the sidecar user and nginx only, deleting items no configuration references. Data changes are hot: no nginx reload.
+Items are stored in the console's database. Configuration carries `{name, sha256, size}` per site and extension; nodes fetch missing items by digest over the node channel (`GetExtensionData`, mTLS, in chunks of 4 MiB), check the digest, and store them under `<id>/data/<site id>/<name>` in the sidecar directory, readable by the node's user and the sidecar user's group only, deleting items no configuration references. Data changes are hot: no nginx reload.
 
 The sidecar learns about sites, configuration and data from `$EDGEWEIR_EXT_DATA/index.json`, written atomically after every item of a revision is present, followed by `SIGHUP`:
 
 ```json
 { "revision": 42, "config": { "...": "global configuration" },
   "sites": { "<site id>": { "name": "shop.example", "domains": ["shop.example"], "config": { "...": "site configuration" },
-    "data": [{ "name": "fn-main.wasm", "sha256": "…", "size": 9123456, "path": "/var/lib/edgeweir-node/extensions/data/<id>/<site id>/fn-main.wasm" }] } } }
+    "data": [{ "name": "fn-main.wasm", "sha256": "…", "size": 9123456, "path": "/var/lib/edgeweir-node-sidecar/<id>/data/<site id>/fn-main.wasm" }] } } }
 ```
 
 Only sites that turn the extension on appear. Site configuration is visible to Lua and the console API (masked `x-secret` values aside); secrets belong in data items.
 
 ### Node state details
 
-Each extension's node state carries `details` (JSON, ≤ 4 KiB): `sidecar` (state, restarts, last exit, since), `listeners` (`{name: {port, state: "listening" | "failed", message}}`), and whatever the sidecar returns from `GET /status` on its socket under `sidecar.status` (≤ 2 KiB, polled every 30 s).
+Each extension's node state carries `details` (JSON, ≤ 4 KiB): `sidecar` (state, pid, restarts, last exit, since), `listeners` (`{name: {port, state: "listening" | "failed", message}}`), and whatever the sidecar returns from `GET /status` on its socket under `sidecar.status` (≤ 2 KiB, polled every 30 s).
 
 ### Distribution changes in 1.1
 

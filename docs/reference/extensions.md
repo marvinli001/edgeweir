@@ -343,12 +343,12 @@ edgeweir-node 仓库里的 `examples/extensions/hello-header` 就是这个扩展
 
 隔离（仅 Linux；达不到时为 `unsupported`，不启动边车）：
 
-- **独立用户。** 边车从不以 agent 或 nginx 的用户运行。安装包（systemd）安装的节点以模板单元 `edgeweir-node-sidecar@<id>.service`、`DynamicUser=yes` 启动它，靠一条 polkit 规则让节点用户只能启停这些单元；容器等其他环境需要 agent 以 root 运行并指定 `--sidecar-user USER`（agent 切换到该用户）。`run --sidecar-mode auto|systemd|user|off` 选择方式；`off` 拒绝边车。
-- **沙箱。** `NoNewPrivileges`、无 capability、只读的系统视图、私有 `/tmp`，只有自己的状态目录可写；seccomp 过滤器拒绝 `ptrace`、`process_vm_*`、挂载、命名空间、BPF、perf、keyring、内核模块、重启与改时钟；内存、任务数与 CPU 上限取自清单（cgroup v2；内存退而用 `RLIMIT_DATA`）；不生成 core dump。
-- **能访问什么。** 可读：本扩展包的 `sidecar/` 与 `assets/`、自己的数据目录。可写：自己的状态目录 `<state>/extensions/run/<id>/state`。可连接：自己的套接字目录与网络。读不到节点状态目录（密钥、凭据、配置），连不上 agent 与 nginx 的控制套接字，也不能向其他进程发信号。
+- **独立用户。** 边车从不以 agent 或 nginx 的用户运行：agent 以 `--sidecar-user USER`（无特权、不同于 agent 的用户）启动它，为此 agent 须以 root 运行，或持有 `CAP_SETUID` 与 `CAP_SETGID`（容器镜像以 `--build-arg SIDECAR_CAPABILITY=true` 构建时给 agent 这两项文件 capability，并带用户 `edgeweir-sidecar`，`-e EDGEWEIR_SIDECAR_USER=edgeweir-sidecar` 即可）。非 root 的 agent 须是该用户主组的成员（镜像已如此），以把数据与套接字目录交给这个组。`run --sidecar-mode auto|user|off` 选择方式（`auto` 即 `user`）；`off` 拒绝边车。以 systemd 模板单元（`DynamicUser=yes`）启动边车的 `systemd` 方式尚未提供。
+- **沙箱。** agent 经自身的辅助命令 `edgeweir-node sidecar-exec` 启动边车：加入边车的 cgroup（能建时），设置资源上限，切换用户与组（清空附加组），`PR_SET_NO_NEW_PRIVS`，载入 seccomp 过滤器，以干净的环境执行边车，不留 capability。过滤器拒绝 `ptrace`、`process_vm_*`、挂载、命名空间（`unshare`、`setns`、带命名空间标志的 `clone`，`clone3` 得到 `ENOSYS`）、BPF、perf、keyring、内核模块、重启、改时钟、swap、`userfaultfd`；其他架构的系统调用终止进程。内存、任务数与 CPU 上限取自清单（agent 所在的 cgroup v2 允许建子组时；否则内存与任务数退而用 `RLIMIT_DATA` 与 `RLIMIT_NPROC`，CPU 不限）；不生成 core dump。
+- **能访问什么。** 边车目录（`--sidecar-dir`，默认节点状态目录加 `-sidecar`，容器中 `/var/lib/edgeweir-node-sidecar`）下按扩展一个目录：`package/`（扩展包的副本，只读）、`state/`（可写，`$EDGEWEIR_EXT_STATE`）、`data/`（只读，`$EDGEWEIR_EXT_DATA`）。文件权限之外没有单独的文件系统视图：节点状态目录（密钥、凭据、配置）与 agent、nginx 的控制套接字只对节点用户开放，边车读不到、连不上，也不能向其他进程发信号。
 - **网络。** 允许出站连接（函数运行时要调用 API）；特殊用途地址由边车自己拒绝。访问网站自己的源站时用下面的源站套接字，私有源站地址无需对边车可达。
 
-套接字（目录 `/run/edgeweir-node/ext/<id>/`，只有边车用户与 nginx 共享的组可访问）：
+套接字（目录为控制套接字所在目录加 `-ext/<id>/`，容器中 `/run/edgeweir-node-ext/<id>/`；属 nginx 的用户与边车用户的组，权限 2770，只有两者可访问）：
 
 - `sidecar.sock`：由边车创建，nginx 连接。
 - `origin.sock`：nginx 为边车提供。带 `X-Edgeweir-Ext-Site: <网站 id>` 的请求按边缘层的方式发往该网站的源站（源站池、Host、TLS 校验、回源规则、源站地址策略），不经过缓存、CRS 与任何扩展钩子。没有开启该扩展的网站得到 403，没有该请求头的请求得到 400。
@@ -373,21 +373,21 @@ edgeweir-node 仓库里的 `examples/extensions/hello-header` 就是这个扩展
 | `PUT /sites/{siteId}/extensions/{id}/data/{name}` | 请求体 `{ "content": "<base64>" }`（请求最大 34 MiB）；名称 `^[a-z0-9][a-z0-9._-]{0,63}$`；上限取自清单的 `data`；写入审计（`site.extension_data_put`），发布修订 |
 | `DELETE /sites/{siteId}/extensions/{id}/data/{name}` | 写入审计（`site.extension_data_delete`），发布修订 |
 
-数据项存在控制台数据库中。配置按网站与扩展带 `{name, sha256, size}`；节点通过节点通道按摘要获取缺少的数据项（`GetExtensionData`，mTLS，每块 4 MiB），校验摘要后存到 `<state>/extensions/data/<id>/<网站 id>/<name>`，只有边车用户与 nginx 可读，并删除不再被配置引用的数据项。数据变化热生效，不重载 nginx。
+数据项存在控制台数据库中。配置按网站与扩展带 `{name, sha256, size}`；节点通过节点通道按摘要获取缺少的数据项（`GetExtensionData`，mTLS，每块 4 MiB），校验摘要后存到边车目录的 `<id>/data/<网站 id>/<name>`，只有节点用户与边车用户的组可读，并删除不再被配置引用的数据项。数据变化热生效，不重载 nginx。
 
 边车从 `$EDGEWEIR_EXT_DATA/index.json` 得知网站、配置与数据。修订的所有数据项就绪后，该文件原子写入，随后发送 `SIGHUP`：
 
 ```json
 { "revision": 42, "config": { "...": "全局配置" },
   "sites": { "<网站 id>": { "name": "shop.example", "domains": ["shop.example"], "config": { "...": "网站配置" },
-    "data": [{ "name": "fn-main.wasm", "sha256": "…", "size": 9123456, "path": "/var/lib/edgeweir-node/extensions/data/<id>/<网站 id>/fn-main.wasm" }] } } }
+    "data": [{ "name": "fn-main.wasm", "sha256": "…", "size": 9123456, "path": "/var/lib/edgeweir-node-sidecar/<id>/data/<网站 id>/fn-main.wasm" }] } } }
 ```
 
 只出现开启了该扩展的网站。网站配置对 Lua 与控制台 API 可见（打码的 `x-secret` 值除外）；密钥应放在数据项里。
 
 ### 节点状态详情
 
-每个扩展的节点状态带 `details`（JSON，≤ 4 KiB）：`sidecar`（状态、重启次数、最近一次退出、起始时间）、`listeners`（`{name: {port, state: "listening" | "failed", message}}`），以及边车套接字上 `GET /status` 的返回，放在 `sidecar.status` 下（≤ 2 KiB，每 30 秒轮询）。
+每个扩展的节点状态带 `details`（JSON，≤ 4 KiB）：`sidecar`（状态、进程号、重启次数、最近一次退出、起始时间）、`listeners`（`{name: {port, state: "listening" | "failed", message}}`），以及边车套接字上 `GET /status` 的返回，放在 `sidecar.status` 下（≤ 2 KiB，每 30 秒轮询）。
 
 ### 1.1 版的分发变化
 
