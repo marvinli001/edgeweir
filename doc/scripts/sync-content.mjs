@@ -232,7 +232,10 @@ const siteUrl = (lang, slug) =>
 const toPosix = (path) => path.split(sep).join("/");
 
 function gitRoot(dir) {
-  return execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: dir, encoding: "utf8" }).trim();
+  return execFileSync("git", ["rev-parse", "--show-toplevel"], {
+    cwd: dir,
+    encoding: "utf8",
+  }).trim();
 }
 
 function loadEdition(file) {
@@ -433,9 +436,11 @@ for (const page of pages) {
     const target = `${page.slug}${suffixOf(lang)}.mdx`;
     const result = transform(readFileSync(abs, "utf8"), page, file, lang);
     write(join(out, target), result.mdx);
-    sources[target] = githubUrl(abs) ?? `${page.edition.github}/blob/${page.edition.branch}/${file}`;
+    sources[target] =
+      githubUrl(abs) ?? `${page.edition.github}/blob/${page.edition.branch}/${file}`;
     if (page.slug === `${page.edition.slug}/index`) {
-      (indexes[lang] ??= []).push({ ...result, href: siteUrl(lang, page.slug) });
+      indexes[lang] ??= [];
+      indexes[lang].push({ ...result, href: siteUrl(lang, page.slug) });
     }
   }
 }
