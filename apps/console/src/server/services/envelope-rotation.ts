@@ -16,6 +16,7 @@ import {
   dnsCredentialBinding,
 } from "./certificates";
 import { challengeKeyBinding } from "./challenge-keys";
+import { challengeProviderBinding } from "./challenge-providers";
 import { providerBinding } from "./dns-providers";
 import { channelBinding, SMTP_KEY, smtpBinding } from "./notification-delivery";
 import { originClientKeyBinding } from "./origin-pki";
@@ -58,6 +59,12 @@ export const ENVELOPE_COLUMNS: EnvelopeColumn[] = [
     id: schema.siteAuthRule.id,
     column: schema.siteAuthRule.secretEnvelope,
     binding: accessAuthSecretBinding,
+  },
+  {
+    table: schema.challengeProvider,
+    id: schema.challengeProvider.id,
+    column: schema.challengeProvider.secretEnvelope,
+    binding: challengeProviderBinding,
   },
   {
     table: schema.pkiAuthority,

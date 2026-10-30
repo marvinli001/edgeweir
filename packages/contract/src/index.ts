@@ -46,7 +46,13 @@ import {
   probesContract,
   schedulingContract,
 } from "./probes";
-import { ccTemplate, protectionContract, protectionSettings, securityContract } from "./protection";
+import {
+  ccTemplate,
+  protectionContract,
+  protectionSettingsInput,
+  protectionSettingsView,
+  securityContract,
+} from "./protection";
 import { ipListsContract, platformRulesContract, rulesContract } from "./rules";
 import * as s from "./schemas";
 import { serviceAccountsContract } from "./service-accounts";
@@ -622,15 +628,15 @@ export const contract = {
       .route({ method: "PUT", path: "/settings/bans", tags: ["settings"] })
       .input(banSettings)
       .output(banSettings),
-    /** Platform Under Attack and the retention of security events. */
+    /** Platform Under Attack, the global interactive provider and the retention of security events. */
     protection: oc
       .route({ method: "GET", path: "/settings/protection", tags: ["settings"] })
-      .output(protectionSettings),
-    /** Publishes a new revision for every cluster when Under Attack changes. */
+      .output(protectionSettingsView),
+    /** Publishes a new revision for every cluster when Under Attack or the provider changes. */
     setProtection: oc
       .route({ method: "PUT", path: "/settings/protection", tags: ["settings"] })
-      .input(protectionSettings)
-      .output(protectionSettings),
+      .input(protectionSettingsInput)
+      .output(protectionSettingsView),
     /** Default CC policy that sites can follow. */
     ccTemplate: oc
       .route({ method: "GET", path: "/settings/cc-template", tags: ["settings"] })

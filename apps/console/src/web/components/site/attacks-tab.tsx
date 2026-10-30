@@ -25,6 +25,7 @@ import { Pager } from "@/components/pager";
 import { RowMenu, type RowMenuItem } from "@/components/quick-actions";
 import { SafetyNote } from "@/components/safety-note";
 import { AutoMitigationCard } from "@/components/site/auto-mitigation-card";
+import { ChallengeKindsTable } from "@/components/site/challenge-kinds-table";
 import { combineQueries, EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { TimeAgo } from "@/components/time-ago";
@@ -568,6 +569,7 @@ function ChallengesCard({ siteId, range }: { siteId: string; range: AnalyticsRan
                   ))}
                 </dl>
               )}
+              {challenges.byKind.length ? <ChallengeKindsTable rows={challenges.byKind} /> : null}
               {unsupportedNodes > 0 ? (
                 <SafetyNote data-testid="challenges-partial">{m.stats_dims_partial()}</SafetyNote>
               ) : null}

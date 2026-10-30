@@ -8,6 +8,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -104,11 +105,48 @@ export const siteProtection = pgTable("site_protection", {
   failureBanEnabled: boolean("failure_ban_enabled").notNull().default(false),
   failureThreshold: integer("failure_threshold").notNull().default(10),
   failureBanSeconds: integer("failure_ban_seconds").notNull().default(600),
+  /** Widget of the interactive challenge: global | builtin | site (the site's challenge_provider row). */
+  interactiveProvider: text("interactive_provider").notNull().default("global"),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
 });
+
+/**
+ * Third-party widgets of the interactive challenge (challenge-v3): one row per site that has its
+ * own and one global default (site_id null). The secret fields of the kind (contract
+ * CHALLENGE_PROVIDER_SECRETS) are a JSON document envelope-encrypted with purpose
+ * "challenge_provider.secret_envelope" bound to the row id; nodes of clusters whose sites use the row
+ * fetch it as an origin credential (GetOriginCredentials, version secret_version).
+ */
+export const challengeProvider = pgTable(
+  "challenge_provider",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Null: the global default. */
+    siteId: uuid("site_id").references(() => site.id, { onDelete: "cascade" }),
+    /** builtin | turnstile | recaptcha_v2 | recaptcha_v3 | recaptcha_enterprise | tencent | aliyun | geetest */
+    kind: text("kind").notNull(),
+    /** Public key: site key, CaptchaAppId, SceneId or captcha_id. */
+    siteKey: text("site_key").notNull().default(""),
+    /** reCAPTCHA v3 / Enterprise lowest passing score in hundredths. */
+    minScore: integer("min_score").notNull().default(50),
+    projectId: text("project_id").notNull().default(""),
+    /** Alibaba Cloud: cn | sgp, and the identity prefix. */
+    region: text("region").notNull().default("cn"),
+    prefix: text("prefix").notNull().default(""),
+    /** JSON envelope of the secret fields; null for builtin. Never plaintext. */
+    secretEnvelope: text("secret_envelope"),
+    /** Raised whenever the secret or the kind changes, so nodes fetch it again. */
+    secretVersion: integer("secret_version").notNull().default(1),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [unique("challenge_provider_site_uq").on(t.siteId).nullsNotDistinct()],
+);
 
 /**
  * A site's automatic mitigation (ADR-0051): when a node's CC level for the

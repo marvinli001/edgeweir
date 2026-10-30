@@ -20,6 +20,7 @@ import {
   dnsCredentialBinding,
 } from "../../src/server/services/certificates";
 import { challengeKeyBinding } from "../../src/server/services/challenge-keys";
+import { challengeProviderBinding } from "../../src/server/services/challenge-providers";
 import { providerBinding } from "../../src/server/services/dns-providers";
 import {
   ENVELOPE_COLUMNS,
@@ -147,12 +148,20 @@ describe("master key rotation", () => {
       ticketKey: crypto.randomUUID(),
       ticketPending: crypto.randomUUID(),
       originClient: crypto.randomUUID(),
+      challengeProvider: crypto.randomUUID(),
     };
     await db.insert(schema.originCredential).values({
       id: ids.credential,
       siteId: site?.id ?? "",
       accessKeyId: "AKID",
       secretEnvelope: seal(s3SecretBinding(ids.credential)),
+    });
+    await db.insert(schema.challengeProvider).values({
+      id: ids.challengeProvider,
+      siteId: site?.id ?? "",
+      kind: "turnstile",
+      siteKey: "fake-site-key",
+      secretEnvelope: seal(challengeProviderBinding(ids.challengeProvider)),
     });
     await db.insert(schema.siteSecret).values({
       id: ids.siteSecret,

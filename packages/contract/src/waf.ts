@@ -249,6 +249,8 @@ export const siteFeatures = z.object({
    * challenge failure bans (challenge-v2).
    */
   challengeV2: featureAvailability,
+  /** The managed challenge and third-party interactive providers. */
+  challengeV3: featureAvailability,
   /**
    * The site's access log options: always logging blocked requests, the query string, request
    * headers and the peer address (access-logs-v2).

@@ -281,6 +281,20 @@
 #   accept either CA's certificates until the first one is retired; rotating
 #   the origin client CA, nodes switch certificates only when it is
 #   activated; Playwright e2e/g19.spec.ts.
+#   Challenge providers G20 (scripts/e2e-g20.mjs, after G19, mock
+#   g20-captcha in profile g20): both nodes report challenge-v3; headless
+#   Chromium without automation signals passes the managed challenge of an
+#   Under Attack site without interaction (s=0, a level-3 pass), which also
+#   satisfies managed_challenge and js_challenge rules; automation
+#   User-Agents (curl/, python-requests) or none, the signal s=1 at verify
+#   and a fifth managed page without a pass get the built-in image captcha;
+#   a site's own Turnstile provider (fake secret) is verified by the agent at
+#   the mock (EDGEWEIR_CHALLENGE_VERIFY_ENDPOINTS): a failed answer of the
+#   /24 makes a browser interactive, bad and another host name fail, good
+#   passes at level 4 (the mock sees the secret, the token and the client),
+#   alt=builtin asks nobody; the mock answering 500 and a refused secret
+#   (invalid-input-secret) serve the built-in captcha and mark the provider
+#   down for 60 s; outcomes per kind reach the statistics; no UI spec.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -354,7 +368,7 @@ SECTIONS=(
   "pp:m6-upgrades"
   "g8:m6-upgrades" "g9:m6-upgrades" "g15:m6-upgrades" "g10:dns m5 m6-upgrades" "g11:m6-upgrades"
   "g12:m6-upgrades" "g13:m6-upgrades" "g14:m6-upgrades" "g16:m6-upgrades" "g17:m6-upgrades"
-  "g18:m6-upgrades" "g19:m6-upgrades" "usage-guard:m6-upgrades" "allowlist:" "lifecycle:"
+  "g18:m6-upgrades" "g19:m6-upgrades" "g20:m6-upgrades" "usage-guard:m6-upgrades" "allowlist:" "lifecycle:"
 )
 # Parallel lanes, "FIRST..LAST:SECTION ...": the SECTIONs run in a second
 # lane while the chain runs FIRST to LAST, and the chain waits for the lane
@@ -377,7 +391,10 @@ SECTIONS=(
 #   g2 turns on platform Under Attack, g3 adds old nodes to the default
 #     cluster, g4 resets platform error pages, g16 changes log retention and
 #     uses client-b (g10), g18 counts origin requests that g15's cache zone
-#     reload repeats.
+#     reload repeats;
+#   g20 fails challenges from the host's /24 (that of client-a and client-b),
+#     counts managed pages of that network and leaves its provider marked
+#     down on the core node for 60 s.
 # install only adds its own cluster and fills the download mirror nobody
 # else reads at that time; h2, g8 (own cluster), g12 and usage-guard keep to
 # their own sites. Each lane runs Playwright with its own session (E2E_LANE).
@@ -1478,7 +1495,7 @@ part checks node scripts/e2e-diagnostics.mjs || fail "diagnostics end-to-end che
 pass "Node diagnostics checks passed"
 }
 
-# ------------------------------------- sections m3 ... g19 (scripts/e2e-*.mjs)
+# ------------------------------------- sections m3 ... g20 (scripts/e2e-*.mjs)
 section_m3() {
 step "M3: ACME issuance, HTTPS, HTTP/2, HTTP/3, renewal and TLS policy"
 story m3
@@ -1651,6 +1668,15 @@ section_g19() {
 step "G19: origin protection: client certificates to origins and the Origin CA"
 story g19 --cleanup
 pass "G19 checks passed"
+}
+
+section_g20() {
+step "G20: managed challenge, escalation to the interactive challenge, a Turnstile provider at a mock, fallback to the built-in captcha"
+part captcha-up "${COMPOSE[@]}" --profile g20 up -d --wait g20-captcha || fail "could not start g20-captcha"
+part checks node scripts/e2e-g20.mjs || fail "g20 end-to-end checks failed"
+part cleanup node scripts/e2e-g20.mjs --cleanup || fail "g20 cleanup failed"
+"${COMPOSE[@]}" --profile g20 rm -sf g20-captcha >/dev/null 2>&1 || true
+pass "G20 checks passed"
 }
 
 section_usage_guard() {

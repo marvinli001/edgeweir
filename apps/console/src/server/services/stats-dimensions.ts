@@ -1,4 +1,6 @@
 import {
+  CHALLENGE_OUTCOME_KINDS,
+  CHALLENGE_OUTCOMES,
   MAX_STATS_COUNTRIES,
   MAX_STATS_TOP,
   nodeSupportsFeature,
@@ -107,8 +109,26 @@ export async function statsDimensions(
     challenges: {
       issued: maps.get("challenges_issued")?.get("") ?? 0,
       passed: maps.get("challenges_passed")?.get("") ?? 0,
+      byKind: challengeOutcomesByKind(maps.get("challenge_outcomes")),
     },
     unsupportedNodes: nodes.filter((n) => !nodeSupportsFeature(n.features, STATS_DIMS_FEATURE))
       .length,
   };
+}
+
+/** Each challenge kind's outcomes (challenge_outcomes keys `<kind>:<outcome>`), kinds with none left out. */
+function challengeOutcomesByKind(counts: Counts | undefined) {
+  return CHALLENGE_OUTCOME_KINDS.flatMap((kind) => {
+    const at = (outcome: (typeof CHALLENGE_OUTCOMES)[number]) =>
+      counts?.get(`${kind}:${outcome}`) ?? 0;
+    const row = {
+      kind,
+      issued: at("issued"),
+      passed: at("passed"),
+      failed: at("failed"),
+      escalated: at("escalated"),
+      fallback: at("fallback"),
+    };
+    return CHALLENGE_OUTCOMES.some((outcome) => row[outcome] > 0) ? [row] : [];
+  });
 }

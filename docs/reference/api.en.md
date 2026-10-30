@@ -290,6 +290,35 @@ curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicati
 
 Behavior: [Challenges and CC mitigation](../guide/challenges.en.md).
 
+#### Managed challenge and CAPTCHA providers
+
+| Field | Notes |
+| --- | --- |
+| `underAttackChallenge` | Site and global also accept `managed` (managed challenge); CC levels and the greylist do not |
+| `interactiveProvider` | `PATCH /sites/{id}/protection`: `global` (default, follows the global provider), `builtin` (built-in image captcha), `site` (the site's `provider`) |
+| `provider` | The site's provider in `PATCH /sites/{id}/protection`, the global one in `PUT /settings/protection`: `kind` (`builtin`, `turnstile`, `recaptcha_v2`, `recaptcha_v3`, `recaptcha_enterprise`, `tencent`, `aliyun`, `geetest`), `siteKey` (1–128 letters, digits, `_.-`; required except for `builtin`), `minScore` (1–100, default 50; `recaptcha_v3` and `recaptcha_enterprise`), `projectId` (required for `recaptcha_enterprise`), `region` (`cn` / `sgp`) and `prefix` (`aliyun`, `prefix` required), `secret` (see below; fields left out keep the saved values of the same kind) |
+| Responses | `protection.*` add `interactiveProvider`, `provider`, `globalProvider`; `settings.protection` adds `provider`: `{ kind, siteKey, minScore, projectId, region, prefix, secretSet, updatedAt }`, never the secrets |
+
+| `kind` | `secret` fields |
+| --- | --- |
+| `turnstile`, `recaptcha_v2`, `recaptcha_v3` | `secret` |
+| `recaptcha_enterprise` | `apiKey` |
+| `tencent` | `secretId`, `secretKey`, `appSecretKey` |
+| `aliyun` | `accessKeyId`, `accessKeySecret` |
+| `geetest` | `captchaKey` |
+
+| Error code | Status | When |
+| --- | --- | --- |
+| `CHALLENGE_PROVIDER_SECRET_REQUIRED` | 400 | A new provider, or a switch to `site`, without all secret fields; `data.fields` lists the missing ones |
+
+The managed challenge, `interactiveProvider` `site`, and a global provider other than `builtin` need the node capability `challenge-v3`. A change of the global provider publishes the clusters with sites that follow it (`platform_protection_updated`) and is audited as `system.protection_update` without the secrets.
+
+```bash
+curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"interactiveProvider":"site","provider":{"kind":"turnstile","siteKey":"<site key>","secret":{"secret":"<secret key>"}}}' \
+  https://cdn-admin.example.com/api/v1/sites/<site ID>/protection
+```
+
 ### Automatic mitigation
 
 | Procedure | Endpoint | Description |
@@ -849,7 +878,7 @@ Responses:
 | `logs.settings` | Adds `retentionDays` (days the current storage keeps), `logBlocked`, `logQuery`, `logHeaders`, `logPeer` |
 | `logs.query`, `logs.export` | Entries add `userAgent`, `referer` (without query and fragment), `httpVersion` (`1.0`, `1.1`, `2`, `3`), `scheme`, `country` (empty when unknown), `asn` (0 when unknown), `asName`, `upstreamAddr`, `upstreamStatus`, `upstreamMs` (empty, 0 and 0 without the origin), `requestBytes`, `contentType`, `tlsVersion` (`1.2`, `1.3`, empty on plain HTTP), `blockReason`, `blockRuleId`, and, while the site records them, `query`, `headers` (name → value), `peerIp`; the CSV ends with these columns in this order (`headers` as `name: value` joined with `; `) |
 | `settings.logRetention` | `postgresDays`, `clickhouseDays`, `storage` (`lite` or `clickhouse`: which one applies) |
-| `analytics.dimensions` | `countries` (`{ country, requests, bytesSent }` by requests, empty `country` is unknown), `asns` (`{ asn, name, requests }`, top 50, approximate), `referers` (`{ host, requests }`, top 50, approximate), `browsers`, `oses`, `devices`, `httpVersions`, `tlsVersions`, `blockReasons` (`{ key, requests }`), `challenges` (`{ issued, passed }`), `unsupportedNodes` (active nodes without `stats-dims-v1`; above 0 the data is partial) |
+| `analytics.dimensions` | `countries` (`{ country, requests, bytesSent }` by requests, empty `country` is unknown), `asns` (`{ asn, name, requests }`, top 50, approximate), `referers` (`{ host, requests }`, top 50, approximate), `browsers`, `oses`, `devices`, `httpVersions`, `tlsVersions`, `blockReasons` (`{ key, requests }`), `challenges` (`{ issued, passed, byKind }`; `byKind`: `{ kind, issued, passed, failed, escalated, fallback }` per type from `challenge-v3` nodes), `unsupportedNodes` (active nodes without `stats-dims-v1`; above 0 the data is partial) |
 | `sites.features` | Adds `accessLogsV2` (feature `access-logs-v2`) |
 
 `blockReason` values: `ip_banned`, `ip_blocked`, `rule`, `rate_limit`, `crs`, `cc`, `challenge`, `auth`, `referer`, `user_agent`, `region`, `cors`, `websocket_origin`, `client_cert`, `maintenance`, see [Access logs](../guide/access-logs.en.md#block-reasons). Client class keys: browsers `chrome`, `edge`, `firefox`, `safari`, `opera`, `samsung`, `uc`, `qq`, `wechat`, `yandex`, `ie`, `crawler`, `tool`, `other`; operating systems `windows`, `macos`, `ios`, `android`, `linux`, `chromeos`, `harmonyos`, `other`; devices `desktop`, `mobile`, `tablet`, `crawler`, `other`; HTTP versions `1.0`, `1.1`, `2`, `3`, `other`; TLS versions `1.2`, `1.3`, `none`, `other`.

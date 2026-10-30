@@ -1,6 +1,6 @@
 {
-  "id": "cfdac98e-1810-497a-80c8-7260be109967",
-  "prevId": "8edf027c-6640-4208-86d9-9dff88a1a2f3",
+  "id": "52177807-7f28-43a2-9538-ad5152acd68a",
+  "prevId": "cfdac98e-1810-497a-80c8-7260be109967",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -782,6 +782,13 @@
           "notNull": true,
           "default": "'{}'::jsonb"
         },
+        "challenge_outcomes": {
+          "name": "challenge_outcomes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
         "image_bytes_saved": {
           "name": "image_bytes_saved",
           "type": "bigint",
@@ -1028,6 +1035,13 @@
         },
         "origin_stats": {
           "name": "origin_stats",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "challenge_outcomes": {
+          "name": "challenge_outcomes",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
@@ -5310,6 +5324,13 @@
         },
         "origin_stats": {
           "name": "origin_stats",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "challenge_outcomes": {
+          "name": "challenge_outcomes",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
@@ -10267,6 +10288,115 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.challenge_provider": {
+      "name": "challenge_provider",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_key": {
+          "name": "site_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "min_score": {
+          "name": "min_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 50
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "region": {
+          "name": "region",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'cn'"
+        },
+        "prefix": {
+          "name": "prefix",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "secret_envelope": {
+          "name": "secret_envelope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "secret_version": {
+          "name": "secret_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "challenge_provider_site_id_site_id_fk": {
+          "name": "challenge_provider_site_id_site_id_fk",
+          "tableFrom": "challenge_provider",
+          "tableTo": "site",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "challenge_provider_site_uq": {
+          "name": "challenge_provider_site_uq",
+          "nullsNotDistinct": true,
+          "columns": [
+            "site_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.security_event": {
       "name": "security_event",
       "schema": "",
@@ -10758,6 +10888,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": 600
+        },
+        "interactive_provider": {
+          "name": "interactive_provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'global'"
         },
         "updated_at": {
           "name": "updated_at",
@@ -11713,6 +11850,13 @@
         },
         "origin_stats": {
           "name": "origin_stats",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "challenge_outcomes": {
+          "name": "challenge_outcomes",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,

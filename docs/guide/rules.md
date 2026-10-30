@@ -57,7 +57,7 @@ API：`GET /api/v1/sites/{id}/rules/{ruleId}/versions`、`GET /api/v1/sites/{id}
 | 请求变换 | 改写路径、请求头 | 改写回源路径与查询参数；设置或移除请求头 |
 | 重定向 | 重定向 | 返回 301、302、303、307 或 308；规则之后查[批量重定向](#批量重定向) |
 | 配置 | 覆盖设置 | 按请求覆盖网站设置，见[覆盖设置](#覆盖设置) |
-| 自定义 WAF | 拦截、记录、放行、挑战、封禁、自定义响应、断开连接、跳过 | 拦截返回 403 或 451；记录只写日志（可另写访问日志）；放行跳过同一作用域剩余的自定义 WAF 规则；挑战要求访客先通过挑战；封禁、自定义响应、断开连接与跳过见[WAF 动作](#waf-动作) |
+| 自定义 WAF | 拦截、记录、放行、托管挑战、非交互式挑战、挑战、封禁、自定义响应、断开连接、跳过 | 拦截返回 403 或 451；记录只写日志（可另写访问日志）；放行跳过同一作用域剩余的自定义 WAF 规则；托管挑战、非交互式挑战与挑战要求访客先通过挑战；封禁、自定义响应、断开连接与跳过见[WAF 动作](#waf-动作) |
 | 限速 | 限速 | 固定窗口计数，超额返回 429 或 403，可在超额后封禁该地址 |
 | 缓存 | 覆盖设置 | 只覆盖绕过缓存、强制 HTTPS 与 Gzip |
 | 回源 | 请求头、源站覆盖 | 设置或移除发往源站的请求头；选择源站组，覆盖回源 Host、SNI 与端口 |
@@ -69,7 +69,9 @@ API：`GET /api/v1/sites/{id}/rules/{ruleId}/versions`、`GET /api/v1/sites/{id}
 | 动作 | 字段 | 取值 | 默认值 |
 | --- | --- | --- | --- |
 | 拦截 | 状态码 | 403 / 451 | 403 |
-| 挑战 | 挑战类型 | Cookie 跳转 / JS 计算 / 工作量证明 / 图片验证码 | JS 计算 |
+| 托管挑战 | 无 | — | — |
+| 非交互式挑战 | 无 | — | — |
+| 挑战 | 挑战类型 | Cookie 跳转 / JS 计算 / 非交互式挑战 / 交互式挑战 | 交互式挑战（不带类型的 API 请求为 JS 计算） |
 | 重定向 | 目标 | 「静态」：站内绝对路径（以 `/` 开头、不以 `//` 开头），或不含账号和空白的 `http(s)` URL；不含反斜杠与控制字符，最长 4096 字符；「表达式」：值表达式，见[动态目标与查询参数](#动态目标与查询参数) | 静态，`/` |
 | 重定向 | 状态码 | 301 / 302 / 303 / 307 / 308 | 301 |
 | 重定向 | 保留查询参数 | 开 / 关 | 关 |
@@ -123,7 +125,7 @@ API：`GET /api/v1/sites/{id}/rules/{ruleId}/versions`、`GET /api/v1/sites/{id}
 | WebSocket | 不更改 / 开启 / 关闭 | 配置 | 覆盖网站的「WebSocket」 |
 | Under Attack | 不更改 / 开启 / 关闭 | 配置 | 覆盖网站的 Under Attack；全局 Under Attack 不受影响 |
 | CC 防护 | 不更改 / 开启 / 关闭 | 配置 | 「关闭」：本请求不受 CC 级别挑战与单 IP 自动封禁，计数照常 |
-| CC 最高级别 | 不更改 / Cookie 跳转 / JS 计算 / 工作量证明 / 图片验证码 | 配置 | 本请求的 CC 级别不高于所选级别 |
+| CC 最高级别 | 不更改 / Cookie 跳转 / JS 计算 / 非交互式挑战 / 交互式挑战 | 配置 | 本请求的 CC 级别不高于所选级别 |
 | 回源连接超时（秒） | 0.1–120 | 配置 | 覆盖源站池的连接超时 |
 | 回源发送超时（秒）、回源读取超时（秒） | 0.1–3600 | 配置 | 覆盖源站池的发送、读取超时 |
 | 日志采样率（%） | 0–100 | 配置 | 本请求的访问日志采样率 |
@@ -483,7 +485,7 @@ API：`GET`、`POST /api/v1/ip-lists`，`PUT`、`DELETE /api/v1/ip-lists/{id}`�
 
 | 项目 | 行为 |
 | --- | --- |
-| 能力 | 规则和放行/拦截名单需要节点能力 `rules-v1`；`ip.geoip.country`、`ip.geoip.subdivision` 需要 `geoip-city-v1`；`ip.geoip.asnum` 需要 `geoip-asn-v1`；挑战动作需要 `challenge-v1`；`tls.ja4`（字段或限速键）需要 `ja4-v1`；`tls.client.*` 需要 `client-cert-v1`；使用 `ip.geoip.subdivision` 时控制台另外检查 `geoip-subdivision-v1`（不写入配置） |
+| 能力 | 规则和放行/拦截名单需要节点能力 `rules-v1`；`ip.geoip.country`、`ip.geoip.subdivision` 需要 `geoip-city-v1`；`ip.geoip.asnum` 需要 `geoip-asn-v1`；挑战动作需要 `challenge-v1`，托管挑战另需 `challenge-v3`；`tls.ja4`（字段或限速键）需要 `ja4-v1`；`tls.client.*` 需要 `client-cert-v1`；使用 `ip.geoip.subdivision` 时控制台另外检查 `geoip-subdivision-v1`（不写入配置） |
 | 规则扩展 | 以下任何一项需要 `rules-v2`：函数与 `http.request.full_uri`、`http.request.uri.path.extension`、`http.response.content_type.media_type`；表达式目标、查询参数编辑，以及重定向打开或改写路径关闭「保留查询参数」；源站覆盖；压缩阶段；只在配置阶段可用的覆盖项与 Gzip「开启」；不是[构建器](origins-and-cache.md#请求条件)形状的缓存规则条件与「浏览器 TTL（秒）」；批量重定向；默认组以外的源站组 |
 | 表达式变量与报头值 | 以下任何一项需要 `rules-v3`：`http.request.cookies[…]`、`http.request.uri.args[…]`、`http.referer`、`http.user_agent`、`http.request.version`、`http.request.scheme`、`http.request.id`、`http.request.timestamp.sec`、`edge.server_port`、`ip.geoip.as_name`（另需 `geoip-asn-v1`）、`http.response.cache_status`；`url_encode`、`base64_encode`、`base64_decode`、`md5`、`sha1`、`sha256`、`substring`、`to_string`；`wildcard`、`strict wildcard`；请求头、响应头与查询参数的表达式值；响应头「追加」；重定向 303；[错误页](error-pages.md)的 `{{time}}`、`{{path}}` |
 | 直连对端 | 读取 `ip.peer` 的配置需要 `client-ip-v1` |

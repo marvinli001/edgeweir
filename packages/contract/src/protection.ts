@@ -1,4 +1,4 @@
-import { challengeTypes } from "@edgeweir/rule-engine";
+import { challengeKinds, challengeTypes } from "@edgeweir/rule-engine";
 import { oc } from "@orpc/contract";
 import * as z from "zod";
 import { isoDateTime, uuid } from "./schemas";
@@ -10,6 +10,119 @@ import { isoDateTime, uuid } from "./schemas";
  */
 export const CHALLENGE_TYPES = challengeTypes;
 const challengeType = z.enum(challengeTypes);
+/**
+ * What Under Attack and challenge rules can ask for (challenge-v3): the types and `managed`,
+ * which asks for the pow level and turns interactive (captcha) only for suspicious clients.
+ */
+const challengeKind = z.enum(challengeKinds);
+
+/**
+ * Widgets of the interactive challenge (the captcha level). builtin is the node's own image
+ * captcha; the others are verified by the node agent with the provider, and when the provider
+ * cannot be reached the node serves the built-in image instead (challenge-v3).
+ */
+export const CHALLENGE_PROVIDER_KINDS = [
+  "builtin",
+  "turnstile",
+  "recaptcha_v2",
+  "recaptcha_v3",
+  "recaptcha_enterprise",
+  "tencent",
+  "aliyun",
+  "geetest",
+] as const;
+const challengeProviderKind = z.enum(CHALLENGE_PROVIDER_KINDS);
+/** Secret fields of each provider; written only, never read back. */
+export const CHALLENGE_PROVIDER_SECRETS = {
+  builtin: [],
+  turnstile: ["secret"],
+  recaptcha_v2: ["secret"],
+  recaptcha_v3: ["secret"],
+  recaptcha_enterprise: ["apiKey"],
+  tencent: ["secretId", "secretKey", "appSecretKey"],
+  aliyun: ["accessKeyId", "accessKeySecret"],
+  geetest: ["captchaKey"],
+} as const satisfies Record<ChallengeProviderKind, readonly string[]>;
+/** Lowest reCAPTCHA v3 / Enterprise score that passes, in hundredths. */
+export const MIN_SCORE_RANGE = { min: 1, max: 100 } as const;
+export const MIN_SCORE_DEFAULT = 50;
+/** Alibaba Cloud regions of the captcha service (cn: cn-shanghai, sgp: ap-southeast-1). */
+export const ALIYUN_REGIONS = ["cn", "sgp"] as const;
+
+/** A provider's public key: site key, CaptchaAppId, SceneId or captcha_id. */
+const providerKey = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z0-9_.-]{1,128}$/, "1-128 of letters, digits, _ . -");
+const secretValue = z
+  .string()
+  .trim()
+  .min(1)
+  .max(512)
+  .refine((v) => /^[\x21-\x7e]+$/.test(v), "printable characters without blanks");
+
+/** Settings of an interactive provider; secret fields are only written. */
+export const challengeProviderInput = z
+  .object({
+    kind: challengeProviderKind,
+    siteKey: z.string().trim().max(128).default(""),
+    /** recaptcha_v3 and recaptcha_enterprise. */
+    minScore: z.number().int().min(MIN_SCORE_RANGE.min).max(MIN_SCORE_RANGE.max).optional(),
+    /** recaptcha_enterprise: the Google Cloud project id. */
+    projectId: z
+      .string()
+      .trim()
+      .regex(/^(?:[a-z][a-z0-9-]{4,28}[a-z0-9])?$/, "a Google Cloud project id")
+      .default(""),
+    /** aliyun: service region and identity prefix. */
+    region: z.enum(ALIYUN_REGIONS).optional(),
+    prefix: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9]{0,64}$/, "letters and digits")
+      .default(""),
+    /** The kind's secret fields; omitted keeps the saved ones of the same kind. */
+    secret: z.record(z.string(), secretValue).optional(),
+  })
+  .superRefine((p, ctx) => {
+    if (p.kind === "builtin") return;
+    if (!providerKey.safeParse(p.siteKey).success)
+      ctx.addIssue({ code: "custom", message: "a site key is required", path: ["siteKey"] });
+    if (p.kind === "recaptcha_enterprise" && !p.projectId)
+      ctx.addIssue({ code: "custom", message: "a project id is required", path: ["projectId"] });
+    if (p.kind === "aliyun" && !p.prefix)
+      ctx.addIssue({ code: "custom", message: "an identity prefix is required", path: ["prefix"] });
+    const allowed: readonly string[] = CHALLENGE_PROVIDER_SECRETS[p.kind];
+    for (const key of Object.keys(p.secret ?? {}))
+      if (!allowed.includes(key))
+        ctx.addIssue({ code: "custom", message: "unknown secret field", path: ["secret", key] });
+  });
+
+/** An interactive provider as read: public settings and whether the secret is saved. */
+const challengeProvider = z.object({
+  kind: challengeProviderKind,
+  siteKey: z.string(),
+  minScore: z.number().int(),
+  projectId: z.string(),
+  region: z.enum(ALIYUN_REGIONS),
+  prefix: z.string(),
+  /** Every secret field of the kind is saved. */
+  secretSet: z.boolean(),
+  updatedAt: isoDateTime.nullable(),
+});
+export const CHALLENGE_PROVIDER_DEFAULTS: ChallengeProvider = {
+  kind: "builtin",
+  siteKey: "",
+  minScore: MIN_SCORE_DEFAULT,
+  projectId: "",
+  region: "cn",
+  prefix: "",
+  secretSet: false,
+  updatedAt: null,
+};
+/** Which interactive provider a site uses: the global default, the built-in image, or its own. */
+export const INTERACTIVE_PROVIDER_CHOICES = ["global", "builtin", "site"] as const;
+const interactiveProviderChoice = z.enum(INTERACTIVE_PROVIDER_CHOICES);
 /** CC mitigation levels: normal, then the challenge types. */
 export const CC_LEVELS = ["normal", ...challengeTypes] as const;
 export const ccLevel = z.enum(CC_LEVELS);
@@ -188,7 +301,7 @@ const siteProtection = z.object({
   siteId: uuid,
   /** Challenge every GET/HEAD request without a valid pass. */
   underAttack: z.boolean(),
-  underAttackChallenge: challengeType,
+  underAttackChallenge: challengeKind,
   passTtlSeconds: z.number().int(),
   powDifficulty: z.number().int(),
   powHighDifficulty: z.number().int(),
@@ -206,6 +319,12 @@ const siteProtection = z.object({
   challengeText: challengeText,
   /** Ban after repeated challenge failures (challenge-v2). */
   failureBan: failureBan,
+  /** Widget of the interactive challenge: the global default, the built-in image or the site's (challenge-v3). */
+  interactiveProvider: interactiveProviderChoice,
+  /** The site's own provider (used with interactiveProvider "site"). */
+  provider: challengeProvider,
+  /** The global default provider (system settings). */
+  globalProvider: challengeProvider,
   /** Under Attack is on for every site (system settings). */
   platformUnderAttack: z.boolean(),
   updatedAt: isoDateTime.nullable(),
@@ -215,7 +334,7 @@ const siteProtection = z.object({
 export const siteProtectionUpdateInput = z.object({
   id: uuid,
   underAttack: z.boolean().optional(),
-  underAttackChallenge: challengeType.optional(),
+  underAttackChallenge: challengeKind.optional(),
   passTtlSeconds: z.number().int().min(PASS_TTL_RANGE.min).max(PASS_TTL_RANGE.max).optional(),
   powDifficulty: z
     .number()
@@ -236,18 +355,27 @@ export const siteProtectionUpdateInput = z.object({
   /** Replaces the texts. */
   challengeText: challengeText.optional(),
   failureBan: failureBan.optional(),
+  interactiveProvider: interactiveProviderChoice.optional(),
+  /** Replaces the site's own provider; secret fields left out keep the saved ones of the same kind. */
+  provider: challengeProviderInput.optional(),
 });
 
 /** Platform protection (system setting `protection_settings`). */
 export const protectionSettings = z.object({
   /** Under Attack for every site of every cluster. */
   underAttack: z.boolean(),
-  underAttackChallenge: challengeType,
+  underAttackChallenge: challengeKind,
   eventRetentionDays: z
     .number()
     .int()
     .min(EVENT_RETENTION_RANGE.min)
     .max(EVENT_RETENTION_RANGE.max),
+});
+/** The platform protection with the global interactive provider, as read. */
+export const protectionSettingsView = protectionSettings.extend({ provider: challengeProvider });
+/** Platform protection changes; `provider` replaces the global interactive provider. */
+export const protectionSettingsInput = protectionSettings.extend({
+  provider: challengeProviderInput.optional(),
 });
 export const PROTECTION_SETTINGS_DEFAULTS: ProtectionSettings = {
   underAttack: false,
@@ -339,6 +467,13 @@ export const securityContract = {
 };
 
 export type ChallengeType = z.infer<typeof challengeType>;
+export type ChallengeKind = z.infer<typeof challengeKind>;
+export type ChallengeProviderKind = z.infer<typeof challengeProviderKind>;
+export type ChallengeProvider = z.infer<typeof challengeProvider>;
+export type ChallengeProviderInput = z.input<typeof challengeProviderInput>;
+export type InteractiveProviderChoice = z.infer<typeof interactiveProviderChoice>;
+export type ProtectionSettingsView = z.infer<typeof protectionSettingsView>;
+export type ProtectionSettingsInput = z.input<typeof protectionSettingsInput>;
 export type ChallengeText = z.infer<typeof challengeText>;
 export type FailureBan = z.infer<typeof failureBan>;
 export type CcLevel = z.infer<typeof ccLevel>;

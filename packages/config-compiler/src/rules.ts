@@ -8,7 +8,13 @@ import {
   RuleActionSchema,
   type RuleExpression,
 } from "@edgeweir/proto";
-import { type Expression, type Phase, parseValueExpression, phases } from "@edgeweir/rule-engine";
+import {
+  challengeActionKinds,
+  type Expression,
+  type Phase,
+  parseValueExpression,
+  phases,
+} from "@edgeweir/rule-engine";
 import type { RuleModel } from "./models";
 import { byString, sortedSet } from "./sort";
 
@@ -27,8 +33,12 @@ function compileAction(phase: string, a: RuleModel["action"]): RuleAction {
   const header = (a.kind === "request_header" || a.kind === "response_header") && !a.remove;
   const value = (source: string | undefined) =>
     source ? parseValueExpression(source, phase as Phase) : undefined;
+  const challenge =
+    a.kind === "challenge"
+      ? (a.type ?? "")
+      : (challengeActionKinds[a.kind as keyof typeof challengeActionKinds] ?? "");
   return create(RuleActionSchema, {
-    kind: a.kind,
+    kind: challenge ? "challenge" : a.kind,
     value: a.value,
     header: a.header,
     statusCode: a.statusCode,
@@ -39,7 +49,7 @@ function compileAction(phase: string, a: RuleModel["action"]): RuleAction {
     forceHttps: a.forceHttps,
     gzip: a.gzip,
     remove: a.remove,
-    challenge: a.kind === "challenge" ? (a.type ?? "") : "",
+    challenge,
     brotli: a.brotli,
     zstd: a.zstd,
     websocket: a.websocket,

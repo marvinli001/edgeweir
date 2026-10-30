@@ -98,6 +98,8 @@ export const errorDefs = {
   BAN_PLATFORM_LIMIT: { status: 409, params: ["limit"] },
   BAN_NOT_FOUND: { status: 404, params: [] },
   PROTECTION_POW_DIFFICULTY: { status: 400, params: ["min"] },
+  /** An interactive provider without all of its kind's secret fields (challenge-v3). */
+  CHALLENGE_PROVIDER_SECRET_REQUIRED: { status: 400, params: ["fields"] },
   CERTIFICATE_NOT_FOUND: { status: 404, params: [] },
   /** A stored certificate that cannot be read. */
   CERTIFICATE_INVALID: { status: 400, params: [] },

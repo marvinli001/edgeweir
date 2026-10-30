@@ -99,7 +99,7 @@ Greylisted addresses are not refused: they are challenged or rate-limited until 
 1. Open **Bans → Greylist** and click **Greylist entry added**.
 2. Choose the scope ("Site" or "Global") and the site, enter the IP or CIDR, and choose the reason and duration.
 3. Choose the action:
-   - **Challenge**: pick the challenge (Cookie redirect, JavaScript, Proof of work, Image captcha). Requests without a pass of that level get the challenge first.
+   - **Challenge**: pick the challenge (Cookie redirect, JavaScript, Non-interactive challenge, Interactive challenge). Requests without a pass of that level get the challenge first.
    - **Rate limit**: enter **Requests** and **Window (seconds)**. Each client (an IPv4 address, the IPv6 `/64`) may send that many requests per window on each node; above it the node answers 429 with `X-Edgeweir-Error: ip-greylisted`.
 4. Click **Add**.
 

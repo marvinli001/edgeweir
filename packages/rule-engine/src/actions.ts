@@ -6,6 +6,17 @@ import type { Expression, Phase } from "./model.ts";
 /** Challenge types of the `challenge` action and of Under Attack, levels 1 to 4. */
 export const challengeTypes = ["cookie302", "js", "pow", "captcha"] as const;
 export type ChallengeType = (typeof challengeTypes)[number];
+/**
+ * Challenges a request can be asked for (challenge-v3): the levels and `managed`, which asks for
+ * the pow level and turns interactive (captcha) only for clients the node judges suspicious.
+ * CC levels, bans and greylist entries keep the four levels.
+ */
+export const challengeKinds = [...challengeTypes, "managed"] as const;
+/**
+ * Contract-only rule actions named after Cloudflare's, compiled to the `challenge` action:
+ * managed_challenge asks for `managed`, js_challenge for the non-interactive `pow`.
+ */
+export const challengeActionKinds = { managed_challenge: "managed", js_challenge: "pow" } as const;
 
 /** Phases each rule action kind may run in. */
 export const actionPhases: Record<string, readonly Phase[]> = {
@@ -13,6 +24,9 @@ export const actionPhases: Record<string, readonly Phase[]> = {
   log: ["waf-custom"],
   allow: ["waf-custom"],
   challenge: ["waf-custom"],
+  // challenge-v3, contract only (challengeActionKinds)
+  managed_challenge: ["waf-custom"],
+  js_challenge: ["waf-custom"],
   // waf-v2
   ban: ["waf-custom"],
   respond: ["waf-custom"],
@@ -242,6 +256,7 @@ export const validRespondBody = (body: string) =>
  * stricter ruleAction schema of @edgeweir/contract.
  */
 export function validActionIr(phase: string, action: ActionIr, platform = false): boolean {
+  if (action.kind in challengeActionKinds) return false;
   if (!(actionPhases[action.kind] as readonly string[] | undefined)?.includes(phase)) return false;
   const allowed = actionFields[action.kind] ?? [];
   for (const [field, value] of Object.entries(action))
@@ -305,7 +320,7 @@ export function validActionIr(phase: string, action: ActionIr, platform = false)
       );
     }
     case "challenge":
-      return (challengeTypes as readonly string[]).includes(action.challenge ?? "");
+      return (challengeKinds as readonly string[]).includes(action.challenge ?? "");
     case "redirect": {
       if (
         !validQueryEdits(action, phase) ||

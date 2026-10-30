@@ -1,6 +1,6 @@
 import { CSS } from "@dnd-kit/utilities";
 import type { RuleDto } from "@edgeweir/contract";
-import { type ChallengeType, challengeTypes, type Phase } from "@edgeweir/rule-engine";
+import type { ChallengeType, Phase } from "@edgeweir/rule-engine";
 import { Delete02Icon, DragDropVerticalIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
@@ -27,8 +27,14 @@ import { RuleHistoryButton } from "@/components/site/rules/history";
 import { actionLabel, kinds, LocksContext, v2Kinds } from "@/components/site/rules/labels";
 import { useSortableRow } from "@/components/sortable-list";
 import { m } from "@/lib/i18n";
-import { challengeLabel } from "@/lib/protection";
-import { type Action, defaultAction, type Kind, WAF_V2_KINDS } from "@/lib/rule-actions";
+import { challengeKindOptions } from "@/lib/protection";
+import {
+  type Action,
+  CHALLENGE_V3_KINDS,
+  defaultAction,
+  type Kind,
+  WAF_V2_KINDS,
+} from "@/lib/rule-actions";
 import { cn } from "@/lib/utils";
 
 export function RuleRow({
@@ -62,7 +68,11 @@ export function RuleRow({
     .filter(
       (kind) =>
         kind === a.kind ||
-        !((locked && v2Kinds.has(kind)) || (locks.wafV2 && WAF_V2_KINDS.has(kind))),
+        !(
+          (locked && v2Kinds.has(kind)) ||
+          (locks.wafV2 && WAF_V2_KINDS.has(kind)) ||
+          (locks.managed && CHALLENGE_V3_KINDS.has(kind))
+        ),
     )
     .map((kind) => ({ value: kind, label: actionLabel(kind) }));
   return (
@@ -212,7 +222,7 @@ function ActionFields({
           id={`challenge-${id}`}
           label={m.rules_challenge_type()}
           value={a.type}
-          options={challengeTypes.map((type) => ({ value: type, label: challengeLabel(type) }))}
+          options={challengeKindOptions(false)}
           onChange={(type) => onChange({ ...a, type: type as ChallengeType })}
         />
       );

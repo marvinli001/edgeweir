@@ -511,6 +511,13 @@ message MinuteStats {
   // background and prefetch fetches included; active health checks and cache
   // hits not), at most 64 origins. Added in v1.4.0 (feature origin-stats-v1).
   repeated OriginCounter origins = 26;
+  // Challenges by kind and outcome, "<kind>:<outcome>": kind cookie302, js,
+  // pow, managed, captcha (the built-in image) or a ChallengeProvider.kind;
+  // outcome issued (a page or a cookie302 redirect), passed (a pass signed),
+  // failed (a wrong or rejected answer), escalated (a managed challenge
+  // turned interactive) or fallback (a provider replaced by the built-in
+  // image captcha). Added in PROTO_NEXT (feature challenge-v3).
+  map<string, uint64> challenge_outcomes = 27;
 }
 
 // OriginCounter is a minute of one origin's fetches on a node.

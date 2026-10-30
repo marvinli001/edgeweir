@@ -290,6 +290,35 @@ curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicati
 
 行为见 [挑战与 CC 防护](../guide/challenges.md)。
 
+#### 托管挑战与验证码服务商
+
+| 字段 | 说明 |
+| --- | --- |
+| `underAttackChallenge` | 网站与全局另可取 `managed`（托管挑战）；CC 级别与灰名单不接受 |
+| `interactiveProvider` | `PATCH /sites/{id}/protection`：`global`（默认，跟随全局）、`builtin`（内置图片验证码）、`site`（本站的 `provider`） |
+| `provider` | `PATCH /sites/{id}/protection` 为本站服务商，`PUT /settings/protection` 为全局服务商：`kind`（`builtin`、`turnstile`、`recaptcha_v2`、`recaptcha_v3`、`recaptcha_enterprise`、`tencent`、`aliyun`、`geetest`）、`siteKey`（1–128 个字母、数字、`_.-`，`builtin` 以外必填）、`minScore`（1–100，默认 50，`recaptcha_v3` 与 `recaptcha_enterprise`）、`projectId`（`recaptcha_enterprise` 必填）、`region`（`cn` / `sgp`）与 `prefix`（`aliyun`，`prefix` 必填）、`secret`（见下表；省略的字段保留同类服务商已保存的值） |
+| 响应 | `protection.*` 另有 `interactiveProvider`、`provider`、`globalProvider`，`settings.protection` 另有 `provider`：`{ kind, siteKey, minScore, projectId, region, prefix, secretSet, updatedAt }`，从不返回密钥 |
+
+| `kind` | `secret` 字段 |
+| --- | --- |
+| `turnstile`、`recaptcha_v2`、`recaptcha_v3` | `secret` |
+| `recaptcha_enterprise` | `apiKey` |
+| `tencent` | `secretId`、`secretKey`、`appSecretKey` |
+| `aliyun` | `accessKeyId`、`accessKeySecret` |
+| `geetest` | `captchaKey` |
+
+| 错误代码 | 状态 | 场景 |
+| --- | --- | --- |
+| `CHALLENGE_PROVIDER_SECRET_REQUIRED` | 400 | 新服务商或改用 `site` 时缺少密钥字段；`data.fields` 列出缺少的字段 |
+
+托管挑战、`interactiveProvider` 为 `site` 或全局服务商不是 `builtin` 时需要节点能力 `challenge-v3`。修改全局服务商发布有网站跟随全局的集群（`platform_protection_updated`），审计 `system.protection_update`，审计内容不含密钥。
+
+```bash
+curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"interactiveProvider":"site","provider":{"kind":"turnstile","siteKey":"<站点密钥>","secret":{"secret":"<密钥>"}}}' \
+  https://cdn-admin.example.com/api/v1/sites/<网站 ID>/protection
+```
+
 ### 自动缓解
 
 | 过程 | 端点 | 说明 |
@@ -849,7 +878,7 @@ curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicati
 | `logs.settings` | 增加 `retentionDays`（当前统计模式的保留天数）、`logBlocked`、`logQuery`、`logHeaders`、`logPeer` |
 | `logs.query`、`logs.export` | 日志增加 `userAgent`、`referer`（不含查询与片段）、`httpVersion`（`1.0`、`1.1`、`2`、`3`）、`scheme`、`country`（未知为空）、`asn`（未知为 0）、`asName`、`upstreamAddr`、`upstreamStatus`、`upstreamMs`（没有回源时为空、0、0）、`requestBytes`、`contentType`、`tlsVersion`（`1.2`、`1.3`，明文为空）、`blockReason`、`blockRuleId`，以及网站开启时的 `query`、`headers`（名称 → 值）、`peerIp`；CSV 末尾按此顺序增加这些列（`headers` 为 `名称: 值`，以 `; ` 连接） |
 | `settings.logRetention` | `postgresDays`、`clickhouseDays`、`storage`（`lite` 或 `clickhouse`：哪一项生效） |
-| `analytics.dimensions` | `countries`（`{ country, requests, bytesSent }`，按请求数，`country` 为空表示未知）、`asns`（`{ asn, name, requests }`，前 50，近似）、`referers`（`{ host, requests }`，前 50，近似）、`browsers`、`oses`、`devices`、`httpVersions`、`tlsVersions`、`blockReasons`（`{ key, requests }`）、`challenges`（`{ issued, passed }`）、`unsupportedNodes`（缺少 `stats-dims-v1` 的活动节点数，大于 0 时数据不完整） |
+| `analytics.dimensions` | `countries`（`{ country, requests, bytesSent }`，按请求数，`country` 为空表示未知）、`asns`（`{ asn, name, requests }`，前 50，近似）、`referers`（`{ host, requests }`，前 50，近似）、`browsers`、`oses`、`devices`、`httpVersions`、`tlsVersions`、`blockReasons`（`{ key, requests }`）、`challenges`（`{ issued, passed, byKind }`，`byKind` 为 `challenge-v3` 节点按类型的 `{ kind, issued, passed, failed, escalated, fallback }`）、`unsupportedNodes`（缺少 `stats-dims-v1` 的活动节点数，大于 0 时数据不完整） |
 | `sites.features` | 增加 `accessLogsV2`（能力 `access-logs-v2`） |
 
 `blockReason` 的取值：`ip_banned`、`ip_blocked`、`rule`、`rate_limit`、`crs`、`cc`、`challenge`、`auth`、`referer`、`user_agent`、`region`、`cors`、`websocket_origin`、`client_cert`、`maintenance`，含义见[访问日志](../guide/access-logs.md#拦截原因)。终端分类的键：浏览器 `chrome`、`edge`、`firefox`、`safari`、`opera`、`samsung`、`uc`、`qq`、`wechat`、`yandex`、`ie`、`crawler`、`tool`、`other`；操作系统 `windows`、`macos`、`ios`、`android`、`linux`、`chromeos`、`harmonyos`、`other`；设备 `desktop`、`mobile`、`tablet`、`crawler`、`other`；HTTP 版本 `1.0`、`1.1`、`2`、`3`、`other`；TLS 版本 `1.2`、`1.3`、`none`、`other`。

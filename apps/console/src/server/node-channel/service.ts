@@ -74,6 +74,7 @@ import {
 } from "../services/certificate-failures";
 import { nodeCertificates } from "../services/certificates";
 import { challengeKeySecrets } from "../services/challenge-keys";
+import { nodeProviderSecrets } from "../services/challenge-providers";
 import { mirrorMinuteStats } from "../services/clickhouse";
 import { claimEnrollmentToken } from "../services/enrollment";
 import { locateAddressOf, nodeIpRows } from "../services/node-addresses";
@@ -585,6 +586,7 @@ export function createNodeService(
                   blockReasons: counts(s.blockReasons),
                   challengesIssued: Number(s.challengesIssued),
                   challengesPassed: Number(s.challengesPassed),
+                  challengeOutcomes: counts(s.challengeOutcomes),
                   origins: s.origins.map((o) => ({
                     originId: o.originId,
                     requests: Number(o.requests),
@@ -1108,6 +1110,12 @@ export function createNodeService(
           log.error("cannot open access authentication secret", { ruleId: rule.id, error });
         }
       }
+      // Secrets of interactive challenge providers the cluster's sites use (challenge-v3), as JSON.
+      credentials.push(
+        ...(await nodeProviderSecrets(app.db, app.masterKey, node.clusterId, ids, (message, data) =>
+          log.error(message, data),
+        )),
+      );
       log.info("origin credentials delivered", {
         nodeId: node.id,
         credentials: credentials.map((c) => c.id),

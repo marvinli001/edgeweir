@@ -709,7 +709,7 @@ describe("access logs and statistics dimensions (G16)", async () => {
         { key: "1.1", requests: 3 },
       ]);
       expect(site.blockReasons.map((r) => r.key).sort()).toEqual(["region", "rule"]);
-      expect(site.challenges).toEqual({ issued: 5, passed: 4 });
+      expect(site.challenges).toEqual({ issued: 5, passed: 4, byKind: [] });
       expect(site.unsupportedNodes).toBe(0);
       const all = await admin.analytics.dimensions({ range: "1h" });
       expect(all.countries.find((c) => c.country === "JP")?.bytesSent).toBe(9_000_000);

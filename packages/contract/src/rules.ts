@@ -195,8 +195,15 @@ export const ruleAction = z.discriminatedUnion("kind", [
     accessLog: z.boolean().optional(),
   }),
   z.object({ kind: z.literal("allow") }),
-  /** Challenges requests without a pass of this type's level or higher. */
+  /**
+   * Challenges requests without a pass of this type's level or higher; `captcha` is the
+   * interactive challenge (the site's provider or the built-in image).
+   */
   z.object({ kind: z.literal("challenge"), type: z.enum(challengeTypes).default("js") }),
+  /** The managed challenge: non-interactive unless the node finds the client suspicious (challenge-v3). */
+  z.object({ kind: z.literal("managed_challenge") }),
+  /** The non-interactive challenge: JavaScript and a proof of work (the pow type). */
+  z.object({ kind: z.literal("js_challenge") }),
   /**
    * Bans the client address (masked to the prefix) through the automatic ban channel (source
    * rule) and answers 403 ip-banned (waf-v2). Platform scope: platform rules only.

@@ -451,7 +451,8 @@ Changes are audited as `system.bans_update`. See [Bans](bans.en.md).
 | Field | Values | Default | Description |
 | --- | --- | --- | --- |
 | **Global Under Attack** | On / off | Off | GET/HEAD requests without a pass are challenged first, on every site; switching asks for confirmation |
-| **Challenge type** | Cookie redirect / JavaScript / Proof of work / Image captcha | JavaScript | Challenge type of global Under Attack |
+| **Challenge type** | Cookie redirect / JavaScript / Non-interactive challenge / Managed challenge / Interactive challenge | JavaScript | Challenge type of global Under Attack |
+| **Interactive challenge** | The built-in image captcha, or a third-party provider and its keys | Built-in image | The CAPTCHA of sites that follow global, see [CAPTCHA providers](challenges.en.md#captcha-providers) |
 | **Security event retention (days)** | 7–365 | 30 | How long CC mitigation events reported by nodes are kept |
 
 Switching global Under Attack, or changing the challenge type while it is on, publishes one revision in every cluster. Changes are audited as `system.protection_update`. Global Under Attack needs the node capability `challenge-v1`; nodes without it keep their configuration, see [Revisions](#revisions). For a site's own Under Attack and CC mitigation, see [Challenges and CC mitigation](challenges.en.md).

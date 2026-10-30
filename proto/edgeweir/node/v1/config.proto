@@ -992,11 +992,21 @@ message WafExclusion {
 
 // SiteProtection holds a site's challenge and CC mitigation settings.
 // Challenge types and levels are cookie302, js, pow and captcha (in rising
-// strength); anything else rejects the configuration.
+// strength); anything else rejects the configuration. captcha is the
+// interactive challenge: the site's interactive provider, or the built-in
+// image captcha.
+//
+// Since PROTO_NEXT (feature challenge-v3) a challenge may also be
+// "managed" (Under Attack, PlatformProtection, the challenge rule action):
+// it asks for a pass of level 3 (pow) and is passed without interaction
+// (a proof of work and the browser's signals) unless the node judges the
+// client suspicious, then it escalates to the interactive challenge (a
+// pass of level 4). Levels, CcPolicy.max_level and bans keep the four
+// types.
 message SiteProtection {
   // Challenge every GET/HEAD request that carries no valid pass.
   bool under_attack = 1;
-  // Challenge type of Under Attack.
+  // Challenge type of Under Attack (managed since PROTO_NEXT).
   string under_attack_challenge = 2;
   // Lifetime of a pass, 300 to 86400 seconds.
   uint32 pass_ttl_seconds = 3;
@@ -1022,6 +1032,39 @@ message SiteProtection {
   // answers within 600 seconds; 0 off, else 3-100.
   uint32 failure_threshold = 10;
   uint32 failure_ban_seconds = 11;
+  // Third-party widget of the interactive challenge (level 4); unset means
+  // the built-in image captcha. Added in PROTO_NEXT (feature
+  // challenge-v3).
+  ChallengeProvider interactive = 12;
+}
+
+// ChallengeProvider is a third-party CAPTCHA widget of a site's interactive
+// challenge. The secret travels as an OriginCredential (access_key_id
+// empty, secret_access_key a JSON document of the kind's secret fields) and
+// never in NodeConfig; the agent verifies answers with the provider. When
+// the provider cannot be reached (timeout, network or server error) or the
+// secret has not been fetched, the node serves the built-in image captcha
+// instead, so that visitors are never locked out.
+message ChallengeProvider {
+  // turnstile, recaptcha_v2, recaptcha_v3, recaptcha_enterprise, tencent,
+  // aliyun or geetest; anything else rejects the configuration.
+  string kind = 1;
+  // Public key of the widget: the Turnstile or reCAPTCHA site key, the
+  // Tencent CaptchaAppId, the Alibaba Cloud SceneId or the GeeTest
+  // captcha_id (1-128 of [A-Za-z0-9_.-]).
+  string site_key = 2;
+  // OriginCredential id and version of the secret.
+  string credential_id = 3;
+  uint64 credential_version = 4;
+  // recaptcha_v3 and recaptcha_enterprise: lowest score that passes, in
+  // hundredths (1-100; 0 means 50).
+  uint32 min_score = 5;
+  // recaptcha_enterprise: the Google Cloud project id.
+  string project_id = 6;
+  // aliyun: the region of the service, cn (cn-shanghai) or sgp
+  // (ap-southeast-1); and the identity prefix of the account.
+  string region = 7;
+  string prefix = 8;
 }
 
 // ChallengeText is plain text (no control characters, at most 200
@@ -1063,6 +1106,7 @@ message CcPolicy {
 // PlatformProtection is set by the operator for every site.
 message PlatformProtection {
   bool under_attack = 1;
+  // Challenge type of Under Attack (managed since PROTO_NEXT).
   string under_attack_challenge = 2;
 }
 
@@ -1142,7 +1186,8 @@ message RuleAction {
   optional bool gzip = 10;
   bool remove = 11;
   // Challenge type of kind "challenge" (waf-custom): cookie302, js, pow or
-  // captcha. Added in v0.10.0 (feature challenge-v1).
+  // captcha. Added in v0.10.0 (feature challenge-v1); managed since
+  // PROTO_NEXT (feature challenge-v3).
   string challenge = 12;
   // Fields 13-31 were added in v0.13.0 (feature rules-v2).
   //

@@ -550,6 +550,22 @@ export interface SiteProtectionModel {
   challengeText?: { titleZh: string; hintZh: string; titleEn: string; hintEn: string };
   /** Ban after repeated challenge failures; omitted or null: off. */
   failureBan?: { threshold: number; banSeconds: number } | null;
+  // challenge-v3; omitted compiles as before.
+  /** Third-party widget of the interactive challenge; omitted or null: the built-in image. */
+  interactive?: ChallengeProviderModelInput | null;
+}
+
+/** A site's interactive provider (SiteProtection.interactive); the secret is an origin credential. */
+export interface ChallengeProviderModelInput {
+  kind: string;
+  siteKey: string;
+  credentialId: string;
+  credentialVersion: number;
+  /** recaptcha_v3 / recaptcha_enterprise, hundredths. */
+  minScore: number;
+  projectId: string;
+  region: string;
+  prefix: string;
 }
 
 export const DEFAULT_SITE_PROTECTION: SiteProtectionModel = {

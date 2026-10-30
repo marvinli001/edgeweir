@@ -7,7 +7,7 @@ A site's **Attacks** tab shows what the site is blocking, who is attacking it an
 | Term | Definition |
 | --- | --- |
 | Block reason | Why a request was blocked, see [Access logs](access-logs.en.md#block-reasons). |
-| CC level | The site's challenge level on a node, from low to high: Normal, Cookie redirect, JavaScript, Proof of work, Image captcha, see [Challenges and CC protection](challenges.en.md). |
+| CC level | The site's challenge level on a node, from low to high: Normal, Cookie redirect, JavaScript, Non-interactive challenge, Interactive challenge, see [Challenges and CC protection](challenges.en.md). |
 | Trigger level | The CC level at which automatic mitigation turns on Under Attack. Never Normal. |
 | Hold | Minutes (5–1440) Under Attack stays on after the level was last at the trigger level. |
 | Holding | Automatic mitigation has turned Under Attack on and has not turned it off yet. |
@@ -39,7 +39,7 @@ On the **Attacks** tab, click **Set up** in the **Automatic mitigation** card an
 | Field | Default | Description |
 | --- | --- | --- |
 | Enabled | On | Off stops automatic turn-on; a hold in progress turns Under Attack off at once |
-| Trigger level | Proof of work | Cookie redirect, JavaScript, Proof of work or Image captcha |
+| Trigger level | Non-interactive challenge | Cookie redirect, JavaScript, Non-interactive challenge or Interactive challenge |
 | Hold below trigger (minutes) | 30 | 5–1440 |
 
 1. On any online, active node of the cluster, the site's CC level reaches the trigger level.

@@ -1,6 +1,7 @@
 import {
   BLOCK_REASONS,
   BROWSERS,
+  CHALLENGE_OUTCOME_KEYS,
   DEVICES,
   MAX_STATS_COUNTRIES,
   MAX_STATS_ORIGINS,
@@ -31,6 +32,8 @@ export interface ReportedDimensions {
   blockReasons?: Record<string, number>;
   challengesIssued?: number;
   challengesPassed?: number;
+  /** `<kind>:<outcome>` → count (MinuteStats.challenge_outcomes, challenge-v3). */
+  challengeOutcomes?: Record<string, number>;
   /** Each origin's fetches (MinuteStats.origins, origin-stats-v1, ADR-0052). */
   origins?: ReportedOrigin[];
 }
@@ -64,6 +67,8 @@ export interface DimensionBucket {
   challenges_passed: number;
   /** `<origin id>:<field>` → count (ORIGIN_STATS_FIELDS), at most MAX_STATS_ORIGINS origins. */
   origin_stats: Record<string, number>;
+  /** `<kind>:<outcome>` → count (CHALLENGE_OUTCOME_KEYS). */
+  challenge_outcomes: Record<string, number>;
 }
 
 /** Map columns and how many keys a bucket keeps (null: the key list bounds them). */
@@ -82,6 +87,8 @@ export const DIMENSION_MAPS = [
   ["block_reasons", null],
   // Bounded by originsBounded (MAX_STATS_ORIGINS origins of 18 counters).
   ["origin_stats", null],
+  // Bounded by the key list (CHALLENGE_OUTCOME_KEYS).
+  ["challenge_outcomes", null],
 ] as const satisfies readonly (readonly [keyof DimensionBucket, number | null])[];
 export const DIMENSION_COUNTERS = ["challenges_issued", "challenges_passed"] as const;
 export const DIMENSION_COLUMNS = [
@@ -96,6 +103,7 @@ const KEYS: Record<string, ReadonlySet<string>> = {
   http_versions: new Set(STATS_HTTP_VERSIONS),
   tls_versions: new Set(STATS_TLS_VERSIONS),
   block_reasons: new Set(BLOCK_REASONS),
+  challenge_outcomes: new Set(CHALLENGE_OUTCOME_KEYS),
 };
 const COUNTRY_RE = /^(?:[A-Z]{2})?$/;
 /** Referring hosts as nodes report them: lowercase labels of letters, digits, "-" and "_". */
@@ -156,6 +164,7 @@ export function cleanDimensions(input: ReportedDimensions | undefined): Dimensio
     tls_versions: Object.create(null),
     block_reasons: Object.create(null),
     origin_stats: Object.create(null),
+    challenge_outcomes: Object.create(null),
     challenges_issued:
       Number.isSafeInteger(d.challengesIssued) && (d.challengesIssued ?? 0) > 0
         ? (d.challengesIssued as number)
@@ -184,6 +193,7 @@ export function cleanDimensions(input: ReportedDimensions | undefined): Dimensio
     ["http_versions", d.httpVersions],
     ["tls_versions", d.tlsVersions],
     ["block_reasons", d.blockReasons],
+    ["challenge_outcomes", d.challengeOutcomes],
   ] as const;
   for (const [column, values] of keyed)
     for (const [key, n] of Object.entries(values ?? {}))

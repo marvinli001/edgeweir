@@ -339,6 +339,7 @@ const core: Fixtures = {
         wafV2: on,
         rulesBody: on,
         challengeV2: on,
+        challengeV3: older,
         accessLogsV2: older,
         imageConvert: older,
       };
