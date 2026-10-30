@@ -30,6 +30,7 @@ import {
 } from "./certificates";
 import { connectionLimitProcedures } from "./connection-limits";
 import { demoProcedures } from "./demo";
+import { developmentModeContract } from "./development-mode";
 import { dnsContract } from "./dns";
 import { edgeProcedures } from "./edge";
 import { errorPagesContract, maintenanceContract, platformErrorPages } from "./error-pages";
@@ -152,6 +153,8 @@ export const contract = {
   accessControl: accessControlContract,
   /** A site's WebP / AVIF conversion of cached images and the bytes it saved. */
   imageConvert: imageConvertContract,
+  /** A site's development mode: the edge cache bypassed for three hours. */
+  developmentMode: developmentModeContract,
   /** What the console knows about an address: lists, bans and client address settings. */
   ipCheck: ipCheckContract,
   certificates: certificatesContract,
@@ -694,6 +697,7 @@ export * from "./access-keys";
 export * from "./alerts";
 export * from "./auto-mitigation";
 export * from "./demo";
+export * from "./development-mode";
 export * from "./dns";
 export * from "./dns-providers";
 export * from "./edge";

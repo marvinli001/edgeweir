@@ -24,6 +24,7 @@ import { createCacheTask, getCacheTask, listCacheTasks } from "../../services/ca
 import { getHttps, updateHttps } from "../../services/certificates";
 import { setCnamePrefix } from "../../services/cname-prefixes";
 import { demoLogEntry } from "../../services/demo";
+import { getDevelopmentMode, setDevelopmentMode } from "../../services/development-mode";
 import { getSiteErrorPages, updateSiteErrorPages } from "../../services/error-pages";
 import { checkHttps } from "../../services/https-check";
 import { getImageConvert, imageSavings, updateImageConvert } from "../../services/image-convert";
@@ -146,6 +147,14 @@ export const sitesRouter = {
     ),
     savings: authed.imageConvert.savings.handler(({ input, context }) =>
       imageSavings(context.app.db, input),
+    ),
+  },
+  developmentMode: {
+    get: authed.developmentMode.get.handler(({ input, context }) =>
+      getDevelopmentMode(context.app.db, input.id),
+    ),
+    set: authed.developmentMode.set.handler(({ input, context }) =>
+      setDevelopmentMode(context.app.db, input, { actor: context.actor }),
     ),
   },
   accessControl: {

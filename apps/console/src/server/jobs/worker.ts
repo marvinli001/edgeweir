@@ -14,6 +14,7 @@ import { sweepCertificates } from "../services/certificate-worker";
 import { markUnloadableCertificates } from "../services/certificates";
 import { rotateChallengeKeys } from "../services/challenge-keys";
 import { expireCnamePrefixes } from "../services/cname-prefixes";
+import { expireDevelopmentModes } from "../services/development-mode";
 import { pruneDnsRevisions, reconcileDns } from "../services/dns";
 import { pruneNodeDebugLogs } from "../services/node-debug-logs";
 import { pruneNodeLogs } from "../services/node-logs";
@@ -32,6 +33,7 @@ import { enforceUsageGuards } from "../services/usage-guard";
 export const QUEUES = {
   alerts: "alerts.sweep",
   mitigation: "mitigation.evaluate",
+  developmentMode: "development-mode.expire",
   rollouts: "rollouts.evaluate",
   dns: "dns.reconcile",
   recompile: "maintenance.recompile",
@@ -55,6 +57,7 @@ export const QUEUES = {
 const MINUTE_QUEUES = [
   QUEUES.alerts,
   QUEUES.mitigation,
+  QUEUES.developmentMode,
   QUEUES.rollouts,
   QUEUES.dns,
   QUEUES.traffic,
@@ -84,6 +87,13 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   });
   await boss.schedule(QUEUES.mitigation, "* * * * *");
   await boss.send(QUEUES.mitigation, {}, { singletonKey: "mitigation-evaluate" });
+  // Deadlines live in site.development_mode_until and nodes honour them on
+  // their own: a late or repeated sweep only turns off what already ended.
+  await boss.work(QUEUES.developmentMode, async () => {
+    await expireDevelopmentModes(ctx);
+  });
+  await boss.schedule(QUEUES.developmentMode, "* * * * *");
+  await boss.send(QUEUES.developmentMode, {}, { singletonKey: "development-mode-expire" });
   await boss.work(QUEUES.rollouts, async () => {
     await evaluateRollouts(ctx);
   });

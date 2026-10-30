@@ -30,6 +30,7 @@ export const router = os.router({
   autoMitigation: sitesRouter.autoMitigation,
   authRules: sitesRouter.authRules,
   imageConvert: sitesRouter.imageConvert,
+  developmentMode: sitesRouter.developmentMode,
   accessControl: sitesRouter.accessControl,
   security: accessControlRouter.security,
   certificates: certificatesRouter.certificates,

@@ -354,6 +354,7 @@ async function loadSiteModels(
         ),
         accessControl: accessControlModel(readAccessControl(s), listIds),
         encodedPathExemptions: readAccessControl(s).encodedPaths.exemptions,
+        developmentModeUntil: s.developmentModeUntil,
         certificateId: s.certificateId ?? "",
         ...(() => {
           const {
