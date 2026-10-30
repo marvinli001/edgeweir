@@ -75,6 +75,7 @@ const SECTIONS = [
       ["access-logs", "docs/guide/access-logs.md"],
       ["node-logs", "docs/guide/node-logs.md"],
       ["node-upgrades", "docs/guide/node-upgrades.md"],
+      ["extensions", "docs/guide/extensions.md"],
     ],
   },
   {
@@ -84,6 +85,7 @@ const SECTIONS = [
       ["environment", "docs/reference/environment.md"],
       ["cli", "docs/reference/cli.md"],
       ["api", "docs/reference/api.md"],
+      ["extensions", "docs/reference/extensions.md"],
     ],
   },
   {
