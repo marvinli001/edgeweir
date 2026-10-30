@@ -1604,7 +1604,9 @@ else
   done
   in_ssh 'test ! -e /var/lib/edgeweir-node/identity.json' || fail "the decommissioned node kept its identity"
   sleep 3
-  [[ "$(in_ssh 'systemctl is-active edgeweir-node || true')" != active ]] || fail "edgeweir-node still runs after its decommission"
+  # A decommissioned node exits 3; the unit ends inactive and is not restarted.
+  state="$(in_ssh 'systemctl is-active edgeweir-node || true')"
+  [[ "$state" == inactive ]] || fail "edgeweir-node is $state after its decommission (expected inactive)"
   [[ "$(api GET "/audit-logs?action=node.delete&limit=5" | jq -r --arg n "$node_id" '[.items[] | select(.targetId == $n) | .metadata.decommissioned] | first')" == true ]] ||
     fail "no node.delete audit entry for the decommission"
   pass "decommissioned without SSH: node $node_id deleted, its identity gone from the host, edgeweir-node stopped"
