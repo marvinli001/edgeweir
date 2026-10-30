@@ -63,7 +63,7 @@ const stateText = (state: SshInstallHost["state"]) =>
     canceled: m.ssh_state_canceled,
   })[state]();
 
-export const sshErrorText = (error: SshInstallError) =>
+const sshErrorText = (error: SshInstallError) =>
   ({
     host_key_mismatch: m.ssh_install_error_host_key_mismatch,
     outbound_refused: m.ssh_install_error_outbound_refused,

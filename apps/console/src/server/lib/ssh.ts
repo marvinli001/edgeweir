@@ -17,7 +17,7 @@ export function hostKeyFingerprint(key: Buffer): string {
 }
 
 /** The key type of a host key blob (its first SSH string), e.g. `ssh-ed25519`. */
-export function hostKeyAlgorithm(key: Buffer): string | null {
+function hostKeyAlgorithm(key: Buffer): string | null {
   if (key.length < 4) return null;
   const length = key.readUInt32BE(0);
   if (length < 1 || length > 64 || key.length < 4 + length) return null;
@@ -94,7 +94,7 @@ export class SshFailure extends Error {
   }
 }
 
-export interface SshLogin {
+interface SshLogin {
   host: string;
   port: number;
   username: string;

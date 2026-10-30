@@ -56,10 +56,10 @@ export function normalizeFingerprint(value: string): string | null {
   return FINGERPRINT_RE.test(v) ? v : null;
 }
 
-export const sshHost = z.string().trim().toLowerCase().refine(isSshHost, "invalid host");
-export const sshPort = z.number().int().min(1).max(65535);
-export const sshUsername = z.string().trim().refine(isSshUsername, "invalid user name");
-export const hostKeyFingerprint = z.string().transform((value, ctx) => {
+const sshHost = z.string().trim().toLowerCase().refine(isSshHost, "invalid host");
+const sshPort = z.number().int().min(1).max(65535);
+const sshUsername = z.string().trim().refine(isSshUsername, "invalid user name");
+const hostKeyFingerprint = z.string().transform((value, ctx) => {
   const fingerprint = normalizeFingerprint(value);
   if (fingerprint === null) {
     ctx.addIssue({ code: "custom", message: "expected an OpenSSH SHA256 fingerprint" });
@@ -141,12 +141,12 @@ function entry(host: string, port: string | undefined, username: string, name: s
 
 const sshTarget = z.object({ host: sshHost, port: sshPort.default(22) });
 
-export const scanHostKeysInput = z.object({
+const scanHostKeysInput = z.object({
   hosts: z.array(sshTarget).min(1).max(SSH_INSTALL_LIMITS.hosts),
 });
 
 /** Why a host key could not be read. */
-export const HOST_KEY_SCAN_ERRORS = [
+const HOST_KEY_SCAN_ERRORS = [
   "unreachable",
   "timeout",
   "not_ssh",
@@ -154,7 +154,7 @@ export const HOST_KEY_SCAN_ERRORS = [
   "outbound_refused",
 ] as const;
 
-export const hostKeyScan = z.object({
+const hostKeyScan = z.object({
   host: z.string(),
   port: z.number().int(),
   /** The key type the console negotiates (ssh2's order, ssh-ed25519 first), e.g. `ssh-ed25519`. */
@@ -165,7 +165,7 @@ export const hostKeyScan = z.object({
 });
 export type HostKeyScan = z.infer<typeof hostKeyScan>;
 
-export const scanHostKeysResult = z.object({ hosts: z.array(hostKeyScan) });
+const scanHostKeysResult = z.object({ hosts: z.array(hostKeyScan) });
 
 /**
  * How the console signs in. A password, a private key (OpenSSH, PEM or PPK;
@@ -199,7 +199,7 @@ const SEMVER_RE =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$/;
 
 /** install.sh options (ADR-0016); the defaults are the manual command's. */
-export const sshInstallOptions = z.object({
+const sshInstallOptions = z.object({
   /** edgeweir-node version (semver, no `v`); empty: the latest. */
   version: z
     .string()
@@ -222,7 +222,7 @@ export const sshInstallOptions = z.object({
 });
 export type SshInstallOptions = z.infer<typeof sshInstallOptions>;
 
-export const sshInstallHostInput = z.object({
+const sshInstallHostInput = z.object({
   host: sshHost,
   port: sshPort.default(22),
   /** Defaults to the credential's user. */
@@ -254,7 +254,6 @@ export const startSshInstallInput = z.object({
     .max(SSH_INSTALL_LIMITS.maxTimeoutMinutes)
     .default(SSH_INSTALL_LIMITS.defaultTimeoutMinutes),
 });
-export type StartSshInstallInput = z.input<typeof startSshInstallInput>;
 
 export const retrySshInstallInput = z.object({
   id: uuid,
@@ -270,7 +269,7 @@ export const retrySshInstallInput = z.object({
     .optional(),
 });
 
-export const SSH_INSTALL_HOST_STATES = [
+const SSH_INSTALL_HOST_STATES = [
   "queued",
   "connecting",
   "installing",
@@ -278,10 +277,9 @@ export const SSH_INSTALL_HOST_STATES = [
   "failed",
   "canceled",
 ] as const;
-export type SshInstallHostState = (typeof SSH_INSTALL_HOST_STATES)[number];
 
 /** Why a host failed (`ssh_install_error_<code>` in the UI). */
-export const SSH_INSTALL_ERRORS = [
+const SSH_INSTALL_ERRORS = [
   "host_key_mismatch",
   /** The host resolves to an address the outbound policy (EDGEWEIR_OUTBOUND_ALLOW_CIDRS) refuses. */
   "outbound_refused",
@@ -301,7 +299,7 @@ export const SSH_INSTALL_ERRORS = [
 ] as const;
 export type SshInstallError = (typeof SSH_INSTALL_ERRORS)[number];
 
-export const sshInstallHost = z.object({
+const sshInstallHost = z.object({
   /** Stable within the run (its position), used to retry it. */
   id: z.string(),
   host: z.string(),
@@ -326,7 +324,7 @@ export const sshInstallHost = z.object({
 });
 export type SshInstallHost = z.infer<typeof sshInstallHost>;
 
-export const sshInstallRun = z.object({
+const sshInstallRun = z.object({
   id: uuid,
   clusterId: uuid,
   nodeGroupId: uuid.nullable(),
