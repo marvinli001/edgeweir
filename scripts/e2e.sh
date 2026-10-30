@@ -1441,9 +1441,13 @@ pass "the installed agent ($NODE_VERSION) runs as the edgeweir user, is online o
 # --------------------------------------------------------- section ssh-install
 # One-shot SSH install (ADR-0066) on a fresh systemd + sshd container: the
 # console scans the host key, refuses a wrong one, names a wrong sudo password,
-# then installs the latest signed edgeweir-node release (GitHub, full cosign
-# verification; the console's mirror is tried first and has no such version)
-# as a sudo user with a password. Needs github.com and api.github.com.
+# then retries that host with the right one and installs the latest signed
+# edgeweir-node release (GitHub, full cosign verification; the console's
+# mirror is tried first and has no such version) as a sudo user with a
+# password. With the stack's own edgeweir-node build on the host (when it is
+# 1.7.0 or later: enroll --if-not-enrolled, decommission-v1, ADR-0067) a new
+# run on the enrolled host keeps its node, and a decommission retires it
+# without SSH. Needs github.com and api.github.com.
 section_ssh_install() {
 step "SSH install: a fresh systemd + sshd host with a sudo user"
 local version image password fingerprint cluster run result node_id deadline got
@@ -1521,11 +1525,12 @@ got="$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$CONSOLE/api/v1/ssh-inst
 [[ "$got" == 400 ]] || fail "an Idempotency-Key with SSH credentials must be refused, got HTTP $got"
 pass "wrong sudo password: sudo_password_wrong; Idempotency-Key with credentials: 400"
 
-step "SSH install: the node installs over SSH as deploy (sudo -S), enrolls and comes online under systemd"
-run="$(api POST /ssh-installs "$(ssh_body "$fingerprint" "$password")" | jq -r .id)" || fail "start failed"
+step "SSH install: the host retried as deploy (sudo -S) installs the node, which enrolls and comes online under systemd"
+api POST "/ssh-installs/$run/retry" "$(jq -nc --arg p "$password" '{credential: {username: "deploy", password: $p, sudoPassword: $p}}')" >/dev/null ||
+  fail "retry failed"
 result="$(ssh_wait "$run" 900)"
 echo "$result" | jq -c '.hosts[0] | {state, error, exitCode, nodeId, attempts}'
-[[ "$(jq -r '.hosts[0].state' <<<"$result")" == succeeded ]] ||
+[[ "$(jq -r '.hosts[0].state' <<<"$result")" == succeeded && "$(jq -r '.hosts[0].attempts' <<<"$result")" == 2 ]] ||
   fail "the SSH install failed: $(jq -r '.hosts[0] | "\(.error) (exit \(.exitCode))\n\(.output)"' <<<"$result")"
 node_id="$(jq -r '.hosts[0].nodeId' <<<"$result")"
 jq -r '.hosts[0].output' <<<"$result" | grep '\[edgeweir\]' | tail -n 6 || true
@@ -1559,8 +1564,52 @@ db_hits="$("${COMPOSE[@]}" exec -T postgres pg_dump -U edgeweir -d edgeweir --da
 [[ "$console_hits" == 0 && "$db_hits" == 0 ]] || fail "the SSH password reached the console's logs ($console_hits) or database ($db_hits)"
 audit="$(api GET "/audit-logs?action=ssh_install.host&limit=5" | jq -c --arg h "$SSH_CONTAINER" '[.items[] | .metadata | select(.host == $h) | .outcome]')"
 [[ "$audit" == '["succeeded","failed","failed"]' ]] || fail "unexpected ssh_install.host audit entries: $audit"
-docker rm -f "$SSH_CONTAINER" >/dev/null 2>&1 || true
 pass "host: no password or token in the journal, files, temp dirs or process environments; sudo logged only the install.sh command; console logs and pg_dump: no password; audit: succeeded, failed, failed"
+
+step "SSH install: with edgeweir-node 1.7.0 a new run keeps the enrolled host's node; decommission retires it without SSH"
+# The stack's own edgeweir-node build (EDGEWEIR_NODE_CONTEXT) on the host, or E2E_SSH_NODE_BINARY.
+local binary="$STATE_DIR/edgeweir-node-ssh" cid nodes_before
+if [[ -n "${E2E_SSH_NODE_BINARY:-}" ]]; then
+  cp "$E2E_SSH_NODE_BINARY" "$binary"
+else
+  cid="$(docker create "edgeweir-node:${E2E_TAG:-e2e}")" || fail "no edgeweir-node image of the stack"
+  docker cp "$cid:/usr/local/bin/edgeweir-node" "$binary" >/dev/null && docker rm "$cid" >/dev/null ||
+    fail "could not copy edgeweir-node out of the stack's image"
+fi
+docker cp "$binary" "$SSH_CONTAINER:/tmp/edgeweir-node-new" >/dev/null
+if ! in_ssh '/tmp/edgeweir-node-new enroll -h 2>&1 | grep -q -- -if-not-enrolled'; then
+  echo "skipped: the stack's edgeweir-node has no enroll --if-not-enrolled (edgeweir-node 1.7.0 and later)"
+else
+  in_ssh 'install -m 0755 /tmp/edgeweir-node-new /usr/bin/edgeweir-node && systemctl restart edgeweir-node'
+  deadline=$((SECONDS + 120))
+  until api GET "/nodes/$node_id" | jq -e '.online and (.supportedFeatures | index("decommission-v1"))' >/dev/null; do
+    ((SECONDS < deadline)) || fail "the node did not come back with decommission-v1: $(api GET "/nodes/$node_id" | jq -c '{online, agentVersion}')"
+    sleep 2
+  done
+  nodes_before="$(api GET "/nodes?clusterId=$cluster" | jq length)"
+  run="$(api POST /ssh-installs "$(ssh_body "$fingerprint" "$password")" | jq -r .id)" || fail "start failed"
+  result="$(ssh_wait "$run" 300)"
+  echo "$result" | jq -c '.hosts[0] | {state, error, exitCode, nodeId, step}'
+  [[ "$(jq -r '.hosts[0].state' <<<"$result")" == succeeded && "$(jq -r '.hosts[0].nodeId' <<<"$result")" == "$node_id" ]] ||
+    fail "a new run on the enrolled host must confirm its node: $(jq -c '.hosts[0] | {state, error, nodeId, output}' <<<"$result")"
+  [[ "$(api GET "/nodes?clusterId=$cluster" | jq length)" == "$nodes_before" ]] || fail "the new run added a node"
+  pass "the enrolled host confirmed its node $node_id (enroll --if-not-enrolled); no second node"
+
+  [[ "$(api POST "/nodes/$node_id/decommission" | jq -r '.decommissionRequestedAt != null')" == true ]] ||
+    fail "decommission request failed"
+  deadline=$((SECONDS + 120))
+  while api GET "/nodes/$node_id" >/dev/null 2>&1; do
+    ((SECONDS < deadline)) || fail "the node was not decommissioned: $(api GET "/nodes/$node_id" | jq -c '{online, decommissionRequestedAt, decommissionError}')"
+    sleep 2
+  done
+  in_ssh 'test ! -e /var/lib/edgeweir-node/identity.json' || fail "the decommissioned node kept its identity"
+  sleep 3
+  [[ "$(in_ssh 'systemctl is-active edgeweir-node || true')" != active ]] || fail "edgeweir-node still runs after its decommission"
+  [[ "$(api GET "/audit-logs?action=node.delete&limit=5" | jq -r --arg n "$node_id" '[.items[] | select(.targetId == $n) | .metadata.decommissioned] | first')" == true ]] ||
+    fail "no node.delete audit entry for the decommission"
+  pass "decommissioned without SSH: node $node_id deleted, its identity gone from the host, edgeweir-node stopped"
+fi
+docker rm -f "$SSH_CONTAINER" >/dev/null 2>&1 || true
 }
 
 # ----------------------------------------------------------------- section wss
