@@ -457,6 +457,12 @@ export interface SiteModel {
    */
   encodedPathExemptions?: readonly EncodedPathExemptionModel[];
   /**
+   * When the site's development mode ends (development-mode-v1); omitted or
+   * null: off. Kept as stored until the console turns it off, so a deadline
+   * in the past compiles too (nodes treat it as off).
+   */
+  developmentModeUntil?: Date | null;
+  /**
    * Largest request body the rules read (rules-body-v1); compiled only when the site's or
    * the platform's rules read the body. Omitted: RULES_BODY_LIMIT.default.
    */

@@ -1,6 +1,6 @@
 {
-  "id": "cfdac98e-1810-497a-80c8-7260be109967",
-  "prevId": "8edf027c-6640-4208-86d9-9dff88a1a2f3",
+  "id": "9ccb97da-d866-42fe-9dbb-230b3ba634c3",
+  "prevId": "cfdac98e-1810-497a-80c8-7260be109967",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -6481,6 +6481,12 @@
         },
         "maintenance_updated_at": {
           "name": "maintenance_updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "development_mode_until": {
+          "name": "development_mode_until",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false

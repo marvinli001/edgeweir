@@ -1,0 +1,1 @@
+ALTER TABLE "site" ADD COLUMN "development_mode_until" timestamp with time zone;
