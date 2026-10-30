@@ -10,8 +10,8 @@ import {
   contentHash,
   usesChallenges,
 } from "../src/index";
-import { site } from "./v0230-models";
 import { aiCrawlModels, crawlers, policy } from "./ai-crawl-models";
+import { site } from "./v0230-models";
 
 // Same vector as edgeweir-node/internal/configir/testdata/content_hash_vector_ai_crawl.json.
 type Vector = { config: JsonValue; canonical_hex: string; content_hash: string };
