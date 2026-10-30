@@ -6,7 +6,10 @@ import { NODE_CHANNEL_WEBSOCKET_PATH, NODE_CHANNEL_WEBSOCKET_PROTOCOL } from "@e
 import { afterEach, describe, expect, it } from "vitest";
 import { createWebSocketStream, WebSocketServer } from "ws";
 import { CertificateAuthority, generateCa } from "../../src/server/pki/ca";
-import { checkNodeChannelUrl } from "../../src/server/services/node-channel-check";
+import {
+  checkNodeChannelUrl,
+  webSocketCandidates,
+} from "../../src/server/services/node-channel-check";
 
 const servers: (Server | TlsServer | HttpServer)[] = [];
 const sockets = new Set<Socket>();
@@ -117,12 +120,9 @@ describe("the console's check of a wss:// or ws:// node channel URL", async () =
     expect(await checkNodeChannelUrl(`ws://127.0.0.1:${entry}`, ca.fingerprintSha256)).toBe("ok");
     // A URL saved in system settings connects to the address resolved before.
     expect(
-      await checkNodeChannelUrl(
-        `ws://entry.invalid:${entry}`,
-        ca.fingerprintSha256,
-        2000,
-        "127.0.0.1",
-      ),
+      await checkNodeChannelUrl(`ws://entry.invalid:${entry}`, ca.fingerprintSha256, 2000, {
+        address: "127.0.0.1",
+      }),
     ).toBe("ok");
   });
 
@@ -149,5 +149,36 @@ describe("the console's check of a wss:// or ws:// node channel URL", async () =
       "unreachable",
     );
     expect(Date.now() - started).toBeLessThan(2000);
+  });
+});
+
+describe("the WebSocket candidates of a node channel URL that fails", () => {
+  it("is the console's public address, then the URL's own host on 443", () => {
+    expect(webSocketCandidates("https://cdn.example.com:8443", "https://cdn.example.com")).toEqual([
+      "wss://cdn.example.com",
+    ]);
+    expect(
+      webSocketCandidates("https://nodes.example.com:8443", "https://console.example.com:8080/"),
+    ).toEqual(["wss://console.example.com:8080", "wss://nodes.example.com"]);
+    // Behind a plain HTTP address the entry is ws:// (the node channel's TLS is inside).
+    expect(webSocketCandidates("https://console.lan:8443", "http://console.lan:3000")).toEqual([
+      "ws://console.lan:3000",
+      "wss://console.lan",
+    ]);
+    expect(webSocketCandidates("https://[2001:db8::1]:8443", "https://[2001:db8::1]")).toEqual([
+      "wss://[2001:db8::1]",
+    ]);
+  });
+
+  it("never offers the URL itself", () => {
+    expect(webSocketCandidates("wss://cdn.example.com", "https://cdn.example.com")).toEqual([]);
+    expect(webSocketCandidates("wss://cdn.example.com:443", "https://cdn.example.com/")).toEqual(
+      [],
+    );
+    // A wss:// URL on another host: only the public address.
+    expect(webSocketCandidates("wss://nodes.example.com", "https://cdn.example.com")).toEqual([
+      "wss://cdn.example.com",
+    ]);
+    expect(webSocketCandidates("not a url", "not a url either")).toEqual([]);
   });
 });

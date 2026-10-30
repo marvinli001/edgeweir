@@ -172,6 +172,7 @@ When the platform forwards HTTP only (for example Render), or 8443 cannot be ope
 | When it is open | `EDGEWEIR_NODE_API_WEBSOCKET=true`; or the node channel URL in effect is a `wss://` or `ws://` one; or, when a URL was saved in **System settings**, the URL in effect before or the one saved was such a URL (nodes enrolled through the entry keep connecting after the URL changes). Otherwise it answers 404 |
 | Refused | Requests with an `Origin` header (browsers) get 403; requests without the subprotocol `edgeweir-node-channel` get 400 |
 | Plain requests | `GET /node-channel` answers 426 while the entry is open and 404 while it is closed; `install.sh` takes 426 as reachable |
+| The console's own check | When the node channel URL fails its check, the console checks the entry through the proxy or CDN (also while the entry is closed; see [Node channel connection check](nodes.en.md#node-channel-connection-check)) and, when it passes, offers **Switch** in **System settings** |
 | Source address | The "connection source address" of a node is the client address of the WebSocket request, resolved as in [Trusted proxies and client IP](#trusted-proxies-and-client-ip) |
 | Node version | edgeweir-node 0.2.0 or later; `install.sh` refuses to enroll an earlier version through a `wss://` or `ws://` URL |
 
