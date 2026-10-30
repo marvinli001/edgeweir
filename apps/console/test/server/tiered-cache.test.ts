@@ -117,12 +117,12 @@ describe("tiered cache", async () => {
     const error = await rpcError(
       admin.tieredCache.update({
         topology: "smart",
-        port: 443,
+        port: 80,
         upperNodeIds: [],
         upperNodeGroupIds: [],
       }),
     );
-    expect(error).toMatchObject({ code: "TIER_PORT_IN_USE", status: 409, data: { port: 443 } });
+    expect(error).toMatchObject({ code: "TIER_PORT_IN_USE", status: 409, data: { port: 80 } });
     expect((await admin.tieredCache.get()).topology).toBe("off");
   });
 
