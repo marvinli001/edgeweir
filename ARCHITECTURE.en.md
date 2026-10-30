@@ -700,6 +700,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0080_origin_ca_rotation` | `pki_authority.kind`, `status`, `generation` (CA rotation; `(kind, status)` unique, existing rows take their id as kind); `origin_certificate.authority_id`, `origin_client_certificate.authority_id` (the issuing CA) |
 | `0081_node_location` | `node.location` (where the node's public address is, from its own GeoIP data: country, subdivision, City MMDB coordinates) |
 | `0082_node_extensions` | `extension_key`, `extension`, `extension_version`, `site_extension` (node extensions); `node.extension_status` (per extension state reported by the node) |
+| `0083_extension_secrets_data` | `extension.secret_envelope`, `extension.secret_version` (console-generated extension secrets); `site_extension_data` (per-site data items of extensions) |
 
 ## Build output
 

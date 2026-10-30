@@ -702,6 +702,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0080_origin_ca_rotation` | `pki_authority.kind`、`status`、`generation`（CA 轮换；`(kind, status)` 唯一，已有行的 kind 取 ID）；`origin_certificate.authority_id`、`origin_client_certificate.authority_id`（签发它的 CA） |
 | `0081_node_location` | `node.location`（节点用自己的 GeoIP 库查出的公网地址位置：国家、一级行政区、City MMDB 的经纬度） |
 | `0082_node_extensions` | `extension_key`、`extension`、`extension_version`、`site_extension`（节点扩展）；`node.extension_status`（节点上报的各扩展状态） |
+| `0083_extension_secrets_data` | `extension.secret_envelope`、`extension.secret_version`（控制台生成的扩展密钥）；`site_extension_data`（扩展的网站数据项） |
 
 ## 构建产物
 

@@ -878,15 +878,18 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
 | `extensions.activate`、`extensions.deleteVersion` | `POST /extensions/{id}/activate`，`DELETE /extensions/{id}/versions/{version}` |
 | `extensions.settings`、`extensions.updateSettings` | `GET`、`PUT /extensions/settings`（总开关） |
 | `extensions.forSite`、`extensions.updateSite` | `GET /sites/{siteId}/extensions`，`PUT /sites/{siteId}/extensions/{id}` |
+| `extensions.rotateSecret` | `POST /extensions/{id}/rotate-secret`（清单 `secret: true`）：生成新的当前密钥，旧密钥保留为上一个，`secretVersion` 加 1；发布使用该扩展的集群；审计 `extension.rotate_secret` |
+| `extensions.listSiteData`、`extensions.putSiteData`、`extensions.deleteSiteData` | `GET /sites/{siteId}/extensions/{id}/data` → `[{ name, sha256, size, updatedAt }]`，`PUT`、`DELETE /sites/{siteId}/extensions/{id}/data/{name}`（清单 `data`）；发布网站所在集群；审计 `site.extension_data_put`、`site.extension_data_delete` |
 
 | 请求 | 字段 |
 | --- | --- |
 | `POST /extension-keys` | `publisher`、`key`（公钥 JWK JSON 或其 base64url `x`）、`label` |
-| `POST /extensions/verify`、`POST /extensions` | `package`（`.ewx` 字节，base64）、`signature`（`.ewx.sig` 紧凑 JWS） |
+| `POST /extensions/verify`、`POST /extensions` | `package`（`.ewx` 字节，base64）、`signature`（`.ewx.sig` 紧凑 JWS）；请求最大 96 MiB（带 sidecar 的包） |
 | `PATCH /extensions/{id}` | `enabled`、`failureMode`（`open`、`closed`）、`config`（清单的全局配置模式） |
 | `PUT /sites/{siteId}/extensions/{id}` | `enabled`、`config`（清单的网站配置模式） |
+| `PUT /sites/{siteId}/extensions/{id}/data/{name}` | `content`（base64；请求最大 34 MiB）。`name` 为 `^[a-z0-9][a-z0-9._-]{0,63}$`；上限取自当前版本清单的 `data`（每项 `max_bytes`，每个网站和扩展 `max_items`、`max_total_bytes`） |
 
-错误：`EXTENSION_PACKAGE_INVALID`、`EXTENSION_SIGNATURE_INVALID`、`EXTENSION_KEY_UNTRUSTED`、`EXTENSION_PUBLISHER_MISMATCH`、`EXTENSION_CONFIG_INVALID`、`EXTENSION_IN_USE`（有规则读取其字段）、`EXTENSION_KEY_IN_USE`、`EXTENSION_VERSION_ACTIVE`、`NODE_CAPABILITY_REQUIRED`（`extensions-v1`）。标记为 `x-secret` 的配置值返回时打码，原样提交打码值即保留已存的值。访问日志带拦截原因 `extension`、规则 id `ext:<id>`，以及字段 `ext`（扩展的日志字段与裁决）。格式与运行时：[节点扩展](extensions.md)；使用：[扩展](../guide/extensions.md)。
+错误：`EXTENSION_PACKAGE_INVALID`、`EXTENSION_SIGNATURE_INVALID`、`EXTENSION_KEY_UNTRUSTED`、`EXTENSION_PUBLISHER_MISMATCH`、`EXTENSION_CONFIG_INVALID`、`EXTENSION_IN_USE`（有规则读取其字段）、`EXTENSION_KEY_IN_USE`、`EXTENSION_VERSION_ACTIVE`、`EXTENSION_SECRET_NOT_SUPPORTED`、`EXTENSION_DATA_NOT_SUPPORTED`（清单没有 `data`）、`EXTENSION_DATA_TOO_LARGE`（`limit`：`max_bytes`、`max_items` 或 `max_total_bytes`；`max`）、`EXTENSION_DATA_NOT_FOUND`、`NODE_CAPABILITY_REQUIRED`（`extensions-v1`、`extensions-v2`）。`extensions.get` 带 `secretVersion`（不含密钥本身）和带 `details` 的节点状态（节点上报的内容，如 `sidecar.state`）；`extensions.forSite` 带 `dataLimits`。标记为 `x-secret` 的配置值返回时打码，原样提交打码值即保留已存的值。访问日志带拦截原因 `extension`、规则 id `ext:<id>`，以及字段 `ext`（扩展的日志字段与裁决）。格式与运行时：[节点扩展](extensions.md)；使用：[扩展](../guide/extensions.md)。
 
 ### 网站标签、批量操作、复制设置与克隆
 

@@ -97,6 +97,7 @@ Separate commercial products (see [LICENSING.en.md](LICENSING.en.md)) may use li
 | Setup token | Envelope-encrypted; SHA-256 kept for comparison | `setup_token` in `system_setting` |
 | Challenge page signing keys | Envelope-encrypted | `challenge_key.secret` |
 | TLS session ticket keys | Envelope-encrypted | `session_ticket_key.secret` |
+| Node extension secrets (`secret: true`, current and previous) | Envelope-encrypted; delivered only over the mTLS node channel | `extension.secret_envelope` |
 | EAB HMAC key of the custom ACME directory | Envelope-encrypted | `acme_directory` in `system_setting` |
 | Node enrollment tokens | SHA-256 | `enrollment_token` |
 | Probe enrollment tokens | SHA-256 | `probe_token` |

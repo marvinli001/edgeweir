@@ -98,6 +98,7 @@ English: [summary](#english) · [full policy](SECURITY.en.md)
 | setup token | 信封加密；另存 SHA-256 用于比对 | `system_setting` 的 `setup_token` |
 | 挑战页签名密钥 | 信封加密 | `challenge_key.secret` |
 | TLS 会话票据密钥 | 信封加密 | `session_ticket_key.secret` |
+| 节点扩展密钥（`secret: true`，当前与上一个） | 信封加密；只经节点通道 mTLS 下发 | `extension.secret_envelope` |
 | 自定义 ACME 目录的 EAB HMAC 密钥 | 信封加密 | `system_setting` 的 `acme_directory` |
 | 节点注册 token | SHA-256 | `enrollment_token` |
 | 探针注册 token | SHA-256 | `probe_token` |
