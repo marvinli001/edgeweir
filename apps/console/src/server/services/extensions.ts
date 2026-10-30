@@ -186,6 +186,13 @@ async function publishUsing(
   );
 }
 
+/** JSON with object keys sorted, so that a configuration always encodes alike. */
+function canonicalJson(value: Record<string, unknown>): string {
+  return JSON.stringify(
+    Object.fromEntries(Object.entries(value).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))),
+  );
+}
+
 /**
  * What compiles into a cluster's configuration: installed extensions in hook
  * order and each site's enabled entries (set on the site models).
@@ -226,7 +233,7 @@ export async function loadExtensionInput(
   for (const site of sites) {
     site.extensions = entries
       .filter((entry) => entry.siteId === site.id)
-      .map((entry) => ({ id: entry.extensionId, configJson: JSON.stringify(entry.config) }));
+      .map((entry) => ({ id: entry.extensionId, configJson: canonicalJson(entry.config) }));
   }
   const extensions = rows.map(({ extension, version, key }): ExtensionModel => {
     const manifest = manifestOf(version);
@@ -240,7 +247,7 @@ export async function loadExtensionInput(
       publicKey: JSON.stringify({ kty: "OKP", crv: "Ed25519", x: key.x }),
       enabled: extension.enabled,
       failureMode: extension.failureMode === "closed" ? "closed" : "open",
-      configJson: JSON.stringify(extension.config),
+      configJson: canonicalJson(extension.config),
       sharedDicts: manifest.shared_dicts.map((d) => ({ name: d.name, sizeKb: d.size_kb })),
     };
   });

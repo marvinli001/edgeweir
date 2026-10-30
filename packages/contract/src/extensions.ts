@@ -154,7 +154,7 @@ export function satisfiesSemverRange(version: string, range: string): boolean {
 
 const localized = z.union([
   z.string().max(512),
-  z.record(z.enum(["en", "zh-CN"]), z.string().max(512)),
+  z.partialRecord(z.enum(["en", "zh-CN"]), z.string().max(512)),
 ]);
 export type ExtensionText = z.infer<typeof localized>;
 
