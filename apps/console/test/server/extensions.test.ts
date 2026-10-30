@@ -2,7 +2,11 @@ import "reflect-metadata";
 import { createHash, createPrivateKey, sign } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
-import { decodeNodeConfig, EXTENSIONS_FEATURE } from "@edgeweir/config-compiler";
+import {
+  decodeNodeConfig,
+  EXTENSIONS_FEATURE,
+  EXTENSIONS_V2_FEATURE,
+} from "@edgeweir/config-compiler";
 import type { RuleInput } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { desc, eq, like } from "drizzle-orm";
@@ -370,6 +374,32 @@ describe("node extensions", async () => {
         )
       ).code,
     ).toBe("EXTENSION_VERSION_EXISTS");
+  });
+
+  it("delivers Lua API 2 packages to extensions-v2 nodes only", async () => {
+    const counters = Array.from({ length: 20 }, (_, i) => `c${i}`);
+    const api1 = exampleVersion("1.2.0", (m) => {
+      m.counters = counters;
+    });
+    expect((await rpcError(admin.extensions.install(api1))).code).toBe(
+      "EXTENSION_PACKAGE_INVALID",
+    );
+    const api2 = exampleVersion("1.2.0", (m) => {
+      m.requires = { lua_api: 2 };
+      m.counters = counters;
+    });
+    expect((await rpcError(admin.extensions.install(api2))).code).toBe(
+      "NODE_CAPABILITY_REQUIRED",
+    );
+    await ctx.db
+      .update(schema.node)
+      .set({ supportedFeatures: ["tls-v1", "rules-v1", EXTENSIONS_FEATURE, EXTENSIONS_V2_FEATURE] })
+      .where(eq(schema.node.id, nodeId));
+    expect((await admin.extensions.install(api2)).version).toBe("1.2.0");
+    expect((await ir()).requiredFeatures).toContain(EXTENSIONS_V2_FEATURE);
+    await admin.extensions.activate({ id: "hello-header", version: "1.0.0" });
+    expect((await ir()).requiredFeatures).not.toContain(EXTENSIONS_V2_FEATURE);
+    await admin.extensions.deleteVersion({ id: "hello-header", version: "1.2.0" });
   });
 
   it("stores what nodes report", async () => {

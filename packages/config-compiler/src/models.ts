@@ -731,6 +731,8 @@ export interface ExtensionModel {
   failureMode: "open" | "closed";
   configJson: string;
   sharedDicts: { name: string; sizeKb: number }[];
+  /** The package's Lua API (1 when absent); 2 needs extensions-v2. */
+  luaApi?: number;
 }
 
 export interface CompileInput {

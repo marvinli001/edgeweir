@@ -3427,6 +3427,7 @@
   "site_tab_extensions": "Extensions",
   "block_reason_extension": "Extension",
   "node_feature_extensions_v1": "Node extensions",
+  "node_feature_extensions_v2": "Node extensions (Lua API 2)",
   "revision_reason_extension_updated": "Extension {extension} updated",
   "revision_reason_extension_removed": "Extension {extension} uninstalled",
   "revision_reason_site_extension_updated": "Extension {extension} of {site} updated",

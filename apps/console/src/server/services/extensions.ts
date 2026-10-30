@@ -2,6 +2,7 @@ import type { ExtensionModel, SiteModel } from "@edgeweir/config-compiler";
 import {
   applyExtensionConfig,
   EXTENSIONS_FEATURE,
+  EXTENSIONS_V2_FEATURE,
   type ExtensionConfigSchema,
   type ExtensionDetail,
   type ExtensionKeyView,
@@ -50,6 +51,10 @@ async function lockExtensions(tx: Tx) {
 
 const manifestOf = (row: Pick<VersionRow, "manifest">): ExtensionManifest =>
   extensionManifest.parse(row.manifest);
+
+/** The node features an extension needs (Lua API 2: extensions-v2). */
+const extensionFeatures = (manifest: ExtensionManifest) =>
+  manifest.requires.lua_api >= 2 ? [EXTENSIONS_FEATURE, EXTENSIONS_V2_FEATURE] : [EXTENSIONS_FEATURE];
 
 const schemaOf = (manifest: ExtensionManifest, scope: "global" | "site") =>
   manifest.config[scope] as ExtensionConfigSchema | undefined;
@@ -249,6 +254,7 @@ export async function loadExtensionInput(
       failureMode: extension.failureMode === "closed" ? "closed" : "open",
       configJson: canonicalJson(extension.config),
       sharedDicts: manifest.shared_dicts.map((d) => ({ name: d.name, sizeKb: d.size_kb })),
+      luaApi: manifest.requires.lua_api,
     };
   });
   return { extensions, extensionsDisabled: (await getExtensionSettings(db)).disabled };
@@ -522,13 +528,15 @@ async function activate(
     .set({ activeVersion: version, config })
     .where(eq(schema.extension.id, existing.id));
   await refreshExtensionFields(tx);
-  const revisions = await publishUsing(
-    tx,
-    actor,
-    await clustersUsing(tx, existing.id),
-    "extension_updated",
-    existing.id,
-  );
+  const clusters = await clustersUsing(tx, existing.id);
+  if (existing.enabled)
+    await assertNodeFeatures(
+      tx,
+      clusters,
+      extensionFeatures(manifest),
+      "nodes without extension support",
+    );
+  const revisions = await publishUsing(tx, actor, clusters, "extension_updated", existing.id);
   await recordAudit(tx, actor, {
     action,
     targetType: "extension",
@@ -653,7 +661,7 @@ export async function updateExtension(
       await assertNodeFeatures(
         tx,
         clusters,
-        [EXTENSIONS_FEATURE],
+        extensionFeatures(manifest),
         "nodes without extension support",
       );
     const changed = {
@@ -846,7 +854,7 @@ export async function updateSiteExtension(
       await assertNodeFeatures(
         tx,
         [site.clusterId],
-        [EXTENSIONS_FEATURE],
+        extensionFeatures(manifest),
         "nodes without extension support",
       );
     const [row] = await tx
@@ -880,11 +888,12 @@ function nodeStates(
   clusters: Set<string>,
   nodes: (typeof schema.node.$inferSelect)[],
 ): NodeExtensionState[] {
+  const features = extensionFeatures(manifestOf(version));
   return nodes
     .filter((node) => clusters.has(node.clusterId) && node.status === "active")
     .map((node) => {
       const reported = node.extensionStatus.find((s) => s.id === extension.id);
-      const supported = nodeSupportsFeature(node.supportedFeatures, EXTENSIONS_FEATURE);
+      const supported = features.every((f) => nodeSupportsFeature(node.supportedFeatures, f));
       const current = reported && reported.sha256 === version.sha256;
       return {
         nodeId: node.id,

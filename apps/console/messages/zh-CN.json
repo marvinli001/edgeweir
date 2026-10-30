@@ -3212,6 +3212,7 @@
   "site_tab_extensions": "扩展",
   "block_reason_extension": "扩展",
   "node_feature_extensions_v1": "节点扩展",
+  "node_feature_extensions_v2": "节点扩展（Lua API 2）",
   "revision_reason_extension_updated": "修改扩展 {extension}",
   "revision_reason_extension_removed": "卸载扩展 {extension}",
   "revision_reason_site_extension_updated": "修改网站 {site} 的扩展 {extension}",

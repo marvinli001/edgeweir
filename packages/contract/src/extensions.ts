@@ -10,8 +10,12 @@ import { isoDateTime, uuid } from "./schemas";
  */
 export const EXTENSION_FORMAT = "edgeweir-node-extension-v1";
 export const EXTENSIONS_FEATURE = "extensions-v1";
+/** Nodes that run Lua API 2 packages (extension version 1.1). */
+export const EXTENSIONS_V2_FEATURE = "extensions-v2";
 /** Lua API versions this console can deliver. */
-export const EXTENSION_LUA_APIS = [1] as const;
+export const EXTENSION_LUA_APIS = [1, 2] as const;
+/** Declared names per Lua API: log fields and counters. */
+const API_LIMITS = { 1: { logFields: 8, counters: 8 }, 2: { logFields: 16, counters: 32 } } as const;
 
 export const EXTENSION_LIMITS = {
   archiveBytes: 4 * 1024 * 1024,
@@ -412,7 +416,7 @@ export const extensionManifest = z
       .refine((url) => url.startsWith("https://") && URL.canParse(url), "https URL")
       .optional(),
     requires: z.strictObject({
-      lua_api: z.literal(1),
+      lua_api: z.union([z.literal(1), z.literal(2)]),
       node: z
         .string()
         .max(128)
@@ -444,8 +448,8 @@ export const extensionManifest = z
       .max(16)
       .default([])
       .refine((list) => new Set(list.map((f) => f.name)).size === list.length, "duplicate field"),
-    log_fields: names(NAME_RE, 8).default([]),
-    counters: names(NAME_RE, 8)
+    log_fields: names(NAME_RE, 16).default([]),
+    counters: names(NAME_RE, 32)
       .refine((list) => !list.includes("faults"), "reserved counter")
       .default([]),
     endpoints: z
@@ -481,6 +485,13 @@ export const extensionManifest = z
       .refine((list) => list.reduce((sum, d) => sum + d.size_kb, 0) <= 32768, "too large"),
   })
   .superRefine((manifest, ctx) => {
+    const limits = API_LIMITS[manifest.requires.lua_api];
+    if (manifest.log_fields.length > limits.logFields) {
+      ctx.addIssue({ code: "custom", path: ["log_fields"], message: "too many log fields" });
+    }
+    if (manifest.counters.length > limits.counters) {
+      ctx.addIssue({ code: "custom", path: ["counters"], message: "too many counters" });
+    }
     if (manifest.hooks.includes("body_filter") && !manifest.capabilities.includes("body_rewrite")) {
       ctx.addIssue({ code: "custom", path: ["hooks"], message: "body_filter needs body_rewrite" });
     }
