@@ -56,11 +56,11 @@ type SourceRow = typeof schema.externalProbeSource.$inferSelect;
 type ObservationRow = typeof schema.externalProbeObservation.$inferSelect;
 type ResultRow = typeof schema.probeResult.$inferSelect;
 
-const credentialBinding = (id: string) => ({
+export const credentialBinding = (id: string) => ({
   purpose: "external_probe_source.credential_envelope",
   recordId: id,
 });
-const webhookSecretBinding = (id: string) => ({
+export const webhookSecretBinding = (id: string) => ({
   purpose: "external_probe_source.webhook_secret_envelope",
   recordId: id,
 });

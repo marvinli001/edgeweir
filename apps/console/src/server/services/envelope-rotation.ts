@@ -19,6 +19,10 @@ import { challengeKeyBinding } from "./challenge-keys";
 import { challengeProviderBinding } from "./challenge-providers";
 import { providerBinding } from "./dns-providers";
 import { extensionSecretBinding } from "./extensions";
+import {
+  credentialBinding as probeSourceCredentialBinding,
+  webhookSecretBinding as probeSourceWebhookBinding,
+} from "./external-probes";
 import { channelBinding, SMTP_KEY, smtpBinding } from "./notification-delivery";
 import { originClientKeyBinding } from "./origin-pki";
 import type { Executor } from "./revisions";
@@ -132,6 +136,18 @@ export const ENVELOPE_COLUMNS: EnvelopeColumn[] = [
     id: schema.extension.id,
     column: schema.extension.secretEnvelope,
     binding: extensionSecretBinding,
+  },
+  {
+    table: schema.externalProbeSource,
+    id: schema.externalProbeSource.id,
+    column: schema.externalProbeSource.credentialEnvelope,
+    binding: probeSourceCredentialBinding,
+  },
+  {
+    table: schema.externalProbeSource,
+    id: schema.externalProbeSource.id,
+    column: schema.externalProbeSource.webhookSecretEnvelope,
+    binding: probeSourceWebhookBinding,
   },
 ];
 
