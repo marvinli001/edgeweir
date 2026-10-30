@@ -38,6 +38,28 @@ export const STATS_TLS_VERSIONS = ["1.2", "1.3", "none", "other"] as const;
 export const MAX_STATS_COUNTRIES = 250;
 /** Networks and referring hosts a minute keeps at most (heaviest first). */
 export const MAX_STATS_TOP = 50;
+/**
+ * Kinds and outcomes of MinuteStats.challenge_outcomes (challenge-v3), keyed `<kind>:<outcome>`:
+ * captcha is the built-in image, the providers are the third-party widgets.
+ */
+export const CHALLENGE_OUTCOME_KINDS = [
+  "cookie302",
+  "js",
+  "pow",
+  "managed",
+  "captcha",
+  "turnstile",
+  "recaptcha_v2",
+  "recaptcha_v3",
+  "recaptcha_enterprise",
+  "tencent",
+  "aliyun",
+  "geetest",
+] as const;
+export const CHALLENGE_OUTCOMES = ["issued", "passed", "failed", "escalated", "fallback"] as const;
+export const CHALLENGE_OUTCOME_KEYS: readonly string[] = CHALLENGE_OUTCOME_KINDS.flatMap((kind) =>
+  CHALLENGE_OUTCOMES.map((outcome) => `${kind}:${outcome}`),
+);
 const count = z.number().int();
 const keyed = z.array(z.object({ key: z.string(), requests: count }));
 
@@ -61,7 +83,21 @@ export const statsDimensions = z.object({
   tlsVersions: keyed,
   /** Requests per block reason. */
   blockReasons: keyed,
-  challenges: z.object({ issued: count, passed: count }),
+  challenges: z.object({
+    issued: count,
+    passed: count,
+    /** Each kind's outcomes (challenge-v3 nodes), kinds with none left out. */
+    byKind: z.array(
+      z.object({
+        kind: z.enum(CHALLENGE_OUTCOME_KINDS),
+        issued: count,
+        passed: count,
+        failed: count,
+        escalated: count,
+        fallback: count,
+      }),
+    ),
+  }),
   /** Active nodes of the sites' clusters without stats-dims-v1: the counts are partial. */
   unsupportedNodes: count,
 });

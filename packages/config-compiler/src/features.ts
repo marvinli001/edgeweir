@@ -25,6 +25,7 @@ import {
   type Site,
 } from "@edgeweir/proto";
 import {
+  challengeActionKinds,
   type Expression,
   needsBotFields,
   needsClientCertificate,
@@ -128,6 +129,8 @@ export const ACCESS_CONTROL_FEATURE = "access-control-v1";
 export const WAF_V2_FEATURE = "waf-v2";
 export const RULES_BODY_FEATURE = "rules-body-v1";
 export const CHALLENGE_V2_FEATURE = "challenge-v2";
+/** The managed challenge and third-party interactive providers (proto PROTO_NEXT, SiteProtection.interactive). */
+export const CHALLENGE_V3_FEATURE = "challenge-v3";
 /** A site's access log options (proto v0.30.0, Site.log_blocked..log_peer; ADR-0041). */
 export const ACCESS_LOGS_V2_FEATURE = "access-logs-v2";
 /** A site's WebP / AVIF conversion (proto v0.31.0, Site.image_convert; ADR-0043). */
@@ -269,6 +272,7 @@ export function usesChallenges(input: CompileInput): boolean {
     (rules ?? []).some(
       (rule) =>
         rule.action.kind === "challenge" ||
+        rule.action.kind in challengeActionKinds ||
         (rule.action.kind === "config" && rule.action.underAttack === true),
     );
   return (
@@ -298,7 +302,8 @@ export function usesChallengeKeys(input: CompileInput): boolean {
 /**
  * Features that the protection of a compiled configuration needs:
  * challenge-v1 when it carries site or platform protection, challenge keys,
- * a challenge rule or a rule that turns Under Attack on; ja4-v1 when an
+ * a challenge rule or a rule that turns Under Attack on; challenge-v3 when a
+ * challenge is managed or a site has an interactive provider; ja4-v1 when an
  * expression reads tls.ja4 (a condition, target or cache rule condition), a
  * rule counts by it or a site records JA4 in its access logs.
  */
@@ -313,6 +318,14 @@ export function protectionFeatures(config: NodeConfig): string[] {
     config.sites.some((site) => site.protection) ||
     rules.some((rule) => rule.action?.kind === "challenge" || rule.action?.underAttack === true)
       ? ["challenge-v1"]
+      : []),
+    ...(config.platformProtection?.underAttackChallenge === "managed" ||
+    config.sites.some(
+      (site) =>
+        site.protection?.underAttackChallenge === "managed" || !!site.protection?.interactive,
+    ) ||
+    rules.some((rule) => rule.action?.kind === "challenge" && rule.action.challenge === "managed")
+      ? [CHALLENGE_V3_FEATURE]
       : []),
     ...(config.sites.some((site) => site.protection?.logJa4) ||
     configExpressions(config).some(readsJa4) ||

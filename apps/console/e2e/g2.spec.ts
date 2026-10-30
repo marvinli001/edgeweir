@@ -63,10 +63,10 @@ test("G2: the site's security tab turns Under Attack off and on, edits the CC po
   );
   await expect(underAttack).toHaveAttribute("aria-checked", "true");
   await expect(on).toBeVisible();
-  await pick(page, page.getByTestId("protection-under-attack-type"), "工作量证明");
-  await expect(page.getByTestId("protection-under-attack-type")).toHaveText("工作量证明");
+  await pick(page, page.getByTestId("protection-under-attack-type"), "非交互式挑战");
+  await expect(page.getByTestId("protection-under-attack-type")).toHaveText("非交互式挑战");
   await page.reload();
-  await expect(page.getByTestId("protection-under-attack-type")).toHaveText("工作量证明");
+  await expect(page.getByTestId("protection-under-attack-type")).toHaveText("非交互式挑战");
   await pick(page, page.getByTestId("protection-under-attack-type"), "JS 计算");
   await expect(page.getByTestId("protection-under-attack-type")).toHaveText("JS 计算");
 
@@ -95,7 +95,7 @@ test("G2: the site's security tab turns Under Attack off and on, edits the CC po
   await expect(urlQps).toHaveValue("200");
   await urlQps.fill("30");
   await ipQps.fill("80");
-  await pick(page, page.getByTestId("cc-max-level"), "工作量证明");
+  await pick(page, page.getByTestId("cc-max-level"), "非交互式挑战");
   await saved(page, save, "protection/update");
   await expect(save).toBeDisabled();
   await page.reload();
@@ -105,7 +105,7 @@ test("G2: the site's security tab turns Under Attack off and on, edits the CC po
   await expect(preset).toHaveText("自定义");
   await expect(urlQps).toHaveValue("30");
   await expect(ipQps).toHaveValue("80");
-  await expect(page.getByTestId("cc-max-level")).toHaveText("工作量证明");
+  await expect(page.getByTestId("cc-max-level")).toHaveText("非交互式挑战");
 
   // What the nodes report and what happened during the CC run, on the attacks tab.
   await page.getByTestId("tab-attacks").click();
@@ -243,8 +243,8 @@ test("G2: the rules editor offers the challenge action and tls.ja4 in expression
   await expect(challenge.getByRole("alert")).toHaveCount(0);
   await pick(page, page.locator(`#action-${ruleId}`), "挑战");
   const type = page.locator(`#challenge-${ruleId}`);
-  await expect(type).toHaveText("JS 计算");
-  await pick(page, type, "工作量证明");
+  await expect(type).toHaveText("交互式挑战");
+  await pick(page, type, "非交互式挑战");
 
   await page.getByTestId("rule-add-ratelimit").click();
   const rate = page.getByTestId("rule-row").nth(1);
@@ -262,7 +262,7 @@ test("G2: the rules editor offers the challenge action and tls.ja4 in expression
     `tls.ja4 eq "${SAMPLE_JA4}"`,
   );
   await expect(rows.first().getByLabel("动作", { exact: true })).toHaveText("挑战");
-  await expect(rows.first().getByLabel("挑战类型", { exact: true })).toHaveText("工作量证明");
+  await expect(rows.first().getByLabel("挑战类型", { exact: true })).toHaveText("非交互式挑战");
   await expect(rows.nth(1).getByLabel("限速键", { exact: true })).toHaveText("tls.ja4");
 
   // The bench site keeps no rules.

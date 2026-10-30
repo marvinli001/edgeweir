@@ -21,6 +21,7 @@ import {
   type CacheRule,
   CacheRuleSchema,
   CcPolicySchema,
+  ChallengeProviderSchema,
   ChallengeTextSchema,
   CharsetSchema,
   ClientCertificateMode,
@@ -117,6 +118,22 @@ function compileSiteProtection(model: SiteProtectionModel) {
         : undefined,
     failureThreshold: model.failureBan?.threshold ?? 0,
     failureBanSeconds: model.failureBan ? model.failureBan.banSeconds : 0,
+    // challenge-v3: absent with the built-in image captcha.
+    interactive: model.interactive
+      ? create(ChallengeProviderSchema, {
+          kind: model.interactive.kind,
+          siteKey: model.interactive.siteKey,
+          credentialId: model.interactive.credentialId,
+          credentialVersion: BigInt(model.interactive.credentialVersion),
+          minScore: ["recaptcha_v3", "recaptcha_enterprise"].includes(model.interactive.kind)
+            ? model.interactive.minScore
+            : 0,
+          projectId:
+            model.interactive.kind === "recaptcha_enterprise" ? model.interactive.projectId : "",
+          region: model.interactive.kind === "aliyun" ? model.interactive.region : "",
+          prefix: model.interactive.kind === "aliyun" ? model.interactive.prefix : "",
+        })
+      : undefined,
   });
 }
 

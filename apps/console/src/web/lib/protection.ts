@@ -1,14 +1,61 @@
-import type { CcLevel, ChallengeType, SecurityEventKind, WafMode } from "@edgeweir/contract";
+import {
+  type CcLevel,
+  type CHALLENGE_OUTCOME_KINDS,
+  CHALLENGE_PROVIDER_KINDS,
+  type ChallengeKind,
+  type ChallengeProviderKind,
+  type ChallengeType,
+  type SecurityEventKind,
+  type WafMode,
+} from "@edgeweir/contract";
 import { m } from "@/lib/i18n";
 
-/** Challenge types, which are also the CC levels above normal. */
-export const challengeLabel = (type: ChallengeType) =>
+/** Challenge kinds: the types (also the CC levels above normal) and the managed challenge. */
+export const challengeLabel = (type: ChallengeKind) =>
   ({
     cookie302: m.challenge_cookie302,
     js: m.challenge_js,
     pow: m.challenge_pow,
     captcha: m.challenge_captcha,
+    managed: m.challenge_managed,
   })[type]();
+
+/** The order selects offer challenge kinds in: the current ones first, then the legacy ones. */
+const CHALLENGE_KIND_ORDER = [
+  "managed",
+  "pow",
+  "captcha",
+  "js",
+  "cookie302",
+] as const satisfies readonly ChallengeKind[];
+
+/** Challenge kind options in select order; `managed` only with `managed` true. */
+export const challengeKindOptions = (managed: boolean) =>
+  CHALLENGE_KIND_ORDER.filter((kind) => managed || kind !== "managed").map((kind) => ({
+    value: kind,
+    label: challengeLabel(kind),
+  }));
+
+/** Widgets of the interactive challenge. */
+export const providerKindLabel = (kind: ChallengeProviderKind) =>
+  ({
+    builtin: m.challenge_provider_builtin,
+    turnstile: m.challenge_provider_turnstile,
+    recaptcha_v2: m.challenge_provider_recaptcha_v2,
+    recaptcha_v3: m.challenge_provider_recaptcha_v3,
+    recaptcha_enterprise: m.challenge_provider_recaptcha_enterprise,
+    tencent: m.challenge_provider_tencent,
+    aliyun: m.challenge_provider_aliyun,
+    geetest: m.challenge_provider_geetest,
+  })[kind]();
+
+/** A kind of the challenge outcome stats: `captcha` there is the built-in image. */
+export const outcomeKindLabel = (kind: (typeof CHALLENGE_OUTCOME_KINDS)[number]) =>
+  kind === "captcha"
+    ? m.challenge_provider_builtin()
+    : (CHALLENGE_PROVIDER_KINDS as readonly string[]).includes(kind)
+      ? providerKindLabel(kind as ChallengeProviderKind)
+      : challengeLabel(kind as ChallengeKind);
 
 export const levelLabel = (level: CcLevel | string) =>
   level === "normal" || !level

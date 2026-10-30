@@ -9,7 +9,8 @@ import { orpc } from "@/lib/orpc";
 /**
  * Rules of a site (siteId) or of the platform. A site's rules can send requests to its origin
  * groups; the rule engine extensions (rules-v2), additions (rules-v3), the WAF actions (waf-v2),
- * the request body fields (rules-body-v1) and the crawler fields (challenge-v2) stay locked while
+ * the request body fields (rules-body-v1), the crawler fields (challenge-v2) and the managed
+ * challenge (challenge-v3) stay locked while
  * the cluster's nodes lack them. With `site`, the tab also sets how much body the rules read.
  */
 export function RulesTab({
@@ -37,6 +38,7 @@ export function RulesTab({
           wafV2: available?.wafV2.available === false,
           body: available?.rulesBody.available === false,
           bot: available?.challengeV2.available === false,
+          managed: available?.challengeV3.available === false,
           platform: !siteId,
         }}
       >

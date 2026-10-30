@@ -73,7 +73,7 @@ Phases run in the order of this table.
 | Request transform | Rewrite path, Request header | Rewrites the origin path and query parameters; sets or removes request headers |
 | Redirect | Redirect | Returns 301, 302, 303, 307, or 308; [bulk redirects](#bulk-redirects) are looked up after the rules |
 | Configuration | Override settings | Overrides site settings per request, see [Override settings](#override-settings) |
-| Custom WAF | Block, Log, Allow, Challenge, Ban, Custom response, Close connection, Skip | Block returns 403 or 451; Log only writes a log line (and optionally an access log line); Allow skips the remaining custom WAF rules of the same scope; Challenge makes visitors pass a challenge first; Ban, Custom response, Close connection and Skip: see [WAF actions](#waf-actions) |
+| Custom WAF | Block, Log, Allow, Managed challenge, Non-interactive challenge, Challenge, Ban, Custom response, Close connection, Skip | Block returns 403 or 451; Log only writes a log line (and optionally an access log line); Allow skips the remaining custom WAF rules of the same scope; Managed challenge, Non-interactive challenge and Challenge make visitors pass a challenge first; Ban, Custom response, Close connection and Skip: see [WAF actions](#waf-actions) |
 | Rate limit | Rate limit | Fixed-window counting; over the limit returns 429 or 403 and can ban the address |
 | Cache | Override settings | Overrides only cache bypass, HTTPS redirect, and Gzip |
 | Origin | Request header, Origin override | Sets or removes headers sent to the origin; picks an origin group and overrides the origin Host, SNI, and port |
@@ -85,7 +85,9 @@ Phases run in the order of this table.
 | Action | Field | Values | Default |
 | --- | --- | --- | --- |
 | Block | Status code | 403 / 451 | 403 |
-| Challenge | Challenge type | Cookie redirect / JavaScript / Proof of work / Image captcha | JavaScript |
+| Managed challenge | None | — | — |
+| Non-interactive challenge | None | — | — |
+| Challenge | Challenge type | Cookie redirect / JavaScript / Non-interactive challenge / Interactive challenge | Interactive challenge (JavaScript for API requests without a type) |
 | Redirect | Target | **Static**: an absolute path on the site (starts with `/`, not `//`), or an `http(s)` URL without credentials or whitespace; no backslashes or control characters, up to 4096 characters. **Expression**: a value expression, see [Dynamic targets and query parameters](#dynamic-targets-and-query-parameters) | Static, `/` |
 | Redirect | Status code | 301 / 302 / 303 / 307 / 308 | 301 |
 | Redirect | Keep query string | On / off | Off |
@@ -139,7 +141,7 @@ Every setting of **Override settings** starts as **Unchanged**; numbers left emp
 | WebSocket | Unchanged / On / Off | Configuration | Overrides the site's **WebSocket** |
 | Under Attack | Unchanged / On / Off | Configuration | Overrides the site's Under Attack; global Under Attack is unaffected |
 | CC mitigation | Unchanged / On / Off | Configuration | **Off**: the request is exempt from CC level challenges and automatic per-IP bans; it is still counted |
-| CC highest level | Unchanged / Cookie redirect / JavaScript / Proof of work / Image captcha | Configuration | The request's CC level does not exceed the chosen level |
+| CC highest level | Unchanged / Cookie redirect / JavaScript / Non-interactive challenge / Interactive challenge | Configuration | The request's CC level does not exceed the chosen level |
 | Origin connect timeout (s) | 0.1–120 | Configuration | Overrides the pool's connect timeout |
 | Origin send timeout (s), Origin read timeout (s) | 0.1–3600 | Configuration | Override the pool's send and read timeouts |
 | Log sample rate (%) | 0–100 | Configuration | The access log sample rate of the request |
@@ -499,7 +501,7 @@ API: `GET` and `POST /api/v1/ip-lists`, `PUT` and `DELETE /api/v1/ip-lists/{id}`
 
 | Item | Behavior |
 | --- | --- |
-| Capabilities | Rules and block/allow lists need the node capability `rules-v1`; `ip.geoip.country` and `ip.geoip.subdivision` need `geoip-city-v1`; `ip.geoip.asnum` and `ip.geoip.as_name` need `geoip-asn-v1`; the challenge action and override settings that turn Under Attack on need `challenge-v1`; `tls.ja4` (field or rate limit key) needs `ja4-v1`; `tls.client.*` needs `client-cert-v1`; when `ip.geoip.subdivision` is used, the console also checks `geoip-subdivision-v1` (not written into the configuration) |
+| Capabilities | Rules and block/allow lists need the node capability `rules-v1`; `ip.geoip.country` and `ip.geoip.subdivision` need `geoip-city-v1`; `ip.geoip.asnum` and `ip.geoip.as_name` need `geoip-asn-v1`; the challenge action and override settings that turn Under Attack on need `challenge-v1`, the managed challenge also `challenge-v3`; `tls.ja4` (field or rate limit key) needs `ja4-v1`; `tls.client.*` needs `client-cert-v1`; when `ip.geoip.subdivision` is used, the console also checks `geoip-subdivision-v1` (not written into the configuration) |
 | Rule engine extensions | Any of these needs `rules-v2`: functions and `http.request.full_uri`, `http.request.uri.path.extension`, `http.response.content_type.media_type`; expression targets, query parameter edits, and a redirect with **Keep query string** on or a rewrite with it off; origin overrides; the compression phase; the overrides available only in the configuration phase and **Gzip** On; cache rule conditions not in the [builder](origins-and-cache.en.md#request-conditions)'s shape and **Browser TTL (s)**; bulk redirects; origin groups other than the default group |
 | Expression fields and header values | Any of these needs `rules-v3`: `http.request.cookies[…]`, `http.request.uri.args[…]`, `http.referer`, `http.user_agent`, `http.request.version`, `http.request.scheme`, `http.request.id`, `http.request.timestamp.sec`, `edge.server_port`, `ip.geoip.as_name` (also `geoip-asn-v1`), `http.response.cache_status`; `url_encode`, `base64_encode`, `base64_decode`, `md5`, `sha1`, `sha256`, `substring`, `to_string`; `wildcard` and `strict wildcard`; expression values of request headers, response headers, and query parameters; response header **Append**; redirect status 303; `{{time}}` and `{{path}}` in [error pages](error-pages.en.md) |
 | Direct peer | Configurations that read `ip.peer` need `client-ip-v1` |

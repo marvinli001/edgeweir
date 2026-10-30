@@ -110,6 +110,15 @@ describe("G16 over the node channel: statistics dimensions and log fields", asyn
           blockReasons: { ip_banned: 2n, challenge: 1n },
           challengesIssued: 1n,
           challengesPassed: 1n,
+          // challenge-v3: outcomes per kind; unknown keys are dropped.
+          challengeOutcomes: {
+            "managed:issued": 3n,
+            "managed:passed": 2n,
+            "managed:escalated": 1n,
+            "turnstile:fallback": 1n,
+            "captcha:passed": 1n,
+            "nonsense:issued": 9n,
+          },
           origins: [
             {
               originId: ORIGIN,
@@ -168,7 +177,15 @@ describe("G16 over the node channel: statistics dimensions and log fields", asyn
         { key: "ip_banned", requests: 2 },
         { key: "challenge", requests: 1 },
       ],
-      challenges: { issued: 1, passed: 1 },
+      challenges: {
+        issued: 1,
+        passed: 1,
+        byKind: [
+          { kind: "managed", issued: 3, passed: 2, failed: 0, escalated: 1, fallback: 0 },
+          { kind: "captcha", issued: 0, passed: 1, failed: 0, escalated: 0, fallback: 0 },
+          { kind: "turnstile", issued: 0, passed: 0, failed: 0, escalated: 0, fallback: 1 },
+        ],
+      },
     });
     const [name] = await ctx.db.select().from(schema.asnName).where(eq(schema.asnName.asn, 3215));
     expect(name?.name).toBe("Orange S.A.");

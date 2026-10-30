@@ -521,6 +521,13 @@ message MinuteStats {
   // (Site.markdown; cache hits included). Added in proto/vX.Y.Z-markdown
   // (feature markdown-v1).
   uint64 markdown_responses = 27;
+  // Challenges by kind and outcome, "<kind>:<outcome>": kind cookie302, js,
+  // pow, managed, captcha (the built-in image) or a ChallengeProvider.kind;
+  // outcome issued (a page or a cookie302 redirect), passed (a pass signed),
+  // failed (a wrong or rejected answer), escalated (a managed challenge
+  // turned interactive) or fallback (a provider replaced by the built-in
+  // image captcha). Added in PROTO_NEXT (feature challenge-v3).
+  map<string, uint64> challenge_outcomes = 28;
 }
 
 // OriginCounter is a minute of one origin's fetches on a node.

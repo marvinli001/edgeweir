@@ -3,13 +3,14 @@ import {
   CC_PRESETS,
   CHALLENGE_PRESETS,
   CHALLENGE_TEXT_MAX,
-  CHALLENGE_TYPES,
+  type ChallengeKind,
   type ChallengeText,
-  type ChallengeType,
   FAILURE_BAN_DEFAULTS,
   FAILURE_BAN_SECONDS_RANGE,
   FAILURE_THRESHOLD_RANGE,
   type FeatureAvailability,
+  INTERACTIVE_PROVIDER_CHOICES,
+  type InteractiveProviderChoice,
   matchPreset,
   PASS_TTL_RANGE,
   POW_DIFFICULTY_RANGE,
@@ -42,6 +43,12 @@ import {
   fromCcDraft,
   toCcDraft,
 } from "@/components/cc-thresholds";
+import {
+  ChallengeProviderFields,
+  fromProviderDraft,
+  providerDraftIssue,
+  toProviderDraft,
+} from "@/components/challenge-provider-form";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormSelect } from "@/components/form-select";
 import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/layout/form";
@@ -59,7 +66,12 @@ import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { formatDateMinutes, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
-import { challengeLabel, levelLabel, wafModeLabel } from "@/lib/protection";
+import {
+  challengeKindOptions,
+  levelLabel,
+  providerKindLabel,
+  wafModeLabel,
+} from "@/lib/protection";
 import { toast } from "@/lib/toast";
 import {
   type Exclusion,
@@ -130,6 +142,7 @@ export function SecurityTab({ siteId }: { siteId: string }) {
           <>
             <UnderAttackCard siteId={siteId} protection={data} />
             <ChallengeSettingsCard siteId={siteId} protection={data} />
+            <InteractiveChallengeCard siteId={siteId} protection={data} />
             <CcPolicyCard siteId={siteId} protection={data} />
           </>
         )}
@@ -261,6 +274,10 @@ function SecuritySummary({ siteId, protection }: { siteId: string; protection: S
 
 function UnderAttackCard({ siteId, protection }: { siteId: string; protection: SiteProtection }) {
   const { apply, save, pending } = useUpdateProtection(siteId);
+  const features = useQuery(orpc.sites.features.queryOptions({ input: { id: siteId } }));
+  // The managed challenge waits for challenge-v3 (a site that asks for it keeps it).
+  const managed =
+    features.data?.challengeV3.available !== false || protection.underAttackChallenge === "managed";
   const mitigation = useQuery(
     orpc.autoMitigation.get.queryOptions({
       input: { id: siteId },
@@ -316,8 +333,8 @@ function UnderAttackCard({ siteId, protection }: { siteId: string; protection: S
           value={protection.underAttackChallenge}
           disabled={pending}
           testId="protection-under-attack-type"
-          options={CHALLENGE_TYPES.map((type) => ({ value: type, label: challengeLabel(type) }))}
-          onChange={(type) => void save({ underAttackChallenge: type as ChallengeType })}
+          options={challengeKindOptions(managed)}
+          onChange={(type) => void save({ underAttackChallenge: type as ChallengeKind })}
         />
         {protection.platformUnderAttack ? (
           <SafetyNote className="sm:col-span-2" data-testid="protection-platform-on">
@@ -558,6 +575,104 @@ function ChallengeSettingsCard({
           </FieldSet>
         </PanelContent>
         <SaveBar indent dirty={dirty} pending={pending} error={error} testId="protection-save" />
+      </form>
+    </Panel>
+  );
+}
+
+/** Which widget the interactive challenge shows: the global default, the built-in image or the site's own. */
+function InteractiveChallengeCard({
+  siteId,
+  protection,
+}: {
+  siteId: string;
+  protection: SiteProtection;
+}) {
+  const { save, error, pending } = useUpdateProtection(siteId);
+  const features = useQuery(orpc.sites.features.queryOptions({ input: { id: siteId } }));
+  // The site's own provider waits for challenge-v3 (a site that has one keeps it editable).
+  const v3 = features.data?.challengeV3;
+  const v3Locked = v3?.available === false;
+  const server = {
+    choice: protection.interactiveProvider,
+    provider: toProviderDraft(protection.provider),
+  };
+  const { draft, setDraft, markSaved, dirty } = useDraft(server, JSON.stringify(protection));
+  const [issue, setIssue] = React.useState<string | null>(null);
+  const choiceLabel = (choice: InteractiveProviderChoice) =>
+    choice === "global"
+      ? m.challenge_provider_follow_global({
+          kind: providerKindLabel(protection.globalProvider.kind),
+        })
+      : choice === "builtin"
+        ? m.challenge_provider_builtin()
+        : m.challenge_provider_site();
+  const choices = INTERACTIVE_PROVIDER_CHOICES.filter(
+    (choice) => choice !== "site" || !v3Locked || protection.interactiveProvider === "site",
+  );
+  return (
+    <Panel className="scroll-mt-4 animate-enter" style={{ animationDelay: "90ms" }}>
+      <form
+        className="flex flex-col gap-(--panel-pad)"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          const site = draft.choice === "site";
+          const refused = site ? providerDraftIssue(draft.provider, protection.provider) : null;
+          setIssue(refused);
+          if (refused) return;
+          const saved = await save({
+            interactiveProvider: draft.choice,
+            ...(site ? { provider: fromProviderDraft(draft.provider) } : {}),
+          });
+          if (saved) markSaved();
+        }}
+        data-testid="protection-interactive"
+      >
+        <PanelHeader>
+          <PanelTitle>{m.challenge_provider_title()}</PanelTitle>
+        </PanelHeader>
+        <PanelContent form className="flex flex-col gap-5">
+          {v3Locked ? (
+            <SafetyNote
+              className="animate-in fade-in"
+              data-testid="protection-challenge-v3-unavailable"
+              data-reason={v3?.reason ?? undefined}
+            >
+              {m.feature_unavailable_nodes()}
+            </SafetyNote>
+          ) : null}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormSelect
+              id="protection-interactive-choice"
+              label={m.challenge_provider_choice()}
+              value={draft.choice}
+              testId="protection-interactive-choice"
+              options={choices.map((value) => ({ value, label: choiceLabel(value) }))}
+              onChange={(choice) => {
+                setIssue(null);
+                setDraft({ ...draft, choice });
+              }}
+            />
+            {draft.choice === "site" ? (
+              <ChallengeProviderFields
+                id="protection-provider"
+                draft={draft.provider}
+                saved={protection.provider}
+                onChange={(provider) => {
+                  setIssue(null);
+                  setDraft({ ...draft, provider });
+                }}
+              />
+            ) : null}
+          </div>
+        </PanelContent>
+        <SaveBar
+          indent
+          dirty={dirty}
+          pending={pending}
+          error={issue ?? error}
+          testId="protection-interactive-save"
+        />
       </form>
     </Panel>
   );

@@ -7,7 +7,7 @@ What a site's "Attacks" tab shows about blocks, sources and matches, and automat
 | Term | Definition |
 | --- | --- |
 | Block reason | Why a request was refused or challenged, see [Access logs](access-logs.en.md#block-reasons). |
-| CC level | The site's challenge level on a node, from low to high: "Normal", "Cookie redirect", "JavaScript", "Proof of work", "Image captcha", see [Challenges and CC mitigation](challenges.en.md). |
+| CC level | The site's challenge level on a node, from low to high: "Normal", "Cookie redirect", "JavaScript", "Non-interactive challenge", "Interactive challenge", see [Challenges and CC mitigation](challenges.en.md). |
 | Site level | The highest CC level the site holds on the online, active nodes of its cluster. |
 | Trigger level | The CC level at which automatic mitigation turns on Under Attack. Never "Normal". |
 | Hold | Minutes (5–1440) Under Attack stays on after the site level was last at the trigger level. |
@@ -67,7 +67,7 @@ On the "Automatic mitigation" card click "Set up" ("Edit" at the top right of th
 | Field | Default | Notes |
 | --- | --- | --- |
 | Enabled | On | Off: it no longer turns Under Attack on; while holding, Under Attack is turned off at once |
-| Trigger level | Proof of work | "Cookie redirect", "JavaScript", "Proof of work", "Image captcha" |
+| Trigger level | Non-interactive challenge | "Cookie redirect", "JavaScript", "Non-interactive challenge", "Interactive challenge" |
 | Hold below trigger (minutes) | 30 | 5–1440 |
 
 Sites not set up have no automatic mitigation; the card shows "Not set up". The card refreshes every 15 seconds and shows "State" ("On", "Armed", "Off"), "Trigger level", "Hold" and "Level now" (the site level).

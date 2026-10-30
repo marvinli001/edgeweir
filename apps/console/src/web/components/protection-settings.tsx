@@ -1,9 +1,19 @@
-import { CHALLENGE_TYPES, type ChallengeType, EVENT_RETENTION_RANGE } from "@edgeweir/contract";
+import {
+  type ChallengeKind,
+  EVENT_RETENTION_RANGE,
+  type ProtectionSettings,
+  type ProtectionSettingsView,
+} from "@edgeweir/contract";
 import type * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Input } from "@/components/arc/input/input";
 import { Switch } from "@/components/arc/switch/switch";
 import { CcThresholdFields, fromCcDraft, toCcDraft } from "@/components/cc-thresholds";
+import {
+  ChallengeProviderFields,
+  fromProviderDraft,
+  toProviderDraft,
+} from "@/components/challenge-provider-form";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { OptionSelect } from "@/components/form-select";
 import { FieldLabel } from "@/components/layout/form";
@@ -11,7 +21,7 @@ import { SafetyNote } from "@/components/safety-note";
 import { SettingsCard } from "@/components/settings-card";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
-import { challengeLabel } from "@/lib/protection";
+import { challengeKindOptions } from "@/lib/protection";
 import { cn } from "@/lib/utils";
 
 /**
@@ -84,6 +94,10 @@ export function SettingNumber({
   );
 }
 
+/** The platform protection without the provider, which only its own card saves. */
+const withoutProvider = ({ provider: _provider, ...rest }: ProtectionSettingsView) =>
+  rest satisfies ProtectionSettings;
+
 /** Platform Under Attack (switched right away, after a confirmation) and event retention. */
 export function ProtectionSettingsCard({
   className,
@@ -105,7 +119,7 @@ export function ProtectionSettingsCard({
         eventRetentionDays: String(s.eventRetentionDays),
       })}
       toInput={(d, s) => ({
-        ...s,
+        ...withoutProvider(s),
         underAttackChallenge: d.underAttackChallenge,
         eventRetentionDays: Number(d.eventRetentionDays),
       })}
@@ -147,7 +161,7 @@ export function ProtectionSettingsCard({
                 confirmLabel={turningOn ? m.protection_turn_on() : m.protection_turn_off()}
                 onConfirm={() =>
                   apply({
-                    ...value,
+                    ...withoutProvider(value),
                     underAttack: turningOn,
                     underAttackChallenge: draft.underAttackChallenge,
                   })
@@ -160,11 +174,8 @@ export function ProtectionSettingsCard({
                 className="w-44"
                 value={draft.underAttackChallenge}
                 testId="platform-under-attack-type"
-                options={CHALLENGE_TYPES.map((type) => ({
-                  value: type,
-                  label: challengeLabel(type),
-                }))}
-                onChange={(type) => set({ underAttackChallenge: type as ChallengeType })}
+                options={challengeKindOptions(true)}
+                onChange={(type) => set({ underAttackChallenge: type as ChallengeKind })}
               />
             </SettingRow>
             <SettingRow htmlFor="protection-retention" label={m.protection_retention()}>
@@ -180,6 +191,39 @@ export function ProtectionSettingsCard({
           </SettingRows>
         );
       }}
+    </SettingsCard>
+  );
+}
+
+/** The global interactive provider: the widget of every site that follows it. */
+export function InteractiveProviderCard({
+  className,
+  style,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <SettingsCard
+      title={m.challenge_provider_title()}
+      className={className}
+      style={style}
+      testId="interactive-provider-card"
+      query={orpc.settings.protection.queryOptions()}
+      mutation={orpc.settings.setProtection.mutationOptions()}
+      toDraft={(s) => toProviderDraft(s.provider)}
+      toInput={(d, s) => ({ ...withoutProvider(s), provider: fromProviderDraft(d) })}
+      contentClassName="flex flex-col gap-4"
+      saveTestId="interactive-provider-save"
+    >
+      {({ value, draft, set }) => (
+        <ChallengeProviderFields
+          id="global-provider"
+          draft={draft}
+          saved={value.provider}
+          onChange={set}
+        />
+      )}
     </SettingsCard>
   );
 }

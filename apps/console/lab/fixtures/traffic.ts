@@ -561,9 +561,44 @@ export function dimensionsOf(range: AnalyticsRange, siteId?: string): StatsDimen
     httpVersions: keyed(totals.requests, profile.http),
     tlsVersions: keyed(totals.requests, profile.tls),
     blockReasons,
-    challenges: { issued, passed: Math.round(issued * 0.41) },
+    challenges: { issued, passed: Math.round(issued * 0.41), byKind: challengeKindsOf(issued) },
     unsupportedNodes: !site || PARTIAL_SITES.has(site.name) ? 1 : 0,
   };
+}
+
+/**
+ * Each kind's outcomes of `issued` challenges (shop.example.com's burst): most were managed and
+ * passed without interaction, the suspicious ones escalated to its Turnstile widget, which fell
+ * back to the built-in image a few times; the passes add up to the 41% of the total.
+ */
+function challengeKindsOf(issued: number): StatsDimensions["challenges"]["byKind"] {
+  if (issued === 0) return [];
+  const share = (part: number) => Math.round(issued * part);
+  const managed = share(0.62);
+  const turnstile = share(0.24);
+  const captcha = share(0.04);
+  const pow = issued - managed - turnstile - captcha;
+  const zero = { escalated: 0, fallback: 0 };
+  return [
+    {
+      kind: "managed",
+      issued: managed,
+      passed: share(0.27),
+      failed: share(0.21),
+      escalated: share(0.14),
+      fallback: 0,
+    },
+    { kind: "pow", issued: pow, passed: share(0.04), failed: share(0.05), ...zero },
+    {
+      kind: "turnstile",
+      issued: turnstile,
+      passed: share(0.08),
+      failed: share(0.15),
+      escalated: 0,
+      fallback: share(0.01),
+    },
+    { kind: "captcha", issued: captcha, passed: share(0.02), failed: share(0.02), ...zero },
+  ];
 }
 
 /**

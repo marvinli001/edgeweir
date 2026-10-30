@@ -13,6 +13,8 @@ export type SkipTarget = (typeof skipTargets)[number];
 
 /** Custom WAF actions only nodes with waf-v2 run. */
 export const WAF_V2_KINDS: ReadonlySet<Kind> = new Set(["ban", "respond", "close", "skip"]);
+/** Custom WAF actions only nodes with challenge-v3 run. */
+export const CHALLENGE_V3_KINDS: ReadonlySet<Kind> = new Set(["managed_challenge"]);
 
 /** What a new rule of the kind starts with. */
 export function defaultAction(kind: Kind): RuleInput["action"] {
@@ -39,8 +41,9 @@ export function defaultAction(kind: Kind): RuleInput["action"] {
       return { kind, cacheBypass: true };
     case "rate_limit":
       return { kind, ...RATE_LIMIT_PRESETS.standard, key: "ip.src", statusCode: 429 };
+    // The interactive challenge (the contract's default stays js for rules sent without a type).
     case "challenge":
-      return { kind, type: "js" };
+      return { kind, type: "captcha" };
     case "origin":
       return { kind, originGroup: "", hostHeader: "", sni: "", port: 0 };
     case "compression":

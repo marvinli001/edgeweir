@@ -2,6 +2,7 @@ import type { PlatformProtectionModel, SiteProtectionModel } from "@edgeweir/con
 import {
   CC_TEMPLATE_DEFAULTS,
   type CcThresholds,
+  CHALLENGE_PROVIDER_SECRETS,
   CHALLENGE_TEXT_DEFAULTS,
   type ChallengeText,
   ccTemplate,
@@ -9,8 +10,11 @@ import {
   FAILURE_BAN_DEFAULTS,
   type FailureBan,
   failureBan,
+  type InteractiveProviderChoice,
   PROTECTION_SETTINGS_DEFAULTS,
   type ProtectionSettings,
+  type ProtectionSettingsInput,
+  type ProtectionSettingsView,
   protectionSettings,
   type SiteCcPolicy,
   type SiteProtection,
@@ -19,10 +23,18 @@ import {
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import type { MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
 import { lockCcTemplate, lockProtectionSettings } from "../lib/locks";
 import type { Actor } from "./audit";
 import { noteOperatorUnderAttack } from "./auto-mitigation";
+import {
+  auditedProvider,
+  loadInteractiveProviders,
+  providerRow,
+  providerView,
+  saveProvider,
+} from "./challenge-providers";
 import { type Executor, publishClusters } from "./revisions";
 import { defineSetting } from "./settings";
 import { publishSiteChange } from "./site-change";
@@ -103,6 +115,12 @@ function savedFailureBan(row: ProtectionRow | undefined): FailureBan {
   return parsed.success ? parsed.data : { enabled: false, ...FAILURE_BAN_DEFAULTS };
 }
 
+/** Which interactive provider a site uses (global until chosen). */
+function providerChoice(row: ProtectionRow | undefined): InteractiveProviderChoice {
+  const choice = row?.interactiveProvider;
+  return choice === "builtin" || choice === "site" ? choice : "global";
+}
+
 function protectionModel(
   row: ProtectionRow | undefined,
   template: CcThresholds,
@@ -138,15 +156,32 @@ export async function loadSiteProtectionModels(
   const template = rows.some((row) => row.cc?.enabled)
     ? await getCcTemplate(db)
     : CC_TEMPLATE_DEFAULTS;
+  const providers = await loadInteractiveProviders(
+    db,
+    new Map(siteIds.map((id) => [id, providerChoice(rows.find((row) => row.siteId === id))])),
+  );
   return new Map(
-    siteIds.map((id) => [
-      id,
-      protectionModel(
+    siteIds.map((id) => {
+      const model = protectionModel(
         rows.find((row) => row.siteId === id),
         template,
-      ),
-    ]),
+      );
+      const interactive = providers.get(id);
+      return [id, interactive ? { ...model, interactive } : model];
+    }),
   );
+}
+
+interface ProviderViews {
+  provider: SiteProtection["provider"];
+  globalProvider: SiteProtection["globalProvider"];
+}
+
+async function providerViews(db: Executor, siteId: string): Promise<ProviderViews> {
+  return {
+    provider: providerView(await providerRow(db, siteId)),
+    globalProvider: providerView(await providerRow(db, null)),
+  };
 }
 
 function toDto(
@@ -154,6 +189,7 @@ function toDto(
   row: ProtectionRow | undefined,
   template: CcThresholds,
   platform: ProtectionSettings,
+  providers: ProviderViews,
 ): SiteProtection {
   const cc = savedCc(row, template);
   return {
@@ -171,6 +207,8 @@ function toDto(
     allowVerifiedBots: row?.allowVerifiedBots ?? false,
     challengeText: savedText(row),
     failureBan: savedFailureBan(row),
+    interactiveProvider: providerChoice(row),
+    ...providers,
     platformUnderAttack: platform.underAttack,
     updatedAt: row?.updatedAt.toISOString() ?? null,
   };
@@ -192,6 +230,7 @@ export async function getSiteProtection(db: Database, siteId: string): Promise<S
     await protectionRow(db, siteId),
     await getCcTemplate(db),
     await getProtectionSettings(db),
+    await providerViews(db, siteId),
   );
 }
 
@@ -203,13 +242,14 @@ export async function getSiteProtection(db: Database, siteId: string): Promise<S
 export async function updateSiteProtection(
   db: Database,
   input: SiteProtectionUpdateInput,
-  ctx: { actor: Actor },
+  ctx: { actor: Actor; masterKey?: MasterKey },
 ): Promise<SiteProtection> {
   return db.transaction(async (tx) => {
     const site = await findSite(tx, input.id, true);
     const template = await getCcTemplate(tx);
     const row = await protectionRow(tx, site.id, true);
-    const before = toDto(site.id, row, template, PROTECTION_SETTINGS_DEFAULTS);
+    const providersBefore = await providerViews(tx, site.id);
+    const before = toDto(site.id, row, template, PROTECTION_SETTINGS_DEFAULTS, providersBefore);
     const next = {
       underAttack: input.underAttack ?? before.underAttack,
       underAttackChallenge: input.underAttackChallenge ?? before.underAttackChallenge,
@@ -223,7 +263,15 @@ export async function updateSiteProtection(
       failureBanEnabled: (input.failureBan ?? before.failureBan).enabled,
       failureThreshold: (input.failureBan ?? before.failureBan).threshold,
       failureBanSeconds: (input.failureBan ?? before.failureBan).banSeconds,
+      interactiveProvider: input.interactiveProvider ?? before.interactiveProvider,
     };
+    const provider = input.provider
+      ? await saveProvider(tx, ctx.masterKey, site.id, input.provider)
+      : providersBefore.provider;
+    if (next.interactiveProvider === "site" && provider.kind !== "builtin" && !provider.secretSet)
+      fail("CHALLENGE_PROVIDER_SECRET_REQUIRED", "the site's provider has no secret", {
+        fields: CHALLENGE_PROVIDER_SECRETS[provider.kind].join(", "),
+      });
     if (next.powHighDifficulty < next.powDifficulty)
       fail(
         "PROTECTION_POW_DIFFICULTY",
@@ -241,14 +289,19 @@ export async function updateSiteProtection(
     // The operator saved the switch: an automatic mitigation holding it lets go.
     if (input.underAttack !== undefined)
       await noteOperatorUnderAttack(tx, site.id, next.underAttack);
-    const after = toDto(site.id, saved, template, PROTECTION_SETTINGS_DEFAULTS);
+    const after = toDto(site.id, saved, template, PROTECTION_SETTINGS_DEFAULTS, {
+      provider,
+      globalProvider: providersBefore.globalProvider,
+    });
     const strip = ({
       siteId: _s,
       platformUnderAttack: _p,
       updatedAt: _u,
       ccTemplate: _t,
+      globalProvider: _g,
+      provider: p,
       ...rest
-    }: SiteProtection) => rest;
+    }: SiteProtection) => ({ ...rest, provider: auditedProvider(p) });
     await publishSiteChange(tx, ctx.actor, site, {
       reason: "site_protection_updated",
       action: "site.protection_update",
@@ -258,36 +311,70 @@ export async function updateSiteProtection(
   });
 }
 
+/** The platform protection with the global interactive provider. */
+export async function getProtectionSettingsView(db: Executor): Promise<ProtectionSettingsView> {
+  return {
+    ...(await getProtectionSettings(db)),
+    provider: providerView(await providerRow(db, null)),
+  };
+}
+
 /**
  * Saves the platform protection. A change of Under Attack publishes every
  * cluster and may require challenge-v1 across clusters (the capability gate
- * of platform rules).
+ * of platform rules); a new global interactive provider publishes the clusters
+ * with sites that use it.
  */
 export async function setProtectionSettings(
   db: Database,
-  input: ProtectionSettings,
+  input: ProtectionSettingsInput,
   actor: Actor,
-): Promise<ProtectionSettings> {
+  masterKey?: MasterKey,
+): Promise<ProtectionSettingsView> {
   return db.transaction(async (tx) => {
     await lockProtectionSettings(tx);
     const before = await getProtectionSettings(tx);
-    return protectionSetting.write(tx, actor, input, {
+    const { provider: providerInput, ...settings } = input;
+    const providerBefore = providerView(await providerRow(tx, null, true));
+    const provider = providerInput
+      ? await saveProvider(tx, masterKey, null, providerInput)
+      : providerBefore;
+    const providerChanged =
+      JSON.stringify(auditedProvider(provider)) !==
+        JSON.stringify(auditedProvider(providerBefore)) ||
+      provider.updatedAt !== providerBefore.updatedAt;
+    const saved = await protectionSetting.write(tx, actor, settings as ProtectionSettings, {
       before,
       afterWrite: async () => {
-        if (
-          before.underAttack !== input.underAttack ||
-          (input.underAttack && before.underAttackChallenge !== input.underAttackChallenge)
-        )
+        const all =
+          before.underAttack !== settings.underAttack ||
+          (settings.underAttack && before.underAttackChallenge !== settings.underAttackChallenge);
+        const clusters = all
+          ? await tx.select({ id: schema.cluster.id }).from(schema.cluster)
+          : providerChanged
+            ? await tx
+                .selectDistinct({ id: schema.site.clusterId })
+                .from(schema.site)
+                .leftJoin(schema.siteProtection, eq(schema.siteProtection.siteId, schema.site.id))
+                .where(
+                  sql`coalesce(${schema.siteProtection.interactiveProvider}, 'global') = 'global'`,
+                )
+            : [];
+        if (clusters.length)
           await publishClusters(
             tx,
-            (await tx.select({ id: schema.cluster.id }).from(schema.cluster)).map((c) => c.id),
+            clusters.map((c) => c.id),
             {
               reason: { code: "platform_protection_updated", params: {} },
               actor,
             },
           );
+        return providerChanged
+          ? { provider: { from: auditedProvider(providerBefore), to: auditedProvider(provider) } }
+          : {};
       },
     });
+    return { ...saved, provider };
   });
 }
 

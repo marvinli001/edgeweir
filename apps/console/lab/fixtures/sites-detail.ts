@@ -14,6 +14,7 @@ import {
   type CcThresholds,
   type CertificateDto,
   CHALLENGE_PRESETS,
+  CHALLENGE_PROVIDER_DEFAULTS,
   CHALLENGE_TEXT_DEFAULTS,
   DEFAULT_COMPRESSION_TYPES,
   FAILURE_BAN_DEFAULTS,
@@ -42,7 +43,7 @@ import {
   type WafTopRules,
 } from "@edgeweir/contract";
 import type * as z from "zod";
-import { ccTemplate, certificates, siteCertificateId } from "./access";
+import { ccTemplate, certificates, globalProvider, siteCertificateId } from "./access";
 import { type Fixtures, notFound, ok } from "./define";
 import { infraFixtures } from "./infra";
 import { NETWORKS, trafficOf } from "./traffic";
@@ -794,6 +795,9 @@ function protectionOf(site: Site): SiteProtection {
     allowVerifiedBots: false,
     challengeText: CHALLENGE_TEXT_DEFAULTS,
     failureBan: { enabled: false, ...FAILURE_BAN_DEFAULTS },
+    interactiveProvider: "global",
+    provider: CHALLENGE_PROVIDER_DEFAULTS,
+    globalProvider,
     platformUnderAttack: false,
     updatedAt: null,
   };
@@ -812,6 +816,16 @@ function protectionOf(site: Site): SiteProtection {
           hintEn: "",
         },
         failureBan: { enabled: true, threshold: 8, banSeconds: 1_800 },
+        // Its own Turnstile widget, secret saved.
+        underAttackChallenge: "managed",
+        interactiveProvider: "site",
+        provider: {
+          ...CHALLENGE_PROVIDER_DEFAULTS,
+          kind: "turnstile",
+          siteKey: "0x4AAAAAAABkMYinukE8nzY",
+          secretSet: true,
+          updatedAt: ago(2 * DAY),
+        },
         updatedAt: ago(9 * HOUR),
       };
     case "example.com":
@@ -838,6 +852,7 @@ function protectionOf(site: Site): SiteProtection {
         underAttack: true,
         underAttackChallenge: "pow",
         ...CHALLENGE_PRESETS.strict,
+        interactiveProvider: "builtin",
         cc: withCc(CC_PRESETS.strict, true, false),
         effectiveCc: CC_PRESETS.strict,
         logJa4: true,

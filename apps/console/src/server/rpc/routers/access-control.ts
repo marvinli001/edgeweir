@@ -94,7 +94,10 @@ export const accessControlRouter = {
       getSiteProtection(context.app.db, input.id),
     ),
     update: authed.protection.update.handler(({ input, context }) =>
-      updateSiteProtection(context.app.db, input, { actor: context.actor }),
+      updateSiteProtection(context.app.db, input, {
+        actor: context.actor,
+        masterKey: context.app.masterKey,
+      }),
     ),
   },
   waf: {

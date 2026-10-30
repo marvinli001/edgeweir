@@ -23,4 +23,12 @@ export const statsDimensionColumns = () => ({
    * `<origin id>:<field>` (ORIGIN_STATS_FIELDS), at most 64 origins.
    */
   originStats: jsonb("origin_stats").$type<Record<string, number>>().notNull().default({}),
+  /**
+   * Challenges by kind and outcome (challenge-v3): counters keyed `<kind>:<outcome>`
+   * (CHALLENGE_OUTCOME_KINDS, CHALLENGE_OUTCOMES).
+   */
+  challengeOutcomes: jsonb("challenge_outcomes")
+    .$type<Record<string, number>>()
+    .notNull()
+    .default({}),
 });

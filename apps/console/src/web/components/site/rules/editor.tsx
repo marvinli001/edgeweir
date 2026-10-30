@@ -48,6 +48,7 @@ function UnavailableNote({ features }: { features?: SiteFeatures }) {
       ["rules-waf-v2", features.wafV2],
       ["rules-body", features.rulesBody],
       ["rules-challenge-v2", features.challengeV2],
+      ["rules-challenge-v3", features.challengeV3],
     ] as const
   ).find(([, availability]) => !availability.available);
   return missing ? (

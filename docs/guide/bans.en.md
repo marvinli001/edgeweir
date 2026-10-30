@@ -123,7 +123,7 @@ Greylisted addresses are not refused: they are challenged or rate-limited until 
 2. Pick the "Scope" ("Site" or "Global"); for a site entry, pick the site.
 3. Fill in "IP or CIDR".
 4. Pick the "Action":
-   - "Challenge" (default): pick the "Challenge" ("Cookie redirect", "JavaScript" (default), "Proof of work", "Image captcha"). Requests without a pass of that level get the challenge first.
+   - "Challenge" (default): pick the "Challenge" ("Cookie redirect", "JavaScript" (default), "Non-interactive challenge", "Interactive challenge"). Requests without a pass of that level get the challenge first.
    - "Rate limit": fill in "Requests" (default 60) and "Window (seconds)" (default 60). Each client (an IPv4 address, the IPv6 `/64`) may send that many requests per window on each node; above it the node answers 429 with `Retry-After` and `X-Edgeweir-Error: ip-greylisted`.
 5. Pick the "Reason" and "Duration" and click "Add".
 

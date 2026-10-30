@@ -19,6 +19,8 @@ export {
   type ActionIr,
   actionPhases,
   type ChallengeType,
+  challengeActionKinds,
+  challengeKinds,
   challengeTypes,
   compressionCodings,
   crsOverrides,

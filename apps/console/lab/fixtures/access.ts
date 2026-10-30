@@ -13,11 +13,13 @@ import {
   type CacheTaskType,
   type CcThresholds,
   type CertificateDto,
+  CHALLENGE_PROVIDER_DEFAULTS,
+  type ChallengeProvider,
   cidrsOverlap,
   type IpListDto,
   type Node,
   type PrefetchVariant,
-  type ProtectionSettings,
+  type ProtectionSettingsView,
   parseBanCidr,
   parseCidr,
   type Site,
@@ -923,10 +925,19 @@ export const bans: Ban[] = (() => {
 // Settings
 
 const banSettings: BanSettings = { maxTotal: 20_000, shareAutoBans: true };
-const protectionSettings: ProtectionSettings = {
+/** The global interactive provider: Tencent Cloud Captcha with its secrets saved. */
+export const globalProvider: ChallengeProvider = {
+  ...CHALLENGE_PROVIDER_DEFAULTS,
+  kind: "tencent",
+  siteKey: "190012345",
+  secretSet: true,
+  updatedAt: ago(6 * DAY),
+};
+const protectionSettings: ProtectionSettingsView = {
   underAttack: false,
-  underAttackChallenge: "pow",
+  underAttackChallenge: "managed",
   eventRetentionDays: 90,
+  provider: globalProvider,
 };
 
 // ---------------------------------------------------------------------------------------------

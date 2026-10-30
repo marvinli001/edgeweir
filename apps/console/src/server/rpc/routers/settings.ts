@@ -17,7 +17,7 @@ import { getOriginAllowList, setOriginAllowList } from "../../services/origin-al
 import { getProbeSettings, setProbeSettings } from "../../services/probes";
 import {
   getCcTemplate,
-  getProtectionSettings,
+  getProtectionSettingsView,
   setCcTemplate,
   setProtectionSettings,
 } from "../../services/protection";
@@ -73,10 +73,10 @@ export const settingsRouter = {
       setBanSettings(context.app.db, input, context.actor),
     ),
     protection: authed.settings.protection.handler(({ context }) =>
-      getProtectionSettings(context.app.db),
+      getProtectionSettingsView(context.app.db),
     ),
     setProtection: authed.settings.setProtection.handler(({ input, context }) =>
-      setProtectionSettings(context.app.db, input, context.actor),
+      setProtectionSettings(context.app.db, input, context.actor, context.app.masterKey),
     ),
     ccTemplate: authed.settings.ccTemplate.handler(({ context }) => getCcTemplate(context.app.db)),
     setCcTemplate: authed.settings.setCcTemplate.handler(({ input, context }) =>

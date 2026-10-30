@@ -25,7 +25,18 @@ export const kinds: Record<Phase, readonly Kind[]> = {
   "request-transform": ["rewrite", "request_header"],
   redirect: ["redirect"],
   config: ["config"],
-  "waf-custom": ["block", "log", "allow", "challenge", "ban", "respond", "close", "skip"],
+  "waf-custom": [
+    "block",
+    "log",
+    "allow",
+    "managed_challenge",
+    "js_challenge",
+    "challenge",
+    "ban",
+    "respond",
+    "close",
+    "skip",
+  ],
   ratelimit: ["rate_limit"],
   cache: ["config"],
   origin: ["request_header", "origin"],
@@ -40,6 +51,8 @@ export const actionLabel = (kind: Kind) =>
     log: m.rules_log,
     allow: m.rules_allow,
     challenge: m.rules_challenge,
+    managed_challenge: m.rules_managed_challenge,
+    js_challenge: m.rules_js_challenge,
     redirect: m.rules_redirect,
     rewrite: m.rules_rewrite,
     request_header: m.rules_request_header,
@@ -102,18 +115,21 @@ const actionFieldLabels: Record<string, () => string> = {
 export const ContentLock = React.createContext(false);
 /**
  * What the site's cluster lacks of G14 (waf-v2 actions and settings, rules-body-v1 body fields,
- * challenge-v2 crawler fields), and whether these are platform rules (only they ban everywhere).
+ * challenge-v2 crawler fields) and of challenge-v3 (the managed challenge), and whether these are
+ * platform rules (only they ban everywhere).
  */
 interface Locks {
   wafV2: boolean;
   body: boolean;
   bot: boolean;
+  managed: boolean;
   platform: boolean;
 }
 export const LocksContext = React.createContext<Locks>({
   wafV2: false,
   body: false,
   bot: false,
+  managed: false,
   platform: false,
 });
 /** The label of the field an issue of `row` points at. */
@@ -148,6 +164,6 @@ export function ruleIssueText(row: RuleDto, issue: z.core.$ZodIssue | undefined)
 }
 
 export type SiteFeatures = Record<
-  "rulesV2" | "rulesV3" | "siteContent" | "wafV2" | "rulesBody" | "challengeV2",
+  "rulesV2" | "rulesV3" | "siteContent" | "wafV2" | "rulesBody" | "challengeV2" | "challengeV3",
   FeatureAvailability
 >;

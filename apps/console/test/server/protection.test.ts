@@ -1,5 +1,10 @@
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
-import { CC_PRESETS, CHALLENGE_PRESETS, ruleInput } from "@edgeweir/contract";
+import {
+  CC_PRESETS,
+  CHALLENGE_PRESETS,
+  CHALLENGE_PROVIDER_DEFAULTS,
+  ruleInput,
+} from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -338,6 +343,7 @@ describe("site protection, platform protection and challenge keys", async () => 
       underAttack: false,
       underAttackChallenge: "js",
       eventRetentionDays: 30,
+      provider: CHALLENGE_PROVIDER_DEFAULTS,
     });
     const saved = await admin.settings.setProtection({
       underAttack: true,
