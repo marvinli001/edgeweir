@@ -42,4 +42,5 @@ ALTER TABLE "node" ADD COLUMN "extension_status" jsonb DEFAULT '[]'::jsonb NOT N
 ALTER TABLE "extension_version" ADD CONSTRAINT "extension_version_extension_id_extension_id_fk" FOREIGN KEY ("extension_id") REFERENCES "public"."extension"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "site_extension" ADD CONSTRAINT "site_extension_site_id_site_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."site"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "site_extension" ADD CONSTRAINT "site_extension_extension_id_extension_id_fk" FOREIGN KEY ("extension_id") REFERENCES "public"."extension"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE UNIQUE INDEX "extension_version_sha256_idx" ON "extension_version" USING btree ("sha256");
+CREATE UNIQUE INDEX "extension_version_sha256_idx" ON "extension_version" USING btree ("sha256");--> statement-breakpoint
+ALTER TABLE "access_log" ADD COLUMN "ext" jsonb DEFAULT '{}'::jsonb NOT NULL;

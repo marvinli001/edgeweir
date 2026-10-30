@@ -578,6 +578,18 @@ function details(
       )),
     );
   if (row.peerIp) add("peer", m.logs_field_peer(), "log-peer-ip", row.peerIp);
+  const ext = headerLines(row.ext ?? {});
+  if (ext.length)
+    add(
+      "ext",
+      m.logs_field_ext(),
+      "log-ext",
+      ext.map((line) => (
+        <span key={line} className="block">
+          {line}
+        </span>
+      )),
+    );
   return rows;
 }
 

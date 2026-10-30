@@ -3092,6 +3092,7 @@
   "logs_field_content_type": "Content type",
   "logs_field_query": "Query string",
   "logs_field_headers": "Request headers",
+  "logs_field_ext": "Extensions",
   "logs_field_peer": "Peer address",
   "block_reason_any": "Any reason",
   "block_reason_ip_banned": "IP banned",

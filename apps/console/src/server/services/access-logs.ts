@@ -55,6 +55,18 @@ const UPSTREAM_RE = /^[A-Za-z0-9._:[\]/@-]{1,128}$/;
 const MEDIA_TYPE_RE = /^[a-z0-9!#$&^_.+-]{1,63}\/[a-z0-9!#$&^_.+-]{1,63}$/;
 const COUNTRY_RE = /^[A-Z]{2}$/;
 const clean = (v: string, n: number) => v.replace(/\p{Cc}/gu, "").slice(0, n);
+const EXTENSION_LOG_FIELD = /^ext\.[a-z][a-z0-9-]{1,38}[a-z0-9]\.[a-z][a-z0-9_]{0,31}$/;
+
+/** Node extensions' log fields and verdicts: valid names only, the first 32 by name, values cut at 256. */
+function extensionLogFields(fields: Record<string, string> | undefined) {
+  const out: Record<string, string> = {};
+  for (const name of Object.keys(fields ?? {}).sort()) {
+    if (Object.keys(out).length >= 32) break;
+    const value = fields?.[name];
+    if (EXTENSION_LOG_FIELD.test(name) && typeof value === "string") out[name] = clean(value, 256);
+  }
+  return out;
+}
 
 /** System setting: days access logs are kept, per storage (ADR-0041 §5). */
 const retentionSetting = defineSetting({
@@ -261,6 +273,7 @@ export async function ingestLogs(
         query: policy.query ? clean(l.query, 2048) : "",
         headers,
         peerIp: policy.peer && isIP(l.peerIp) && l.peerIp !== l.clientIp ? l.peerIp : "",
+        ext: extensionLogFields(l.ext),
       },
     ];
   });
@@ -492,6 +505,7 @@ export function logsCsv(entries: LogEntry[]) {
     "query",
     "headers",
     "peerIp",
+    "ext",
   ] as const;
   const cell = (value: unknown) => {
     let text = Array.isArray(value)

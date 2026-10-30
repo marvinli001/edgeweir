@@ -867,6 +867,27 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
 
 See [Access logs and access keys](../guide/access-logs.en.md) and [System settings](../guide/system.en.md#access-logs).
 
+### Node extensions
+
+| Procedure | Endpoint |
+| --- | --- |
+| `extensionKeys.list`, `extensionKeys.add`, `extensionKeys.remove` | `GET`, `POST /extension-keys`, `DELETE /extension-keys/{kid}` |
+| `extensions.verify` | `POST /extensions/verify` |
+| `extensions.install` | `POST /extensions` |
+| `extensions.list`, `extensions.get`, `extensions.update`, `extensions.uninstall` | `GET /extensions`, `GET`, `PATCH`, `DELETE /extensions/{id}` |
+| `extensions.activate`, `extensions.deleteVersion` | `POST /extensions/{id}/activate`, `DELETE /extensions/{id}/versions/{version}` |
+| `extensions.settings`, `extensions.updateSettings` | `GET`, `PUT /extensions/settings` (kill switch) |
+| `extensions.forSite`, `extensions.updateSite` | `GET /sites/{siteId}/extensions`, `PUT /sites/{siteId}/extensions/{id}` |
+
+| Request | Fields |
+| --- | --- |
+| `POST /extension-keys` | `publisher`, `key` (public JWK JSON or its base64url `x`), `label` |
+| `POST /extensions/verify`, `POST /extensions` | `package` (the `.ewx` bytes, base64), `signature` (the `.ewx.sig` compact JWS) |
+| `PATCH /extensions/{id}` | `enabled`, `failureMode` (`open`, `closed`), `config` (the manifest's global schema) |
+| `PUT /sites/{siteId}/extensions/{id}` | `enabled`, `config` (the manifest's site schema) |
+
+Errors: `EXTENSION_PACKAGE_INVALID`, `EXTENSION_SIGNATURE_INVALID`, `EXTENSION_KEY_UNTRUSTED`, `EXTENSION_PUBLISHER_MISMATCH`, `EXTENSION_CONFIG_INVALID`, `EXTENSION_IN_USE` (rules read its fields), `EXTENSION_KEY_IN_USE`, `EXTENSION_VERSION_ACTIVE`, `NODE_CAPABILITY_REQUIRED` (`extensions-v1`). Configuration values marked `x-secret` come back masked; sending the mask keeps the stored value. Access logs carry block reason `extension` with rule id `ext:<id>` and the field `ext` (the extensions' log fields and verdicts). Format and runtime: [Node extensions](extensions.en.md); usage: [Extensions](../guide/extensions.en.md).
+
 ### Site tags, batch operations, copying settings and cloning
 
 | Procedure | Endpoint | Notes |

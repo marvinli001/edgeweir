@@ -68,6 +68,8 @@ export const accessLog = pgTable(
     query: text("query").notNull().default(""),
     headers: jsonb("headers").$type<Record<string, string>>().notNull().default({}),
     peerIp: text("peer_ip").notNull().default(""),
+    /** Node extensions' log fields and verdicts ("ext.<id>.<name>", extensions-v1). */
+    ext: jsonb("ext").$type<Record<string, string>>().notNull().default({}),
   },
   (t) => [
     primaryKey({ columns: [t.time, t.id] }),

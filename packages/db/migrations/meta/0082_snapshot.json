@@ -9065,6 +9065,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "''"
+        },
+        "ext": {
+          "name": "ext",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
         }
       },
       "indexes": {

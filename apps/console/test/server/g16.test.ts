@@ -224,6 +224,11 @@ describe("access logs and statistics dimensions (G16)", async () => {
             headers: { "x-trace-id": "abc-1", "user-agent": "dropped", "accept-language": "de" },
             peerIp: "198.51.100.2",
             requestId: "req-fields",
+            ext: {
+              "ext.hello-header.greeting": `hi${"x".repeat(300)}`,
+              "ext.hello-header.verdict": "deny",
+              "not-an-extension": "dropped",
+            },
           }),
           line({
             requestId: "req-cleaned",
@@ -259,6 +264,7 @@ describe("access logs and statistics dimensions (G16)", async () => {
         query: "q=shoes&page=2",
         headers: { "x-trace-id": "abc-1", "accept-language": "de" },
         peerIp: "198.51.100.2",
+        ext: { "ext.hello-header.greeting": `hi${"x".repeat(254)}`, "ext.hello-header.verdict": "deny" },
       });
       expect(entries[0]?.userAgent).toHaveLength(512);
       expect(entries[0]?.userAgent).not.toContain("\u0007");
@@ -278,6 +284,17 @@ describe("access logs and statistics dimensions (G16)", async () => {
         blockRuleId: "",
         peerIp: "",
       });
+      // A node extension's deny verdict keeps its rule id ext:<id>.
+      await ingest([
+        line({ requestId: "req-ext", blockReason: "extension", blockRuleId: "ext:hello-header" }),
+        line({ requestId: "req-ext-bad", blockReason: "extension", blockRuleId: "ext:Hello" }),
+      ]);
+      expect(
+        (await admin.logs.query({ siteId, ...window(), requestId: "req-ext" })).entries[0],
+      ).toMatchObject({ blockReason: "extension", blockRuleId: "ext:hello-header" });
+      expect(
+        (await admin.logs.query({ siteId, ...window(), requestId: "req-ext-bad" })).entries[0],
+      ).toMatchObject({ blockReason: "extension", blockRuleId: "" });
       // Turned off: later lines drop the query string, headers and peer.
       await admin.logs.configure({
         siteId,
@@ -461,6 +478,7 @@ describe("access logs and statistics dimensions (G16)", async () => {
         "query",
         "headers",
         "peerIp",
+        "ext",
       ]);
       const cells = row?.slice(1, -1).split('","') ?? [];
       expect(cells[columns.indexOf("headers")]).toBe("x-trace-id: abc-1; accept-language: de");

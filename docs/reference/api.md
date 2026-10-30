@@ -867,6 +867,27 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
 
 行为见[访问日志与 AccessKey](../guide/access-logs.md) 与[系统设置](../guide/system.md#访问日志)。
 
+### 节点扩展
+
+| 过程 | 端点 |
+| --- | --- |
+| `extensionKeys.list`、`extensionKeys.add`、`extensionKeys.remove` | `GET`、`POST /extension-keys`，`DELETE /extension-keys/{kid}` |
+| `extensions.verify` | `POST /extensions/verify` |
+| `extensions.install` | `POST /extensions` |
+| `extensions.list`、`extensions.get`、`extensions.update`、`extensions.uninstall` | `GET /extensions`，`GET`、`PATCH`、`DELETE /extensions/{id}` |
+| `extensions.activate`、`extensions.deleteVersion` | `POST /extensions/{id}/activate`，`DELETE /extensions/{id}/versions/{version}` |
+| `extensions.settings`、`extensions.updateSettings` | `GET`、`PUT /extensions/settings`（总开关） |
+| `extensions.forSite`、`extensions.updateSite` | `GET /sites/{siteId}/extensions`，`PUT /sites/{siteId}/extensions/{id}` |
+
+| 请求 | 字段 |
+| --- | --- |
+| `POST /extension-keys` | `publisher`、`key`（公钥 JWK JSON 或其 base64url `x`）、`label` |
+| `POST /extensions/verify`、`POST /extensions` | `package`（`.ewx` 字节，base64）、`signature`（`.ewx.sig` 紧凑 JWS） |
+| `PATCH /extensions/{id}` | `enabled`、`failureMode`（`open`、`closed`）、`config`（清单的全局配置模式） |
+| `PUT /sites/{siteId}/extensions/{id}` | `enabled`、`config`（清单的网站配置模式） |
+
+错误：`EXTENSION_PACKAGE_INVALID`、`EXTENSION_SIGNATURE_INVALID`、`EXTENSION_KEY_UNTRUSTED`、`EXTENSION_PUBLISHER_MISMATCH`、`EXTENSION_CONFIG_INVALID`、`EXTENSION_IN_USE`（有规则读取其字段）、`EXTENSION_KEY_IN_USE`、`EXTENSION_VERSION_ACTIVE`、`NODE_CAPABILITY_REQUIRED`（`extensions-v1`）。标记为 `x-secret` 的配置值返回时打码，原样提交打码值即保留已存的值。访问日志带拦截原因 `extension`、规则 id `ext:<id>`，以及字段 `ext`（扩展的日志字段与裁决）。格式与运行时：[节点扩展](extensions.md)；使用：[扩展](../guide/extensions.md)。
+
 ### 网站标签、批量操作、复制设置与克隆
 
 | 过程 | 端点 | 说明 |

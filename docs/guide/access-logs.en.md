@@ -138,6 +138,7 @@ Access logs need the node capability `access-logs-v1`, JA4 also `ja4-v1`, forced
 | `websocket_origin` | WebSocket origin | The WebSocket Origin is not allowed |
 | `client_cert` | Client certificate | The site requires a client certificate |
 | `maintenance` | Maintenance mode | Maintenance mode |
+| `extension` | Extension | A node extension's verdict (rule `ext:<id>`), or 503 while an extension that fails closed cannot run ([Extensions](extensions.en.md)) |
 
 Nodes record the reason where they refuse; reasons match the error codes of error pages (`ip-banned`, `ip-blocked`, `policy-denied`, `waf-blocked`, `geo-denied`, `hotlink-denied`, `ua-denied`, `cors-origin-denied`, `websocket-origin-denied`, `client-cert-required`, `maintenance`, `auth-*`). A forced HTTPS answer without a certificate (503), WebSocket turned off, an oversized body and unknown hosts are not blocks.
 
@@ -157,7 +158,7 @@ Nodes record the reason where they refuse; reasons match the error codes of erro
 
    The toast that follows links to the bans, the purge tasks or the CRS settings.
 
-Rows with a block reason show its badge under the request (grey for challenges, red otherwise) with the rule name (deleted rules by id). A click anywhere in the row (or on the arrow before the request) opens the details: User-Agent, Referer, protocol, country, network, origin, request bytes, content type, query string, request headers and peer address; empty fields are left out.
+Rows with a block reason show its badge under the request (grey for challenges, red otherwise) with the rule name (deleted rules by id). A click anywhere in the row (or on the arrow before the request) opens the details: User-Agent, Referer, protocol, country, network, origin, request bytes, content type, query string, request headers, peer address and the node extensions' log fields and verdicts; empty fields are left out.
 
 | Item | Behavior |
 | --- | --- |

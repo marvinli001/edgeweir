@@ -166,6 +166,8 @@ export const logEntry = z.object({
   headers: z.record(z.string(), z.string()).default({}),
   /** The connection's peer when it differs from clientIp, while the site records it. */
   peerIp: z.string().default(""),
+  /** Node extensions' log fields and verdicts ("ext.<id>.<name>" → value). */
+  ext: z.record(z.string(), z.string()).default({}),
 });
 export type LogEntry = z.infer<typeof logEntry>;
 
