@@ -1500,8 +1500,8 @@ pass "the installed agent ($NODE_VERSION) runs as the edgeweir user, is online o
 # then retries that host with the right one and installs the latest signed
 # edgeweir-node release (GitHub, full cosign verification; the console's
 # mirror is tried first and has no such version) as a sudo user with a
-# password. With the stack's own edgeweir-node build on the host (when it is
-# 1.7.0 or later: enroll --if-not-enrolled, decommission-v1, ADR-0067) a new
+# password. With the stack's own edgeweir-node build on the host (1.7.0 or
+# later: enroll --if-not-enrolled, decommission-v1, ADR-0067) a new
 # run on the enrolled host keeps its node, and a decommission retires it
 # without SSH. Needs github.com and api.github.com.
 section_ssh_install() {
@@ -1635,7 +1635,7 @@ else
 fi
 docker cp "$binary" "$SSH_CONTAINER:/tmp/edgeweir-node-new" >/dev/null
 if ! in_ssh '/tmp/edgeweir-node-new enroll -h 2>&1 | grep -q -- -if-not-enrolled'; then
-  echo "skipped: the stack's edgeweir-node has no enroll --if-not-enrolled (edgeweir-node 1.7.0 and later)"
+  fail "SSH lifecycle checks require edgeweir-node 1.7.0 or later with enroll --if-not-enrolled"
 else
   # The 1.7.0 package's unit as well (RestartPreventExitStatus=2 3, SuccessExitStatus=3): with the
   # installed release's unit a decommissioned node is restarted.
