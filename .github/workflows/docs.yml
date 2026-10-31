@@ -30,7 +30,7 @@ concurrency:
 jobs:
   build:
     name: build site
-    runs-on: ubuntu-latest
+    runs-on: instabox-medium
     defaults:
       run:
         working-directory: doc
@@ -58,7 +58,7 @@ jobs:
     name: deploy to GitHub Pages
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: instabox-medium
     permissions:
       pages: write
       id-token: write

@@ -15,7 +15,7 @@ concurrency:
 jobs:
   checks:
     name: lint · typecheck · test · build
-    runs-on: ubuntu-latest
+    runs-on: instabox-medium
     services:
       # Tests of concurrent transactions (PGlite runs one at a time).
       postgres:
@@ -52,7 +52,7 @@ jobs:
 
   certd:
     name: edgeweir-certd (Go)
-    runs-on: ubuntu-latest
+    runs-on: instabox-medium
     defaults:
       run:
         working-directory: helpers/certd
@@ -66,7 +66,7 @@ jobs:
 
   image:
     name: build image
-    runs-on: ubuntu-latest
+    runs-on: instabox-medium
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: version
@@ -85,7 +85,7 @@ jobs:
 
   e2e:
     name: end-to-end (compose.e2e.yml)
-    runs-on: ubuntu-latest
+    runs-on: instabox-medium
     needs: checks
     env:
       EDGEWEIR_NODE_CONTEXT: ./edgeweir-node

@@ -22,7 +22,7 @@ concurrency:
 jobs:
   stable:
     if: github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
+    runs-on: instabox-medium
     permissions:
       contents: read
       packages: write
