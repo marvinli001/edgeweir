@@ -283,6 +283,14 @@
 #   logged; client-a signs in; `recover.js --clear-login-allowlist` lets the
 #   host sign in again and signs the old session out; Playwright
 #   e2e/allowlist.spec.ts (the card, the sign-in page's reason).
+#   MCP over OAuth (scripts/e2e-mcp.mjs, ADR-0076): off answers 404; the
+#   401 challenge and both metadata documents; dynamic registration, authorize
+#   to /login, the sign-in resuming to /oauth/consent, read+write consent,
+#   code + PKCE for opaque tokens; initialize, tools/list, get_overview, a
+#   purge audited as the MCP client, accessKeys hidden, refresh rotation; a
+#   read grant refused a purge with 403 insufficient_scope; revoke makes the
+#   token 401; Playwright e2e/mcp.spec.ts (system card, consent page,
+#   connected apps); --cleanup switches MCP off.
 #   Tiered cache (scripts/e2e-tiers.mjs, ADR-0073): three nodes in cluster
 #   tiers across regions tier-east and tier-west; the smart topology picks the
 #   upper tier by the measured round trip time and a fallback in the other
@@ -410,7 +418,7 @@ SECTIONS=(
   "pp:m6-upgrades"
   "g8:m6-upgrades" "g9:m6-upgrades" "g15:m6-upgrades" "g10:dns m5 m6-upgrades" "g11:m6-upgrades"
   "g12:m6-upgrades" "g13:m6-upgrades" "g14:m6-upgrades" "g16:m6-upgrades" "g17:m6-upgrades"
-  "g18:m6-upgrades" "g19:m6-upgrades" "g20:m6-upgrades" "probe-sources:" "usage-guard:m6-upgrades" "dev-mode:" "ai-crawl:" "tiers:" "allowlist:" "lifecycle:"
+  "g18:m6-upgrades" "g19:m6-upgrades" "g20:m6-upgrades" "probe-sources:" "usage-guard:m6-upgrades" "dev-mode:" "ai-crawl:" "tiers:" "allowlist:" "mcp:" "lifecycle:"
 )
 # Parallel lanes, "FIRST..LAST:SECTION ...": the SECTIONs run in a second
 # lane while the chain runs FIRST to LAST, and the chain waits for the lane
@@ -2064,6 +2072,13 @@ section_allowlist() {
 step "Login IP allow list: sign-in and sessions only from the list, AccessKeys and the demo account not limited, recover.js clears it"
 story allowlist --cleanup
 pass "Login IP allow list checks passed"
+}
+
+# ----------------------------------------------------------------- section mcp
+section_mcp() {
+step "MCP over OAuth: discovery, registration, sign-in resume, consent, tools as the MCP client, scopes, revoke"
+story mcp --cleanup
+pass "MCP checks passed"
 }
 
 # ----------------------------------------------------------- section lifecycle
