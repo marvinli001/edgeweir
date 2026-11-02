@@ -197,9 +197,7 @@ async function main() {
   const prm = await (await fetch(`${base}/.well-known/oauth-protected-resource/mcp`)).json();
   assert.equal(prm.resource, resource);
   assert.deepEqual(prm.authorization_servers, [`${base}/api/auth`]);
-  const as = await (
-    await fetch(`${base}/.well-known/oauth-authorization-server/api/auth`)
-  ).json();
+  const as = await (await fetch(`${base}/.well-known/oauth-authorization-server/api/auth`)).json();
   assert.equal(as.issuer, `${base}/api/auth`);
   assert.deepEqual(as.code_challenge_methods_supported, ["S256"]);
   assert.ok(as.registration_endpoint, "registration endpoint advertised");
@@ -216,7 +214,9 @@ async function main() {
     "edgeweir:write",
     "offline_access",
   ]);
-  pass(`client ${clientId.slice(0, 8)}… registered, sign-in resumed to consent, read+write granted`);
+  pass(
+    `client ${clientId.slice(0, 8)}… registered, sign-in resumed to consent, read+write granted`,
+  );
 
   // d. Tools.
   const token = write.tokens.access_token;
@@ -272,7 +272,10 @@ async function main() {
   assert.equal(denied.status, 403);
   assert.match(denied.response.headers.get("www-authenticate") ?? "", /insufficient_scope/);
   const { apps } = await rpc(base, cookie, "mcp/apps", {});
-  assert.ok(apps.some((app) => app.clientId === clientId && app.lastUsedAt), "write app listed");
+  assert.ok(
+    apps.some((app) => app.clientId === clientId && app.lastUsedAt),
+    "write app listed",
+  );
   await rpc(base, cookie, "mcp/revokeApp", { clientId });
   assert.equal((await mcp(rotated.access_token, "tools/list")).response.status, 401);
   pass("read grant refused a purge with 403 insufficient_scope; revoke made the token 401 at once");
