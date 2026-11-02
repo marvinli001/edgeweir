@@ -955,7 +955,7 @@ export const auditLog = pgTable(
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
-    /** user | api_key | service_account | node | probe | system */
+    /** user | api_key | service_account | oauth_client | node | probe | system */
     actorType: text("actor_type").notNull(),
     actorId: text("actor_id").notNull().default(""),
     /** Display name of the actor at the time of the action. */

@@ -638,6 +638,13 @@
       "when": 1793339303755,
       "tag": "0090_extension_secrets_data",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1793617167800,
+      "tag": "0091_oauth_mcp",
+      "breakpoints": true
     }
   ]
 }

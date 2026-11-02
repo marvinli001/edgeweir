@@ -9,6 +9,7 @@ export * from "./error-pages";
 export * from "./extensions";
 export * from "./l4";
 export * from "./logs";
+export * from "./oauth";
 export * from "./origin-pki";
 export * from "./probes";
 export * from "./protection";
