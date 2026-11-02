@@ -32,6 +32,15 @@ export const errorDefs = {
   /** The operator's account uses the demo account's e-mail. */
   DEMO_EMAIL_TAKEN: { status: 409, params: [] },
   SCOPE_REQUIRED: { status: 403, params: ["scope"] },
+  /** MCP is switched off (mcp.setSettings). */
+  MCP_DISABLED: { status: 404, params: [] },
+  /** MCP clients may not call this procedure (mcpProcedureAllowed). */
+  MCP_PROCEDURE_FORBIDDEN: { status: 403, params: [] },
+  /** The authorization request is unknown, expired or altered; the client has to start again. */
+  OAUTH_REQUEST_INVALID: { status: 400, params: [] },
+  /** Authorizing an MCP client takes a signed-in browser session. */
+  OAUTH_SESSION_REQUIRED: { status: 403, params: [] },
+  OAUTH_APP_NOT_FOUND: { status: 404, params: [] },
   SERVICE_ACCOUNT_FORBIDDEN: { status: 403, params: [] },
   SERVICE_ACCOUNT_NOT_FOUND: { status: 404, params: [] },
   SERVICE_ACCOUNT_KEY_NOT_FOUND: { status: 404, params: [] },

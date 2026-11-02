@@ -42,6 +42,7 @@ import { imageConvertContract } from "./image-convert";
 import { l4AppsContract, portPoolProcedures } from "./l4";
 import { loginAllowListProcedures } from "./login-allow-list";
 import { markdownContract } from "./markdown";
+import { mcpContract } from "./mcp";
 import { originCaContract, originCertificatesContract, originClientCaContract } from "./origin-pki";
 import { probeSourcesContract } from "./probe-sources";
 import {
@@ -709,6 +710,7 @@ export const contract = {
     /** The networks the operator may sign in from; empty: anyone may. */
     ...loginAllowListProcedures,
   },
+  mcp: mcpContract,
   auditLogs: {
     list: oc
       .route({ method: "GET", path: "/audit-logs", tags: ["audit"] })
@@ -740,6 +742,33 @@ export const oneTimeSecretProcedures: ReadonlySet<string> = new Set([
   "authRules.signUrl",
 ]);
 
+/**
+ * Procedure groups and procedures an MCP client (an OAuth token on /mcp) may not call, whatever
+ * its scope (ADR-0076): credentials shown once, AccessKeys, service accounts, the login allow
+ * list, OAuth grants and the MCP switch themselves, the demo switch and the extension trust keys.
+ * Everything else, including procedures added later, is reachable.
+ */
+const mcpForbiddenGroups: ReadonlySet<string> = new Set([
+  "accessKeys",
+  "serviceAccounts",
+  "mcp",
+  "extensionKeys",
+]);
+const mcpForbiddenProcedures: ReadonlySet<string> = new Set([
+  ...oneTimeSecretProcedures,
+  "settings.loginAllowList",
+  "settings.setLoginAllowList",
+  "settings.demo",
+  "settings.setDemo",
+  "system.setup",
+]);
+
+/** Whether MCP clients may call the procedure (dotted path, e.g. "sites.list"). */
+export function mcpProcedureAllowed(procedure: string): boolean {
+  const [group = ""] = procedure.split(".");
+  return !mcpForbiddenGroups.has(group) && !mcpForbiddenProcedures.has(procedure);
+}
+
 export * from "./access-keys";
 export * from "./alerts";
 export * from "./auto-mitigation";
@@ -750,6 +779,7 @@ export * from "./dns-providers";
 export * from "./edge";
 export * from "./l4";
 export * from "./login-allow-list";
+export * from "./mcp";
 export * from "./probe-sources";
 export * from "./probes";
 export * from "./service-accounts";
