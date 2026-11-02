@@ -76,11 +76,16 @@ oRPC 与 HTTP 层的代码，不在接口错误码表中。
 | `LOGIN_IP_NOT_ALLOWED` | 403 | — | 此 IP 不在登录白名单内 | 会话请求或 `/api/auth` 登录请求的客户端 IP 不在登录白名单内（AccessKey 不受限制） |
 | `LOGIN_ALLOW_LIST_EXCLUDES_CURRENT_IP` | 400 | `ip` | 名单不含当前 IP {ip}，保存后将无法登录 | 保存的登录白名单不包含调用方当前的 IP |
 | `DEMO_EMAIL_TAKEN` | 409 | — | 管理账号的邮箱与演示账号相同 | 开启演示账号时，运营者账户的邮箱与演示账号相同 |
-| `SCOPE_REQUIRED` | 403 | `scope` | 缺少权限范围：{scope} | 服务账号缺少过程所需的 scope |
+| `SCOPE_REQUIRED` | 403 | `scope` | 缺少权限范围：{scope} | 服务账号缺少过程所需的 scope；MCP 令牌缺少 `edgeweir:write` 时调用写操作 |
 | `SERVICE_ACCOUNT_FORBIDDEN` | 403 | — | 服务账号不能调用此接口 | 服务账号调用不在允许列表中的过程 |
 | `SERVICE_ACCOUNT_NOT_FOUND` | 404 | — | 服务账号不存在 | 服务账号不存在 |
 | `SERVICE_ACCOUNT_KEY_NOT_FOUND` | 404 | — | 密钥不存在 | 吊销的服务账号 key 不存在或不属于该账号 |
 | `SERVICE_ACCOUNT_NAME_TAKEN` | 409 | `name` | 服务账号名称已存在：{name} | 服务账号名称重复 |
+| `MCP_DISABLED` | 404 | — | MCP 已关闭 | 关闭 MCP 时处理授权请求；`/mcp` 与 OAuth 端点此时直接回答 404 |
+| `MCP_PROCEDURE_FORBIDDEN` | 403 | — | MCP 客户端不可使用此操作 | MCP 客户端调用密钥、服务账号、MCP 设置、登录白名单、演示账号或初始化的过程 |
+| `OAUTH_REQUEST_INVALID` | 400 | — | 授权请求无效或已过期 | 授权页的请求签名无效、已过期，或客户端已不存在 |
+| `OAUTH_SESSION_REQUIRED` | 403 | — | 请先登录再处理授权请求 | 用 AccessKey、服务账号或 MCP 令牌调用 `mcp.consentRequest` 或 `mcp.consent` |
+| `OAUTH_APP_NOT_FOUND` | 404 | — | 没有该已连接应用 | 撤销的 MCP 客户端没有授权 |
 | `IDEMPOTENCY_KEY_INVALID` | 400 | — | Idempotency-Key 无效 | `Idempotency-Key` 不是 1–255 个可打印 ASCII 字符 |
 | `IDEMPOTENCY_KEY_MISMATCH` | 422 | — | 该 Idempotency-Key 已用于另一个请求 | 同一 `Idempotency-Key` 用于不同的方法、路径或请求体 |
 | `IDEMPOTENCY_IN_PROGRESS` | 409 | — | 同一 Idempotency-Key 的请求仍在处理中 | 同一 `Idempotency-Key` 的第一次请求仍在执行 |

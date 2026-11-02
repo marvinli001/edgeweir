@@ -10,7 +10,7 @@ Page: **System settings** (`/system`), with the tabs:
 
 | Tab | Content |
 | --- | --- |
-| **General** | The sections below, in page order: system information, node channel, origin allow list, node release source, certificate authorities, usage, access logs, node log retention, platform error pages, login IP allow list, demo account |
+| **General** | The sections below, in page order: system information, node channel, origin allow list, node release source, certificate authorities, usage, access logs, node log retention, platform error pages, login IP allow list, demo account, MCP server |
 | **Monitoring** | `/system?tab=probes`: the regional probe list (page action **Add probe**), the **Last round** card (a latency matrix of probers × nodes) and the **Probe settings** card, see [Regional probes](scheduling.en.md#regional-probes); `/regions?tab=probes` redirects there |
 | **Service accounts** | `/system?tab=service-accounts`, see [Service accounts](#service-accounts) |
 
@@ -157,6 +157,15 @@ The demo account can open every page of the console and change nothing:
 
 The switch is refused while the operator account uses `demo@edgeweir.com` (`DEMO_EMAIL_TAKEN`). Changes are audited as `system.demo_update`; the demo account's sign-ins are audited too.
 
+### MCP server
+
+| Field | Meaning |
+| --- | --- |
+| **Allow MCP clients** | Opens `/mcp` and its OAuth endpoints; off, they answer 404 and grants stay. Off by default |
+| **Server URL** | Shown while on; add it to the MCP client. A note says MCP clients need HTTPS when the console URL is not HTTPS |
+
+Changes are audited as `mcp.settings_update`. Client setup, scopes and tools: [MCP](mcp.en.md).
+
 ### Precedence
 
 A value saved in the console wins over the environment variable, which wins over the default. The environment variables remain only as a fallback for existing deployments.
@@ -229,6 +238,7 @@ The page shows **Time**, **Actor**, **Action** (name and code), and **Target**, 
 | `system.*` | Setup (`system.setup`; a wrong setup token is `system.setup_rejected`), node channel (`system.node_channel_update`), origin allow list (`system.origin_allow_list_update`), node release source (`system.release_source_update`), certificate authorities (`system.acme_directory_update`), usage (`system.usage_update`), access log retention (`system.log_retention_update`), node log retention (`system.node_log_retention_update`), platform error pages (`system.error_pages_update`), login IP allow list (`system.login_allow_list_update`), demo account (`system.demo_update`), ban settings (`system.bans_update`), protection (`system.protection_update`), CC template (`system.cc_template_update`), probe settings (`system.probes_update`), recompilation after an upgrade (`system.recompile`) |
 | `auth.*` | Successful (`auth.sign_in`, with the sign-in method) and failed (`auth.sign_in_failed`) sign-ins |
 | `account.*` | Password change, two-factor enable / disable, passkey add / delete, account recovery on the server (`account.recover`, see [Account recovery](account.en.md#account-recovery)) |
+| `mcp.*`, `oauth.*` | MCP settings (`mcp.settings_update`), MCP client authorized (`oauth.consent_grant`, with `scopes` and `requested`) and revoked (`oauth.revoke`); changes by MCP clients are recorded with the actor type **MCP client**: [MCP](mcp.en.md) |
 | `api_key.*` | AccessKey create (`api_key.create`), name and requests-per-minute changes (`api_key.update`), revoke (`api_key.revoke`) |
 | `service_account.*` | Service accounts and their keys |
 | `cluster.*`, `node_group.*`, `region.*`, `node.*`, `enrollment_token.*` | Clusters (including the configuration canary, rollbacks, challenge and session ticket key rotation, listening ports, visitor IP, unknown hosts, cache zone, port pools `cluster.port_pools_update`, and connection limits `cluster.connection_limits_update`), node groups, regions, nodes (including enrollment, certificate renewal, upgrades, scheduling addresses `node.set_addresses`, probing `node.set_probe`, debug log pulls `node.debug_logs_pull`), install commands |

@@ -492,6 +492,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `maintenance.prune-revisions` | 每小时第 17 分 | 删除超出保留数量的 revision 与 DNS 版本 |
 | `maintenance.prune-idempotency-keys` | 每小时第 29 分 | 删除过期（超过 24 小时）的幂等键 |
 | `maintenance.expire-cache-tasks` | 每小时第 43 分 | 把超期未完成的刷新预热交付记为失败；删除 90 天前的任务（节点仍需补发的刷新保留） |
+| `maintenance.prune-oauth` | 每小时第 47 分 | 删除过期的 MCP 访问令牌、过期或撤销超过 1 天的刷新令牌，以及 30 天内无人授权的 OAuth 客户端 |
 | `maintenance.expire-enrollment-tokens` | 每 30 分钟 | 删除过期或使用超过 7 天的注册 token |
 | `maintenance.prune-bans` | 每 10 分钟 | 删除到期超过一小时的封禁 |
 | `maintenance.rotate-challenge-keys` | 每小时第 11 分 | 轮换满一天的挑战密钥 |
@@ -516,6 +517,11 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `two_factor` | TOTP 密钥与备用码 |
 | `passkey` | passkey 公钥 |
 | `apikey` | AccessKey：哈希、权限、启用状态 |
+| `oauth_client` | MCP 的 OAuth 客户端：动态注册或由客户端元数据文档解析（`client_discovery_id`），重定向 URI 与 scope |
+| `oauth_resource`、`oauth_client_resource` | OAuth 资源（`<控制台地址>/mcp`）与客户端到资源的绑定（better-auth 的表结构） |
+| `oauth_consent` | 授权：运营者为客户端批准的 scope，`last_used_at` 为最近一次 `/mcp` 请求 |
+| `oauth_access_token`、`oauth_refresh_token` | 不透明访问令牌与刷新令牌，只存 SHA-256；绑定资源、会话与刷新令牌，刷新时轮换 |
+| `oauth_client_assertion` | 已用过的 `private_key_jwt` 断言 id（防重放） |
 | `service_account` | 服务账号：名称、scope、启用状态（不能登录） |
 | `service_account_key` | 服务账号 key 的 SHA-256、前缀、最后使用与吊销时间 |
 | `idempotency_key` | `/api/v1` 写请求的幂等键：调用方、方法、路径、请求体哈希与最终响应，保留 24 小时 |
@@ -727,6 +733,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0088_tiered_cache` | `site.tiered_cache`；`tier_latency`、`tier_selection`；`access_log.tier`；分钟、小时、天统计与视图 `traffic_hour_stats` 的 `tier_stats` |
 | `0089_node_extensions` | `extension_key`、`extension`、`extension_version`、`site_extension`（节点扩展）；`node.extension_status`（节点上报的各扩展状态） |
 | `0090_extension_secrets_data` | `extension.secret_envelope`、`extension.secret_version`（控制台生成的扩展密钥）；`site_extension_data`（扩展的网站数据项） |
+| `0091_oauth_mcp` | MCP 的 OAuth 授权服务器：`oauth_client`、`oauth_resource`、`oauth_client_resource`、`oauth_consent`、`oauth_access_token`、`oauth_refresh_token`、`oauth_client_assertion` |
 
 ## 构建产物
 

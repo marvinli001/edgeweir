@@ -76,11 +76,16 @@ Defined in `packages/contract/src/errors.ts`; thrown by `fail(code, message, dat
 | `LOGIN_IP_NOT_ALLOWED` | 403 | — | This IP is not on the login allow list | The client IP of a session request or an `/api/auth` sign-in request is outside the login allow list (AccessKeys are not limited) |
 | `LOGIN_ALLOW_LIST_EXCLUDES_CURRENT_IP` | 400 | `ip` | The list excludes your current IP {ip}; saving would lock you out | The saved login allow list leaves out the caller's current IP |
 | `DEMO_EMAIL_TAKEN` | 409 | — | The operator account uses the demo email | Turning on the demo account while the operator's account uses its e-mail |
-| `SCOPE_REQUIRED` | 403 | `scope` | Missing scope: {scope} | The service account lacks the scope the procedure needs |
+| `SCOPE_REQUIRED` | 403 | `scope` | Missing scope: {scope} | The service account lacks the scope the procedure needs; an MCP token without `edgeweir:write` calls a change |
 | `SERVICE_ACCOUNT_FORBIDDEN` | 403 | — | Service accounts cannot call this | A service account calls a procedure outside its allowed list |
 | `SERVICE_ACCOUNT_NOT_FOUND` | 404 | — | Service account not found | The service account does not exist |
 | `SERVICE_ACCOUNT_KEY_NOT_FOUND` | 404 | — | Key not found | The service account key to revoke does not exist or belongs to another account |
 | `SERVICE_ACCOUNT_NAME_TAKEN` | 409 | `name` | A service account named {name} exists | The service account name is taken |
+| `MCP_DISABLED` | 404 | — | MCP is switched off | An authorization request is answered while MCP is off; `/mcp` and the OAuth endpoints answer 404 then |
+| `MCP_PROCEDURE_FORBIDDEN` | 403 | — | Not available to MCP clients | An MCP client calls a procedure of keys, service accounts, MCP settings, the login allow list, the demo account or setup |
+| `OAUTH_REQUEST_INVALID` | 400 | — | The authorization request is invalid or has expired | The consent page's request has a bad or expired signature, or its client no longer exists |
+| `OAUTH_SESSION_REQUIRED` | 403 | — | Sign in to answer an authorization request | `mcp.consentRequest` or `mcp.consent` is called with an AccessKey, a service account or an MCP token |
+| `OAUTH_APP_NOT_FOUND` | 404 | — | No such connected app | The MCP client to revoke has no grant |
 | `IDEMPOTENCY_KEY_INVALID` | 400 | — | Invalid Idempotency-Key | `Idempotency-Key` is not 1–255 printable ASCII characters |
 | `IDEMPOTENCY_KEY_MISMATCH` | 422 | — | This Idempotency-Key was used for another request | The same `Idempotency-Key` with another method, path or body |
 | `IDEMPOTENCY_IN_PROGRESS` | 409 | — | A request with this Idempotency-Key is still in progress | The first request with the same `Idempotency-Key` is still running |

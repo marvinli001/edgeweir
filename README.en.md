@@ -171,8 +171,9 @@ Installer options and the release mirror: [Adding nodes](docs/deploy/nodes.en.md
 | --- | --- | --- |
 | `/api/v1` | AccessKey (`x-api-key` header) | Public OpenAPI; specification at `/api/v1/openapi.json` |
 | `/rpc` | Session cookie + CSRF header | Web UI only |
+| `/mcp` | OAuth access token (`Authorization: Bearer`) | MCP server, off by default: [MCP](docs/guide/mcp.en.md) |
 
-Both are served from the same oRPC contract in `packages/contract`.
+All three are served from the same oRPC contract in `packages/contract`.
 
 ## Development
 

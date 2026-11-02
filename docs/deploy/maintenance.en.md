@@ -129,6 +129,7 @@ The worker uses pg-boss; its tables are in the database's `pgboss` schema. Cron 
 | `maintenance.prune-idempotency-keys` | Minute 29 of every hour | Deletes expired idempotency keys |
 | `maintenance.prune-security-events` | Minute 37 of every hour | Deletes security events beyond retention |
 | `maintenance.expire-cache-tasks` | Minute 43 of every hour | Expires undelivered purge and preload tasks and deletes old ones |
+| `maintenance.prune-oauth` | Minute 47 of every hour | Deletes expired MCP access and refresh tokens, and clients nobody authorized within 30 days |
 
 Scheduling (probe reachability and scheduling rules) is evaluated every 10 seconds by an in-process timer; a lease lets one console process evaluate at a time.
 

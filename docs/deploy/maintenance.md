@@ -129,6 +129,7 @@ worker 使用 pg-boss，任务表在数据库的 `pgboss` schema 中。cron 时�
 | `maintenance.prune-idempotency-keys` | 每小时第 29 分 | 删除过期的幂等键 |
 | `maintenance.prune-security-events` | 每小时第 37 分 | 删除超出保留期的安全事件 |
 | `maintenance.expire-cache-tasks` | 每小时第 43 分 | 过期未送达的刷新预热任务，删除旧任务 |
+| `maintenance.prune-oauth` | 每小时第 47 分 | 删除过期的 MCP 访问令牌与刷新令牌，以及 30 天内无人授权的客户端 |
 
 智能调度（探针可达性与调度规则）由进程内定时器每 10 秒求值一次，多个控制台进程经租约同一时间只有一个求值。
 

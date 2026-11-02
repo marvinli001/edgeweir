@@ -491,6 +491,7 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, skewed node clocks (
 | `maintenance.prune-revisions` | Minute 17 of every hour | Deletes revisions and DNS revisions beyond the retention count |
 | `maintenance.prune-idempotency-keys` | Minute 29 of every hour | Deletes expired idempotency keys (older than 24 hours) |
 | `maintenance.expire-cache-tasks` | Minute 43 of every hour | Fails purge and prefetch deliveries past their deadline; deletes tasks older than 90 days (purges a node has yet to make up stay) |
+| `maintenance.prune-oauth` | Minute 47 of every hour | Deletes expired MCP access tokens, refresh tokens expired or revoked more than a day ago, and OAuth clients nobody authorized within 30 days |
 | `maintenance.expire-enrollment-tokens` | Every 30 minutes | Deletes enrollment tokens expired or used more than 7 days ago |
 | `maintenance.prune-bans` | Every 10 minutes | Deletes bans that expired more than an hour ago |
 | `maintenance.rotate-challenge-keys` | Hourly at minute 11 | Rotates challenge keys that are a day old |
@@ -515,6 +516,11 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `two_factor` | TOTP secrets and backup codes |
 | `passkey` | Passkey public keys |
 | `apikey` | AccessKeys: hash, permissions, enabled state |
+| `oauth_client` | OAuth clients of MCP: registered dynamically or resolved from a client metadata document (`client_discovery_id`), redirect URIs and scopes |
+| `oauth_resource`, `oauth_client_resource` | The OAuth resource (`<console URL>/mcp`) and client-to-resource bindings (better-auth's schema) |
+| `oauth_consent` | Grants: the scopes the operator approved for a client; `last_used_at` is the last `/mcp` request |
+| `oauth_access_token`, `oauth_refresh_token` | Opaque access and refresh tokens, stored as SHA-256 only; bound to the resource, session and refresh token, rotated on refresh |
+| `oauth_client_assertion` | Used `private_key_jwt` assertion ids (replay protection) |
 | `service_account` | Service accounts: name, scopes, enabled (cannot sign in) |
 | `service_account_key` | Service account keys: SHA-256, prefix, last use, revocation |
 | `idempotency_key` | Idempotency keys of `/api/v1` writes: caller, method, path, body hash and final response, kept 24 hours |
@@ -725,6 +731,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0088_tiered_cache` | `site.tiered_cache`; `tier_latency`, `tier_selection`; `access_log.tier`; `tier_stats` in minute, hour and day statistics and the view `traffic_hour_stats` |
 | `0089_node_extensions` | `extension_key`, `extension`, `extension_version`, `site_extension` (node extensions); `node.extension_status` (per extension state reported by the node) |
 | `0090_extension_secrets_data` | `extension.secret_envelope`, `extension.secret_version` (console-generated extension secrets); `site_extension_data` (per-site data items of extensions) |
+| `0091_oauth_mcp` | The OAuth authorization server of MCP: `oauth_client`, `oauth_resource`, `oauth_client_resource`, `oauth_consent`, `oauth_access_token`, `oauth_refresh_token`, `oauth_client_assertion` |
 
 ## Build output
 

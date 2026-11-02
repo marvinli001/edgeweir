@@ -77,6 +77,10 @@ Page: user menu → **Security** (`/security`, titled **Account security**).
 
 Password changes, two-factor enable and disable, and passkey add and delete are written to the [audit log](system.en.md#audit-log) (`account.*`).
 
+### Connected apps
+
+MCP clients you authorized: name, client host, **Read only** or **Read and write**, last use. **Revoke** (confirmed) deletes the grant and every token, audited as `oauth.revoke`. See [MCP](mcp.en.md#connected-apps).
+
 ## Personal settings
 
 Page: user menu → **Personal settings** (`/settings`).

@@ -116,6 +116,7 @@ const OSS = {
         ["alerts", "docs/guide/alerts.md"],
         ["system", "docs/guide/system.md"],
         ["extensions", "docs/guide/extensions.md"],
+        ["mcp", "docs/guide/mcp.md"],
       ],
     },
     {

@@ -10,7 +10,7 @@
 
 | 页签 | 内容 |
 | --- | --- |
-| **通用** | 以下各节，按页面顺序：系统信息、节点通道、源站地址允许清单、节点发布源、证书颁发机构、用量、访问日志、节点日志保留期、平台错误页、登录 IP 白名单、演示账号 |
+| **通用** | 以下各节，按页面顺序：系统信息、节点通道、源站地址允许清单、节点发布源、证书颁发机构、用量、访问日志、节点日志保留期、平台错误页、登录 IP 白名单、演示账号、MCP 服务 |
 | **监控** | `/system?tab=probes`：区域探针列表（页面操作 **添加探针**）、**最近一轮** 卡片（探测方 × 节点的延迟矩阵）与 **探测设置** 卡片，见 [区域探针](scheduling.md#区域探针)；`/regions?tab=probes` 跳转到这里 |
 | **服务账号** | `/system?tab=service-accounts`，见 [服务账号](#服务账号) |
 
@@ -157,6 +157,15 @@ URL 与 CA 证书分别显示来源标签（**已保存**、**环境变量** 或
 
 管理账户的邮箱为 `demo@edgeweir.com` 时不能打开（`DEMO_EMAIL_TAKEN`）。修改写审计 `system.demo_update`；演示账号的登录同样写入审计日志。
 
+### MCP 服务
+
+| 字段 | 说明 |
+| --- | --- |
+| **允许 MCP 客户端** | 打开 `/mcp` 与它的 OAuth 端点；关闭后都返回 404，已有授权保留。默认关闭 |
+| **服务地址** | 开启后显示，添加到 MCP 客户端；控制台地址不是 HTTPS 时提示 MCP 客户端需要 HTTPS |
+
+修改写审计 `mcp.settings_update`。客户端配置、权限范围与工具见 [MCP](mcp.md)。
+
 ### 设置优先级
 
 控制台中保存的值优先于环境变量，环境变量优先于默认值。环境变量只作为已有部署的后备。
@@ -229,6 +238,7 @@ URL 与 CA 证书分别显示来源标签（**已保存**、**环境变量** 或
 | `system.*` | 初始化（`system.setup`；setup token 错误为 `system.setup_rejected`）、节点通道（`system.node_channel_update`）、源站地址允许清单（`system.origin_allow_list_update`）、节点发布源（`system.release_source_update`）、证书颁发机构（`system.acme_directory_update`）、用量（`system.usage_update`）、访问日志保留期（`system.log_retention_update`）、节点日志保留期（`system.node_log_retention_update`）、平台错误页（`system.error_pages_update`）、登录 IP 白名单（`system.login_allow_list_update`）、演示账号（`system.demo_update`）、封禁设置（`system.bans_update`）、防护（`system.protection_update`）、CC 模板（`system.cc_template_update`）、探测设置（`system.probes_update`）、升级后重新编译（`system.recompile`） |
 | `auth.*` | 登录成功（`auth.sign_in`，含登录方式）与失败（`auth.sign_in_failed`） |
 | `account.*` | 修改密码、启用 / 停用两步验证、添加 / 删除通行密钥、在服务器上找回账户（`account.recover`，见 [找回账户](account.md#找回账户)） |
+| `mcp.*`、`oauth.*` | MCP 设置（`mcp.settings_update`）、授权 MCP 客户端（`oauth.consent_grant`，含 `scopes` 与 `requested`）、撤销（`oauth.revoke`）；MCP 客户端所做的修改以操作者类型 **MCP 客户端** 记录，见 [MCP](mcp.md) |
 | `api_key.*` | AccessKey 创建（`api_key.create`）、修改名称与每分钟请求数（`api_key.update`）、吊销（`api_key.revoke`） |
 | `service_account.*` | 服务账号与其 key |
 | `cluster.*`、`node_group.*`、`region.*`、`node.*`、`enrollment_token.*` | 集群（含配置金丝雀、回滚、挑战密钥与会话票据密钥轮换、监听端口、访客 IP、未知域名、缓存区、端口池 `cluster.port_pools_update`、连接限制 `cluster.connection_limits_update`）、节点组、区域、节点（含注册、证书续期、升级、调度地址 `node.set_addresses`、兼任探针 `node.set_probe`、拉取 Debug 日志 `node.debug_logs_pull`）、安装命令 |

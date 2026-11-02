@@ -171,8 +171,9 @@ sudo bash deploy.sh install
 | --- | --- | --- |
 | `/api/v1` | AccessKey（`x-api-key` 请求头） | 对外 OpenAPI，规范文档位于 `/api/v1/openapi.json` |
 | `/rpc` | 会话 Cookie + CSRF 请求头 | Web UI 专用 |
+| `/mcp` | OAuth 访问令牌（`Authorization: Bearer`） | MCP 服务，默认关闭，见 [MCP](docs/guide/mcp.md) |
 
-两个入口由 `packages/contract` 中的同一份 oRPC 契约提供。
+三个入口由 `packages/contract` 中的同一份 oRPC 契约提供。
 
 ## 开发
 
