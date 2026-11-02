@@ -18,6 +18,7 @@ import { expireDevelopmentModes } from "../services/development-mode";
 import { pruneDnsRevisions, reconcileDns } from "../services/dns";
 import { withLease } from "../services/dns-lease";
 import { pollProbeSources, sweepProbeSourceAlerts } from "../services/external-probes";
+import { pruneOAuth } from "../services/mcp";
 import { pruneNodeDebugLogs } from "../services/node-debug-logs";
 import { pruneNodeLogs } from "../services/node-logs";
 import { rotateOriginClientCertificates } from "../services/origin-pki";
@@ -59,6 +60,7 @@ export const QUEUES = {
   rotateOriginClientCertificates: "maintenance.rotate-origin-client-certificates",
   pruneSecurityEvents: "maintenance.prune-security-events",
   pruneNodeLogs: "maintenance.prune-node-logs",
+  pruneOAuth: "maintenance.prune-oauth",
 } as const;
 
 /** Queues scheduled every minute ("* * * * *"). */
@@ -200,6 +202,12 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
     if (removed) log.info("pruned idempotency keys", { removed });
   });
 
+  // Expired OAuth tokens, and MCP clients nobody authorized within 30 days (ADR-0076).
+  await boss.work(QUEUES.pruneOAuth, async () => {
+    const removed = await pruneOAuth(ctx.db);
+    if (removed) log.info("pruned OAuth tokens and clients", { removed });
+  });
+
   await boss.work(QUEUES.pruneBans, async () => {
     const removed = await pruneBans(ctx.db);
     if (removed) log.info("deleted expired bans", { removed });
@@ -295,6 +303,7 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   await boss.schedule(QUEUES.pruneNodeLogs, "*/10 * * * *");
   await boss.schedule(QUEUES.pruneRevisions, "17 * * * *");
   await boss.schedule(QUEUES.pruneIdempotencyKeys, "29 * * * *");
+  await boss.schedule(QUEUES.pruneOAuth, "47 * * * *");
   await boss.schedule(QUEUES.expireCacheTasks, "43 * * * *");
   await boss.schedule(QUEUES.expireEnrollmentTokens, "*/30 * * * *");
   log.info("worker started", { queues: Object.values(QUEUES) });

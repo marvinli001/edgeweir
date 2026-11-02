@@ -84,6 +84,8 @@ export async function createTestContext(
   opts: {
     rateLimit?: boolean;
     seed?: { upTo: string; run: (client: PGlite) => Promise<void> };
+    /** Client ID Metadata Document fetches (MCP); unset: refused. */
+    fetchClientMetadata?: (input: string | URL | Request) => Promise<Response>;
   } = {},
 ) {
   const { client, db } = await createTestDatabase(opts.seed);
@@ -117,6 +119,7 @@ export async function createTestContext(
       secret: resolveAuthSecret(env).value,
       publicUrl: env.EDGEWEIR_PUBLIC_URL,
       rateLimit: opts.rateLimit,
+      fetchClientMetadata: opts.fetchClientMetadata,
     }),
     masterKey: new MasterKey(TEST_MASTER_KEY),
     nodeCa: await CertificateAuthority.load(await generateCa("Test CA")),

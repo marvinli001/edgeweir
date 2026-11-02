@@ -13,6 +13,7 @@ import { ConfigEventBus } from "./lib/events";
 import { logger, setLogLevel } from "./lib/logger";
 import { assertMasterKey } from "./lib/master-key";
 import { setHeartbeatSeconds } from "./lib/node-online";
+import { fetchClientMetadata } from "./lib/outbound";
 import { CLOSE_GRACE_MS, type NodeChannel, startNodeChannel } from "./node-channel/server";
 import { loadOrCreateNodeCa } from "./pki/store";
 import { AccessKeyRateLimiter } from "./services/access-keys";
@@ -184,10 +185,16 @@ export async function bootstrap(): Promise<Running> {
   const nodeCa = await loadOrCreateNodeCa(db, masterKey);
   // Rules may read the fields of installed extensions (ext.<id>.<name>).
   await refreshExtensionFields(db);
+  // CIMD fetches run at request time, once the context below exists.
+  let appContext: AppContext | undefined;
   const auth = createAuth({
     db,
     secret: authSecret.value,
     publicUrl: env.EDGEWEIR_PUBLIC_URL,
+    fetchClientMetadata: (input, init) => {
+      if (!appContext) throw new Error("console not started");
+      return fetchClientMetadata(appContext, input, init);
+    },
   });
   const events = new ConfigEventBus(env.DATABASE_URL, log.child({ component: "events" }));
   const ctx: AppContext = {
@@ -202,6 +209,7 @@ export async function bootstrap(): Promise<Running> {
     accessKeyLimits: new AccessKeyRateLimiter(),
     sshInstalls: new SshInstallRuns(),
   };
+  appContext = ctx;
 
   let nodeChannel: NodeChannel | undefined;
   let boss: PgBoss | undefined;

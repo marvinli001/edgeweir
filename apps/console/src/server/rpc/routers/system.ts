@@ -11,6 +11,14 @@ import { listAttention } from "../../services/attention";
 import { auditFacets, listAuditLogs } from "../../services/audit";
 import { demoAuditEntry, isDemoEnabled } from "../../services/demo";
 import { getHiddenCards, updateHiddenCards } from "../../services/hidden-cards";
+import {
+  answerConsent,
+  getConsentRequest,
+  getMcpSettings,
+  listConnectedApps,
+  revokeConnectedApp,
+  setMcpSettings,
+} from "../../services/mcp";
 import { onlineWindowSeconds } from "../../services/nodes";
 import { toRevisionDto } from "../../services/revisions";
 import {
@@ -24,7 +32,7 @@ import {
 import { isInitialized, runSetup } from "../../services/setup";
 import { countSites } from "../../services/sites";
 import { listUsage, usageChanges } from "../../services/usage";
-import { authed, os } from "../base";
+import { authed, ok, os } from "../base";
 
 /** Setup, the operator's account and keys, service accounts, usage and the audit log. */
 export const systemRouter = {
@@ -115,6 +123,25 @@ export const systemRouter = {
     ),
     revoke: authed.accessKeys.revoke.handler(({ input, context }) =>
       revokeAccessKey(context.app, context.user.id, input.id, context.actor),
+    ),
+  },
+  mcp: {
+    settings: authed.mcp.settings.handler(({ context }) => getMcpSettings(context.app)),
+    setSettings: authed.mcp.setSettings.handler(({ input, context }) =>
+      setMcpSettings(context.app, input, context.actor),
+    ),
+    apps: authed.mcp.apps.handler(async ({ context }) => ({
+      apps: await listConnectedApps(context.app.db, context.user.id),
+    })),
+    revokeApp: authed.mcp.revokeApp.handler(async ({ input, context }) => {
+      await revokeConnectedApp(context.app.db, context.user.id, input.clientId, context.actor);
+      return ok;
+    }),
+    consentRequest: authed.mcp.consentRequest.handler(({ input, context }) =>
+      getConsentRequest(context.app, context, input.oauthQuery),
+    ),
+    consent: authed.mcp.consent.handler(({ input, context }) =>
+      answerConsent(context.app, context, input),
     ),
   },
   auditLogs: {

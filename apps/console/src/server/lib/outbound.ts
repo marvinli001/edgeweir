@@ -197,7 +197,7 @@ export async function outboundRequest(
   app: AppContext,
   request: { method: "GET" | "POST"; url: string; headers: Record<string, string>; body?: Buffer },
   limits: { maxBytes: number; timeoutMs: number },
-): Promise<{ status: number; body: Buffer }> {
+): Promise<{ status: number; headers: http.IncomingHttpHeaders; body: Buffer }> {
   const signal = AbortSignal.timeout(limits.timeoutMs);
   const url = new URL(request.url);
   if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.hash)
@@ -234,12 +234,61 @@ export async function outboundRequest(
         });
         response.once("error", reject);
         response.once("end", () =>
-          resolve({ status: response.statusCode ?? 0, body: Buffer.concat(chunks) }),
+          resolve({
+            status: response.statusCode ?? 0,
+            headers: response.headers,
+            body: Buffer.concat(chunks),
+          }),
         );
       },
     );
     outgoing.once("error", () => reject(new Error("outbound transport failed")));
     outgoing.once("timeout", () => outgoing.destroy(new Error("outbound timeout")));
     outgoing.end(request.method === "POST" ? body : undefined);
+  });
+}
+
+/** Response headers a Client ID Metadata Document fetch passes on (type and HTTP caching). */
+const CLIENT_METADATA_HEADERS = [
+  "content-type",
+  "content-length",
+  "cache-control",
+  "vary",
+  "expires",
+  "date",
+  "age",
+  "etag",
+  "last-modified",
+];
+
+/**
+ * The fetch transport of @better-auth/cimd (MCP clients identified by an https URL): one GET
+ * under the outbound policy (resolved once, special-purpose addresses refused unless allowed,
+ * connected by the pinned address), no redirects, at most 64 KiB within 5 seconds.
+ */
+export async function fetchClientMetadata(
+  app: AppContext,
+  input: string | URL | Request,
+  init?: RequestInit,
+): Promise<Response> {
+  const url = input instanceof Request ? input.url : String(input);
+  const headers: Record<string, string> = {};
+  new Headers(init?.headers).forEach((value, name) => {
+    headers[name] = value;
+  });
+  const response = await outboundRequest(
+    app,
+    { method: "GET", url, headers },
+    { maxBytes: 65536, timeoutMs: 5000 },
+  );
+  const passed = new Headers();
+  for (const name of CLIENT_METADATA_HEADERS) {
+    const value = response.headers[name];
+    if (typeof value === "string") passed.set(name, value);
+  }
+  const empty = [204, 205, 304].includes(response.status) || response.status < 200;
+  return new Response(empty ? null : new Uint8Array(response.body), {
+    status: response.status < 200 ? 502 : response.status,
+    headers: passed,
   });
 }

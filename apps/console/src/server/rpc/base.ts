@@ -1,6 +1,8 @@
 import {
   contract,
   DEMO_USER_ID,
+  MCP_SCOPE_WRITE,
+  mcpProcedureAllowed,
   oneTimeSecretProcedures,
   serviceAccountScopeFor,
 } from "@edgeweir/contract";
@@ -12,6 +14,7 @@ import { IDEMPOTENCY_HEADER } from "../lib/idempotency";
 import { authenticateAccessKey, keyScope } from "../services/access-keys";
 import type { Actor } from "../services/audit";
 import { type LoginCaller, loginAllowed, logLoginRefusal } from "../services/login-allow-list";
+import type { OAuthPrincipal } from "../services/mcp";
 import {
   authenticateServiceAccountKey,
   isServiceAccountKey,
@@ -29,6 +32,11 @@ export interface RequestContext {
   accessKeyUser?: SessionUser;
   /** Set when the request authenticated with a service account key. */
   serviceAccount?: ServicePrincipal;
+  /**
+   * The OAuth grant of an MCP tool call (services/mcp-server.ts): set in process only, never
+   * from a request of /rpc or /api/v1.
+   */
+  oauth?: OAuthPrincipal;
 }
 
 const implementation = implement(contract).$context<RequestContext>();
@@ -61,13 +69,34 @@ function refuseStoredSecret(context: RequestContext, path: readonly string[]) {
 /** POST procedures that change nothing: read-only callers may use them. */
 const READ_ONLY_POSTS: ReadonlySet<string> = new Set(["rules.validate"]);
 
-/** Whether a read-only caller (a read AccessKey, the demo account) may call the procedure. */
-function readOnlyAllowed(method: string, path: readonly string[]): boolean {
+/**
+ * Whether a read-only caller (a read AccessKey, a read OAuth grant, the demo account) may call
+ * the procedure.
+ */
+export function readOnlyAllowed(method: string, path: readonly string[]): boolean {
   return method === "GET" || READ_ONLY_POSTS.has(path.join("."));
 }
 
+/**
+ * Changes the demo account may make anyway: granting an MCP client (reads only; services/mcp.ts
+ * drops edgeweir:write for it).
+ */
+const DEMO_ALLOWED_POSTS: ReadonlySet<string> = new Set(["mcp.consent"]);
+
 /** Scope applies before every public/optional-auth procedure as well as authed routes. */
 export const os = implementation.use(async ({ context, next, procedure, path }) => {
+  const grant = context.oauth;
+  if (grant) {
+    // MCP clients: not the excluded procedures (contract), writes only with edgeweir:write.
+    if (!mcpProcedureAllowed(path.join(".")))
+      fail("MCP_PROCEDURE_FORBIDDEN", "MCP clients cannot call this procedure");
+    const method = procedure["~orpc"].route.method ?? "POST";
+    if (!grant.scopes.includes(MCP_SCOPE_WRITE) && !readOnlyAllowed(method, path))
+      fail("SCOPE_REQUIRED", `this call needs the ${MCP_SCOPE_WRITE} scope`, {
+        scope: MCP_SCOPE_WRITE,
+      });
+    return next();
+  }
   const apiKey = context.headers.get(API_KEY_HEADER);
   if (!apiKey) return next();
   if (isServiceAccountKey(apiKey)) {
@@ -95,9 +124,25 @@ export const os = implementation.use(async ({ context, next, procedure, path }) 
 
 /**
  * Resolves the caller: the operator's session (cookie or AccessKey), the demo account's session
- * (reads only) or a service account.
+ * (reads only), a service account or an MCP client's OAuth grant.
  */
 export const authed = os.use(async ({ context, next, procedure, path }) => {
+  const grant = context.oauth;
+  if (grant) {
+    // `os` already enforced its scope. Like AccessKeys, grants are not limited by the login
+    // allow list: agents call from wherever they run (ADR-0076).
+    const actor: Actor = {
+      type: "oauth_client",
+      id: grant.clientId,
+      name: grant.clientName,
+      ip: context.ip,
+      userAgent: context.userAgent,
+    };
+    const demo = grant.user.id === DEMO_USER_ID;
+    if (demo && !readOnlyAllowed(procedure["~orpc"].route.method ?? "POST", path))
+      fail("DEMO_READ_ONLY", "the demo account can only read");
+    return next({ context: { user: grant.user as SessionUser, actor, demo } });
+  }
   const account = context.serviceAccount;
   if (account) {
     // `os` already enforced its scopes.
@@ -129,7 +174,11 @@ export const authed = os.use(async ({ context, next, procedure, path }) => {
     logLoginRefusal(context.app.log, context.ip, `/rpc/${path.join("/")}`);
     fail("LOGIN_IP_NOT_ALLOWED", "this address may not sign in to the console");
   }
-  if (demo && !readOnlyAllowed(procedure["~orpc"].route.method ?? "POST", path))
+  if (
+    demo &&
+    !readOnlyAllowed(procedure["~orpc"].route.method ?? "POST", path) &&
+    !DEMO_ALLOWED_POSTS.has(path.join("."))
+  )
     fail("DEMO_READ_ONLY", "the demo account can only read");
   const actor: Actor = {
     type: context.headers.has(API_KEY_HEADER) ? "api_key" : "user",

@@ -1,7 +1,15 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DEMO_EMAIL, DEMO_USER_ID, NODE_CHANNEL_WEBSOCKET_PATH } from "@edgeweir/contract";
+import {
+  ACCESS_KEY_DEFAULT_REQUESTS_PER_MINUTE,
+  DEMO_EMAIL,
+  DEMO_USER_ID,
+  MCP_PATH,
+  MCP_SCOPE_OFFLINE,
+  mcpScopes,
+  NODE_CHANNEL_WEBSOCKET_PATH,
+} from "@edgeweir/contract";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { OpenAPIGenerator } from "@orpc/openapi";
@@ -20,15 +28,20 @@ import {
   AUTH_BASE_PATH,
   isAllowedAuthRoute,
   LOGIN_ALLOW_LIST_EXEMPT_ROUTES,
+  mcpIssuer,
+  mcpResourceUrl,
+  OAUTH_ROUTES,
 } from "./lib/auth";
 import { normalizeIp, resolveClientIp, withClientIp } from "./lib/client-ip";
 import type { AppContext } from "./lib/context";
 import { withIdempotency } from "./lib/idempotency";
+import { createMcpServerHandler, toolCallScope } from "./rpc/mcp";
 import { type RequestContext, router } from "./rpc/router";
 import { findAccessKey } from "./services/access-keys";
 import { isDemoEnabled } from "./services/demo";
 import { PROBE_SOURCE_WEBHOOK_PATH } from "./services/external-probes";
 import { loginAllowed, logLoginRefusal } from "./services/login-allow-list";
+import { authenticateMcpToken, mcpEnabled } from "./services/mcp";
 import { nodeChannelWebSocketOpen } from "./services/node-channel-url";
 import {
   PROBE_SOURCE_WEBHOOK_MAX_BYTES,
@@ -134,9 +147,10 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
    * The API key header is removed: keys authenticate /api/v1 only (ADR-0005)
    * and must never become a session on better-auth's own endpoints.
    */
-  const authRequest = (c: HonoContext, ip: string): Request => {
+  const authRequest = (c: HonoContext, ip: string, withoutCookie = false): Request => {
     const headers = withClientIp(c.req.raw.headers, ip);
     headers.delete(API_KEY_HEADER);
+    if (withoutCookie) headers.delete("cookie");
     return new Request(c.req.raw, { headers });
   };
 
@@ -272,12 +286,51 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
     }),
   );
 
+  // MCP's OAuth discovery (ADR-0076): RFC 8414 metadata of the authorization server (issuer
+  // <public URL>/api/auth) at its path-inserted and root locations, RFC 9728 metadata of the /mcp
+  // resource. 404 while MCP is off.
+  const publicUrl = ctx.env.EDGEWEIR_PUBLIC_URL.replace(/\/$/, "");
+  const mcpResource = mcpResourceUrl(ctx.env.EDGEWEIR_PUBLIC_URL);
+  const resourceMetadataUrl = `${new URL(publicUrl).origin}/.well-known/oauth-protected-resource${MCP_PATH}`;
+  const authorizationServerMetadata = async (c: HonoContext) => {
+    if (!(await mcpEnabled(ctx.db))) return notFound(c);
+    const metadata: Record<string, unknown> = { ...(await ctx.auth.api.getOAuthServerConfig()) };
+    // Introspection stays server side (not on the /api/auth allow list).
+    for (const key of Object.keys(metadata))
+      if (key.startsWith("introspection_")) delete metadata[key];
+    return c.json(metadata);
+  };
+  for (const path of [
+    `/.well-known/oauth-authorization-server${AUTH_BASE_PATH}`,
+    "/.well-known/oauth-authorization-server",
+    `${AUTH_BASE_PATH}/.well-known/oauth-authorization-server`,
+  ])
+    app.get(path, authorizationServerMetadata);
+  const protectedResourceMetadata = async (c: HonoContext) => {
+    if (!(await mcpEnabled(ctx.db))) return notFound(c);
+    return c.json({
+      resource: mcpResource,
+      authorization_servers: [mcpIssuer(publicUrl)],
+      bearer_methods_supported: ["header"],
+      scopes_supported: mcpScopes.filter((scope) => scope !== MCP_SCOPE_OFFLINE),
+      resource_name: "Edgeweir",
+    });
+  };
+  app.get(`/.well-known/oauth-protected-resource${MCP_PATH}`, protectedResourceMetadata);
+  app.get("/.well-known/oauth-protected-resource", protectedResourceMetadata);
+
   app.on(["GET", "POST"], "/api/auth/*", async (c, next) => {
     // Exact match on the normalized path: no prefixes, encodings or trailing slashes.
     const path = new URL(c.req.url).pathname.slice(AUTH_BASE_PATH.length);
     if (!isAllowedAuthRoute(c.req.method, path)) return next(); // -> the /api/* 404
+    if (OAUTH_ROUTES.has(path) && !(await mcpEnabled(ctx.db))) return next();
     const ip = clientIp(c);
-    const request = authRequest(c, ip);
+    // Registration, token and revocation calls come from MCP clients, never with a session.
+    const request = authRequest(
+      c,
+      ip,
+      OAUTH_ROUTES.has(path) && LOGIN_ALLOW_LIST_EXEMPT_ROUTES.has(path),
+    );
     // Checked before better-auth sees the request: no password check, no sign-in limiter, the
     // same answer for right and wrong passwords.
     if (
@@ -306,6 +359,101 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
     });
     if (matched) return c.newResponse(response.body, response);
     await next();
+  });
+
+  /**
+   * /mcp (ADR-0076): only OAuth access tokens bound to this resource, never the session cookie or
+   * an AccessKey (both stripped). Unauthenticated: 401 with the RFC 9728 challenge; a tool call
+   * that needs edgeweir:write with a read token: 403 insufficient_scope; each grant has the
+   * AccessKey request limit.
+   */
+  const mcp = createMcpServerHandler({
+    version: ctx.env.version,
+    maxRequestBodySize: MAX_BODY_BYTES,
+    onerror: (error) => log.warn("mcp request failed", { error }),
+  });
+  const bearerChallenge = (c: HonoContext, status: 401 | 403, fields: Record<string, string>) => {
+    const params = { ...fields, resource_metadata: resourceMetadataUrl };
+    c.header(
+      "www-authenticate",
+      `Bearer ${Object.entries(params)
+        .map(([key, value]) => `${key}="${value}"`)
+        .join(", ")}`,
+    );
+    const message = status === 401 ? "authentication required" : "insufficient scope";
+    return c.json({ jsonrpc: "2.0", error: { code: -32000, message }, id: null }, status);
+  };
+  app.use(
+    MCP_PATH,
+    bodyLimit({
+      maxSize: MAX_BODY_BYTES,
+      onError: (c) =>
+        c.json(
+          { jsonrpc: "2.0", error: { code: -32600, message: "request body too large" }, id: null },
+          413,
+        ),
+    }),
+  );
+  app.all(MCP_PATH, async (c) => {
+    if (!(await mcpEnabled(ctx.db))) return notFound(c);
+    const token = /^Bearer +(\S+)$/i.exec(c.req.header("authorization") ?? "")?.[1];
+    const principal = token ? await authenticateMcpToken(ctx, token) : null;
+    if (!principal)
+      return bearerChallenge(c, 401, {
+        ...(token ? { error: "invalid_token" } : {}),
+        scope: mcpScopes.join(" "),
+      });
+    const wait = ctx.accessKeyLimits.take(
+      `oauth:${principal.grantId}`,
+      ACCESS_KEY_DEFAULT_REQUESTS_PER_MINUTE,
+      60_000,
+    );
+    if (wait !== null) {
+      c.header("retry-after", String(Math.max(1, Math.ceil(wait / 1000))));
+      return c.json(
+        { jsonrpc: "2.0", error: { code: -32000, message: "too many requests" }, id: null },
+        429,
+      );
+    }
+    const body = c.req.method === "POST" ? await c.req.text() : undefined;
+    if (body !== undefined) {
+      let message: { method?: unknown; params?: { name?: unknown; arguments?: unknown } } = {};
+      try {
+        message = JSON.parse(body) ?? {};
+      } catch {}
+      const needed =
+        message.method === "tools/call" && typeof message.params?.name === "string"
+          ? toolCallScope(message.params.name, message.params.arguments)
+          : null;
+      if (needed && !principal.scopes.includes(needed))
+        return bearerChallenge(c, 403, {
+          error: "insufficient_scope",
+          scope: [...new Set([...principal.scopes, needed])].join(" "),
+          error_description: `this call needs the ${needed} scope`,
+        });
+    }
+    const ip = clientIp(c);
+    // Procedures see the request without any credential: the grant is the caller.
+    const headers = withClientIp(c.req.raw.headers, ip);
+    for (const name of ["cookie", API_KEY_HEADER, "authorization"]) headers.delete(name);
+    const context: RequestContext = {
+      app: ctx,
+      headers,
+      ip,
+      userAgent: c.req.header("user-agent") ?? "",
+      untrustedForwarding: untrustedForwarding(c),
+    };
+    return mcp.fetch(new Request(c.req.raw.url, { method: c.req.method, headers, body }), {
+      authInfo: {
+        token: "",
+        clientId: principal.clientId,
+        scopes: principal.scopes,
+        expiresAt: principal.expiresAt,
+        resource: new URL(mcpResource),
+        resourceMetadataUrl,
+        extra: { caller: { principal, context } },
+      },
+    });
   });
 
   app.get("/api/v1/openapi.json", async (c) => {
@@ -397,6 +545,7 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
   }
   app.all("/install.sh", notFound);
   app.all("/healthz", notFound);
+  app.all("/.well-known/*", notFound);
   app.all(NODE_CHANNEL_WEBSOCKET_PATH, notFound);
 
   if (opts.webDist) {

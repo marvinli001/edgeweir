@@ -1,6 +1,8 @@
 import { apiKey } from "@better-auth/api-key";
+import { cimd } from "@better-auth/cimd";
+import { type ClientMetadataResourceFetch, oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
-import { ACCESS_KEY_DEFAULT_REQUESTS_PER_MINUTE } from "@edgeweir/contract";
+import { ACCESS_KEY_DEFAULT_REQUESTS_PER_MINUTE, MCP_PATH, mcpScopes } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -14,6 +16,20 @@ delete process.env.BETTER_AUTH_TELEMETRY;
 
 export const API_KEY_HEADER = "x-api-key";
 export const AUTH_BASE_PATH = "/api/auth";
+
+/** The MCP resource (RFC 8707 / RFC 9728): the audience every OAuth access token is bound to. */
+export function mcpResourceUrl(publicUrl: string): string {
+  return `${publicUrl.replace(/\/$/, "")}${MCP_PATH}`;
+}
+
+/** The OAuth authorization server's issuer: better-auth's base URL. */
+export function mcpIssuer(publicUrl: string): string {
+  return `${publicUrl.replace(/\/$/, "")}${AUTH_BASE_PATH}`;
+}
+
+/** Opaque OAuth tokens carry a prefix, so secret scanners and logs can tell them apart. */
+export const OAUTH_ACCESS_TOKEN_PREFIX = "ewo_";
+const OAUTH_REFRESH_TOKEN_PREFIX = "ewr_";
 
 /**
  * The better-auth HTTP endpoints the web console calls (apps/console/src/web,
@@ -37,7 +53,20 @@ export const AUTH_HTTP_ROUTES: Readonly<Record<string, readonly ("GET" | "POST")
   "/passkey/verify-authentication": ["POST"],
   "/passkey/list-user-passkeys": ["GET"],
   "/passkey/delete-passkey": ["POST"],
+  // OAuth for MCP clients (ADR-0076), only while MCP is on (app.ts): the browser's authorization
+  // request, and the client's registration, token and revocation calls. Consent goes through
+  // the mcp.consent procedure; introspection, userinfo, client and consent management stay
+  // server side.
+  "/oauth2/authorize": ["GET"],
+  "/oauth2/register": ["POST"],
+  "/oauth2/token": ["POST"],
+  "/oauth2/revoke": ["POST"],
 };
+
+/** The OAuth endpoints of AUTH_HTTP_ROUTES: 404 while MCP is off. */
+export const OAUTH_ROUTES: ReadonlySet<string> = new Set(
+  Object.keys(AUTH_HTTP_ROUTES).filter((path) => path.startsWith("/oauth2/")),
+);
 
 /**
  * Allowed endpoints that change the signed-in account (its password, second
@@ -56,7 +85,14 @@ export const ACCOUNT_CHANGE_ROUTES: ReadonlySet<string> = new Set([
  * Allowed endpoints the login allow list does not limit (ADR-0047): signing out only ends the
  * session the request carries.
  */
-export const LOGIN_ALLOW_LIST_EXEMPT_ROUTES: ReadonlySet<string> = new Set(["/sign-out"]);
+export const LOGIN_ALLOW_LIST_EXEMPT_ROUTES: ReadonlySet<string> = new Set([
+  "/sign-out",
+  // MCP clients call these from wherever they run (often a cloud egress), like AccessKeys; the
+  // browser's authorization request is not exempt: granting takes an allowed session.
+  "/oauth2/register",
+  "/oauth2/token",
+  "/oauth2/revoke",
+]);
 
 /** Whether an /api/auth request (path below the base path) is on the allow list. */
 export function isAllowedAuthRoute(method: string, path: string): boolean {
@@ -70,7 +106,15 @@ export function createAuth(opts: {
   publicUrl: string;
   /** better-auth rate limiting; unset keeps its default (on in production only). */
   rateLimit?: boolean;
+  /**
+   * Fetches Client ID Metadata Documents (CIMD): resolve once, refuse special-purpose
+   * addresses, pin the address, no redirects (lib/outbound.ts). Unset: refused.
+   */
+  fetchClientMetadata?: ClientMetadataResourceFetch;
 }) {
+  const fetchClientMetadata: ClientMetadataResourceFetch =
+    opts.fetchClientMetadata ??
+    (() => Promise.reject(new Error("client metadata documents are not fetched here")));
   const url = new URL(opts.publicUrl);
   return betterAuth({
     appName: "Edgeweir",
@@ -90,6 +134,13 @@ export function createAuth(opts: {
         passkey: schema.passkey,
         apikey: schema.apikey,
         rateLimit: schema.rateLimit,
+        oauthClient: schema.oauthClient,
+        oauthResource: schema.oauthResource,
+        oauthClientResource: schema.oauthClientResource,
+        oauthRefreshToken: schema.oauthRefreshToken,
+        oauthAccessToken: schema.oauthAccessToken,
+        oauthConsent: schema.oauthConsent,
+        oauthClientAssertion: schema.oauthClientAssertion,
       },
     }),
     // The /api/auth endpoints' limits (sign-in, second factor): counters live in
@@ -132,6 +183,42 @@ export function createAuth(opts: {
           timeWindow: 60_000,
           maxRequests: ACCESS_KEY_DEFAULT_REQUESTS_PER_MINUTE,
         },
+      }),
+      // The authorization server for MCP clients (ADR-0076). Access tokens are opaque and stored
+      // as SHA-256 (no JWT signing keys): /mcp looks each one up, so a revoked grant stops at
+      // once. One resource, /mcp, which every token is bound to.
+      oauthProvider({
+        loginPage: "/login",
+        consentPage: "/oauth/consent",
+        scopes: [...mcpScopes],
+        grantTypes: ["authorization_code", "refresh_token"],
+        disableJwtPlugin: true,
+        resources: [{ identifier: mcpResourceUrl(opts.publicUrl), name: "Edgeweir MCP" }],
+        // Every client may ask for the one resource; there is nothing to separate.
+        enforcePerClientResources: false,
+        // Open dynamic registration (RFC 7591) for clients without a metadata document; its
+        // endpoint has a request limit (rateLimit below), unused clients are pruned
+        // (services/mcp.ts).
+        allowDynamicClientRegistration: true,
+        allowUnauthenticatedClientRegistration: true,
+        // Native clients (Claude Code, Cursor) register loopback callbacks without
+        // application_type.
+        clientRegistrationDefaultApplicationType: "infer",
+        // A registered client may ask for every scope; the operator decides on /oauth/consent.
+        clientRegistrationDefaultScopes: [...mcpScopes],
+        prefix: {
+          opaqueAccessToken: OAUTH_ACCESS_TOKEN_PREFIX,
+          refreshToken: OAUTH_REFRESH_TOKEN_PREFIX,
+        },
+        // A retried refresh gets the response of the first one (as @better-auth/mcp sets it).
+        refreshTokenReuseInterval: 30,
+        advertisedMetadata: { scopes_supported: [...mcpScopes] },
+        rateLimit: { register: { window: 60, max: 10 } },
+      }),
+      // Clients identified by an https URL (Client ID Metadata Document, as MCP prefers).
+      cimd({
+        fetchClientMetadataResource: fetchClientMetadata,
+        metadataFetchPolicy: { maximumFetchesPerMinute: 60, maximumFetchesPerOriginPerMinute: 10 },
       }),
       // Last, so its hooks see the other plugins' final responses: audit entries
       // for sign-in, password, passkey and API key changes.

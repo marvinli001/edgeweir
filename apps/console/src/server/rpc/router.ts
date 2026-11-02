@@ -68,5 +68,6 @@ export const router = os.router({
   sites: sitesRouter.sites,
   cacheTasks: sitesRouter.cacheTasks,
   settings: settingsRouter.settings,
+  mcp: systemRouter.mcp,
   auditLogs: systemRouter.auditLogs,
 });
