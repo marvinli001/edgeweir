@@ -1,8 +1,10 @@
-import { Delete02Icon, FingerPrintIcon } from "@hugeicons/core-free-icons";
+import { MCP_SCOPE_WRITE } from "@edgeweir/contract";
+import { Delete02Icon, FingerPrintIcon, McpServerIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
+import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { Input } from "@/components/arc/input/input";
 import { OtpInput } from "@/components/arc/otp-input/otp-input";
@@ -54,6 +56,7 @@ function SecurityPage() {
           {({ user }) => <TwoFactorCard enabled={user.twoFactorEnabled} />}
         </QueryView>
         <PasskeysCard />
+        <ConnectedAppsCard />
       </div>
     </Page>
   );
@@ -381,6 +384,92 @@ function PasskeysCard() {
                     onConfirm={async () => {
                       await unwrap(authClient.passkey.deletePasskey({ id: key.id }));
                       await queryClient.invalidateQueries({ queryKey: ["passkeys"] });
+                    }}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </QueryView>
+      </PanelContent>
+    </Panel>
+  );
+}
+
+/** MCP clients the operator authorized (ADR-0076); revoking ends their access at once. */
+function ConnectedAppsCard() {
+  const apps = useQuery(orpc.mcp.apps.queryOptions());
+  const revoke = useMutation({
+    ...orpc.mcp.revokeApp.mutationOptions(),
+    meta: { invalidates: [orpc.mcp.apps.key()], success: m.security_apps_revoked },
+  });
+  return (
+    <Panel className="animate-enter" style={{ animationDelay: "180ms" }}>
+      <PanelHeader>
+        <PanelTitle>{m.security_apps()}</PanelTitle>
+      </PanelHeader>
+      <PanelContent>
+        <QueryView
+          query={apps}
+          loadingClassName="min-h-24"
+          isEmpty={(data) => data.apps.length === 0}
+          empty={<EmptyState compact icon={McpServerIcon} title={m.security_apps_empty()} />}
+        >
+          {({ apps: list }) => (
+            <ul
+              className="divide-y divide-edge rounded-lg text-sm faint-well"
+              data-testid="connected-apps"
+            >
+              {list.map((app, index) => (
+                <li
+                  key={app.clientId}
+                  className="flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 animate-enter"
+                  style={enterDelay(index)}
+                >
+                  <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-raised text-muted-foreground shadow-elev-1">
+                    <HugeiconsIcon icon={McpServerIcon} strokeWidth={2} className="size-4" />
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate font-medium">{app.name}</span>
+                    <span className="truncate font-mono text-xs text-muted-foreground">
+                      {app.host}
+                    </span>
+                  </span>
+                  <Badge
+                    size="sm"
+                    tone={app.scopes.includes(MCP_SCOPE_WRITE) ? "warning" : "neutral"}
+                  >
+                    {app.scopes.includes(MCP_SCOPE_WRITE)
+                      ? m.oauth_access_write()
+                      : m.oauth_access_read()}
+                  </Badge>
+                  <span
+                    className="shrink-0 text-xs text-muted-foreground tabular-nums"
+                    title={formatDateTime(app.lastUsedAt ?? app.grantedAt)}
+                  >
+                    {app.lastUsedAt ? (
+                      <TimeAgo at={app.lastUsedAt} />
+                    ) : (
+                      m.security_apps_never_used()
+                    )}
+                  </span>
+                  <ConfirmDialog
+                    trigger={
+                      <Button
+                        className="icon-button"
+                        size="sm"
+                        variant="ghost"
+                        aria-label={m.security_apps_revoke()}
+                        data-testid="revoke-app"
+                      >
+                        <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+                      </Button>
+                    }
+                    destructive
+                    title={m.security_apps_revoke_confirm({ name: app.name })}
+                    confirmLabel={m.security_apps_revoke()}
+                    onConfirm={async () => {
+                      await revoke.mutateAsync({ clientId: app.clientId });
                     }}
                   />
                 </li>

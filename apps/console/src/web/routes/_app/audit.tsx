@@ -43,6 +43,7 @@ const actorLabels: Record<string, () => string> = {
   user: () => m.audit_actor_user(),
   api_key: () => m.audit_actor_api_key(),
   service_account: () => m.audit_actor_service_account(),
+  oauth_client: () => m.audit_actor_oauth_client(),
   node: () => m.audit_actor_node(),
   probe: () => m.audit_actor_probe(),
   system: () => m.audit_actor_system(),

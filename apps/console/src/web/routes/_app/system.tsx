@@ -14,6 +14,7 @@ import { ExtensionsPanel } from "@/components/extensions/extensions-panel";
 import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { LogRetentionCard } from "@/components/log-retention";
 import { LoginAllowListCard } from "@/components/login-allow-list";
+import { McpSettingsCard } from "@/components/mcp-settings";
 import { NodeChannelCard } from "@/components/node-channel";
 import { UrlScopeBadge } from "@/components/node-enrollment";
 import { NodeLogRetentionCard } from "@/components/node-log-retention";
@@ -215,6 +216,7 @@ function GeneralSettings() {
       <PlatformErrorPagesCard />
       <LoginAllowListCard />
       <DemoSettingsCard />
+      <McpSettingsCard />
     </>
   );
 }
