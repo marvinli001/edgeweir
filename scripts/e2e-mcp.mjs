@@ -89,6 +89,15 @@ const form = (path, body) =>
     body: new URLSearchParams(body).toString(),
   });
 
+/** Where a redirecting better-auth answer sends the browser: Location, or the JSON url. */
+async function target(response) {
+  const text = await response.text();
+  const location =
+    response.headers.get("location") ?? (text.startsWith("{") ? JSON.parse(text).url : undefined);
+  assert.ok(location, `no redirect (HTTP ${response.status}): ${text.slice(0, 300)}`);
+  return new URL(location, base);
+}
+
 /** Authorize → (sign-in) → consent → token, as the browser and the client do it. */
 async function grant(clientId, access, session) {
   const { verifier, challenge } = pkce();
@@ -106,7 +115,7 @@ async function grant(clientId, access, session) {
     redirect: "manual",
     headers: session ? { cookie: session } : {},
   });
-  let next = new URL(authorize.headers.get("location") ?? "", base);
+  let next = await target(authorize);
   let cookie = session;
   if (next.pathname === "/login") {
     assert.ok(next.searchParams.get("sig"), "the /login redirect carries a signed request");
