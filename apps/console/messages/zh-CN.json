@@ -1984,6 +1984,7 @@
   "revision_reason_site_access_control_updated": "修改网站 {site} 的访问控制",
   "revision_reason_cluster_cache_updated": "修改缓存区",
   "revision_reason_node_cache_updated": "修改节点 {node} 的缓存容量",
+  "revision_reason_node_addresses_updated": "修改节点 {node} 的调度地址",
   "revision_reason_error_pages_updated": "修改平台错误页",
   "task_error_sitemap_failed": "站点地图 {url} 获取失败（{reason}）",
   "task_error_sitemap_empty": "站点地图 {url} 中没有本网站的 URL",

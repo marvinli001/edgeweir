@@ -227,6 +227,76 @@ describe("tiered cache", async () => {
     expect(row?.t).toBeNull();
   });
 
+  it("publishes changed upper addresses without changing the selected nodes", async () => {
+    const id = nodes.u1 as string;
+    await ctx.db.insert(schema.nodeIp).values({ nodeId: id, address: "8.8.4.4" });
+    await admin.tieredCache.site.update({
+      id: siteId,
+      topology: "custom",
+      upperNodeIds: [id],
+      upperNodeGroupIds: [],
+    });
+    const before = await config();
+    expect(before.tieredCache?.nodes.find((n) => n.id === id)?.address).toBe("10.2.0.1");
+
+    const addresses = [{ address: "10.2.0.9", level: 0 }];
+    await admin.nodes.setAddresses({ id, addresses });
+    const changed = await config();
+    expect(changed.revision).toBeGreaterThan(before.revision);
+    expect(changed.tieredCache?.nodes.find((n) => n.id === id)?.address).toBe("10.2.0.9");
+    expect(changed.tieredCache?.plans).toEqual(before.tieredCache?.plans);
+    expect((await latestRevision(ctx.db, clusterId))?.reasonCode).toBe("node_addresses_updated");
+
+    await admin.nodes.setAddresses({ id, addresses });
+    expect((await config()).revision).toBe(changed.revision);
+
+    await admin.nodes.setAddresses({ id, addresses: [] });
+    const reported = await config();
+    expect(reported.revision).toBeGreaterThan(changed.revision);
+    expect(reported.tieredCache?.nodes.find((n) => n.id === id)?.address).toBe("8.8.4.4");
+    expect(reported.tieredCache?.plans).toEqual(before.tieredCache?.plans);
+
+    await admin.nodes.setAddresses({ id, addresses: [{ address: "10.2.0.1", level: 0 }] });
+    await admin.tieredCache.site.update({
+      id: siteId,
+      topology: "inherit",
+      upperNodeIds: [],
+      upperNodeGroupIds: [],
+    });
+  });
+
+  it("publishes global port changes for clusters with only per-site topologies", async () => {
+    const settings = await admin.tieredCache.get();
+    await admin.tieredCache.site.update({
+      id: siteId,
+      topology: "custom",
+      upperNodeIds: [nodes.u1 as string],
+      upperNodeGroupIds: [],
+    });
+    const before = await config();
+    expect(before.tieredCache?.port).toBe(8444);
+
+    await admin.tieredCache.update({ ...settings, port: 8445 });
+    const changed = await config();
+    expect(changed.revision).toBeGreaterThan(before.revision);
+    expect(changed.tieredCache?.port).toBe(8445);
+    expect(changed.tieredCache?.plans).toEqual(before.tieredCache?.plans);
+    expect((await latestRevision(ctx.db, clusterId))?.reasonCode).toBe("tiered_cache_updated");
+    expect(await selectTiers(ctx.db)).toEqual([]);
+
+    await admin.tieredCache.update({ ...settings, port: 8445, topology: "generic" });
+    expect((await config()).revision).toBe(changed.revision);
+
+    await admin.tieredCache.update(settings);
+    expect((await config()).tieredCache?.port).toBe(8444);
+    await admin.tieredCache.site.update({
+      id: siteId,
+      topology: "inherit",
+      upperNodeIds: [],
+      upperNodeGroupIds: [],
+    });
+  });
+
   it("counts tier fetches and the upper tiers' hit ratio", async () => {
     const node = nodes.e1 as string;
     await ctx.db.insert(schema.nodeMinuteStats).values({

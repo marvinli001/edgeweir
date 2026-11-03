@@ -2154,6 +2154,7 @@
   "revision_reason_site_access_control_updated": "Access control of {site} updated",
   "revision_reason_cluster_cache_updated": "Cache zone updated",
   "revision_reason_node_cache_updated": "Cache size of node {node} updated",
+  "revision_reason_node_addresses_updated": "Scheduling addresses of node {node} updated",
   "revision_reason_error_pages_updated": "Platform error pages updated",
   "task_error_sitemap_failed": "Could not fetch the sitemap {url} ({reason})",
   "task_error_sitemap_empty": "The sitemap {url} lists no URL of the site",

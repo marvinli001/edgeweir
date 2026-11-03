@@ -405,7 +405,7 @@ export async function replaceReportedAddresses(
 /**
  * Replaces the node's configured scheduling addresses (empty: DNS and
  * probes go back to the public addresses it reports) and publishes the
- * cluster's DNS binding with them; the reconciliation writes it.
+ * cluster's configuration and DNS binding with them.
  */
 export async function setNodeAddresses(
   db: Database,
@@ -448,6 +448,11 @@ export async function setNodeAddresses(
           .map((a) => ({ address: a.address, level: a.level })),
         to: addresses,
       },
+    });
+    await publishRevision(tx, {
+      clusterId: row.clusterId,
+      reason: { code: "node_addresses_updated", params: { node: row.name } },
+      actor,
     });
     await publishClusterDns(tx, row.clusterId, "manual");
     return getNode(tx, row.id);

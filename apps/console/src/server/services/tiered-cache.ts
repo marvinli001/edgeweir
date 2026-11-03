@@ -369,8 +369,8 @@ export async function selectTiers(db: Database, now = Date.now()): Promise<strin
 }
 
 /**
- * Replaces the console-wide setting and publishes every cluster with a site
- * that follows it, in one transaction with the audit entry.
+ * Replaces the console-wide setting and publishes every cluster with a site,
+ * since even per-site topologies share its port; audited in the same transaction.
  */
 export async function updateTieredCache(
   db: Database,
@@ -386,12 +386,7 @@ export async function updateTieredCache(
       });
     return tieredCacheSetting.write(tx, actor, input, {
       afterWrite: async () => {
-        const rows = await tx
-          .selectDistinct({ id: schema.site.clusterId })
-          .from(schema.site)
-          .where(
-            sql`${schema.site.tieredCache} is null or ${schema.site.tieredCache}->>'topology' = 'inherit'`,
-          );
+        const rows = await tx.selectDistinct({ id: schema.site.clusterId }).from(schema.site);
         const published = await publishClusters(
           tx,
           rows.map((r) => r.id),

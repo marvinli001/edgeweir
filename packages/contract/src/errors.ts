@@ -447,6 +447,7 @@ export const revisionReasonDefs = {
   ai_crawl_updated: { params: [], en: "global AI crawl control updated" },
   cluster_cache_updated: { params: [], en: "cache zone updated" },
   node_cache_updated: { params: ["node"], en: "cache size of node {node} updated" },
+  node_addresses_updated: { params: ["node"], en: "scheduling addresses of node {node} updated" },
   error_pages_updated: { params: [], en: "platform error pages updated" },
   recompiled: { params: [], en: "configuration recompiled after an upgrade" },
   l4_app_created: { params: ["app"], en: "L4 application {app} created" },
