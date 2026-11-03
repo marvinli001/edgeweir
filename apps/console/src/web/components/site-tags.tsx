@@ -244,7 +244,7 @@ export function TagFilter({
         }
       >
         <HugeiconsIcon icon={Tag01Icon} strokeWidth={2} />
-        <span className="max-w-48 truncate">
+        <span className="max-w-32 truncate sm:max-w-48">
           {names.length ? names.join(match === "all" ? " + " : " / ") : m.tags_filter()}
         </span>
       </DropdownMenuTrigger>

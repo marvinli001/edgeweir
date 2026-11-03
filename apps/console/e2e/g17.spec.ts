@@ -82,6 +82,9 @@ test("G17: tags filter the site list, are edited on a site and renamed or delete
   const tag = `g17-ui-${RUN}`;
   await page.goto(`/sites/${state?.t1}`);
   await page.getByTestId("site-tags-edit").click();
+  // A retry starts from the fixture's tags, without edits left by its earlier attempt.
+  const previousTags = page.getByTestId("tag-chip").filter({ hasText: /^g17-ui-/i });
+  while (await previousTags.count()) await previousTags.first().getByRole("button").click();
   await page.getByTestId("tag-picker-input").fill(`  ${tag.toUpperCase()} `);
   await page.getByTestId("tag-picker-input").press("Enter");
   await page.getByTestId("tag-picker-input").fill(tag);
