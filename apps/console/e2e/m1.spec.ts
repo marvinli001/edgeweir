@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { pick, saved, signedIn, test } from "./helpers";
+import { pick, saved, signedIn, siteTab, test } from "./helpers";
 
 /**
  * MVP M1 acceptance (dev-docs/specs/mvp.md §1): the operator creates and edits a site → creates a
@@ -32,7 +32,7 @@ test("M1: site editing, clusters, node groups, audit and i18n", async ({ page })
     // Creating a site opens its detail page.
     await expect(page.getByTestId("page-title")).toHaveText("edited-site");
 
-    await page.getByTestId("tab-domains").click();
+    await siteTab(page, "domains");
     await page.getByTestId("domain-input").fill("www.edited.test");
     await page.getByTestId("domain-add").click();
     await page.getByTestId("domains-save").click();
@@ -42,7 +42,7 @@ test("M1: site editing, clusters, node groups, audit and i18n", async ({ page })
     await expect(notice).toContainText(/生效中 \d+\/\d+|已生效/);
     await expect(page.getByTestId("domain-list")).toContainText("www.edited.test");
 
-    await page.getByTestId("tab-origins").click();
+    await siteTab(page, "origins");
     await page.getByTestId("origin-address").fill("whoami");
     await page.getByTestId("origin-port").fill("80");
     await saved(page, page.getByTestId("origins-save"), "sites/update");
@@ -51,7 +51,7 @@ test("M1: site editing, clusters, node groups, audit and i18n", async ({ page })
     // The edits are stored: a reload shows them.
     await page.reload();
     await expect(page.getByTestId("origin-address")).toHaveValue("whoami");
-    await page.getByTestId("tab-domains").click();
+    await siteTab(page, "domains");
     await expect(page.getByTestId("domain-list")).toContainText("edited.test");
     await expect(page.getByTestId("domain-list")).toContainText("www.edited.test");
 

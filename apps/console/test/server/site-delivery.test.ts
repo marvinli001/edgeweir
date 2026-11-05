@@ -34,6 +34,7 @@ describe("site delivery: where a site's configuration runs", async () => {
           set: {
             appliedRevision: latest.revision,
             appliedContentHash: latest.contentHash,
+            state: "applied",
             dataPlaneHealthy: healthy,
           },
         });
@@ -105,6 +106,43 @@ describe("site delivery: where a site's configuration runs", async () => {
     expect((await admin.sites.get({ id: other })).delivery.state).toBe("live");
     await apply(nodeIds.slice(0, 2));
     expect((await delivery()).state).toBe("live");
+  });
+
+  it("keeps a rules save separate from node acknowledgements, including failed applies", async () => {
+    const other = (
+      await admin.sites.create({
+        name: "unaffected",
+        clusterId,
+        domains: ["unaffected.test"],
+        origins,
+      })
+    ).site.id;
+    await apply(nodeIds.slice(0, 2));
+    const saved = await admin.rules.save({
+      id: siteId,
+      rules: [
+        {
+          name: "block",
+          phase: "waf-custom",
+          expression: 'http.request.uri.path eq "/blocked"',
+          enabled: true,
+          action: { kind: "block" },
+        },
+      ],
+    });
+    expect(saved).toHaveLength(1);
+    expect(await delivery()).toMatchObject({ state: "partial", currentNodes: 0, totalNodes: 2 });
+    await ctx.db
+      .update(schema.nodeConfigStatus)
+      .set({ state: "failed", message: "configuration rejected" })
+      .where(eq(schema.nodeConfigStatus.nodeId, nodeIds[0] as string));
+    expect(await delivery()).toMatchObject({ state: "partial", currentNodes: 0 });
+    // A cluster-wide apply failure does not mean an unchanged site stopped serving its version.
+    expect((await admin.sites.get({ id: other })).delivery.state).toBe("live");
+    await apply(nodeIds.slice(0, 1));
+    expect(await delivery()).toMatchObject({ state: "partial", currentNodes: 1 });
+    await apply(nodeIds.slice(1, 2));
+    expect(await delivery()).toMatchObject({ state: "live", currentNodes: 2 });
   });
 
   it("is partial while a node's data plane is unhealthy, and disabled when disabled", async () => {

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, type Page } from "@playwright/test";
-import { errors, pick, saved, shots, signedIn, test } from "./helpers";
+import { errors, pick, saved, shots, signedIn, siteTab, test } from "./helpers";
 
 /**
  * Written by scripts/e2e-g10.mjs: g10-suffix (.multi.g10.test) with the CNAME prefix
@@ -39,7 +39,7 @@ test("G10: Unicode and suffix, wildcard and pattern domains", async ({ page }) =
   await page.getByTestId("create-site-submit").click();
   await expect(page.getByTestId("page-title")).toHaveText("g10-ui");
 
-  await page.getByTestId("tab-domains").click();
+  await siteTab(page, "domains");
   const list = page.getByTestId("domain-list");
   // Stored as Punycode, shown in Unicode with the stored form on hover.
   const unicode = list.getByTestId("domain-unicode");

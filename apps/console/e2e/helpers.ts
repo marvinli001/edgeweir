@@ -98,6 +98,18 @@ export async function pick(page: Page, trigger: Locator, option: string) {
   await page.getByRole("option", { name: option, exact: true }).click();
 }
 
+/** Opens a site tab through its group, using the navigation's own membership. */
+export async function siteTab(page: Page, tab: string) {
+  const group = page.getByTestId("site-tab-group");
+  await expect(group).toBeVisible();
+  const target = page.getByTestId(`tab-${tab}`);
+  if (!(await target.isVisible())) {
+    await group.click();
+    await page.locator(`[role="option"][data-site-tabs~="${tab}"]`).click();
+  }
+  await target.click();
+}
+
 /**
  * Clicks a save button and waits for its RPC to answer: the button turns
  * disabled while the mutation is still pending, so a reload right after the

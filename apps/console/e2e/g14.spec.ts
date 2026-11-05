@@ -1,7 +1,9 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import type { Cluster, Node } from "@edgeweir/contract";
 import { expect, type Locator, type Page } from "@playwright/test";
-import { errors, pick, saved, signedIn, test } from "./helpers";
+import { revokeAccessKey, signInWithAccessKey } from "../../../scripts/e2e-auth.mjs";
+import { errors, pick, saved, signedIn, siteTab, test } from "./helpers";
 
 /**
  * G14 in the browser, on a site of its own created here through the UI (unique per run):
@@ -279,14 +281,99 @@ test("G14: a platform rule bans everywhere", async ({ page }) => {
     PLATFORM_RULE,
     `http.request.uri.path eq "/${PLATFORM_RULE}"`,
   );
+  await rule.getByRole("switch", { name: "启用", exact: true }).click();
+  await expect(rule.getByRole("switch", { name: "启用", exact: true })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
   await pick(page, rule.getByLabel("动作", { exact: true }), "封禁");
   await expect(rule.getByTestId("rule-ban-scope")).toHaveText("本站");
   await pick(page, rule.getByTestId("rule-ban-scope"), "全局");
   await pick(page, rule.getByTestId("rule-ban-prefix-v6"), "/48");
   await saved(page, page.getByTestId("rules-save"), "platformRules/save");
   await expect(page.getByTestId("rules-save")).toBeDisabled();
-
-  await page.reload();
+  const notice = page.getByTestId("rules-delivery-toast");
+  await expect(notice).toContainText("已保存");
+  await expect(notice).toContainText("请逐集群查看节点生效状态");
+  await expect(notice.locator('div[data-type="info"]')).toBeVisible();
+  await notice.getByRole("button", { name: "查看节点", exact: true }).click();
+  await expect(page).toHaveURL(/\/clusters$/);
+  await page.goto("/rules");
+  const base = new URL(page.url()).origin;
+  const session = await signInWithAccessKey(
+    base,
+    process.env.E2E_ADMIN_EMAIL ?? "admin@e2e.test",
+    process.env.E2E_ADMIN_PASSWORD ?? "e2e-admin-password-123",
+    `g14-delivery-${RUN}`,
+    "read",
+  );
+  try {
+    const read = async <T>(path: string): Promise<T> => {
+      const response = await page.request.get(`/api/v1${path}`, {
+        headers: { "x-api-key": session.key },
+      });
+      expect(response.status(), `read-only GET ${path}`).toBe(200);
+      return response.json();
+    };
+    const clusters = await read<Cluster[]>("/clusters");
+    expect(clusters.reduce((total, cluster) => total + cluster.liveNodeCount, 0)).toBeGreaterThan(
+      0,
+    );
+    let receipts: { cluster: Cluster; expectedOnline: number; nodes: Node[] }[] = [];
+    await expect
+      .poll(
+        async () => {
+          receipts = await Promise.all(
+            clusters.map(async (cluster) => ({
+              cluster: await read<Cluster>(`/clusters/${cluster.id}`),
+              expectedOnline: cluster.liveNodeCount,
+              nodes: await read<Node[]>(`/nodes?clusterId=${cluster.id}`),
+            })),
+          );
+          return receipts.every(({ cluster, expectedOnline, nodes }) => {
+            const online = nodes.filter((node) => node.status === "active" && node.online);
+            return (
+              online.length >= expectedOnline &&
+              online.every(
+                (node) =>
+                  node.dataPlaneHealthy &&
+                  node.applyState === "applied" &&
+                  node.appliedRevision === cluster.latestRevision?.revision &&
+                  node.appliedContentHash === cluster.latestRevision?.contentHash,
+              )
+            );
+          });
+        },
+        { message: "platform rules reach every online node", timeout: 120_000, intervals: [5000] },
+      )
+      .toBe(true);
+    writeFileSync(
+      resolve("../../.e2e/g14-platform-delivery.json"),
+      `${JSON.stringify(
+        receipts.map(({ cluster, expectedOnline, nodes }) => ({
+          clusterId: cluster.id,
+          expectedOnline,
+          revision: cluster.latestRevision?.revision,
+          contentHash: cluster.latestRevision?.contentHash,
+          nodes: nodes.map((node) => ({
+            id: node.id,
+            name: node.name,
+            status: node.status,
+            online: node.online,
+            agentVersion: node.agentVersion,
+            dataPlaneHealthy: node.dataPlaneHealthy,
+            appliedRevision: node.appliedRevision,
+            appliedContentHash: node.appliedContentHash,
+            applyState: node.applyState,
+          })),
+        })),
+        null,
+        2,
+      )}\n`,
+    );
+  } finally {
+    await revokeAccessKey(base, session);
+  }
   const kept = phaseRules(page, "waf-custom").last();
   await expect(kept.getByLabel("名称", { exact: true })).toHaveValue(PLATFORM_RULE);
   await expect(kept.getByTestId("rule-ban-scope")).toHaveText("全局");
@@ -386,7 +473,7 @@ test("G14: CRS exclusions by path and target, and 按路径排除 from the top C
   } else {
     await link.click();
     await expect(page.getByTestId("page-title")).toHaveText(CRS_SITE);
-    await page.getByTestId("tab-attacks").click();
+    await siteTab(page, "attacks");
     const top = page.getByTestId("waf-top-rules");
     const item = top
       .locator("li")
@@ -409,7 +496,7 @@ test("G14: CRS exclusions by path and target, and 按路径排除 from the top C
     await dialog.getByTestId("exclusion-submit").click();
     expect((await answered).ok()).toBe(true);
     await expect(dialog).toBeHidden();
-    await page.getByTestId("tab-security").click();
+    await siteTab(page, "security");
     const added = page.locator(`[data-testid="waf-exclusion-entry"][data-path="${path}"]`);
     await expect(added).toHaveCount(1);
     await expect(added.getByTestId("waf-exclusion-entry-rules")).toHaveText(ruleIdText);

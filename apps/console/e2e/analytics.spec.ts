@@ -1,5 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import { signedIn, test } from "./helpers";
+import { signedIn, siteTab, test } from "./helpers";
 
 const nodeName = process.env.E2E_NODE_NAME ?? "edge-e2e-1";
 
@@ -42,7 +42,7 @@ test("overview lists and charts, stars, site analytics with breakdowns", async (
     await page.getByTestId("home-site").first().click();
     await expect(page.getByTestId("page-title")).toHaveText("demo");
     await expect(page.getByTestId("site-star")).toHaveAttribute("aria-pressed", "true");
-    await page.getByTestId("tab-analytics").click();
+    await siteTab(page, "analytics");
     await expect(
       page.getByTestId("metric-requests").locator("[data-slot=metric-value]"),
     ).toHaveText(/[1-9]/);

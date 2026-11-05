@@ -1,17 +1,20 @@
 import type { Cluster, Revision } from "@edgeweir/contract";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Button } from "@/components/arc/button/button";
 import { SiteChangeList } from "@/components/config-changes";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FieldError } from "@/components/layout/form";
-import { EmptyState, QueryView } from "@/components/states";
+import { Spinner } from "@/components/layout/spinner";
+import { EmptyState, ErrorState, QueryView } from "@/components/states";
 import { TimeAgo } from "@/components/time-ago";
-import { formatDateTime, m } from "@/lib/i18n";
+import { formatDateTime, formatNumber, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { revisionReason } from "@/lib/revisions";
 import { toast } from "@/lib/toast";
+
+const PAGE_SIZE = 20;
 
 /**
  * Rollback with what it changes: the sites it adds, changes and removes
@@ -63,9 +66,31 @@ function RollbackAction({ clusterId, revision }: { clusterId: string; revision: 
   );
 }
 
-/** The cluster's latest revisions, each but the latest with its rollback. */
+/** The cluster's retained revisions, newest first, each but the latest with its rollback. */
 export function RevisionsSection({ cluster }: { cluster: Cluster }) {
-  const revisions = useQuery(orpc.clusters.revisions.queryOptions({ input: { id: cluster.id } }));
+  const revisions = useInfiniteQuery(
+    orpc.clusters.revisions.infiniteOptions({
+      input: (before: number | undefined) => ({ id: cluster.id, before, limit: PAGE_SIZE }),
+      initialPageParam: undefined,
+      getNextPageParam: (page) => (page.length === PAGE_SIZE ? page.at(-1)?.revision : undefined),
+    }),
+  );
+  const section = React.useRef<HTMLElement>(null);
+  const focusAfter = React.useRef<number | undefined>(undefined);
+  const loadMore = () => {
+    focusAfter.current = revisions.data?.pages.flat().length;
+    void revisions.fetchNextPage();
+  };
+  React.useEffect(() => {
+    const index = focusAfter.current;
+    if (index === undefined || revisions.isFetching || revisions.isFetchNextPageError) return;
+    const rows = section.current?.querySelectorAll<HTMLTableRowElement>("tbody tr");
+    // Appended rows precede the load button; keep them reachable in the forward tab order.
+    (rows?.[index] ?? rows?.[index - 1])
+      ?.querySelector<HTMLButtonElement>('[data-testid="revision-rollback"]')
+      ?.focus();
+    focusAfter.current = undefined;
+  }, [revisions.isFetching, revisions.isFetchNextPageError]);
   const latest = cluster.latestRevision?.revision ?? 0;
   const columns = React.useMemo<Columns<Revision>>(
     () => [
@@ -122,17 +147,43 @@ export function RevisionsSection({ cluster }: { cluster: Cluster }) {
   );
 
   return (
-    <section className="flex flex-col gap-3">
+    <section ref={section} className="flex min-w-0 flex-col gap-3">
       <h2 className="text-sm font-medium">{m.revisions_title()}</h2>
-      <QueryView query={revisions} empty={<EmptyState compact title={m.revisions_empty()} />}>
-        {(list) => (
-          <DataTable
-            data={list.slice(0, 20)}
-            columns={columns}
-            getRowId={(r) => String(r.revision)}
-            testId="revisions-table"
-            pinFirstColumn
-          />
+      <QueryView
+        query={revisions}
+        isEmpty={(data) => data.pages.every((page) => page.length === 0)}
+        empty={<EmptyState compact title={m.revisions_empty()} />}
+      >
+        {(data) => (
+          <>
+            <DataTable
+              data={data.pages.flat()}
+              columns={columns}
+              getRowId={(r) => String(r.revision)}
+              testId="revisions-table"
+              pinFirstColumn
+              footer={
+                <>
+                  <span className="sr-only" role="status">
+                    {m.revisions_loaded({ count: formatNumber(data.pages.flat().length) })}
+                  </span>
+                  {revisions.hasNextPage ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={revisions.isFetching}
+                      onClick={loadMore}
+                      data-testid="revisions-more"
+                    >
+                      {revisions.isFetchingNextPage ? <Spinner /> : null}
+                      {revisions.isFetchNextPageError ? m.common_retry() : m.revisions_more()}
+                    </Button>
+                  ) : null}
+                </>
+              }
+            />
+            {revisions.isFetchNextPageError ? <ErrorState error={revisions.error} /> : null}
+          </>
         )}
       </QueryView>
     </section>

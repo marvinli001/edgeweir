@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { signedIn, test } from "./helpers";
+import { signedIn, siteTab, test } from "./helpers";
 
 /**
  * MVP M2 console acceptance (dev-docs/specs/mvp.md §2): the platform admin submits a URL purge on
@@ -72,7 +72,7 @@ test("M2: purge tasks, origin health, origin and cache settings", async ({ page 
       .click();
     await expect(page.getByTestId("page-title")).toHaveText("demo");
 
-    await page.getByTestId("tab-origins").click();
+    await siteTab(page, "origins");
     const origin = page.getByTestId("origin-row").first();
     await expect(origin.getByTestId("origin-address")).not.toHaveValue("");
     // Health comes from the nodes' passive checks; the e2e node is online, so it is known.
@@ -91,7 +91,7 @@ test("M2: purge tasks, origin health, origin and cache settings", async ({ page 
   });
 
   await test.step("the cache tab lists sortable rules and the cache key settings", async () => {
-    await page.getByTestId("tab-cache").click();
+    await siteTab(page, "cache");
     const rules = page.getByTestId("cache-rules-card");
     await expect(rules).toBeVisible();
     await expect(rules.getByTestId("cache-rule-row").first()).toBeVisible();
@@ -131,6 +131,7 @@ test("M2: purge tasks, origin health, origin and cache settings", async ({ page 
     );
     await expect(page.getByTestId("cache-save")).toBeEnabled();
 
+    await page.getByTestId("cache-group-behavior-trigger").click();
     const cacheKey = page.getByTestId("cache-key-card");
     await expect(cacheKey).toBeVisible();
     await expect(cacheKey.getByTestId("cache-key-query")).toBeVisible();

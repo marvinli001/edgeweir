@@ -3,11 +3,13 @@ import { type RuleDto, type RuleInput, ruleInput, siteRuleInput } from "@edgewei
 import { phases } from "@edgeweir/rule-engine";
 import { Add01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import { Button } from "@/components/arc/button/button";
 import { DisabledHint } from "@/components/disabled-hint";
 import { SafetyNote } from "@/components/safety-note";
+import { followSiteDelivery } from "@/components/site/delivery-toast";
 import { DeletedRules, RuleHistoryContext } from "@/components/site/rules/history";
 import {
   kinds,
@@ -22,8 +24,9 @@ import { SortableList } from "@/components/sortable-list";
 import { EmptyState } from "@/components/states";
 import { m } from "@/lib/i18n";
 import { invalidHostHeader } from "@/lib/lists";
-import { client, errorMessage } from "@/lib/orpc";
+import { client, errorMessage, orpc } from "@/lib/orpc";
 import { defaultAction } from "@/lib/rule-actions";
+import { toast } from "@/lib/toast";
 import { randomUuid } from "@/lib/uuid";
 
 /**
@@ -77,6 +80,8 @@ export function RulesEditor({
   /** The rules-v3 additions wait until the cluster's nodes run them. */
   lockedV3: boolean;
 }) {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [rows, setRows] = React.useState(initial);
   const [error, setError] = React.useState<string | null>(null);
   const save = useMutation({
@@ -85,7 +90,42 @@ export function RulesEditor({
       else await client.platformRules.save({ rules });
     },
     // Rules reach revisions, the sites' delivery and the platform's views.
-    meta: { invalidates: "all", success: m.common_saved },
+    meta: { invalidates: "all" },
+    onSuccess: async () => {
+      const title = m.common_saved();
+      const viewNodes = (clusterId?: string) =>
+        void navigate({ to: "/clusters", search: { cluster: clusterId } });
+      const action = { label: m.site_delivery_view_nodes(), onClick: () => viewNodes() };
+      if (!siteId) {
+        toast.info(title, {
+          description: m.rules_platform_delivery(),
+          action,
+          testId: "rules-delivery-toast",
+        });
+        return;
+      }
+      const id = `site-delivery-${siteId}`;
+      toast.loading(title, {
+        id,
+        description: m.site_delivery_checking(),
+        action,
+        testId: "site-delivery-toast",
+      });
+      try {
+        const site = await client.sites.get({ id: siteId });
+        queryClient.setQueryData(orpc.sites.get.queryKey({ input: { id: siteId } }), site);
+        followSiteDelivery(queryClient, siteId, title, site.delivery, () =>
+          viewNodes(site.clusterId),
+        );
+      } catch {
+        toast.info(title, {
+          id,
+          description: m.site_delivery_unavailable(),
+          action,
+          testId: "site-delivery-toast",
+        });
+      }
+    },
   });
   const dirty = JSON.stringify(initial) !== JSON.stringify(rows);
   const history = React.useMemo(

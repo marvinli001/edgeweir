@@ -12,7 +12,9 @@ import * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { Spinner } from "@/components/layout/spinner";
+import { LinkButton } from "@/components/link-button";
 import { SafetyNote } from "@/components/safety-note";
+import { ErrorState, QueryView } from "@/components/states";
 import { Dot, type StatusTone } from "@/components/status-dot";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
@@ -135,7 +137,7 @@ function WebSocketCandidate({
 
 /**
  * The console's own TLS handshake with the node channel URL, as one line:
- * a pulsing dot while it runs, nothing when it cannot be asked. `line`
+ * a pulsing dot while it runs, a retry when the request fails. `line`
  * names the node channel and links a failed check to the setting (the
  * add-node dialog). A failed check adds the WebSocket entry's: a switch to
  * it when it works (`onSwitched` after saving), a hint otherwise.
@@ -152,7 +154,14 @@ export function NodeChannelCheckStatus({
     meta: { background: true },
   });
   if (check.isPending) return <Dot tone="idle" pulse small />;
-  if (!check.data) return null;
+  if (check.isLoadingError || check.isRefetchError)
+    return (
+      <ErrorState
+        title={m.node_channel_check_failed()}
+        error={check.error}
+        onRetry={() => void check.refetch()}
+      />
+    );
   const { result, candidate } = check.data;
   const status = (
     <span
@@ -246,7 +255,11 @@ export function EnrollProgress({
     if (used) void queryClient.invalidateQueries({ queryKey: orpc.overview.key() });
   }, [used, queryClient]);
   const reached = (done: boolean, previous: boolean): Pick<Step, "tone" | "pulse"> =>
-    done ? { tone: "good" } : previous ? { tone: "idle", pulse: true } : { tone: "idle" };
+    done
+      ? { tone: "good" }
+      : previous && !status.isRefetchError
+        ? { tone: "idle", pulse: true }
+        : { tone: "idle" };
   const online = !!node?.online;
   const applied = !!node && node.applyState === "applied" && node.appliedRevision > 0;
   const healthy = !!node?.dataPlaneHealthy;
@@ -274,7 +287,12 @@ export function EnrollProgress({
         }
       : expired
         ? { id: "expired", tone: "bad", label: m.enroll_step_expired() }
-        : { id: "waiting", tone: "idle", pulse: true, label: m.enroll_step_waiting() },
+        : {
+            id: "waiting",
+            tone: "idle",
+            pulse: !status.isRefetchError,
+            label: m.enroll_step_waiting(),
+          },
     { id: "online", label: m.nodes_online(), ...reached(online, !!node) },
     { id: "applied", label: m.enroll_step_applied(), ...reached(applied, online) },
     { id: "healthy", label: m.enroll_step_healthy(), ...reached(healthy, applied) },
@@ -282,32 +300,53 @@ export function EnrollProgress({
       ? { id: "address", tone: "warn", label: m.node_dns_no_public_address() }
       : { id: "address", label: m.enroll_step_address(), ...reached(addressed, healthy) },
   ];
+  const queryError = (
+    <ErrorState
+      title={m.enroll_progress_failed()}
+      error={status.error}
+      onRetry={() => void status.refetch()}
+    />
+  );
   return (
-    <ol
-      className="flex flex-col gap-2 rounded-lg p-3 text-sm faint-well"
-      data-testid="enroll-progress"
-    >
-      {steps.map((step, index) => (
-        <li
-          key={step.id}
-          className="flex items-center gap-2 animate-enter"
-          style={{ animationDelay: `${index * 40}ms` }}
-          data-testid="enroll-step"
-          data-step={step.id}
-          data-tone={step.tone}
-        >
-          <Dot tone={step.tone} pulse={step.pulse} />
-          <span
-            className={
-              step.tone === "idle" && !step.pulse
-                ? "text-muted-foreground"
-                : "flex items-center gap-1.5"
-            }
+    <QueryView query={status} error={() => queryError} loadingClassName="min-h-16">
+      {() => (
+        <div className="flex flex-col gap-2">
+          {status.isRefetchError ? queryError : null}
+          <ol
+            className="flex flex-col gap-2 rounded-lg p-3 text-sm faint-well"
+            data-testid="enroll-progress"
           >
-            {step.label}
-          </span>
-        </li>
-      ))}
-    </ol>
+            {steps.map((step, index) => (
+              <li
+                key={step.id}
+                className="flex items-center gap-2 animate-enter"
+                style={{ animationDelay: `${index * 40}ms` }}
+                data-testid="enroll-step"
+                data-step={step.id}
+                data-tone={step.tone}
+              >
+                <Dot tone={step.tone} pulse={step.pulse} />
+                <span
+                  className={
+                    step.tone === "idle" && !step.pulse
+                      ? "text-muted-foreground"
+                      : "flex items-center gap-1.5"
+                  }
+                >
+                  {step.label}
+                </span>
+              </li>
+            ))}
+          </ol>
+          {used && online && applied && healthy && addressed ? (
+            <div>
+              <LinkButton to="/sites" search={{ create: true }} data-testid="enroll-create-site">
+                {m.nav_new_site()}
+              </LinkButton>
+            </div>
+          ) : null}
+        </div>
+      )}
+    </QueryView>
   );
 }

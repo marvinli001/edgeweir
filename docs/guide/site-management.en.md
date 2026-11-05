@@ -79,6 +79,18 @@ Page: **Sites → (site)** (`/sites/<site ID>`). The header holds the button bac
 
 ### Site tabs
 
+Below the title, choose a group and then one of its tabs. Switching groups opens the group's first tab. On phones the group selector takes its own row; the tabs within a group scroll sideways when needed.
+
+| Group | Tabs |
+| --- | --- |
+| "Overview" | Overview |
+| "Connection" | Domains, Origins, HTTPS |
+| "Performance & delivery" | Cache, Rules, Bulk redirects, Error pages, Extensions (shown once an extension is installed) |
+| "Security" | Security, Access control, AI crawlers |
+| "Observability" | Analytics, Attacks, Logs |
+
+Existing tab addresses are unchanged. Opening an old link, refreshing or going back or forward selects the group and tab from the address. Switching groups or tabs asks before discarding unsaved changes; cancelling keeps the current tab and draft.
+
 | Tab | Address | Content | Documentation |
 | --- | --- | --- | --- |
 | "Overview" | `/sites/<ID>` | Live requests, launch check, name, status, tags, usage protection | [Overview tab](#overview-tab) |
@@ -92,7 +104,9 @@ Page: **Sites → (site)** (`/sites/<site ID>`). The header holds the button bac
 | "Access control" | `?tab=access` | Access authentication, site lists, regions, hotlink protection, user agents, CORS, WebSocket, security headers, encoded path exemptions, IP check | [Access control](access-control.en.md) |
 | "Security" | `?tab=security` | Under Attack, challenge settings, CC policy, OWASP CRS | [Challenges and CC mitigation](challenges.en.md), [OWASP CRS](waf.en.md) |
 | "Attacks" | `?tab=attacks` | Attack statistics, automatic mitigation, security events | [Attacks and automatic mitigation](attack-dashboard.en.md) |
+| "AI crawlers" | `?tab=crawlers` | Crawler traffic, access policies, Markdown for Agents | [AI crawlers](ai-crawl-control.en.md) |
 | "Error pages" | `?tab=errors` | Error pages, maintenance mode | [Error pages](error-pages.en.md) |
+| "Extensions" | `?tab=extensions` | Per-site switches and settings for installed extensions | [Extensions](extensions.en.md) |
 | "Logs" | `?tab=logs` | Searching, exporting and configuring access logs | [Access logs](access-logs.en.md) |
 
 The time range of the "Analytics", "Origins" and "Attacks" tabs is kept in `?range=`.

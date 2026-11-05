@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect } from "@playwright/test";
-import { pick, signedIn, test } from "./helpers";
+import { pick, signedIn, siteTab, test } from "./helpers";
 
 test("M6: log filters, CSV export and scoped AccessKey revocation", async ({ page }) => {
   const state = JSON.parse(readFileSync(resolve("../../.e2e/m6-logs-state.json"), "utf8")) as {
@@ -39,7 +39,7 @@ test("M6: log filters, CSV export and scoped AccessKey revocation", async ({ pag
     .getByRole("link")
     .first();
   await other.click();
-  await page.getByTestId("tab-logs").click();
+  await siteTab(page, "logs");
   const otherUrl = `${new URL(page.url()).pathname}?tab=logs`;
   const otherTitle = await page.getByTestId("page-title").innerText();
   await page.getByLabel("路径前缀").fill("previous-site-filter");

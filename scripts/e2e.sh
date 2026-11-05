@@ -890,7 +890,7 @@ pass "cluster latest revision #$REVISION, $(jq -r .onlineNodeCount <<<"$CLUSTER"
 if ! $SKIP_UI; then
   step "Playwright smoke: login -> clusters & nodes -> sites"
   part ui env E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
-    E2E_EXPECT_REVISION="$REVISION" pnpm --filter @edgeweir/console run test:e2e e2e/smoke.spec.ts \
+    E2E_EXPECT_REVISION="$REVISION" pnpm --filter @edgeweir/console run test:e2e e2e/smoke \
     || fail "Playwright smoke test failed"
   pass "Playwright smoke passed"
 fi
@@ -1734,6 +1734,11 @@ section_extensions() {
 step "Node extensions: sign, trust, install, load, per-site, failure modes, kill switch, removal"
 part checks node scripts/e2e-extensions.mjs || fail "extensions end-to-end checks failed"
 part checks node scripts/e2e-extensions-v11.mjs || fail "extensions 1.1 end-to-end checks failed"
+if ! $SKIP_UI; then
+  part ui env E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+    pnpm --filter @edgeweir/console run test:e2e e2e/extension-node-settings.spec.ts \
+    || fail "node extension settings browser checks failed"
+fi
 pass "Node extension checks passed"
 }
 

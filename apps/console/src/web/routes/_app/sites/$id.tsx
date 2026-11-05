@@ -32,6 +32,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/arc/dropdown-menu/dropdown-menu";
 import { Input } from "@/components/arc/input/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/arc/select/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/arc/tabs/tabs";
 import { ConfirmDialog, ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
@@ -76,7 +83,7 @@ import { m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
 import { recordRecent } from "@/lib/recents";
 import { needsDomainForms, newDomains } from "@/lib/site-domains";
-import { SITE_TABS, type SiteTab, siteTabLabel } from "@/lib/site-tabs";
+import { SITE_TABS, type SiteTab, siteTabGroups, siteTabLabel } from "@/lib/site-tabs";
 import { toast } from "@/lib/toast";
 
 export const Route = createFileRoute("/_app/sites/$id")({
@@ -111,6 +118,24 @@ function SiteDetailPage() {
   });
   const stars = useSiteStars();
   const tab: SiteTab = search.tab ?? "overview";
+  const groups = siteTabGroups();
+  const group = groups.find((group) => group.tabs.includes(tab)) as (typeof groups)[number];
+  const setTab = (value: SiteTab) =>
+    navigate({
+      // A jump's filters belong to the tab it opened.
+      search: (prev) => ({
+        ...prev,
+        tab: value === "overview" ? undefined : value,
+        blockReason: undefined,
+        ip: undefined,
+        cidr: undefined,
+        path: undefined,
+        crawler: undefined,
+        from: undefined,
+        to: undefined,
+      }),
+      replace: true,
+    });
   const setRange = (range: AnalyticsRange) =>
     navigate({
       search: (prev) => ({ ...prev, range: range === DEFAULT_RANGE ? undefined : range }),
@@ -182,44 +207,56 @@ function SiteDetailPage() {
             key={data.id}
             className="gap-4"
             value={tab}
-            onValueChange={(value) =>
-              navigate({
-                // A jump's filters belong to the tab it opened.
-                search: (prev) => ({
-                  ...prev,
-                  tab: value === "overview" ? undefined : (value as SiteTab),
-                  blockReason: undefined,
-                  ip: undefined,
-                  cidr: undefined,
-                  path: undefined,
-                  crawler: undefined,
-                  from: undefined,
-                  to: undefined,
-                }),
-                replace: true,
-              })
-            }
+            onValueChange={(value) => setTab(value as SiteTab)}
           >
             {/* The page's tab bar, in the header band. */}
             <PageTabs>
-              <TabsList
-                ref={tabBar}
-                variant="line"
-                className="w-full max-w-full justify-start overflow-x-auto overflow-y-hidden scroll-fade [scrollbar-width:none]"
-              >
-                {SITE_TABS.filter((value) => value !== "extensions" || hasExtensions).map(
-                  (value) => (
-                    <TabsTrigger
-                      key={value}
-                      value={value}
-                      className="flex-none"
-                      data-testid={`tab-${value}`}
-                    >
-                      {siteTabLabel(value)}
-                    </TabsTrigger>
-                  ),
-                )}
-              </TabsList>
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-6">
+                <Select<SiteTab>
+                  value={group.tabs[0]}
+                  onValueChange={(value) => {
+                    if (value) void setTab(value);
+                  }}
+                >
+                  <SelectTrigger
+                    className="w-full sm:w-52 sm:flex-none"
+                    aria-label={m.site_settings_group()}
+                    data-testid="site-tab-group"
+                  >
+                    <SelectValue>{group.label}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {groups.map((item) => (
+                      <SelectItem
+                        key={item.tabs[0]}
+                        value={item.tabs[0]}
+                        data-site-tabs={item.tabs.join(" ")}
+                      >
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <TabsList
+                  ref={tabBar}
+                  variant="line"
+                  aria-label={group.label}
+                  className="w-full min-w-0 max-w-full justify-start overflow-x-auto overflow-y-hidden scroll-fade [scrollbar-width:none]"
+                >
+                  {group.tabs
+                    .filter((value) => value !== "extensions" || hasExtensions)
+                    .map((value) => (
+                      <TabsTrigger
+                        key={value}
+                        value={value}
+                        className="flex-none"
+                        data-testid={`tab-${value}`}
+                      >
+                        {siteTabLabel(value)}
+                      </TabsTrigger>
+                    ))}
+                </TabsList>
+              </div>
             </PageTabs>
             <TabsContent value="overview" className="animate-enter">
               <OverviewTab site={data} />

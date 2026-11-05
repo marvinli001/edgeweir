@@ -74,6 +74,7 @@ test("G18: conversion turns on in the cache tab, refuses bad settings and keeps 
   expect(siteId).not.toBe("");
 
   await page.goto(`/sites/${siteId}?tab=cache`);
+  await page.getByTestId("cache-group-optimization-trigger").click();
   const card = page.getByTestId("image-convert-card");
   await expect(card).toBeVisible();
   // The cluster's nodes run image-convert-v1: nothing is locked.
@@ -104,6 +105,7 @@ test("G18: conversion turns on in the cache tab, refuses bad settings and keeps 
   await page.getByTestId("image-convert-max-pixels").fill("8000000");
   await saved(page, page.getByTestId("image-convert-save"), "imageConvert/update");
   await page.reload();
+  await page.getByTestId("cache-group-optimization-trigger").click();
   await expect(page.getByTestId("image-convert-enabled")).toHaveAttribute("aria-checked", "true");
   await expect(page.getByTestId("image-convert-avif-on")).toHaveAttribute("aria-checked", "true");
   await expect(page.getByTestId("image-convert-avif-quality")).toHaveValue("45");
@@ -121,6 +123,7 @@ test("G18: the savings card shows what the nodes saved", async ({ page }) => {
   const state = JSON.parse(readFileSync(G18_STATE, "utf8")) as { siteId: string };
   await signedIn(page);
   await page.goto(`/sites/${state.siteId}?tab=cache`);
+  await page.getByTestId("cache-group-optimization-trigger").click();
   await expect(page.getByTestId("image-convert-enabled")).toHaveAttribute("aria-checked", "true");
   const bytes = page.getByTestId("image-savings-bytes");
   await expect(bytes).toBeVisible();

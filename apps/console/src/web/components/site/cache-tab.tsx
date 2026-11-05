@@ -55,11 +55,7 @@ import { splitList } from "@/lib/lists";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
-/**
- * Cache tab: development mode, purges, ordered cache rules, how cache keys are built, whether the
- * origin's Cache-Tag reaches clients, the tiered cache, compression, WebP / AVIF conversion and
- * charsets. Each card saves on its own.
- */
+/** Common cache operations first; the remaining cards save independently inside their groups. */
 export function CacheTab({ site }: { site: Site }) {
   const { cacheKey, rangeSlice, keepCacheTag, xCache, purgeMethod } = site.cacheSettings;
   return (
@@ -69,19 +65,95 @@ export function CacheTab({ site }: { site: Site }) {
       {/* Keyed by their own data, so saving one card keeps unsaved edits in the others. */}
       {/* Each key starts with the card's name: sibling keys must differ ("true" twice duplicates a card). */}
       <CacheRulesCard key={`rules-${JSON.stringify(site.cacheRules)}`} site={site} />
-      <CacheKeyCard key={`key-${JSON.stringify({ cacheKey, rangeSlice })}`} site={site} />
-      <PurgeMethodCard key={`purge-${JSON.stringify(purgeMethod)}`} site={site} />
-      <CacheTagCard key={`cache-tag-${keepCacheTag}`} site={site} />
-      <XCacheCard key={`x-cache-${xCache}`} site={site} />
-      <TieredCacheCard site={site} />
-      <TierSelectionCard siteId={site.id} />
-      <CompressionCard site={site} />
-      <ImageConvertCard site={site} />
-      <ImageSavingsCard siteId={site.id} />
-      <MarkdownCard site={site} />
-      <MarkdownStatsCard siteId={site.id} />
-      <CharsetCard key={`charset-${JSON.stringify(site.contentSettings.charset)}`} site={site} />
+      <CacheGroup
+        name="behavior"
+        title={m.site_cache_group_behavior()}
+        items={m.site_cache_group_behavior_items()}
+      >
+        <CacheKeyCard key={`key-${JSON.stringify({ cacheKey, rangeSlice })}`} site={site} />
+        <TieredCacheCard site={site} />
+        <TierSelectionCard siteId={site.id} />
+      </CacheGroup>
+      <CacheGroup
+        name="optimization"
+        title={m.site_cache_group_optimization()}
+        items={m.site_cache_group_optimization_items()}
+      >
+        <CompressionCard site={site} />
+        <ImageConvertCard site={site} />
+        <ImageSavingsCard siteId={site.id} />
+        <MarkdownCard site={site} />
+        <MarkdownStatsCard siteId={site.id} />
+      </CacheGroup>
+      <CacheGroup
+        name="response"
+        title={m.site_cache_group_response()}
+        items={m.site_cache_group_response_items()}
+      >
+        <PurgeMethodCard key={`purge-${JSON.stringify(purgeMethod)}`} site={site} />
+        <CacheTagCard key={`cache-tag-${keepCacheTag}`} site={site} />
+        <XCacheCard key={`x-cache-${xCache}`} site={site} />
+        <CharsetCard key={`charset-${JSON.stringify(site.contentSettings.charset)}`} site={site} />
+      </CacheGroup>
     </div>
+  );
+}
+
+function CacheGroup({
+  name,
+  title,
+  items,
+  children,
+}: {
+  name: string;
+  title: string;
+  items: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const itemsId = React.useId();
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className="min-w-0 border-t pt-2"
+      onSubmitCapture={() => setOpen(true)}
+      onInvalidCapture={(event) => {
+        if (open) return;
+        event.preventDefault();
+        setOpen(true);
+        const field = event.target as HTMLInputElement;
+        requestAnimationFrame(() => field.reportValidity());
+      }}
+    >
+      <h2>
+        <CollapsibleTrigger
+          className="focus-ring flex min-h-11 w-full items-center gap-3 rounded-md px-3 py-3 text-left hover:bg-wash"
+          aria-label={title}
+          aria-describedby={itemsId}
+          data-testid={`cache-group-${name}-trigger`}
+        >
+          <span className="flex min-w-0 flex-1 flex-col gap-1">
+            <span className="text-section font-medium">{title}</span>
+            <span id={itemsId} className="text-xs font-normal text-muted-foreground">
+              {items}
+            </span>
+          </span>
+          <HugeiconsIcon
+            icon={ArrowDown01Icon}
+            strokeWidth={2}
+            className={cn(
+              "size-4 shrink-0 transition-transform motion-reduce:transition-none",
+              open && "rotate-180",
+            )}
+          />
+        </CollapsibleTrigger>
+      </h2>
+      {/* Keep the forms and their dirty guards mounted while the group is closed. */}
+      <CollapsibleContent keepMounted data-testid={`cache-group-${name}-content`}>
+        <div className="mt-4 flex flex-col gap-4">{children}</div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 

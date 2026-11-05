@@ -19,7 +19,15 @@ The site's Origins and Cache tabs: origins, groups, health checks, origin connec
 
 The **Origins** tab (`/sites/<site ID>?tab=origins`) and the **Cache** tab (`?tab=cache`) of the site page. Each card saves on its own; saving one card keeps unsaved edits in the others.
 
-| Tab | Card (top to bottom) | Saved with | See |
+The Cache tab starts with **Development mode**, **Purge cache** and **Cache rules**. The other cards are grouped by purpose and start collapsed. Click a group heading, or focus it with Tab and press Enter / Space, to open or close it:
+
+- **Cache behavior**: cache key & slicing, Tiered Cache and upper tiers.
+- **Content optimization**: compression, image conversion & savings, Markdown for Agents & response stats.
+- **Response & purging**: PURGE method, Cache-Tag, X-Cache and charset.
+
+Closing a group keeps unsaved edits. Leaving the page or switching tabs still asks before discarding them; open the group to save its cards. Closing a group does not change saved settings or turn features off.
+
+| Tab | Card | Saved with | See |
 | --- | --- | --- | --- |
 | Origins | Traffic path | Read only | [Traffic path](#traffic-path) |
 | Origins | Origin quality | Read only | [Origin quality](#origin-quality) |

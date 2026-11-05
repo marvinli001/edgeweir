@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect } from "@playwright/test";
-import { pick, signedIn, test } from "./helpers";
+import { pick, signedIn, siteTab, test } from "./helpers";
 
 test("M5: DNS provider controls, statistics and alert subscriptions", async ({ page }) => {
   const state = JSON.parse(readFileSync(resolve("../../.e2e/m5-state.json"), "utf8")) as {
@@ -52,7 +52,7 @@ test("M5: DNS provider controls, statistics and alert subscriptions", async ({ p
   await expect(page.getByLabel("SMTP 主机", { exact: true })).toBeVisible();
   await page.goto(`/sites/${state.siteId}?tab=domains`);
   await expect(page.getByTestId("cname-target")).toContainText("edge.cdn.m5.test");
-  await page.getByTestId("tab-analytics").click();
+  await siteTab(page, "analytics");
   await expect(page.getByTestId("top-url")).toContainText("/m5-popular");
   await expect(page.getByTestId("analytics")).toBeVisible();
   await page.getByTestId("nav-alerts").click();

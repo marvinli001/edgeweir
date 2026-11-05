@@ -171,6 +171,7 @@ test("G4: the cache tab forwards Cache-Tag to clients and back", async ({ page }
   const pageErrors = errors(page);
   await signedIn(page);
   await openTab(page, state.tagSiteId, "cache");
+  await page.getByTestId("cache-group-response-trigger").click();
   const keep = page.getByTestId("cache-keep-cache-tag");
   const save = page.getByTestId("cache-tag-save");
   await expect(keep).toHaveAttribute("aria-checked", "false");
@@ -180,8 +181,10 @@ test("G4: the cache tab forwards Cache-Tag to clients and back", async ({ page }
   await saved(page, save, "sites/update");
   await expect(save).toBeDisabled();
   await page.reload();
+  await page.getByTestId("cache-group-response-trigger").click();
   await expect(keep).toHaveAttribute("aria-checked", "true");
   // The cache key card has nothing to save: it kept its settings.
+  await page.getByTestId("cache-group-behavior-trigger").click();
   await expect(page.getByTestId("cache-key-save")).toBeDisabled();
   await check(page, "cache-tag");
 
@@ -189,6 +192,7 @@ test("G4: the cache tab forwards Cache-Tag to clients and back", async ({ page }
   await saved(page, save, "sites/update");
   await expect(save).toBeDisabled();
   await page.reload();
+  await page.getByTestId("cache-group-response-trigger").click();
   await expect(keep).toHaveAttribute("aria-checked", "false");
   await logout(page);
   expect(pageErrors).toEqual([]);

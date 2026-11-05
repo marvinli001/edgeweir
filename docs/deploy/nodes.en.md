@@ -60,6 +60,7 @@ GitHub Actions builds the releases from the tag, reproducibly (`-trimpath`, time
 2. For a node name, another node group, or another lifetime, open **Options**: fill in **Node name**, choose a **Node group** (shown when the cluster has several) and **Valid for** (15 minutes, 1 hour, or 24 hours), and click **Regenerate**.
 3. Copy the **Install command**. Below it are the time left, **Shown once**, address warnings, and the [node channel connection check](#node-channel-connection-check); once the dialog is closed the command is not shown again, and opening it again generates a new token.
 4. Once the command runs on the node, the dialog's **Progress** refreshes every 3 seconds: waiting for the node (or token expired), enrolled (the node name links to its details), online, configuration applied, data plane healthy, has an address for DNS.
+5. A failed request shows an error and **Retry**, keeping any progress already received. A failed request for the node channel check is shown separately and does not mean the node is not enrolled. Once all five steps are complete, **New site** opens the site creation form.
 
 | Item | Behavior |
 | --- | --- |

@@ -115,8 +115,10 @@ Response: `{ ok: true }`.
 | Parameter | In | Type | Required | Constraints and default | Description |
 | --- | --- | --- | --- | --- | --- |
 | `id` | path | uuid | yes | — | Cluster ID |
+| `before` | query | integer | no | ≥1 | Return only revisions below this number, excluding it |
+| `limit` | query | integer | no | 1–100, default 100 | Maximum number of revisions per request |
 
-Response: [Revision](#revision-object)`[]`, newest first, at most 100.
+Response: [Revision](#revision-object)`[]`, in descending revision order. Pass the last entry's `revision` as the next request's `before` until fewer than `limit` entries are returned (possibly none) to read every retained revision. Revision numbers may have gaps. Without pagination parameters, the latest 100 entries are still returned.
 
 | Error | Status | Condition |
 | --- | --- | --- |

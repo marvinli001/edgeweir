@@ -146,7 +146,9 @@ if (chart) {
   );
 }
 
-// Segmented tabs: the thumb slides to the origins tab and its traffic path.
+// Site navigation: choose Connection, then the origins tab and its traffic path.
+await page.getByTestId("site-tab-group").click();
+await page.locator('[role="option"][data-site-tabs~="origins"]').click();
 await page.click('[data-testid="tab-origins"]');
 await page.waitForSelector('[data-testid="origin-topology"] .react-flow__node');
 await page.waitForTimeout(2000);

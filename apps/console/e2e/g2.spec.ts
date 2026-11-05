@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, type Page } from "@playwright/test";
-import { errors, logout, pick, saved, shots, signedIn, test } from "./helpers";
+import { errors, logout, pick, saved, shots, signedIn, siteTab, test } from "./helpers";
 
 /**
  * Written by scripts/e2e-g2.mjs: the bench site (Under Attack js, CC off, no
@@ -25,7 +25,7 @@ const check = (page: Page, name: string) => shots(page, "g2", name);
 
 async function openSecurityTab(page: Page) {
   await page.goto(`/sites/${state.benchSiteId}`);
-  await page.getByTestId("tab-security").click();
+  await siteTab(page, "security");
   await expect(page).toHaveURL(/tab=security/);
   await expect(page.getByTestId("protection-under-attack")).toBeVisible();
 }
@@ -108,7 +108,7 @@ test("G2: the site's security tab turns Under Attack off and on, edits the CC po
   await expect(page.getByTestId("cc-max-level")).toHaveText("非交互式挑战");
 
   // What the nodes report and what happened during the CC run, on the attacks tab.
-  await page.getByTestId("tab-attacks").click();
+  await siteTab(page, "attacks");
   await expect(page).toHaveURL(/tab=attacks/);
   const nodes = page.getByTestId("security-node-row");
   await expect(nodes).toHaveCount(2);
@@ -134,7 +134,7 @@ test("G2: the site's security tab turns Under Attack off and on, edits the CC po
   await expect(events.first()).toHaveAttribute("data-kind", "path_level");
 
   // Back to CC off for bench.sh.
-  await page.getByTestId("tab-security").click();
+  await siteTab(page, "security");
   await enabled.click();
   await saved(page, save, "protection/update");
   await expect(save).toBeDisabled();
@@ -224,7 +224,7 @@ test("G2: the rules editor offers the challenge action and tls.ja4 in expression
   const pageErrors = errors(page);
   await signedIn(page);
   await page.goto(`/sites/${state.benchSiteId}`);
-  await page.getByTestId("tab-rules").click();
+  await siteTab(page, "rules");
   await expect(page.getByTestId("rule-add-waf-custom")).toBeVisible();
   await expect(page.getByTestId("rule-row")).toHaveCount(0);
 

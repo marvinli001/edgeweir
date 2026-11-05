@@ -33,9 +33,20 @@ function progress(delivery: SiteDelivery): { text: string; settled: boolean; don
   return { text: m.site_state_partial({ current, total }), settled: false, done: false };
 }
 
-function show(id: string, title: string, delivery: SiteDelivery, final = false) {
+function show(
+  id: string,
+  title: string,
+  delivery: SiteDelivery,
+  onView?: () => void,
+  final = false,
+) {
   const { text, settled, done } = progress(delivery);
-  const options = { id, description: text, testId: "site-delivery-toast" };
+  const options = {
+    id,
+    description: text,
+    testId: "site-delivery-toast",
+    action: onView ? { label: m.site_delivery_view_nodes(), onClick: onView } : undefined,
+  };
   if (done) toast.success(title, { ...options, duration: SETTLED_MS });
   else if (settled || final) toast.info(title, { ...options, duration: SETTLED_MS });
   else toast.loading(title, options);
@@ -44,7 +55,7 @@ function show(id: string, title: string, delivery: SiteDelivery, final = false) 
 
 /**
  * One toast for a site change that follows it onto the nodes in place:
- * "Saved · Rolling out 3/5" until "Live on every node" (or a canary's end,
+ * "Saved · Rolling out 3/5" until "Live on every online node" (or a canary's end,
  * or no online node), polling the site for a few minutes at most.
  */
 export function followSiteDelivery(
@@ -52,10 +63,11 @@ export function followSiteDelivery(
   siteId: string,
   title: string,
   delivery: SiteDelivery,
+  onView?: () => void,
 ) {
   following.get(siteId)?.();
   const id = `site-delivery-${siteId}`;
-  if (show(id, title, delivery)) return;
+  if (show(id, title, delivery, onView)) return;
   const started = Date.now();
   let last = delivery;
   let unsubscribe = () => {};
@@ -64,7 +76,7 @@ export function followSiteDelivery(
     unsubscribe();
     clearTimeout(timer);
     following.delete(siteId);
-    if (final) show(id, title, last, true);
+    if (final) show(id, title, last, onView, true);
   };
   const observer = new QueryObserver(queryClient, {
     ...orpc.sites.get.queryOptions({ input: { id: siteId } }),
@@ -76,7 +88,7 @@ export function followSiteDelivery(
     // What the cache held before the change says nothing about it.
     if (!result.data || result.dataUpdatedAt < started) return;
     last = result.data.delivery;
-    if (show(id, title, last)) stop(false);
+    if (show(id, title, last, onView)) stop(false);
   });
   timer = setTimeout(() => stop(true), FOLLOW_MS);
   following.set(siteId, () => stop(false));

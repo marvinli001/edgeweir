@@ -10,9 +10,17 @@ import { errorMessage, isNotFound } from "@/lib/orpc";
 
 export { LoadingState };
 
-export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+export function ErrorState({
+  error,
+  onRetry,
+  title = m.common_error_title(),
+}: {
+  error: unknown;
+  onRetry?: () => void;
+  title?: string;
+}) {
   return (
-    <Alert tone="danger" title={m.common_error_title()} className="animate-enter">
+    <Alert tone="danger" title={title} className="animate-enter">
       {onRetry ? (
         <span className="flex flex-wrap items-center justify-between gap-2">
           <span className="min-w-0">{errorMessage(error, m.common_unknown_error())}</span>

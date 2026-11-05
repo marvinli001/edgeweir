@@ -1,5 +1,6 @@
+import type { Site } from "@edgeweir/contract";
 import { expect } from "@playwright/test";
-import { pick, saved, signedIn, test } from "./helpers";
+import { pick, saved, signedIn, siteTab, test } from "./helpers";
 
 test("M4: IP list and rule editing with syntax errors, ordering and mobile", async ({ page }) => {
   const errors: string[] = [];
@@ -25,7 +26,7 @@ test("M4: IP list and rule editing with syntax errors, ordering and mobile", asy
     .getByRole("link")
     .first()
     .click();
-  await page.getByTestId("tab-rules").click();
+  await siteTab(page, "rules");
   await expect(page.getByTestId("rule-add-waf-custom")).toBeVisible();
   while (await page.getByTestId("rule-row").count())
     await page
@@ -62,7 +63,15 @@ test("M4: IP list and rule editing with syntax errors, ordering and mobile", asy
     );
   }
   const announcement = page.locator('[role="status"][aria-live="assertive"]');
-  await second.getByRole("button", { name: "调整规则顺序" }).focus();
+  const handle = second.getByRole("button", { name: "调整规则顺序" });
+  for (
+    let step = 0;
+    step < 100 && !(await handle.evaluate((node) => node === node.ownerDocument.activeElement));
+    step++
+  ) {
+    await page.keyboard.press("Tab");
+  }
+  await expect(handle).toBeFocused();
   await page.keyboard.press("Space");
   await expect(announcement).toHaveText(/^(已拿起规则 2|规则 2 移到第 2 位)$/);
   // KeyboardSensor registers its keydown listener in a timeout after pickup.
@@ -74,11 +83,55 @@ test("M4: IP list and rule editing with syntax errors, ordering and mobile", asy
   await expect(
     page.getByTestId("rule-row").first().getByLabel("名称", { exact: true }),
   ).toHaveValue("Browser log");
+  const accepted = page.waitForResponse(
+    (response) =>
+      response.url().includes("/rpc/rules/save") && response.request().method() === "POST",
+  );
+  const delivered = page.waitForResponse(
+    async (response) => {
+      if (!response.url().includes("/rpc/sites/get") || !response.ok()) return false;
+      const timing = (await accepted).request().timing();
+      // An earlier in-flight read cannot confirm this save.
+      if (response.request().timing().startTime < timing.startTime + timing.responseStart)
+        return false;
+      const { json: site } = (await response.json()) as { json: Site };
+      return (
+        site.domains.includes("rules.m4.test") &&
+        site.delivery.state === "live" &&
+        site.delivery.totalNodes > 0
+      );
+    },
+    { timeout: 120_000 },
+  );
   await saved(page, page.getByTestId("rules-save"), "rules/save");
   await expect(page.getByTestId("rules-save")).toBeDisabled();
+  const notice = page.getByTestId("site-delivery-toast");
+  await expect(notice).toContainText("已保存");
+  await expect(notice).toContainText(/生效中 \d+\/\d+|已生效/);
+  const { json: liveSite } = (await (await delivered).json()) as { json: Site };
+  expect(liveSite.delivery.currentNodes).toBe(liveSite.delivery.totalNodes);
+  await expect(notice).toContainText("已生效（在线节点）", { timeout: 120_000 });
+  await expect(notice.locator('div[data-type="success"]')).toBeVisible();
+  const siteUrl = page.url();
+  await notice.getByRole("button", { name: "查看节点", exact: true }).click();
+  await expect(page).toHaveURL(/\/clusters\?cluster=/);
+  await page.goto(siteUrl);
+  // A failed status lookup does not turn a saved rule into a failed save or an applied change.
+  first = page.getByTestId("rule-row").first();
+  await first.getByLabel("表达式", { exact: true }).fill("false");
+  await page.route("**/rpc/sites/get**", (route) =>
+    route.fulfill({ status: 503, body: "unavailable" }),
+  );
+  await saved(page, page.getByTestId("rules-save"), "rules/save");
+  await expect(notice).toContainText("已保存");
+  await expect(notice).toContainText("暂时无法查询节点生效状态");
+  await expect(notice.locator('div[data-type="info"]')).toBeVisible();
+  await expect(page.getByTestId("site-save-error")).toHaveCount(0);
+  await page.unroute("**/rpc/sites/get**");
   await page.reload();
   first = page.getByTestId("rule-row").first();
   await expect(first.getByLabel("名称", { exact: true })).toHaveValue("Browser log");
+  await expect(first.getByLabel("表达式", { exact: true })).toHaveValue("false");
   await page.screenshot({
     path: "../../.e2e/m4-rules-desktop.png",
     fullPage: true,

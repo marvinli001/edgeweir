@@ -22,7 +22,7 @@ The console parses expressions and checks their fields, types, and actions befor
 3. Enter the rule name (1–100 characters, **New rule** by default) and **Expression**. **Insert condition** appends a common condition and selects its example value, so typing replaces it: Path prefix, Host equals, File extension, IP range, Country, ASN, User-Agent contains, Request method, Cookie equals, Query parameter equals, User-Agent wildcard, Referer wildcard, Form field equals, JSON field equals, Request body contains, Uploaded file name contains, Verified crawler, and one "IP list `<name>`" per list; the five before the lists appear in the request phases only. **Insert field** appends a field available in the phase; for **Cookie**, **Query parameter**, and **Request header**, first enter the name in the field that appears and press Enter or click **Insert**; both join with `and`. While the cluster's nodes lack a capability, both menus leave out its conditions and fields, see [Node capabilities and publishing](#node-capabilities-and-publishing). When the expression is invalid, "Character N: reason" appears below the editor, for example "Character 11: Ordered comparisons need a number field"; an expression the console refuses on save shows its position and reason the same way.
 4. Select **Action**, fill in its fields, and turn on **Enabled**. A new rule starts disabled with the expression `true` (every request), as does a rule saved through the API without `enabled`; check the condition and the action before you save.
 5. Drag the handle on the left of a rule to reorder rules within a phase.
-6. Click **Save**. The console shows **Saved** and publishes a new configuration revision ("Rules and IP lists updated").
+6. Click **Save**. The console publishes a new configuration revision ("Rules and IP lists updated"); the **Saved** notice follows **Rolling out N/M** until **Live on every online node**. No online nodes, a canary waiting, or an unavailable status lookup shows its own state rather than claiming every node has applied the change. **View nodes** opens the site's cluster to inspect node refusals or required upgrades. The notice follows the change for at most three minutes; the node page remains available afterwards.
 7. Verify: for example, the expression `http.request.uri.path eq "/blocked"` with the **Block** action:
 
    ```bash
@@ -31,7 +31,11 @@ The console parses expressions and checks their fields, types, and actions befor
 
    The response is 403 with `X-Edgeweir-Error: policy-denied`.
 
-Global rules are edited under **Access control → Global rules** (`/rules`), apply to every site, and are published to every cluster on save. The editor is the same as for site rules, with these differences:
+Global rules are edited under **Access control → Global rules** (`/rules`), apply to every site, and are published to every cluster on save.
+
+The global rules notice confirms **Saved** and asks you to check node rollout status in each cluster. **View nodes** opens the clusters page; a successful save does not confirm that every cluster's nodes have applied it.
+
+The editor is the same as for site rules, with these differences:
 
 | Item | Site rules | Global rules |
 | --- | --- | --- |

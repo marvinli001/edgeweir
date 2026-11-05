@@ -1,6 +1,6 @@
 import { m } from "@/lib/i18n";
 
-/** Tabs of the site detail page, in display order. */
+/** Stable tab values for site detail URLs. */
 export const SITE_TABS = [
   "overview",
   "analytics",
@@ -20,6 +20,19 @@ export const SITE_TABS = [
 ] as const;
 
 export type SiteTab = (typeof SITE_TABS)[number];
+
+export function siteTabGroups(): { label: string; tabs: [SiteTab, ...SiteTab[]] }[] {
+  return [
+    { label: m.site_tab_overview(), tabs: ["overview"] },
+    { label: m.site_group_connection(), tabs: ["domains", "origins", "https"] },
+    {
+      label: m.site_group_delivery(),
+      tabs: ["cache", "rules", "redirects", "errors", "extensions"],
+    },
+    { label: m.site_tab_security(), tabs: ["security", "access", "crawlers"] },
+    { label: m.site_group_observability(), tabs: ["analytics", "attacks", "logs"] },
+  ];
+}
 
 export function isSiteTab(value: unknown): value is SiteTab {
   return typeof value === "string" && (SITE_TABS as readonly string[]).includes(value);

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, type Page } from "@playwright/test";
-import { errors, logout, pick, saved, shots, signedIn, test } from "./helpers";
+import { errors, logout, pick, saved, shots, signedIn, siteTab, test } from "./helpers";
 
 /**
  * Written by scripts/e2e-g3.mjs: the compression and CRS sites of the
@@ -28,6 +28,7 @@ const check = (page: Page, name: string) => shots(page, "g3", name);
 async function openTab(page: Page, siteId: string, tab: "cache" | "security" | "logs") {
   await page.goto(`/sites/${siteId}?tab=${tab}`);
   await expect(page.getByTestId(`tab-${tab}`)).toHaveAttribute("aria-selected", "true");
+  if (tab === "cache") await page.getByTestId("cache-group-optimization-trigger").click();
 }
 
 test("G3: the cache tab turns Zstandard and Brotli on with their levels and keeps gzip", async ({
@@ -68,6 +69,7 @@ test("G3: the cache tab turns Zstandard and Brotli on with their levels and keep
   await saved(page, save, "https/update");
   await expect(save).toBeDisabled();
   await page.reload();
+  await page.getByTestId("cache-group-optimization-trigger").click();
   await expect(zstd).toHaveAttribute("aria-checked", "true");
   await expect(brotli).toHaveAttribute("aria-checked", "true");
   await expect(gzip).toHaveAttribute("aria-checked", "true");
@@ -92,6 +94,7 @@ test("G3: the cache tab turns Zstandard and Brotli on with their levels and keep
   await saved(page, save, "https/update");
   await expect(save).toBeDisabled();
   await page.reload();
+  await page.getByTestId("cache-group-optimization-trigger").click();
   await expect(zstd).toHaveAttribute("aria-checked", "false");
   await expect(brotli).toHaveAttribute("aria-checked", "false");
   await expect(page.getByTestId("https-zstd-level")).toHaveValue("3");
@@ -129,7 +132,7 @@ test("G3: the security tab edits the site's OWASP CRS and lists the most-matched
 
   // The script's detect run: its detection rules are the most-matched ones; the blocking
   // evaluation (949110) matched every request too but does not rank.
-  await page.getByTestId("tab-attacks").click();
+  await siteTab(page, "attacks");
   const top = page.getByTestId("waf-top-rules");
   const detection = state.crsRuleIds.filter(
     (id) => ![901, 949, 959, 980].includes(Math.floor(id / 1000)),
@@ -140,7 +143,7 @@ test("G3: the security tab edits the site's OWASP CRS and lists the most-matched
   await expect(page.getByTestId("attacks-range")).toHaveText("过去 1 小时");
   for (const rule of detection) await expect(top).toContainText(String(rule));
 
-  await page.getByTestId("tab-security").click();
+  await siteTab(page, "security");
   await pick(page, mode, "拦截");
   await pick(page, preset, "自定义");
   await expect(paranoia).toHaveText("1 级");

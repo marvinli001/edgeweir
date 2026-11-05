@@ -33,6 +33,7 @@ test("G15: cache tab with excluded parameters, Set-Cookie caching, PURGE, X-Cach
   const pageErrors = errors(page);
   await signedIn(page);
   await openTab(page, state.contentSiteId, "cache");
+  await page.getByTestId("cache-group-behavior-trigger").click();
 
   await test.step("the cache key leaves utm_* out", async () => {
     await expect(page.getByTestId("cache-key-query")).toHaveText("排除指定参数");
@@ -51,6 +52,7 @@ test("G15: cache tab with excluded parameters, Set-Cookie caching, PURGE, X-Cach
   });
 
   await test.step("PURGE: the saved key stays hidden, a generated one is shown once", async () => {
+    await page.getByTestId("cache-group-response-trigger").click();
     const card = page.getByTestId("purge-method-card");
     await expect(card.getByTestId("purge-method-enabled")).toHaveAttribute("aria-checked", "true");
     const key = card.getByTestId("purge-method-key");
@@ -67,6 +69,7 @@ test("G15: cache tab with excluded parameters, Set-Cookie caching, PURGE, X-Cach
   });
 
   await test.step("X-Cache, gzip level and the largest compressed length, charset", async () => {
+    await page.getByTestId("cache-group-optimization-trigger").click();
     await expect(page.getByTestId("x-cache-send")).toHaveAttribute("aria-checked", "true");
     await expect(page.getByTestId("https-gzip-level")).toHaveValue("9");
     await expect(page.getByTestId("compression-max-length")).toHaveValue("2000");
@@ -79,6 +82,7 @@ test("G15: cache tab with excluded parameters, Set-Cookie caching, PURGE, X-Cach
   });
   await check(page, "cache");
   await page.reload();
+  await page.getByTestId("cache-group-response-trigger").click();
   await expect(page.getByTestId("charset-name")).toHaveText("gbk");
   expect(pageErrors).toEqual([]);
 });

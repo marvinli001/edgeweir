@@ -130,7 +130,7 @@ A click on the node's row, or **Details** under **⋯** (`/clusters?node=<node I
 
 ## Revisions
 
-A change that affects node configuration publishes a new revision in the cluster; none when the content hash equals the previous one. The **Revisions** table on the **Releases** tab lists the latest 20: **Revision**, **Content hash**, **Sites**, **Reason**, **Time**; every row except the latest has **Roll back**.
+A change that affects node configuration publishes a new revision in the cluster; none when the content hash equals the previous one. The **Revisions** table on the **Releases** tab initially lists the latest 20: **Revision**, **Content hash**, **Sites**, **Reason**, **Time**. Choose **Load older revisions** to load another 20 at a time until every retained revision is listed. Every row except the latest has **Roll back**. If loading fails, the displayed entries remain available; choose **Retry** to continue.
 
 | Item | Value |
 | --- | --- |

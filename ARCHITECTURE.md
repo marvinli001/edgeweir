@@ -582,6 +582,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `extension_key` | 节点扩展的受信任发布者密钥：kid（RFC 7638 指纹）、发布者、公钥 `x`、备注 |
 | `extension` | 已安装的节点扩展：当前版本、启用、失败模式、全局配置 |
 | `extension_version` | 扩展上传的各版本：扩展包字节、SHA-256（唯一）、大小、签名、签名 kid、清单 |
+| `extension_node_setting` | 节点作用范围扩展的监听器绑定与目标集群，独立于网站配置 |
 | `site_extension` | 网站的扩展：开启与网站配置 |
 
 ### 证书、DNS 与域名
@@ -734,6 +735,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0089_node_extensions` | `extension_key`、`extension`、`extension_version`、`site_extension`（节点扩展）；`node.extension_status`（节点上报的各扩展状态） |
 | `0090_extension_secrets_data` | `extension.secret_envelope`、`extension.secret_version`（控制台生成的扩展密钥）；`site_extension_data`（扩展的网站数据项） |
 | `0091_oauth_mcp` | MCP 的 OAuth 授权服务器：`oauth_client`、`oauth_resource`、`oauth_client_resource`、`oauth_consent`、`oauth_access_token`、`oauth_refresh_token`、`oauth_client_assertion` |
+| `0092_right_agent_brand` | `extension_node_setting`：节点扩展监听器与目标集群设置 |
 
 ## 构建产物
 
