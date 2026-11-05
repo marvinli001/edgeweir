@@ -28,6 +28,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { lockClusterL4 } from "../lib/locks";
 import { type Actor, recordAudit } from "./audit";
+import { assertNoNodeListenerConflict } from "./extension-node-settings";
 import { loadPortPools } from "./l4-config";
 import { type Executor, latestRevision, publishRevision } from "./revisions";
 
@@ -158,6 +159,11 @@ export async function setListenPorts(
     const found = await findCluster(tx, input.clusterId);
     await lockClusterL4(tx, found.id);
     const cluster = await findCluster(tx, found.id, true);
+    await assertNoNodeListenerConflict(
+      tx,
+      cluster.id,
+      [...input.httpPorts, ...input.httpsPorts].map((port) => ({ start: port, end: port })),
+    );
     const conflict = input.httpPorts.find((port) => input.httpsPorts.includes(port));
     if (conflict !== undefined)
       fail("LISTEN_PORT_CONFLICT", `port ${conflict} is listed for HTTP and HTTPS`, {

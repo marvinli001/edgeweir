@@ -78,6 +78,18 @@ export const extensionVersion = pgTable(
   ],
 );
 
+/** Operator bindings, separate from the signed package and its global configuration. */
+export const extensionNodeSetting = pgTable("extension_node_setting", {
+  extensionId: text("extension_id")
+    .primaryKey()
+    .references(() => extension.id, { onDelete: "cascade" }),
+  settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+});
+
 /** An extension turned on for one site, with the site's configuration. */
 export const siteExtension = pgTable(
   "site_extension",

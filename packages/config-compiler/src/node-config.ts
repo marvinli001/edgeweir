@@ -9,6 +9,7 @@ import {
   ChallengeKeyRefSchema,
   DomainMatch,
   ExtensionDataItemSchema,
+  ExtensionListenerSchema,
   ExtensionSchema,
   ExtensionSharedDictSchema,
   IpListSchema,
@@ -232,7 +233,7 @@ function compileAiCrawlers(
 }
 
 /**
- * Delivers the extensions the cluster's sites turn on, in hook order, and
+ * Delivers node extensions and those the cluster's sites turn on, in hook order, and
  * each site's list in the same order; nothing (and no kill switch) without one.
  */
 function compileExtensions(config: NodeConfig, input: CompileInput): void {
@@ -240,9 +241,17 @@ function compileExtensions(config: NodeConfig, input: CompileInput): void {
   const used = new Set(
     config.sites.flatMap((site) => (bySite.get(site.id) ?? []).map((e) => e.id)),
   );
-  const extensions = (input.extensions ?? []).filter((extension) => used.has(extension.id));
+  const extensions = (input.extensions ?? []).filter((extension) =>
+    extension.scope === "node"
+      ? extension.enabled && !input.extensionsDisabled
+      : used.has(extension.id),
+  );
   if (extensions.length === 0) return;
-  const order = new Map(extensions.map((extension, index) => [extension.id, index]));
+  const order = new Map(
+    extensions
+      .filter((extension) => extension.scope !== "node")
+      .map((extension, index) => [extension.id, index]),
+  );
   config.extensions = extensions.map((extension) =>
     create(ExtensionSchema, {
       id: extension.id,
@@ -260,6 +269,13 @@ function compileExtensions(config: NodeConfig, input: CompileInput): void {
       ),
       luaApi: extension.luaApi ?? 1,
       secretVersion: extension.secretVersion ?? 0,
+      scope: extension.scope === "node" ? "node" : "",
+      listeners:
+        extension.scope === "node" && extension.enabled && !input.extensionsDisabled
+          ? (extension.listeners ?? []).map((listener) =>
+              create(ExtensionListenerSchema, { ...listener, maxBody: listener.maxBody ?? 4096 }),
+            )
+          : [],
     }),
   );
   config.extensionsDisabled = input.extensionsDisabled ?? false;

@@ -7,6 +7,7 @@ import {
   DOMAINS_V2_FEATURE,
   EDGE_PORTS_FEATURE,
   ERROR_PAGES_V1_STATUSES,
+  EXTENSIONS_NODE_FEATURE,
   L4_FEATURE,
   L4_V2_FEATURE,
   UNKNOWN_HOST_FEATURE,
@@ -519,6 +520,9 @@ export function derivedFeatures(config: NodeConfig): string[] {
       : []),
     ...(config.extensions.some((extension) => extension.luaApi >= 2)
       ? [EXTENSIONS_V2_FEATURE]
+      : []),
+    ...(config.extensions.some((extension) => extension.scope === "node")
+      ? [EXTENSIONS_NODE_FEATURE]
       : []),
   ];
 }

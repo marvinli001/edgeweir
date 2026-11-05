@@ -2,6 +2,8 @@
 
 Node extensions add Lua code from a publisher you trust to the edge request path: headers, verdicts, rule fields, HTML snippets, small endpoints. The console installs and configures them and turns them on per site; nodes verify and load them. The format and runtime contract is in [Node extensions](../reference/extensions.en.md).
 
+These operations apply to site extensions: installable site packages must omit `scope` and run with the default `site` semantics. Lua API 2 site extensions can use secrets, sidecars and site data; that does not establish node-scope or dedicated HTTP listener support. Verifying or installing a package with explicit `scope: "site"` returns `EXTENSION_PACKAGE_INVALID`, `reason: "manifest"`. See [Node scope](../reference/extensions.en.md#node-scope-and-http-listener-contract) for node package requirements and settings.
+
 > An extension runs inside the node's nginx workers with their privileges and sees the requests and responses of every site that turns it on. Trust a publisher key only if you would run that publisher's code on your edge (see the threat model in SECURITY.en.md).
 
 ## Concepts

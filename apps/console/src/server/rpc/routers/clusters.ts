@@ -1,5 +1,5 @@
 import { schema } from "@edgeweir/db";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, lt } from "drizzle-orm";
 import type { AppContext } from "../../lib/context";
 import { outboundAddress } from "../../lib/outbound";
 import type { Actor } from "../../services/audit";
@@ -235,9 +235,16 @@ export const clustersRouter = {
       const rows = await context.app.db
         .select()
         .from(schema.configRevision)
-        .where(eq(schema.configRevision.clusterId, input.id))
+        .where(
+          and(
+            eq(schema.configRevision.clusterId, input.id),
+            input.before === undefined
+              ? undefined
+              : lt(schema.configRevision.revision, input.before),
+          ),
+        )
         .orderBy(desc(schema.configRevision.revision))
-        .limit(100);
+        .limit(input.limit);
       return rows.map(toRevisionDto);
     }),
     rollback: authed.clusters.rollback.handler(({ input, context }) =>

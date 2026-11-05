@@ -1,5 +1,6 @@
 import { oc } from "@orpc/contract";
 import * as z from "zod";
+import { type Cidr, cidrContains, formatIp, normalizeCidr, parseCidr, parseIp } from "./addresses";
 import { isoDateTime, uuid } from "./schemas";
 
 /**
@@ -12,6 +13,8 @@ export const EXTENSION_FORMAT = "edgeweir-node-extension-v1";
 export const EXTENSIONS_FEATURE = "extensions-v1";
 /** Nodes that run Lua API 2 packages (extension version 1.1). */
 export const EXTENSIONS_V2_FEATURE = "extensions-v2";
+/** Node scope, including dedicated HTTP listeners; not implied by Lua API 2. */
+export const EXTENSIONS_NODE_FEATURE = "extensions-node-v1";
 /** Declared names per Lua API: log fields and counters. */
 const API_LIMITS = {
   1: { logFields: 8, counters: 8 },
@@ -72,7 +75,10 @@ const EXTENSION_HOOKS = [
   "body_filter",
   "log",
   "endpoint",
+  "listen",
 ] as const;
+const NODE_HOOKS = new Set(["init", "log", "listen"]);
+const NODE_CAPABILITIES = new Set(["request_body", "http_client", "timers"]);
 const EXTENSION_CAPABILITIES = [
   "verdicts",
   "request_headers",
@@ -392,6 +398,24 @@ const extensionSidecar = z.strictObject({
   max_body: z.number().int().min(0).max(104857600).default(10485760),
 });
 
+const listenerPort = z
+  .number()
+  .int()
+  .min(1024)
+  .max(65535)
+  .refine((port) => port !== 8443, "reserved listener port");
+
+const extensionListener = z.strictObject({
+  name: z.string().regex(SHORT_NAME_RE),
+  default_port: listenerPort,
+  methods: z
+    .array(z.enum(["GET", "HEAD", "POST"]))
+    .min(1)
+    .max(3)
+    .refine((methods) => new Set(methods).size === methods.length, "duplicate method"),
+  max_body: z.number().int().min(0).max(65536).default(4096),
+});
+
 export const extensionManifest = z
   .strictObject({
     format: z.literal(EXTENSION_FORMAT),
@@ -422,6 +446,7 @@ export const extensionManifest = z
         .refine((range) => parseSemverRange(range) !== null, "invalid range")
         .optional(),
     }),
+    scope: z.enum(["site", "node"]).default("site"),
     hooks: z
       .array(z.enum(EXTENSION_HOOKS))
       .min(1)
@@ -471,6 +496,14 @@ export const extensionManifest = z
         (list) => new Set(list.map((e) => e.path)).size === list.length,
         "duplicate endpoint",
       ),
+    listeners: z
+      .array(extensionListener)
+      .max(2)
+      .refine(
+        (list) => new Set(list.map((listener) => listener.name)).size === list.length,
+        "duplicate listener",
+      )
+      .optional(),
     shared_dicts: z
       .array(
         z.strictObject({
@@ -496,6 +529,52 @@ export const extensionManifest = z
       .optional(),
   })
   .superRefine((manifest, ctx) => {
+    if (manifest.scope === "site") {
+      if (manifest.hooks.includes("listen")) {
+        ctx.addIssue({ code: "custom", path: ["hooks"], message: "listen needs node scope" });
+      }
+      if (manifest.listeners !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["listeners"],
+          message: "listeners need node scope",
+        });
+      }
+    } else {
+      if (manifest.requires.lua_api !== 2) {
+        ctx.addIssue({ code: "custom", path: ["scope"], message: "node scope needs lua_api 2" });
+      }
+      if (manifest.hooks.some((hook) => !NODE_HOOKS.has(hook))) {
+        ctx.addIssue({ code: "custom", path: ["hooks"], message: "hook needs site scope" });
+      }
+      if (manifest.capabilities.some((capability) => !NODE_CAPABILITIES.has(capability))) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["capabilities"],
+          message: "capability needs site scope",
+        });
+      }
+      if (manifest.config.site !== undefined) {
+        ctx.addIssue({ code: "custom", path: ["config", "site"], message: "site scope only" });
+      }
+      for (const member of ["fields", "endpoints"] as const) {
+        if (manifest[member].length > 0) {
+          ctx.addIssue({ code: "custom", path: [member], message: "site scope only" });
+        }
+      }
+      for (const member of ["sidecar", "data"] as const) {
+        if (manifest[member] !== undefined) {
+          ctx.addIssue({ code: "custom", path: [member], message: "site scope only" });
+        }
+      }
+      if (manifest.hooks.includes("listen") !== (manifest.listeners?.length ?? 0) > 0) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["listeners"],
+          message: "listen hook and listeners go together",
+        });
+      }
+    }
     const limits = API_LIMITS[manifest.requires.lua_api];
     for (const member of ["secret", "sidecar", "data"] as const) {
       if (manifest[member] !== undefined && manifest.requires.lua_api < 2) {
@@ -530,6 +609,103 @@ export const extensionManifest = z
     }
   });
 export type ExtensionManifest = z.infer<typeof extensionManifest>;
+
+/** Required together; a node version or extensions-v2 alone never implies node scope. */
+export function extensionRequiredFeatures(manifest: ExtensionManifest): string[] {
+  return [
+    EXTENSIONS_FEATURE,
+    ...(manifest.requires.lua_api === 2 ? [EXTENSIONS_V2_FEATURE] : []),
+    ...(manifest.scope === "node" ? [EXTENSIONS_NODE_FEATURE] : []),
+  ];
+}
+
+const IPV4_MAPPED_CIDR = parseCidr("::ffff:0:0/96") as Cidr;
+
+const listenerAddress = z.string().transform((value, ctx) => {
+  const ip = parseIp(value);
+  if (!ip || cidrContains(IPV4_MAPPED_CIDR, ip)) {
+    ctx.addIssue({ code: "custom", message: "not an unmapped IP address" });
+    return z.NEVER;
+  }
+  return formatIp(ip);
+});
+
+const listenerCidr = z.string().transform((value, ctx) => {
+  const ip = parseIp(value.split("/")[0] ?? "");
+  const cidr = ip && !cidrContains(IPV4_MAPPED_CIDR, ip) ? normalizeCidr(value) : null;
+  if (!cidr) {
+    ctx.addIssue({ code: "custom", message: "not an unmapped IP address or CIDR range" });
+    return z.NEVER;
+  }
+  return cidr;
+});
+
+const nodeSettings = z.strictObject({
+  listeners: z
+    .record(
+      z.string().regex(SHORT_NAME_RE),
+      z
+        .strictObject({
+          port: listenerPort,
+          bind: listenerAddress.default("0.0.0.0"),
+          allow: z
+            .array(listenerCidr)
+            .min(1)
+            .max(64)
+            .transform((cidrs) => [...new Set(cidrs)].sort()),
+        })
+        .nullable(),
+    )
+    .refine((listeners) => Object.keys(listeners).length <= 2, "too many listeners")
+    .default({}),
+  clusterIds: z
+    .array(uuid)
+    .max(256)
+    .refine((ids) => new Set(ids).size === ids.length, "duplicate cluster")
+    .transform((ids) => [...ids].sort())
+    .nullable()
+    .optional(),
+});
+export type ExtensionNodeSettings = z.infer<typeof nodeSettings>;
+
+/**
+ * Reserved ports cover every selected cluster's edge ports,
+ * layer-4 pools/apps, internal services and other enabled extension listeners.
+ */
+export function extensionNodeSettings(
+  manifest: ExtensionManifest,
+  reservedPorts: readonly { start: number; end: number }[],
+) {
+  return nodeSettings.superRefine((settings, ctx) => {
+    if (manifest.scope !== "node") {
+      ctx.addIssue({ code: "custom", path: [], message: "node settings need node scope" });
+      return;
+    }
+    const declared = new Set(manifest.listeners?.map((listener) => listener.name));
+    const ports = new Set<number>();
+    for (const [name, listener] of Object.entries(settings.listeners)) {
+      if (!declared.has(name)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["listeners", name],
+          message: "unknown listener",
+        });
+      }
+      if (listener === null) continue;
+      if (
+        ports.has(listener.port) ||
+        reservedPorts.some((range) => range.start <= listener.port && listener.port <= range.end)
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["listeners", name, "port"],
+          message: "listener port conflict",
+        });
+      }
+      ports.add(listener.port);
+    }
+  });
+}
 
 // ---------------------------------------------------------------------------
 // API
@@ -590,12 +766,13 @@ const nodeExtensionState = z.object({
   message: z.string(),
   faults: z.number().int(),
   trips: z.number().int(),
-  /** What the node reports beyond the state (version 1.1): `sidecar`, `listeners`. */
+  /** Extra state: `sidecar`; `listeners` requires extensions-node-v1. */
   details: z.record(z.string(), z.unknown()),
 });
 
 const extensionSummary = z.object({
   id: z.string(),
+  scope: z.enum(["site", "node"]),
   version: z.string(),
   publisher: z.string(),
   name: extensionManifest.shape.name,
@@ -656,6 +833,12 @@ const siteDataItem = z.object({
 const siteDataName = z.string().regex(EXTENSION_DATA_NAME_RE);
 
 const settingsView = z.object({ disabled: z.boolean() });
+const nodeSettingsInput = z.strictObject({ id: extensionId, settings: nodeSettings });
+const nodeSettingsView = z.object({
+  id: extensionId,
+  settings: nodeSettings,
+  targetClusterIds: z.array(uuid),
+});
 
 const tags = ["extensions"];
 
@@ -704,6 +887,18 @@ export const extensionsContract = {
     .route({ method: "PUT", path: "/extensions/settings", tags })
     .input(settingsView)
     .output(settingsView),
+  nodeSettings: oc
+    .route({ method: "GET", path: "/extensions/{id}/node-settings", tags })
+    .input(z.strictObject({ id: extensionId }))
+    .output(nodeSettingsView),
+  updateNodeSettings: oc
+    .route({ method: "PUT", path: "/extensions/{id}/node-settings", tags })
+    .input(nodeSettingsInput)
+    .output(nodeSettingsView),
+  checkNodeSettings: oc
+    .route({ method: "POST", path: "/extensions/{id}/node-settings/check", tags })
+    .input(nodeSettingsInput)
+    .output(nodeSettingsView),
   /** Extensions of a site: every installed one, with the site's state. */
   forSite: oc
     .route({ method: "GET", path: "/sites/{siteId}/extensions", tags })
@@ -781,3 +976,4 @@ export type VerifiedExtensionPackage = z.infer<typeof verifiedPackage>;
 export type SiteExtensionView = z.infer<typeof siteExtensionView>;
 export type NodeExtensionState = z.infer<typeof nodeExtensionState>;
 export type ExtensionSiteDataItem = z.infer<typeof siteDataItem>;
+export type ExtensionNodeSettingsView = z.infer<typeof nodeSettingsView>;

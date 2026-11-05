@@ -284,7 +284,12 @@ export const contract = {
       .output(ok),
     revisions: oc
       .route({ method: "GET", path: "/clusters/{id}/revisions", tags: ["clusters"] })
-      .input(idParam)
+      .input(
+        idParam.extend({
+          before: z.coerce.number().int().min(1).optional(),
+          limit: z.coerce.number().int().min(1).max(100).default(100),
+        }),
+      )
       .output(z.array(s.revision)),
     rollback: oc
       .route({ method: "POST", path: "/clusters/{id}/rollback", tags: ["clusters"] })

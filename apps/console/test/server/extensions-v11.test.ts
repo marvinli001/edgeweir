@@ -3,10 +3,12 @@ import { createHash, randomBytes } from "node:crypto";
 import { type Client, Code, ConnectError, createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import {
+  compileNodeConfig,
   decodeNodeConfig,
   EXTENSIONS_FEATURE,
   EXTENSIONS_V2_FEATURE,
 } from "@edgeweir/config-compiler";
+import { EXTENSIONS_NODE_FEATURE } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { ApplyState, NodeService } from "@edgeweir/proto";
 import { eq, like } from "drizzle-orm";
@@ -21,9 +23,11 @@ import { readArchive } from "../../src/server/lib/extension-package";
 import { type NodeChannel, startNodeChannel } from "../../src/server/node-channel/server";
 import { createClusterTx } from "../../src/server/services/clusters";
 import { createEnrollmentToken } from "../../src/server/services/enrollment";
-import { extensionSecretBinding } from "../../src/server/services/extensions";
+import { extensionSecretBinding, loadExtensionInput } from "../../src/server/services/extensions";
 import { latestRevision } from "../../src/server/services/revisions";
+import { currentStable } from "../../src/server/services/rollback";
 import { PACKAGE, PUBLIC_JWK, SIGNATURE, signPackage, ustar } from "./extension-fixtures";
+import { seedNodeExtension } from "./extension-node-fixtures";
 import {
   type ApiClient,
   createTestContext,
@@ -86,13 +90,16 @@ describe("node extensions 1.1: sidecars, secrets and site data", async () => {
   let nodeA: Client<typeof NodeService>;
   let nodeB: Client<typeof NodeService>;
   let nodeAId = "";
+  let nodeBId = "";
+  let secondClusterId = "";
+  let nodePackages: Awaited<ReturnType<typeof seedNodeExtension>>;
   // The sidecar package: a binary over 4 MiB, so that it travels in parts.
   const sidecar = build(sidecarManifest, {
     "sidecar/linux-amd64/runtime": elf(62, 5 * MiB + 123),
   });
 
-  const ir = async () => {
-    const row = await latestRevision(ctx.db, clusterId);
+  const ir = async (cluster = clusterId) => {
+    const row = await latestRevision(ctx.db, cluster);
     if (!row) throw new Error("no revision");
     return decodeNodeConfig(row.ir);
   };
@@ -177,7 +184,10 @@ describe("node extensions 1.1: sidecars, secrets and site data", async () => {
     const other = await ctx.db.transaction((tx) =>
       createClusterTx(tx, { name: "other", description: "" }, actor),
     );
-    nodeB = (await enroll(other.id, "edge-b")).client;
+    secondClusterId = other.id;
+    const b = await enroll(other.id, "edge-b");
+    nodeB = b.client;
+    nodeBId = b.id;
   });
   afterAll(async () => {
     await channel.close();
@@ -498,5 +508,345 @@ describe("node extensions 1.1: sidecars, secrets and site data", async () => {
       "site.extension_data_delete",
     ])
       expect(actions).toContain(action);
+  });
+
+  const nodeId = "node-control";
+  const nodeFeatures = [
+    "tls-v1",
+    "rules-v1",
+    EXTENSIONS_FEATURE,
+    EXTENSIONS_V2_FEATURE,
+    EXTENSIONS_NODE_FEATURE,
+  ];
+  const nodeBinding = {
+    status: { port: 9700, bind: "127.0.0.1", allow: ["::1/128", "127.0.0.1/32"] },
+  };
+
+  it("delivers an effective node package and secret to a zero-site cluster, with no binding", async () => {
+    nodePackages = await seedNodeExtension(ctx.db, nodeId, [
+      { secret: true },
+      {
+        secret: true,
+        listeners: [{ name: "status", default_port: 9145, methods: ["HEAD", "GET"] }],
+      },
+      {
+        secret: true,
+        listeners: [{ name: "changed", default_port: 9145, methods: ["GET"] }],
+      },
+      {
+        secret: false,
+        listeners: [{ name: "status", default_port: 9145, methods: ["HEAD"] }],
+      },
+    ]);
+    await admin.extensions.updateNodeSettings({
+      id: nodeId,
+      settings: { clusterIds: [secondClusterId], listeners: { status: null } },
+    });
+    await admin.extensions.rotateSecret({ id: nodeId });
+    const revisions = await ctx.db.select().from(schema.configRevision);
+    const audits = await ctx.db.select().from(schema.auditLog);
+    expect(await rpcError(admin.extensions.update({ id: nodeId, enabled: true }))).toMatchObject({
+      code: "NODE_CAPABILITY_REQUIRED",
+      data: { features: EXTENSIONS_NODE_FEATURE },
+    });
+    expect(await ctx.db.select().from(schema.configRevision)).toEqual(revisions);
+    expect(await ctx.db.select().from(schema.auditLog)).toEqual(audits);
+    await ctx.db
+      .update(schema.node)
+      .set({ supportedFeatures: nodeFeatures })
+      .where(eq(schema.node.id, nodeBId));
+    await admin.extensions.update({ id: nodeId, enabled: true });
+    const config = await ir(secondClusterId);
+    expect(config.sites).toEqual([]);
+    expect(config.extensions).toMatchObject([
+      {
+        id: nodeId,
+        scope: "node",
+        configJson: '{"label":"status"}',
+        listeners: [],
+        secretVersion: 1,
+      },
+    ]);
+    expect(config.requiredFeatures).toContain(EXTENSIONS_NODE_FEATURE);
+    const received = await nodeB.getConfig({});
+    expect(received.payload.case).toBe("snapshot");
+    if (received.payload.case === "snapshot") expect(received.payload.value).toEqual(config);
+    await ctx.db
+      .update(schema.node)
+      .set({
+        supportedFeatures: nodeFeatures.filter((feature) => feature !== EXTENSIONS_NODE_FEATURE),
+      })
+      .where(eq(schema.node.id, nodeBId));
+    expect(await connectCode(nodeB.getConfig({}))).toBe("FailedPrecondition");
+    await ctx.db
+      .update(schema.node)
+      .set({ supportedFeatures: nodeFeatures })
+      .where(eq(schema.node.id, nodeBId));
+    const detail = await admin.extensions.get({ id: nodeId });
+    expect(detail).toMatchObject({
+      sites: 0,
+      nodesLoaded: 0,
+      nodes: [{ nodeId: nodeBId, state: "pending" }],
+    });
+    const digest = nodePackages[0]?.sha256 ?? "";
+    const part = await nodeB.getExtensionPackage({ sha256: digest, offset: 17n });
+    expect(Buffer.from(part.package)).toEqual(nodePackages[0]?.package.subarray(17));
+    expect(part.total).toBe(BigInt(nodePackages[0]?.size ?? 0));
+    expect(
+      await connectCode(nodeB.getExtensionPackage({ sha256: digest, offset: part.total + 1n })),
+    ).toBe("OutOfRange");
+    const [secret] = (await nodeB.getExtensionSecrets({ ids: [nodeId] })).secrets;
+    expect(secret).toMatchObject({ id: nodeId, version: 1 });
+    expect(secret?.current).toHaveLength(32);
+    const [stored] = await ctx.db
+      .select()
+      .from(schema.extension)
+      .where(eq(schema.extension.id, nodeId));
+    const envelope = JSON.parse(stored?.secretEnvelope ?? "{}") as Envelope;
+    expect(ctx.masterKey.open(envelope, extensionSecretBinding(nodeId))).toEqual(
+      Buffer.from(secret?.current ?? []),
+    );
+    expect(() => ctx.masterKey.open(envelope, extensionSecretBinding("other-node"))).toThrow();
+    await ctx.db.insert(schema.siteExtension).values({
+      siteId,
+      extensionId: nodeId,
+      enabled: true,
+      config: { forged: true },
+    });
+    expect(await connectCode(nodeA.getExtensionPackage({ sha256: digest }))).toBe("NotFound");
+    expect((await nodeA.getExtensionSecrets({ ids: [nodeId] })).secrets).toEqual([]);
+    const legacyInput = await loadExtensionInput(ctx.db, []);
+    expect(
+      compileNodeConfig({ clusterId: secondClusterId, sites: [], ...legacyInput }, 1n).extensions,
+    ).toEqual([]);
+  });
+
+  it("uses signed listener limits across upgrade and rollback without changing package bytes", async () => {
+    await admin.extensions.updateNodeSettings({
+      id: nodeId,
+      settings: { clusterIds: [secondClusterId], listeners: nodeBinding },
+    });
+    const original = await ir(secondClusterId);
+    expect(original.extensions[0]?.listeners).toMatchObject([
+      { name: "status", port: 9700, methods: ["GET"], maxBody: 0 },
+    ]);
+    await admin.extensions.activate({ id: nodeId, version: "1.0.1" });
+    expect((await ir(secondClusterId)).extensions[0]?.listeners).toMatchObject([
+      { methods: ["GET", "HEAD"], maxBody: 4096 },
+    ]);
+    expect((await ir(secondClusterId)).extensions[0]?.signature).toBe(nodePackages[1]?.signature);
+    const rollbackPackage = await nodeB.getExtensionPackage({
+      sha256: nodePackages[0]?.sha256 ?? "",
+    });
+    expect(Buffer.from(rollbackPackage.package)).toEqual(nodePackages[0]?.package);
+    await admin.extensions.activate({ id: nodeId, version: "1.0.0" });
+    expect((await ir(secondClusterId)).contentHash).toBe(original.contentHash);
+    const revisions = await ctx.db.select().from(schema.configRevision);
+    const audits = await ctx.db.select().from(schema.auditLog);
+    const settings = await admin.extensions.nodeSettings({ id: nodeId });
+    expect(
+      await rpcError(admin.extensions.activate({ id: nodeId, version: "1.0.2" })),
+    ).toMatchObject({ code: "EXTENSION_NODE_SETTINGS_INVALID" });
+    expect((await admin.extensions.get({ id: nodeId })).version).toBe("1.0.0");
+    expect(await admin.extensions.nodeSettings({ id: nodeId })).toEqual(settings);
+    expect(await ctx.db.select().from(schema.configRevision)).toEqual(revisions);
+    expect(await ctx.db.select().from(schema.auditLog)).toEqual(audits);
+    const stored = await ctx.db
+      .select()
+      .from(schema.extensionVersion)
+      .where(eq(schema.extensionVersion.extensionId, nodeId));
+    for (const pkg of nodePackages) {
+      const version = stored.find((row) => row.version === pkg.version);
+      expect(Buffer.from(version?.package ?? [])).toEqual(pkg.package);
+      expect(version).toMatchObject({
+        sha256: pkg.sha256,
+        signature: pkg.signature,
+        manifest: pkg.manifest,
+      });
+    }
+  });
+
+  it("keeps old and new signed node packages distinct through a live canary and safety changes", async () => {
+    const stable = await enroll(secondClusterId, "edge-stable");
+    await ctx.db
+      .update(schema.node)
+      .set({ supportedFeatures: nodeFeatures })
+      .where(eq(schema.node.id, stable.id));
+    const group = await admin.nodeGroups.create({
+      clusterId: secondClusterId,
+      name: "canary",
+      isCanary: true,
+    });
+    await ctx.db
+      .update(schema.node)
+      .set({ nodeGroupId: group.id, lastSeenAt: new Date() })
+      .where(eq(schema.node.id, nodeBId));
+    const policy = {
+      id: secondClusterId,
+      enabled: true,
+      windowSeconds: 300,
+      autoPromote: false,
+      errorRatioMultiplier: 2,
+      errorRatioFloor: 0.05,
+      minRequests: 10,
+    };
+    const snapshot = async (node: Client<typeof NodeService>) => {
+      const reply = await node.getConfig({});
+      if (reply.payload.case !== "snapshot") throw new Error("expected snapshot");
+      return reply.payload.value;
+    };
+    const original = await latestRevision(ctx.db, secondClusterId);
+    await admin.clusters.setRolloutPolicy(policy);
+    await admin.extensions.activate({ id: nodeId, version: "1.0.1" });
+    await admin.extensions.update({ id: nodeId, config: { label: "candidate" } });
+    expect((await admin.clusters.rollout({ id: secondClusterId })).state).toBe("canary");
+    const candidate = (await snapshot(nodeB)).extensions[0];
+    const previous = (await snapshot(stable.client)).extensions[0];
+    expect(candidate).toMatchObject({
+      sha256: nodePackages[1]?.sha256,
+      configJson: '{"label":"candidate"}',
+      listeners: [{ methods: ["GET", "HEAD"], maxBody: 4096 }],
+    });
+    expect(previous).toMatchObject({
+      sha256: nodePackages[0]?.sha256,
+      configJson: '{"label":"status"}',
+      listeners: [{ methods: ["GET"], maxBody: 0 }],
+    });
+    for (const [node, version] of [
+      [nodeB, 1],
+      [stable.client, 0],
+    ] as const) {
+      const part = await node.getExtensionPackage({ sha256: nodePackages[version]?.sha256 ?? "" });
+      expect(Buffer.from(part.package)).toEqual(nodePackages[version]?.package);
+      expect((await node.getExtensionSecrets({ ids: [nodeId] })).secrets).toMatchObject([
+        { id: nodeId, version: 1 },
+      ]);
+    }
+    await admin.extensions.rotateSecret({ id: nodeId });
+    const issued = (await stable.client.getExtensionSecrets({ ids: [nodeId] })).secrets[0];
+    expect((await snapshot(stable.client)).extensions[0]).toMatchObject({
+      sha256: nodePackages[0]?.sha256,
+      secretVersion: issued?.version,
+    });
+    expect(issued?.version).toBe(2);
+    const listeners = { status: { ...nodeBinding.status, port: 9701, allow: ["127.0.0.2/32"] } };
+    await admin.extensions.updateNodeSettings({
+      id: nodeId,
+      settings: { clusterIds: [secondClusterId], listeners },
+    });
+    await admin.clusters.abortRollout({ id: secondClusterId });
+    for (const node of [nodeB, stable.client])
+      expect((await snapshot(node)).extensions[0]).toMatchObject({
+        sha256: nodePackages[0]?.sha256,
+        listeners: [{ port: 9701, allow: ["127.0.0.2/32"], methods: ["GET"], maxBody: 0 }],
+      });
+    await admin.clusters.rollback({ id: secondClusterId, revision: original?.revision ?? 0 });
+    expect((await snapshot(stable.client)).extensions[0]).toMatchObject({
+      sha256: nodePackages[1]?.sha256,
+      listeners: [{ port: 9701, allow: ["127.0.0.2/32"] }],
+    });
+    await admin.extensions.activate({ id: nodeId, version: "1.0.0" });
+    await admin.clusters.promoteRollout({ id: secondClusterId });
+    await admin.extensions.activate({ id: nodeId, version: "1.0.3" });
+    expect((await snapshot(stable.client)).extensions[0]?.sha256).toBe(nodePackages[0]?.sha256);
+    expect((await snapshot(nodeB)).extensions[0]?.sha256).toBe(nodePackages[3]?.sha256);
+    expect((await stable.client.getExtensionSecrets({ ids: [nodeId] })).secrets[0]?.version).toBe(
+      2,
+    );
+    await admin.extensions.updateSettings({ disabled: true });
+    for (const node of [nodeB, stable.client]) {
+      expect((await snapshot(node)).extensions).toEqual([]);
+      expect(
+        await connectCode(node.getExtensionPackage({ sha256: nodePackages[0]?.sha256 ?? "" })),
+      ).toBe("NotFound");
+      expect((await node.getExtensionSecrets({ ids: [nodeId] })).secrets).toEqual([]);
+    }
+    await admin.extensions.updateSettings({ disabled: false });
+    expect((await snapshot(stable.client)).extensions).toEqual([]);
+    await admin.clusters.promoteRollout({ id: secondClusterId });
+    await admin.extensions.activate({ id: nodeId, version: "1.0.0" });
+    await admin.extensions.deleteVersion({ id: nodeId, version: "1.0.3" });
+    expect((await snapshot(stable.client)).extensions).toEqual([]);
+    expect((await snapshot(nodeB)).extensions[0]?.sha256).toBe(nodePackages[0]?.sha256);
+    await admin.extensions.updateNodeSettings({ id: nodeId, settings: { clusterIds: [] } });
+    for (const node of [nodeB, stable.client]) {
+      expect((await snapshot(node)).extensions).toEqual([]);
+      expect((await node.getExtensionSecrets({ ids: [nodeId] })).secrets).toEqual([]);
+    }
+    await admin.clusters.setRolloutPolicy({ ...policy, enabled: false });
+  });
+
+  it("publishes both old and new targets for null, omitted, subset and empty target sets", async () => {
+    const before = await latestRevision(ctx.db, secondClusterId);
+    expect(
+      await rpcError(
+        admin.extensions.updateNodeSettings({ id: nodeId, settings: { clusterIds: null } }),
+      ),
+    ).toMatchObject({ code: "NODE_CAPABILITY_REQUIRED" });
+    expect((await latestRevision(ctx.db, secondClusterId))?.revision).toBe(before?.revision);
+    await ctx.db
+      .update(schema.node)
+      .set({ supportedFeatures: nodeFeatures })
+      .where(eq(schema.node.id, nodeAId));
+    await admin.extensions.updateNodeSettings({ id: nodeId, settings: { clusterIds: null } });
+    expect((await ir()).extensions.some((entry) => entry.id === nodeId)).toBe(true);
+    expect(
+      (await ir()).sites.flatMap((entry) => entry.extensions).some((entry) => entry.id === nodeId),
+    ).toBe(false);
+    const added = await admin.clusters.create({ name: "node-all-target", description: "" });
+    expect((await ir(added.id)).extensions).toMatchObject([{ id: nodeId, listeners: [] }]);
+    await admin.extensions.updateNodeSettings({ id: nodeId, settings: { clusterIds: [] } });
+    for (const cluster of [clusterId, secondClusterId, added.id])
+      expect((await ir(cluster)).extensions.some((entry) => entry.id === nodeId)).toBe(false);
+    for (const node of [nodeA, nodeB]) {
+      expect(
+        await connectCode(node.getExtensionPackage({ sha256: nodePackages[0]?.sha256 ?? "" })),
+      ).toBe("NotFound");
+      expect((await node.getExtensionSecrets({ ids: [nodeId] })).secrets).toEqual([]);
+    }
+    await admin.extensions.updateNodeSettings({ id: nodeId, settings: {} });
+    expect((await ir(secondClusterId)).extensions).toMatchObject([{ id: nodeId, listeners: [] }]);
+    await admin.extensions.updateNodeSettings({
+      id: nodeId,
+      settings: { clusterIds: [secondClusterId] },
+    });
+    expect((await ir()).extensions.some((entry) => entry.id === nodeId)).toBe(false);
+    expect((await ir(added.id)).extensions).toEqual([]);
+  });
+
+  it("withdraws node descriptors and fetch access on kill/disable, and rotates through the existing envelope", async () => {
+    await admin.extensions.updateNodeSettings({
+      id: nodeId,
+      settings: { clusterIds: [secondClusterId], listeners: nodeBinding },
+    });
+    for (const change of ["kill", "disable"] as const) {
+      const active = await latestRevision(ctx.db, secondClusterId);
+      if (change === "kill") await admin.extensions.updateSettings({ disabled: true });
+      else await admin.extensions.update({ id: nodeId, enabled: false });
+      expect((await ir(secondClusterId)).extensions).toEqual([]);
+      expect(
+        await connectCode(nodeB.getExtensionPackage({ sha256: nodePackages[0]?.sha256 ?? "" })),
+      ).toBe("NotFound");
+      expect((await nodeB.getExtensionSecrets({ ids: [nodeId] })).secrets).toEqual([]);
+      const stable = await ctx.db.transaction((tx) =>
+        currentStable(tx, secondClusterId, decodeNodeConfig(active?.ir ?? new Uint8Array())),
+      );
+      expect(stable.extensions).toEqual([]);
+      await admin.clusters.rollback({ id: secondClusterId, revision: active?.revision ?? 0 });
+      expect((await ir(secondClusterId)).extensions).toEqual([]);
+      if (change === "kill") await admin.extensions.updateSettings({ disabled: false });
+      else await admin.extensions.update({ id: nodeId, enabled: true });
+      expect((await ir(secondClusterId)).extensions).toMatchObject([{ id: nodeId }]);
+    }
+    const [before] = (await nodeB.getExtensionSecrets({ ids: [nodeId] })).secrets;
+    await admin.extensions.rotateSecret({ id: nodeId });
+    const [after] = (await nodeB.getExtensionSecrets({ ids: [nodeId] })).secrets;
+    expect(after?.version).toBe((before?.version ?? 0) + 1);
+    expect(after?.previous).toEqual(before?.current);
+    expect(after?.current).not.toEqual(before?.current);
+    expect((await ir(secondClusterId)).extensions[0]?.secretVersion).toBe(after?.version);
+    await admin.extensions.uninstall({ id: nodeId });
+    expect((await ir(secondClusterId)).extensions).toEqual([]);
+    expect((await nodeB.getExtensionSecrets({ ids: [nodeId] })).secrets).toEqual([]);
   });
 });

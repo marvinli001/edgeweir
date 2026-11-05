@@ -18,6 +18,7 @@ import { Switch } from "@/components/arc/switch/switch";
 import { Textarea } from "@/components/arc/textarea/textarea";
 import { ConfirmDialog, ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
+import { NodeSettings } from "@/components/extensions/node-settings";
 import {
   type ConfigDraft,
   configDraft,
@@ -46,6 +47,7 @@ import { StatusDot, type StatusTone } from "@/components/status-dot";
 import { TimeAgo } from "@/components/time-ago";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { useOpenKey } from "@/hooks/use-open-key";
+import { hasUnsavedChanges, useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { formatBytes, formatDateTime, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { rowLink, rowLinkButton } from "@/lib/row-link";
@@ -102,6 +104,7 @@ function NodeState({ state }: { state: string }) {
 /** An extension's state in the list: off, every node loaded it, or some fail. */
 function ExtensionStatus({ extension }: { extension: ExtensionSummary }) {
   if (!extension.enabled) return <StatusDot tone="idle">{m.extensions_disabled()}</StatusDot>;
+  if (extension.scope === "node") return <StatusDot tone="idle">{m.common_saved()}</StatusDot>;
   if (extension.nodesFailing > 0)
     return (
       <StatusDot tone="bad">
@@ -281,6 +284,9 @@ function InstallDialog({
             </Fact>
             <Fact label={m.extensions_capabilities()}>
               <Names list={manifest.capabilities} />
+            </Fact>
+            <Fact label={m.extensions_scope()}>
+              {manifest.scope === "node" ? m.extensions_scope_node() : m.extensions_scope_site()}
             </Fact>
             <Fact label={m.extensions_hooks()}>
               <Names list={manifest.hooks} />
@@ -542,6 +548,9 @@ function GlobalConfig({ detail }: { detail: ExtensionDetail }) {
   const schema = detail.manifest.config.global;
   const [draft, setDraft] = React.useState<ConfigDraft>(() => configDraft(schema, detail.config));
   const [error, setError] = React.useState<string | null>(null);
+  const [saved, setSaved] = React.useState(() => JSON.stringify(draft));
+  const dirty = JSON.stringify(draft) !== saved;
+  useUnsavedChanges(dirty);
   const update = useMutation({
     ...orpc.extensions.update.mutationOptions(),
     meta: { invalidates: invalidates(), success: m.common_saved },
@@ -553,7 +562,13 @@ function GlobalConfig({ detail }: { detail: ExtensionDetail }) {
         event.preventDefault();
         setError(null);
         try {
-          await update.mutateAsync({ id: detail.id, config: configFromDraft(schema, draft) });
+          const result = await update.mutateAsync({
+            id: detail.id,
+            config: configFromDraft(schema, draft),
+          });
+          const next = configDraft(schema, result.config);
+          setDraft(next);
+          setSaved(JSON.stringify(next));
         } catch (err) {
           setError(errorMessage(err));
         }
@@ -561,12 +576,18 @@ function GlobalConfig({ detail }: { detail: ExtensionDetail }) {
       data-testid="extension-global-config"
     >
       <FieldGroup>
-        <SchemaForm schema={schema} draft={draft} onChange={setDraft} idPrefix="extension-global" />
+        <SchemaForm
+          schema={schema}
+          draft={draft}
+          onChange={setDraft}
+          idPrefix="extension-global"
+          disabled={update.isPending}
+        />
         {error ? <FieldError className="animate-in fade-in">{error}</FieldError> : null}
         <Button
           type="submit"
           className="self-start"
-          disabled={update.isPending}
+          disabled={!dirty || update.isPending}
           data-testid="extension-global-save"
         >
           {update.isPending ? <Spinner /> : null}
@@ -577,7 +598,15 @@ function GlobalConfig({ detail }: { detail: ExtensionDetail }) {
   );
 }
 
-function DetailBody({ detail, onClose }: { detail: ExtensionDetail; onClose: () => void }) {
+function DetailBody({
+  detail,
+  onClose,
+  footer,
+}: {
+  detail: ExtensionDetail;
+  onClose: () => void;
+  footer: HTMLDivElement | null;
+}) {
   const update = useMutation({
     ...orpc.extensions.update.mutationOptions(),
     meta: { invalidates: invalidates(), toastError: true },
@@ -594,6 +623,9 @@ function DetailBody({ detail, onClose }: { detail: ExtensionDetail; onClose: () 
   return (
     <div className="flex min-w-0 flex-col gap-6">
       <Facts>
+        <Fact label={m.extensions_scope()}>
+          {detail.manifest.scope === "node" ? m.extensions_scope_node() : m.extensions_scope_site()}
+        </Fact>
         <Fact label={m.extensions_col_version()}>
           <span className="font-mono">{detail.version}</span>
         </Fact>
@@ -650,7 +682,11 @@ function DetailBody({ detail, onClose }: { detail: ExtensionDetail; onClose: () 
         <FieldGroup>
           <SwitchField
             id="extension-enabled"
-            label={m.extensions_enabled()}
+            label={
+              detail.scope === "node"
+                ? m.extensions_node_extension_enabled()
+                : m.extensions_enabled()
+            }
             checked={detail.enabled}
             disabled={update.isPending}
             onCheckedChange={(enabled) => update.mutate({ id: detail.id, enabled })}
@@ -673,9 +709,14 @@ function DetailBody({ detail, onClose }: { detail: ExtensionDetail; onClose: () 
           </Field>
         </FieldGroup>
       </Section>
+      {detail.manifest.scope === "node" ? (
+        <Section title={m.extensions_node_settings()}>
+          <NodeSettings detail={detail} footer={footer} />
+        </Section>
+      ) : null}
       {hasConfigFields(detail.manifest.config.global) ? (
         <Section title={m.extensions_config()}>
-          <GlobalConfig key={detail.updatedAt} detail={detail} />
+          <GlobalConfig key={detail.version} detail={detail} />
         </Section>
       ) : null}
       <Section title={m.extensions_versions()}>
@@ -685,30 +726,34 @@ function DetailBody({ detail, onClose }: { detail: ExtensionDetail; onClose: () 
           ))}
         </ul>
       </Section>
-      <Section title={m.extensions_col_nodes()}>
-        {detail.nodes.length === 0 ? (
-          <p className="text-sm text-muted-foreground">—</p>
-        ) : (
-          <ul className="divide-y divide-edge rounded-lg text-sm faint-well">
-            {detail.nodes.map((node) => (
-              <NodeRow key={node.nodeId} node={node} />
-            ))}
-          </ul>
-        )}
-      </Section>
-      <Section title={m.extensions_col_sites()}>
-        {detail.siteList.length === 0 ? (
-          <p className="text-sm text-muted-foreground">—</p>
-        ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {detail.siteList.map((site) => (
-              <Badge key={site.id} size="sm" tone="neutral">
-                {site.name}
-              </Badge>
-            ))}
-          </div>
-        )}
-      </Section>
+      {detail.manifest.scope !== "node" ? (
+        <>
+          <Section title={m.extensions_col_nodes()}>
+            {detail.nodes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">—</p>
+            ) : (
+              <ul className="divide-y divide-edge rounded-lg text-sm faint-well">
+                {detail.nodes.map((node) => (
+                  <NodeRow key={node.nodeId} node={node} />
+                ))}
+              </ul>
+            )}
+          </Section>
+          <Section title={m.extensions_col_sites()}>
+            {detail.siteList.length === 0 ? (
+              <p className="text-sm text-muted-foreground">—</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {detail.siteList.map((site) => (
+                  <Badge key={site.id} size="sm" tone="neutral">
+                    {site.name}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </Section>
+        </>
+      ) : null}
       <ConfirmDialog
         trigger={
           <Button
@@ -736,12 +781,20 @@ function DetailBody({ detail, onClose }: { detail: ExtensionDetail; onClose: () 
 function ExtensionSheet({ id, onClose }: { id: string; onClose: () => void }) {
   const detail = useQuery(orpc.extensions.get.queryOptions({ input: { id } }));
   const name = detail.data ? localizedText(detail.data.name, id) : id;
+  const [discarding, setDiscarding] = React.useState(false);
+  const [footer, setFooter] = React.useState<HTMLDivElement | null>(null);
+  const close = () => (hasUnsavedChanges() ? setDiscarding(true) : onClose());
   return (
-    <Drawer open onOpenChange={(open) => !open && onClose()}>
+    <Drawer open onOpenChange={(open) => !open && close()}>
       <DrawerContent
         side="right"
         className="w-[min(40rem,100vw)]!"
         data-testid="extension-detail"
+        footer={
+          detail.data?.manifest.scope === "node" ? (
+            <div ref={setFooter} className="w-full min-w-0" />
+          ) : undefined
+        }
         title={
           <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
             <span className="min-w-0 break-all">{name}</span>
@@ -755,9 +808,16 @@ function ExtensionSheet({ id, onClose }: { id: string; onClose: () => void }) {
           query={detail}
           notFound={<EmptyState compact icon={PuzzleIcon} title={m.extensions_gone()} />}
         >
-          {(data) => <DetailBody detail={data} onClose={onClose} />}
+          {(data) => <DetailBody detail={data} onClose={onClose} footer={footer} />}
         </QueryView>
       </DrawerContent>
+      <ControlledConfirmDialog
+        open={discarding}
+        onOpenChange={setDiscarding}
+        title={m.unsaved_leave_title()}
+        confirmLabel={m.unsaved_discard()}
+        onConfirm={async () => onClose()}
+      />
     </Drawer>
   );
 }
@@ -802,6 +862,12 @@ export function ExtensionsPanel({
         cell: ({ row }) => <ExtensionStatus extension={row.original} />,
       },
       {
+        id: "scope",
+        header: () => m.extensions_scope(),
+        cell: ({ row }) =>
+          row.original.scope === "node" ? m.extensions_scope_node() : m.extensions_scope_site(),
+      },
+      {
         id: "version",
         header: () => m.extensions_col_version(),
         cell: ({ row }) => <span className="font-mono">{row.original.version}</span>,
@@ -816,14 +882,18 @@ export function ExtensionsPanel({
         header: () => m.extensions_col_nodes(),
         cell: ({ row }) => (
           <span className="tabular-nums" title={m.extensions_nodes_loaded()}>
-            {row.original.nodesLoaded}
+            {row.original.scope === "node" ? "—" : row.original.nodesLoaded}
           </span>
         ),
       },
       {
         id: "sites",
         header: () => m.extensions_col_sites(),
-        cell: ({ row }) => <span className="tabular-nums">{row.original.sites}</span>,
+        cell: ({ row }) => (
+          <span className="tabular-nums">
+            {row.original.scope === "node" ? "—" : row.original.sites}
+          </span>
+        ),
       },
       {
         id: "enabled",

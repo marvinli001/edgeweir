@@ -3,9 +3,14 @@ import type { Cluster, Revision, RollbackPreview } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { and, asc, count, desc, eq, ne, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
+import { lockListenerPorts } from "../lib/locks";
 import { type Actor, recordAudit } from "./audit";
 import { siteChanges } from "./config-changes";
 import { assertBindingReleased } from "./dns";
+import {
+  assertNodeExtensionClusterReleased,
+  validateEnabledNodeExtensions,
+} from "./extension-node-settings";
 import { isOnline, onlineWindowSeconds } from "./nodes";
 import { resolvePlatformAlert } from "./platform-alerts";
 import {
@@ -127,9 +132,11 @@ export async function createClusterTx(
   input: { name: string; description: string },
   actor: Actor,
 ) {
+  await lockListenerPorts(tx);
   await assertNameFree(tx, input.name);
   const [row] = await tx.insert(schema.cluster).values(input).returning();
   if (!row) throw new Error("cluster insert failed");
+  await validateEnabledNodeExtensions(tx);
   await tx.insert(schema.nodeGroup).values({ clusterId: row.id, name: "default", isDefault: true });
   await publishRevision(tx, {
     clusterId: row.id,
@@ -223,9 +230,10 @@ export async function setClusterCache(
   return toClusterDto(db, row);
 }
 
-/** Deletes an empty cluster; refused while nodes or sites still belong to it. */
+/** Deletes an empty cluster after explicit extension targets and DNS bindings are released. */
 export async function deleteCluster(db: Database, id: string, actor: Actor): Promise<void> {
   await db.transaction(async (tx) => {
+    await lockListenerPorts(tx);
     const row = await findCluster(tx, id);
     const [nodes] = await tx
       .select({ n: count() })
@@ -243,6 +251,7 @@ export async function deleteCluster(db: Database, id: string, actor: Actor): Pro
         sites: siteCount,
       });
     }
+    await assertNodeExtensionClusterReleased(tx, id);
     await assertBindingReleased(tx, id);
     // The cluster's platform alerts end with it (nothing would resolve them later).
     for (const kind of [

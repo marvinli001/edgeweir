@@ -27,9 +27,10 @@ import {
 import { type Database, schema } from "@edgeweir/db";
 import { and, asc, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
-import { lockClusterPublish } from "../lib/locks";
+import { lockClusterPublish, lockListenerPorts } from "../lib/locks";
 import { rangeWindow, sourceFor } from "./analytics";
 import { type Actor, systemActor } from "./audit";
+import { assertNoNodeListenerConflict } from "./extension-node-settings";
 import { nodeIpRows, schedulingAddressesOf } from "./node-addresses";
 import {
   type Executor,
@@ -378,6 +379,8 @@ export async function updateTieredCache(
   actor: Actor,
 ): Promise<TieredCacheSettings> {
   return db.transaction(async (tx) => {
+    await lockListenerPorts(tx);
+    await assertNoNodeListenerConflict(tx, undefined, [{ start: input.port, end: input.port }]);
     const clusters = await clustersUsingPort(tx, input.port);
     if (clusters.length)
       fail("TIER_PORT_IN_USE", `port ${input.port} is a listener or TCP application port`, {

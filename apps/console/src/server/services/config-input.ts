@@ -876,6 +876,6 @@ export async function loadConfigInput(
     greylistChallenges: await greylistChallenges(tx, clusterId),
     aiCrawlers: ai.catalogue,
     tieredCache: await loadTieredCacheModel(tx, clusterId),
-    ...(await loadExtensionInput(tx, sites)),
+    ...(await loadExtensionInput(tx, sites, clusterId)),
   };
 }

@@ -156,6 +156,20 @@ describe("OpenAPI security requirements", async () => {
     ).toEqual(expect.arrayContaining(["id", "from", "to"]));
   });
 
+  it("documents the independent node settings and preflight routes", () => {
+    const routes = operations
+      .filter(({ op }) =>
+        /extensions\.(nodeSettings|updateNodeSettings|checkNodeSettings)$/.test(op.operationId),
+      )
+      .map(({ path, method, op }) => `${method} ${path} ${op.operationId}`)
+      .sort();
+    expect(routes).toEqual([
+      "get /extensions/{id}/node-settings extensions.nodeSettings",
+      "post /extensions/{id}/node-settings/check extensions.checkNodeSettings",
+      "put /extensions/{id}/node-settings extensions.updateNodeSettings",
+    ]);
+  });
+
   it("matches what the API enforces without credentials", async () => {
     const uuid = "00000000-0000-4000-8000-000000000000";
     for (const { path, method, op } of operations) {

@@ -2,6 +2,8 @@
 
 节点扩展把你信任的发布者编写的 Lua 代码加入边缘请求路径：响应头、裁决、规则字段、HTML 片段、小型端点。控制台负责安装、配置并按网站开启；节点校验并加载。格式与运行时契约见[节点扩展](../reference/extensions.md)。
 
+本页操作适用于网站扩展：可安装的网站包须省略 `scope`，按默认的 `site` 语义运行。Lua API 2 的网站扩展可使用密钥、边车与网站数据；它不代表支持节点作用范围或独立 HTTP 监听器。显式声明 `scope: "site"` 的包在校验与安装时返回 `EXTENSION_PACKAGE_INVALID`，`reason: "manifest"`；节点包的能力门槛与设置接口见[节点作用范围](../reference/extensions.md#节点作用范围与-http-监听器契约)。
+
 > 扩展以 nginx worker 的权限在节点的 worker 内运行，能看到开启它的每个网站的请求与响应。只在你愿意让某个发布者的代码跑在自己边缘上时才信任其密钥（威胁模型见 SECURITY.md）。
 
 ## 概念

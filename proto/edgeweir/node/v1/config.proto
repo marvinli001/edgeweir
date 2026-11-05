@@ -30,7 +30,9 @@ import "google/protobuf/timestamp.proto";
 //   - inside a site domains, and offline_hosts, by (name, wildcard, match)
 //     (v0.25.0; a name sorts before the same name with wildcard);
 //   - origin_client_certificates by id (v1.3.0);
-//   - connection_limits ports by start (v1.6.0).
+//   - connection_limits ports by start (v1.6.0);
+//   - inside an extension listeners by name, with allow and methods sorted
+//     and unique; site scope is encoded as the empty string.
 // content_hash is the lowercase hex SHA-256 of the deterministic binary
 // encoding of this message with `revision` and `content_hash` cleared.
 message NodeConfig {
@@ -1994,6 +1996,39 @@ message Extension {
   // `secret: true`, extension version 1.1); 0: none. Nodes fetch the secret
   // itself with NodeService.GetExtensionSecrets when it changes.
   uint32 secret_version = 13;
+  // Empty: site scope, including legacy manifests without scope; leave this
+  // field unset for site extensions to preserve their encoding. "node":
+  // node scope, requiring Lua API 2 and extensions-node-v1 in required_features
+  // in addition to extensions-v1 and extensions-v2. Nodes verify the scope
+  // against the signed manifest; Lua API 2 alone does not imply node scope.
+  string scope = 14;
+  // Effective operator bindings for node scope only, at most 2, sorted by
+  // name. Omit unbound/null entries and all bindings when this extension or
+  // extensions globally are disabled. These are separate from config_json.
+  repeated ExtensionListener listeners = 15;
+}
+
+// ExtensionListener is one enabled, dedicated HTTP listener of a node-scoped
+// extension. Its name, methods and body limit must match the signed manifest;
+// port, bind and allow are the operator's independent binding. Nodes verify
+// the declaration and binding before opening a port.
+message ExtensionListener {
+  // Manifest listener name ([a-z][a-z0-9_]{0,15}), unique in this extension.
+  string name = 1;
+  // 1024-65535, excluding 8443; must not conflict with edge, layer-4,
+  // internal service or other enabled extension listener ports.
+  uint32 port = 2;
+  // Normalized IPv4 or IPv6 literal, excluding IPv4-mapped IPv6 addresses.
+  string bind = 3;
+  // 1-64 normalized CIDRs, sorted and unique, excluding IPv4-mapped IPv6.
+  // Only the real TCP peer is checked, before Lua; forwarding headers do not
+  // affect this ACL. Empty is invalid, never an implicit allow-all.
+  repeated string allow = 4;
+  // Non-empty subset of GET, HEAD and POST, sorted and unique.
+  repeated string methods = 5;
+  // Request body limit in bytes, 0-65536. Unset means 4096; explicit 0 is
+  // valid and must retain presence. Derived from the signed manifest.
+  optional uint32 max_body = 6;
 }
 
 // ExtensionSharedDict is one lua_shared_dict of an extension.

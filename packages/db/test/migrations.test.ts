@@ -93,6 +93,7 @@ describe("migrations", () => {
       "region",
       "node_certificate_revocation",
       "system_setting",
+      "extension_node_setting",
       "site_star",
       "origin_credential",
       "origin_health",

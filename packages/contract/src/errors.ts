@@ -171,6 +171,7 @@ export const errorDefs = {
   NODE_CAPABILITY_REQUIRED: { status: 409, params: ["features", "nodes"] },
   CLUSTER_NAME_TAKEN: { status: 409, params: ["name"] },
   CLUSTER_NOT_EMPTY: { status: 409, params: ["nodes", "sites"] },
+  CLUSTER_NODE_EXTENSION_IN_USE: { status: 409, params: ["extensions"] },
   NO_CLUSTER: { status: 412, params: [] },
   NODE_GROUP_NOT_FOUND: { status: 404, params: [] },
   NODE_GROUP_NAME_TAKEN: { status: 409, params: ["name"] },
@@ -386,6 +387,11 @@ export const errorDefs = {
   EXTENSION_VERSION_EXISTS: { status: 409, params: ["version"] },
   /** `path` of the first issue and its `issue` code (required, type, enum, min, max, pattern, format, unknown, unique). */
   EXTENSION_CONFIG_INVALID: { status: 400, params: ["scope", "path", "issue"] },
+  EXTENSION_NODE_SETTINGS_INVALID: { status: 400, params: ["path", "issue"] },
+  EXTENSION_SCOPE_MISMATCH: { status: 400, params: ["scope"] },
+  EXTENSION_SCOPE_CHANGE: { status: 409, params: [] },
+  /** Port ownership is independent of bind address and transport protocol. */
+  PORT_BINDING_CONFLICT: { status: 409, params: ["port", "cluster", "owner"] },
   /** Rules read the extension's fields (first 5 rule names). */
   EXTENSION_IN_USE: { status: 409, params: ["rules"] },
   /** The extension's version needs a Lua API this console does not deliver. */

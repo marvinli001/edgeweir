@@ -28,6 +28,13 @@ export const lockClusterPublish = (tx: Executor, clusterId: string) =>
   xactLock(tx, `edgeweir.publish.${clusterId}`);
 
 /**
+ * Port ownership and cluster membership, including extensions targeting all
+ * clusters. Taken before extension, L4, row and publish locks; read the
+ * port snapshot only after taking it.
+ */
+export const lockListenerPorts = (tx: Executor) => xactLock(tx, "edgeweir.listener-ports");
+
+/**
  * Serializes the certificate_unloadable alert of a certificate: the
  * heartbeats that change what nodes report about it decide it one after
  * the other (syncCertificateFailureAlerts).
@@ -47,8 +54,10 @@ export const lockStats = (tx: Executor, mode: "shared" | "exclusive") =>
  * Serializes changes to a cluster's port pools and layer-4 applications
  * (ports are checked against both). Taken before the cluster's publish lock.
  */
-export const lockClusterL4 = (tx: Executor, clusterId: string) =>
-  xactLock(tx, `edgeweir.l4.${clusterId}`);
+export async function lockClusterL4(tx: Executor, clusterId: string) {
+  await lockListenerPorts(tx);
+  await xactLock(tx, `edgeweir.l4.${clusterId}`);
+}
 
 /** Serializes the evaluation of a cluster's scheduling rules (address states, actions, DNS). */
 export const lockClusterScheduling = (tx: Executor, clusterId: string) =>

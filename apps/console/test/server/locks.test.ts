@@ -28,7 +28,7 @@ describe("advisory locks", () => {
   // Every console instance takes the same keys: these never change.
   it.each([
     ["publish", (tx: Executor) => locks.lockClusterPublish(tx, "c1"), "edgeweir.publish.c1"],
-    ["l4", (tx: Executor) => locks.lockClusterL4(tx, "c1"), "edgeweir.l4.c1"],
+    ["listener ports", locks.lockListenerPorts, "edgeweir.listener-ports"],
     [
       "scheduling",
       (tx: Executor) => locks.lockClusterScheduling(tx, "c1"),
@@ -57,6 +57,13 @@ describe("advisory locks", () => {
     ],
   ])("keys the %s lock", async (_name, take, key) => {
     expect(await statements(take)).toEqual([exclusive(key)]);
+  });
+
+  it("takes the listener-port lock before the cluster L4 lock", async () => {
+    expect(await statements((tx) => locks.lockClusterL4(tx, "c1"))).toEqual([
+      exclusive("edgeweir.listener-ports"),
+      exclusive("edgeweir.l4.c1"),
+    ]);
   });
 
   it("takes the shared side of the bans and statistics locks", async () => {

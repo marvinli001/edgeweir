@@ -196,6 +196,10 @@ function readManifest(files: PackageFile[]): ExtensionManifest {
       `${issue?.path.join(".") || "manifest"}: ${issue?.message ?? "invalid"}`,
     );
   }
+  // Existing nodes reject unknown manifest members, including an explicit site scope.
+  if (parsed.data.scope === "site" && Object.hasOwn(json as Record<string, unknown>, "scope")) {
+    return invalid("manifest", "scope: explicit site scope is not supported by this console");
+  }
   if (!files.some((f) => f.path === "lua/main.lua")) invalid("manifest", "lua/main.lua missing");
   for (const f of files) {
     if (!f.path.endsWith(".lua") || isSidecarPath(f.path)) continue;

@@ -2,7 +2,7 @@
 
 Node extensions add Lua code to the request path of edge nodes. Anyone can write and sign one; the operator decides which publishers to trust, installs packages in the console, configures them and turns them on per site. The console distributes packages to nodes over the node channel and nodes load them. Neither the console nor the node checks licenses or contacts anyone about extensions; everything goes through the console's normal API.
 
-This page is the format and runtime contract (`edgeweir-node-extension-v1`, Lua API 1). The [guide](../guide/extensions.en.md) describes the console screens.
+This page is the format and runtime contract (`edgeweir-node-extension-v1`, Lua API 1 / 2). Site extensions can be installed and run; [node scope and HTTP listeners](#node-scope-and-http-listener-contract) have a separate contract and feature requirement. A Lua API version alone does not establish support. The [guide](../guide/extensions.en.md) describes the console screens.
 
 ## Overview
 
@@ -63,8 +63,9 @@ UTF-8 JSON, at most 64 KiB. Unknown top-level members are rejected (so that a ne
 | `name` | Map of locale (`en` required, `zh-CN` optional) to ≤ 64 characters |
 | `description` | Optional, same locales, ≤ 512 characters |
 | `license`, `homepage` | Optional, informational (SPDX expression ≤ 128 characters; `https://` URL) |
-| `requires.lua_api` | Required, `1` |
+| `requires.lua_api` | Required, `1` or `2`; API 2 members are described below |
 | `requires.node` | Optional semver range: space-separated comparators (`>=1.7.0 <2.0.0`), operators `=`, `>`, `>=`, `<`, `<=` |
+| `scope` | Optional, `site` (default) or `node`; omission preserves old site-extension behavior. `sites` is not a valid value. See the node-scope support requirements below |
 | `hooks` | Non-empty subset of `init`, `access`, `access_late`, `header_filter`, `body_filter`, `log`, `endpoint`; each needs a function of that name in `main.lua` |
 | `capabilities` | Subset of the table under [Capabilities](#capabilities); API calls outside them raise an error |
 | `config.global`, `config.site` | Optional JSON Schemas (subset below) of the global and per-site configuration; missing means `{}` with no properties |
@@ -121,7 +122,7 @@ edgeweir-node extension verify --pubkey publisher.pub.jwk --publisher example.or
 | Trusted keys | `GET` / `POST /extension-keys`, `DELETE /extension-keys/{kid}` | Trust store |
 | Status | `GET /extensions/{id}` | Manifest, versions, configuration, sites and each node's load state |
 
-Every write is audited (`extension.install`, `extension.upgrade`, `extension.activate`, `extension.delete_version`, `extension.update`, `extension.uninstall`, `extension.settings_update`, `extension_key.add`, `extension_key.remove`, `site.extension_update`) and publishes a new configuration revision in the same transaction. The same procedures serve `/rpc` for the console UI. Service account keys cannot call them.
+Changes are audited (`extension.install`, `extension.upgrade`, `extension.activate`, `extension.delete_version`, `extension.update`, `extension.uninstall`, `extension.settings_update`, `extension.node_settings_update`, `extension_key.add`, `extension_key.remove`, `site.extension_update`). Changes affecting site delivery publish the affected clusters in the same transaction. Node settings are stored without publishing a configuration revision. The same procedures serve `/rpc` for the console UI. Service account keys cannot call them.
 
 Packages are sent as base64 in JSON (`{"package": "<base64>", "signature": "<jws>"}`); the 16 MiB request limit leaves room for the 4 MiB archive.
 
@@ -218,7 +219,7 @@ Files under `assets/` are served at `/.edgeweir/ext/<id>/assets/<path>` (GET / H
 
 - Code runs in its own environment: standard Lua functions (`string`, `table`, `math`, `bit`, `pairs`, `pcall`, …), `os.time` / `os.clock` / `os.date`, and `require` limited to the package's own `lua/` modules (`require("util")` loads `lua/util.lua`) plus `cjson.safe`, `resty.sha256`, `resty.string`, `resty.random`, `resty.lrucache`, `ngx.re`. There is no `ngx` global, `io`, `os.execute`, `debug`, `ffi`, `jit`, `load` of bytecode, `package`, `setfenv` / `getfenv` or `collectgarbage`.
 - **This is hygiene, not a security sandbox.** A trusted publisher's code runs inside the nginx worker with the worker's privileges and can reach anything the worker can. Trust a key only if you would run that publisher's code on your edge.
-- Every hook call runs under `pcall`. An error or a call longer than the budget (10 ms wall time, including waits on cosockets in `access` / `access_late` / `endpoint`: 1000 ms) is a fault. 20 faults within 60 seconds in a worker trip the extension in that worker for 60 seconds; tripped extensions are treated like failing ones.
+- Every hook call runs under `pcall`. An error or a call longer than the budget (10 ms wall time, including waits on cosockets in `access` / `access_late` / `endpoint`: 1000 ms) is a fault. The budget is checked after the call returns and cannot interrupt a synchronous infinite loop; install only trusted publishers' code. 20 faults within 60 seconds in a worker trip the extension in that worker for 60 seconds; tripped extensions are treated like failing ones.
 - **Failure mode** (per extension, default `open`): `open` ignores a failing or tripped extension (the request continues as if the hook returned nothing). `closed` answers requests on sites that enable it with 503 `X-Edgeweir-Error: extension` when its `access`, `access_late` or `endpoint` hook fails, is tripped, or the package could not be loaded. Header filter, body filter and log hooks always fail open.
 - Faults are logged (`[ext <id>]`, rate-limited), counted per site in the minute stats (`ext.<id>.faults`), and reported per node.
 
@@ -256,26 +257,24 @@ return M
 
 ## Version 1.1 (Lua API 2)
 
-Version 1.1 keeps the package format `edgeweir-node-extension-v1` and adds manifest members and calls for node-level extensions (metrics exporters) and for extensions that run a native helper process (sidecars, such as function runtimes). Everything in this section needs `"requires": {"lua_api": 2}`; the node feature is `extensions-v2` (a node with it runs Lua API 1 and 2 packages). The console refuses a package that uses a member of this section with `lua_api: 1`, and delivers an API 2 extension only to clusters whose active nodes all report `extensions-v2` (`NODE_CAPABILITY_REQUIRED` otherwise). Nothing here is specific to any product, and nothing checks licenses.
+Version 1.1 keeps the package format `edgeweir-node-extension-v1` and adds secrets, native helper processes (sidecars) and site data. Everything in this section needs `"requires": {"lua_api": 2}`; the node feature is `extensions-v2` (a node with it runs Lua API 1 and 2 packages). The console refuses a package that uses a member of this section with `lua_api: 1`, and delivers an API 2 extension only to clusters whose active nodes all report `extensions-v1` and `extensions-v2` (`NODE_CAPABILITY_REQUIRED` otherwise). `extensions-v2` does not establish node-scope or listener support.
 
 ### Manifest members (API 2)
 
 | Member | Rules |
 | --- | --- |
-| `scope` | `"sites"` (default): as in version 1. `"node"`: the extension runs on nodes, not per site: allowed hooks `init`, `log`, `listen`; no `endpoints`, `fields`, `html_inject`, `body_rewrite`, `request_headers`, `verdicts`, `sidecar`, `data`; no site configuration. Its `log` hook runs for every request of every site on the nodes it is delivered to |
-| `listeners` | `scope: "node"` only. ≤ 2 entries `{ "name": <^[a-z][a-z0-9_]{0,15}$>, "default_port": 1024–65535, "methods": ["GET", "HEAD", "POST"] }`; served by the node on a port of its own, outside every site (see [Node listeners](#node-listeners)). Needs the hook `listen` |
 | `secret` | `true`: the console keeps a random 32-byte secret for the extension and nodes expose it as `ew.secret()` (see [Secrets](#secrets)) |
 | `sidecar` | A native helper process (see [Sidecars](#sidecars)). Needs the capability `sidecar` |
 | `data` | `{ "max_bytes": ≤ 25165824, "max_items": ≤ 32, "max_total_bytes": ≤ 268435456 }`: the extension accepts per-site data items (see [Site data](#site-data)); needs `sidecar` |
 | Limits | API 2 raises `fields` to ≤ 16, `log_fields` to ≤ 16 and `counters` to ≤ 32 |
 
-Hooks gain `listen`; capabilities gain `sidecar`. A package with a sidecar may be up to 64 MiB (archive), 192 MiB unpacked, with files up to 96 MiB; `POST /extensions` and `POST /extensions/verify` accept requests up to 96 MiB for them.
+Capabilities gain `sidecar`. A package with a sidecar may be up to 64 MiB (archive), 192 MiB unpacked, with files up to 96 MiB; `POST /extensions` and `POST /extensions/verify` accept requests up to 96 MiB for them.
 
 ### API 2 calls
 
 | Call | Notes |
 | --- | --- |
-| `ew.site_name` | The site's primary domain (its first domain); with `ew.site_id`, the request's site also in a node-scope `log` hook, `nil` in `listen`, `init` and timers |
+| `ew.site_name` | The site's primary domain (its first domain) |
 | `ew.req.http_version()` | `"1.0"`, `"1.1"`, `"2"`, `"3"` |
 | `ew.req.request_length()`, `ew.req.request_time()` | Bytes received (request line, headers, body) and seconds since the first byte; `log` |
 | `ew.resp.bytes_sent()` | Bytes sent to the client; `log` |
@@ -284,7 +283,7 @@ Hooks gain `listen`; capabilities gain `sidecar`. A package with a sidecar may b
 | `ew.req.verified_bot()` | The verified search engine crawler name (PTR plus forward lookup, as for the site's crawler setting) or `nil`; `access`, `access_late`; its DNS wait does not count against the budget |
 | `ew.req.exempt()` | `true` when the client is on one of the site's allow lists or a platform allow list (the clients the node exempts from bans and challenges); `access`, `access_late` |
 | `ew.node.id()`, `name()`, `cluster_id()`, `version()` | The node's identity and agent version |
-| `ew.node.connections()` | `{ active, reading, writing, waiting }` of the nginx worker's view (stub_status), in request and listener hooks; `nil` in timers |
+| `ew.node.connections()` | `{ active, reading, writing, waiting }` of the nginx worker's view (stub_status), in request hooks; `nil` in timers |
 | `ew.node.status()` | The node's last reported host metrics `{ at, cpu_percent, load1, load5, load15, memory_used_bytes, memory_total_bytes, egress_bps, active_connections }` (`nil` before the first report); any hook |
 | `ew.secret()`, `ew.secrets()` | `secret: true`: the current secret (32 raw bytes); `ew.secrets()` returns `{ current, previous }` (`previous` `nil` before the first rotation) |
 | `ew.equal(a, b)` | Constant-time comparison of two strings |
@@ -293,14 +292,86 @@ Hooks gain `listen`; capabilities gain `sidecar`. A package with a sidecar may b
 
 Clarifications for both API versions: `ew.req.pass_level()` is 0 (none), 1 `cookie302`, 2 `js`, 3 `pow`, 4 `captcha`; `ew.sha256` and `ew.hmac_sha256` return 32 raw bytes; `ew.req.header(name)` is case-insensitive and joins repeated headers with `", "`; `ew.respond` may set `Set-Cookie` and sends no body for `HEAD`; `ew.ctx` is one table per request and extension across all its hooks (also `endpoint` and `log`); access hooks do not run for `/.edgeweir/ext/<id>/…` requests, the `log` hook does; header filter hooks also run on responses an extension produced with `ew.respond`; a same-origin `src` with a query string counts as same origin, and assets are served regardless of the query string.
 
-### Node listeners
+### Node scope and HTTP listener contract
 
-A node listener is an HTTP server the node opens for a `scope: "node"` extension, outside every site: no Host lookup, rules, challenges, CC, cache or access logs.
+Node scope uses the normal package verification, installation and distribution interfaces. `PATCH /extensions/{id}` manages enablement and global configuration; the independent node settings interface manages `listeners` and `clusterIds`. Proto `Extension` carries scope and listener fields. A valid manifest must still meet the target nodes' feature requirements.
 
-- The operator turns a listener on in the console (`PATCH /extensions/{id}` with `{"listeners": {"<name>": {"port": 9145, "bind": "0.0.0.0", "allow": ["10.0.0.0/8"]}}, "clusterIds": [...]}`; `null` turns one off, no `clusterIds` means every cluster): `port` (1024–65535; not 80, 443, the cluster's edge or layer-4 ports or 8443), `bind` (an address of the node, default `0.0.0.0` and `[::]`) and `allow` (1–64 CIDRs, required). The node renders `allow` / `deny all` into the listener, so clients outside the list never reach Lua. A listener without settings is off.
-- The node calls `listen(ew, name, path)` for each request on a declared method; `path` is the request path. The hook returns `ew.respond(...)`; anything else is a 500. Budget: 1000 ms. `ew.req.*` reads the request, `ew.req.body()` (with `request_body`) up to 64 KiB.
-- Authentication beyond the address list (bearer tokens in the extension's configuration, compared with `ew.equal`) is the extension's. TLS and client certificates are not offered in 1.1: put the listener on a private network or behind the allow list.
-- A port the node cannot bind is reported in the extension's node state (`failed`, message), the rest of the configuration applies.
+Existing nodes also reject the unknown manifest member `scope`. Package entry points therefore refuse an explicit `scope: "site"` in the original manifest, with the same code and `reason`, and `detail: "scope: explicit site scope is not supported by this console"`. Installable site packages must omit `scope`; parsing defaults it to `site` without changing package bytes.
+
+A complete node-scope implementation must provide distribution, node configuration validation, listener rendering and Lua hooks. Every active node in a target cluster must report `extensions-v1`, `extensions-v2` and `extensions-node-v1`, and meet optional `requires.node`. Neither a version number nor `extensions-v2` alone suffices. Missing features prevent enablement (`NODE_CAPABILITY_REQUIRED`); implementations must not omit listeners or downgrade to site scope. A node may announce `extensions-node-v1` only with all of these behaviors implemented.
+
+| Manifest | `site` (default) | `node` (requires Lua API 2) |
+| --- | --- | --- |
+| Hooks | `init`, `access`, `access_late`, `header_filter`, `body_filter`, `log`, `endpoint` | Only `init`, `log`, `listen` |
+| Capabilities | All capabilities on this page | Only `request_body`, `http_client`, `timers` |
+| Configuration | `config.global`, `config.site` | Only `config.global`; no `config.site`, even an empty schema |
+| Site-only members | `fields`, `endpoints`, `sidecar`, `data` | No non-empty `fields` / `endpoints`, no `sidecar` / `data` |
+| Shared members | `log_fields`, `counters`, `shared_dicts`, API 2 `secret` | Allowed with the same API 2 limits; log fields and per-site counters may be written only in `log` |
+| `listeners` | Must be absent, even an empty array is refused | At most 2 HTTP listener declarations; non-empty declarations and the `listen` hook must occur together |
+
+Node scope needs no site association. Its `log` hook runs once for each site request on a target node, after site extensions, and always fails open; dedicated listener requests do not call it again. In `log`, `ew.site_id` / `ew.site_name` identify the request's site and `ew.site_config` is `nil`; all three are `nil` in `init`, timers and `listen`. Node extensions cannot mutate site requests, return site verdicts or proxy to origins. `init`, shared dicts, logging and timers keep the existing isolation, budgets and circuit breaker.
+
+Declaration example (extension `node-status` from publisher `example.org`):
+
+```json
+{
+  "scope": "node",
+  "requires": { "lua_api": 2 },
+  "hooks": ["log", "listen"],
+  "listeners": [{ "name": "status", "default_port": 9145, "methods": ["GET", "HEAD"], "max_body": 4096 }]
+}
+```
+
+These are partial manifest members; the other identity and signature rules still apply. Names must be unique and match `^[a-z][a-z0-9_]{0,15}$`. Required `default_port` is a suggestion to the operator and never opens a port automatically: integer 1024–65535, with 8443 reserved. `methods` is a non-empty, unique subset of `GET`, `HEAD`, `POST`. `max_body` is an integer 0–65536 bytes, default 4096. Unknown declaration members are refused.
+
+Separate operator settings are strictly validated by `extensionNodeSettings(manifest, reservedPorts)`, apart from the extension's own global configuration:
+
+```json
+{
+  "listeners": { "status": { "port": 9145, "bind": "0.0.0.0", "allow": ["10.0.0.0/8"] } },
+  "clusterIds": ["00000000-0000-4000-8000-000000000001"]
+}
+```
+
+- `listeners` defaults to `{}`. An absent or `null` listener is off. Only declared names are allowed, at most 2. `port` is required, with the same range as `default_port`. `bind` defaults to the single IPv4 address `0.0.0.0`; an unbracketed IPv6 literal is also allowed. No host names, ranges, zone IDs or IPv4-mapped IPv6. Addresses are stored canonically. `::` binds IPv6 only, without an implicit IPv4 binding.
+- Required `allow` contains 1–64 IPv4 / IPv6 addresses or CIDRs; IPv4-mapped IPv6 is refused. Bare addresses become `/32` or `/128`, host bits are cleared, entries sorted and deduplicated. There is no default allowed range. `0.0.0.0/0` or `::/0` explicitly allows all corresponding addresses. Before Lua, nodes refuse clients outside the list with 403 using the TCP peer address, ignoring forwarding headers and the sites' client-address trust settings.
+- `clusterIds` may be omitted or set to `null` (all clusters), `[]` means no cluster, or up to 256 unique UUIDs may be supplied (stored sorted). The service must check cluster existence in its transaction. Unknown declaration or settings members are refused; site extensions cannot have node settings.
+- Two listeners of an extension cannot share a port, even on different bind addresses. Callers must supply inclusive reserved port ranges (`{start, end}`) from every target cluster: edge HTTP(S) ports, layer-4 applications and pools, internal services and effective listeners of other enabled extensions. Any conflict is refused, regardless of bind address. Saving, enabling, selecting clusters, upgrading and rolling back must validate under the port lock. Node preflight must still discover unknown processes holding a port or an address absent on that node.
+
+The validator returns Zod issues. Association errors use `custom`: `node settings need node scope` (root), `unknown listener` (`listeners.<name>`), `listener port conflict` (`listeners.<name>.port`). Type, count, unknown-key and address errors also carry precise paths. Implementations must not drop keys and continue or save partial settings.
+
+#### Node settings API
+
+| Action | API (`/api/v1`) | Effect |
+| --- | --- | --- |
+| Read | `GET /extensions/{id}/node-settings` | Saved settings and resolved `targetClusterIds` |
+| Preflight | `POST /extensions/{id}/node-settings/check` | Validates a proposed replacement without saving or auditing |
+| Save | `PUT /extensions/{id}/node-settings` | Replaces the independent operator settings and audits the change |
+
+Preflight and save take `{"settings":{"listeners":{"status":{"port":9145,"allow":["10.0.0.0/8"]}},"clusterIds":["00000000-0000-4000-8000-000000000001"]}}`. Omitted listeners remain off; omitting `clusterIds` or setting it to `null` selects all clusters, including future clusters. Methods and body limits always come from the verified manifest; settings cannot override them. Unknown names, including names set to `null`, and unknown request members are rejected.
+
+Node packages use normal signature-verified installation. Enabling and distribution require target nodes to report `extensions-node-v1` and the required API features. Legacy site packages continue to omit `scope`; explicit `scope: "site"` is still rejected because older nodes do not accept that manifest member. Saving node settings does not change the package bytes, digest, signature or global configuration. A successful save confirms storage; check target nodes' revisions, content hashes and failures for application results.
+
+In System → Extensions, the list and details show **Site** or **Node**, taken from the active validated manifest. Old packages without `scope` remain site extensions. Node extensions do not appear in a site's extension bindings.
+
+In **Node settings**, choose **All clusters (including future clusters)** (`clusterIds: null`), **Selected clusters** (an explicit non-empty subset), or **No clusters** (`clusterIds: []`). An empty selected subset must be resolved explicitly; it never becomes all clusters. Listeners start off even when the manifest declares `default_port`. Enable a listener explicitly, enter its port, then expand **Address and access** to set the bind IP and the required allow list (one IP/CIDR per line, or separated by commas). The suggested port, listener name, methods and body limit are read-only declarations. Disabling a listener retains its draft but saves that binding as `null`; the extension's enable switch controls the whole extension, including its other hooks.
+
+**Preflight** checks the proposed settings without saving. Failed checks or saves keep the fields and draft; invalid folded fields open for correction. Retry with the same action. **Save** reports **Saved**. Target-node compatibility uses reported features, including `extensions-node-v1` as well as the required API features; Lua API 2 alone is insufficient. Offline or unreported nodes show **Unknown**. Reported application or listener failures remain visible alongside the node's revision and content hash. **Node details** opens the existing revision, application and log information. Neither a reported feature nor a node's unrelated applied revision proves these settings are live: the settings API supplies no delivery revision or per-node application correlation. Core preflight also cannot establish that the chosen address exists or that the operating system can bind the port.
+
+Port checks cover the selected clusters' edge ports, L4 pools of either protocol, L4 application ranges, known current revision ports, the configured tiered-cache port and other enabled node extension listeners. The tiered-cache port stays reserved when the default topology is off because sites can override it. Conflicts use `PORT_BINDING_CONFLICT` (409) with `port`, `cluster`, `clusterId` and `owner`; invalid settings use `EXTENSION_NODE_SETTINGS_INVALID` (400) with `path` and `issue`. A wrong scope uses `EXTENSION_SCOPE_MISMATCH` (400); changing an installed extension's scope uses `EXTENSION_SCOPE_CHANGE` (409), even when disabled.
+
+A cluster explicitly selected in saved node settings cannot be deleted, even when the extension is disabled. Deletion returns `CLUSTER_NODE_EXTENSION_IN_USE` (409) with the referencing extension ids in `extensions`. Remove the cluster from those settings first; `clusterIds: []` continues to mean no clusters and is never changed to all clusters automatically.
+
+Saving, enabling, upgrading, rolling back, changing targets, changing edge/L4/tier ports and adding clusters share a transaction port lock. A failed check rolls back the change and its audit. Disabled extensions and the kill switch release their effective reservations; enabling again checks the current port snapshot. All-cluster selections are checked when a cluster is created. Core cannot inspect a node's local `--default-port`, other local configuration, operating-system processes or assigned addresses: node preflight must still check these before binding.
+
+Listener runtime contract:
+
+- Dedicated plain HTTP only: no site Host matching, rules, challenges, CC, cache, site access logs, static assets or origin forwarding. The extension handles authentication beyond the address list, for example a global configuration token compared with `ew.equal`. An address list does not keep tokens confidential; the operator must provide a protected network or TLS termination. Core adds no license checks or external calls.
+- Declared methods call `listen(ew, name, path)` and return `ew.respond(...)`, without needing `verdicts`. Other methods return 405 before Lua. `ew.req.body()` requires `request_body` and is bounded by `max_body`, including bodies without `Content-Length`; oversized bodies return 413 before Lua. `HEAD` sends no body. The wall-time budget is 1000 ms. Errors, timeouts and circuit trips return 503; no valid response returns 500, regardless of `open` / `closed`. Never fall through to a site or origin.
+- Port, bind address, allow list and listener enablement changes are structural, requiring preflight and a graceful reload. A listener that cannot bind stays off and reports `failed`; other configuration may apply. Do not silently retain that listener's old port or allow list. A failure of the overall rendering or reload rejects the revision and retains the previous complete configuration, reporting failure.
+- Disabled or uninstalled extensions, unselected clusters, the kill switch and `--no-extensions` run no hooks and serve no listeners; stopping service must close its bindings. The kill switch and local node disablement take precedence over rollback. Upgrade and rollback first validate the target manifest, global configuration, listener names/settings, ports and node features. A failure changes no version and publishes no partial configuration, retaining the old package, settings and bindings. An installed extension cannot switch between `site` and `node` scope.
+
+Signatures always cover the original `.ewx` bytes. Default scope applies only to the parsed manifest and must not rewrite an old package or change its digest. The empty-by-default trust store, publisher binding, local `--extension-keys`, mTLS package/secret retrieval and `--no-extensions` retain the site-extension boundaries. Local node disablement announces no extension features.
 
 ### Secrets
 
@@ -387,13 +458,12 @@ Only sites that turn the extension on appear. Site configuration is visible to L
 
 ### Node state details
 
-Each extension's node state carries `details` (JSON, ≤ 4 KiB): `sidecar` (state, pid, restarts, last exit, since), `listeners` (`{name: {port, state: "listening" | "failed", message}}`), and whatever the sidecar returns from `GET /status` on its socket under `sidecar.status` (≤ 2 KiB, polled every 30 s).
+Each extension's node state carries `details` (JSON, ≤ 4 KiB): `sidecar` (state, pid, restarts, last exit, since), and whatever the sidecar returns from `GET /status` on its socket under `sidecar.status` (≤ 2 KiB, polled every 30 s). An implementation of `extensions-node-v1` must also report `listeners` (`{name: {port, state: "listening" | "failed", message}}`); a details member alone does not establish listener support.
 
 ### Distribution changes in 1.1
 
 - `GetExtensionPackage` and `GetExtensionData` transfer in chunks (`offset`, at most 4 MiB per answer, `total` size).
-- `Extension` carries `lua_api`, `scope`, `listeners` (the operator's settings), `secret_version`; `SiteExtension` carries `data`; `ExtensionStatus` carries `details_json`.
-- Node-scope extensions are delivered to every cluster while enabled, or to the clusters chosen in the extension's settings (`clusterIds`).
+- `Extension` carries `lua_api` and `secret_version`; `SiteExtension` carries `data`; `ExtensionStatus` carries `details_json`. These fields do not distribute node scope or listeners.
 
 ## Compatibility
 

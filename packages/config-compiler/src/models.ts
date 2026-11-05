@@ -803,6 +803,17 @@ export interface ExtensionModel {
   luaApi?: number;
   /** Version of the console-generated secret (manifest `secret: true`); 0 or absent: none. */
   secretVersion?: number;
+  /** Absent/site preserves the legacy wire encoding. Node entries are cluster-filtered. */
+  scope?: "site" | "node";
+  /** Effective operator bindings, with methods and body limits from the signed manifest. */
+  listeners?: {
+    name: string;
+    port: number;
+    bind: string;
+    allow: string[];
+    methods: string[];
+    maxBody?: number;
+  }[];
 }
 
 export interface CompileInput {
@@ -865,7 +876,7 @@ export interface CompileInput {
   tieredCache?: TieredCacheModel;
   /**
    * Installed extensions in hook order (install order, then id); compiled
-   * are those an enabled site of the cluster turns on.
+   * are node entries for this cluster and those its enabled sites turn on.
    */
   extensions?: ExtensionModel[];
   /** The extension kill switch. */

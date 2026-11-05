@@ -30,6 +30,7 @@ export const auditActions = [
   "extension.activate",
   "extension.delete_version",
   "extension.install",
+  "extension.node_settings_update",
   "extension.rotate_secret",
   "extension.settings_update",
   "extension.uninstall",

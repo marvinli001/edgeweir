@@ -27,6 +27,7 @@ import { type Actor, recordAudit } from "./audit";
 import { assertLoadable } from "./certificates";
 import { newCnamePrefix, retiredPrefixesOf } from "./cname-prefixes";
 import { cnameTargets } from "./dns";
+import { assertNoNodeListenerConflict } from "./extension-node-settings";
 import { loadPortPools, poolCovers, poolsCoverRange } from "./l4-config";
 import { assertOriginsAllowed } from "./origin-allow-list";
 import {
@@ -129,6 +130,11 @@ export async function setPortPools(
   await db.transaction(async (tx) => {
     const cluster = await findCluster(tx, input.clusterId);
     await lockClusterL4(tx, cluster.id);
+    await assertNoNodeListenerConflict(
+      tx,
+      cluster.id,
+      pools.map((pool) => ({ start: pool.from, end: pool.to })),
+    );
     for (const [i, a] of pools.entries())
       for (const b of pools.slice(i + 1)) {
         const shared = a.protocol === "both" || b.protocol === "both" || a.protocol === b.protocol;
@@ -330,6 +336,7 @@ async function validateApp(
       max: MAX_L4_RANGE_PORTS,
     });
   const last = lastPort(app);
+  await assertNoNodeListenerConflict(tx, clusterId, [{ start: app.port, end: last }]);
   const reserved = (await reservedPorts(tx, clusterId)).find((p) => app.port <= p && p <= last);
   if (reserved !== undefined)
     fail("L4_PORT_RESERVED", `port ${reserved} belongs to the cluster's HTTP listeners`, {
@@ -652,6 +659,10 @@ export async function setL4AppEnabled(
       return { app: await toDto(tx, row), revision: toRevisionDto(latest) };
     }
     assertUpdatedAt(row.updatedAt, input.expectedUpdatedAt);
+    if (input.enabled)
+      await assertNoNodeListenerConflict(tx, row.clusterId, [
+        { start: row.port, end: lastPort(row) },
+      ]);
     const [updated] = await tx
       .update(schema.l4App)
       .set({ enabled: input.enabled, updatedAt: nextUpdatedAt(row.updatedAt) })

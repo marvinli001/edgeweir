@@ -2,7 +2,7 @@
 
 节点扩展把 Lua 代码加进边缘节点的请求路径。任何人都可以编写并签名扩展；运营者决定信任哪些发布者，在控制台安装扩展包、配置，并按网站开启。控制台经节点通道把扩展包分发给节点，节点加载运行。控制台和节点都不为扩展校验许可证、不连接任何外部服务；一切操作都经过控制台的公开 API。
 
-本页是格式与运行时契约（`edgeweir-node-extension-v1`，Lua API 1）。控制台界面见[使用指南](../guide/extensions.md)。
+本页是格式与运行时契约（`edgeweir-node-extension-v1`，Lua API 1 / 2）。网站扩展可安装运行；[节点作用范围与 HTTP 监听器](#节点作用范围与-http-监听器契约)有独立的契约与能力门槛，不能由 Lua API 版本推断可用。控制台界面见[使用指南](../guide/extensions.md)。
 
 ## 概览
 
@@ -63,8 +63,9 @@ UTF-8 JSON，至多 64 KiB。未知的顶层成员一律拒绝（新格式的扩
 | `name` | 语言（`en` 必需，`zh-CN` 可选）到 ≤ 64 字符名称的映射 |
 | `description` | 可选，同样的语言，≤ 512 字符 |
 | `license`、`homepage` | 可选，仅供展示（SPDX 表达式 ≤ 128 字符；`https://` 地址） |
-| `requires.lua_api` | 必需，`1` |
+| `requires.lua_api` | 必需，`1` 或 `2`；API 2 的成员见下 |
 | `requires.node` | 可选，semver 范围：空格分隔的比较式（`>=1.7.0 <2.0.0`），运算符 `=`、`>`、`>=`、`<`、`<=` |
+| `scope` | 可选，`site`（默认）或 `node`；缺省保持旧网站扩展的行为。`sites` 不是有效值。节点作用范围的支持条件见下 |
 | `hooks` | `init`、`access`、`access_late`、`header_filter`、`body_filter`、`log`、`endpoint` 的非空子集；每个都要在 `main.lua` 里有同名函数 |
 | `capabilities` | [能力](#能力)表中的子集；超出范围的 API 调用抛出错误 |
 | `config.global`、`config.site` | 可选，全局与网站配置的 JSON Schema（子集见下）；缺省为不含属性的 `{}` |
@@ -121,7 +122,7 @@ edgeweir-node extension verify --pubkey publisher.pub.jwk --publisher example.or
 | 受信任的公钥 | `GET` / `POST /extension-keys`、`DELETE /extension-keys/{kid}` | 信任库 |
 | 状态 | `GET /extensions/{id}` | manifest、版本、配置、网站与各节点的加载状态 |
 
-每次写入都记审计（`extension.install`、`extension.upgrade`、`extension.activate`、`extension.delete_version`、`extension.update`、`extension.uninstall`、`extension.settings_update`、`extension_key.add`、`extension_key.remove`、`site.extension_update`），并在同一事务里发布新的配置版本。控制台界面经 `/rpc` 调用同样的过程。服务账号 key 不能调用。
+变更会记审计（`extension.install`、`extension.upgrade`、`extension.activate`、`extension.delete_version`、`extension.update`、`extension.uninstall`、`extension.settings_update`、`extension.node_settings_update`、`extension_key.add`、`extension_key.remove`、`site.extension_update`）。影响网站分发的变更在同一事务里发布受影响集群；节点设置独立保存，不发布配置修订。控制台界面经 `/rpc` 调用同样的过程。服务账号 key 不能调用。
 
 扩展包以 JSON 中的 base64 上传（`{"package": "<base64>", "signature": "<jws>"}`）；16 MiB 的请求上限足以容纳 4 MiB 的归档。
 
@@ -218,7 +219,7 @@ CSP：响应带 `Content-Security-Policy` 头时，`ew.html.script` 取有效的
 
 - 代码运行在自己的环境里：标准 Lua 函数（`string`、`table`、`math`、`bit`、`pairs`、`pcall` 等）、`os.time` / `os.clock` / `os.date`，`require` 只能加载扩展包自己的 `lua/` 模块（`require("util")` 加载 `lua/util.lua`）以及 `cjson.safe`、`resty.sha256`、`resty.string`、`resty.random`、`resty.lrucache`、`ngx.re`。没有 `ngx` 全局变量、`io`、`os.execute`、`debug`、`ffi`、`jit`、字节码 `load`、`package`、`setfenv` / `getfenv` 和 `collectgarbage`。
 - **这只是规范约束，不是安全沙箱。** 受信任发布者的代码在 nginx worker 内以 worker 的权限运行，worker 能访问的它都能访问。只信任你愿意让其代码在边缘运行的发布者。
-- 每次钩子调用都在 `pcall` 中运行。出错，或超过预算（墙钟 10 毫秒；`access` / `access_late` / `endpoint` 中等待协程套接字时为 1000 毫秒）算一次故障。一个 worker 内 60 秒里 20 次故障，该扩展在这个 worker 上熔断 60 秒；熔断按失败处理。
+- 每次钩子调用都在 `pcall` 中运行。出错，或超过预算（墙钟 10 毫秒；`access` / `access_late` / `endpoint` 中等待协程套接字时为 1000 毫秒）算一次故障。预算在调用返回后检测，不能中断同步死循环；只安装可信发布者的代码。一个 worker 内 60 秒里 20 次故障，该扩展在这个 worker 上熔断 60 秒；熔断按失败处理。
 - **失败模式**（每个扩展，默认 `open`）：`open` 忽略失败或熔断的扩展（请求如同钩子没有返回值一样继续）。`closed` 在 `access`、`access_late` 或 `endpoint` 钩子失败、熔断或扩展包无法加载时，对开启它的网站上的请求返回 503 `X-Edgeweir-Error: extension`。header filter、body filter 与 log 钩子总是失败放行。
 - 故障写入日志（`[ext <id>]`，限频），按网站计入分钟统计（`ext.<id>.faults`），并按节点上报。
 
@@ -256,26 +257,24 @@ edgeweir-node 仓库里的 `examples/extensions/hello-header` 就是这个扩展
 
 ## 1.1 版（Lua API 2）
 
-1.1 版沿用扩展包格式 `edgeweir-node-extension-v1`，为节点级扩展（指标导出等）和带原生辅助进程的扩展（边车，例如函数运行时）增加清单成员与调用。本节的一切都需要 `"requires": {"lua_api": 2}`；节点能力为 `extensions-v2`（具备它的节点同时运行 Lua API 1 与 2 的扩展包）。用了本节成员却声明 `lua_api: 1` 的扩展包会被控制台拒绝；API 2 扩展只下发到活跃节点都报告 `extensions-v2` 的集群（否则 `NODE_CAPABILITY_REQUIRED`）。这里没有针对任何产品的内容，也不检查许可证。
+1.1 版沿用扩展包格式 `edgeweir-node-extension-v1`，增加密钥、原生辅助进程（边车）与网站数据。本节的一切都需要 `"requires": {"lua_api": 2}`；节点能力为 `extensions-v2`（具备它的节点同时运行 Lua API 1 与 2 的扩展包）。用了本节成员却声明 `lua_api: 1` 的扩展包会被控制台拒绝；API 2 扩展只下发到活跃节点都报告 `extensions-v1`、`extensions-v2` 的集群（否则 `NODE_CAPABILITY_REQUIRED`）。`extensions-v2` 不代表支持节点作用范围或监听器。
 
 ### 清单成员（API 2）
 
 | 成员 | 规则 |
 | --- | --- |
-| `scope` | `"sites"`（默认）：同 1 版。`"node"`：扩展在节点上运行，不按网站开启：允许的钩子为 `init`、`log`、`listen`；不能有 `endpoints`、`fields`、`html_inject`、`body_rewrite`、`request_headers`、`verdicts`、`sidecar`、`data`，也没有网站配置。它的 `log` 钩子对下发到的节点上每个网站的每个请求运行 |
-| `listeners` | 仅 `scope: "node"`。≤ 2 项 `{ "name": <^[a-z][a-z0-9_]{0,15}$>, "default_port": 1024–65535, "methods": ["GET", "HEAD", "POST"] }`；节点在独立端口上提供服务，与所有网站无关（见[节点监听器](#节点监听器)）。需要钩子 `listen` |
 | `secret` | `true`：控制台为扩展保存一个随机 32 字节密钥，节点以 `ew.secret()` 提供（见[密钥](#密钥)） |
 | `sidecar` | 原生辅助进程（见[边车](#边车)）。需要能力 `sidecar` |
 | `data` | `{ "max_bytes": ≤ 25165824, "max_items": ≤ 32, "max_total_bytes": ≤ 268435456 }`：扩展接受按网站上传的数据项（见[网站数据](#网站数据)）；需要 `sidecar` |
 | 上限 | API 2 把 `fields` 提高到 ≤ 16、`log_fields` ≤ 16、`counters` ≤ 32 |
 
-钩子增加 `listen`；能力增加 `sidecar`。带边车的扩展包最大 64 MiB（归档）、解包后 192 MiB，单个文件 96 MiB；对这类扩展包，`POST /extensions` 与 `POST /extensions/verify` 接受最大 96 MiB 的请求。
+能力增加 `sidecar`。带边车的扩展包最大 64 MiB（归档）、解包后 192 MiB，单个文件 96 MiB；对这类扩展包，`POST /extensions` 与 `POST /extensions/verify` 接受最大 96 MiB 的请求。
 
 ### API 2 调用
 
 | 调用 | 说明 |
 | --- | --- |
-| `ew.site_name` | 网站的主域名（第一个域名）；与 `ew.site_id` 一样，节点级扩展的 `log` 钩子中也是请求所属网站，`listen`、`init` 与定时器中为 `nil` |
+| `ew.site_name` | 网站的主域名（第一个域名） |
 | `ew.req.http_version()` | `"1.0"`、`"1.1"`、`"2"`、`"3"` |
 | `ew.req.request_length()`、`ew.req.request_time()` | 收到的字节数（请求行、请求头、请求体）与自第一个字节起的秒数；`log` |
 | `ew.resp.bytes_sent()` | 发给客户端的字节数；`log` |
@@ -284,7 +283,7 @@ edgeweir-node 仓库里的 `examples/extensions/hello-header` 就是这个扩展
 | `ew.req.verified_bot()` | 经过验证的搜索引擎爬虫名称（PTR 加正向解析，与网站的爬虫设置相同），否则 `nil`；`access`、`access_late`；等待 DNS 的时间不计入预算 |
 | `ew.req.exempt()` | 客户端在网站的放行名单或平台放行名单上时为 `true`（即节点免于封禁与挑战的客户端）；`access`、`access_late` |
 | `ew.node.id()`、`name()`、`cluster_id()`、`version()` | 节点身份与 agent 版本 |
-| `ew.node.connections()` | nginx worker 视角的 `{ active, reading, writing, waiting }`（stub_status），请求与监听器钩子中可用；定时器中为 `nil` |
+| `ew.node.connections()` | nginx worker 视角的 `{ active, reading, writing, waiting }`（stub_status），请求钩子中可用；定时器中为 `nil` |
 | `ew.node.status()` | 节点最近一次上报的主机指标 `{ at, cpu_percent, load1, load5, load15, memory_used_bytes, memory_total_bytes, egress_bps, active_connections }`（首次上报前为 `nil`）；任何钩子 |
 | `ew.secret()`、`ew.secrets()` | `secret: true`：当前密钥（32 个原始字节）；`ew.secrets()` 返回 `{ current, previous }`（首次轮换前 `previous` 为 `nil`） |
 | `ew.equal(a, b)` | 常数时间比较两个字符串 |
@@ -293,14 +292,86 @@ edgeweir-node 仓库里的 `examples/extensions/hello-header` 就是这个扩展
 
 两个 API 版本通用的说明：`ew.req.pass_level()` 为 0（无）、1 `cookie302`、2 `js`、3 `pow`、4 `captcha`；`ew.sha256` 与 `ew.hmac_sha256` 返回 32 个原始字节；`ew.req.header(name)` 不区分大小写，重复的请求头以 `", "` 连接；`ew.respond` 可以设置 `Set-Cookie`，`HEAD` 请求不发送正文；`ew.ctx` 对同一请求、同一扩展的所有钩子是同一个表（包括 `endpoint` 与 `log`）；`/.edgeweir/ext/<id>/…` 请求不运行访问阶段钩子，运行 `log` 钩子；响应头过滤钩子也作用于扩展自己用 `ew.respond` 生成的响应；带查询字符串的同源 `src` 仍算同源，静态资源的服务与查询字符串无关。
 
-### 节点监听器
+### 节点作用范围与 HTTP 监听器契约
 
-节点监听器是节点为 `scope: "node"` 扩展开设的 HTTP 服务，与所有网站无关：不查 Host、不走规则、挑战、CC、缓存与访问日志。
+节点作用范围使用正常的包验签、安装与分发接口。`PATCH /extensions/{id}` 管理启用状态与全局配置；独立的节点设置接口管理 `listeners` 与 `clusterIds`。proto `Extension` 携带作用范围与监听器字段；清单校验通过仍须满足目标节点的能力门槛。
 
-- 运营者在控制台开启监听器（`PATCH /extensions/{id}`，`{"listeners": {"<name>": {"port": 9145, "bind": "0.0.0.0", "allow": ["10.0.0.0/8"]}}, "clusterIds": [...]}`；`null` 关闭，省略 `clusterIds` 表示所有集群）：`port`（1024–65535；不能是 80、443、集群的边缘或四层端口、8443）、`bind`（节点上的地址，默认 `0.0.0.0` 与 `[::]`）与 `allow`（1–64 个 CIDR，必填）。节点把 `allow` / `deny all` 写进监听器，名单之外的客户端到不了 Lua。没有设置的监听器不开启。
-- 节点对声明方法的每个请求调用 `listen(ew, name, path)`，`path` 为请求路径。钩子返回 `ew.respond(...)`，其他返回值得到 500。预算 1000 ms。`ew.req.*` 读取请求，`ew.req.body()`（需 `request_body`）最多 64 KiB。
-- 地址名单之外的认证（扩展配置里的 Bearer 令牌，用 `ew.equal` 比较）由扩展负责。1.1 不提供 TLS 与客户端证书：把监听器放在私有网络上或依靠地址名单。
-- 节点绑定不了的端口记在扩展的节点状态里（`failed` 与消息），其余配置照常生效。
+现有节点还会拒绝清单中未知的 `scope` 成员。因此包入口也拒绝原始清单显式写出的 `scope: "site"`，错误码与 `reason` 相同，`detail: "scope: explicit site scope is not supported by this console"`。可安装的网站包须省略 `scope`；解析时默认得到 `site`，不改变包字节。
+
+运行节点扩展的完整实现须具备分发、节点配置校验、监听器渲染与 Lua 钩子，并要求目标集群所有活动节点报告 `extensions-v1`、`extensions-v2`、`extensions-node-v1`，同时满足可选的 `requires.node`。仅版本号或 `extensions-v2` 不足以证明支持；缺能力时拒绝启用（`NODE_CAPABILITY_REQUIRED`），不能省略监听器或降为网站扩展。节点只有完整实现这些行为才能声明 `extensions-node-v1`。
+
+| 清单 | `site`（缺省） | `node`（需要 Lua API 2） |
+| --- | --- | --- |
+| 钩子 | `init`、`access`、`access_late`、`header_filter`、`body_filter`、`log`、`endpoint` | 仅 `init`、`log`、`listen` |
+| 能力 | 本页的全部能力 | 仅 `request_body`、`http_client`、`timers` |
+| 配置 | `config.global`、`config.site` | 仅 `config.global`；不得声明 `config.site`，即使 Schema 为空 |
+| 网站专用成员 | `fields`、`endpoints`、`sidecar`、`data` | 不得声明非空 `fields` / `endpoints`，不得声明 `sidecar` / `data` |
+| 共用成员 | `log_fields`、`counters`、`shared_dicts`、API 2 的 `secret` | 同样可声明，沿用 API 2 上限；日志字段与按网站计数只在 `log` 中写入 |
+| `listeners` | 不得声明，即使是空数组 | 至多 2 个 HTTP 监听器声明；非空声明与 `listen` 钩子必须同时存在 |
+
+节点作用范围不需要网站关联：`log` 对目标节点上每个网站的请求运行一次，在网站扩展之后调用，并始终失败放行；不会对独立监听器的请求再次调用。`log` 中 `ew.site_id` / `ew.site_name` 是当前请求的网站，`ew.site_config` 为 `nil`；`init`、定时器和 `listen` 中三者均为 `nil`。节点扩展不能改写网站请求、返回网站裁决或代理回源。`init`、共享字典、日志与定时器沿用现有隔离、预算和熔断限制。
+
+声明示例（`example.org` 发布者的 `node-status` 扩展）：
+
+```json
+{
+  "scope": "node",
+  "requires": { "lua_api": 2 },
+  "hooks": ["log", "listen"],
+  "listeners": [{ "name": "status", "default_port": 9145, "methods": ["GET", "HEAD"], "max_body": 4096 }]
+}
+```
+
+这是清单的部分成员，其余身份与签名规则不变。名称须唯一，匹配 `^[a-z][a-z0-9_]{0,15}$`。`default_port` 必填，仅作选端口的提示，不自动打开端口；为 1024–65535 的整数，8443 保留。`methods` 是 `GET`、`HEAD`、`POST` 的非空、不重复子集；`max_body` 是 0–65536 字节的整数，默认 4096。声明中任何未知成员都拒绝。
+
+独立的运营者设置由 `extensionNodeSettings(manifest, reservedPorts)` 严格校验，与扩展自己的全局配置分开：
+
+```json
+{
+  "listeners": { "status": { "port": 9145, "bind": "0.0.0.0", "allow": ["10.0.0.0/8"] } },
+  "clusterIds": ["00000000-0000-4000-8000-000000000001"]
+}
+```
+
+- `listeners` 缺省为 `{}`；未设置或为 `null` 的监听器关闭。只能出现清单声明的名字，至多 2 个。`port` 必填，范围同 `default_port`；`bind` 缺省为单个 IPv4 地址 `0.0.0.0`，也可指定无方括号的 IPv6 字面量。不得使用主机名、地址段、zone id 或 IPv4-mapped IPv6；地址按标准形式保存。`::` 仅绑定 IPv6，不隐式再绑定 IPv4。
+- `allow` 必填，1–64 个 IPv4 / IPv6 地址或 CIDR；不接受 IPv4-mapped IPv6。裸地址变成 `/32` 或 `/128`，清除主机位，排序并去重。没有默认允许范围；`0.0.0.0/0` 或 `::/0` 是运营者显式允许所有对应地址。节点按 TCP 对端地址在 Lua 之前拒绝名单外的客户端（403）；忽略转发头，不继承网站的客户端地址信任设置。
+- `clusterIds` 可省略或设为 `null`（所有集群），`[]` 表示无集群，或至多 256 个不重复 UUID（排序保存）。服务层须在事务中确认集群存在。声明与设置的未知成员一律拒绝；网站扩展不能有节点设置。
+- 同一扩展的两个监听器不得用同一端口，即使 `bind` 不同。调用方必须传入所有目标集群的保留端口范围（闭区间 `{start, end}`）：边缘 HTTP(S) 端口、四层应用与端口池、内部服务和其他已启用扩展的有效监听端口。对它们的冲突一律拒绝，不按地址抢占。保存、启用、选择集群、升级与回滚均须在端口锁下校验；未知进程占用或地址在节点上不存在仍须由节点预检发现。
+
+校验器返回 Zod issues；关联错误为 `custom`：`node settings need node scope`（根）、`unknown listener`（`listeners.<name>`）、`listener port conflict`（`listeners.<name>.port`）。类型、数量、未知键和地址错误也带精确路径，不删键后继续，也不保存部分设置。
+
+#### 节点设置 API
+
+| 操作 | API（`/api/v1`） | 行为 |
+| --- | --- | --- |
+| 读取 | `GET /extensions/{id}/node-settings` | 返回保存的设置与解析后的 `targetClusterIds` |
+| 预检 | `POST /extensions/{id}/node-settings/check` | 校验拟替换的设置，不保存、不写审计 |
+| 保存 | `PUT /extensions/{id}/node-settings` | 替换独立的运营者设置，同事务写审计 |
+
+预检与保存接收 `{"settings":{"listeners":{"status":{"port":9145,"allow":["10.0.0.0/8"]}},"clusterIds":["00000000-0000-4000-8000-000000000001"]}}`。未设置的监听器关闭；省略 `clusterIds` 或设为 `null` 选择所有集群，包括以后新增的集群。方法与请求体限制始终来自已验签清单，设置不能覆盖它们。未知名字（包括值为 `null` 的旧名）和请求中的未知字段一律拒绝。
+
+节点包通过正常验签安装，启用与分发要求目标节点报告 `extensions-node-v1` 及所需 API 能力。旧站点包继续省略 `scope`；显式 `scope: "site"` 仍被拒绝，因为旧节点不接受该清单字段。保存节点设置不改变包字节、摘要、签名或扩展自己的全局配置。保存成功只代表设置已保存，节点应用结果须查看目标节点的修订、内容摘要与失败信息。
+
+端口检查覆盖所选集群的边缘端口、两种协议的四层端口池、四层应用范围、当前已知修订端口、配置的分层缓存端口和其他已启用节点扩展的监听器。默认拓扑关闭时仍保留分层缓存端口，因为网站可以单独启用。冲突返回 `PORT_BINDING_CONFLICT`（409），携带 `port`、`cluster`、`clusterId`、`owner`；设置无效返回 `EXTENSION_NODE_SETTINGS_INVALID`（400），携带 `path` 与 `issue`。作用范围不符返回 `EXTENSION_SCOPE_MISMATCH`（400）；已安装扩展切换作用范围返回 `EXTENSION_SCOPE_CHANGE`（409），先停用也不能绕过。
+
+节点设置中显式选择的集群不能删除，即使扩展已经停用。删除返回 `CLUSTER_NODE_EXTENSION_IN_USE`（409），`extensions` 列出引用它的扩展 ID。须先在这些设置中移除该集群；`clusterIds: []` 仍表示无集群，不会自动改为所有集群。
+
+保存、启用、升级、回滚、调整目标、修改边缘/四层/分层缓存端口和创建集群共用事务端口锁。检查失败时变更与审计一并回滚。停用扩展或关闭总开关释放有效端口保留，再启用时重新读取当前端口状态检查。新增集群时检查选择了所有集群的扩展。Core 看不到节点本地的 `--default-port`、其他本地配置、操作系统进程占用或节点实际地址；绑定前仍需节点预检这些事实。
+
+监听器运行契约：
+
+- 仅独立的明文 HTTP；没有网站 Host 匹配、规则、挑战、CC、缓存、网站访问日志、静态资源或源站转发。扩展负责地址名单之外的鉴权（例如全局配置中的令牌配合 `ew.equal`）；地址名单不能代替令牌保密，须由运营者提供受保护的网络或 TLS 终止。核心不添加授权检查或外部请求。
+- 声明的方法调用 `listen(ew, name, path)`，返回 `ew.respond(...)`，不需要 `verdicts`；未声明方法 405，不调用 Lua。`ew.req.body()` 需要 `request_body`，按 `max_body` 限制，包括没有 `Content-Length` 的正文；超限 413，在 Lua 前拒绝。`HEAD` 不发送响应体。钩子墙钟预算 1000 ms；错误、超时或熔断均为 503，无有效响应为 500，与 `open` / `closed` 无关，绝不转交网站或源站。
+- 端口、绑定地址、地址名单与监听器开关变化为结构变化，须预检并平滑重载。绑定失败的监听器不启用并报告 `failed`；其他配置可继续应用，不暗中沿用失败监听器的旧端口或旧地址名单。整体渲染或重载失败则拒绝修订并保留上一份完整配置，上报失败。
+- 扩展停用、卸载、未选中集群、总开关或 `--no-extensions` 时不运行钩子、不提供监听服务；关闭服务须关闭绑定。总开关与节点本地禁用优先于回滚。升级与回滚先校验目标清单、全局配置、监听器名字、设置、端口及节点能力；任一失败都不切版本、不发布部分配置，旧的包、配置与绑定保持不变。不能跨 `site` / `node` 作用范围切换同一安装项。
+
+签名始终覆盖原始 `.ewx` 字节；默认作用范围只作用于解析后的清单，不能重写旧扩展包或改变其摘要。空信任库、发布者绑定、节点本地 `--extension-keys`、mTLS 获取包与密钥、`--no-extensions` 的边界与网站扩展相同；节点本地禁用时不声明任何扩展能力。
+
+系统 → 扩展的列表与详情按当前已校验清单显示「网站」或「节点」。旧包省略 `scope` 时仍是网站扩展；节点扩展不出现在网站绑定列表。
+
+「节点设置」的目标集群分为「全部集群（含未来集群）」（`clusterIds: null`）、「选定集群」（显式非空子集）和「无集群」（`clusterIds: []`）。选定模式未勾选集群时须明确处理，不会自动变成全部集群。监听器默认关闭，清单的 `default_port` 只作为建议端口展示。显式启用监听器后填写端口，再展开「地址与访问」设置绑定IP与必需的允许列表（每行一个IP/CIDR，也可用逗号分隔）。监听器名称、请求方法与请求体上限只读。关闭监听器保留编辑草稿，保存时将该绑定设为 `null`；「启用扩展」控制整个扩展及其其他钩子。
+
+「预检」仅检查草稿，不保存。预检或保存失败保留字段与草稿，折叠区内的无效字段会展开定位；使用原动作重试。「保存」只反馈「已保存」。目标节点兼容性依据实际上报的能力，除所需API能力外还必须包含 `extensions-node-v1`，不能仅凭Lua API 2判断。离线或未上报节点显示「未知」；节点修订、内容摘要及已上报的配置应用或监听器失败会展示。「节点详情」沿用已有修订、应用状态与日志入口。能力已上报或节点应用了其他修订均不能证明这份设置已生效：设置API没有提供关联的分发修订与逐节点应用状态。Core预检也不能证明节点实际具有所填地址、或操作系统能绑定该端口。
 
 ### 密钥
 
@@ -387,13 +458,12 @@ edgeweir-node 仓库里的 `examples/extensions/hello-header` 就是这个扩展
 
 ### 节点状态详情
 
-每个扩展的节点状态带 `details`（JSON，≤ 4 KiB）：`sidecar`（状态、进程号、重启次数、最近一次退出、起始时间）、`listeners`（`{name: {port, state: "listening" | "failed", message}}`），以及边车套接字上 `GET /status` 的返回，放在 `sidecar.status` 下（≤ 2 KiB，每 30 秒轮询）。
+每个扩展的节点状态带 `details`（JSON，≤ 4 KiB）：`sidecar`（状态、进程号、重启次数、最近一次退出、起始时间），以及边车套接字上 `GET /status` 的返回，放在 `sidecar.status` 下（≤ 2 KiB，每 30 秒轮询）。支持 `extensions-node-v1` 的实现还须报告 `listeners`（`{name: {port, state: "listening" | "failed", message}}`）；不能凭详情成员推断当前节点支持监听器。
 
 ### 1.1 版的分发变化
 
 - `GetExtensionPackage` 与 `GetExtensionData` 分块传输（`offset`，每次应答最多 4 MiB，带 `total` 总大小）。
-- `Extension` 增加 `lua_api`、`scope`、`listeners`（运营者的设置）、`secret_version`；`SiteExtension` 增加 `data`；`ExtensionStatus` 增加 `details_json`。
-- 节点级扩展启用后下发到所有集群，或扩展设置中选定的集群（`clusterIds`）。
+- `Extension` 增加 `lua_api`、`secret_version`；`SiteExtension` 增加 `data`；`ExtensionStatus` 增加 `details_json`。这些字段不提供节点作用范围或监听器分发。
 
 ## 兼容性
 

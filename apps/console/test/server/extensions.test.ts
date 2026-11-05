@@ -171,12 +171,70 @@ describe("node extensions", async () => {
     expect(installed).toMatchObject({
       id: "hello-header",
       version: "1.0.0",
+      scope: "site",
       enabled: false,
       sites: 0,
     });
     expect(installed.config).toEqual({ greeting: "hello" });
+    expect(
+      (await admin.extensions.list()).find((extension) => extension.id === "hello-header")?.scope,
+    ).toBe("site");
     expect((await ir()).extensions).toEqual([]);
     expect(await packageForNode(ctx.db, clusterId, installed.sha256)).toBeNull();
+  });
+
+  it("verifies and installs signed node packages disabled without a site reference", async () => {
+    const node = exampleVersion("2.0.0", (manifest) => {
+      manifest.id = "node-status";
+      manifest.scope = "node";
+      manifest.requires = { lua_api: 2 };
+      manifest.hooks = ["listen"];
+      manifest.capabilities = [];
+      manifest.config = {};
+      manifest.fields = [];
+      manifest.endpoints = [];
+      manifest.listeners = [{ name: "status", default_port: 9145, methods: ["GET"] }];
+    });
+    expect(await admin.extensions.verify(node)).toMatchObject({
+      manifest: {
+        id: "node-status",
+        scope: "node",
+        listeners: [{ name: "status", methods: ["GET"], max_body: 4096 }],
+      },
+      stored: false,
+    });
+    const installed = await admin.extensions.install(node);
+    expect(installed).toMatchObject({ id: "node-status", scope: "node", enabled: false, sites: 0 });
+    const [stored] = await ctx.db
+      .select()
+      .from(schema.extensionVersion)
+      .where(eq(schema.extensionVersion.extensionId, installed.id));
+    expect(Buffer.from(stored?.package ?? [])).toEqual(Buffer.from(node.package, "base64"));
+    expect(stored?.signature).toBe(node.signature);
+    expect(await packageForNode(ctx.db, clusterId, installed.sha256)).toBeNull();
+    expect(await admin.extensions.nodeSettings({ id: installed.id })).toMatchObject({
+      settings: { listeners: {} },
+    });
+    expect((await admin.extensions.get({ id: "hello-header" })).version).toBe("1.0.0");
+    expect((await ir()).extensions).toEqual([]);
+    await admin.extensions.uninstall({ id: installed.id });
+  });
+
+  it("refuses explicit site scope while nodes still reject that manifest member", async () => {
+    const explicit = exampleVersion("1.0.1", (manifest) => {
+      manifest.scope = "site";
+    });
+    for (const result of [
+      await rpcError(admin.extensions.verify(explicit)),
+      await rpcError(admin.extensions.install(explicit)),
+    ]) {
+      expect(result.code).toBe("EXTENSION_PACKAGE_INVALID");
+      expect(result.data).toMatchObject({
+        reason: "manifest",
+        detail: "scope: explicit site scope is not supported by this console",
+      });
+    }
+    expect((await admin.extensions.get({ id: "hello-header" })).version).toBe("1.0.0");
   });
 
   it("needs extensions-v1 on the cluster's nodes to turn a site on", async () => {

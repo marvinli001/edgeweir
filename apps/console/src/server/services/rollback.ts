@@ -2,6 +2,7 @@ import { clone, create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import {
   compileDevelopmentMode,
+  compileNodeConfig,
   compileOfflineHosts,
   compilePlatformErrorPages,
   compileRules,
@@ -11,11 +12,12 @@ import {
   refreshDerived,
   usesSessionTickets,
 } from "@edgeweir/config-compiler";
-import { certificateUnloadable, tlsSettings } from "@edgeweir/contract";
+import { certificateUnloadable, extensionManifest, tlsSettings } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import {
   ChallengeKeyRefSchema,
   type DomainMatch,
+  ExtensionListenerSchema,
   HttpChallengeSchema,
   IpListSchema,
   type NodeConfig,
@@ -42,6 +44,7 @@ import {
 } from "./config-input";
 import { loadEdgeModel } from "./edge";
 import { loadPlatformErrorPages } from "./error-pages";
+import { getExtensionSettings, loadExtensionInput } from "./extensions";
 import { restoreL4Apps } from "./l4-config";
 import { loadOriginAllowList } from "./origin-allow-list";
 import { restoreOriginProtection } from "./origin-pki";
@@ -242,6 +245,70 @@ async function restoreSites(
   }
   out.l4Apps = await restoreL4Apps(tx, clusterId, out.l4Apps, opts);
   await restoreOriginProtection(tx, clusterId, out, opts);
+  // Node bindings and targets are current operator policy, including on stable nodes.
+  const input = await loadExtensionInput(tx, [], clusterId);
+  const currentNodes = new Map(
+    input.extensions
+      .filter((extension) => extension.scope === "node")
+      .map((extension) => [extension.id, extension]),
+  );
+  const historicalNodes = out.extensions.filter((extension) => extension.scope === "node");
+  if (currentNodes.size || historicalNodes.length) {
+    if (opts.strict) {
+      const nodes = compileNodeConfig({ clusterId, sites: [], ...input }, 0n).extensions;
+      const order = new Map(input.extensions.map((extension, index) => [extension.id, index]));
+      out.extensions = [
+        ...out.extensions.filter((extension) => extension.scope !== "node"),
+        ...nodes,
+      ].sort((a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity));
+    } else {
+      // A canary must keep stable code/config while bindings and secret issuance stay current.
+      const versions = historicalNodes.length
+        ? await tx
+            .select({
+              id: schema.extensionVersion.extensionId,
+              sha256: schema.extensionVersion.sha256,
+              manifest: schema.extensionVersion.manifest,
+              secretVersion: schema.extension.secretVersion,
+            })
+            .from(schema.extensionVersion)
+            .innerJoin(
+              schema.extension,
+              eq(schema.extension.id, schema.extensionVersion.extensionId),
+            )
+            .where(
+              inArray(
+                schema.extensionVersion.sha256,
+                historicalNodes.map((extension) => extension.sha256),
+              ),
+            )
+        : [];
+      out.extensions = out.extensions.flatMap((extension) => {
+        if (extension.scope !== "node") return [extension];
+        const current = currentNodes.get(extension.id);
+        const version = versions.find(
+          (row) => row.id === extension.id && row.sha256 === extension.sha256,
+        );
+        if (!current || !version) return [];
+        const manifest = extensionManifest.parse(version.manifest);
+        extension.listeners = (manifest.listeners ?? []).flatMap((listener) => {
+          const binding = current.listeners?.find((binding) => binding.name === listener.name);
+          return binding
+            ? [
+                create(ExtensionListenerSchema, {
+                  ...binding,
+                  methods: listener.methods,
+                  maxBody: listener.max_body ?? 4096,
+                }),
+              ]
+            : [];
+        });
+        extension.secretVersion = manifest.secret ? version.secretVersion : 0;
+        return [extension];
+      });
+    }
+    out.extensionsDisabled = (await getExtensionSettings(tx)).disabled;
+  }
   return { config: out, currentSites, edge };
 }
 

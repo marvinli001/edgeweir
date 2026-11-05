@@ -1,4 +1,9 @@
 import {
+  checkNodeExtensionSettings,
+  getNodeExtensionSettings,
+  updateNodeExtensionSettings,
+} from "../../services/extension-node-settings";
+import {
   activateExtensionVersion,
   addExtensionKey,
   deleteExtensionVersion,
@@ -52,6 +57,15 @@ export const extensionsRouter = {
     ),
     updateSettings: authed.extensions.updateSettings.handler(({ input, context }) =>
       updateExtensionSettings(context.app.db, input, context.actor),
+    ),
+    nodeSettings: authed.extensions.nodeSettings.handler(({ input, context }) =>
+      getNodeExtensionSettings(context.app.db, input.id),
+    ),
+    updateNodeSettings: authed.extensions.updateNodeSettings.handler(({ input, context }) =>
+      updateNodeExtensionSettings(context.app.db, input, context.actor),
+    ),
+    checkNodeSettings: authed.extensions.checkNodeSettings.handler(({ input, context }) =>
+      checkNodeExtensionSettings(context.app.db, input),
     ),
     forSite: authed.extensions.forSite.handler(({ input, context }) =>
       listSiteExtensions(context.app.db, input.siteId),

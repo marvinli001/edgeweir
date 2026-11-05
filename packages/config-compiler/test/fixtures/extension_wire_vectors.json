@@ -1,0 +1,79 @@
+[
+  {
+    "name": "legacy site with fields 1-13",
+    "extension": {
+      "id": "old-ext",
+      "version": "1.0.0",
+      "publisher": "test",
+      "sha256": "ab",
+      "size": "1",
+      "signature": "sig",
+      "publicKey": "key",
+      "enabled": true,
+      "failureMode": "open",
+      "configJson": "{}",
+      "sharedDicts": [{ "name": "state", "sizeKb": 16 }],
+      "luaApi": 2,
+      "secretVersion": 1
+    },
+    "canonical_hex": "0a076f6c642d6578741205312e302e301a047465737422026162280132037369673a036b657940014a046f70656e52027b7d5a090a057374617465101060026801"
+  },
+  {
+    "name": "node scope without bindings",
+    "extension": { "luaApi": 2, "scope": "node" },
+    "canonical_hex": "600272046e6f6465"
+  },
+  {
+    "name": "node listener with default body limit absent",
+    "extension": {
+      "luaApi": 2,
+      "scope": "node",
+      "listeners": [
+        {
+          "name": "http",
+          "port": 9100,
+          "bind": "127.0.0.1",
+          "allow": ["127.0.0.1/32", "::1/128"],
+          "methods": ["GET", "HEAD"]
+        }
+      ]
+    },
+    "canonical_hex": "600272046e6f64657a360a0468747470108c471a093132372e302e302e31220c3132372e302e302e312f333222073a3a312f3132382a034745542a0448454144"
+  },
+  {
+    "name": "node listener with explicit zero body limit",
+    "extension": {
+      "luaApi": 2,
+      "scope": "node",
+      "listeners": [
+        {
+          "name": "http",
+          "port": 9100,
+          "bind": "127.0.0.1",
+          "allow": ["127.0.0.1/32", "::1/128"],
+          "methods": ["GET", "HEAD"],
+          "maxBody": 0
+        }
+      ]
+    },
+    "canonical_hex": "600272046e6f64657a380a0468747470108c471a093132372e302e302e31220c3132372e302e302e312f333222073a3a312f3132382a034745542a04484541443000"
+  },
+  {
+    "name": "node listener with explicit default body limit",
+    "extension": {
+      "luaApi": 2,
+      "scope": "node",
+      "listeners": [
+        {
+          "name": "http",
+          "port": 9100,
+          "bind": "127.0.0.1",
+          "allow": ["127.0.0.1/32", "::1/128"],
+          "methods": ["GET", "HEAD"],
+          "maxBody": 4096
+        }
+      ]
+    },
+    "canonical_hex": "600272046e6f64657a390a0468747470108c471a093132372e302e302e31220c3132372e302e302e312f333222073a3a312f3132382a034745542a0448454144308020"
+  }
+]

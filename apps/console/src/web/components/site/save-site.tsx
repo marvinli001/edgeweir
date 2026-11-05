@@ -54,6 +54,7 @@ export function SaveBar({
   testId,
   errorTestId = "site-save-error",
   className,
+  form,
 }: {
   dirty: boolean;
   pending: boolean;
@@ -65,6 +66,7 @@ export function SaveBar({
   testId: string;
   errorTestId?: string;
   className?: string;
+  form?: string;
 }) {
   useUnsavedChanges(dirty);
   return (
@@ -74,6 +76,7 @@ export function SaveBar({
     >
       <Button
         type="submit"
+        form={form}
         disabled={!dirty || pending}
         className={
           indent ? "@min-[42.5rem]/save-bar:ml-[calc(var(--ew-form-label)+1.5rem)]" : undefined

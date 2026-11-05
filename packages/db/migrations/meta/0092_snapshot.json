@@ -1,6 +1,6 @@
 {
-  "id": "3b79f099-c248-4093-8741-8b97dd62175d",
-  "prevId": "87b83f53-4d75-4491-8b58-c23a4d80e1b3",
+  "id": "13836b61-97bd-47ef-9434-e55511d2165b",
+  "prevId": "3b79f099-c248-4093-8741-8b97dd62175d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -8277,6 +8277,53 @@
       },
       "indexes": {},
       "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.extension_node_setting": {
+      "name": "extension_node_setting",
+      "schema": "",
+      "columns": {
+        "extension_id": {
+          "name": "extension_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "settings": {
+          "name": "settings",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "extension_node_setting_extension_id_extension_id_fk": {
+          "name": "extension_node_setting_extension_id_extension_id_fk",
+          "tableFrom": "extension_node_setting",
+          "tableTo": "extension",
+          "columnsFrom": [
+            "extension_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

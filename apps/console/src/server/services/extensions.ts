@@ -2,8 +2,6 @@ import { createHash, randomBytes } from "node:crypto";
 import type { ExtensionModel, SiteModel } from "@edgeweir/config-compiler";
 import {
   applyExtensionConfig,
-  EXTENSIONS_FEATURE,
-  EXTENSIONS_V2_FEATURE,
   type ExtensionConfigSchema,
   type ExtensionDetail,
   type ExtensionKeyView,
@@ -11,6 +9,7 @@ import {
   type ExtensionSiteDataItem,
   type ExtensionSummary,
   extensionManifest,
+  extensionRequiredFeatures,
   maskExtensionConfig,
   type NodeExtensionState,
   nodeSupportsFeature,
@@ -21,6 +20,7 @@ import {
 import { type Database, schema } from "@edgeweir/db";
 import { registerExtensionFields } from "@edgeweir/rule-engine";
 import { type AnyColumn, and, asc, eq, inArray, isNotNull, like, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { Envelope, MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
 import {
@@ -30,16 +30,22 @@ import {
   type VerifiedPackage,
   verifyPackage,
 } from "../lib/extension-package";
+import { lockListenerPorts } from "../lib/locks";
 import { assertNodeFeatures } from "../lib/node-features";
 import { type Actor, recordAudit } from "./audit";
+import {
+  nodeExtensionClusters,
+  readNodeExtensionSettings,
+  validateEnabledNodeExtensions,
+  validateNodeExtensionSettings,
+} from "./extension-node-settings";
 import { type Executor, publishClusters, type Tx } from "./revisions";
 import { publishSiteChange } from "./site-change";
 
 /**
  * Node extensions (docs/reference/extensions.md): the trust store, verified
  * package versions, their operator settings and the sites that turn them on.
- * Every change publishes the clusters whose sites use the extension and is
- * audited in the same transaction.
+ * Changes publish site references and node targets in the audit transaction.
  */
 
 const SETTINGS_KEY = "extensions";
@@ -49,17 +55,12 @@ type ExtensionRow = typeof schema.extension.$inferSelect;
 type VersionRow = typeof schema.extensionVersion.$inferSelect;
 
 async function lockExtensions(tx: Tx) {
+  await lockListenerPorts(tx);
   await tx.execute(sql`select pg_advisory_xact_lock(${LOCK_KEY})`);
 }
 
 const manifestOf = (row: Pick<VersionRow, "manifest">): ExtensionManifest =>
   extensionManifest.parse(row.manifest);
-
-/** The node features an extension needs (Lua API 2: extensions-v2). */
-const extensionFeatures = (manifest: ExtensionManifest) =>
-  manifest.requires.lua_api >= 2
-    ? [EXTENSIONS_FEATURE, EXTENSIONS_V2_FEATURE]
-    : [EXTENSIONS_FEATURE];
 
 // ---------------------------------------------------------------------------
 // Secrets (manifest `secret: true`, version 1.1)
@@ -215,7 +216,7 @@ async function assertFieldsKept(
 // ---------------------------------------------------------------------------
 // Publishing
 
-/** Clusters with an enabled site that turns the extension on (or any extension). */
+/** Site references and node targets, including targets that a disable must withdraw. */
 async function clustersUsing(db: Executor, id?: string): Promise<string[]> {
   const rows = await db
     .selectDistinct({ clusterId: schema.site.clusterId })
@@ -228,7 +229,25 @@ async function clustersUsing(db: Executor, id?: string): Promise<string[]> {
         ...(id ? [eq(schema.siteExtension.extensionId, id)] : []),
       ),
     );
-  return rows.map((row) => row.clusterId);
+  const clusters = new Set(rows.map((row) => row.clusterId));
+  const installed = await db
+    .select({ id: schema.extension.id, manifest: schema.extensionVersion.manifest })
+    .from(schema.extension)
+    .innerJoin(
+      schema.extensionVersion,
+      and(
+        eq(schema.extensionVersion.extensionId, schema.extension.id),
+        eq(schema.extensionVersion.version, schema.extension.activeVersion),
+      ),
+    )
+    .where(id ? eq(schema.extension.id, id) : undefined);
+  for (const row of installed) {
+    const manifest = manifestOf(row);
+    if (manifest.scope !== "node") continue;
+    const settings = await readNodeExtensionSettings(db, row.id, manifest);
+    for (const cluster of await nodeExtensionClusters(db, settings)) clusters.add(cluster.id);
+  }
+  return [...clusters].sort();
 }
 
 async function publishUsing(
@@ -261,8 +280,9 @@ function canonicalJson(value: Record<string, unknown>): string {
 export async function loadExtensionInput(
   db: Executor,
   sites: SiteModel[],
+  clusterId?: string,
 ): Promise<{ extensions: ExtensionModel[]; extensionsDisabled: boolean }> {
-  const rows = await db
+  const installed = await db
     .select({
       extension: schema.extension,
       version: schema.extensionVersion,
@@ -278,6 +298,19 @@ export async function loadExtensionInput(
     )
     .innerJoin(schema.extensionKey, eq(schema.extensionKey.kid, schema.extensionVersion.kid))
     .orderBy(asc(schema.extension.installedAt), asc(schema.extension.id));
+  const disabled = (await getExtensionSettings(db)).disabled;
+  const rows: typeof installed = [];
+  const nodeSettings = new Map<string, Awaited<ReturnType<typeof readNodeExtensionSettings>>>();
+  for (const row of installed) {
+    const manifest = manifestOf(row.version);
+    if (manifest.scope === "node") {
+      if (!clusterId || !row.extension.enabled || disabled) continue;
+      const settings = await readNodeExtensionSettings(db, row.extension.id, manifest);
+      if (settings.clusterIds != null && !settings.clusterIds.includes(clusterId)) continue;
+      nodeSettings.set(row.extension.id, settings);
+    }
+    rows.push(row);
+  }
   if (rows.length === 0) return { extensions: [], extensionsDisabled: false };
   const siteIds = sites.map((s) => s.id);
   const entries = siteIds.length
@@ -320,7 +353,9 @@ export async function loadExtensionInput(
     : [];
   for (const site of sites) {
     site.extensions = entries
-      .filter((entry) => entry.siteId === site.id)
+      .filter(
+        (entry) => entry.siteId === site.id && manifests.get(entry.extensionId)?.scope === "site",
+      )
       .map((entry) => ({
         id: entry.extensionId,
         configJson: canonicalJson(entry.config),
@@ -347,9 +382,27 @@ export async function loadExtensionInput(
       sharedDicts: manifest.shared_dicts.map((d) => ({ name: d.name, sizeKb: d.size_kb })),
       luaApi: manifest.requires.lua_api,
       secretVersion: manifest.secret ? extension.secretVersion : 0,
+      ...(manifest.scope === "node"
+        ? {
+            scope: "node" as const,
+            listeners: (manifest.listeners ?? []).flatMap((listener) => {
+              const binding = nodeSettings.get(extension.id)?.listeners[listener.name];
+              return binding
+                ? [
+                    {
+                      ...binding,
+                      name: listener.name,
+                      methods: listener.methods,
+                      maxBody: listener.max_body ?? 4096,
+                    },
+                  ]
+                : [];
+            }),
+          }
+        : {}),
     };
   });
-  return { extensions, extensionsDisabled: (await getExtensionSettings(db)).disabled };
+  return { extensions, extensionsDisabled: disabled };
 }
 
 // ---------------------------------------------------------------------------
@@ -588,6 +641,17 @@ async function activate(
   if (existing.activeVersion === version) return;
   const before = versions.find((v) => v.version === existing.activeVersion);
   const manifest = manifestOf(target);
+  if (before && manifestOf(before).scope !== manifest.scope)
+    fail("EXTENSION_SCOPE_CHANGE", "an installed extension cannot change scope");
+  const nodeSettings =
+    manifest.scope === "node"
+      ? await validateNodeExtensionSettings(
+          tx,
+          existing.id,
+          manifest,
+          await readNodeExtensionSettings(tx, existing.id, manifest),
+        )
+      : null;
   await assertFieldsKept(tx, existing.id, before ? manifestOf(before) : null, manifest);
   // Configurations follow the new schemas: kept where valid, defaults filled in.
   const config = validConfig(
@@ -624,12 +688,12 @@ async function activate(
     .where(eq(schema.extension.id, existing.id));
   await ensureSecret(tx, masterKey, existing.id, manifest);
   await refreshExtensionFields(tx);
-  const clusters = await clustersUsing(tx, existing.id);
+  const clusters = nodeSettings?.targetClusterIds ?? (await clustersUsing(tx, existing.id));
   if (existing.enabled)
     await assertNodeFeatures(
       tx,
-      clusters,
-      extensionFeatures(manifest),
+      nodeSettings?.targetClusterIds ?? clusters,
+      extensionRequiredFeatures(manifest),
       "nodes without extension support",
     );
   const revisions = await publishUsing(tx, actor, clusters, "extension_updated", existing.id);
@@ -709,7 +773,7 @@ export async function deleteExtensionVersion(
       fail("EXTENSION_VERSION_ACTIVE", "the active version cannot be deleted", {
         version: input.version,
       });
-    const deleted = await tx
+    const [deleted] = await tx
       .delete(schema.extensionVersion)
       .where(
         and(
@@ -717,15 +781,32 @@ export async function deleteExtensionVersion(
           eq(schema.extensionVersion.version, input.version),
         ),
       )
-      .returning({ sha256: schema.extensionVersion.sha256 });
-    if (!deleted.length)
+      .returning({
+        sha256: schema.extensionVersion.sha256,
+        manifest: schema.extensionVersion.manifest,
+      });
+    if (!deleted)
       fail("EXTENSION_VERSION_NOT_FOUND", "no such version", { version: input.version });
+    const revisions =
+      manifestOf(deleted).scope === "node"
+        ? await publishUsing(
+            tx,
+            actor,
+            await clustersUsing(tx, input.id),
+            "extension_updated",
+            input.id,
+          )
+        : undefined;
     await recordAudit(tx, actor, {
       action: "extension.delete_version",
       targetType: "extension",
       targetId: input.id,
       targetName: input.id,
-      metadata: { version: input.version, sha256: deleted[0]?.sha256 },
+      metadata: {
+        version: input.version,
+        sha256: deleted.sha256,
+        ...(revisions ? { revisions } : {}),
+      },
     });
   });
   return getExtension(db, input.id);
@@ -754,12 +835,21 @@ export async function updateExtension(
         : unmaskExtensionConfig(schemaOf(manifest, "global"), input.config, row.config),
       !enabled,
     );
-    const clusters = await clustersUsing(tx, row.id);
-    if (input.enabled && !row.enabled)
+    const nodeSettings =
+      manifest.scope === "node" && enabled
+        ? await validateNodeExtensionSettings(
+            tx,
+            row.id,
+            manifest,
+            await readNodeExtensionSettings(tx, row.id, manifest),
+          )
+        : null;
+    const clusters = nodeSettings?.targetClusterIds ?? (await clustersUsing(tx, row.id));
+    if (enabled && (manifest.scope === "node" || (input.enabled && !row.enabled)))
       await assertNodeFeatures(
         tx,
-        clusters,
-        extensionFeatures(manifest),
+        nodeSettings?.targetClusterIds ?? clusters,
+        extensionRequiredFeatures(manifest),
         "nodes without extension support",
       );
     const changed = {
@@ -877,6 +967,7 @@ export async function updateExtensionSettings(
         target: schema.systemSetting.key,
         set: { value: { disabled: input.disabled } },
       });
+    if (!input.disabled) await validateEnabledNodeExtensions(tx);
     const published = await publishClusters(tx, await clustersUsing(tx), {
       reason: { code: "extensions_settings_updated", params: {} },
       actor,
@@ -918,13 +1009,15 @@ export async function listSiteExtensions(
     .select()
     .from(schema.siteExtension)
     .where(eq(schema.siteExtension.siteId, siteId));
-  return rows.map(({ extension, version }) =>
-    siteView(
-      extension,
-      version,
-      entries.find((e) => e.extensionId === extension.id),
-    ),
-  );
+  return rows
+    .filter(({ version }) => manifestOf(version).scope === "site")
+    .map(({ extension, version }) =>
+      siteView(
+        extension,
+        version,
+        entries.find((e) => e.extensionId === extension.id),
+      ),
+    );
 }
 
 function siteView(
@@ -984,6 +1077,8 @@ export async function updateSiteExtension(
     const extension = await requireExtension(tx, input.id);
     const version = await activeVersion(tx, extension);
     const manifest = manifestOf(version);
+    if (manifest.scope !== "site")
+      fail("EXTENSION_SCOPE_MISMATCH", "site settings need site scope", { scope: "site" });
     const [entry] = await tx
       .select()
       .from(schema.siteExtension)
@@ -1003,7 +1098,7 @@ export async function updateSiteExtension(
       await assertNodeFeatures(
         tx,
         [site.clusterId],
-        extensionFeatures(manifest),
+        extensionRequiredFeatures(manifest),
         "nodes without extension support",
       );
     const [row] = await tx
@@ -1162,7 +1257,7 @@ function nodeStates(
   clusters: Set<string>,
   nodes: (typeof schema.node.$inferSelect)[],
 ): NodeExtensionState[] {
-  const features = extensionFeatures(manifestOf(version));
+  const features = extensionRequiredFeatures(manifestOf(version));
   return nodes
     .filter((node) => clusters.has(node.clusterId) && node.status === "active")
     .map((node) => {
@@ -1212,18 +1307,28 @@ async function summaries(
     .innerJoin(schema.site, eq(schema.site.id, schema.siteExtension.siteId))
     .where(eq(schema.siteExtension.enabled, true));
   const nodes = await db.select().from(schema.node);
-  return rows.map(({ extension, version }) => {
+  const disabled = (await getExtensionSettings(db)).disabled;
+  const results = [];
+  for (const { extension, version } of rows) {
     const manifest = manifestOf(version);
     const used = usage.filter((u) => u.id === extension.id);
     const clusters = new Set(used.filter((u) => u.siteEnabled).map((u) => u.clusterId));
+    if (manifest.scope === "node") {
+      clusters.clear();
+      if (extension.enabled && !disabled) {
+        const settings = await readNodeExtensionSettings(db, extension.id, manifest);
+        for (const cluster of await nodeExtensionClusters(db, settings)) clusters.add(cluster.id);
+      }
+    }
     const states = nodeStates(extension, version, clusters, nodes);
-    return {
+    results.push({
       id: extension.id,
+      scope: manifest.scope,
       version: extension.activeVersion,
       publisher: manifest.publisher,
       name: manifest.name,
       enabled: extension.enabled,
-      failureMode: extension.failureMode === "closed" ? "closed" : "open",
+      failureMode: extension.failureMode === "closed" ? ("closed" as const) : ("open" as const),
       sites: used.length,
       nodesLoaded: states.filter((s) => s.state === "loaded").length,
       nodesFailing: states.filter((s) =>
@@ -1234,8 +1339,9 @@ async function summaries(
       _row: extension,
       _version: version,
       _nodes: states,
-    };
-  });
+    });
+  }
+  return results;
 }
 
 export async function listExtensions(db: Executor): Promise<ExtensionSummary[]> {
@@ -1303,8 +1409,8 @@ const chunkOf = (column: AnyColumn, offset: number) => ({
 /**
  * A part of the package bytes for a node (from `offset`, at most
  * EXTENSION_CHUNK_BYTES) and the package's size: a stored version of an
- * extension that an enabled site of the node's cluster turns on (the active
- * one, or an older one a rollback revision may still reference).
+ * extension the cluster can receive, including stored rollback versions.
+ * Node scope requires a current effective target; site scope keeps its legacy references.
  */
 export async function packageForNode(
   db: Executor,
@@ -1312,6 +1418,41 @@ export async function packageForNode(
   sha256: string,
   offset = 0,
 ): Promise<{ data: Uint8Array; total: number } | null> {
+  const requested = alias(schema.extensionVersion, "requested_extension_version");
+  const [candidate] = await db
+    .select({
+      id: schema.extension.id,
+      enabled: schema.extension.enabled,
+      manifest: schema.extensionVersion.manifest,
+    })
+    .from(schema.extension)
+    .innerJoin(
+      schema.extensionVersion,
+      and(
+        eq(schema.extensionVersion.extensionId, schema.extension.id),
+        eq(schema.extensionVersion.version, schema.extension.activeVersion),
+      ),
+    )
+    .innerJoin(requested, eq(requested.extensionId, schema.extension.id))
+    .where(eq(requested.sha256, sha256))
+    .limit(1);
+  if (!candidate) return null;
+  const manifest = manifestOf(candidate);
+  if (manifest.scope === "node") {
+    if (!candidate.enabled || (await getExtensionSettings(db)).disabled) return null;
+    const settings = await readNodeExtensionSettings(db, candidate.id, manifest);
+    if (settings.clusterIds != null && !settings.clusterIds.includes(clusterId)) return null;
+    const [row] = await db
+      .select(chunkOf(schema.extensionVersion.package, offset))
+      .from(schema.extensionVersion)
+      .where(
+        and(
+          eq(schema.extensionVersion.sha256, sha256),
+          eq(schema.extensionVersion.extensionId, candidate.id),
+        ),
+      );
+    return row ?? null;
+  }
   const [row] = await db
     .select(chunkOf(schema.extensionVersion.package, offset))
     .from(schema.extensionVersion)
@@ -1326,8 +1467,8 @@ export async function packageForNode(
 }
 
 /**
- * The secrets (current, previous) of the extensions an enabled site of the
- * node's cluster turns on whose active version declares `secret: true`;
+ * The secrets (current, previous) of effective node targets and legacy site
+ * references declaring `secret: true` (retained node versions may still be stable);
  * `ids` narrows them (empty: all).
  */
 export async function secretsForNode(
@@ -1339,6 +1480,7 @@ export async function secretsForNode(
   const rows = await db
     .select({
       id: schema.extension.id,
+      enabled: schema.extension.enabled,
       envelope: schema.extension.secretEnvelope,
       version: schema.extension.secretVersion,
       manifest: schema.extensionVersion.manifest,
@@ -1351,23 +1493,48 @@ export async function secretsForNode(
         eq(schema.extensionVersion.version, schema.extension.activeVersion),
       ),
     )
-    .innerJoin(schema.siteExtension, eq(schema.siteExtension.extensionId, schema.extension.id))
+    .where(
+      and(
+        isNotNull(schema.extension.secretEnvelope),
+        ...(ids.length ? [inArray(schema.extension.id, ids)] : []),
+      ),
+    )
+    .orderBy(asc(schema.extension.id));
+  const siteEntries = await db
+    .select({ id: schema.siteExtension.extensionId })
+    .from(schema.siteExtension)
     .innerJoin(schema.site, eq(schema.site.id, schema.siteExtension.siteId))
     .where(
       and(
         eq(schema.site.clusterId, clusterId),
         eq(schema.site.enabled, true),
         eq(schema.siteExtension.enabled, true),
-        isNotNull(schema.extension.secretEnvelope),
-        ...(ids.length ? [inArray(schema.extension.id, ids)] : []),
       ),
-    )
-    .orderBy(asc(schema.extension.id));
-  const seen = new Set<string>();
+    );
+  const siteIds = new Set(siteEntries.map((entry) => entry.id));
+  const disabled = (await getExtensionSettings(db)).disabled;
   const secrets: { id: string; version: number; current: Uint8Array; previous: Uint8Array }[] = [];
   for (const row of rows) {
-    if (seen.has(row.id) || !row.envelope || !manifestOf(row).secret) continue;
-    seen.add(row.id);
+    const manifest = manifestOf(row);
+    if (!row.envelope) continue;
+    if (manifest.scope === "node") {
+      if (!row.enabled || disabled) continue;
+      const settings = await readNodeExtensionSettings(db, row.id, manifest);
+      if (settings.clusterIds != null && !settings.clusterIds.includes(clusterId)) continue;
+      if (!manifest.secret) {
+        const versions = await db
+          .select({ manifest: schema.extensionVersion.manifest })
+          .from(schema.extensionVersion)
+          .where(eq(schema.extensionVersion.extensionId, row.id));
+        if (
+          !versions.some((version) => {
+            const retained = manifestOf(version);
+            return retained.scope === "node" && retained.secret;
+          })
+        )
+          continue;
+      }
+    } else if (!manifest.secret || !siteIds.has(row.id)) continue;
     const { current, previous } = openSecrets(masterKey, row.id, row.envelope);
     secrets.push({
       id: row.id,

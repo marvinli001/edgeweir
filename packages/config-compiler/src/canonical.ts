@@ -41,6 +41,13 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
   // A set: ascending (byte order, ASCII) without duplicates, as the Go agent sorts it.
   out.originAllowedCidrs = sortedSet(out.originAllowedCidrs);
   out.requiredFeatures = sortedSet(out.requiredFeatures);
+  for (const extension of out.extensions) {
+    extension.listeners.sort(byString((listener) => listener.name));
+    for (const listener of extension.listeners) {
+      listener.allow = sortedSet(listener.allow);
+      listener.methods = sortedSet(listener.methods);
+    }
+  }
   out.httpChallenges.sort(byString((c) => `${c.domain}/${c.token}`));
   out.ipLists.sort(byString((list: IpList) => list.id));
   out.challengeKeys.sort(byString((key: ChallengeKeyRef) => key.id));
