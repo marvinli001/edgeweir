@@ -1,5 +1,6 @@
 import { Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { useRouter } from "@tanstack/react-router";
 import * as React from "react";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/layout/input-group";
 import { m } from "@/lib/i18n";
@@ -15,6 +16,8 @@ export function SearchBox({
   const [text, setText] = React.useState(value);
   const latest = React.useRef(onChange);
   latest.current = onChange;
+  const history = useRouter().history;
+  const path = React.useRef(history.location.pathname);
   // The URL holds the trimmed text: a space typed between words is not taken back.
   React.useEffect(
     () => setText((current) => (current.trim() === value ? current : value)),
@@ -22,9 +25,12 @@ export function SearchBox({
   );
   React.useEffect(() => {
     if (text.trim() === value) return;
-    const timer = setTimeout(() => latest.current(text.trim()), 300);
+    const timer = setTimeout(() => {
+      // A link opened during the pause: updating this page's URL would undo it.
+      if (history.location.pathname === path.current) latest.current(text.trim());
+    }, 300);
     return () => clearTimeout(timer);
-  }, [text, value]);
+  }, [text, value, history]);
   return (
     <InputGroup className="w-full sm:w-72">
       <InputGroupAddon>
