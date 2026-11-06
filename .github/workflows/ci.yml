@@ -48,6 +48,7 @@ jobs:
       - run: pnpm test
         env:
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+          EDGEWEIR_TEST_POSTGRES_URL: postgres://postgres:postgres@localhost:5432/postgres
       - run: pnpm build
 
   certd:
