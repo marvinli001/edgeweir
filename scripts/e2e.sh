@@ -888,8 +888,12 @@ pass "cluster latest revision #$REVISION, $(jq -r .onlineNodeCount <<<"$CLUSTER"
 if ! $SKIP_UI; then
   step "Playwright smoke: login -> clusters & nodes -> sites"
   part ui env E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
-    E2E_EXPECT_REVISION="$REVISION" pnpm --filter @edgeweir/console run test:e2e e2e/smoke \
+    E2E_EXPECT_REVISION="$REVISION" pnpm --filter @edgeweir/console run test:e2e e2e/smoke.spec.ts \
     || fail "Playwright smoke test failed"
+  # The settings workflows publish newer revisions after the initial revision is checked.
+  part ui env E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+    pnpm --filter @edgeweir/console run test:e2e e2e/smoke-settings.spec.ts \
+    || fail "Playwright settings smoke test failed"
   pass "Playwright smoke passed"
 fi
 
