@@ -108,11 +108,11 @@ try {
     const signature = (await exec("cat", `${archive}.sig`)).trim();
     await admin.ok("POST", "/extensions", { package: packageB64, signature });
     await admin.ok("PATCH", `/extensions/${id}`, { enabled: true });
-    const site = await admin.ok("POST", "/sites", {
+    const { site } = await admin.ok("POST", "/sites", {
       name: id,
       domains: [hostFor(id)],
       clusterId: node.clusterId,
-      origins: [{ address: "origin", port: 80, protocol: "http", weight: 1 }],
+      origins: [{ address: "whoami" }],
     });
     await admin.ok("PUT", `/sites/${site.id}/extensions/${id}`, { enabled: true, config: {} });
     await applied();
