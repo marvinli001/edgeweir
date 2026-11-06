@@ -19,6 +19,8 @@ test("M4: IP list and rule editing with syntax errors, ordering and mobile", asy
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(page.getByText(`$${name}`, { exact: true })).toBeVisible();
   await page.getByTestId("nav-sites").click();
+  // Other sections add sites too; search so this one is on the first page.
+  await page.getByTestId("sites-search").fill("rules.m4.test");
   await page
     .getByTestId("sites-table")
     .getByRole("row")

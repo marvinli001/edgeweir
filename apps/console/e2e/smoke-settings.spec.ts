@@ -5,6 +5,18 @@ import { errors, login, saved, siteTab } from "./helpers";
 const email = process.env.E2E_ADMIN_EMAIL ?? "admin@e2e.test";
 const password = process.env.E2E_ADMIN_PASSWORD ?? "e2e-admin-password-123";
 
+// Sites these tests create; later sections expect the sites list to hold only theirs.
+const created: string[] = [];
+
+test.afterEach(async ({ page }) => {
+  for (const id of created.splice(0)) {
+    await page.request.post("/rpc/sites/delete", {
+      headers: { "x-csrf-token": "orpc" },
+      data: { json: { id } },
+    });
+  }
+});
+
 async function createSite(page: Page, name: string) {
   const response = await page.request.post("/rpc/sites/create", {
     headers: { "x-csrf-token": "orpc" },
@@ -18,6 +30,7 @@ async function createSite(page: Page, name: string) {
   });
   expect(response.ok()).toBe(true);
   const { json } = (await response.json()) as { json: { site: Site } };
+  created.push(json.site.id);
   return json.site;
 }
 
