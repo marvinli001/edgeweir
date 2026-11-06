@@ -1,0 +1,13 @@
+{
+  "format": "edgeweir-node-extension-v1",
+  "id": "api-v2-probe",
+  "version": "1.0.0",
+  "publisher": "example.org",
+  "name": { "en": "API 2 probe", "zh-CN": "API 2 测试" },
+  "license": "MIT-0",
+  "requires": { "lua_api": 2 },
+  "hooks": ["endpoint"],
+  "capabilities": [],
+  "secret": true,
+  "endpoints": [{ "path": "state", "methods": ["GET"] }]
+}

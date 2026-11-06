@@ -259,6 +259,8 @@ return M
 
 Version 1.1 keeps the package format `edgeweir-node-extension-v1` and adds secrets, native helper processes (sidecars) and site data. Everything in this section needs `"requires": {"lua_api": 2}`; the node feature is `extensions-v2` (a node with it runs Lua API 1 and 2 packages). The console refuses a package that uses a member of this section with `lua_api: 1`, and delivers an API 2 extension only to clusters whose active nodes all report `extensions-v1` and `extensions-v2` (`NODE_CAPABILITY_REQUIRED` otherwise). `extensions-v2` does not establish node-scope or listener support.
 
+`pnpm e2e --only core,extensions --up --down --serial` uses the bundled neutral `api-v2-probe` fixture to check signed delivery, Lua API 2, secret rotation, disabling and removal. No additional repository is required. `E2E_EXTENSION_PACKAGES` accepts a JSON array of additional API 2 site-extension fixture directories; the bundled fixture always runs.
+
 ### Manifest members (API 2)
 
 | Member | Rules |

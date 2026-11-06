@@ -259,6 +259,8 @@ edgeweir-node 仓库里的 `examples/extensions/hello-header` 就是这个扩展
 
 1.1 版沿用扩展包格式 `edgeweir-node-extension-v1`，增加密钥、原生辅助进程（边车）与网站数据。本节的一切都需要 `"requires": {"lua_api": 2}`；节点能力为 `extensions-v2`（具备它的节点同时运行 Lua API 1 与 2 的扩展包）。用了本节成员却声明 `lua_api: 1` 的扩展包会被控制台拒绝；API 2 扩展只下发到活跃节点都报告 `extensions-v1`、`extensions-v2` 的集群（否则 `NODE_CAPABILITY_REQUIRED`）。`extensions-v2` 不代表支持节点作用范围或监听器。
 
+`pnpm e2e --only core,extensions --up --down --serial` 使用仓库内的中性 `api-v2-probe` 夹具，验证签名包分发、Lua API 2、密钥轮换、禁用与卸载，不需要额外仓库。`E2E_EXTENSION_PACKAGES` 可提供额外 API 2 网站扩展夹具目录的 JSON 数组；内置夹具始终运行。
+
 ### 清单成员（API 2）
 
 | 成员 | 规则 |
