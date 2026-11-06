@@ -148,9 +148,13 @@ test("M1: site editing, clusters, node groups, audit and i18n", async ({ page })
     await page.keyboard.press("Escape");
     await expect(detail).toBeHidden();
 
+    // Earlier sections edit their own sites too; count only this site's edits.
     await pick(page, page.getByTestId("audit-filter-action"), "修改网站");
-    await expect(audit.getByTestId("audit-action")).toHaveText(["site.update", "site.update"]);
-    await expect(audit.getByTestId("audit-actor")).toHaveText(["E2E Admin", "E2E Admin"]);
+    const edits = audit.locator("[data-row-id]").filter({
+      has: page.getByTestId("audit-target").getByText("edited-site", { exact: true }),
+    });
+    await expect(edits.getByTestId("audit-action")).toHaveText(["site.update", "site.update"]);
+    await expect(edits.getByTestId("audit-actor")).toHaveText(["E2E Admin", "E2E Admin"]);
   });
 
   await test.step("in English, revision reasons and errors are English", async () => {
