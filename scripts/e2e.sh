@@ -1536,6 +1536,13 @@ RUN apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq 
  && rm -rf /var/lib/apt/lists/* \
  && useradd -m -s /bin/bash deploy \
  && echo 'deploy ALL=(ALL) ALL' >/etc/sudoers.d/deploy && chmod 0440 /etc/sudoers.d/deploy
+# The API intentionally retains only an output tail. Capture the complete
+# real SSH session here to check early signature-verification output too.
+RUN printf '%s\\n' '#!/bin/bash' 'set -o pipefail' \
+      'bash -c "\$SSH_ORIGINAL_COMMAND" 2>&1 | tee -a "\$HOME/ssh-output.log"' \
+      >/usr/local/bin/e2e-ssh-session \
+ && chmod 0755 /usr/local/bin/e2e-ssh-session \
+ && echo 'ForceCommand /usr/local/bin/e2e-ssh-session' >/etc/ssh/sshd_config.d/e2e.conf
 STOPSIGNAL SIGRTMIN+3
 CMD ["/lib/systemd/systemd"]
 EOF
@@ -1615,7 +1622,7 @@ until [[ "$(api GET "/nodes/$node_id" | jq -r '"\(.online) \(.agentVersion) \(.n
 done
 [[ "$(in_ssh 'systemctl is-active edgeweir-node')" == active && "$(in_ssh 'systemctl is-enabled edgeweir-node')" == enabled ]] ||
   fail "edgeweir-node is not an enabled, active systemd service"
-grep -q "cosign signature verified (release workflow, tag v$version)" <<<"$(jq -r '.hosts[0].output' <<<"$result")" ||
+in_ssh 'grep -qF -- "cosign signature verified (release workflow, tag v$1)" /home/deploy/ssh-output.log' _ "$version" ||
   fail "install.sh did not report the verified release signature"
 pass "node $node_id ($version) installed over SSH, online, edgeweir-node enabled and active; install.sh verified the release's cosign signature"
 
@@ -1625,20 +1632,24 @@ leaks="$(in_ssh '
   journalctl --no-pager | grep -cF -- "$p" || true
   journalctl --no-pager | grep -cE "ewt_[A-Za-z0-9_-]{20,}" || true
   grep -rlE "ewt_[A-Za-z0-9_-]{20,}" /var/log /tmp /home/deploy 2>/dev/null | wc -l
-  find /tmp -maxdepth 1 -name "tmp.*" -user deploy | wc -l
+  find /tmp -maxdepth 1 \( -name "tmp.*" -user deploy -o -name "edgeweir-ssh-*" \) | wc -l
   grep -lsa EDGEWEIR_TOKEN /proc/[0-9]*/environ | wc -l
 ' _ "$password" | tr '\n' ' ')"
 [[ "$leaks" == "0 0 0 0 0 " ]] ||
   fail "credentials or tokens left on the host (password in journal, token in journal, token files, temp dirs, environments): $leaks"
-journalctl_sudo="$(in_ssh 'journalctl --no-pager _COMM=sudo | grep "COMMAND=" | tail -n 1')"
+# sudo splits this supervised command into multiple syslog messages.
+journalctl_sudo="$(in_ssh 'journalctl --no-pager -o json _COMM=sudo' | jq -sr 'map(.MESSAGE) | join("\n")')"
 echo "sudo log: ${journalctl_sudo:0:200}"
-[[ "$journalctl_sudo" == *"/install.sh --token-file /tmp/tmp."*"/token --server https://console:8443"* && "$journalctl_sudo" != *ewt_* ]] || fail "sudo did not log the install.sh command line, or logged a token"
+[[ "$journalctl_sudo" == *"COMMAND=/usr/bin/bash -c "*"edgeweir-runner /tmp/edgeweir-ssh-root-"* &&
+   "$journalctl_sudo" == *"--token-file"* && "$journalctl_sudo" == *"--server https://console:8443"* &&
+   "$journalctl_sudo" != *ewt_* && "$journalctl_sudo" != *"$password"* ]] ||
+  fail "sudo did not log the supervised install command with file-only token delivery, or logged credentials"
 console_hits="$("${COMPOSE[@]}" logs console 2>&1 | grep -cF -- "$password" || true)"
 db_hits="$("${COMPOSE[@]}" exec -T postgres pg_dump -U edgeweir -d edgeweir --data-only | grep -cF -- "$password" || true)"
 [[ "$console_hits" == 0 && "$db_hits" == 0 ]] || fail "the SSH password reached the console's logs ($console_hits) or database ($db_hits)"
 audit="$(api GET "/audit-logs?action=ssh_install.host&limit=5" | jq -c --arg h "$SSH_CONTAINER" '[.items[] | .metadata | select(.host == $h) | .outcome]')"
 [[ "$audit" == '["succeeded","failed","failed"]' ]] || fail "unexpected ssh_install.host audit entries: $audit"
-pass "host: no password or token in the journal, files, temp dirs or process environments; sudo logged only the install.sh command; console logs and pg_dump: no password; audit: succeeded, failed, failed"
+pass "host: no password or token in the journal, files, temp dirs or process environments; sudo logged the supervised install command with token-file only; console logs and pg_dump: no password; audit: succeeded, failed, failed"
 
 step "SSH install: with edgeweir-node 1.7.0 a new run keeps the enrolled host's node; decommission retires it without SSH"
 # The stack's own edgeweir-node build (EDGEWEIR_NODE_CONTEXT) on the host, or E2E_SSH_NODE_BINARY, with the
