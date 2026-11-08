@@ -43,19 +43,21 @@ test("login -> clusters & nodes -> sites, then switch to English", async ({ page
   await expect(page.getByTestId("revisions-table")).toBeVisible();
 
   // The "add node" dialog shows a one-time install command with the CA pin at once. The
-  // token travels in EDGEWEIR_TOKEN, never as an argument (the process list would show it).
+  // token travels on stdin into a private file, never an argument or inherited environment.
   await page.getByTestId("add-node").click();
   // SSH install is the default method; the manual command is the other tab (remembered).
   await expect(page.getByTestId("ssh-install-form")).toBeVisible();
   await page.getByTestId("enroll-method-manual").click();
   const command = page.getByTestId("install-command");
-  const token = /export EDGEWEIR_TOKEN='(ewt_[A-Za-z0-9_-]+)'/;
+  const token = /\n(ewt_[A-Za-z0-9_-]+)\nEDGEWEIR_ENROLLMENT_TOKEN/;
   await expect(command).toContainText(token);
-  await expect(command).toContainText(
-    "/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- --server https://",
-  );
+  await expect(command).toContainText("sh <<'EDGEWEIR_INSTALL'");
+  await expect(command).toContainText('chmod 0700 "$d"');
+  await expect(command).toContainText('chmod 0600 "$d/token"');
+  await expect(command).toContainText('set -- --token-file "$d/token" --server https://');
+  await expect(command).toContainText('sudo bash "$d/install.sh" "$@" </dev/null');
   await expect(command).toContainText(/--ca-sha256 [0-9a-f]{64}/);
-  await expect(command).not.toContainText("--token");
+  await expect(command).not.toContainText(/export EDGEWEIR_TOKEN|--preserve-env|--token(?:[=\s])/);
   await expect(page.getByTestId("enroll-token-once")).toHaveText("仅显示一次");
   const first = (await command.textContent())?.match(token)?.[1];
   expect(first).toBeTruthy();

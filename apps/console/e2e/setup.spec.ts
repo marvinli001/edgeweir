@@ -25,7 +25,10 @@ test("first-run setup needs the setup token printed in the console log", async (
   await expect(page.getByTestId("page-title")).toHaveText("集群与节点");
   await expect(page.getByTestId("ssh-install-form")).toBeVisible();
   await page.getByTestId("enroll-method-manual").click();
-  await expect(page.getByTestId("install-command")).toContainText("EDGEWEIR_TOKEN");
+  const command = page.getByTestId("install-command");
+  await expect(command).toContainText("sh <<'EDGEWEIR_INSTALL'");
+  await expect(command).toContainText('--token-file "$d/token"');
+  await expect(command).not.toContainText(/export EDGEWEIR_TOKEN|--preserve-env|--token(?:[=\s])/);
   const primary = page.getByTestId("nav-primary-action");
   await expect(primary).toHaveText("添加节点");
   await expect(primary).toHaveAttribute("data-action", "add-node");

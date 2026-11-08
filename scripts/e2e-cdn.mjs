@@ -234,19 +234,31 @@ async function host(service) {
  */
 async function install(service, token) {
   const version = NODE_VERSION ? ` --version ${NODE_VERSION}` : "";
-  // The command shown, with root instead of sudo.
   assert.ok(
-    token.installCommand.includes(
-      `curl -fsSL https://${CDN}/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- --server ${token.serverUrl} --ca-sha256 ${token.caSha256}`,
-    ),
-    token.installCommand,
+    token.installCommand.startsWith("sh <<'EDGEWEIR_INSTALL'\n") &&
+      token.installCommand.includes(`\n${token.token}\nEDGEWEIR_ENROLLMENT_TOKEN\n`) &&
+      token.installCommand.includes('chmod 0700 "$d"') &&
+      token.installCommand.includes('chmod 0600 "$d/token"') &&
+      token.installCommand.includes(`curl -fsSL https://${CDN}/install.sh -o "$d/install.sh"`) &&
+      token.installCommand.includes(
+        `set -- --token-file "$d/token" --server ${token.serverUrl} --ca-sha256 ${token.caSha256}`,
+      ) &&
+      !/export EDGEWEIR_TOKEN|--preserve-env|--token(?:[=\s])/.test(token.installCommand),
+    "expected the console's stdin/private-file install command through the CDN",
   );
-  const log = await sh(
-    service,
-    `set -o pipefail
-     curl -fsSL https://${CDN}/install.sh | bash -s -- --server "$SERVER" --ca-sha256 "$CA"${version} --no-start 2>&1`,
-    [`EDGEWEIR_TOKEN=${token.token}`, `SERVER=${token.serverUrl}`, `CA=${token.caSha256}`],
-  );
+  const command = token.installCommand.replace(/^(set -- .+)$/m, `$1${version} --no-start`);
+  const log = await new Promise((resolve, reject) => {
+    const child = execFile(
+      "docker",
+      ["exec", "-i", name(service), "sh"],
+      { maxBuffer: 16 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error) reject(error);
+        else resolve(stdout + stderr);
+      },
+    );
+    child.stdin.end(command);
+  });
   await sh(
     service,
     `set -a; . /etc/default/edgeweir-node 2>/dev/null || true; set +a
@@ -398,7 +410,10 @@ try {
     ttlMinutes: 15,
   });
   assert.equal(token2.serverUrl, WSS);
-  assert.ok(token2.installCommand.includes(`--server ${WSS} `), token2.installCommand);
+  assert.ok(
+    token2.installCommand.includes(`--server ${WSS} `),
+    "install command uses the saved WSS URL",
+  );
   const log2 = await install("node-2", token2);
   assert.match(
     log2,

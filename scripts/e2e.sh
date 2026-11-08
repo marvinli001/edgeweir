@@ -799,11 +799,19 @@ TOKEN="$(jq -r .token <<<"$TOKEN_JSON")"
 CA_SHA256="$(jq -r .caSha256 <<<"$TOKEN_JSON")"
 SERVER_URL="$(jq -r .serverUrl <<<"$TOKEN_JSON")"
 INSTALL_COMMAND="$(jq -r .installCommand <<<"$TOKEN_JSON")"
-echo "install command (as shown in the console):"
-sed -E "s/(EDGEWEIR_TOKEN=')[^']+/\1<redacted>/" <<<"$INSTALL_COMMAND"
-[[ "$INSTALL_COMMAND" == "export EDGEWEIR_TOKEN='$TOKEN'"$'\n'*"/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- --server $SERVER_URL --ca-sha256 $CA_SHA256" &&
-  "$INSTALL_COMMAND" != *--token* ]] ||
-  fail "the install command must pass the token through EDGEWEIR_TOKEN, never as an argument"
+echo "install command (token redacted):"
+sed -E 's/ewt_[A-Za-z0-9_-]+/<redacted>/g' <<<"$INSTALL_COMMAND"
+[[ "$INSTALL_COMMAND" == "sh <<'EDGEWEIR_INSTALL'"$'\n'* &&
+  "$INSTALL_COMMAND" == *$'\n'"$TOKEN"$'\nEDGEWEIR_ENROLLMENT_TOKEN\n'* &&
+  "$INSTALL_COMMAND" == *'umask 077'* &&
+  "$INSTALL_COMMAND" == *'chmod 0700 "$d"'* &&
+  "$INSTALL_COMMAND" == *'chmod 0600 "$d/token"'* &&
+  "$INSTALL_COMMAND" == *'set -- --token-file "$d/token" --server '"$SERVER_URL --ca-sha256 $CA_SHA256"* &&
+  "$INSTALL_COMMAND" == *'sudo bash "$d/install.sh" "$@" </dev/null'* &&
+  "$INSTALL_COMMAND" != *'export EDGEWEIR_TOKEN'* &&
+  "$INSTALL_COMMAND" != *'--preserve-env'* &&
+  "$INSTALL_COMMAND" != *'--token '* && "$INSTALL_COMMAND" != *'--token='* ]] ||
+  fail "the install command must pass the token through stdin and a private file, never arguments or inherited environment"
 
 if "${COMPOSE[@]}" exec -T node edgeweir-node enroll --server "$SERVER_URL" --token "$TOKEN" \
   --ca-sha256 "$(printf '0%.0s' {1..64})" --state-dir /tmp/pin-mismatch >"$STATE_DIR/pin.log" 2>&1; then
@@ -1332,7 +1340,7 @@ if in_install 'curl -fsSL http://console:3000/install.sh | bash -s -- --token ew
   fail "install.sh must refuse --token"
 fi
 grep -q -- "--token is not accepted" "$STATE_DIR/install-token-arg.log" || fail "install.sh --token: $(cat "$STATE_DIR/install-token-arg.log")"
-# As the console's command, but as root without sudo and with the mirror on the e2e network.
+# Legacy environment input, as root without systemd and with the mirror on the e2e network.
 EDGEWEIR_TOKEN="$(jq -r .token <<<"$INSTALL_TOKEN_JSON")" docker exec -e EDGEWEIR_TOKEN "$INSTALL_CONTAINER" bash -ec '
   set -o pipefail
   curl -fsSL http://console:3000/install.sh | bash -s -- --server "$1" --ca-sha256 "$2" \
