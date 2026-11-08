@@ -19,8 +19,11 @@ import {
   type Node,
   type SchedulingPreview,
   type SchedulingRule,
+  type SshInstallHost,
+  type SshInstallStep,
   type UpgradeJob,
 } from "@edgeweir/contract";
+import { buildInstallCommand } from "../../src/server/lib/enrollment-command";
 import { certificates, ipLists } from "./access";
 import { type Fixtures, notFound } from "./define";
 import {
@@ -1344,6 +1347,15 @@ function sshRunNow() {
       nodeName: h.nodeName ?? "",
       hostKeyFingerprint: h.hostKeyFingerprint,
       state,
+      phase: (done
+        ? "finished"
+        : state === "connecting"
+          ? "target_connecting"
+          : state) as SshInstallHost["phase"],
+      cleanup: done ? "stopped" : "not_needed",
+      cancelRequested: false,
+      errorHop: null,
+      completedSteps: [] as SshInstallStep[],
       error: state === "failed" ? ("sudo_password_wrong" as const) : null,
       // While installing, install.sh's step moves with the time.
       step:
@@ -1376,6 +1388,14 @@ function sshRunNow() {
     state: running ? ("running" as const) : ("finished" as const),
     concurrency: run.input.concurrency ?? 5,
     timeoutMinutes: run.input.timeoutMinutes ?? 15,
+    tty: run.input.tty ?? "auto",
+    jumpHost: run.input.jumpHost
+      ? {
+          host: run.input.jumpHost.host,
+          port: run.input.jumpHost.port ?? 22,
+          hostKeyFingerprint: run.input.jumpHost.hostKeyFingerprint,
+        }
+      : null,
     options: {
       version: "",
       format: "auto" as const,
@@ -1443,10 +1463,12 @@ export const infraFixtures: Fixtures = {
         expiresAt: ahead((input.ttlMinutes ?? 60) * MINUTE),
         serverUrl: NODE_CHANNEL,
         caSha256: CA_SHA256,
-        installCommand: [
-          `export EDGEWEIR_TOKEN='${LAB_TOKEN}'`,
-          `curl -fsSL https://console.example.net/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- --server ${NODE_CHANNEL} --ca-sha256 ${CA_SHA256}`,
-        ].join("\n"),
+        installCommand: buildInstallCommand({
+          consoleUrl: "https://console.example.net",
+          token: LAB_TOKEN,
+          serverUrl: NODE_CHANNEL,
+          caSha256: CA_SHA256,
+        }),
         warnings: [],
       };
     },
@@ -1461,6 +1483,7 @@ export const infraFixtures: Fixtures = {
     },
   },
   sshInstalls: {
+    capabilities: () => ({ version: 2, agent: { available: false, reason: "not_configured" } }),
     scanHostKeys: ({ hosts }) => ({
       hosts: hosts.map((h, index) => ({
         host: h.host,
@@ -1468,6 +1491,8 @@ export const infraFixtures: Fixtures = {
         algorithm: index === 2 ? null : "ssh-ed25519",
         fingerprint: index === 2 ? null : (LAB_HOST_KEYS[index % LAB_HOST_KEYS.length] ?? null),
         error: index === 2 ? ("unreachable" as const) : null,
+        errorHop: null,
+        presentedFingerprint: null,
       })),
     }),
     start: (input) => {

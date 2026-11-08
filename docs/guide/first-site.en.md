@@ -66,10 +66,7 @@ Objects created by setup:
 
 3. Copy the **Install command** (shown once) and run it on the node host. The warnings and the node channel connection check below the command point out addresses nodes may not reach; see [Adding nodes](../deploy/nodes.en.md#1-generate-the-install-command). Command format:
 
-   ```bash title="Node host"
-   export EDGEWEIR_TOKEN='ewt_…'
-   curl -fsSL https://console.example.com/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- --server https://console.example.com:8443 --ca-sha256 <CA fingerprint>
-   ```
+   Copy the complete generated command, from `sh <<'EDGEWEIR_INSTALL'` through the final `EDGEWEIR_INSTALL`, into the node terminal. Root and sudo users are supported.
 
 4. Verify: every step of the dialog's **Progress** completes; the node appears in the node table of **Clusters & nodes**, **Online**, with **In sync** next to **Applied**.
 

@@ -147,17 +147,13 @@ Node requirements: Linux with systemd, amd64 / arm64, glibc 2.34 or later (RHEL 
 1. Sign in, open **Clusters & nodes**, pick a cluster and generate an install command. The command carries a single-use token and the SHA-256 fingerprint of the console's internal CA.
 2. Run it on the node with an account that may use sudo:
 
-   ```sh
-   export EDGEWEIR_TOKEN='<one-time-token>'
-   curl -fsSL https://<console>/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- \
-     --server https://<console>:8443 --ca-sha256 <fingerprint>
-   ```
+   Copy the complete generated command, from `sh <<'EDGEWEIR_INSTALL'` through the final `EDGEWEIR_INSTALL`, into the node terminal. Root and sudo users are supported.
 
 3. The node appears online in the console with the config revision it has applied.
 
 Installer behavior:
 
-- The token is passed only through `EDGEWEIR_TOKEN` or `--token-file`, never as a process argument.
+- The command passes the token through stdin and a 0600 file in a 0700 temporary directory. The installer and enroll use `--token-file`; success, failure and interruption clean up. Tokens stay out of arguments, sudo logs and child environments.
 - Before installing, it verifies the cosign signature of the checksums (issued to the edgeweir-node release workflow at the exact tag being installed) and the SHA-256 of every package.
 - Installs the .deb / .rpm package where possible, otherwise the tar.gz; downloads from the console's `/downloads` mirror when configured, otherwise from GitHub Releases.
 - Installs OpenResty built for Edgeweir (`edgeweir-openresty`) and its ModSecurity module (`edgeweir-openresty-modsecurity`, skipped with `--no-modsecurity`) from the same release before edgeweir-node.

@@ -55,12 +55,33 @@
 `install.sh` 由控制台在 `/install.sh` 提供，在节点上安装并注册 `edgeweir-node`。控制台生成的安装命令已填入 `--server` 与 `--ca-sha256`，见[接入节点](../deploy/nodes.md)。
 
 ```bash title="节点"
-export EDGEWEIR_TOKEN='<一次性 token>'
-curl -fsSL https://<控制台>/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- \
-  --server https://<控制台>:8443 --ca-sha256 <CA 指纹>
+sh <<'EDGEWEIR_INSTALL'
+set -eu
+unset EDGEWEIR_TOKEN
+umask 077
+d=
+trap '[ -z "$d" ] || rm -rf "$d"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+d=$(mktemp -d "${TMPDIR:-/tmp}/edgeweir-install.XXXXXXXX")
+chmod 0700 "$d"
+cat >"$d/token" <<'EDGEWEIR_ENROLLMENT_TOKEN'
+<one-time-token>
+EDGEWEIR_ENROLLMENT_TOKEN
+chmod 0600 "$d/token"
+curl -fsSL https://cdn-admin.example.com/install.sh -o "$d/install.sh"
+set -- --token-file "$d/token" --server https://cdn-admin.example.com:8443 --ca-sha256 <ca-sha256>
+if [ "$(id -u)" = 0 ]; then
+  bash "$d/install.sh" "$@" </dev/null
+else
+  sudo bash "$d/install.sh" "$@" </dev/null
+fi
+EDGEWEIR_INSTALL
 ```
 
 ### 选项
+
+在完整安装命令中，将选项加在 `set -- --token-file …` 行的末尾。
 
 `<控制台>` 为 `EDGEWEIR_PUBLIC_URL`，控制台提供脚本时写入。
 
@@ -81,7 +102,7 @@ curl -fsSL https://<控制台>/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN b
 
 | 环境变量 | 作用 |
 | --- | --- |
-| `EDGEWEIR_TOKEN` | 一次性注册 token，格式 `ewt_` 加 `[A-Za-z0-9_-]`。脚本读取后从环境中移除，其他子进程不继承；经环境变量传给 `edgeweir-node enroll`。已注册且未给 `--force` 时不使用 |
+| `EDGEWEIR_TOKEN` | 兼容旧调用的一次性注册 token，格式 `ewt_` 加 `[A-Za-z0-9_-]`；推荐完整生成命令或 `--token-file`。脚本立即阻止子进程继承，读取后写入私密文件，以 `--token-file` 交给 enroll，退出时清理。已注册且未给 `--force` 时不使用 |
 
 `--token` 与 `--token=…` 被拒绝：命令行参数在进程列表中可见。
 

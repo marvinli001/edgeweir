@@ -67,19 +67,10 @@ Replaces the node's identity with a new token: a new node appears in the console
 Install command (systemd hosts):
 
 1. In **Clusters & nodes**, click **Add node** for the target cluster and copy the **Install command**.
-2. Run it on the node with `--force` appended. `install.sh` stops the service, runs `edgeweir-node enroll --force` with the new token, then starts the service and runs the health check.
+2. Add `--force` at the end of the script's `set -- --token-file …` line, then run the complete command. `install.sh` stops the service, runs `edgeweir-node enroll --force` with the new token, then starts the service and runs the health check.
 3. Delete the old node in the console.
 
-Manual:
-
-```bash title="Node"
-sudo systemctl stop edgeweir-node
-sudo install -m 0600 /dev/stdin /root/edgeweir-token <<< '<one-time token>'
-sudo edgeweir-node enroll --force --server https://cdn-admin.example.com:8443 \
-  --token-file /root/edgeweir-token --ca-sha256 <CA fingerprint>
-sudo rm /root/edgeweir-token
-sudo systemctl start edgeweir-node
-```
+To keep the installed packages, run `sudo systemctl stop edgeweir-node`, then the [manual enrollment command](../deploy/nodes.en.md#deb--rpm), adding `--force` after `as_root edgeweir-node enroll`. The command starts the service after enrollment.
 
 Container (the running node holds the run lock, so stop the container first):
 

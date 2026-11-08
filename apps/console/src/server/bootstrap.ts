@@ -207,7 +207,7 @@ export async function bootstrap(): Promise<Running> {
     events,
     log,
     accessKeyLimits: new AccessKeyRateLimiter(),
-    sshInstalls: new SshInstallRuns(),
+    sshInstalls: new SshInstallRuns({ agentSocket: env.EDGEWEIR_SSH_AGENT_SOCKET }),
   };
   appContext = ctx;
 
@@ -236,7 +236,7 @@ export async function bootstrap(): Promise<Running> {
     closing = true;
     log.info("shutting down");
     // SSH installs end with the process: their credentials go with them (ADR-0066).
-    ctx.sshInstalls.shutdown();
+    await ctx.sshInstalls.shutdown();
     // Requests in flight get CLOSE_GRACE_MS; the listeners, the watch streams
     // of connected nodes and pg-boss stop at the same time.
     await Promise.all([

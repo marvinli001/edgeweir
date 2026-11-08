@@ -1,5 +1,17 @@
 import "reflect-metadata";
+import { spawnSync } from "node:child_process";
 import { createHash, webcrypto } from "node:crypto";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Code, ConnectError, createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { schema } from "@edgeweir/db";
@@ -76,6 +88,63 @@ describe("following an enrollment from the add-node dialog", async () => {
     await channel.close();
     await pglite.close();
   });
+
+  it.each(["ok", "download", "install"])(
+    "keeps manual-install secrets private and cleans up after %s",
+    async (mode) => {
+      const token = await admin.clusters.createEnrollmentToken({ clusterId, nodeName: "manual" });
+      expect(token.installCommand).not.toContain("export EDGEWEIR_TOKEN");
+      expect(token.installCommand).not.toContain("--preserve-env");
+      const dir = mkdtempSync(join(tmpdir(), "manual-install-test-"));
+      try {
+        const installer = join(dir, "payload");
+        writeFileSync(
+          installer,
+          `#!/bin/bash
+set -eu
+[ "$1" = --token-file ]
+[ "$(stat -c %a "$(dirname "$2")")" = 700 ]
+[ "$(stat -c %a "$2")" = 600 ]
+env >"$REPORT.env"
+printf '%s\\n' "$@" >"$REPORT.args"
+cat "$2" >"$REPORT.token"
+exit "$INSTALL_EXIT"
+`,
+        );
+        for (const [name, body] of Object.entries({
+          id: "echo 0",
+          curl: 'while [ "$1" != -o ]; do shift; done; cp "$PAYLOAD" "$2"; exit "$DOWNLOAD_EXIT"',
+        })) {
+          writeFileSync(join(dir, name), `#!/bin/sh\n${body}\n`);
+          chmodSync(join(dir, name), 0o755);
+        }
+        const temporary = join(dir, "tmp");
+        mkdirSync(temporary);
+        const result = spawnSync("sh", ["-s"], {
+          input: token.installCommand,
+          encoding: "utf8",
+          env: {
+            PATH: `${dir}:/usr/bin:/bin`,
+            TMPDIR: temporary,
+            PAYLOAD: installer,
+            REPORT: join(dir, "report"),
+            INSTALL_EXIT: mode === "install" ? "37" : "0",
+            DOWNLOAD_EXIT: mode === "download" ? "22" : "0",
+          },
+        });
+        expect(result.status, result.stderr).toBe(mode === "ok" ? 0 : mode === "install" ? 37 : 22);
+        expect(readdirSync(temporary)).toEqual([]);
+        if (mode !== "download") {
+          expect(readFileSync(join(dir, "report.token"), "utf8").trim()).toBe(token.token);
+          expect(readFileSync(join(dir, "report.env"), "utf8")).not.toContain(token.token);
+          expect(readFileSync(join(dir, "report.args"), "utf8")).not.toContain(token.token);
+        }
+        expect(result.stdout + result.stderr).not.toContain(token.token);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
 
   it("warns about URLs other networks cannot reach, without refusing", async () => {
     // The tests' node channel URL is https://localhost:8443; the console URL is a public

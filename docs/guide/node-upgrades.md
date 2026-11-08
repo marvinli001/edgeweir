@@ -120,7 +120,7 @@
 
 | 安装形式 | 命令 |
 | --- | --- |
-| 安装命令 | 在已注册的主机上重新执行原安装命令（不需要 token），末尾加 `--version <版本>`：校验并安装该版本，重启服务并做健康检查 |
+| 安装命令 | 在原安装脚本的 `set -- --token-file …` 行末尾加 `--version <版本>`，在已注册的主机上执行整段命令（不需要新 token）：校验并安装该版本，重启服务并做健康检查 |
 | deb | `sudo apt-get install ./edgeweir-node_<版本>_amd64.deb`（OpenResty 版本变化时同时列出 `edgeweir-openresty` 与 `edgeweir-openresty-modsecurity` 的新包） |
 | rpm | `sudo dnf install ./edgeweir-node-<版本>-1.x86_64.rpm`（同上） |
 | tar.gz | 按 [tar.gz](../deploy/nodes.md#targz) 替换 `/usr/bin/edgeweir-node` 与 Lua 模块，`sudo systemctl restart edgeweir-node` |

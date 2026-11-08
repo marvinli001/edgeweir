@@ -108,6 +108,8 @@ const schema = z.object({
    * and X-Real-IP headers are believed. Empty: the socket address is the client.
    */
   EDGEWEIR_TRUSTED_PROXIES: z.string().default(""),
+  /** Explicit Core-side agent socket. Never inferred from SSH_AUTH_SOCK or supplied by HTTP. */
+  EDGEWEIR_SSH_AGENT_SOCKET: z.string().default(""),
   HOST: z.string().default("0.0.0.0"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   /**

@@ -116,11 +116,12 @@ describe("install.sh", () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 
-  it("pins cosign v3.1.3 by SHA-256 and passes the token to enroll through the environment", () => {
+  it("pins cosign v3.1.3 by SHA-256 and passes the token to enroll through a file", () => {
     expect(script).toContain('COSIGN_VERSION="3.1.3"');
     expect(script).toMatch(/COSIGN_SHA256_AMD64="[0-9a-f]{64}"/);
     expect(script).toMatch(/COSIGN_SHA256_ARM64="[0-9a-f]{64}"/);
-    expect(script).toContain('EDGEWEIR_TOKEN="$TOKEN" /usr/bin/edgeweir-node enroll --server');
+    expect(script).not.toContain('EDGEWEIR_TOKEN="$TOKEN" /usr/bin/edgeweir-node');
+    expect(script).toContain('--token-file "$TOKEN_FILE"');
     // No command line carries the token.
     expect(script).not.toMatch(/--token[ =]"?\$/);
   });
@@ -128,7 +129,7 @@ describe("install.sh", () => {
   it("refuses --token on the command line", () => {
     const res = run([...valid, "--token", TOKEN]);
     expect(res.status).toBe(20);
-    expect(res.stderr).toMatch(/--token is not accepted.*EDGEWEIR_TOKEN/);
+    expect(res.stderr).toMatch(/--token is not accepted.*--token-file/);
     // stderr is not a terminal here (as in an SSH install): plain text, no colour codes.
     expect(res.stderr).toContain("[edgeweir] error: --token is not accepted");
     expect(res.stderr).not.toContain("\x1b");
@@ -151,6 +152,20 @@ describe("install.sh", () => {
       expect(res.status).toBe(21);
       expect(res.stderr).toContain("run as root");
       expect(res.calls).toBe("");
+    }
+  });
+
+  it("only cleans directories created by this installer", () => {
+    const caller = mkdtempSync(join(tmpdir(), "edgeweir-caller-"));
+    const kept = join(caller, "keep");
+    writeFileSync(kept, "keep");
+    try {
+      expect(run(valid, { EDGEWEIR_TOKEN: TOKEN, WORK: caller, TOKEN_WORK: caller }).status).toBe(
+        21,
+      );
+      expect(readFileSync(kept, "utf8")).toBe("keep");
+    } finally {
+      rmSync(caller, { recursive: true, force: true });
     }
   });
 
@@ -430,7 +445,7 @@ describe("install.sh", () => {
         { PATH: `${bin}${delimiter}${stubs}${delimiter}/usr/bin${delimiter}/bin`, ...env },
         enrolled.replace(
           /main "\$@"\s*$/,
-          'constants\nparse_args "$@"\nread_token\nenroll\necho enrolled\n',
+          'trap on_exit EXIT\nconstants\nparse_args "$@"\nread_token\nenroll\necho enrolled\n',
         ),
       );
     try {
@@ -445,11 +460,16 @@ describe("install.sh", () => {
       expect(forced.status).toBe(0);
       expect(forced.stdout).toContain("enrolled");
       // The running node is stopped first; start_service starts it again.
-      expect(forced.calls.trim().split("\n")).toEqual([
+      expect(
+        forced.calls
+          .replace(/--token-file \S+/g, "--token-file $TOKEN_FILE")
+          .trim()
+          .split("\n"),
+      ).toEqual([
         // Whether it writes its own result line; never with the token.
         "edgeweir-node enroll -h token=",
         "systemctl stop edgeweir-node.service",
-        `edgeweir-node enroll --force --server https://console.example.com:8443 --ca-sha256 ${CA} --state-dir ${state} token=set`,
+        `edgeweir-node enroll --force --server https://console.example.com:8443 --ca-sha256 ${CA} --state-dir ${state} --token-file $TOKEN_FILE token=`,
       ]);
       expect(forced.calls).not.toContain(TOKEN);
 
@@ -569,7 +589,9 @@ describe("install.sh", () => {
     const main = script.slice(script.indexOf("main() {"));
     expect(main).toMatch(/\n {2}WORK="\$\(mktemp -d\)"\n(?: {2}#.*\n)* {2}chmod 0755 "\$WORK"\n/);
     // Removed on every exit (on_exit), also after a failed step.
-    expect(main).toMatch(/^main\(\) \{\n {2}STEP="args"\n {2}trap on_exit EXIT\n/);
+    expect(main).toMatch(
+      /^main\(\) \{\n {2}export -n EDGEWEIR_TOKEN TOKEN\n {2}WORK=""\n {2}TOKEN_WORK=""\n {2}STEP="args"\n {2}trap on_exit EXIT\n/,
+    );
   });
 
   /** sha256sum with its check mode (coreutils; /sbin/sha256sum on macOS). */
@@ -677,6 +699,55 @@ describe("install.sh", () => {
       remove: () => rmSync(root, { recursive: true, force: true }),
     };
   }
+
+  it.runIf(sha256sum)(
+    "normalizes both token inputs into a private file, without exporting or deleting the supplied token",
+    () => {
+      const host = fakeHost(false);
+      const report = join(host.state, "token-report");
+      const supplied = join(host.state, "user-token");
+      writeFileSync(supplied, `${TOKEN}\n`);
+      writeFileSync(
+        host.node,
+        `#!/bin/sh
+[ "$2" != -h ] || exit 0
+while [ "$1" != --token-file ]; do shift; [ $# -gt 0 ] || exit 41; done
+printf '%s\\n' "$2" >"${report}"
+stat -c %a "$(dirname "$2")" "$2" >>"${report}"
+cat "$2" >>"${report}"
+[ -z "\${EDGEWEIR_TOKEN:-}" ] || exit 42
+exit "\${ENROLL_EXIT:-0}"
+`,
+      );
+      try {
+        for (const fromFile of [false, true]) {
+          for (const fail of [false, true]) {
+            const result = host.install(
+              [
+                ...valid,
+                "--version",
+                "0.3.0",
+                "--no-start",
+                ...(fromFile ? ["--token-file", supplied] : []),
+              ],
+              { ...(fromFile ? {} : { EDGEWEIR_TOKEN: TOKEN }), ENROLL_EXIT: fail ? "1" : "0" },
+              host.input.replace("    check_server\n", "    :\n"),
+            );
+            expect(result.status, result.stderr).toBe(fail ? 26 : 0);
+            const [path, directoryMode, fileMode, content] = readFileSync(report, "utf8")
+              .trim()
+              .split("\n");
+            expect([directoryMode, fileMode, content]).toEqual(["700", "600", TOKEN]);
+            expect(() => readFileSync(path!)).toThrow();
+            expect(readFileSync(supplied, "utf8")).toBe(`${TOKEN}\n`);
+            expect(result.calls + result.stdout + result.stderr).not.toContain(TOKEN);
+          }
+        }
+      } finally {
+        host.remove();
+      }
+    },
+  );
 
   const started = [
     "systemctl daemon-reload",

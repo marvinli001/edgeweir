@@ -108,8 +108,15 @@ function outboundResolver(app: AppContext) {
 
 export const clustersRouter = {
   sshInstalls: {
+    capabilities: authed.sshInstalls.capabilities.handler(({ context }) =>
+      context.app.sshInstalls.capabilities(),
+    ),
     scanHostKeys: authed.sshInstalls.scanHostKeys.handler(async ({ input, context }) => ({
-      hosts: await context.app.sshInstalls.scanHostKeys(input.hosts, outboundResolver(context.app)),
+      hosts: await context.app.sshInstalls.scanHostKeys(
+        input.hosts,
+        outboundResolver(context.app),
+        input.jumpHost,
+      ),
     })),
     start: authed.sshInstalls.start.handler(async ({ input, context }) =>
       context.app.sshInstalls.start(input, await installContext(context)),

@@ -92,6 +92,7 @@ describe("sshCredential", () => {
 
   it("refuses line breaks in passwords (sudo -S reads one line)", () => {
     expect(sshCredential.safeParse({ password: "a\nb" }).success).toBe(false);
+    expect(sshCredential.safeParse({ password: "x", sudoPassword: "a\0b" }).success).toBe(false);
     expect(sshCredential.safeParse({ password: "x", sudoPassword: "a\rb" }).success).toBe(false);
   });
 
@@ -143,11 +144,58 @@ describe("startSshInstallInput", () => {
 });
 
 describe("carriesSshCredentials", () => {
-  it("matches start and retry on /api/v1 only", () => {
+  it("matches every credential-bearing SSH request on /api/v1 only", () => {
     expect(carriesSshCredentials("POST", "/api/v1/ssh-installs")).toBe(true);
     expect(carriesSshCredentials("POST", "/api/v1/ssh-installs/abc/retry")).toBe(true);
-    expect(carriesSshCredentials("POST", "/api/v1/ssh-installs/host-keys")).toBe(false);
+    expect(carriesSshCredentials("POST", "/api/v1/ssh-installs/host-keys")).toBe(true);
     expect(carriesSshCredentials("POST", "/api/v1/ssh-installs/abc/cancel")).toBe(false);
     expect(carriesSshCredentials("GET", "/api/v1/ssh-installs/abc")).toBe(false);
+  });
+});
+
+describe("SSH connection v2", () => {
+  it("accepts agent login independently of forwarding, with forwarding off by default", () => {
+    expect(sshCredential.parse({ agent: true })).toMatchObject({
+      agent: true,
+      agentForwarding: false,
+    });
+    expect(sshCredential.parse({ password: "pw", agentForwarding: true })).toMatchObject({
+      agent: false,
+      agentForwarding: true,
+    });
+    expect(sshCredential.safeParse({ agentForwarding: true }).success).toBe(false);
+  });
+  it("does not expose forwarding on the jump tunnel", () => {
+    const input = {
+      clusterId: "00000000-0000-4000-8000-000000000001",
+      credential: { agent: true, agentForwarding: true },
+      hosts: [{ host: "target.example", hostKeyFingerprint: FP }],
+      jumpHost: { host: "jump.example", hostKeyFingerprint: FP, credential: { agent: true } },
+    };
+    expect(startSshInstallInput.safeParse(input).success).toBe(true);
+    expect(
+      startSshInstallInput.safeParse({
+        ...input,
+        jumpHost: {
+          ...input.jumpHost,
+          credential: { agent: true, agentForwarding: true },
+        },
+      }).success,
+    ).toBe(false);
+  });
+  it("requires a separately confirmed jump key and separate login", () => {
+    const input = {
+      clusterId: "00000000-0000-4000-8000-000000000001",
+      credential: { agent: true },
+      hosts: [{ host: "target.example", hostKeyFingerprint: FP }],
+      jumpHost: { host: "jump.example", credential: { password: "jump-password" } },
+    };
+    expect(startSshInstallInput.safeParse(input).success).toBe(false);
+    expect(
+      startSshInstallInput.parse({
+        ...input,
+        jumpHost: { ...input.jumpHost, hostKeyFingerprint: FP },
+      }).tty,
+    ).toBe("auto");
   });
 });

@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { type AddressInfo, createServer, type Server as NetServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -115,6 +116,17 @@ async function sshServer(opts: { exec: Exec; key?: string; keyboardOnly?: boolea
             stdin += chunk.toString("utf8");
           });
           stream.on("end", async () => {
+            if (info.command.includes("edgeweir-preflight")) {
+              stream.exit(0);
+              stream.end();
+              return;
+            }
+            if (info.command.includes("edgeweir-cleanup")) {
+              stream.write("EDGEWEIR_CLEANUP stopped\n");
+              stream.exit(0);
+              stream.end();
+              return;
+            }
             execs.push({ command: info.command, stdin, username });
             const code = await opts.exec({
               command: info.command,
@@ -251,6 +263,8 @@ describe("SSH install (ADR-0066)", async () => {
         algorithm: "ssh-ed25519",
         fingerprint: HOST_FP,
         error: null,
+        errorHop: null,
+        presentedFingerprint: null,
       });
       expect(hosts[1]).toMatchObject({ fingerprint: null, error: "unreachable" });
       expect(hosts[2]).toMatchObject({ fingerprint: null, error: "not_ssh" });
@@ -314,7 +328,8 @@ describe("SSH install (ADR-0066)", async () => {
       expect(exec?.username).toBe("deploy");
       // The command line: script, URLs and options only.
       for (const secret of [...SECRETS, token ?? ""]) expect(exec?.command).not.toContain(secret);
-      expect(exec?.command).toContain(`${origin}/install.sh sudo-s --server`);
+      expect(exec?.command).toContain(`${origin}/install.sh sudo-s `);
+      expect(exec?.command).toContain(" --server ");
       expect(exec?.command).toContain(
         "--version 1.6.2 --mirror https://mirror.example.com/edgeweir",
       );
@@ -366,8 +381,10 @@ describe("SSH install (ADR-0066)", async () => {
         ).id,
       );
       expect(byKey.hosts[0]).toMatchObject({ state: "succeeded", username: "ops" });
-      expect(server.execs[0]?.command).toContain("install.sh sudo-n --server");
-      expect(server.execs[0]?.stdin.split("\n")).toHaveLength(2); // the token line only
+      expect(server.execs[0]?.command).toContain("install.sh sudo-n ");
+      expect(server.execs[0]?.command).toContain(" --server ");
+      expect(server.execs[0]?.stdin.split("\n")).toHaveLength(3);
+      expect(server.execs[0]?.stdin.split("\n").slice(1)).toEqual(["", ""]); // token, empty sudo password, trailing newline
 
       const byKeyboard = await ended(
         (
@@ -494,6 +511,22 @@ describe("SSH install (ADR-0066)", async () => {
         ).id,
       );
       expect(wrongPassword.hosts[0]).toMatchObject({ state: "failed", error: "auth_failed" });
+      expect(
+        (
+          await rpcError(
+            admin.sshInstalls.retry({
+              id: wrongPassword.id,
+              credential: { password: PASSWORD },
+              jumpHost: {
+                host: "jump.example",
+                port: 22,
+                hostKeyFingerprint: HOST_FP,
+                credential: { password: PASSWORD },
+              },
+            }),
+          )
+        ).code,
+      ).toBe("SSH_JUMP_REQUIRED");
 
       const first = await admin.sshInstalls.start({
         clusterId,
@@ -625,6 +658,14 @@ describe("SSH install (ADR-0066)", async () => {
       // Enrolled but not healthy: failed at that step, with its node.
       expect(unhealthy).toMatchObject({ state: "failed", error: "health_failed", step: "health" });
       expect(unhealthy?.nodeId).toEqual(expect.any(String));
+      expect(unhealthy?.completedSteps).toEqual([
+        "check",
+        "download",
+        "verify",
+        "install",
+        "enroll",
+        "start",
+      ]);
       expect(unhealthy?.output).toBe("[edgeweir] error: not healthy after 90s");
 
       for (const [b, error, step] of [
@@ -645,6 +686,7 @@ describe("SSH install (ADR-0066)", async () => {
       enrolledId = unhealthy?.nodeId ?? "";
       const confirmed = (await ended(await install())).hosts[0];
       expect(confirmed).toMatchObject({ state: "succeeded", nodeId: enrolledId, step: null });
+      expect(confirmed?.completedSteps).toEqual(["check", "enroll", "start", "health"]);
       const [token] = await ctx.db
         .select()
         .from(schema.enrollmentToken)
@@ -716,6 +758,59 @@ describe("SSH install (ADR-0066)", async () => {
     expect(classifyExit(27, finished, "")).toBe("start_failed");
     // Without install.sh's last line: sudo's (or the shell's) code, read from the text.
     expect(classifyExit(1, [], "sudo: a password is required")).toBe("sudo_password_required");
+  });
+
+  it("preserves registration without turning an explicit failure or cancellation into success", async () => {
+    let registered = false;
+    let hanging = false;
+    const server = await sshServer({
+      exec: async ({ stdin, write }) => {
+        await enroll(stdin);
+        registered = true;
+        write('EDGEWEIR_RESULT {"v":1,"step":"check","status":"ok"}\n');
+        return hanging ? "hang" : 1;
+      },
+    });
+    try {
+      const failed = await ended(
+        (
+          await admin.sshInstalls.start({
+            clusterId,
+            credential: { password: PASSWORD },
+            hosts: [host(server.port)],
+          })
+        ).id,
+      );
+      expect(failed.hosts[0]?.state).toBe("failed");
+      expect(failed.hosts[0]).toMatchObject({
+        state: "failed",
+        error: "install_failed",
+        completedSteps: ["check"],
+      });
+      expect(failed.hosts[0]?.nodeId).toBeTruthy();
+      registered = false;
+      hanging = true;
+      const started = await admin.sshInstalls.start({
+        clusterId,
+        credential: { password: PASSWORD },
+        hosts: [host(server.port)],
+      });
+      await until(
+        started.id,
+        (run) => registered && run.hosts[0]?.completedSteps.includes("check") === true,
+      );
+      await admin.sshInstalls.cancel({ id: started.id });
+      const canceled = await ended(started.id);
+      expect(canceled.hosts[0]).toMatchObject({
+        state: "canceled",
+        cancelRequested: true,
+        cleanup: "stopped",
+        completedSteps: ["check"],
+      });
+      expect(canceled.hosts[0]?.nodeId).toBeTruthy();
+    } finally {
+      server.close();
+    }
   });
 
   it("cancels: running hosts are disconnected, queued ones never start; a host over its timeout fails", async () => {
@@ -900,10 +995,12 @@ describe("remote command and output", () => {
         mirror: "https://m.example.com/a'b",
       },
       sudo: "sudo-n",
+      taskId: "test-job",
+      timeoutSeconds: 42,
     });
     expect(command.startsWith("sh -c 'LC_ALL=C;")).toBe(true);
     expect(command).toContain(
-      `https://console.example.com/install.sh sudo-n --server https://console.example.com:8443 --ca-sha256 ${"ab".repeat(32)} --format rpm --mirror 'https://m.example.com/a'"'"'b' --mirror-only --no-modsecurity --no-start`,
+      `https://console.example.com/install.sh sudo-n test-job 42 EDGEWEIR_INPUT_READY_test-job --server https://console.example.com:8443 --ca-sha256 ${"ab".repeat(32)} --format rpm --mirror 'https://m.example.com/a'"'"'b' --mirror-only --no-modsecurity --no-start`,
     );
   });
 
@@ -930,6 +1027,7 @@ describe("remote command and output", () => {
       "a=[redacted] b=[redacted] [redacted] c",
     );
     expect(scrubOutput("x\n-----BEGIN RSA PRIVATE KEY-----\nMII\n", [])).toBe("x\n[redacted]");
+    expect(scrubOutput("password=absecret", ["ab\u001b[31msecret"])).toBe("password=[redacted]");
   });
 
   describe("the remote script under sh", () => {
@@ -943,8 +1041,10 @@ describe("remote command and output", () => {
       // curl -fsSL -o FILE URL: writes an install.sh that reports what it got.
       stub(
         "curl",
-        `[ "$4" = "http://console.test/install.sh" ] || exit 22
-cat >"$3" <<'SH'
+        `while [ "$1" != -o ]; do shift; done
+file=$2; url=$3
+[ "$url" = "http://console.test/install.sh" ] || exit 22
+cat >"$file" <<'SH'
 [ "$1" = --token-file ] || exit 3
 echo "token=$(cat "$2") $(ls -l "$2" | cut -c1-10) env=\${EDGEWEIR_TOKEN:-unset}"
 echo "$2" >>"$TOKEN_FILES"
@@ -957,7 +1057,8 @@ SH`,
       // sudo -S -p '' …: reads one password line, then runs the rest; sudo -n … runs the rest.
       stub(
         "sudo",
-        `if [ "$1" = -S ]; then IFS= read -r pw; echo "sudo-password=$pw"; shift 3; else shift 1; fi
+        `if [ "$1" = -S ]; then IFS= read -r pw; echo "sudo-password=$pw"; shift 4; else shift 1; fi
+[ "$1" != -- ] || shift
 exec "$@"`,
       );
     });
@@ -971,10 +1072,28 @@ exec "$@"`,
       new Promise<string>((resolve) => {
         const child = execFile(
           "sh",
-          ["-c", REMOTE_SCRIPT, url, mode, "--server", "https://c:8443"],
+          [
+            "-c",
+            REMOTE_SCRIPT,
+            url,
+            mode,
+            randomUUID(),
+            "20",
+            "test-ready",
+            "--server",
+            "https://c:8443",
+          ],
           { env: { PATH: `${dir}:/usr/bin:/bin`, TOKEN_FILES: join(dir, "token-files"), ...env } },
           (error, stdout) =>
-            resolve(error ? `exit ${(error as { code?: number }).code}\n${stdout}` : stdout),
+            resolve(
+              (error ? `exit ${(error as { code?: number }).code}\n` : "") +
+                stdout
+                  .replace(/\nEDGEWEIR_CLEANUP stopped\n/g, "")
+                  .replace(
+                    /^EDGEWEIR_(?:TASK_STARTED|CLEANUP stopped|PHASE (?:downloading|installing))\n/gm,
+                    "",
+                  ),
+            ),
         );
         child.stdin?.end(stdin);
       });

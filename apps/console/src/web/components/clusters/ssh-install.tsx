@@ -42,6 +42,8 @@ import { errorMessage, orpc } from "@/lib/orpc";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
+import { emptySshConnection, readSshConnection, SshConnectionFields } from "./ssh-connection";
+
 type Target = SshHostLine & { expected?: string };
 
 const HOST_STATE: Record<SshInstallHost["state"], { tone: StatusTone; pulse?: boolean }> = {
@@ -74,6 +76,8 @@ const sshErrorText = (error: SshInstallError) =>
     sudo_password_wrong: m.ssh_install_error_sudo_password_wrong,
     sudo_requires_tty: m.ssh_install_error_sudo_requires_tty,
     sudo_not_allowed: m.ssh_install_error_sudo_not_allowed,
+    pty_refused: m.ssh_install_error_pty_refused,
+    agent_unavailable: m.ssh_install_error_agent_unavailable,
     download_failed: m.ssh_install_error_download_failed,
     install_failed: m.ssh_install_error_install_failed,
     not_enrolled: m.ssh_install_error_not_enrolled,
@@ -105,6 +109,10 @@ const scanErrorText = (error: NonNullable<HostKeyScan["error"]>) =>
     unreachable: m.ssh_scan_error_unreachable,
     timeout: m.ssh_scan_error_timeout,
     not_ssh: m.ssh_scan_error_not_ssh,
+    host_key_mismatch: m.ssh_install_error_host_key_mismatch,
+    auth_failed: m.ssh_install_error_auth_failed,
+    agent_unavailable: m.ssh_install_error_agent_unavailable,
+    connection_lost: m.ssh_install_error_connection_lost,
     outbound_refused: m.ssh_scan_error_outbound_refused,
   })[error]();
 
@@ -128,7 +136,11 @@ export function SshInstall({ cluster, onClose }: { cluster: Cluster; onClose: ()
   const [nodeName, setNodeName] = React.useState("");
   const [expected, setExpected] = React.useState("");
   const [list, setList] = React.useState("");
-  const [auth, setAuth] = React.useState<"password" | "key">("password");
+  const [auth, setAuth] = React.useState<"password" | "key" | "agent">("password");
+  const [connection, setConnection] = React.useState(emptySshConnection);
+  const [agentForwarding, setAgentForwarding] = React.useState(false);
+  const capabilities = useQuery(orpc.sshInstalls.capabilities.queryOptions({ input: {} }));
+  const agentAvailable = capabilities.data?.agent.available === true;
   const [password, setPassword] = React.useState("");
   const [privateKey, setPrivateKey] = React.useState("");
   const [passphrase, setPassphrase] = React.useState("");
@@ -153,12 +165,18 @@ export function SshInstall({ cluster, onClose }: { cluster: Cluster; onClose: ()
 
   const groups = useQuery(orpc.nodeGroups.list.queryOptions({ input: { clusterId: cluster.id } }));
   const groupOptions = (groups.data ?? []).map((g) => ({ label: g.name, value: g.id }));
-  const scan = useMutation(orpc.sshInstalls.scanHostKeys.mutationOptions());
-  const start = useMutation(orpc.sshInstalls.start.mutationOptions());
+  const scan = useMutation({ ...orpc.sshInstalls.scanHostKeys.mutationOptions(), gcTime: 0 });
+  const start = useMutation({ ...orpc.sshInstalls.start.mutationOptions(), gcTime: 0 });
 
   const credential = (): SshCredential => ({
     username: username.trim(),
-    ...(auth === "password" ? { password } : { privateKey, ...(passphrase ? { passphrase } : {}) }),
+    agent: auth === "agent",
+    agentForwarding,
+    ...(auth === "password"
+      ? { password }
+      : auth === "key"
+        ? { privateKey, ...(passphrase ? { passphrase } : {}) }
+        : {}),
     ...(sudoPassword ? { sudoPassword } : {}),
   });
 
@@ -204,8 +222,13 @@ export function SshInstall({ cluster, onClose }: { cluster: Cluster; onClose: ()
       if (seen.has(key)) errors.push(m.error_ssh_install_duplicate_host({ host: hostLabel(t) }));
       seen.add(key);
     }
-    if (auth === "password" ? !password : !privateKey.trim())
+    if (
+      (auth === "password" && !password) ||
+      (auth === "key" && !privateKey.trim()) ||
+      (auth === "agent" && !agentAvailable)
+    )
       errors.push(m.ssh_credential_required());
+    if (!readSshConnection(connection)) errors.push(m.ssh_jump_invalid());
     return { targets: found, errors };
   };
 
@@ -217,6 +240,7 @@ export function SshInstall({ cluster, onClose }: { cluster: Cluster; onClose: ()
     try {
       const result = await scan.mutateAsync({
         hosts: read.targets.map((t) => ({ host: t.host, port: t.port })),
+        ...readSshConnection(connection)!,
       });
       setTargets(read.targets);
       setScans(result.hosts);
@@ -241,6 +265,7 @@ export function SshInstall({ cluster, onClose }: { cluster: Cluster; onClose: ()
         clusterId: cluster.id,
         nodeGroupId: groupId || undefined,
         credential: credential(),
+        ...readSshConnection(connection)!,
         hosts: installable.map(({ scan: s, target }) => ({
           host: target.host,
           port: target.port,
@@ -266,7 +291,15 @@ export function SshInstall({ cluster, onClose }: { cluster: Cluster; onClose: ()
   };
 
   if (step === "run" && runId)
-    return <RunView runId={runId} cluster={cluster} credential={credential} onClose={onClose} />;
+    return (
+      <RunView
+        runId={runId}
+        cluster={cluster}
+        credential={credential}
+        connection={() => readSshConnection(connection)!}
+        onClose={onClose}
+      />
+    );
 
   if (step === "confirm")
     return (
@@ -311,6 +344,7 @@ export function SshInstall({ cluster, onClose }: { cluster: Cluster; onClose: ()
                       ) : (
                         <span className="flex items-center gap-1.5">
                           <Dot tone="bad" small />
+                          {s.errorHop === "jump" ? `${m.ssh_jump()} · ` : ""}
                           {scanErrorText(s.error ?? "unreachable")}
                         </span>
                       )}
@@ -412,13 +446,16 @@ export function SshInstall({ cluster, onClose }: { cluster: Cluster; onClose: ()
             </Field>
           </div>
         )}
-        <Tabs value={auth} onValueChange={(v) => setAuth(v as "password" | "key")}>
+        <Tabs value={auth} onValueChange={(v) => setAuth(v as "password" | "key" | "agent")}>
           <TabsList>
             <TabsTrigger value="password" data-testid="ssh-auth-password">
               {m.ssh_auth_password()}
             </TabsTrigger>
             <TabsTrigger value="key" data-testid="ssh-auth-key">
               {m.ssh_auth_key()}
+            </TabsTrigger>
+            <TabsTrigger value="agent" disabled={!agentAvailable} data-testid="ssh-auth-agent">
+              {m.ssh_auth_agent()}
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -433,7 +470,7 @@ export function SshInstall({ cluster, onClose }: { cluster: Cluster; onClose: ()
               onChange={(event) => setPassword(event.target.value)}
             />
           </Field>
-        ) : (
+        ) : auth === "key" ? (
           <>
             <Field>
               <FieldLabel htmlFor="sshPrivateKey">{m.ssh_private_key()}</FieldLabel>
@@ -459,7 +496,7 @@ export function SshInstall({ cluster, onClose }: { cluster: Cluster; onClose: ()
               />
             </Field>
           </>
-        )}
+        ) : null}
         {showSudo ? (
           <Field>
             <FieldLabel htmlFor="sshSudoPassword">{m.ssh_sudo_password()}</FieldLabel>
@@ -472,6 +509,26 @@ export function SshInstall({ cluster, onClose }: { cluster: Cluster; onClose: ()
             />
           </Field>
         ) : null}
+        <Field orientation="horizontal">
+          <FieldLabel htmlFor="sshAgentForward">{m.ssh_agent_forward()}</FieldLabel>
+          <Switch
+            id="sshAgentForward"
+            checked={agentForwarding}
+            disabled={!agentAvailable}
+            onCheckedChange={setAgentForwarding}
+          />
+        </Field>
+        {capabilities.data && !agentAvailable ? (
+          <SafetyNote>{m.ssh_agent_unavailable()}</SafetyNote>
+        ) : null}
+        {capabilities.isLoadingError ? (
+          <FieldError>{errorMessage(capabilities.error)}</FieldError>
+        ) : null}
+        <SshConnectionFields
+          value={connection}
+          onChange={setConnection}
+          agentAvailable={agentAvailable}
+        />
         <SafetyNote data-testid="ssh-credentials-note">{m.ssh_credentials_note()}</SafetyNote>
         {optionsOpen ? (
           <div className="grid gap-4 border-t pt-4 animate-enter sm:grid-cols-2">
@@ -614,11 +671,13 @@ function RunView({
   runId,
   cluster,
   credential,
+  connection,
   onClose,
 }: {
   runId: string;
   cluster: Cluster;
   credential: () => SshCredential;
+  connection: () => NonNullable<ReturnType<typeof readSshConnection>>;
   onClose: () => void;
 }) {
   const [open, setOpen] = React.useState<string | null>(null);
@@ -641,7 +700,7 @@ function RunView({
     meta: { background: true },
   });
   const cancel = useMutation(orpc.sshInstalls.cancel.mutationOptions());
-  const retry = useMutation(orpc.sshInstalls.retry.mutationOptions());
+  const retry = useMutation({ ...orpc.sshInstalls.retry.mutationOptions(), gcTime: 0 });
   const lost = errorCode(run.error) === "SSH_INSTALL_NOT_FOUND";
   const nodeById = new Map((nodes.data ?? []).map((n) => [n.id, n]));
   const retryable = data ? data.counts.failed + data.counts.canceled : 0;
@@ -650,9 +709,18 @@ function RunView({
   const copyResults = async () => {
     if (!data) return;
     const lines = [
-      ["host", "port", "user", "state", "error", "node"].join("\t"),
+      ["host", "port", "user", "state", "error", "node", "cleanup", "cancel_requested"].join("\t"),
       ...data.hosts.map((h) =>
-        [h.host, h.port, h.username, h.state, h.error ?? "", h.nodeId ?? ""].join("\t"),
+        [
+          h.host,
+          h.port,
+          h.username,
+          h.state,
+          h.error ?? "",
+          h.nodeId ?? "",
+          h.cleanup,
+          h.cancelRequested,
+        ].join("\t"),
       ),
     ];
     if (await copyText(`${lines.join("\n")}\n`)) toast.success(m.common_copied());
@@ -730,13 +798,58 @@ function RunView({
                           <TableCell>
                             <span className="flex items-center gap-1.5">
                               <Dot {...HOST_STATE[h.state]} small />
-                              {h.error ? sshErrorText(h.error) : stateText(h.state)}
+                              {h.errorHop === "jump" ? `${m.ssh_jump()} · ` : ""}
+                              {h.cancelRequested && h.phase !== "finished"
+                                ? m.ssh_cancel_requested()
+                                : h.error
+                                  ? sshErrorText(h.error)
+                                  : stateText(h.state)}
                               {h.state === "installing" && h.step ? (
                                 <span className="text-muted-foreground" data-testid="ssh-run-step">
                                   · {stepText(h.step)}
                                 </span>
                               ) : null}
                             </span>
+                            {[
+                              "jump_connecting",
+                              "target_connecting",
+                              "authenticating",
+                              "preparing",
+                              "downloading",
+                              "stopping",
+                            ].includes(h.phase) ? (
+                              <span className="block text-xs text-muted-foreground">
+                                {{
+                                  queued: m.ssh_state_queued,
+                                  jump_connecting: m.ssh_phase_jump_connecting,
+                                  target_connecting: m.ssh_phase_target_connecting,
+                                  authenticating: m.ssh_phase_authenticating,
+                                  preparing: m.ssh_phase_preparing,
+                                  downloading: m.ssh_step_download,
+                                  stopping: m.ssh_phase_stopping,
+                                  installing: m.ssh_state_installing,
+                                  finished: m.ssh_state_succeeded,
+                                }[h.phase]()}
+                              </span>
+                            ) : null}
+                            {h.cleanup !== "not_needed" ? (
+                              <span
+                                className="block text-xs text-muted-foreground"
+                                data-testid="ssh-cleanup"
+                              >
+                                {{
+                                  pending: m.ssh_cleanup_pending,
+                                  stopped: m.ssh_cleanup_stopped,
+                                  unknown: m.ssh_cleanup_unknown,
+                                }[h.cleanup]()}
+                              </span>
+                            ) : null}
+                            {(h.cancelRequested ||
+                              h.error === "timeout" ||
+                              h.error === "connection_lost") &&
+                            (h.step === "install" || h.completedSteps.includes("install")) ? (
+                              <SafetyNote>{m.ssh_package_interrupted()}</SafetyNote>
+                            ) : null}
                           </TableCell>
                           <TableCell>
                             {node ? (
@@ -789,7 +902,7 @@ function RunView({
               disabled={retry.isPending}
               onClick={() =>
                 retry.mutate(
-                  { id: runId, credential: credential() },
+                  { id: runId, credential: credential(), ...connection() },
                   { onSuccess: () => void run.refetch() },
                 )
               }

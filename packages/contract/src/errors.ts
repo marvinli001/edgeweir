@@ -230,6 +230,8 @@ export const errorDefs = {
   SSH_PRIVATE_KEY_INVALID: { status: 400, params: [] },
   /** The private key is encrypted and the passphrase is missing or wrong. */
   SSH_PRIVATE_KEY_PASSPHRASE: { status: 400, params: [] },
+  SSH_AGENT_UNAVAILABLE: { status: 409, params: [] },
+  SSH_JUMP_REQUIRED: { status: 400, params: [] },
   SITE_NOT_FOUND: { status: 404, params: [] },
   CACHE_RULE_PRIORITY_DUPLICATE: { status: 400, params: ["priority"] },
   SITE_DISABLED: { status: 409, params: [] },

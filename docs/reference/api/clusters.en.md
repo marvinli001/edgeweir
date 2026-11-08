@@ -466,7 +466,7 @@ Response:
 | `expiresAt` | datetime | Expiry |
 | `serverUrl` | string | Node channel URL in effect |
 | `caSha256` | string | SHA-256 fingerprint of the node channel CA |
-| `installCommand` | string | Install command, two lines: `export EDGEWEIR_TOKEN=…` and `curl -fsSL <console>/install.sh \| sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- --server … --ca-sha256 …` |
+| `installCommand` | string | Complete shell command read from stdin: a 0700 temporary directory, a 0600 token file, root/sudo execution with `--token-file`, and cleanup on success, failure and INT/TERM. Copy both heredoc delimiters. |
 | `warnings` | `array<enum>` | Addresses nodes on other networks may not reach: `console_url_local`, `console_url_private`, `console_url_http`, `node_api_url_local`, `node_api_url_private` |
 
 | Error | Status | Condition |
@@ -774,10 +774,11 @@ Response: [Node](#node-object).
 
 ## SSH install
 
-- Requests, states, failure reasons and the handling of credentials: [SSH install](../../deploy/nodes.en.md#ssh-install). Service accounts cannot call these; read-only AccessKeys call `sshInstalls.get` only. `start` and `retry` do not take an `Idempotency-Key`.
+- Requests, states, failure reasons and the handling of credentials: [SSH install](../../deploy/nodes.en.md#ssh-install). Service accounts cannot call these; read-only AccessKeys can call `capabilities` and `get`. Scan, start and retry refuse `Idempotency-Key`. `capabilities.version:2` identifies the SSH connection capabilities.
 
 | Procedure | Method and path | Access |
 | --- | --- | --- |
+| `sshInstalls.capabilities` | `GET /ssh-installs/capabilities` | read |
 | `sshInstalls.scanHostKeys` | `POST /ssh-installs/host-keys` | write |
 | `sshInstalls.start` | `POST /ssh-installs` | write |
 | `sshInstalls.get` | `GET /ssh-installs/{id}` | read |

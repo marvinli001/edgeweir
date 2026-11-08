@@ -147,17 +147,13 @@ sudo bash deploy.sh install
 1. 登录控制台，打开 **集群与节点**，选择集群并生成安装命令。命令包含单次有效 token 与控制台内部 CA 的 SHA-256 指纹。
 2. 在节点上以具备 sudo 权限的账户执行：
 
-   ```sh
-   export EDGEWEIR_TOKEN='<一次性 token>'
-   curl -fsSL https://<控制台>/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- \
-     --server https://<控制台>:8443 --ca-sha256 <CA 指纹>
-   ```
+   在节点终端粘贴完整命令，从 `sh <<'EDGEWEIR_INSTALL'` 到末行 `EDGEWEIR_INSTALL` 全部复制；支持 root 与 sudo 用户。
 
 3. 节点上线后，控制台显示其在线状态与已应用的配置 revision。
 
 安装脚本行为：
 
-- token 仅经 `EDGEWEIR_TOKEN` 环境变量或 `--token-file` 传递，不出现在进程参数中。
+- token 通过 stdin 与 0700 临时目录中的 0600 文件传递，安装器和 enroll 均使用 `--token-file`；成功、失败或中断后清理，不进入进程参数、sudo 日志或子进程环境。
 - 安装前校验 checksums 的 cosign 签名（签发身份须为 edgeweir-node release 工作流及待安装的 tag）与每个包的 SHA-256。
 - 优先安装 .deb / .rpm，否则使用 tar.gz；配置了控制台 `/downloads` 镜像时从镜像下载，否则从 GitHub Releases 下载。
 - 先安装同一发布中为 Edgeweir 构建的 OpenResty（`edgeweir-openresty`）与 ModSecurity 模块（`edgeweir-openresty-modsecurity`，`--no-modsecurity` 跳过），再安装 edgeweir-node。

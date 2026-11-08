@@ -6,6 +6,7 @@ import {
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { and, eq, gt, isNull } from "drizzle-orm";
+import { buildInstallCommand } from "../lib/enrollment-command";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import { findNodeGroup } from "./node-groups";
@@ -20,34 +21,6 @@ function hashToken(token: string): string {
 
 function generateToken(): string {
   return `${TOKEN_PREFIX}${randomBytes(32).toString("base64url")}`;
-}
-
-/** Shell-quotes a value for the generated install command. */
-function sh(value: string): string {
-  return /^[A-Za-z0-9_./:@=+-]+$/.test(value) ? value : `'${value.replace(/'/g, `'"'"'`)}'`;
-}
-
-/**
- * The command the console shows for a new node. The token travels in the
- * EDGEWEIR_TOKEN environment variable (exported by the shell, passed through
- * sudo, read by install.sh and `edgeweir-node enroll`), never as an argument
- * that the process list would show.
- */
-function buildInstallCommand(opts: {
-  consoleUrl: string;
-  serverUrl: string;
-  token: string;
-  caSha256: string;
-}): string {
-  const script = `${opts.consoleUrl.replace(/\/$/, "")}/install.sh`;
-  return [
-    `export EDGEWEIR_TOKEN='${opts.token.replace(/'/g, `'"'"'`)}'`,
-    [
-      `curl -fsSL ${sh(script)} | sudo --preserve-env=EDGEWEIR_TOKEN bash -s --`,
-      `--server ${sh(opts.serverUrl)}`,
-      `--ca-sha256 ${sh(opts.caSha256)}`,
-    ].join(" "),
-  ].join("\n");
 }
 
 export async function createEnrollmentToken(

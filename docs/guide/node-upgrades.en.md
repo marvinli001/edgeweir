@@ -120,7 +120,7 @@ When a package or image update changes the base install's binary or Lua, the sup
 
 | Install form | Command |
 | --- | --- |
-| Install command | Run the original install command again on the enrolled host (no token needed) with `--version <version>` appended: it verifies and installs that version, restarts the service and runs the health check |
+| Install command | Add `--version <version>` at the end of the original script's `set -- --token-file …` line and run the complete command on the enrolled host (no new token needed): it verifies and installs that version, restarts the service and runs the health check |
 | deb | `sudo apt-get install ./edgeweir-node_<version>_amd64.deb` (list the new `edgeweir-openresty` and `edgeweir-openresty-modsecurity` packages too when OpenResty changes) |
 | rpm | `sudo dnf install ./edgeweir-node-<version>-1.x86_64.rpm` (as above) |
 | tar.gz | Replace `/usr/bin/edgeweir-node` and the Lua modules as in [tar.gz](../deploy/nodes.en.md#targz), then `sudo systemctl restart edgeweir-node` |

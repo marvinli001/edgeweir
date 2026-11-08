@@ -1,4 +1,9 @@
 import { createHash } from "node:crypto";
+import { lstat, realpath } from "node:fs/promises";
+import { createConnection } from "node:net";
+import { isAbsolute } from "node:path";
+import { StringDecoder } from "node:string_decoder";
+import { stripVTControlCharacters } from "node:util";
 import type { HostKeyScan } from "@edgeweir/contract";
 import ssh2, { type ClientChannel, type ConnectConfig } from "ssh2";
 
@@ -39,6 +44,8 @@ function connectFailure(error: SocketError): "unreachable" | "timeout" | "not_ss
 export function scanHostKey(
   target: { host: string; port: number },
   timeoutMs: number,
+  sock?: ClientChannel,
+  signal?: AbortSignal,
 ): Promise<HostKeyScan> {
   return new Promise((resolve) => {
     const client = new Client();
@@ -48,23 +55,29 @@ export function scanHostKey(
       if (done) return;
       done = true;
       clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
       client.removeAllListeners();
       client.on("error", () => {});
-      client.end();
+      client.destroy();
       resolve({
         host: target.host,
         port: target.port,
         algorithm: presented ? hostKeyAlgorithm(presented) : null,
         fingerprint: presented ? hostKeyFingerprint(presented) : null,
         error: presented ? null : error,
+        errorHop: null,
+        presentedFingerprint: null,
       });
     };
-    const timer = setTimeout(() => finish("timeout"), timeoutMs + 1000);
+    const onAbort = () => finish("connection_lost");
+    const timer = setTimeout(() => finish("timeout"), timeoutMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) return onAbort();
     client.on("error", (error: SocketError) => finish(connectFailure(error)));
     client.on("ready", () => finish("not_ssh"));
     client.on("close", () => finish("not_ssh"));
     client.connect({
-      host: target.host,
+      ...(sock ? { sock } : { host: target.host }),
       port: target.port,
       username: "edgeweir",
       readyTimeout: timeoutMs,
@@ -76,7 +89,7 @@ export function scanHostKey(
   });
 }
 
-/** Why a session could not be opened or used. */
+/** Only fixed error codes cross the SSH boundary. */
 export class SshFailure extends Error {
   constructor(
     readonly code:
@@ -85,9 +98,11 @@ export class SshFailure extends Error {
       | "unreachable"
       | "timeout"
       | "auth_failed"
-      | "connection_lost",
-    /** The fingerprint the host presented, for host_key_mismatch. */
+      | "connection_lost"
+      | "pty_refused"
+      | "agent_unavailable",
     readonly presented: string | null = null,
+    readonly hop: "jump" | "target" = "target",
   ) {
     super(code);
     this.name = "SshFailure";
@@ -101,101 +116,259 @@ interface SshLogin {
   password?: Buffer;
   privateKey?: Buffer;
   passphrase?: Buffer;
-  /** OpenSSH `SHA256:` fingerprint; any other host key ends the handshake. */
+  agentSocket?: string;
+  agent?: boolean;
+  agentForwarding?: boolean;
   hostKeyFingerprint: string;
   readyTimeoutMs: number;
+  jump?: Omit<SshLogin, "jump">;
+  onPhase?: (phase: "jump_connecting" | "target_connecting" | "authenticating") => void;
 }
-
+interface SshExecOptions {
+  pty?: boolean;
+  /** The remote script emits this only after stty has disabled echo and line processing. */
+  inputReady?: string;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
 export interface SshSession {
-  /**
-   * Runs `command` through the login shell, writes `stdin` and closes it,
-   * streams stdout and stderr (merged) to `onOutput`; resolves with the exit
-   * status, null when the command ended on a signal or the connection broke.
-   */
-  exec(command: string, stdin: Buffer, onOutput: (chunk: Buffer) => void): Promise<number | null>;
+  exec(
+    command: string,
+    stdin: Buffer,
+    onOutput: (chunk: Buffer) => void,
+    options?: SshExecOptions,
+  ): Promise<number | null>;
+  forward(host: string, port: number): Promise<ClientChannel>;
   close(): void;
 }
-
 export type SshConnect = (login: SshLogin, signal: AbortSignal) => Promise<SshSession>;
 
-/** Opens an authenticated session (password, key, keyboard-interactive with the password). */
-export const openSshSession: SshConnect = (login, signal) =>
-  new Promise((resolve, reject) => {
-    const client = new Client();
-    let presented: string | null = null;
-    let ready = false;
-    const fail = (failure: SshFailure) => {
-      client.removeAllListeners();
-      client.on("error", () => {});
-      client.end();
-      signal.removeEventListener("abort", onAbort);
-      reject(failure);
-    };
-    const onAbort = () => fail(new SshFailure("connection_lost"));
-    signal.addEventListener("abort", onAbort, { once: true });
-    client.on("error", (error: SocketError) => {
-      if (ready) return;
-      if (presented !== null && presented !== login.hostKeyFingerprint)
-        return fail(new SshFailure("host_key_mismatch", presented));
-      if (error.level === "client-authentication") return fail(new SshFailure("auth_failed"));
-      const reason = connectFailure(error);
-      fail(new SshFailure(reason === "not_ssh" ? "unreachable" : reason));
-    });
-    client.on("keyboard-interactive", (_name, _instructions, _lang, prompts, finish) => {
-      const password = login.password?.toString("utf8") ?? "";
-      finish(prompts.map(() => password));
-    });
-    client.on("ready", () => {
-      ready = true;
-      signal.removeEventListener("abort", onAbort);
-      resolve(session(client));
-    });
-    const config: ConnectConfig = {
-      host: login.host,
-      port: login.port,
-      username: login.username,
-      readyTimeout: login.readyTimeoutMs,
-      keepaliveInterval: 15_000,
-      keepaliveCountMax: 4,
-      hostVerifier: (key: Buffer) => {
-        presented = hostKeyFingerprint(key);
-        return presented === login.hostKeyFingerprint;
-      },
-    };
-    if (login.password) {
-      config.password = login.password.toString("utf8");
-      config.tryKeyboard = true;
-    }
-    if (login.privateKey) {
-      config.privateKey = login.privateKey;
-      if (login.passphrase) config.passphrase = login.passphrase.toString("utf8");
-    }
-    client.connect(config);
-  });
-
-function session(client: InstanceType<typeof Client>): SshSession {
-  let lost = false;
-  client.on("error", () => {
-    lost = true;
-  });
-  return {
-    exec: (command, stdin, onOutput) =>
-      new Promise((resolve, reject) => {
-        client.exec(command, (error, channel: ClientChannel) => {
-          if (error) return reject(new SshFailure("connection_lost"));
-          let code: number | null = null;
-          channel.on("data", onOutput);
-          channel.stderr.on("data", onOutput);
-          channel.on("exit", (status: number | null) => {
-            code = typeof status === "number" ? status : null;
-          });
-          channel.on("close", () => (lost ? resolve(null) : resolve(code)));
-          client.once("close", () => resolve(null));
-          channel.end(stdin);
-        });
-      }),
-    close: () => client.end(),
+/** Both handshakes verify the pinned key before ssh2 starts user authentication. */
+export const openSshSession: SshConnect = async (login, signal) => {
+  const clients: InstanceType<typeof Client>[] = [];
+  const tunnels: ClientChannel[] = [];
+  const close = () => {
+    for (const tunnel of tunnels) tunnel.destroy();
+    for (const client of [...clients].reverse()) client.destroy();
   };
+  const onAbort = () => close();
+  signal.addEventListener("abort", onAbort, { once: true });
+  const connect = (config: SshLogin, hop: "jump" | "target", sock?: ClientChannel) =>
+    new Promise<InstanceType<typeof Client>>((resolve, reject) => {
+      if (signal.aborted) return reject(new SshFailure("connection_lost", null, hop));
+      login.onPhase?.(hop === "jump" ? "jump_connecting" : "target_connecting");
+      const client = new Client();
+      clients.push(client);
+      let presented: string | null = null;
+      let ready = false;
+      const failure = (error?: SocketError) => {
+        if (ready) return;
+        let code: SshFailure["code"] = "connection_lost";
+        if (presented !== null && presented !== config.hostKeyFingerprint)
+          code = "host_key_mismatch";
+        else if (error?.level === "client-authentication") code = "auth_failed";
+        else if (error) {
+          const reason = connectFailure(error);
+          code = reason === "not_ssh" ? "unreachable" : reason;
+        }
+        reject(new SshFailure(code, code === "host_key_mismatch" ? presented : null, hop));
+      };
+      client.on("error", failure);
+      client.once("close", () => failure());
+      client.on("keyboard-interactive", (_name, _instructions, _lang, prompts, finish) => {
+        finish(prompts.map(() => config.password?.toString("utf8") ?? ""));
+      });
+      client.once("ready", () => {
+        ready = true;
+        resolve(client);
+      });
+      const options: ConnectConfig = {
+        ...(sock ? { sock } : { host: config.host, port: config.port }),
+        username: config.username,
+        readyTimeout: config.readyTimeoutMs,
+        keepaliveInterval: 5000,
+        keepaliveCountMax: 2,
+        hostVerifier: (key: Buffer) => {
+          presented = hostKeyFingerprint(key);
+          if (presented === config.hostKeyFingerprint) login.onPhase?.("authenticating");
+          return presented === config.hostKeyFingerprint;
+        },
+      };
+      if (config.password) {
+        options.password = config.password.toString("utf8");
+        options.tryKeyboard = true;
+      }
+      if (config.privateKey) {
+        options.privateKey = config.privateKey;
+        if (config.passphrase) options.passphrase = config.passphrase.toString("utf8");
+      }
+      if (config.agent || config.agentForwarding) {
+        if (!config.agentSocket) return reject(new SshFailure("agent_unavailable", null, hop));
+        options.agent = config.agentSocket;
+        options.agentForward = config.agentForwarding === true;
+        // Forwarding alone must not add agent keys to the login methods.
+        if (!config.agent)
+          options.authHandler = [
+            "none",
+            ...(config.privateKey ? ["publickey" as const] : []),
+            ...(config.password ? ["password" as const, "keyboard-interactive" as const] : []),
+          ];
+      }
+      try {
+        client.connect(options);
+      } catch {
+        failure();
+      }
+    });
+  try {
+    let sock: ClientChannel | undefined;
+    if (login.jump) {
+      const jump = await connect(login.jump, "jump");
+      sock = await forward(jump, login.host, login.port);
+      tunnels.push(sock);
+      if (signal.aborted) throw new SshFailure("connection_lost");
+    }
+    const client = await connect(login, "target", sock);
+    if (signal.aborted) throw new SshFailure("connection_lost");
+    return session(client, close);
+  } catch (error) {
+    close();
+    throw error;
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+};
+
+function forward(
+  client: InstanceType<typeof Client>,
+  host: string,
+  port: number,
+): Promise<ClientChannel> {
+  return new Promise((resolve, reject) => {
+    const lost = () => reject(new SshFailure("connection_lost", null, "jump"));
+    client.once("close", lost);
+    client.forwardOut("127.0.0.1", 0, host, port, (error, channel) => {
+      client.removeListener("close", lost);
+      if (error) reject(new SshFailure("unreachable", null, "target"));
+      else resolve(channel);
+    });
+  });
+}
+
+function session(client: InstanceType<typeof Client>, close: () => void): SshSession {
+  client.on("error", () => {});
+  return {
+    exec: (command, stdin, onOutput, options = {}) =>
+      new Promise((resolve, reject) => {
+        let channel: ClientChannel | undefined;
+        let code: number | null = null;
+        let finished = false;
+        let sent = !options.pty;
+        let pending = "";
+        const decoder = new StringDecoder("utf8");
+        const finish = (error?: SshFailure) => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(timer);
+          client.removeListener("close", lost);
+          options.signal?.removeEventListener("abort", aborted);
+          if (error) {
+            channel?.destroy();
+            reject(error);
+          } else resolve(code);
+        };
+        const lost = () => finish();
+        const aborted = () => finish(new SshFailure("connection_lost"));
+        const timer = setTimeout(
+          () => finish(new SshFailure("timeout")),
+          options.timeoutMs ?? 65 * 60_000,
+        );
+        client.once("close", lost);
+        options.signal?.addEventListener("abort", aborted, { once: true });
+        if (options.signal?.aborted) return aborted();
+        const receive = (chunk: Buffer) => {
+          if (!sent) {
+            pending += stripVTControlCharacters(decoder.write(chunk)).replace(/\r/g, "");
+            if (pending.split("\n").includes(options.inputReady ?? "")) {
+              sent = true;
+              pending = "";
+              channel?.write(stdin);
+            } else if (pending.length > 16_384) finish(new SshFailure("pty_refused"));
+            return;
+          }
+          onOutput(chunk);
+        };
+        client.exec(
+          command,
+          options.pty
+            ? { pty: { term: "dumb", modes: { ECHO: 0, ECHONL: 0, ICANON: 0, ISIG: 0 } } }
+            : {},
+          (error, stream) => {
+            if (finished) {
+              stream?.destroy();
+              return;
+            }
+            if (error)
+              return finish(new SshFailure(options.pty ? "pty_refused" : "connection_lost"));
+            channel = stream;
+            stream.on("error", () => finish());
+            stream.on("data", receive);
+            stream.stderr.on("data", receive);
+            stream.on("exit", (status: number | null) => {
+              code = typeof status === "number" ? status : null;
+            });
+            stream.once("close", () => finish());
+            if (!options.pty) stream.end(stdin);
+          },
+        );
+      }),
+    forward: (host, port) => forward(client, host, port),
+    close,
+  };
+}
+
+/** No implicit SSH_AUTH_SOCK: only the Core administrator can choose this socket. */
+export async function sshAgentStatus(configured: string | undefined): Promise<{
+  available: boolean;
+  reason: "not_configured" | "unavailable" | null;
+  socket?: string;
+}> {
+  if (!configured) return { available: false, reason: "not_configured" };
+  try {
+    if (!isAbsolute(configured)) throw new Error("invalid agent");
+    const socket = await realpath(configured);
+    const stat = await lstat(socket);
+    if (
+      !stat.isSocket() ||
+      (stat.uid !== process.getuid?.() && stat.uid !== 0) ||
+      (stat.mode & 0o022) !== 0
+    )
+      throw new Error("invalid agent");
+    await new Promise<void>((resolve, reject) => {
+      const connection = createConnection(socket);
+      const protocol = new ssh2.AgentProtocol(true);
+      const timer = setTimeout(() => done(false), 2000);
+      let ended = false;
+      const done = (ok: boolean) => {
+        if (ended) return;
+        ended = true;
+        clearTimeout(timer);
+        connection.destroy();
+        protocol.destroy();
+        if (ok) resolve();
+        else reject(new Error("agent unavailable"));
+      };
+      connection.on("error", () => done(false));
+      protocol.on("error", () => done(false));
+      connection.once("connect", () => {
+        connection.pipe(protocol).pipe(connection);
+        protocol.getIdentities((error, keys) => done(!error && !!keys?.length));
+      });
+    });
+    return { available: true, reason: null, socket };
+  } catch {
+    return { available: false, reason: "unavailable" };
+  }
 }
 
 /** Whether a private key parses (with its passphrase); never says more than that. */

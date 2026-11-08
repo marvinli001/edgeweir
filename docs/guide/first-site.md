@@ -66,10 +66,7 @@
 
 3. 复制 **安装命令**（仅显示一次），在节点主机上执行。命令下方的提醒与节点通道连接检查指出节点可能连不上的地址，见 [接入节点](../deploy/nodes.md#1-生成安装命令)。命令格式：
 
-   ```bash title="节点主机"
-   export EDGEWEIR_TOKEN='ewt_…'
-   curl -fsSL https://console.example.com/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- --server https://console.example.com:8443 --ca-sha256 <CA 指纹>
-   ```
+   在节点终端粘贴完整命令，从 `sh <<'EDGEWEIR_INSTALL'` 到末行 `EDGEWEIR_INSTALL` 全部复制；支持 root 与 sudo 用户。
 
 4. 验证：对话框的 **注册进度** 依次完成；**集群与节点** 的节点表中出现该节点，状态为 **在线**，**已应用版本** 旁显示 **已同步**。
 

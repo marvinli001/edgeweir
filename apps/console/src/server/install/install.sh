@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # Edgeweir node installer, served by the Edgeweir console at /install.sh.
 #
-#   export EDGEWEIR_TOKEN='<one-time token>'
-#   curl -fsSL https://<console>/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- \
+#   Copy the complete manual command from the console, or supply a private
+#   token file: sudo bash install.sh --token-file /private/token \
 #     --server https://<console>:8443 --ca-sha256 <fingerprint>
 #
 # --server wss://<console> (ws:// for a plain-HTTP console) connects through
 # the node channel's WebSocket entry on the console's web port instead.
 #
 # The token never appears on a command line (it would be visible in the
-# process list): it comes from the EDGEWEIR_TOKEN environment variable or
-# from --token-file PATH, and reaches `edgeweir-node enroll` the same way.
+# process list): --token-file PATH is preferred; EDGEWEIR_TOKEN remains an
+# input for existing callers. `edgeweir-node enroll` always reads a private file.
 #
 # What it does, in order:
 #   1. downloads checksums.txt and its cosign signature bundle for the
@@ -126,6 +126,7 @@ die_with() {
 on_exit() {
   local status=$?
   [ -z "${WORK:-}" ] || rm -rf "$WORK"
+  [ -z "${TOKEN_WORK:-}" ] || rm -rf "$TOKEN_WORK"
   if [ "$status" -ne 0 ] && [ -n "${STEP:-}" ] && [ "${REPORTED:-false}" != "true" ]; then
     REPORTED="true"
     local code
@@ -148,8 +149,7 @@ apt_install() {
 usage() {
   cat >&2 <<'USAGE'
 Usage:
-  export EDGEWEIR_TOKEN='<one-time token>'
-  install.sh --server URL --ca-sha256 HEX [options]
+  install.sh --token-file PATH --server URL --ca-sha256 HEX [options]
 
   --server URL         node channel URL of the console, e.g. https://console.example.com:8443,
                        or wss://console.example.com for its WebSocket entry on the web port
@@ -197,7 +197,7 @@ parse_args() {
       --force) FORCE="true"; shift ;;
       --allow-unsigned) ALLOW_UNSIGNED="true"; shift ;;
       --token | --token=*)
-        die "--token is not accepted (the process list would show it): export EDGEWEIR_TOKEN or use --token-file" ;;
+        die "--token is not accepted (the process list would show it): use --token-file PATH" ;;
       -h | --help) usage 0 ;;
       *) die "unknown option: $1" ;;
     esac
@@ -224,6 +224,7 @@ parse_args() {
 # install another version) needs no token, unless --force enrolls it again.
 read_token() {
   TOKEN="${EDGEWEIR_TOKEN:-}"
+  export -n TOKEN
   unset EDGEWEIR_TOKEN
   ENROLLED="false"
   if [ -f "${STATE_DIR}/identity.json" ]; then
@@ -240,7 +241,7 @@ read_token() {
     [ -r "$TOKEN_FILE" ] || die "cannot read --token-file $TOKEN_FILE"
     TOKEN="$(tr -d '[:space:]' <"$TOKEN_FILE")"
   fi
-  [ -n "$TOKEN" ] || die "no enrollment token: export EDGEWEIR_TOKEN='<token>' and run with sudo --preserve-env=EDGEWEIR_TOKEN, or pass --token-file PATH"
+  [ -n "$TOKEN" ] || die "no enrollment token: copy the complete command from the console, or pass --token-file PATH"
   [[ "$TOKEN" =~ ^ewt_[A-Za-z0-9_-]+$ ]] || die "the enrollment token is malformed (expected ewt_...)"
 }
 
@@ -701,19 +702,25 @@ enroll() {
     confirm_enrollment
     return 0
   fi
+  TOKEN_WORK="$(mktemp -d "${TMPDIR:-/tmp}/edgeweir-token.XXXXXXXX")"
+  chmod 0700 "$TOKEN_WORK"
+  TOKEN_FILE="$TOKEN_WORK/token"
+  (umask 077; printf '%s\n' "$TOKEN" >"$TOKEN_FILE")
+  unset TOKEN
   if node_results; then NODE_RESULTS="true"; fi
   log "enrolling with ${SERVER}"
-  # The token goes through the environment only (edgeweir-node reads EDGEWEIR_TOKEN).
   if [ "$ENROLLED" = "true" ]; then
     # A running node keeps its identity: stop it first; start_service starts it again.
     log "enrolling again (--force): stopping edgeweir-node"
     systemctl stop edgeweir-node.service >/dev/null 2>&1 || true
-    EDGEWEIR_TOKEN="$TOKEN" /usr/bin/edgeweir-node enroll --force --server "$SERVER" \
-      --ca-sha256 "$CA_SHA256" --state-dir "$STATE_DIR" || die "enrollment failed"
+    /usr/bin/edgeweir-node enroll --force --server "$SERVER" \
+      --ca-sha256 "$CA_SHA256" --state-dir "$STATE_DIR" --token-file "$TOKEN_FILE" || die "enrollment failed"
   else
-    EDGEWEIR_TOKEN="$TOKEN" /usr/bin/edgeweir-node enroll --server "$SERVER" --ca-sha256 "$CA_SHA256" \
-      --state-dir "$STATE_DIR" || die "enrollment failed"
+    /usr/bin/edgeweir-node enroll --server "$SERVER" --ca-sha256 "$CA_SHA256" \
+      --state-dir "$STATE_DIR" --token-file "$TOKEN_FILE" || die "enrollment failed"
   fi
+  rm -rf "$TOKEN_WORK"
+  TOKEN_WORK=""
   [ "${NODE_RESULTS:-false}" = "true" ] || result enroll enrolled
 }
 
@@ -767,8 +774,13 @@ check_health() {
 }
 
 main() {
+  export -n EDGEWEIR_TOKEN TOKEN
+  WORK=""
+  TOKEN_WORK=""
   STEP="args"
   trap on_exit EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
   constants
   parse_args "$@"
   read_token

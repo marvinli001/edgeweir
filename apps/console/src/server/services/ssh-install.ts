@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { StringDecoder } from "node:string_decoder";
+import { stripVTControlCharacters } from "node:util";
 import {
   type HostKeyScan,
   type retrySshInstallInput,
@@ -10,10 +12,12 @@ import {
   type SshInstallOptions,
   type SshInstallRun,
   type SshInstallStep,
+  type SshJumpHost,
   type startSshInstallInput,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { eq } from "drizzle-orm";
+import type { ClientChannel } from "ssh2";
 import type * as z from "zod";
 import { fail } from "../lib/errors";
 import type { Logger } from "../lib/logger";
@@ -25,7 +29,17 @@ import {
   SshFailure,
   type SshSession,
   scanHostKey,
+  sshAgentStatus,
 } from "../lib/ssh";
+import {
+  buildCleanupCommand,
+  buildPreflightCommand,
+  buildRemoteCommand,
+  inputMarker,
+} from "../lib/ssh-install-command";
+
+export { buildRemoteCommand, REMOTE_SCRIPT } from "../lib/ssh-install-command";
+
 import { type Actor, recordAudit } from "./audit";
 import {
   createEnrollmentToken,
@@ -62,13 +76,35 @@ export interface InstallContext {
 export type Resolve = (host: string) => Promise<string>;
 
 /** Pins the host's address, or fails the way the scan and the install name it. */
-async function pin(resolve: Resolve, host: string): Promise<string> {
+async function pin(
+  resolve: Resolve,
+  host: string,
+  signal?: AbortSignal,
+  hop: "jump" | "target" = "target",
+): Promise<string> {
+  let onAbort: (() => void) | undefined;
   try {
-    return await resolve(host);
+    if (signal?.aborted) throw signal.reason;
+    return await Promise.race([
+      resolve(host),
+      ...(signal
+        ? [
+            new Promise<never>((_resolve, reject) => {
+              onAbort = () => reject(signal.reason);
+              signal.addEventListener("abort", onAbort, { once: true });
+            }),
+          ]
+        : []),
+    ]);
   } catch (error) {
+    if (signal?.aborted) throw signal.reason;
     throw new SshFailure(
       error instanceof OutboundRefusedError ? "outbound_refused" : "unreachable",
+      null,
+      hop,
     );
+  } finally {
+    if (onAbort) signal?.removeEventListener("abort", onAbort);
   }
 }
 
@@ -79,9 +115,11 @@ interface Secrets {
   privateKey?: Buffer;
   passphrase?: Buffer;
   sudoPassword?: Buffer;
+  agent: boolean;
+  agentForwarding: boolean;
 }
 
-interface HostState extends Omit<SshInstallHost, "output" | "step"> {
+interface HostState extends Omit<SshInstallHost, "output" | "step" | "completedSteps"> {
   output: OutputTail;
   /** The current attempt's token, kept only while it runs (to scrub the output). */
   token: string | null;
@@ -104,6 +142,11 @@ interface RunState {
   canceled: boolean;
   hosts: HostState[];
   secrets: Secrets | null;
+  jumpSecrets: Secrets | null;
+  jumpHost: SshInstallRun["jumpHost"];
+  tty: SshInstallRun["tty"];
+  agentSocket?: string;
+  work?: Promise<void>;
   abort: AbortController;
   ctx: InstallContext;
 }
@@ -116,7 +159,8 @@ const PRIVATE_KEY_RE =
 /** Removes every secret, any enrollment token and any private key block from `text`. */
 export function scrubOutput(text: string, secrets: readonly string[]): string {
   let out = text;
-  for (const secret of [...secrets].sort((a, b) => b.length - a.length)) {
+  const variants = secrets.flatMap((secret) => [secret, stripVTControlCharacters(secret)]);
+  for (const secret of variants.sort((a, b) => b.length - a.length)) {
     if (secret) out = out.split(secret).join(REDACTED);
   }
   return out.replace(PRIVATE_KEY_RE, REDACTED).replace(TOKEN_RE, REDACTED);
@@ -252,20 +296,44 @@ class OutputTail {
   private lines: string[] = [];
   private partial = "";
   private sealed = false;
+  private decoder = new StringDecoder("utf8");
+  private discarding = false;
+  cleanup: SshInstallHost["cleanup"] = "not_needed";
+  phase: "downloading" | "installing" | null = null;
   /** install.sh's result lines of this attempt (kept out of the output shown). */
   results: InstallResult[] = [];
 
   push(chunk: Buffer) {
     if (this.sealed) return;
-    const parts = (this.partial + chunk.toString("utf8")).split(/\r?\n/);
+    const parts = (this.partial + this.decoder.write(chunk)).split(/\r\n?|\n/);
     this.partial = parts.pop() ?? "";
-    // A line longer than the whole bound keeps its end.
-    if (this.partial.length > SSH_INSTALL_LIMITS.outputBytes) this.partial = "";
-    for (const line of parts) {
+    for (const raw of parts) {
+      if (this.discarding) {
+        this.discarding = false;
+        continue;
+      }
+      if (raw.length > SSH_INSTALL_LIMITS.outputBytes) continue;
+      const line = stripVTControlCharacters(raw);
+      if (line === "EDGEWEIR_PHASE downloading" || line === "EDGEWEIR_PHASE installing") {
+        this.phase = line === "EDGEWEIR_PHASE downloading" ? "downloading" : "installing";
+        continue;
+      }
+      if (line === "EDGEWEIR_TASK_STARTED") {
+        this.cleanup = "pending";
+        continue;
+      }
+      if (line.startsWith("EDGEWEIR_CLEANUP ")) {
+        this.cleanup = line === "EDGEWEIR_CLEANUP stopped" ? "stopped" : "unknown";
+        continue;
+      }
       const result = parseResultLine(line);
       if (result) {
         if (this.results.length < 64) this.results.push(result);
       } else this.lines.push(line.slice(-SSH_INSTALL_LIMITS.outputBytes));
+    }
+    if (this.partial.length > SSH_INSTALL_LIMITS.outputBytes) {
+      this.partial = "";
+      this.discarding = true;
     }
     this.trim();
   }
@@ -281,7 +349,9 @@ class OutputTail {
   }
 
   text(secrets: readonly string[]) {
-    const raw = [...this.lines, ...(this.partial ? [this.partial] : [])].join("\n");
+    const raw = stripVTControlCharacters(
+      [...this.lines, ...(this.partial && !this.discarding ? [this.partial] : [])].join("\n"),
+    );
     return this.sealed ? raw : scrubOutput(raw, secrets);
   }
 
@@ -298,6 +368,10 @@ class OutputTail {
     this.partial = "";
     this.sealed = false;
     this.results = [];
+    this.cleanup = "not_needed";
+    this.phase = null;
+    this.decoder = new StringDecoder("utf8");
+    this.discarding = false;
   }
 }
 
@@ -306,6 +380,8 @@ function toSecrets(credential: SshCredential): Secrets {
     value === undefined ? undefined : Buffer.from(value, "utf8");
   return {
     username: credential.username,
+    agent: credential.agent,
+    agentForwarding: credential.agentForwarding,
     password: buffer(credential.password),
     privateKey: buffer(credential.privateKey),
     passphrase: buffer(credential.passphrase),
@@ -344,59 +420,10 @@ function checkCredential(credential: SshCredential) {
     fail("SSH_PRIVATE_KEY_PASSPHRASE", "the private key needs its passphrase, or it is wrong");
 }
 
-/** Shell-quotes a value (POSIX single quotes). */
-function sh(value: string): string {
-  return /^[A-Za-z0-9_./:@=+,-]+$/.test(value) ? value : `'${value.replace(/'/g, `'"'"'`)}'`;
-}
-
-/**
- * The fixed script the login shell runs (as `sh -c SCRIPT URL MODE ARGS…`).
- * stdin line 1 is the token, line 2 the sudo password (sudo -S only).
- * install.sh is fetched as the user and run as root with stdin from
- * /dev/null, so a sudo password sudo did not read stays unread. The token
- * reaches it as `--token-file` (0600 in the user's 0700 temporary directory,
- * removed on exit), never in an environment: sudo logs preserved variables
- * with their values. Exit 90: no token on stdin, 91: download failed, 92: no
- * temporary directory.
- */
-export const REMOTE_SCRIPT = [
-  "LC_ALL=C; export LC_ALL",
-  "url=$0; mode=$1; shift",
-  "IFS= read -r t || exit 90",
-  "d=$(mktemp -d) || exit 92",
-  "trap 'rm -rf \"$d\"' EXIT",
-  `(umask 077; printf '%s\\n' "$t" >"$d/token") || exit 92`,
-  "t=",
-  'curl -fsSL -o "$d/install.sh" "$url" || exit 91',
-  'set -- --token-file "$d/token" "$@"',
-  'if [ "$(id -u)" = 0 ]; then bash "$d/install.sh" "$@" </dev/null',
-  `elif [ "$mode" = sudo-s ]; then sudo -S -p '' sh -c 'exec bash "$0" "$@" </dev/null' "$d/install.sh" "$@"`,
-  'else sudo -n bash "$d/install.sh" "$@" </dev/null',
-  "fi",
-].join("\n");
-
-/** The command line: only the script, URLs and options; never the token or a password. */
-export function buildRemoteCommand(opts: {
-  consoleUrl: string;
-  serverUrl: string;
-  caSha256: string;
-  options: SshInstallOptions;
-  sudo: "sudo-s" | "sudo-n";
-}): string {
-  const { options } = opts;
-  const args = ["--server", opts.serverUrl, "--ca-sha256", opts.caSha256];
-  if (options.version) args.push("--version", options.version);
-  if (options.format !== "auto") args.push("--format", options.format);
-  if (options.mirror) args.push("--mirror", options.mirror);
-  if (options.mirrorOnly) args.push("--mirror-only");
-  if (!options.modsecurity) args.push("--no-modsecurity");
-  if (options.noStart) args.push("--no-start");
-  const url = `${opts.consoleUrl.replace(/\/$/, "")}/install.sh`;
-  return ["sh", "-c", REMOTE_SCRIPT, url, opts.sudo, ...args].map(sh).join(" ");
-}
-
 /** Why install.sh (or sudo before it) failed, from its exit status and output. */
 export function classifyFailure(exitCode: number, output: string): SshInstallError {
+  if (exitCode === 94) return "pty_refused";
+  if (exitCode === 95) return "system_unsupported";
   if (exitCode === 91) return "download_failed";
   if (/^sudo: (?:a password is required|a terminal is required)/m.test(output))
     return "sudo_password_required";
@@ -421,7 +448,11 @@ async function pool<T>(items: readonly T[], limit: number, task: (item: T) => Pr
       await task(item);
     }
   };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  const results = await Promise.allSettled(
+    Array.from({ length: Math.min(limit, items.length) }, worker),
+  );
+  const failed = results.find((result) => result.status === "rejected");
+  if (failed?.status === "rejected") throw failed.reason;
 }
 
 const SCAN_TIMEOUT_MS = 10_000;
@@ -434,6 +465,7 @@ export class SshInstallRuns {
   private readonly now: () => Date;
   /** Milliseconds per timeout minute (tests shorten it). */
   private readonly minuteMs: number;
+  private readonly agentSocket: string | undefined;
 
   constructor(
     deps: {
@@ -441,44 +473,107 @@ export class SshInstallRuns {
       scan?: typeof scanHostKey;
       now?: () => Date;
       minuteMs?: number;
+      agentSocket?: string;
     } = {},
   ) {
     this.connect = deps.connect ?? openSshSession;
     this.scan = deps.scan ?? scanHostKey;
     this.now = deps.now ?? (() => new Date());
     this.minuteMs = deps.minuteMs ?? 60_000;
+    this.agentSocket = deps.agentSocket;
   }
 
-  /** The host key each host presents; nothing is sent but the SSH handshake. */
+  async capabilities() {
+    const { available, reason } = await sshAgentStatus(this.agentSocket);
+    return { version: 2 as const, agent: { available, reason } };
+  }
+
+  private async agentFor(...credentials: (SshCredential | undefined)[]) {
+    if (!credentials.some((c) => c?.agent || c?.agentForwarding)) return undefined;
+    const status = await sshAgentStatus(this.agentSocket);
+    if (!status.available) fail("SSH_AGENT_UNAVAILABLE", "the Core SSH agent is unavailable");
+    return status.socket;
+  }
+
+  /** DNS is always resolved and pinned in Core, including forwardOut's destination. */
   async scanHostKeys(
     hosts: { host: string; port: number }[],
     resolve: Resolve,
+    jumpHost?: SshJumpHost,
   ): Promise<HostKeyScan[]> {
     const results: HostKeyScan[] = new Array(hosts.length);
-    await pool(
-      hosts.map((host, index) => ({ host, index })),
-      SCAN_CONCURRENCY,
-      async ({ host, index }) => {
-        try {
-          const address = await pin(resolve, host.host);
-          results[index] = {
-            ...(await this.scan({ host: address, port: host.port }, SCAN_TIMEOUT_MS)),
-            host: host.host,
-          };
-        } catch (error) {
-          results[index] = {
-            host: host.host,
-            port: host.port,
-            algorithm: null,
-            fingerprint: null,
-            error:
-              error instanceof SshFailure && error.code === "outbound_refused"
-                ? "outbound_refused"
-                : "unreachable",
-          };
-        }
-      },
-    );
+    if (jumpHost) checkCredential(jumpHost.credential);
+    const agentSocket = await this.agentFor(jumpHost?.credential);
+    const secrets = jumpHost ? toSecrets(jumpHost.credential) : null;
+    try {
+      await pool(
+        hosts.map((host, index) => ({ host, index })),
+        SCAN_CONCURRENCY,
+        async ({ host, index }) => {
+          const abort = new AbortController();
+          let session: SshSession | null = null;
+          const timer = setTimeout(() => {
+            abort.abort();
+            session?.close();
+          }, SCAN_TIMEOUT_MS);
+          let hop: "jump" | "target" = "target";
+          try {
+            const address = await pin(resolve, host.host, abort.signal);
+            let tunnel: ClientChannel | undefined;
+            if (jumpHost && secrets) {
+              hop = "jump";
+              const jumpAddress = await pin(resolve, jumpHost.host, abort.signal, "jump");
+              session = await this.connect(
+                {
+                  ...secrets,
+                  host: jumpAddress,
+                  port: jumpHost.port,
+                  hostKeyFingerprint: jumpHost.hostKeyFingerprint,
+                  readyTimeoutMs: SCAN_TIMEOUT_MS,
+                  agentSocket,
+                },
+                abort.signal,
+              );
+              hop = "target";
+              tunnel = await session.forward(address, host.port);
+            }
+            const scanned = await this.scan(
+              { host: address, port: host.port },
+              SCAN_TIMEOUT_MS,
+              tunnel,
+              abort.signal,
+            );
+            const timedOut = abort.signal.aborted && !scanned.fingerprint;
+            results[index] = {
+              ...scanned,
+              host: host.host,
+              error: timedOut ? "timeout" : scanned.error,
+              errorHop: timedOut || scanned.error ? hop : null,
+            };
+          } catch (error) {
+            results[index] = {
+              host: host.host,
+              port: host.port,
+              algorithm: null,
+              fingerprint: null,
+              error: abort.signal.aborted
+                ? "timeout"
+                : error instanceof SshFailure && error.code !== "pty_refused"
+                  ? error.code
+                  : "unreachable",
+              errorHop:
+                error instanceof SshFailure && error.code === "host_key_mismatch" ? "jump" : hop,
+              presentedFingerprint: error instanceof SshFailure ? error.presented : null,
+            };
+          } finally {
+            clearTimeout(timer);
+            session?.close();
+          }
+        },
+      );
+    } finally {
+      wipe(secrets);
+    }
     return results;
   }
 
@@ -497,6 +592,8 @@ export class SshInstallRuns {
         limit: SSH_INSTALL_LIMITS.activeRuns,
       });
     checkCredential(input.credential);
+    if (input.jumpHost) checkCredential(input.jumpHost.credential);
+    const agentSocket = await this.agentFor(input.credential, input.jumpHost?.credential);
     const [cluster] = await ctx.db
       .select({ id: schema.cluster.id, name: schema.cluster.name })
       .from(schema.cluster)
@@ -507,6 +604,13 @@ export class SshInstallRuns {
       if (group.clusterId !== input.clusterId)
         fail("NODE_GROUP_CLUSTER_MISMATCH", "the node group belongs to another cluster");
     }
+    if (
+      [...this.runs.values()].filter((run) => run.state === "running").length >=
+      SSH_INSTALL_LIMITS.activeRuns
+    )
+      fail("SSH_INSTALL_TOO_MANY_RUNS", "too many SSH installs are running", {
+        limit: SSH_INSTALL_LIMITS.activeRuns,
+      });
     const run: RunState = {
       id: randomUUID(),
       clusterId: cluster.id,
@@ -520,6 +624,16 @@ export class SshInstallRuns {
       state: "running",
       canceled: false,
       secrets: toSecrets(input.credential),
+      jumpSecrets: input.jumpHost ? toSecrets(input.jumpHost.credential) : null,
+      jumpHost: input.jumpHost
+        ? {
+            host: input.jumpHost.host,
+            port: input.jumpHost.port,
+            hostKeyFingerprint: input.jumpHost.hostKeyFingerprint,
+          }
+        : null,
+      tty: input.tty,
+      agentSocket,
       abort: new AbortController(),
       ctx,
       hosts: input.hosts.map((host, index) => ({
@@ -530,6 +644,10 @@ export class SshInstallRuns {
         nodeName: host.nodeName,
         hostKeyFingerprint: host.hostKeyFingerprint,
         state: "queued",
+        phase: "queued",
+        cleanup: "not_needed",
+        cancelRequested: false,
+        errorHop: null,
         error: null,
         exitCode: null,
         presentedFingerprint: null,
@@ -545,20 +663,33 @@ export class SshInstallRuns {
       })),
     };
     this.runs.set(run.id, run);
-    await recordAudit(ctx.db, ctx.actor, {
-      action: "ssh_install.start",
-      targetType: "cluster",
-      targetId: run.clusterId,
-      targetName: run.clusterName,
-      metadata: {
-        runId: run.id,
-        hosts: run.hosts.length,
-        concurrency: run.concurrency,
-        timeoutMinutes: run.timeoutMinutes,
-        options: run.options,
-      },
-    });
-    void this.drive(run, run.hosts);
+    try {
+      await recordAudit(ctx.db, ctx.actor, {
+        action: "ssh_install.start",
+        targetType: "cluster",
+        targetId: run.clusterId,
+        targetName: run.clusterName,
+        metadata: {
+          runId: run.id,
+          hosts: run.hosts.length,
+          concurrency: run.concurrency,
+          timeoutMinutes: run.timeoutMinutes,
+          options: run.options,
+          tty: run.tty,
+          jumpHost: run.jumpHost,
+          agentLogin: input.credential.agent,
+          agentForwarding: input.credential.agentForwarding,
+        },
+      });
+    } catch (error) {
+      this.runs.delete(run.id);
+      wipe(run.secrets);
+      wipe(run.jumpSecrets);
+      run.secrets = null;
+      run.jumpSecrets = null;
+      throw error;
+    }
+    run.work = this.drive(run, run.hosts);
     return this.snapshot(run);
   }
 
@@ -571,6 +702,8 @@ export class SshInstallRuns {
     if (run.state === "running" && !run.canceled) {
       run.canceled = true;
       for (const host of run.hosts) {
+        if (["queued", "connecting", "installing"].includes(host.state))
+          host.cancelRequested = true;
         if (host.state === "queued") this.end(host, "canceled", null);
       }
       run.abort.abort();
@@ -600,17 +733,40 @@ export class SshInstallRuns {
         limit: SSH_INSTALL_LIMITS.activeRuns,
       });
     checkCredential(input.credential);
+    if (!!run.jumpHost !== !!input.jumpHost)
+      fail("SSH_JUMP_REQUIRED", "retry must keep the original SSH connection path");
+    if (input.jumpHost) {
+      checkCredential(input.jumpHost.credential);
+      if (
+        run.jumpHost &&
+        (run.jumpHost.host !== input.jumpHost.host || run.jumpHost.port !== input.jumpHost.port)
+      )
+        fail("SSH_JUMP_REQUIRED", "retry must use the same jump host");
+    }
+    const agentSocket = await this.agentFor(input.credential, input.jumpHost?.credential);
+    if (this.find(input.id).state === "running")
+      fail("SSH_INSTALL_BUSY", "the run has not ended yet");
+    if (
+      [...this.runs.values()].filter((run) => run.state === "running").length >=
+      SSH_INSTALL_LIMITS.activeRuns
+    )
+      fail("SSH_INSTALL_TOO_MANY_RUNS", "too many SSH installs are running", {
+        limit: SSH_INSTALL_LIMITS.activeRuns,
+      });
     for (const host of hosts) {
       const fingerprint = wanted?.get(host.id)?.hostKeyFingerprint;
       if (fingerprint) host.hostKeyFingerprint = fingerprint;
       if (!host.ownUsername) host.username = input.credential.username;
       Object.assign(host, {
         state: "queued",
+        phase: "queued",
+        cleanup: "not_needed",
+        cancelRequested: false,
+        errorHop: null,
         error: null,
         exitCode: null,
         presentedFingerprint: null,
         tokenId: null,
-        nodeId: null,
         startedAt: null,
         finishedAt: null,
       } satisfies Partial<HostState>);
@@ -621,26 +777,58 @@ export class SshInstallRuns {
     run.finishedAt = null;
     run.abort = new AbortController();
     run.secrets = toSecrets(input.credential);
+    run.jumpSecrets = input.jumpHost ? toSecrets(input.jumpHost.credential) : null;
+    run.jumpHost = input.jumpHost
+      ? {
+          host: input.jumpHost.host,
+          port: input.jumpHost.port,
+          hostKeyFingerprint: input.jumpHost.hostKeyFingerprint,
+        }
+      : null;
+    run.tty = input.tty;
+    run.agentSocket = agentSocket;
     run.ctx = ctx;
-    await recordAudit(ctx.db, ctx.actor, {
-      action: "ssh_install.start",
-      targetType: "cluster",
-      targetId: run.clusterId,
-      targetName: run.clusterName,
-      metadata: { runId: run.id, hosts: hosts.length, retry: true },
-    });
-    void this.drive(run, hosts);
+    try {
+      await recordAudit(ctx.db, ctx.actor, {
+        action: "ssh_install.start",
+        targetType: "cluster",
+        targetId: run.clusterId,
+        targetName: run.clusterName,
+        metadata: {
+          runId: run.id,
+          hosts: hosts.length,
+          retry: true,
+          tty: run.tty,
+          jumpHost: run.jumpHost,
+          agentLogin: input.credential.agent,
+          agentForwarding: input.credential.agentForwarding,
+        },
+      });
+    } catch (error) {
+      wipe(run.secrets);
+      wipe(run.jumpSecrets);
+      run.secrets = null;
+      run.jumpSecrets = null;
+      run.state = "finished";
+      run.finishedAt = this.now();
+      for (const host of hosts) this.end(host, "failed", "console_error");
+      throw error;
+    }
+    run.work = this.drive(run, hosts);
     return this.snapshot(run);
   }
 
   /** Cancels everything (console shutdown): no credential outlives the process's work. */
-  shutdown() {
+  async shutdown() {
     for (const run of this.runs.values()) {
+      if (run.state !== "running") continue;
       run.canceled = true;
+      for (const host of run.hosts)
+        if (["queued", "connecting", "installing"].includes(host.state))
+          host.cancelRequested = true;
       run.abort.abort();
-      wipe(run.secrets);
-      run.secrets = null;
     }
+    await Promise.all([...this.runs.values()].map((run) => run.work));
   }
 
   private find(id: string): RunState {
@@ -662,7 +850,10 @@ export class SshInstallRuns {
     try {
       await pool(hosts, run.concurrency, (host) => this.installHost(run, host));
     } catch (error) {
-      run.ctx.log.error("ssh install run failed", { runId: run.id, error: String(error) });
+      run.ctx.log.error("ssh install run failed", {
+        runId: run.id,
+        error: error instanceof Error ? error.name : "unknown",
+      });
     } finally {
       for (const host of hosts) {
         if (host.state === "queued") this.end(host, "canceled", null);
@@ -670,12 +861,16 @@ export class SshInstallRuns {
       run.state = run.canceled ? "canceled" : "finished";
       run.finishedAt = this.now();
       wipe(run.secrets);
+      wipe(run.jumpSecrets);
       run.secrets = null;
+      run.jumpSecrets = null;
+      run.agentSocket = undefined;
     }
   }
 
   private end(host: HostState, state: SshInstallHost["state"], error: SshInstallError | null) {
     host.state = state;
+    host.phase = "finished";
     host.error = error;
     host.finishedAt = this.now().toISOString();
     host.abort = null;
@@ -687,6 +882,7 @@ export class SshInstallRuns {
     if (!secrets) return;
     const { ctx } = run;
     host.state = "connecting";
+    host.phase = run.jumpHost ? "jump_connecting" : "target_connecting";
     host.attempts += 1;
     host.startedAt = this.now().toISOString();
     const abort = new AbortController();
@@ -695,12 +891,23 @@ export class SshInstallRuns {
     const onRunAbort = () => abort.abort("canceled");
     run.abort.signal.addEventListener("abort", onRunAbort, { once: true });
     let session: SshSession | null = null;
+    const closeOnAbort = () => {
+      session?.close();
+      session = null;
+    };
+    abort.signal.addEventListener("abort", closeOnAbort, { once: true });
     let outcome: { state: SshInstallHost["state"]; error: SshInstallError | null } = {
       state: "failed",
       error: "console_error",
     };
     // install.sh named the failed step: a late enrollment does not make it a success.
-    let reported = false;
+    const taskId = randomUUID();
+    const sudo = secrets.sudoPassword ? "sudo-s" : "sudo-n";
+    let pty = run.tty === "always";
+    let submitted = false;
+    const sudoInput = () =>
+      Buffer.concat([...(secrets.sudoPassword ? [secrets.sudoPassword] : []), Buffer.from("\n")]);
+    const execOptions = () => ({ pty, inputReady: inputMarker(taskId), signal: abort.signal });
     try {
       const minted = await createEnrollmentToken(
         ctx.db,
@@ -720,8 +927,19 @@ export class SshInstallRuns {
       host.tokenId = minted.tokenId;
       host.token = minted.token;
       if (abort.signal.aborted) throw abort.signal.reason;
-      const address = await pin(ctx.resolve, host.host);
+      const address = await pin(ctx.resolve, host.host, abort.signal);
       if (abort.signal.aborted) throw abort.signal.reason;
+      const jump =
+        run.jumpHost && run.jumpSecrets
+          ? {
+              ...run.jumpSecrets,
+              host: await pin(ctx.resolve, run.jumpHost.host, abort.signal, "jump"),
+              port: run.jumpHost.port,
+              hostKeyFingerprint: run.jumpHost.hostKeyFingerprint,
+              readyTimeoutMs: Math.min(20_000, run.timeoutMinutes * this.minuteMs),
+              agentSocket: run.agentSocket,
+            }
+          : undefined;
       session = await this.connect(
         {
           host: address,
@@ -730,39 +948,86 @@ export class SshInstallRuns {
           password: secrets.password,
           privateKey: secrets.privateKey,
           passphrase: secrets.passphrase,
+          agent: secrets.agent,
+          agentForwarding: secrets.agentForwarding,
+          agentSocket: run.agentSocket,
+          jump,
+          onPhase: (phase) => {
+            host.phase = phase;
+          },
           hostKeyFingerprint: host.hostKeyFingerprint,
           readyTimeoutMs: Math.min(20_000, run.timeoutMinutes * this.minuteMs),
         },
         abort.signal,
       );
       if (abort.signal.aborted) throw abort.signal.reason;
+      host.phase = "preparing";
+      if (host.username !== "root") {
+        const preflight = async () => {
+          let output = "";
+          const stdin = sudoInput();
+          try {
+            const code = await session!.exec(
+              buildPreflightCommand(taskId, sudo),
+              stdin,
+              (chunk) => {
+                output += chunk.toString("utf8");
+              },
+              { ...execOptions(), timeoutMs: 15_000 },
+            );
+            if (code === null) throw new SshFailure("connection_lost");
+            return code === 0 ? null : classifyFailure(code, output);
+          } finally {
+            stdin.fill(0);
+          }
+        };
+        let error = await preflight();
+        if (error === "sudo_requires_tty" && run.tty === "auto" && !pty) {
+          pty = true;
+          error = await preflight();
+        }
+        if (error) throw new InstallPreflightFailure(error);
+      }
       host.state = "installing";
+      host.phase = "installing";
       const command = buildRemoteCommand({
         consoleUrl: ctx.consoleUrl,
         serverUrl: ctx.serverUrl,
         caSha256: ctx.caSha256,
         options: run.options,
-        sudo: secrets.sudoPassword ? "sudo-s" : "sudo-n",
+        sudo,
+        taskId,
+        timeoutSeconds:
+          (run.timeoutMinutes * this.minuteMs -
+            (this.now().getTime() - new Date(host.startedAt!).getTime())) /
+          1000,
       });
-      const stdin = Buffer.concat([
-        Buffer.from(`${minted.token}\n`, "utf8"),
-        ...(secrets.sudoPassword ? [secrets.sudoPassword, Buffer.from("\n")] : []),
-      ]);
-      const live = session;
-      const closeOnAbort = () => live.close();
-      abort.signal.addEventListener("abort", closeOnAbort, { once: true });
+      const stdin = Buffer.concat([Buffer.from(`${minted.token}\n`, "utf8"), sudoInput()]);
       let exitCode: number | null;
+      submitted = true;
+      host.cleanup = "pending";
       try {
-        exitCode = await live.exec(command, stdin, (chunk) => host.output.push(chunk));
+        exitCode = await session.exec(
+          command,
+          stdin,
+          (chunk) => {
+            if (host.finishedAt !== null) return;
+            host.output.push(chunk);
+            if (host.output.phase) host.phase = host.output.phase;
+            if (host.output.cleanup !== "not_needed") host.cleanup = host.output.cleanup;
+          },
+          execOptions(),
+        );
       } finally {
         stdin.fill(0);
-        abort.signal.removeEventListener("abort", closeOnAbort);
       }
-      if (abort.signal.aborted) throw abort.signal.reason;
       host.exitCode = exitCode;
+      if (abort.signal.aborted) throw abort.signal.reason;
       const results = host.output.results;
       if (exitCode === null) {
         outcome = { state: "failed", error: "connection_lost" };
+      } else if (exitCode === 124) {
+        outcome = { state: "failed", error: "timeout" };
       } else if (exitCode !== 0) {
         outcome = {
           state: "failed",
@@ -772,7 +1037,6 @@ export class SshInstallRuns {
             host.output.text(secretStrings(secrets, host.token)),
           ),
         };
-        reported = results.some((r) => r.step === "done");
         // Enrolled before a later step failed: the node is there (a retry confirms it).
         host.nodeId = (await enrollmentTokenUse(ctx.db, minted.tokenId)).usedByNodeId;
       } else {
@@ -781,18 +1045,21 @@ export class SshInstallRuns {
         // confirmed the identity is this console's and named its node.
         const known = use.usedByNodeId ?? enrollResult(results)?.nodeId ?? null;
         const node = known ? await nodeCluster(ctx.db, known) : null;
-        host.nodeId = node?.id ?? null;
+        if (node) host.nodeId = node.id;
         if (node && node.clusterId === run.clusterId) outcome = { state: "succeeded", error: null };
         else if (node) outcome = { state: "failed", error: "enrolled_elsewhere" };
         else outcome = { state: "failed", error: "not_enrolled" };
       }
     } catch (error) {
-      if (error === "canceled") outcome = { state: "canceled", error: null };
+      if (error instanceof InstallPreflightFailure)
+        outcome = { state: "failed", error: error.code };
+      else if (error === "canceled") outcome = { state: "canceled", error: null };
       else if (error === "timeout") outcome = { state: "failed", error: "timeout" };
       else if (error instanceof SshFailure) {
         outcome = { state: "failed", error: abort.signal.aborted ? reasonOf(abort) : error.code };
         if (outcome.error === null) outcome.state = "canceled";
         host.presentedFingerprint = error.presented;
+        host.errorHop = outcome.error === null ? null : error.hop;
       } else {
         // Never the error itself in the output: it could quote input.
         ctx.log.error("ssh install host failed", {
@@ -805,20 +1072,102 @@ export class SshInstallRuns {
     } finally {
       clearTimeout(timeout);
       run.abort.signal.removeEventListener("abort", onRunAbort);
+      abort.signal.removeEventListener("abort", closeOnAbort);
+      if (host.tokenId && (abort.signal.aborted || outcome.state !== "succeeded"))
+        await expireUnusedEnrollmentToken(ctx.db, host.tokenId).catch(() =>
+          ctx.log.error("ssh install token expiry failed", { runId: run.id }),
+        );
+      if (submitted && host.cleanup !== "stopped") {
+        host.phase = "stopping";
+        host.cleanup = "pending";
+        let stopped = false;
+        const cleanupAbort = new AbortController();
+        const cleanupTimer = setTimeout(() => cleanupAbort.abort(), 15_000);
+        const stdin = sudoInput();
+        try {
+          // Reconnect through the same pinned path only when the original transport has gone.
+          const clean = async (live: SshSession) => {
+            let output = "";
+            await live.exec(
+              buildCleanupCommand(taskId, sudo),
+              stdin,
+              (chunk) => {
+                host.output.push(chunk);
+                output = (output + chunk.toString("utf8")).slice(-1024);
+              },
+              {
+                pty,
+                inputReady: inputMarker(taskId),
+                signal: cleanupAbort.signal,
+                timeoutMs: 12_000,
+              },
+            );
+            if (/^EDGEWEIR_CLEANUP stopped\r?$/m.test(output)) stopped = true;
+          };
+          if (session) {
+            try {
+              await clean(session);
+            } catch {
+              /* A broken transport requires a fresh handshake. */
+            }
+          }
+          if (!stopped && !cleanupAbort.signal.aborted) {
+            session?.close();
+            const jump =
+              run.jumpHost && run.jumpSecrets
+                ? {
+                    ...run.jumpSecrets,
+                    agentForwarding: false,
+                    host: await pin(ctx.resolve, run.jumpHost.host, cleanupAbort.signal, "jump"),
+                    port: run.jumpHost.port,
+                    hostKeyFingerprint: run.jumpHost.hostKeyFingerprint,
+                    readyTimeoutMs: 3000,
+                    agentSocket: run.agentSocket,
+                  }
+                : undefined;
+            session = await this.connect(
+              {
+                ...secrets,
+                agentForwarding: false,
+                host: await pin(ctx.resolve, host.host, cleanupAbort.signal),
+                port: host.port,
+                username: host.username,
+                hostKeyFingerprint: host.hostKeyFingerprint,
+                readyTimeoutMs: 3000,
+                agentSocket: run.agentSocket,
+                jump,
+              },
+              cleanupAbort.signal,
+            );
+            await clean(session);
+          }
+        } catch {
+          /* A deadline on the host remains active even when reconnection fails. */
+        } finally {
+          clearTimeout(cleanupTimer);
+          stdin.fill(0);
+          host.cleanup = stopped ? "stopped" : "unknown";
+        }
+      }
       session?.close();
     }
     try {
       if (host.tokenId) {
         // Unused (an enrolled host confirmed its node, or the attempt failed): ended now.
         const use = await expireUnusedEnrollmentToken(ctx.db, host.tokenId);
-        // A late enrollment wins (the answer was lost): the node exists, the install worked.
-        if (outcome.state !== "succeeded" && use.usedByNodeId && !reported) {
-          host.nodeId = use.usedByNodeId;
-          outcome = { state: "succeeded", error: null };
+        // Registration is a fact, not evidence that download/install/start/health completed.
+        if (use.usedByNodeId) host.nodeId = use.usedByNodeId;
+        else {
+          const reported = enrollResult(host.output.results)?.nodeId;
+          const node = reported ? await nodeCluster(ctx.db, reported) : null;
+          if (node?.clusterId === run.clusterId) host.nodeId = node.id;
         }
       }
     } finally {
-      host.output.seal(secretStrings(secrets, host.token));
+      host.output.seal([
+        ...secretStrings(secrets, host.token),
+        ...secretStrings(run.jumpSecrets, null),
+      ]);
       host.token = null;
       this.end(host, outcome.state, outcome.error);
     }
@@ -837,6 +1186,9 @@ export class SshInstallRuns {
         error: outcome.error,
         exitCode: host.exitCode,
         nodeId: host.nodeId,
+        cleanup: host.cleanup,
+        cancelRequested: host.cancelRequested,
+        errorHop: host.errorHop,
         tokenId: host.tokenId,
       },
     }).catch((error: unknown) =>
@@ -856,7 +1208,24 @@ export class SshInstallRuns {
       return {
         ...rest,
         step: host.state === "succeeded" ? null : currentStep(output.results),
-        output: output.text(secretStrings(run.secrets, token)),
+        completedSteps: [
+          ...new Set(
+            output.results
+              .filter(
+                (r) =>
+                  isStep(r.step) &&
+                  (r.status === "ok" ||
+                    (r.step === "enroll" &&
+                      (r.status === "enrolled" || r.status === "already_enrolled") &&
+                      (r.exit === null || r.exit === 0))),
+              )
+              .map((r) => r.step as SshInstallStep),
+          ),
+        ],
+        output: output.text([
+          ...secretStrings(run.secrets, token),
+          ...secretStrings(run.jumpSecrets, null),
+        ]),
       };
     });
     return {
@@ -866,6 +1235,8 @@ export class SshInstallRuns {
       state: run.state,
       concurrency: run.concurrency,
       timeoutMinutes: run.timeoutMinutes,
+      tty: run.tty,
+      jumpHost: run.jumpHost,
       options: run.options,
       createdAt: run.createdAt.toISOString(),
       finishedAt: run.finishedAt?.toISOString() ?? null,
@@ -875,6 +1246,12 @@ export class SshInstallRuns {
       counts,
       hosts,
     };
+  }
+}
+
+class InstallPreflightFailure extends Error {
+  constructor(readonly code: SshInstallError) {
+    super(code);
   }
 }
 

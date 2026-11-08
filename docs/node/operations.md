@@ -67,19 +67,10 @@
 安装命令（systemd 主机）：
 
 1. 在 **集群与节点** 为目标集群点击 **添加节点**，复制 **安装命令**。
-2. 在节点上执行该命令，末尾加 `--force`。`install.sh` 停止服务，以新 token 执行 `edgeweir-node enroll --force`，再启动服务并做健康检查。
+2. 在脚本的 `set -- --token-file …` 行末尾加 `--force`，再执行整段命令。`install.sh` 停止服务，以新 token 执行 `edgeweir-node enroll --force`，再启动服务并做健康检查。
 3. 在控制台删除原来的节点。
 
-手动：
-
-```bash title="节点"
-sudo systemctl stop edgeweir-node
-sudo install -m 0600 /dev/stdin /root/edgeweir-token <<< '<一次性 token>'
-sudo edgeweir-node enroll --force --server https://cdn-admin.example.com:8443 \
-  --token-file /root/edgeweir-token --ca-sha256 <CA 指纹>
-sudo rm /root/edgeweir-token
-sudo systemctl start edgeweir-node
-```
+保留已安装的软件包时，先执行 `sudo systemctl stop edgeweir-node`，再运行 [手动安装的注册命令](../deploy/nodes.md#deb--rpm)，在 `as_root edgeweir-node enroll` 后加入 `--force`。命令完成注册后启动服务。
 
 容器（运行中的节点持有运行锁，先停止容器）：
 

@@ -141,10 +141,6 @@ function entry(host: string, port: string | undefined, username: string, name: s
 
 const sshTarget = z.object({ host: sshHost, port: sshPort.default(22) });
 
-const scanHostKeysInput = z.object({
-  hosts: z.array(sshTarget).min(1).max(SSH_INSTALL_LIMITS.hosts),
-});
-
 /** Why a host key could not be read. */
 const HOST_KEY_SCAN_ERRORS = [
   "unreachable",
@@ -152,6 +148,10 @@ const HOST_KEY_SCAN_ERRORS = [
   "not_ssh",
   /** A special-purpose address EDGEWEIR_OUTBOUND_ALLOW_CIDRS does not allow (private, loopback …). */
   "outbound_refused",
+  "host_key_mismatch",
+  "auth_failed",
+  "agent_unavailable",
+  "connection_lost",
 ] as const;
 
 const hostKeyScan = z.object({
@@ -162,6 +162,8 @@ const hostKeyScan = z.object({
   /** OpenSSH `SHA256:…`; null when error is set. */
   fingerprint: z.string().nullable(),
   error: z.enum(HOST_KEY_SCAN_ERRORS).nullable(),
+  errorHop: z.enum(["jump", "target"]).nullable().default(null),
+  presentedFingerprint: z.string().nullable().default(null),
 });
 export type HostKeyScan = z.infer<typeof hostKeyScan>;
 
@@ -178,7 +180,7 @@ const secretLine = z
   .string()
   .min(1)
   .max(1024)
-  .refine((v) => !/[\r\n]/.test(v), "must not contain line breaks");
+  .refine((v) => !/[\0\r\n]/.test(v), "must not contain line breaks or NUL");
 
 export const sshCredential = z
   .object({
@@ -188,12 +190,32 @@ export const sshCredential = z
     privateKey: z.string().min(1).max(SSH_INSTALL_LIMITS.privateKeyBytes).optional(),
     passphrase: secretLine.optional(),
     sudoPassword: secretLine.optional(),
+    agent: z.boolean().default(false),
+    agentForwarding: z.boolean().default(false),
   })
-  .refine((c) => c.password !== undefined || c.privateKey !== undefined, {
-    message: "a password or a private key is required",
+  .refine((c) => c.password !== undefined || c.privateKey !== undefined || c.agent, {
+    message: "a password, private key or configured agent is required",
     path: ["password"],
   });
 export type SshCredential = z.infer<typeof sshCredential>;
+
+export const sshJumpHost = z.object({
+  ...sshTarget.shape,
+  hostKeyFingerprint,
+  credential: sshCredential.refine((credential) => !credential.agentForwarding, {
+    message: "agent forwarding is supported only on the target connection",
+    path: ["agentForwarding"],
+  }),
+});
+export type SshJumpHost = z.infer<typeof sshJumpHost>;
+const sshConnectionOptions = z.object({
+  tty: z.enum(["auto", "always", "never"]).default("auto"),
+  jumpHost: sshJumpHost.optional(),
+});
+const scanHostKeysInput = z.object({
+  hosts: z.array(sshTarget).min(1).max(SSH_INSTALL_LIMITS.hosts),
+  jumpHost: sshJumpHost.optional(),
+});
 
 const SEMVER_RE =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$/;
@@ -234,6 +256,7 @@ const sshInstallHostInput = z.object({
 });
 
 export const startSshInstallInput = z.object({
+  ...sshConnectionOptions.shape,
   clusterId: uuid,
   /** Defaults to the cluster's default node group. */
   nodeGroupId: uuid.optional(),
@@ -256,6 +279,7 @@ export const startSshInstallInput = z.object({
 });
 
 export const retrySshInstallInput = z.object({
+  ...sshConnectionOptions.shape,
   id: uuid,
   /** Required again: the run dropped the credential when it ended. */
   credential: sshCredential,
@@ -290,6 +314,8 @@ const SSH_INSTALL_ERRORS = [
   "sudo_password_wrong",
   "sudo_requires_tty",
   "sudo_not_allowed",
+  "pty_refused",
+  "agent_unavailable",
   "download_failed",
   "install_failed",
   /**
@@ -341,6 +367,21 @@ const sshInstallHost = z.object({
   nodeName: z.string(),
   hostKeyFingerprint: z.string(),
   state: z.enum(SSH_INSTALL_HOST_STATES),
+  phase: z.enum([
+    "queued",
+    "jump_connecting",
+    "target_connecting",
+    "authenticating",
+    "preparing",
+    "downloading",
+    "installing",
+    "stopping",
+    "finished",
+  ]),
+  cancelRequested: z.boolean(),
+  cleanup: z.enum(["not_needed", "pending", "stopped", "unknown"]),
+  errorHop: z.enum(["jump", "target"]).nullable(),
+  completedSteps: z.array(z.enum(SSH_INSTALL_STEPS)),
   error: z.enum(SSH_INSTALL_ERRORS).nullable(),
   /**
    * install.sh's step from its result lines: the one running while it
@@ -371,6 +412,8 @@ const sshInstallRun = z.object({
   state: z.enum(["running", "finished", "canceled"]),
   concurrency: z.number().int(),
   timeoutMinutes: z.number().int(),
+  tty: sshConnectionOptions.shape.tty,
+  jumpHost: sshJumpHost.omit({ credential: true }).nullable(),
   options: sshInstallOptions,
   createdAt: isoDateTime,
   finishedAt: isoDateTime.nullable(),
@@ -390,6 +433,18 @@ export type SshInstallRun = z.infer<typeof sshInstallRun>;
 const idParam = z.object({ id: uuid });
 
 export const sshInstallsContract = {
+  capabilities: oc
+    .route({ method: "GET", path: "/ssh-installs/capabilities", tags: ["nodes"] })
+    .input(z.object({}))
+    .output(
+      z.object({
+        version: z.literal(2),
+        agent: z.object({
+          available: z.boolean(),
+          reason: z.enum(["not_configured", "unavailable"]).nullable(),
+        }),
+      }),
+    ),
   /** Connects to each host only to read its host key, for the operator to confirm. */
   scanHostKeys: oc
     .route({ method: "POST", path: "/ssh-installs/host-keys", tags: ["nodes"] })
@@ -405,7 +460,7 @@ export const sshInstallsContract = {
     .route({ method: "GET", path: "/ssh-installs/{id}", tags: ["nodes"] })
     .input(idParam)
     .output(sshInstallRun),
-  /** Stops the run: queued hosts are canceled, running ones disconnected. */
+  /** Requests cancellation; poll until cleanup is stopped or explicitly unknown. */
   cancel: oc
     .route({ method: "POST", path: "/ssh-installs/{id}/cancel", tags: ["nodes"] })
     .input(idParam)
@@ -422,5 +477,8 @@ export const sshInstallsContract = {
  * Idempotency-Key on them before anything (not even the body's hash) is kept.
  */
 export function carriesSshCredentials(method: string, pathname: string): boolean {
-  return method === "POST" && /^\/api\/v1\/ssh-installs(?:\/[^/]+\/retry)?\/?$/.test(pathname);
+  return (
+    method === "POST" &&
+    /^\/api\/v1\/ssh-installs(?:\/host-keys|\/[^/]+\/retry)?\/?$/.test(pathname)
+  );
 }

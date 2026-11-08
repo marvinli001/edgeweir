@@ -466,7 +466,7 @@
 | `expiresAt` | datetime | 过期时间 |
 | `serverUrl` | string | 当前生效的节点通道地址 |
 | `caSha256` | string | 节点通道 CA 的 SHA-256 指纹 |
-| `installCommand` | string | 安装命令：`export EDGEWEIR_TOKEN=…` 与 `curl -fsSL <控制台>/install.sh \| sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- --server … --ca-sha256 …` 两行 |
+| `installCommand` | string | 完整 stdin Shell 命令：0700 临时目录、0600 令牌文件、root/sudo 以 `--token-file` 执行，成功、失败与 INT/TERM 清理；须复制两端 heredoc 标记。 |
 | `warnings` | `array<enum>` | 其他网络的节点可能访问不到的地址：`console_url_local`、`console_url_private`、`console_url_http`、`node_api_url_local`、`node_api_url_private` |
 
 | 错误 | 状态 | 条件 |
@@ -774,10 +774,11 @@
 
 ## SSH 安装
 
-- 请求、状态、失败原因与凭据处理见 [SSH 安装](../../deploy/nodes.md#ssh-安装)。服务账号不能调用；只读 AccessKey 只能调用 `sshInstalls.get`。`start` 与 `retry` 不接受 `Idempotency-Key`。
+- 请求、状态、失败原因与凭据处理见 [SSH 安装](../../deploy/nodes.md#ssh-安装)。服务账号不能调用；只读 AccessKey 可调用 `capabilities` 与 `get`。扫描、开始与重试不接受 `Idempotency-Key`。SSH 连接能力由 `capabilities.version:2` 标识。
 
 | 过程 | 方法与路径 | 权限 |
 | --- | --- | --- |
+| `sshInstalls.capabilities` | `GET /ssh-installs/capabilities` | 读 |
 | `sshInstalls.scanHostKeys` | `POST /ssh-installs/host-keys` | 写 |
 | `sshInstalls.start` | `POST /ssh-installs` | 写 |
 | `sshInstalls.get` | `GET /ssh-installs/{id}` | 读 |

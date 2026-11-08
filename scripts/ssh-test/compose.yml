@@ -1,0 +1,19 @@
+services:
+  jump:
+    build: .
+    image: edgeweir-ssh-test:${SSH_TEST_TAG:-local}
+    networks:
+      front: { ipv4_address: 172.30.121.2 }
+      back: { ipv4_address: 172.30.122.2 }
+  target:
+    image: edgeweir-ssh-test:${SSH_TEST_TAG:-local}
+    cap_add: [NET_ADMIN]
+    command: [bash, -ec, "iptables -A INPUT -p tcp --dport 22 ! -s 172.30.122.2 -j DROP; ssh-keygen -A >/dev/null; /usr/sbin/sshd -E /var/log/sshd.log; exec sleep infinity"]
+    networks:
+      back: { ipv4_address: 172.30.122.3 }
+networks:
+  front:
+    ipam: { config: [{ subnet: 172.30.121.0/24 }] }
+  back:
+    internal: true
+    ipam: { config: [{ subnet: 172.30.122.0/24 }] }

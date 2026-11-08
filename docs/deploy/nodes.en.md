@@ -96,12 +96,33 @@ The check is advisory and blocks nothing: the console reaching its own address d
 Run the generated command on the node host (not the console host) with an account that may use sudo:
 
 ```bash title="Node"
-export EDGEWEIR_TOKEN='<one-time token>'
-curl -fsSL https://cdn-admin.example.com/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- \
-  --server https://cdn-admin.example.com:8443 --ca-sha256 <CA fingerprint>
+sh <<'EDGEWEIR_INSTALL'
+set -eu
+unset EDGEWEIR_TOKEN
+umask 077
+d=
+trap '[ -z "$d" ] || rm -rf "$d"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+d=$(mktemp -d "${TMPDIR:-/tmp}/edgeweir-install.XXXXXXXX")
+chmod 0700 "$d"
+cat >"$d/token" <<'EDGEWEIR_ENROLLMENT_TOKEN'
+<one-time-token>
+EDGEWEIR_ENROLLMENT_TOKEN
+chmod 0600 "$d/token"
+curl -fsSL https://cdn-admin.example.com/install.sh -o "$d/install.sh"
+set -- --token-file "$d/token" --server https://cdn-admin.example.com:8443 --ca-sha256 <ca-sha256>
+if [ "$(id -u)" = 0 ]; then
+  bash "$d/install.sh" "$@" </dev/null
+else
+  sudo bash "$d/install.sh" "$@" </dev/null
+fi
+EDGEWEIR_INSTALL
 ```
 
-The token travels only in the `EDGEWEIR_TOKEN` environment variable or through `--token-file PATH`, never in process arguments; `--token` is rejected.
+Copy the complete command, including both heredoc delimiters. It writes stdin into a 0600 token file in a 0700 temporary directory; sudo receives only file paths. Success, download/install failure and INT/TERM clean up. The installer also passes a private file to enroll and preserves user-supplied files. Legacy `EDGEWEIR_TOKEN` input remains accepted and is removed from child environments; `--token` is rejected.
+
+Add other options at the end of the script's `set -- --token-file …` line, for example `--force` or `--version 1.7.0`.
 
 | Option | Default | Effect |
 | --- | --- | --- |
@@ -132,60 +153,56 @@ Expected: `edgeweir-node.service` is `active (running)`; every `diagnose` line i
 
 ## SSH install
 
-Add nodes without signing in to each host: the console connects over SSH once, runs the same `install.sh` as the [install command](#2-run-the-install-command) (same signature checks and options), and disconnects; everything after that still goes through the node channel.
+The console runs the same signed installer over a one-shot SSH connection. Subsequent management still uses the node channel.
 
-1. The **Add node** dialog opens on **SSH install** (the other tab is **Manual command**; the last choice is remembered).
-2. **One host**: fill in **Host**, **Port** (default 22) and **User** (default root). **Batch**: in **Hosts**, one host per line as `host[:port] [user] [node name]` (IPv6 as `[2001:db8::1]:22`), or CSV `host,port,user,node name` (a header line is allowed, empty fields take the defaults); lines starting with `#` are ignored. Up to 200 hosts at once share one credential; a user on a line wins.
-3. **Authentication**: **Password**, or **Private key** (OpenSSH, PEM or PPK; with its **Passphrase** when encrypted). For a user other than root: a **sudo password** uses `sudo -S`; without one, passwordless sudo is required (`sudo -n`).
-4. **Options**: node name, the expected **Host key fingerprint** (one host), node group, **Version** (default latest), **Package format**, **Download mirror**, **Mirror only**, **Install ModSecurity**, **Concurrency** (batch, default 5, at most 20), **Timeout per host** (default 15 minutes, 1–60).
-5. Click **Read host keys**: the console completes the SSH handshake only, reads the host key and disconnects without signing in. Compare each `SHA256:…` fingerprint with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the host; a host whose key differs from the fingerprint entered is marked and not installed.
-6. Click **Install on N**: each host shows queued, connecting, installing (with its current step: checking, downloading, verifying, installing packages, enrolling, starting, health check), enrolled or why it failed; click a host for the last lines of its output. A single host shows the same **Progress** as the manual command once enrolled. **Stop**, **Retry** failed hosts (with the credential still in the form) and **Copy results** (tab-separated: host, port, user, state, reason, node id).
+1. Open **Clusters & nodes → Add node → SSH install**. Enter host, port (22) and user (root). Batch input accepts `host[:port] [user] [node name]`, bracketed IPv6, CSV `host,port,user,node name`, headers, blank lines and `#` comments. Up to 200 hosts share a target credential; a per-line user takes precedence.
+2. Select password, private key (OpenSSH/PEM/PPK, with passphrase) or **Core SSH agent**. Non-root users may provide a sudo password; otherwise passwordless sudo is required. **Auto (sudo preflight)** enables a PTY only when preflight requires it. **Always use TTY** and **Never use TTY** are explicit choices. An installer already started is never rerun because its output mentions a terminal.
+3. For a jump, enable **SSH jump host** and enter its separate host, port, user and authentication. Scan its fingerprint, verify it through an independent trusted channel against `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`, and confirm it before login.
+4. **Read host keys** and verify each target fingerprint. Target scans only read keys; a jumped scan authenticates only to the confirmed jump. Each hop verifies its own key before sending that hop's credentials.
+5. Set node group, version, package format, mirror, ModSecurity, concurrency (default 5, maximum 20) and per-host timeout (default 15 minutes, 1–60). **Install on N** shows both connections, authentication, sudo preflight, installer download, install steps and results. Click a host for sanitized output.
+6. Request cancellation or retry failed hosts. Retry resends both credentials and uses the same jump route and confirmed keys. A changed jump key needs a fresh scan and confirmation. Closing drops credentials. Copied results include node ID, cancellation request and cleanup state.
 
-| Item | Behavior |
+### Agent and network
+
+The administrator explicitly sets `EDGEWEIR_SSH_AGENT_SOCKET` in the **Core server environment** to an existing Unix agent socket with loaded keys. Core must be able to access it; it must be owned by Core's user or root and not writable by group/others. Containers need a server-side socket mount with matching UID/permissions. Browsers cannot supply a workstation `SSH_AUTH_SOCK`. Unconfigured, empty or inaccessible agents are unavailable; the API never returns the socket path.
+
+Agent login and **Forward agent to target** are independent; forwarding defaults off and can also accompany password/key login. The jump carries a TCP tunnel only and never receives agent forwarding; its login may independently use the agent. Cancellation and timeout immediately close the original connections and forwarding; cleanup reconnects with forwarding off. Sudo may remove root's `SSH_AUTH_SOCK`. Private keys are never exported from the agent.
+
+Core resolves DNS for both hops and applies `EDGEWEIR_OUTBOUND_ALLOW_CIDRS`, then connects to the checked IP. `forwardOut` receives that IP; the jump never resolves the destination again. Jump-only DNS names are unsupported: use a name Core resolves or an allowed IP. Core must reach the first hop; the target must reach the console, node channel and package repositories.
+
+### Stop and recovery
+
+`cancelRequested` records a cancellation request. Queued hosts never start. Running hosts report:
+
+| cleanup | Meaning |
 | --- | --- |
-| Host keys | Negotiated in ssh2's order (ssh-ed25519 first). The install accepts only the confirmed fingerprint; any other key ends the connection before signing in (`host_key_mismatch`), and no credential is sent |
-| Enrollment token | One single-use token per host and attempt (valid for the host timeout plus 5 minutes), expired at once after a failure, a stop or a timeout |
-| On the host | The login shell runs a fixed `sh` script: the token is the first line of stdin, the sudo password the second; `install.sh` is downloaded as the user into a `mktemp -d` directory, then runs as root with stdin from `/dev/null`; the token goes into an owner-only file in that directory and reaches `install.sh` as `--token-file` (not an environment variable: sudo logs preserved variables with their values), and the directory is removed. Command lines, environments and sudo logs carry only URLs, options and the token file's path |
-| Credentials | Held in the console's process memory for that install only and dropped when it ends (every host done or stopped); the console never stores SSH credentials and never writes them to the database, logs, job queue, audit log or error messages. A retry needs the credential again |
-| Output | At most the last 64 lines and 16 KiB per host, with passwords, passphrases, tokens and private key blocks removed |
-| Run state | In the console's process memory only: kept 1 hour after the run ends, lost when the console restarts (the dialog says so; check the node list). At most 4 runs at once |
-| Outbound policy | A host is resolved once and connected by that address; special-purpose addresses (private, loopback …) need `EDGEWEIR_OUTBOUND_ALLOW_CIDRS`, otherwise "The outbound policy does not allow this address" |
-| Audit | `ssh_install.start` (cluster, run id, host count), one `ssh_install.host` per host (host, port, user, host key fingerprint, outcome, node id, token id), `ssh_install.cancel` |
-| Network | The console must reach the hosts' SSH port; the hosts must reach the console URL (`install.sh`) and the node channel URL, as with the manual command |
+| `not_needed` | No remote installer was started |
+| `pending` | Stopping or confirming |
+| `stopped` | This attempt's processes stopped and token, script and temporary directories cleaned |
+| `unknown` | Remote state is unconfirmed; closing SSH is not cleanup evidence |
 
-Reasons:
+The installer has its own process group and a remote deadline independent of SSH. TERM gets a bounded grace period before KILL if needed. Only this attempt's resources are affected; existing identity and CDN services remain. Unused tokens expire promptly. Registration remains a fact after a later failure, cancellation or disconnect: `nodeId` and completed steps are retained. Token use alone never means the whole install succeeded.
 
-| Reason | Meaning |
-| --- | --- |
-| Host key mismatch | The host presented a key other than the confirmed one: an interception, or the host was reinstalled |
-| Unreachable / Timed out | Address, port or firewall; or the host timeout ran out |
-| Authentication failed | Wrong user, password or key |
-| sudo needs a password / Wrong sudo password / No sudo rights | sudo of a user other than root |
-| sudo requires a terminal (requiretty) | sudoers sets `requiretty`, which SSH install does not support: use the manual command, or drop the setting |
-| Could not download install.sh | The host cannot reach the console URL |
-| System not supported | Not Linux, no systemd, or an unsupported architecture or glibc (exit code 21) |
-| Host cannot reach the node channel | The node channel URL is unreachable, the CA fingerprint differs, or the WebSocket entry is closed (22, or `unreachable`, `ca_mismatch` while enrolling) |
-| Signature or checksum mismatch | The cosign signature or a SHA-256 failed (24) |
-| Token rejected | The console refused this attempt's token (26, the node's `token_rejected`) |
-| Enrolled with another console or cluster | The host's identity is pinned to another console's CA (26, the node's `enrolled_elsewhere`), or the enrollment reported a node of another cluster of this console |
-| Another install is running on the host | Another `install.sh` or `edgeweir-node enroll` runs (29, or the node's `busy`); retry later |
-| Service did not start / Started, not healthy in time | Step 10 (27) or step 11 (28); see the host's output and `journalctl -u edgeweir-node -n 50` |
-| install.sh failed | Any other failure; see the host's output |
-| Not enrolled (enrolled, but no node of this console) | `install.sh` ended without using the token or reporting a node of this console: edgeweir-node before 1.7.0 with an identity from elsewhere (to enroll again, run the manual command with `--force`) |
+Interrupted package operations are not a system rollback. Check `dpkg --audit`/`dpkg --configure -a` or RPM/DNF state and follow the package manager's recovery guidance before retrying. Core restart forgets in-memory runs; inspect the node list. Remote deadlines remain active.
 
-Retries and new runs never add a second node: every attempt gets a new one-time token; an enrolled host (edgeweir-node 1.7.0 and later) reports its node through `edgeweir-node enroll --if-not-enrolled`; a node that enrolled while SSH dropped gets the same node again when its key enrolls once more ([idempotent by key](#enrolling-again-and-node-identity)).
+Credentials exist only in necessary requests and run memory, never in the database, logs, audit, queue, exports or browser storage. A token reaches `--token-file` through a 0600 file in a 0700 directory, never argv or environment. PTY input is withheld until echo and input processing are disabled and a ready marker is received. Installer stdin is `/dev/null`, so it cannot consume a leftover sudo password. Output keeps at most 64 lines/16 KiB per host after redaction; result lines are parsed separately.
 
-API (`/api/v1`, an AccessKey with write scope; service accounts cannot call it; read-only AccessKeys can only read):
+### API
+
+Prefix `/api/v1`; mutations require the operator's write AccessKey. Service accounts cannot call these endpoints. Read keys can query capabilities and status.
 
 | Request | Notes |
 | --- | --- |
-| `POST /ssh-installs/host-keys` | `{ hosts: [{ host, port }] }`; returns each host's `algorithm`, `fingerprint` or `error` (`unreachable`, `timeout`, `not_ssh`, `outbound_refused`) |
-| `POST /ssh-installs` | `{ clusterId, nodeGroupId?, credential: { username, password?, privateKey?, passphrase?, sudoPassword? }, hosts: [{ host, port, username?, nodeName?, hostKeyFingerprint }], options: { version, format, mirror, mirrorOnly, modsecurity, noStart }, concurrency, timeoutMinutes }`; returns the run |
-| `GET /ssh-installs/{id}` | The run and each host's `state`, `step` (the current step while installing: `check`, `download`, `verify`, `install`, `enroll`, `start`, `health`; otherwise `null`), `error`, `exitCode`, `tokenId`, `nodeId`, `output`; 404 `SSH_INSTALL_NOT_FOUND` once it expired or the console restarted |
-| `POST /ssh-installs/{id}/cancel` | Stops the run |
-| `POST /ssh-installs/{id}/retry` | `{ credential, hosts?: [{ id, hostKeyFingerprint? }] }`; by default every failed or stopped host; 409 `SSH_INSTALL_BUSY` while the run is going |
+| `GET /ssh-installs/capabilities` | `{version:2,agent:{available,reason}}`; reason is `not_configured`, `unavailable` or null |
+| `POST /ssh-installs/host-keys` | `{hosts:[{host,port}],jumpHost?}`; returns algorithm, fingerprint, error, errorHop and presentedFingerprint |
+| `POST /ssh-installs` | Existing clusterId/nodeGroupId/hosts/options/concurrency/timeoutMinutes plus `tty` and `jumpHost`; target credential adds independent `agent` and `agentForwarding` booleans (default false) |
+| `GET /ssh-installs/{id}` | Hosts, phase, step, completedSteps, exitCode, nodeId, cancelRequested, cleanup, errorHop and sanitized output; 404 `SSH_INSTALL_NOT_FOUND` after expiry/restart |
+| `POST /ssh-installs/{id}/cancel` | Requests cancellation; keep polling cleanup |
+| `POST /ssh-installs/{id}/retry` | `{credential,tty,jumpHost?,hosts?:[{id,hostKeyFingerprint?}]}`; 409 `SSH_INSTALL_BUSY` while running |
 
-`POST /ssh-installs` and `/retry` refuse an `Idempotency-Key` (the body carries credentials; see [API and endpoints](../reference/api.en.md)).
+`tty` is `auto|always|never`. `jumpHost` is `{host,port,hostKeyFingerprint,credential}` with its own username/authentication. Retry must resend it. Errors include `sudo_password_wrong`, `sudo_not_allowed`, `sudo_requires_tty` (TTY explicitly disabled), `pty_refused` (refused or echo could not be disabled), `agent_unavailable`, `host_key_mismatch`, `outbound_refused`, and existing installer step errors. `errorHop` distinguishes jump/target.
+
+Finished runs remain for one hour; at most four run concurrently. Scan, start and retry reject `Idempotency-Key` and retain no request-body hash. Audit records host, key, outcome, node ID, cancellation and cleanup, with no credential.
 
 ## install.sh flow
 
@@ -246,7 +263,7 @@ The deb and rpm package scripts create the `edgeweir` user, `/var/lib/edgeweir-n
 
 ## Manual installation
 
-Without `install.sh`, first [verify the releases](#verifying-releases), then follow the install form. Put the token in a file only root can read and delete it after enrollment.
+Without `install.sh`, first [verify the releases](#verifying-releases), then follow the install form. The token goes into the current user's private temporary file and is removed after enrollment.
 
 ### deb / rpm
 
@@ -261,12 +278,28 @@ sudo dnf install ./edgeweir-openresty-1.31.1.1-3.x86_64.rpm \
 ```
 
 ```bash title="Node"
-sudo install -m 0600 /dev/stdin /root/edgeweir-token <<< '<one-time token>'
-sudo edgeweir-node enroll --server https://cdn-admin.example.com:8443 \
-  --token-file /root/edgeweir-token --ca-sha256 <CA fingerprint>
-sudo rm /root/edgeweir-token
-sudo systemctl disable --now openresty 2>/dev/null || true
-sudo systemctl enable --now edgeweir-node
+sh <<'EDGEWEIR_ENROLL'
+set -eu
+unset EDGEWEIR_TOKEN
+umask 077
+d=
+trap '[ -z "$d" ] || rm -rf "$d"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+d=$(mktemp -d "${TMPDIR:-/tmp}/edgeweir-enroll.XXXXXXXX")
+chmod 0700 "$d"
+cat >"$d/token" <<'EDGEWEIR_ENROLLMENT_TOKEN'
+<one-time token>
+EDGEWEIR_ENROLLMENT_TOKEN
+chmod 0600 "$d/token"
+as_root() {
+  if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi
+}
+as_root edgeweir-node enroll --server https://cdn-admin.example.com:8443 \
+  --token-file "$d/token" --ca-sha256 <CA fingerprint> </dev/null
+as_root systemctl disable --now openresty 2>/dev/null || true
+as_root systemctl enable --now edgeweir-node
+EDGEWEIR_ENROLL
 ```
 
 The packages do not enable the service: enable it after enrollment. On a host with OpenResty's own packages, disable their `openresty.service` (the unit declares `Conflicts=openresty.service`).
@@ -540,7 +573,7 @@ Errors during installation and enrollment. Connection, configuration, certificat
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `no enrollment token` | `sudo` did not keep `EDGEWEIR_TOKEN` | Run the generated command as is: `export` and `sudo --preserve-env=EDGEWEIR_TOKEN` |
+| `no enrollment token` | Missing token file, or only part of the command was copied | Copy the entire generated command, or supply a readable `--token-file PATH` |
 | `the enrollment token is malformed (expected ewt_...)` | The token was copied incompletely | Copy the install command again |
 | `--server must be an https://, wss:// or ws:// URL` | Missing or wrong scheme | Use the "Node channel" URL from **System settings** |
 | `systemd is required (use --no-start to only install and enroll)` | No systemd on the host | Use a systemd host, add `--no-start` to install and enroll only, or use [Docker](#docker) |

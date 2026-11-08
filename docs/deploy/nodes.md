@@ -96,12 +96,33 @@ gh attestation verify edgeweir-node_<版本>_linux_amd64.tar.gz --repo marvinli0
 在节点主机（不是控制台主机）上以具备 sudo 权限的账户执行生成的命令：
 
 ```bash title="节点"
-export EDGEWEIR_TOKEN='<一次性 token>'
-curl -fsSL https://cdn-admin.example.com/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- \
-  --server https://cdn-admin.example.com:8443 --ca-sha256 <CA 指纹>
+sh <<'EDGEWEIR_INSTALL'
+set -eu
+unset EDGEWEIR_TOKEN
+umask 077
+d=
+trap '[ -z "$d" ] || rm -rf "$d"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+d=$(mktemp -d "${TMPDIR:-/tmp}/edgeweir-install.XXXXXXXX")
+chmod 0700 "$d"
+cat >"$d/token" <<'EDGEWEIR_ENROLLMENT_TOKEN'
+<one-time-token>
+EDGEWEIR_ENROLLMENT_TOKEN
+chmod 0600 "$d/token"
+curl -fsSL https://cdn-admin.example.com/install.sh -o "$d/install.sh"
+set -- --token-file "$d/token" --server https://cdn-admin.example.com:8443 --ca-sha256 <ca-sha256>
+if [ "$(id -u)" = 0 ]; then
+  bash "$d/install.sh" "$@" </dev/null
+else
+  sudo bash "$d/install.sh" "$@" </dev/null
+fi
+EDGEWEIR_INSTALL
 ```
 
-token 只经 `EDGEWEIR_TOKEN` 环境变量或 `--token-file PATH` 传递，不出现在进程参数中；`--token` 被拒绝。
+完整复制生成的命令，包括起止标记。命令通过 stdin 写入 0700 临时目录中的 0600 令牌文件，再以 `--token-file` 交给安装器；sudo 只接收文件路径。成功、下载或安装失败、INT/TERM 中断后自动清理。安装器到 enroll 也只使用私密文件，不删除用户提供的文件。旧的 `EDGEWEIR_TOKEN` 输入仍兼容，但不会传给子进程；`--token` 被拒绝。
+
+其他选项加在脚本中 `set -- --token-file …` 这一行的末尾，例如 `--force` 或 `--version 1.7.0`。
 
 | 选项 | 默认值 | 作用 |
 | --- | --- | --- |
@@ -132,60 +153,56 @@ sudo edgeweir-node diagnose
 
 ## SSH 安装
 
-不登录节点主机也能添加节点：控制台用 SSH 连接一次，运行与 [安装命令](#2-执行安装命令) 相同的 `install.sh`（同样的签名校验与选项），再断开；之后的一切仍经节点通道。
+控制台通过一次性 SSH 连接运行同一个签名安装器；后续管理仍走节点通道。
 
-1. **添加节点** 对话框默认是 **SSH 安装**（另一个页签是 **手动命令**，上次的选择会记住）。
-2. **单台**：填写 **主机**、**端口**（默认 22）、**用户**（默认 root）。**批量**：在 **主机列表** 每行填一台 `主机[:端口] [用户] [节点名称]`（IPv6 写成 `[2001:db8::1]:22`），或 CSV `主机,端口,用户,节点名称`（可带表头，空字段取默认值），`#` 开头的行忽略；一次最多 200 台，全部主机共用一份凭据，行内的用户优先。
-3. **认证**：**密码**，或 **私钥**（OpenSSH、PEM 或 PPK，加密的私钥填 **私钥口令**）。用户不是 root 时：填 **sudo 密码** 用 `sudo -S`；不填时要求免密 sudo（`sudo -n`）。
-4. **选项**：节点名称、预期的 **主机指纹**（单台）、节点组、**版本**（默认最新）、**包格式**、**下载镜像**、**只用镜像**、**安装 ModSecurity**、**并发**（批量，默认 5，最大 20）、**单台超时**（默认 15 分钟，1–60）。
-5. 点击 **读取主机指纹**：控制台只完成 SSH 握手、读取主机密钥后断开，不登录。逐台核对表中的 `SHA256:…` 指纹与主机上 `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` 的输出；填了预期指纹而不符的主机标「与填写的指纹不符」，不会安装。
-6. 点击 **安装 N 台**：每台主机依次显示排队、连接中、安装中（及当前步骤：检查、下载、校验、安装软件包、注册、启动、健康检查）、已注册或失败原因；点击主机看输出的最后几十行。单台安装成功后显示与手动命令相同的 **注册进度**。可以 **停止**、**重试** 失败的主机（使用表单里仍保留的凭据）、**复制结果**（制表符分隔：主机、端口、用户、状态、原因、节点 id）。
+1. 在 **集群与节点 → 添加节点 → SSH 安装** 填写主机、端口（22）、用户（root）。批量每行 `主机[:端口] [用户] [节点名称]`，IPv6 用 `[地址]:端口`；也支持 CSV `主机,端口,用户,节点名称`、表头、空行和 `#` 注释。每次最多 200 台，共用一份目标凭据，行内用户优先。
+2. 选择密码、私钥（OpenSSH/PEM/PPK，可带口令）或 **Core SSH agent**。非 root 用户可填 sudo 密码；不填时使用免密 sudo。**终端** 默认 **自动（sudo 预检）**：只在安装前预检发现 requiretty 时启用 PTY。也可选始终使用或不使用 TTY；进入安装阶段后不会因 TTY 错误自动重跑。
+3. 需要跳板机时启用 **SSH 跳板机**，填写独立的地址、端口、用户和认证。先扫描它的指纹，与可信渠道提供的 `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` 核对，勾选 **已核对跳板机指纹**。跳板机密钥未确认时不登录它。
+4. 点击 **读取主机指纹**，逐台核对目标机的 `SHA256:…`。目标机扫描只取密钥；通过跳板时仅登录已确认的跳板机。两跳分别校验密钥，本跳不匹配时不发送本跳登录凭据。
+5. 设置节点组、版本、包格式、下载镜像、ModSecurity、并发（默认 5，最大 20）和单台超时（默认 15 分钟，1–60），点击 **安装 N 台**。页面显示两跳连接、认证、sudo 预检、下载安装器、安装步骤及结果；点击主机查看脱敏输出。
+6. 可请求停止或重试失败主机。重试重新发送目标及跳板凭据，并使用相同跳板路径和确认的指纹；跳板密钥变化时先重新扫描核对。关闭对话框后凭据丢失。复制结果包含节点 id、取消请求和清理状态。
 
-| 项目 | 行为 |
+### Agent 与网络
+
+管理员在 **Core 服务器运行环境** 显式设置 `EDGEWEIR_SSH_AGENT_SOCKET`，指向已有、已加载密钥的 Unix agent socket。它必须可由 Core 用户访问，由该用户或 root 所有，且组/其他用户不可写。容器部署需挂载服务器 socket 并匹配 Core 的 UID/权限；不能把操作者电脑的 `SSH_AUTH_SOCK` 从浏览器传入。未配置、无密钥、权限错误或不可访问时，API 和界面显示不可用，不返回 socket 路径。
+
+Agent 登录与 **向目标机转发 agent** 独立，转发默认关闭；密码/私钥登录也可显式转发。跳板机仅承载 TCP 隧道，不向跳板机转发 agent；其登录仍可独立使用 agent。取消和超时立即关闭原连接及转发；清理另建不转发 agent 的连接。sudo 环境策略仍可能移除 root 进程的 `SSH_AUTH_SOCK`。私钥不从 agent 导出。
+
+两跳和目标均由 Core 解析 DNS、执行 `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 策略，再按检查过的 IP 连接；`forwardOut` 也只接收该 IP，跳板机不重新解析。仅跳板机能解析的名字不支持，应提供 Core 可解析的名字或允许的 IP。Core 要能到达第一跳；目标机要能访问控制台、节点通道与软件包源。
+
+### 停止与恢复
+
+`cancelRequested` 表示已请求取消。排队主机不再启动；运行主机显示清理结果：
+
+| cleanup | 含义 |
 | --- | --- |
-| 主机指纹 | 控制台按 ssh2 的算法顺序协商（ssh-ed25519 优先）。安装时只接受确认过的指纹，其他密钥在登录前断开（`host_key_mismatch`），不发送任何凭据 |
-| 注册 token | 每台主机、每次尝试单独生成一个一次性 token（有效期为单台超时加 5 分钟），失败、停止或超时后立即作废 |
-| 远端执行 | 登录 shell 执行一段固定的 `sh` 脚本：token 是标准输入第一行，sudo 密码是第二行；`install.sh` 先以登录用户下载到 `mktemp -d` 的临时目录，再以 root 运行，其标准输入为 `/dev/null`；token 写进该目录里仅本人可读的文件，以 `--token-file` 交给 `install.sh`（不经环境变量：sudo 会把保留的环境变量连同值写进日志），结束时删除临时目录。命令行、环境与 sudo 日志里只有地址、选项与 token 文件路径 |
-| 凭据 | 只在该次安装期间留在控制台进程内存里，安装结束（全部主机结束或停止）即丢弃；控制台绝不保存 SSH 凭据，不写入数据库、日志、任务队列、审计或错误信息。重试需要再次提交凭据 |
-| 输出 | 每台最多保留最后 64 行、16 KiB，先删去密码、口令、token 与私钥块 |
-| 任务状态 | 只在控制台进程内存里：结束后保留 1 小时，控制台重启后丢失（界面提示到节点列表核对）。最多 4 个任务同时进行 |
-| 出站策略 | 主机解析一次后按地址连接；解析到内网、回环等特殊用途地址时需要 `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 放行，否则为「出站策略不允许连接该地址」 |
-| 审计 | `ssh_install.start`（集群、任务 id、主机数）、每台主机一条 `ssh_install.host`（主机、端口、用户、主机指纹、结果、节点 id、token id）、`ssh_install.cancel` |
-| 网络 | 控制台要能连上主机的 SSH 端口；主机要能访问控制台地址（`install.sh`）与节点通道地址，与手动命令相同 |
+| `not_needed` | 尚未启动远端安装任务 |
+| `pending` | 正在停止或确认 |
+| `stopped` | 已确认本次进程停止，令牌、脚本和临时目录已清理 |
+| `unknown` | 无法确认远端状态；关闭 SSH 不等于清理完成 |
 
-失败原因：
+安装器在独立进程组内运行，远端期限不依赖 SSH 连接。终止先发送 TERM，给予有限宽限后必要时 KILL；只处理本次任务的进程与目录，保留节点身份及现有 CDN 服务。未使用的注册令牌及时作废。注册后失败、取消或失联仍保留 `nodeId` 和完成步骤；使用过令牌不等于整次安装成功。
 
-| 原因 | 含义 |
-| --- | --- |
-| 主机指纹不符 | 主机出示的密钥不是确认过的，可能被中间人拦截或主机已重装 |
-| 无法连接 / 超时 | 地址、端口或防火墙；或单台超时用完 |
-| 认证失败 | 用户、密码或私钥不对 |
-| 需要 sudo 密码 / sudo 密码错误 / 没有 sudo 权限 | 非 root 用户的 sudo |
-| sudo 要求终端（requiretty） | sudoers 设置了 `requiretty`，SSH 安装不支持，改用手动命令或去掉该设置 |
-| 下载 install.sh 失败 | 主机访问不到控制台地址 |
-| 系统不受支持 | 不是 Linux、没有 systemd、架构或 glibc 不支持（退出码 21） |
-| 主机连不上节点通道 | 节点通道地址不通、CA 指纹不符或 WebSocket 入口未开放（22，或注册时的 `unreachable`、`ca_mismatch`） |
-| 签名或校验和不符 | cosign 签名或 SHA-256 校验失败（24） |
-| 令牌被拒绝 | 控制台拒绝了本次的 token（26，节点的 `token_rejected`） |
-| 已注册到其他控制台或集群 | 主机的身份固定在另一个控制台的 CA 上（26，节点的 `enrolled_elsewhere`），或注册结果是本控制台另一个集群的节点 |
-| 主机上另有安装在进行 | 另一个 `install.sh` 或 `edgeweir-node enroll` 正在运行（29，或节点的 `busy`）；稍后重试 |
-| 服务启动失败 / 已启动，健康检查未通过 | 第 10 步（27）或第 11 步（28），查看该主机的输出与 `journalctl -u edgeweir-node -n 50` |
-| install.sh 失败 | 其他失败，查看该主机的输出 |
-| 未注册（主机已注册，但不是本控制台的节点） | `install.sh` 正常结束，既没有使用 token，也没有报告本控制台的节点：主机上的 edgeweir-node 早于 1.7.0、身份属于别处（要重新注册用手动命令加 `--force`） |
+软件包安装可能中断，不保证回滚系统。重试前检查 `dpkg --audit`/`dpkg --configure -a` 或对应 RPM/DNF 状态，按包管理器提示恢复。控制台重启会丢失内存中的任务，应核对节点列表；远端期限仍生效。
 
-重试与再次运行不会产生第二个节点：每次尝试用新的一次性 token；已注册的主机（edgeweir-node 1.7.0 起）经 `edgeweir-node enroll --if-not-enrolled` 报告原来的节点；SSH 断线时节点已经注册的，同一私钥再次注册得到同一个节点（[按密钥幂等](#重新注册与节点身份)）。
+密码、私钥、口令、sudo 密码只在必要请求和运行内存中存在，不进入数据库、日志、审计、队列、导出或浏览器存储。令牌通过 0700 临时目录里的 0600 文件交给 `--token-file`，不进参数或环境；PTY 在成功关闭回显和终端输入处理、回传就绪标记后才收秘密。安装器 stdin 固定为 `/dev/null`，不会读到遗留 sudo 密码。每台保留最多 64 行/16 KiB 脱敏输出，结果行单独解析。
 
-API（`/api/v1`，AccessKey 须有写权限；服务账号不能调用；只读 AccessKey 只能查询）：
+### API
+
+路径前缀 `/api/v1`；写操作限运营者写权限 AccessKey，服务账号不可调用。能力和状态可用只读 AccessKey 查询。
 
 | 请求 | 说明 |
 | --- | --- |
-| `POST /ssh-installs/host-keys` | `{ hosts: [{ host, port }] }`，返回每台的 `algorithm`、`fingerprint` 或 `error`（`unreachable`、`timeout`、`not_ssh`、`outbound_refused`） |
-| `POST /ssh-installs` | `{ clusterId, nodeGroupId?, credential: { username, password?, privateKey?, passphrase?, sudoPassword? }, hosts: [{ host, port, username?, nodeName?, hostKeyFingerprint }], options: { version, format, mirror, mirrorOnly, modsecurity, noStart }, concurrency, timeoutMinutes }`，返回任务 |
-| `GET /ssh-installs/{id}` | 任务与每台主机的 `state`、`step`（安装中的当前步骤：`check`、`download`、`verify`、`install`、`enroll`、`start`、`health`，其他时候为 `null`）、`error`、`exitCode`、`tokenId`、`nodeId`、`output`；任务不存在（过期或控制台重启）为 404 `SSH_INSTALL_NOT_FOUND` |
-| `POST /ssh-installs/{id}/cancel` | 停止 |
-| `POST /ssh-installs/{id}/retry` | `{ credential, hosts?: [{ id, hostKeyFingerprint? }] }`，默认重试全部失败与已停止的主机；任务仍在进行时 409 `SSH_INSTALL_BUSY` |
+| `GET /ssh-installs/capabilities` | `{version:2,agent:{available,reason}}`；reason 为 `not_configured`、`unavailable` 或 null |
+| `POST /ssh-installs/host-keys` | `{hosts:[{host,port}],jumpHost?}`；每台返回算法、指纹、error、errorHop、presentedFingerprint |
+| `POST /ssh-installs` | 既有 clusterId/nodeGroupId/hosts/options/concurrency/timeoutMinutes，增加 `tty`、`jumpHost`；目标 `credential` 增加独立的 `agent`、`agentForwarding`（默认 false） |
+| `GET /ssh-installs/{id}` | 任务、主机状态、phase、step、completedSteps、exitCode、nodeId、cancelRequested、cleanup、errorHop 和脱敏 output；过期或重启后 404 `SSH_INSTALL_NOT_FOUND` |
+| `POST /ssh-installs/{id}/cancel` | 请求取消，继续轮询清理结果 |
+| `POST /ssh-installs/{id}/retry` | `{credential,tty,jumpHost?,hosts?:[{id,hostKeyFingerprint?}]}`；任务仍在运行时 409 `SSH_INSTALL_BUSY` |
 
-`POST /ssh-installs` 与 `/retry` 不接受 `Idempotency-Key`（请求体带凭据，见 [API 与端点](../reference/api.md)）。
+`tty` 为 `auto|always|never`。`jumpHost` 为 `{host,port,hostKeyFingerprint,credential}`，它的 credential 含独立 username 和认证；重试跳板机时必须重新提供。错误包括 `sudo_password_wrong`、`sudo_not_allowed`、`sudo_requires_tty`（显式禁用 TTY）、`pty_refused`（服务器拒绝或无法关闭回显）、`agent_unavailable`、`host_key_mismatch`、`outbound_refused`，以及安装器已有的分步错误。`errorHop` 区分 jump/target。
+
+任务结束保留 1 小时，同时最多 4 个运行。扫描、开始、重试均不接受 `Idempotency-Key`，不保留凭据请求体的哈希。审计保留主机、指纹、结果、节点 id、取消和清理状态，不保留秘密。
 
 ## install.sh 流程
 
@@ -246,7 +263,7 @@ deb、rpm 由包脚本创建 `edgeweir` 用户、`/var/lib/edgeweir-node`（0700
 
 ## 手动安装
 
-不使用 `install.sh` 时，先 [校验发布物](#校验发布物)，再按安装形式执行。token 写入只有 root 可读的文件，注册后删除。
+不使用 `install.sh` 时，先 [校验发布物](#校验发布物)，再按安装形式执行。token 写入当前用户的私密临时文件，注册后自动删除。
 
 ### deb / rpm
 
@@ -261,12 +278,28 @@ sudo dnf install ./edgeweir-openresty-1.31.1.1-3.x86_64.rpm \
 ```
 
 ```bash title="节点"
-sudo install -m 0600 /dev/stdin /root/edgeweir-token <<< '<一次性 token>'
-sudo edgeweir-node enroll --server https://cdn-admin.example.com:8443 \
-  --token-file /root/edgeweir-token --ca-sha256 <CA 指纹>
-sudo rm /root/edgeweir-token
-sudo systemctl disable --now openresty 2>/dev/null || true
-sudo systemctl enable --now edgeweir-node
+sh <<'EDGEWEIR_ENROLL'
+set -eu
+unset EDGEWEIR_TOKEN
+umask 077
+d=
+trap '[ -z "$d" ] || rm -rf "$d"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+d=$(mktemp -d "${TMPDIR:-/tmp}/edgeweir-enroll.XXXXXXXX")
+chmod 0700 "$d"
+cat >"$d/token" <<'EDGEWEIR_ENROLLMENT_TOKEN'
+<一次性 token>
+EDGEWEIR_ENROLLMENT_TOKEN
+chmod 0600 "$d/token"
+as_root() {
+  if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi
+}
+as_root edgeweir-node enroll --server https://cdn-admin.example.com:8443 \
+  --token-file "$d/token" --ca-sha256 <CA 指纹> </dev/null
+as_root systemctl disable --now openresty 2>/dev/null || true
+as_root systemctl enable --now edgeweir-node
+EDGEWEIR_ENROLL
 ```
 
 软件包不自动启用服务：注册后再启用。主机装有 OpenResty 官方包时停用其 `openresty.service`（单元声明 `Conflicts=openresty.service`）。
@@ -540,7 +573,7 @@ downloads/
 
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
-| `no enrollment token` | `sudo` 未保留 `EDGEWEIR_TOKEN` | 原样执行生成的命令：`export` 与 `sudo --preserve-env=EDGEWEIR_TOKEN` |
+| `no enrollment token` | 未提供令牌文件，或只复制了部分命令 | 完整复制生成的命令，或传入可读取的 `--token-file PATH` |
 | `the enrollment token is malformed (expected ewt_...)` | token 复制不完整 | 重新复制安装命令 |
 | `--server must be an https://, wss:// or ws:// URL` | 地址缺少协议或协议错误 | 使用 **系统设置** 中的「节点通道」地址 |
 | `systemd is required (use --no-start to only install and enroll)` | 主机无 systemd | 使用 systemd 主机，或加 `--no-start` 只安装与注册，或使用 [Docker](#docker) |
