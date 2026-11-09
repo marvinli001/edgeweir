@@ -2,6 +2,8 @@
 
 控制台在 `<控制台地址>/mcp` 提供 MCP 服务（Streamable HTTP），AI 客户端经 OAuth 授权后调用控制台的过程。默认关闭。
 
+![MCP 服务的关闭状态](../assets/ui/mcp.zh.png)
+
 ## 开启
 
 1. 控制台地址（`EDGEWEIR_PUBLIC_URL`）须为 HTTPS，且客户端能访问；Claude.ai 等云端客户端要求公网可达。

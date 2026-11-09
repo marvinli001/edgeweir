@@ -2,6 +2,10 @@
 
 经 SSH 由控制台安装，或在 Linux 主机、容器中安装边缘节点并注册到集群：要求、发布物与校验、安装命令、SSH 安装、手动安装、注册与 mTLS、退役、端口、访客 IP、区域探针与下载镜像。
 
+![SSH 安装表单](../assets/ui/node-ssh.zh.png)
+
+![手动安装面板（注册命令已遮挡）](../assets/ui/node-manual.zh.png)
+
 组件、端口与文件总表见 [节点概览](../node/README.md)。
 
 ## 要求

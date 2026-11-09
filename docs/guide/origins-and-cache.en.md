@@ -2,6 +2,10 @@
 
 The site's Origins and Cache tabs: origins, groups, health checks, origin connections, S3, cache rules and key, PURGE, cache zone, purge and prefetch.
 
+![Cache settings and collapsible groups](../assets/ui/cache-settings.en.png)
+
+![Cache settings at phone width](../assets/ui/cache-mobile.en.png)
+
 ## Concepts
 
 | Term | Definition |

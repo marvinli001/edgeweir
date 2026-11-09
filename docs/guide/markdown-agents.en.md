@@ -2,6 +2,8 @@
 
 When a request lists `text/markdown` in `Accept`, the node converts the site's HTML response to Markdown for AI agents and crawlers; browsers and other clients still get HTML. The behaviour is compatible with Cloudflare's Markdown for Agents. When conversion fails or is out of range, the original HTML is returned.
 
+![Markdown for Agents settings](../assets/ui/markdown.en.png)
+
 ## Concepts
 
 | Term | Definition |
@@ -13,7 +15,7 @@ When a request lists `text/markdown` in `Accept`, the node converts the site's H
 
 ## Turning it on
 
-1. Open **Sites** → choose a site → the **Cache** tab.
+1. Open **Sites** → choose a site → **Performance & delivery** → **Cache**, then expand **Content optimization**.
 2. On the **Markdown for Agents** card, turn on **Enabled**, fill in include and exclude path prefixes if needed (one per line), and click **Save**.
 3. The **Markdown responses** card shows the number of Markdown responses in the chosen range.
 

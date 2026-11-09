@@ -2,6 +2,8 @@
 
 The console serves MCP (Streamable HTTP) at `<console URL>/mcp`: AI clients call console procedures after you authorize them over OAuth. Off by default.
 
+![MCP service in its off state](../assets/ui/mcp.en.png)
+
 ## Switch it on
 
 1. The console URL (`EDGEWEIR_PUBLIC_URL`) must be HTTPS and reachable by the client; cloud clients such as Claude.ai need it on the public internet.

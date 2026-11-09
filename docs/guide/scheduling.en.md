@@ -2,6 +2,8 @@
 
 Regional probes, node metrics, scheduling addresses with backup IP levels, and scheduling rules that change DNS by metrics.
 
+![Monitoring with no probes and probe settings](../assets/ui/monitoring.en.png)
+
 ## Concepts
 
 | Term | Definition |

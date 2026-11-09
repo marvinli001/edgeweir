@@ -2,6 +2,8 @@
 
 The site list, creating sites, the site page and its Overview tab, stars, tags, batch actions, copying settings, cloning and deleting sites.
 
+![Site settings groups and tabs](../assets/ui/site-settings.en.png)
+
 ## Concepts
 
 | Term | Definition |

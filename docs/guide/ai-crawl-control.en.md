@@ -2,6 +2,8 @@
 
 Recognize requests that claim to be AI crawlers and verify them; allow, block, challenge or charge them per crawler or operator; manage robots.txt; see crawler traffic per site.
 
+![AI crawler policies and managed robots.txt settings](../assets/ui/ai-crawl.en.png)
+
 ## Concepts
 
 | Term | Definition |
@@ -49,7 +51,7 @@ Order: the site's crawler action → the site's operator action → the global c
 ## Settings
 
 1. Global: **Protection settings → Protection → AI crawlers**. With **Detect AI crawlers** on, nodes tag crawlers in access logs and statistics; here you set every site's default actions, impersonators, challenge type and block response. Saving publishes every cluster.
-2. Site: **Sites → (site) → AI crawlers**, the **AI crawl control** card. Override the global actions per crawler or operator; impersonators, challenge type and block response can follow the global settings. Saving hot-updates the site's cluster.
+2. Site: **Sites → (site) → Security → AI crawlers**, the **AI crawl control** card. Override the global actions per crawler or operator; impersonators, challenge type and block response can follow the global settings. Saving hot-updates the site's cluster.
 
 The cluster's active nodes need `ai-crawlers-v1`; detection alone does not.
 

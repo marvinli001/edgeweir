@@ -2,6 +2,10 @@
 
 Install and enroll edge nodes: requirements, releases and verification, install command, SSH install, manual installs, enrollment, decommissioning, ports, client IP, probes, mirror.
 
+![SSH installation form](../assets/ui/node-ssh.en.png)
+
+![Manual installation panel with the enrollment command redacted](../assets/ui/node-manual.en.png)
+
 Components, ports and files at a glance: [Node overview](../node/README.en.md).
 
 ## Requirements

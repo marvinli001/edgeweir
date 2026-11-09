@@ -3,9 +3,9 @@
 // Simplified Chinese, `name.en.md` English); here it becomes MDX for Fumadocs:
 //
 //   - the H1 becomes `title`, a one-line paragraph right after it `description`
-//   - relative links to published pages become site URLs, links to other
-//     repository files become GitHub URLs, and a link to a missing or
-//     git-ignored file (absent on GitHub) fails
+//   - relative links to published pages become site URLs; local images are
+//     copied into the static export, other repository files become GitHub URLs,
+//     and a link to a missing or git-ignored file fails
 //   - GitHub alerts (`> [!NOTE]` …) become <Callout>
 //   - SECURITY.md drops its English summary (SECURITY.en.md is the English page)
 //
@@ -20,7 +20,15 @@
 // Site-only pages come from doc/site. Old URLs (before editions) get redirect
 // pages in doc/public. Output is generated and git-ignored.
 import { execFileSync } from "node:child_process";
-import { existsSync, globSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  globSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, posix, relative, resolve, sep } from "node:path";
 import remarkGfm from "remark-gfm";
 import remarkMdx from "remark-mdx";
@@ -328,6 +336,14 @@ function rewriteUrl(url, page, file, lang) {
   const clean = target.replace(/[/\\]$/, "");
   const slug = slugOf.get(clean);
   if (slug) return siteUrl(lang, slug) + hash;
+  if (published.has(clean) && /\.(?:avif|gif|jpe?g|png|svg|webp)$/i.test(clean)) {
+    const edition = editions.find(({ root }) => clean.startsWith(root + sep));
+    const asset = join("assets/docs", edition.slug, relative(edition.root, clean));
+    const destination = join(redirects, asset);
+    mkdirSync(dirname(destination), { recursive: true });
+    copyFileSync(clean, destination);
+    return `/${toPosix(asset).split("/").map(encodeURIComponent).join("/")}${hash}`;
+  }
   const remote = githubUrl(clean);
   if (!remote) {
     problems.push(`${page.edition.slug}:${file}: broken link ${url}`);

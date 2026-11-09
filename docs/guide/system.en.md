@@ -2,6 +2,8 @@
 
 System settings (General, Monitoring and Service accounts tabs), the audit log, and the protection settings page.
 
+![Node release source and its saved-value source badge](../assets/ui/system-sources.en.png)
+
 Clusters, nodes and regions: [Clusters and nodes](clusters.en.md); DNS steering: [DNS steering](dns.en.md); alerts: [Alerts](alerts.en.md); regional probes and scheduling: [Regional probes and scheduling](scheduling.en.md); every page of the sidebar: [Console navigation](account.en.md#console-navigation).
 
 ## System settings
@@ -167,6 +169,8 @@ The switch is refused while the operator account uses `demo@edgeweir.com` (`DEMO
 Changes are audited as `mcp.settings_update`. Client setup, scopes and tools: [MCP](mcp.en.md).
 
 ### Precedence
+
+Source badges below controls describe the persisted configuration. **Saved** does not mean the current form has no unsaved changes.
 
 A value saved in the console wins over the environment variable, which wins over the default. The environment variables remain only as a fallback for existing deployments.
 

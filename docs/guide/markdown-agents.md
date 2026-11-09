@@ -2,6 +2,8 @@
 
 请求在 `Accept` 中列出 `text/markdown` 时，节点把网站的 HTML 响应转换为 Markdown 返回，供 AI 代理与爬虫读取；浏览器与其他客户端照常收到 HTML。行为与 Cloudflare 的 Markdown for Agents 兼容。转换失败或超出范围时返回原 HTML。
 
+![面向代理的 Markdown 设置](../assets/ui/markdown.zh.png)
+
 ## 概念
 
 | 术语 | 定义 |
@@ -13,7 +15,7 @@
 
 ## 开启
 
-1. 打开 **网站** → 选择网站 →「缓存」页签。
+1. 打开 **网站** → 选择网站 → **性能与交付** →「缓存」页签，展开 **内容优化**。
 2. 在「面向代理的 Markdown」卡片打开「开启」，按需填写包含与排除的路径前缀（每行一个），点击「保存」。
 3. 「Markdown 响应」卡片显示所选时间范围内的 Markdown 响应数。
 
