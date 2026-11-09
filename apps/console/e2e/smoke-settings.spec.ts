@@ -8,6 +8,39 @@ const password = process.env.E2E_ADMIN_PASSWORD ?? "e2e-admin-password-123";
 // Sites these tests create; later sections expect the sites list to hold only theirs.
 const created: string[] = [];
 
+test.describe("small touch window", () => {
+  test.use({ viewport: { width: 320, height: 844 }, isMobile: true, hasTouch: true });
+
+  test("top bar keeps every action inside the viewport", async ({ page }) => {
+    await login(page, email, password);
+    for (const locale of ["zh-CN", "en"]) {
+      await page.evaluate((value) => localStorage.setItem("PARAGLIDE_LOCALE", value), locale);
+      await page.goto("/system");
+      await page.locator("html").evaluate((element) => element.ownerDocument.fonts.ready);
+      const header = page.locator('[data-slot="top-bar"]');
+      await expect(header).toBeVisible();
+      expect(
+        await page.locator("html").evaluate((element) => ({
+          viewport: element.clientWidth,
+          page: element.scrollWidth,
+        })),
+      ).toEqual({ viewport: 320, page: 320 });
+      for (const action of await header.locator("button:visible, a:visible").all()) {
+        const box = await action.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          return { x: rect.x, right: rect.right };
+        });
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.right).toBeLessThanOrEqual(320);
+      }
+      await page.getByTestId("user-menu").tap();
+      await expect(page.getByRole("menu").first()).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("user-menu")).toBeFocused();
+    }
+  });
+});
+
 test.afterEach(async ({ page }) => {
   for (const id of created.splice(0)) {
     await page.request.post("/rpc/sites/delete", {

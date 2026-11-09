@@ -278,7 +278,7 @@ export function TopBar({ user, onMenu }: { user?: ShellUser; onMenu?: () => void
   return (
     <header
       data-slot="top-bar"
-      className="sticky top-0 z-30 flex h-(--header-height) shrink-0 items-center gap-3 border-b bg-card px-3 md:px-4"
+      className="sticky top-0 z-30 flex h-(--header-height) shrink-0 items-center gap-2 border-b bg-card px-3 md:gap-3 md:px-4"
     >
       {onMenu ? (
         <Button
@@ -294,15 +294,14 @@ export function TopBar({ user, onMenu }: { user?: ShellUser; onMenu?: () => void
       ) : null}
       <Link
         to="/overview"
-        className="flex shrink-0 items-center gap-2 rounded-md pr-2 focus-ring md:w-[calc(var(--ew-sidebar-width)-1rem)]"
+        className="flex min-w-0 flex-1 items-center gap-2 rounded-md pr-2 focus-ring md:w-[calc(var(--ew-sidebar-width)-1rem)] md:flex-none"
       >
-        <span className="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground">
+        <span className="grid size-7 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground">
           <Logo className="size-4.5 text-primary-foreground" />
         </span>
-        <span className="text-section font-medium">{m.app_name()}</span>
+        <span className="truncate text-section font-medium">{m.app_name()}</span>
       </Link>
-      <div className="min-w-0 flex-1" />
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="ml-auto flex shrink-0 items-center gap-1">
         {user ? <SearchTrigger /> : null}
         <LanguageMenu />
         <ThemeToggle />
