@@ -103,9 +103,18 @@ jobs:
         with:
           go-version-file: edgeweir-node/go.mod
           cache-dependency-path: edgeweir-node/go.sum
-      - uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
-        with:
-          syft-version: v1.52.0
+      - name: Install Syft 1.52.0
+        run: |
+          syft_dir="$RUNNER_TEMP/syft"
+          mkdir -p "$syft_dir"
+          curl -fsSL --retry 3 --connect-timeout 15 --max-time 180 \
+            -H 'Accept: application/octet-stream' \
+            https://api.github.com/repos/anchore/syft/releases/assets/570445809 \
+            -o "$syft_dir/syft.tar.gz"
+          printf '%s  %s\n' caeedb81fb0491615f1ebd1761e4145d41ee86dd2cc7bf80669f9f5ad9d6133d "$syft_dir/syft.tar.gz" | sha256sum -c -
+          tar -xzf "$syft_dir/syft.tar.gz" -C "$syft_dir" syft
+          "$syft_dir/syft" version
+          echo "$syft_dir" >> "$GITHUB_PATH"
       - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           distribution: goreleaser
