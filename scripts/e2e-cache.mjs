@@ -13,8 +13,8 @@
 //     restore copies cached FILEs into NODE_CONTEXT/out/openresty (exit 1
 //     when they are not cached), save keeps them (scripts/e2e.sh after
 //     `make openresty-packages`); both only for a clean packaging/openresty
-import { copyFile, mkdir, rename, rm, stat } from "node:fs/promises";
-import { homedir } from "node:os";
+import { copyFile, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execute } from "./e2e-lib.mjs";
@@ -51,8 +51,8 @@ async function imageCommit(image) {
 }
 
 /**
- * `image` built from edgeweir-node `commit` (git archive | docker build) in
- * Docker: an image with that commit's label is kept, one from the cache
+ * `image` built from archived edgeweir-node `commit` with refreshed download
+ * transport: an image with that commit's label is kept, one from the cache
  * loaded, otherwise built and saved to the cache. An existing image without
  * the label (built before the cache) is kept too. Returns what it did.
  */
@@ -72,13 +72,31 @@ export async function ensureNodeImage(image, commit, nodeContext) {
     }
     if ((await imageCommit(image)) === sha) return `loaded from ${file}`;
   }
-  await sh(
-    'git -C "$1" archive "$2" | docker build -q --label "$3" -t "$4" -',
-    nodeContext,
-    sha,
-    `${COMMIT_LABEL}=${sha}`,
-    image,
-  );
+  const context = await mkdtemp(join(tmpdir(), "edgeweir-e2e-node-"));
+  try {
+    await sh('git -C "$1" archive "$2" | tar -x -C "$3"', nodeContext, sha, context);
+    // Refresh download transport only; legacy code, source locks and signing keys stay pinned.
+    const fetchScript = join(context, "packaging/openresty/fetch.sh");
+    if (await exists(fetchScript))
+      await copyFile(join(nodeContext, "packaging/openresty/fetch.sh"), fetchScript);
+    const dockerfile = join(context, "Dockerfile");
+    await writeFile(
+      dockerfile,
+      (await readFile(dockerfile, "utf8")).replace(
+        `wget -q -O /cosign "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-linux-\${TARGETARCH}"`,
+        `case "$TARGETARCH" in amd64) asset=503286005 ;; arm64) asset=503286299 ;; *) exit 1 ;; esac; wget -q --header='Accept: application/octet-stream' -O /cosign "https://api.github.com/repos/sigstore/cosign/releases/assets/$asset"`,
+      ),
+    );
+    await execute(
+      "docker",
+      ["build", "-q", "--label", `${COMMIT_LABEL}=${sha}`, "-t", image, context],
+      {
+        maxBuffer: 16 * 1024 * 1024,
+      },
+    );
+  } finally {
+    await rm(context, { recursive: true, force: true });
+  }
   await mkdir(join(CACHE, "images"), { recursive: true });
   const partial = `${file}.${process.pid}.partial`;
   try {
