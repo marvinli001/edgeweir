@@ -18,6 +18,7 @@ def matches(path, patterns):
 def select(repo, files, force_full=False, default_branch=False):
     result = {key: False for key in ["product", "full", "checks", "tests", "certd", "integration", "browser", "containers", "proto", "lua", "snapshot", "image", "reuse"]}
     result["e2e_sections"] = ""
+    result["e2e_shards"] = "[0]"
     docs = ["docs/**", "doc/**", ".github/assets/**"]
     runtime_docs = ["docs/site/operations/upgrade*.md", "docs/deploy/managed-control*.md", "docs/integration-gaps.md"] if repo == "edgeweir-business" else []
     files = [p for p in files if matches(p, runtime_docs) or not (matches(p, docs) or ("/" not in p and p.endswith(".md")))]
@@ -68,6 +69,17 @@ def select(repo, files, force_full=False, default_branch=False):
     return result
 
 
+def e2e_shards(repo, result):
+    """The CI e2e matrix: every shard of scripts/e2e.sh for a complete run, one job (0) otherwise."""
+    if repo != "edgeweir" or not result["containers"] or result["e2e_sections"]:
+        return "[0]"
+    listed = subprocess.check_output(["bash", "scripts/e2e.sh", "--shards"], text=True).splitlines()
+    shards = [int(line.split("\t", 1)[0]) for line in listed if line.strip()]
+    if shards != list(range(1, len(shards) + 1)):
+        raise ValueError(f"Unexpected e2e shards: {listed}")
+    return json.dumps(shards, separators=(",", ":"))
+
+
 def main():
     verification = runpy.run_path("scripts/ci-verify.py")
     config = verification["policy"]()
@@ -95,10 +107,11 @@ def main():
             proof = None
         if proof:
             for key in result:
-                if key not in ["checks", "product", "e2e_sections"]:
+                if key not in ["checks", "product", "e2e_sections", "e2e_shards"]:
                     result[key] = False
             result.update(full=True, reuse=True)
             result["e2e_sections"] = ""
+    result["e2e_shards"] = e2e_shards(repo, result)
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a") as output:
             for key, value in result.items():

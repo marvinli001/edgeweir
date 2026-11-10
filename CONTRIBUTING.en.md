@@ -147,7 +147,7 @@ Every new API procedure has a Vitest case.
 
 A few sections run in a parallel lane beside a stretch of the chain (`LANES` in `scripts/e2e.sh`, which also says why the others cannot): a lane's output is printed when it ends, and it has a Playwright session of its own; `--serial` runs every section in turn.
 
-Running some sections: `--list` prints the sections and what each needs; `--only g12,g15` runs just these, `--from g12` that section and all after it; `--plan` only shows which sections would run. A fresh stack runs core and the needed sections first; on a stack that got past core the run continues (`.e2e/run.env`, `.e2e/run.done`) without repeating needed sections that passed, e.g. `--from <failed section>` after a fix. A partial run ends with `SECTIONS OK`.
+Running some sections: `--list` prints the sections and what each needs; `--only g12,g15` runs just these, `--from g12` that section and all after it; `--plan` only shows which sections would run. A fresh stack runs core and the needed sections first; on a stack that got past core the run continues (`.e2e/run.env`, `.e2e/run.done`) without repeating needed sections that passed, e.g. `--from <failed section>` after a fix. A partial run ends with `SECTIONS OK`. `--shards` prints the shards (`SHARDS`) and `--shard 2` runs only the second: each shard runs on a fresh stack of its own after core and the sections it needs, and CI runs every shard on its own runner in parallel.
 
 Playwright tests start with the operator's session instead of the login form: it is kept in `.e2e/operator-session-<console port>.json` and signed in again through the API when missing or no longer valid (a test signed out, the stack was reset); `e2e/smoke.spec.ts` covers the login form.
 

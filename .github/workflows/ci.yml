@@ -23,6 +23,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # The e2e install step's snapshot packages, the same version as the node repository's CI.
+  GORELEASER_VERSION: v2.18.2
+
 jobs:
   changes:
     runs-on: ubuntu-latest
@@ -35,6 +39,7 @@ jobs:
       full: ${{ steps.plan.outputs.full }}
       reuse: ${{ steps.plan.outputs.reuse }}
       e2e_sections: ${{ steps.plan.outputs.e2e_sections }}
+      e2e_shards: ${{ steps.plan.outputs.e2e_shards }}
       node_revision: ${{ steps.node.outputs.revision }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -166,14 +171,84 @@ jobs:
           compression-level: 0
           retention-days: 7
 
+  # Build products of the pinned edgeweir-node checkout the e2e shards share:
+  # edgeweir-openresty packages, the goreleaser snapshot and the old node
+  # images of e2e-g3/e2e-g8 (scripts/e2e-fixtures.sh). Saved as soon as they
+  # are built, so failed or cancelled e2e runs never throw them away.
+  fixtures:
+    name: e2e fixtures
+    needs: changes
+    if: needs.changes.outputs.containers == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      key: ${{ steps.key.outputs.key }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: marvinli001/edgeweir-node
+          ref: ${{ needs.changes.outputs.node_revision }}
+          path: edgeweir-node
+          fetch-depth: 0
+          persist-credentials: false
+      - id: key
+        env:
+          NODE_REVISION: ${{ needs.changes.outputs.node_revision }}
+          SCRIPTS: ${{ hashFiles('scripts/e2e-cache.mjs', 'scripts/e2e-fixtures.sh') }}
+        run: echo "key=$RUNNER_OS-$RUNNER_ARCH-e2e-fixtures-v2-$NODE_REVISION-goreleaser-$GORELEASER_VERSION-$SCRIPTS" >> "$GITHUB_OUTPUT"
+      # Entries are keyed by content (commit, tree), so an older cache is a valid start.
+      - id: restore
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.cache/edgeweir-e2e
+          key: ${{ steps.key.outputs.key }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-e2e-fixtures-v2-
+      - if: steps.restore.outputs.cache-hit != 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - if: steps.restore.outputs.cache-hit != 'true'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: edgeweir-node/go.mod
+          cache-dependency-path: edgeweir-node/go.sum
+      - if: steps.restore.outputs.cache-hit != 'true'
+        name: Install Syft 1.52.0
+        run: bash scripts/ci-syft.sh
+      - if: steps.restore.outputs.cache-hit != 'true'
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: ${{ env.GORELEASER_VERSION }}
+          install-only: true
+      - if: steps.restore.outputs.cache-hit != 'true'
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - if: steps.restore.outputs.cache-hit != 'true'
+        name: Build what the cache lacks
+        run: bash scripts/e2e-fixtures.sh all ./edgeweir-node .e2e
+      - if: steps.restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.cache/edgeweir-e2e
+          key: ${{ steps.key.outputs.key }}
+
   e2e:
     name: end-to-end (compose.e2e.yml)
     runs-on: ubuntu-latest
-    needs: [changes, image]
+    needs: [changes, image, fixtures]
     if: needs.changes.outputs.containers == 'true'
+    strategy:
+      # Every shard reports, so one failure does not hide another.
+      fail-fast: false
+      matrix:
+        # scripts/e2e.sh --shards for a complete run, 0 (one job) for selected sections.
+        shard: ${{ fromJSON(needs.changes.outputs.e2e_shards) }}
     env:
       EDGEWEIR_NODE_CONTEXT: ./edgeweir-node
       CI_E2E_SECTIONS: ${{ needs.changes.outputs.e2e_sections }}
+      CI_E2E_SHARD: ${{ matrix.shard }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -192,33 +267,24 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y skopeo
           python3 scripts/ci-image.py load
-      - name: Restore immutable E2E fixtures
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      - name: Restore the e2e fixtures
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: ~/.cache/edgeweir-e2e
-          key: ${{ runner.os }}-${{ runner.arch }}-e2e-fixtures-${{ hashFiles('scripts/e2e-cache.mjs', 'scripts/e2e-g3.mjs', 'scripts/e2e-g8.mjs', 'edgeweir-node/packaging/openresty/**') }}
-      # scripts/e2e.sh builds goreleaser snapshot packages of the node for the
-      # install.sh step (same tool versions as the node repository's CI).
+          key: ${{ needs.fixtures.outputs.key }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-e2e-fixtures-v2-
+      # The install step checks the goreleaser config and builds what the
+      # cache lacks (same tool versions as the node repository's CI).
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: edgeweir-node/go.mod
           cache-dependency-path: edgeweir-node/go.sum
       - name: Install Syft 1.52.0
-        run: |
-          syft_dir="$RUNNER_TEMP/syft"
-          mkdir -p "$syft_dir"
-          curl -fsSL --retry 3 --connect-timeout 15 --max-time 180 \
-            -H 'Accept: application/octet-stream' \
-            https://api.github.com/repos/anchore/syft/releases/assets/570445809 \
-            -o "$syft_dir/syft.tar.gz"
-          printf '%s  %s\n' caeedb81fb0491615f1ebd1761e4145d41ee86dd2cc7bf80669f9f5ad9d6133d "$syft_dir/syft.tar.gz" | sha256sum -c -
-          tar -xzf "$syft_dir/syft.tar.gz" -C "$syft_dir" syft
-          "$syft_dir/syft" version
-          echo "$syft_dir" >> "$GITHUB_PATH"
+        run: bash scripts/ci-syft.sh
       - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           distribution: goreleaser
-          version: v2.18.2
+          version: ${{ env.GORELEASER_VERSION }}
           install-only: true
       - name: Install verified cosign 3.1.3
         run: bash scripts/ci-cosign.sh
@@ -251,7 +317,7 @@ jobs:
       - if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: e2e-evidence
+          name: e2e-evidence-${{ matrix.shard }}
           path: |
             .e2e/timings.tsv
             .e2e/lane-*.tsv
@@ -263,7 +329,7 @@ jobs:
 
   acceptance:
     if: always() && needs.changes.outputs.product == 'true'
-    needs: [changes, checks, certd, image, e2e]
+    needs: [changes, checks, certd, image, fixtures, e2e]
     runs-on: ubuntu-latest
     steps:
       - env:
@@ -274,7 +340,7 @@ jobs:
           import json, os
           plan, results = json.loads(os.environ['PLAN']), json.loads(os.environ['RESULTS'])
           assert results['changes']['result'] == 'success'
-          for job, key in [('checks', 'checks'), ('certd', 'certd'), ('image', 'image'), ('e2e', 'containers')]:
+          for job, key in [('checks', 'checks'), ('certd', 'certd'), ('image', 'image'), ('fixtures', 'containers'), ('e2e', 'containers')]:
               expected = 'success' if plan[key] == 'true' else 'skipped'
               assert results[job]['result'] == expected, (job, results[job]['result'], expected)
           PY_GATE

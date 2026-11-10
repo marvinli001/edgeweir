@@ -252,6 +252,25 @@ class SelectionTests(unittest.TestCase):
         self.assertTrue(selected["containers"])
         self.assertFalse(selected["checks"])
 
+    def test_e2e_runs_one_job_unless_core_runs_every_section(self):
+        self.assertEqual(plan.select("edgeweir", ["README.md"])["e2e_shards"], "[0]")
+        scoped = plan.select("edgeweir", ["apps/console/src/web/routes/_app/purge.tsx"])
+        self.assertEqual(plan.e2e_shards("edgeweir", scoped), "[0]")
+        self.assertEqual(plan.e2e_shards("edgeweir-node", {"containers": True, "e2e_sections": ""}), "[0]")
+
+    @unittest.skipUnless(Path("scripts/e2e.sh").exists() and Path("scripts/e2e-fixtures.sh").exists(), "core e2e shards")
+    def test_complete_core_runs_every_shard_and_shards_cover_every_section_once(self):
+        full = plan.select("edgeweir", ["packages/db/migrations/new.sql"])
+        shards = json.loads(plan.e2e_shards("edgeweir", full))
+        self.assertGreater(len(shards), 1)
+        self.assertEqual(shards, list(range(1, len(shards) + 1)))
+        listed = subprocess.check_output(["bash", "scripts/e2e.sh", "--list"], text=True)
+        sections = [line.split()[0] for line in listed.splitlines() if line.strip()]
+        sharded = subprocess.check_output(["bash", "scripts/e2e.sh", "--shards"], text=True)
+        members = [s for line in sharded.splitlines() for s in line.split("\t", 1)[1].split()]
+        self.assertEqual(sorted(members), sorted(sections))
+        self.assertEqual(len(members), len(set(members)))
+
     def test_force_full_is_available_even_for_docs(self):
         for repo in ["edgeweir", "edgeweir-node", "edgeweir-business", "edgeweir-cloud"]:
             self.assertTrue(plan.select(repo, ["README.md"], force_full=True)["full"])

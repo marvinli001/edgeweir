@@ -40,11 +40,11 @@ case "${1:-}" in
     ;&
   e2e)
     docker compose -f compose.e2e.yml up -d --no-build
-    if [ -n "${CI_E2E_SECTIONS:-}" ]; then
-      bash scripts/e2e.sh --only "$CI_E2E_SECTIONS"
-    else
-      bash scripts/e2e.sh
-    fi
+    args=()
+    if [ -n "${CI_E2E_SECTIONS:-}" ]; then args+=(--only "$CI_E2E_SECTIONS"); fi
+    # CI's e2e matrix: shard N of scripts/e2e.sh --shards (0 or unset: every section).
+    if [ "${CI_E2E_SHARD:-0}" != 0 ]; then args+=(--shard "$CI_E2E_SHARD"); fi
+    bash scripts/e2e.sh ${args[@]+"${args[@]}"}
     ;;
   cleanup)
     docker compose -f compose.e2e.yml --profile '*' down -v --remove-orphans

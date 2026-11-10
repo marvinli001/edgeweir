@@ -344,7 +344,7 @@
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
-#   bash scripts/e2e.sh [--up] [--down] [--skip-ui] [--only SECTION,... | --from SECTION] [--serial] [--list] [--plan]
+#   bash scripts/e2e.sh [--up] [--down] [--skip-ui] [--only SECTION,... | --from SECTION] [--shard N] [--serial] [--list] [--shards] [--plan]
 # The run is a chain of sections (--list prints them with what each needs).
 # A few sections run in a parallel lane beside a stretch of the chain (LANES;
 # --serial runs everything in turn); a lane's output follows when it ends.
@@ -354,8 +354,10 @@
 # there (.e2e/run.env, .e2e/run.done) and runs a needed section again only
 # when it has not passed on that stack. A section that passed is not
 # guaranteed to pass a second time on the same stack. --plan prints the
-# sections a run would take on the stack and stops. The time of every
-# section and part (checks, ui, cleanup, ...) is printed at the end and kept
+# sections a run would take on the stack and stops. --shard N keeps the
+# sections of shard N (SHARDS; --shards prints them): CI runs every shard on
+# its own runner and stack, each after core and the sections it needs. The
+# time of every section and part (checks, ui, cleanup, ...) is printed at the end and kept
 # in .e2e/timings.tsv; output lines of the scripts and Playwright carry the
 # seconds since their part started.
 # Needs curl, jq, docker, node, and for the install step goreleaser, syft and
@@ -366,6 +368,8 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+# shellcheck source=scripts/e2e-fixtures.sh
+source scripts/e2e-fixtures.sh
 
 COMPOSE=(docker compose -f compose.e2e.yml)
 CONSOLE="http://localhost:${E2E_CONSOLE_PORT:-13000}"
@@ -389,6 +393,8 @@ FROM=""
 LIST=false
 PLAN_ONLY=false
 SERIAL=false
+SHARD=""
+SHOW_SHARDS=false
 while (($#)); do
   case "$1" in
     --up) UP=true ;;
@@ -401,6 +407,9 @@ while (($#)); do
     --list) LIST=true ;;
     --plan) PLAN_ONLY=true ;;
     --serial) SERIAL=true ;;
+    --shard) SHARD="${2:-}"; shift ;;
+    --shard=*) SHARD="${1#*=}" ;;
+    --shards) SHOW_SHARDS=true ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
@@ -451,12 +460,39 @@ LANES=(
   "m3..m4:install ssh-install"
   "g9..g14:h2 g8 g12 usage-guard"
 )
+# Shards for parallel runners (--shard N, CI's e2e matrix): each runs on a
+# fresh stack of its own after core and the sections it needs (SECTIONS), in
+# chain order, with the LANES whose sections it holds. Every section is in
+# exactly one shard. Balanced by the section times of a CI run with a warm
+# fixture cache (2026-11-10): about 16 to 17 minutes each, counting core and
+# the m5 and m6-upgrades runs that most sections need.
+SHARDS=(
+  "core m1 analytics m2 install ssh-install wss channel node-logs diagnostics extensions m3 m4 probe-sources ai-crawl tiers allowlist mcp lifecycle"
+  "p0 g1 h2 usage-guard dev-mode"
+  "m5 m6-logs m6-upgrades dns g4 g6 g10 g14"
+  "g2 g5 g7 g12 g13 g16"
+  "pp g3 g8 g9 g15 g11 g17 g18 g19 g20"
+)
 section_names() { local s; for s in "${SECTIONS[@]}"; do printf '%s\n' "${s%%:*}"; done; }
 section_deps() { local s; for s in "${SECTIONS[@]}"; do [[ "${s%%:*}" != "$1" ]] || { printf '%s\n' "${s#*:}"; return; }; done; }
+ALL_SECTIONS=" $(section_names | tr '\n' ' ')"
+SHARDED=" "
+for s in ${SHARDS[*]}; do
+  [[ "$ALL_SECTIONS" == *" $s "* ]] || { echo "SHARDS: unknown section $s" >&2; exit 2; }
+  [[ "$SHARDED" != *" $s "* ]] || { echo "SHARDS: $s is in two shards" >&2; exit 2; }
+  SHARDED+="$s "
+done
+for s in $ALL_SECTIONS; do [[ "$SHARDED" == *" $s "* ]] || { echo "SHARDS: $s is in no shard" >&2; exit 2; }; done
 if $LIST; then
   for s in "${SECTIONS[@]}"; do printf '%-12s %s\n' "${s%%:*}" "${s#*:}"; done
   exit 0
 fi
+if $SHOW_SHARDS; then
+  for i in "${!SHARDS[@]}"; do printf '%s\t%s\n' "$((i + 1))" "${SHARDS[i]}"; done
+  exit 0
+fi
+[[ -z "$SHARD" ]] || { [[ "$SHARD" =~ ^[1-9][0-9]*$ ]] && ((SHARD <= ${#SHARDS[@]})); } ||
+  { echo "--shard takes 1 to ${#SHARDS[@]} (bash scripts/e2e.sh --shards)" >&2; exit 2; }
 [[ -z "$ONLY" || -z "$FROM" ]] || { echo "--only and --from cannot be combined" >&2; exit 2; }
 for s in ${ONLY//,/ } $FROM; do
   section_names | grep -qx -- "$s" || { echo "unknown section: $s (bash scripts/e2e.sh --list)" >&2; exit 2; }
@@ -1261,33 +1297,18 @@ need syft
   { cat "$STATE_DIR/goreleaser-check.log" >&2; fail "goreleaser check failed in $NODE_CONTEXT"; }
 pass "goreleaser check: $(tr -d '\033' <"$STATE_DIR/goreleaser-check.log" | sed -E 's/\[[0-9;]*m//g' | grep -iE 'valid|checked' | tail -n1 | sed -E 's/^[[:space:]•]*//')"
 # The snapshot copies the edgeweir-openresty packages of `make
-# openresty-packages` (out/openresty) into dist/; when they are missing for
-# the architecture of the install container they come from the cache of
-# scripts/e2e-cache.mjs (by the git tree of packaging/openresty), or are
-# built and cached.
+# openresty-packages` (out/openresty) into dist/. Both, for the architecture
+# of the install container, come from the cache of scripts/e2e-cache.mjs (the
+# packages by the git tree of packaging/openresty, the snapshot by the
+# edgeweir-node commit and the goreleaser version), or are built and cached
+# (scripts/e2e-fixtures.sh; CI fills the cache in its fixtures job).
 DOCKER_ARCH="$(docker version --format '{{.Server.Arch}}')"
-OPENRESTY_VERSION="$(awk '$1 == "openresty" { print $2 }' "$NODE_CONTEXT/packaging/openresty/sources.lock")"
-OPENRESTY_RELEASE="$(awk '$1 == "release:" { print $2 }' "$NODE_CONTEXT/packaging/openresty/nfpm/edgeweir-openresty.yaml")"
-OPENRESTY_PKG="$OPENRESTY_VERSION-$OPENRESTY_RELEASE"
-OPENRESTY_FILES=("edgeweir-openresty_${OPENRESTY_PKG}_$DOCKER_ARCH.deb" "edgeweir-openresty-modsecurity_${OPENRESTY_PKG}_$DOCKER_ARCH.deb"
-  "edgeweir-openresty_${OPENRESTY_PKG}_$DOCKER_ARCH.sbom.json")
-RPM_ARCH="$([[ "$DOCKER_ARCH" == arm64 ]] && echo aarch64 || echo x86_64)"
-OPENRESTY_CACHED=("${OPENRESTY_FILES[@]}" "edgeweir-openresty-$OPENRESTY_PKG.$RPM_ARCH.rpm"
-  "edgeweir-openresty-modsecurity-$OPENRESTY_PKG.$RPM_ARCH.rpm")
-openresty_packages_built() { for f in "${OPENRESTY_FILES[@]}"; do [[ -f "$NODE_CONTEXT/out/openresty/$f" ]] || return 1; done; }
-if ! openresty_packages_built &&
-  ! node scripts/e2e-cache.mjs openresty restore "$NODE_CONTEXT" "$DOCKER_ARCH" "${OPENRESTY_CACHED[@]}"; then
-  echo "make openresty-packages ARCH=$DOCKER_ARCH (in $NODE_CONTEXT, log in $STATE_DIR/openresty-packages.log)"
-  part openresty-packages make -C "$NODE_CONTEXT" openresty-packages ARCH="$DOCKER_ARCH" >"$STATE_DIR/openresty-packages.log" 2>&1 ||
-    { tail -n 40 "$STATE_DIR/openresty-packages.log" >&2; fail "building the edgeweir-openresty packages failed"; }
-  openresty_packages_built || fail "make openresty-packages did not produce ${OPENRESTY_FILES[*]}"
-  node scripts/e2e-cache.mjs openresty save "$NODE_CONTEXT" "$DOCKER_ARCH" "${OPENRESTY_CACHED[@]}" ||
-    echo "not cached: packaging/openresty has uncommitted changes in $NODE_CONTEXT"
-fi
+openresty_vars "$NODE_CONTEXT" "$DOCKER_ARCH"
+part openresty-packages bash scripts/e2e-fixtures.sh openresty "$NODE_CONTEXT" "$STATE_DIR" ||
+  fail "no edgeweir-openresty packages (output above)"
 pass "edgeweir-openresty $OPENRESTY_PKG packages for $DOCKER_ARCH in $NODE_CONTEXT/out/openresty"
-echo "goreleaser release --snapshot --clean (in $NODE_CONTEXT, log in $STATE_DIR/goreleaser.log)"
-part goreleaser sh -c 'cd "$1" && goreleaser release --snapshot --clean' _ "$NODE_CONTEXT" >"$STATE_DIR/goreleaser.log" 2>&1 ||
-  { tail -n 40 "$STATE_DIR/goreleaser.log" >&2; fail "goreleaser snapshot build failed"; }
+part goreleaser bash scripts/e2e-fixtures.sh dist "$NODE_CONTEXT" "$STATE_DIR" ||
+  fail "no goreleaser snapshot (output above)"
 DIST="$(cd "$NODE_CONTEXT" && pwd)/dist"
 NODE_VERSION="$(jq -r .version "$DIST/metadata.json")"
 echo "snapshot $NODE_VERSION: $(awk '{ print $2 }' "$DIST/checksums.txt" | grep -v '\.sbom\.json$' | tr '\n' ' ')"
@@ -2157,6 +2178,12 @@ if [[ -n "$ONLY" ]]; then
   TARGETS="${ONLY//,/ }"
 else
   TARGETS="$(section_names | awk -v from="${FROM:-core}" '$0 == from { on = 1 } on' | tr '\n' ' ')"
+fi
+if [[ -n "$SHARD" ]]; then
+  IN_SHARD=" ${SHARDS[SHARD - 1]} " SHARD_TARGETS=""
+  for s in $TARGETS; do [[ "$IN_SHARD" != *" $s "* ]] || SHARD_TARGETS+="$s "; done
+  TARGETS="$SHARD_TARGETS"
+  echo "shard $SHARD of ${#SHARDS[@]}: ${TARGETS:-nothing beyond core}"
 fi
 WANT=" "
 want() { # want SECTION [target]: SECTION and the sections it needs that have not passed on this stack

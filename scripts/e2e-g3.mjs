@@ -38,17 +38,17 @@ import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import http from "node:http";
 import zlib from "node:zlib";
-import { ensureNodeImage } from "./e2e-cache.mjs";
+import { ensureNodeImage, OLD_NODE_IMAGES } from "./e2e-cache.mjs";
 import { actor, execute, pass, sleep, stack, waitFor } from "./e2e-lib.mjs";
 
 const edgePort = Number(process.env.E2E_NODE_PORT ?? 18080);
 const nodeImage = `edgeweir-node:${process.env.E2E_TAG ?? "e2e"}`;
 const nodeContext = process.env.EDGEWEIR_NODE_CONTEXT ?? "../edgeweir-node";
 /** An edge node from before G3: no brotli-v1, zstd-v1 or modsecurity-v1. */
-const OLD_NODE_IMAGE = process.env.E2E_OLD_NODE_IMAGE ?? "edgeweir-node:pre-g3";
+const OLD_NODE_IMAGE = process.env.E2E_OLD_NODE_IMAGE ?? OLD_NODE_IMAGES.preG3.image;
 /** Last edgeweir-node commit before G3 (proto v0.10.1); builds OLD_NODE_IMAGE when it is missing
  * (or loads it from the per-commit cache of scripts/e2e-cache.mjs). */
-const OLD_NODE_COMMIT = process.env.E2E_OLD_NODE_COMMIT ?? "6da3403";
+const OLD_NODE_COMMIT = process.env.E2E_OLD_NODE_COMMIT ?? OLD_NODE_IMAGES.preG3.commit;
 const CURL_IMAGE =
   "curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777";
 const { run, containerId } = stack({
