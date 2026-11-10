@@ -124,6 +124,8 @@ export async function runSetup(
   },
   meta: { ip: string; userAgent: string },
 ): Promise<{ userId: string }> {
+  if (ctx.env.EDGEWEIR_BOOTSTRAP_TOKEN_FILE)
+    fail("BOOTSTRAP_CONFLICT", "this installation requires the private installer capability");
   const client = await ctx.pool.connect();
   let locked = false;
   try {

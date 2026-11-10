@@ -6,7 +6,12 @@ import { authed, os } from "../../src/server/rpc/base";
 import { router } from "../../src/server/rpc/router";
 
 /** Procedures anyone may call: the first-run setup. */
-const PUBLIC_PROCEDURES = ["system.status", "system.setup"];
+const PUBLIC_PROCEDURES = [
+  "system.status",
+  "system.setup",
+  "system.bootstrap",
+  "system.authorizeIntegration",
+];
 
 /** The leaves of a (contract) router by their dotted path. */
 function leaves<T>(node: unknown, isLeaf: (value: unknown) => value is T, path: string[] = []) {

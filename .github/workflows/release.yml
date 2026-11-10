@@ -20,13 +20,37 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  image:
+  eligibility:
     if: >-
       (github.event_name == 'workflow_run'
         && github.event.workflow_run.conclusion == 'success'
         && github.event.workflow_run.event == 'push'
         && github.event.workflow_run.head_repository.full_name == github.repository)
       || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    outputs:
+      publish: ${{ steps.eligible.outputs.publish }}
+    steps:
+      - id: eligible
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            echo 'publish=true' >> "$GITHUB_OUTPUT"
+          else
+            # Successful jobs may belong to an earlier failed-job rerun attempt.
+            publish=$(gh api --paginate --slurp "repos/$GH_REPO/actions/runs/$RUN_ID/jobs?filter=all&per_page=100" --jq '[.[].jobs[] | select(.name == "build image")] | max_by(.run_attempt) | .conclusion == "success"')
+            echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          fi
+
+  image:
+    needs: eligibility
+    if: needs.eligibility.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -74,7 +98,8 @@ jobs:
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
             REVISION=${{ steps.version.outputs.revision }}
-          cache-from: type=gha
+          cache-from: type=gha,scope=console-image
+          cache-to: type=gha,scope=console-image,mode=max
           sbom: true
           provenance: mode=max
       - name: Sign the image (cosign keyless)

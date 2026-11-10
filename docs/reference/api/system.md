@@ -1,6 +1,6 @@
 # API：系统与账户
 
-初始化、调用方账户、AccessKey、服务账号与系统设置的过程，共 47 个。
+初始化、调用方账户、AccessKey、服务账号与系统设置的过程，共 51 个。
 
 权限级别、认证、幂等键与错误格式见 [API 概览](../api.md)。
 
@@ -47,6 +47,25 @@
 | `SETUP_IN_PROGRESS` | 409 | 另一个初始化请求正在进行 |
 | `SETUP_DONE` | 403 | 已有管理账户 |
 | `SETUP_TOKEN_INVALID` | 403 | 令牌不符或已使用 |
+
+## 安装器初始化与集成授权
+
+新安装可设置 `EDGEWEIR_BOOTSTRAP_TOKEN_FILE`，指向只读挂载的私密普通文件（0600，进程可读，不接受符号链接）。内容是 32 随机字节的 base64url 或等强度 64 位十六进制令牌。该模式不输出日志 setup token，也不允许旧 `/system/setup` 路径抢先创建账户。
+
+| 路径 | 授权与用途 |
+| --- | --- |
+| `POST /system/bootstrap` | 请求体 `{installationId, requestId, token}`；两个 ID 为 UUID，token 来自私密文件 |
+| `POST /system/bootstrap/acknowledge` | 同一请求体，另带本次签发的 `x-api-key`，确认调用方已持久化凭据 |
+| `POST /system/authorize-integration` | 兑换部署所有者通过正式 CLI 授予的一次性集成请求；不能仅凭 AccessKey 创建授权 |
+| `POST /system/authorize-integration/acknowledge` | 同一授权请求体和本次签发的 `x-api-key` |
+
+bootstrap 在同一数据库事务内创建无密码的内部运营身份、默认集群和专用读写 AccessKey。已经存在管理账户时拒绝，不承接旧账户密码、MFA 或通行密钥。响应为 `{installationId,userId,clusterId,accessKeyId,accessKey,caSha256,recoveryExpiresAt}`，只经后端连接传递；客户端不得放入日志、URL 或浏览器。已有实例授权的 `clusterId` 在多集群时为 `null`，不擅自选择客户的新建集群。
+
+同安装、同请求的中断重试在 24 小时内取得相同密钥；结果由 Core 主密钥封存，普通幂等缓存不存储它，四个接口均拒绝 `Idempotency-Key`。另一安装或请求返回 `BOOTSTRAP_CONFLICT`。确认必须证明持有已签发密钥；成功后删除恢复结果，原 API 密钥继续有效。过期结果在状态检查时清除，不停用已经持久化的密钥；持有原密钥的调用方仍可完成确认。未持久化且恢复窗口已过时，须由部署所有者重新授权，不重建资源。
+
+已有实例的正式授权 CLI 随镜像提供：`node dist/server/authorize-integration.js prepare <installation UUID>` 的输出只能重定向至 0600 文件；持久化该请求后，使用 `authorize` 模式从标准输入读取它。该命令在 Core 自己的部署中运行，权限来自主机部署所有者，审计 actor 为本地部署操作员，不假装执行过网页 MFA。公开 API 随后兑换专用密钥；原用户、配置、资源和节点不变。明确的 `renew` 模式可轮换同一安装旧集成密钥；中断后复用已保存请求恢复，不另造请求。
+
+`system.status` 增加 `bootstrap:{version:1,enabled,phase}` 和 `integrationAuthorization:{version:1,phase}`，只包含能力与阶段，不返回令牌、密钥或账户身份。Core 不依赖 Business 或 Cloud 授权，原独立初始化方式在未启用私密文件时保持可用。
 
 ## 账户
 

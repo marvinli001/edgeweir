@@ -93,6 +93,15 @@ export async function withIdempotency(
       "IDEMPOTENCY_KEY_UNSUPPORTED",
       "this request carries SSH credentials; send it without Idempotency-Key",
     );
+  if (
+    ["/api/v1/system/bootstrap", "/api/v1/system/authorize-integration"].some((path) =>
+      new URL(request.url).pathname.startsWith(path),
+    )
+  )
+    return errorResponse(
+      "IDEMPOTENCY_KEY_UNSUPPORTED",
+      "installer credentials use their own sealed recovery record; send without Idempotency-Key",
+    );
   const principal = await idempotencyPrincipal(db, apiKey);
   // Without valid credentials the procedure answers 401; nothing to remember.
   if (principal === null) return handle(request);

@@ -13,6 +13,7 @@ import { siteSecretBinding } from "../../src/server/lib/site-secrets";
 import { generateCa } from "../../src/server/pki/ca";
 import { caKeyBinding, loadOrCreateNodeCa, NODE_CA_ID } from "../../src/server/pki/store";
 import { ACME_DIRECTORY_KEY, acmeDirectoryBinding } from "../../src/server/services/acme-directory";
+import { BOOTSTRAP_BINDING, BOOTSTRAP_KEY } from "../../src/server/services/bootstrap";
 import {
   acmeAccountBinding,
   certificateAccountBinding,
@@ -34,6 +35,10 @@ import {
   credentialBinding as probeSourceCredentialBinding,
   webhookSecretBinding as probeSourceWebhookBinding,
 } from "../../src/server/services/external-probes";
+import {
+  INTEGRATION_GRANT_BINDING,
+  INTEGRATION_GRANT_KEY,
+} from "../../src/server/services/integration-authorization";
 import {
   channelBinding,
   SMTP_KEY,
@@ -280,6 +285,8 @@ describe("master key rotation", () => {
         },
       },
       { key: SMTP_KEY, value: { envelope: seal(smtpBinding) } },
+      { key: BOOTSTRAP_KEY, value: { envelope: seal(BOOTSTRAP_BINDING) } },
+      { key: INTEGRATION_GRANT_KEY, value: { envelope: seal(INTEGRATION_GRANT_BINDING) } },
       { key: AUTH_SECRET_KEY, value: { envelope: before.seal("session", AUTH_SECRET_BINDING) } },
       {
         key: ACME_DIRECTORY_KEY,

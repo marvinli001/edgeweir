@@ -13,8 +13,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      product: ${{ steps.changes.outputs.product }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+      - id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          product=$(bash scripts/ci-changes.sh "$BASE_SHA" "$HEAD_SHA")
+          echo "product=$product" >> "$GITHUB_OUTPUT"
+
   checks:
     name: lint · typecheck · test · build
+    needs: changes
+    if: needs.changes.outputs.product == 'true'
     runs-on: ubuntu-latest
     services:
       # Tests of concurrent transactions (PGlite runs one at a time).
@@ -53,6 +71,8 @@ jobs:
 
   certd:
     name: edgeweir-certd (Go)
+    needs: changes
+    if: needs.changes.outputs.product == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -67,6 +87,8 @@ jobs:
 
   image:
     name: build image
+    needs: changes
+    if: needs.changes.outputs.product == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -81,13 +103,14 @@ jobs:
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
             REVISION=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=console-image
+          cache-to: type=gha,scope=console-image,mode=max
 
   e2e:
     name: end-to-end (compose.e2e.yml)
     runs-on: ubuntu-latest
-    needs: checks
+    needs: changes
+    if: needs.changes.outputs.product == 'true'
     env:
       EDGEWEIR_NODE_CONTEXT: ./edgeweir-node
     steps:
@@ -97,6 +120,11 @@ jobs:
           repository: marvinli001/edgeweir-node
           path: edgeweir-node
           fetch-depth: 0
+      - name: Restore immutable E2E fixtures
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ~/.cache/edgeweir-e2e
+          key: ${{ runner.os }}-${{ runner.arch }}-e2e-fixtures-${{ hashFiles('scripts/e2e-cache.mjs', 'scripts/e2e-g3.mjs', 'scripts/e2e-g8.mjs', 'edgeweir-node/packaging/openresty/**') }}
       # scripts/e2e.sh builds goreleaser snapshot packages of the node for the
       # install.sh step (same tool versions as the node repository's CI).
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -129,9 +157,37 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @edgeweir/console exec playwright install --with-deps chromium
-      - run: docker compose -f compose.e2e.yml up -d --build
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build isolated E2E images
+        uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7
+        with:
+          source: .
+          files: compose.e2e.yml
+          targets: |
+            console
+            node
+            geoip-fixture
+          load: true
+          set: |
+            console.cache-from=type=gha,scope=e2e-console
+            console.cache-to=type=gha,scope=e2e-console,mode=max
+            node.cache-from=type=gha,scope=e2e-node
+            node.cache-to=type=gha,scope=e2e-node,mode=max
+            geoip-fixture.cache-from=type=gha,scope=e2e-geoip
+            geoip-fixture.cache-to=type=gha,scope=e2e-geoip,mode=max
+      - run: docker compose -f compose.e2e.yml up -d --no-build
       - run: bash scripts/e2e.sh
       - if: failure()
         run: docker compose -f compose.e2e.yml logs
+      - if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-evidence
+          path: |
+            .e2e/timings.tsv
+            .e2e/lane-*.tsv
+            apps/console/test-results/
+          include-hidden-files: true
+          retention-days: 7
       - if: always()
         run: docker compose -f compose.e2e.yml --profile analytics --profile upgrades down -v

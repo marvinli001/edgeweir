@@ -10,12 +10,14 @@ on:
     paths:
       - "doc/**"
       - "docs/**"
+      - ".github/assets/**"
       - "*.md"
       - ".github/workflows/docs.yml"
   pull_request:
     paths:
       - "doc/**"
       - "docs/**"
+      - ".github/assets/**"
       - "*.md"
       - ".github/workflows/docs.yml"
   workflow_dispatch:

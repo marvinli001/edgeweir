@@ -1352,6 +1352,16 @@ export const siteStarInput = z.object({ id: uuid, starred: z.boolean() });
 export const systemStatus = z.object({
   initialized: z.boolean(),
   version: z.string(),
+  integrationAuthorization: z
+    .object({ version: z.literal(1), phase: z.enum(["available", "pending", "completed"]) })
+    .optional(),
+  bootstrap: z
+    .object({
+      version: z.literal(1),
+      enabled: z.boolean(),
+      phase: z.enum(["available", "pending", "completed", "disabled"]),
+    })
+    .optional(),
   /** The demo account is on (settings.demo): sign-in offers it. */
   demo: z.boolean(),
 });

@@ -26,7 +26,7 @@ describe("procedures that return a credential once", () => {
         // Nullable strings count too: a secret shown only when the console made it.
         return Object.entries(output.shape).some(
           ([field, schema]) =>
-            ["key", "secret", "token", "webhookSecret"].includes(field) &&
+            ["key", "accessKey", "secret", "token", "webhookSecret"].includes(field) &&
             (schema instanceof z.ZodString ||
               (schema instanceof z.ZodNullable && schema.unwrap() instanceof z.ZodString)),
         );

@@ -1,6 +1,6 @@
 # API: System and account
 
-Procedures for setup, the caller's account, AccessKeys, service accounts and system settings; 47 in total.
+Procedures for setup, the caller's account, AccessKeys, service accounts and system settings; 51 in total.
 
 Access levels, authentication, idempotency keys and the error format: [API overview](../api.en.md).
 
@@ -47,6 +47,18 @@ Response: `{ userId }`: ID of the new account (string).
 | `SETUP_IN_PROGRESS` | 409 | Another setup request is running |
 | `SETUP_DONE` | 403 | The operator account exists already |
 | `SETUP_TOKEN_INVALID` | 403 | Wrong or spent token |
+
+## Installer bootstrap and integration authorization
+
+Set `EDGEWEIR_BOOTSTRAP_TOKEN_FILE` for a new installation: a private regular file (0600, readable by the process, no symlinks), mounted read-only, containing 32 random bytes in base64url or an equally strong 64-character hexadecimal token. This mode suppresses the log setup token and refuses the legacy setup path.
+
+`POST /system/bootstrap` takes `{installationId,requestId,token}` (UUID IDs). It atomically creates a passwordless internal operator, the default cluster and a dedicated write AccessKey. Existing operators are refused. The response is `{installationId,userId,clusterId,accessKeyId,accessKey,caSha256,recoveryExpiresAt}` and belongs only on the backend connection, never in logs, URLs or the browser.
+
+Retries of the same installation/request recover the same master-key-sealed result for 24 hours. `POST /system/bootstrap/acknowledge` takes the same body plus the issued `x-api-key`; only proof of holding that credential erases the recovery result. The actual key remains valid. Status checks clear expired results; a client that already persisted the key can still acknowledge it. A lost result outside its recovery window requires explicit deployment-owner authorization, without rebuilding resources.
+
+For an existing instance, its official image ships `node dist/server/authorize-integration.js`. Redirect `prepare <installation UUID>` output to a private 0600 file **before** passing it to `authorize` on stdin. This is deployment-owner authorization, audited as a local operator; it does not claim browser MFA. `POST /system/authorize-integration` redeems that saved request; `/system/authorize-integration/acknowledge` takes the request and the issued `x-api-key`. Multiple clusters produce a null default cluster. An explicit local `renew` rotates the previous integration credential for that installation; resume interruptions with the saved request. Existing users, passwords, MFA, passkeys, resources and node identities remain unchanged.
+
+All four endpoints refuse generic `Idempotency-Key` caching. Another installation/request conflicts. `system.status` reports `bootstrap:{version:1,enabled,phase}` and `integrationAuthorization:{version:1,phase}` without secrets or account identities. Core has no Business/Cloud licensing dependency, and standalone setup remains available when file bootstrap is not enabled.
 
 ## Account
 

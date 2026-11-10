@@ -14,7 +14,7 @@
     },
     "apps/console": {
       "entry": [
-        "src/server/{main,dev,recover}.ts",
+        "src/server/{main,dev,recover,authorize-integration}.ts",
         "src/web/routes/**/*.tsx",
         // The lab swaps @/lib/orpc and @/lib/auth-client for these (lab/vite.config.ts).
         "lab/*.{ts,tsx}",

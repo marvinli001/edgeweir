@@ -63,6 +63,8 @@ const schema = z.object({
   DATABASE_URL: z.string().min(1),
   /** Base64-encoded 32+ byte key used to envelope-encrypt secrets at rest. */
   EDGEWEIR_MASTER_KEY: masterKey,
+  /** Private read-only installer capability; never printed or accepted as a session. */
+  EDGEWEIR_BOOTSTRAP_TOKEN_FILE: z.string().default(""),
   /**
    * The master key before a rotation: opens what it sealed until the startup
    * re-seal pass has moved everything to EDGEWEIR_MASTER_KEY; never seals.

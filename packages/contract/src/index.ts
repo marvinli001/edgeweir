@@ -20,6 +20,7 @@ import { alertsContract } from "./alerts";
 import { authRulesContract } from "./auth-rules";
 import { autoMitigationContract } from "./auto-mitigation";
 import { banSettings, bansContract } from "./bans";
+import { bootstrapInput, bootstrapResult, integrationAuthorizationResult } from "./bootstrap";
 import { bulkRedirectsContract } from "./bulk-redirects";
 import {
   acmeAccountsContract,
@@ -85,6 +86,7 @@ export * from "./ai-crawl";
 export * from "./audit";
 export * from "./auth-rules";
 export * from "./bans";
+export * from "./bootstrap";
 export * from "./bulk-redirects";
 export * from "./certificates";
 export * from "./connection-limits";
@@ -212,6 +214,35 @@ export const contract = {
       .route({ method: "POST", path: "/system/setup", tags: ["system"], spec: publicOperation })
       .input(s.setupInput)
       .output(z.object({ userId: z.string() })),
+    bootstrap: oc
+      .route({ method: "POST", path: "/system/bootstrap", tags: ["system"], spec: publicOperation })
+      .input(bootstrapInput)
+      .output(bootstrapResult),
+    acknowledgeBootstrap: oc
+      .route({
+        method: "POST",
+        path: "/system/bootstrap/acknowledge",
+        tags: ["system"],
+      })
+      .input(bootstrapInput)
+      .output(z.object({ ok: z.literal(true) })),
+    authorizeIntegration: oc
+      .route({
+        method: "POST",
+        path: "/system/authorize-integration",
+        tags: ["system"],
+        spec: publicOperation,
+      })
+      .input(bootstrapInput)
+      .output(integrationAuthorizationResult),
+    acknowledgeIntegration: oc
+      .route({
+        method: "POST",
+        path: "/system/authorize-integration/acknowledge",
+        tags: ["system"],
+      })
+      .input(bootstrapInput)
+      .output(z.object({ ok: z.literal(true) })),
   },
   account: {
     me: oc.route({ method: "GET", path: "/me", tags: ["account"] }).output(s.me),
@@ -736,6 +767,8 @@ export type Contract = typeof contract;
  * credential.
  */
 export const oneTimeSecretProcedures: ReadonlySet<string> = new Set([
+  "system.bootstrap",
+  "system.authorizeIntegration",
   "accessKeys.create",
   "serviceAccounts.createKey",
   "clusters.createEnrollmentToken",
@@ -745,6 +778,14 @@ export const oneTimeSecretProcedures: ReadonlySet<string> = new Set([
   "probeSources.rotateWebhookSecret",
   // A signed URL grants access until it expires (up to a year).
   "authRules.signUrl",
+]);
+
+/** Private capability inputs use sealed recovery instead of the generic idempotency cache. */
+export const installerCredentialProcedures: ReadonlySet<string> = new Set([
+  "system.bootstrap",
+  "system.acknowledgeBootstrap",
+  "system.authorizeIntegration",
+  "system.acknowledgeIntegration",
 ]);
 
 /**
@@ -761,6 +802,7 @@ const mcpForbiddenGroups: ReadonlySet<string> = new Set([
 ]);
 const mcpForbiddenProcedures: ReadonlySet<string> = new Set([
   ...oneTimeSecretProcedures,
+  ...installerCredentialProcedures,
   "settings.loginAllowList",
   "settings.setLoginAllowList",
   "settings.demo",

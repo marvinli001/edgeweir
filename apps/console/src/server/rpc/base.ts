@@ -1,6 +1,7 @@
 import {
   contract,
   DEMO_USER_ID,
+  installerCredentialProcedures,
   MCP_SCOPE_WRITE,
   mcpProcedureAllowed,
   oneTimeSecretProcedures,
@@ -59,7 +60,11 @@ async function sessionUser(context: RequestContext): Promise<SessionUser | null>
  * hours (lib/idempotency.ts); a credential shown once must not end up there.
  */
 function refuseStoredSecret(context: RequestContext, path: readonly string[]) {
-  if (context.headers.has(IDEMPOTENCY_HEADER) && oneTimeSecretProcedures.has(path.join(".")))
+  if (
+    context.headers.has(IDEMPOTENCY_HEADER) &&
+    (oneTimeSecretProcedures.has(path.join(".")) ||
+      installerCredentialProcedures.has(path.join(".")))
+  )
     fail(
       "IDEMPOTENCY_KEY_UNSUPPORTED",
       "this request returns a credential once; send it without Idempotency-Key",
@@ -85,6 +90,7 @@ const DEMO_ALLOWED_POSTS: ReadonlySet<string> = new Set(["mcp.consent"]);
 
 /** Scope applies before every public/optional-auth procedure as well as authed routes. */
 export const os = implementation.use(async ({ context, next, procedure, path }) => {
+  refuseStoredSecret(context, path);
   const grant = context.oauth;
   if (grant) {
     // MCP clients: not the excluded procedures (contract), writes only with edgeweir:write.

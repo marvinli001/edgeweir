@@ -61,6 +61,11 @@ const results = await Promise.all([
     entryPoints: [resolve(root, "src/server/recover.ts")],
     outfile: resolve(out, "recover.js"),
   }),
+  build({
+    ...options,
+    entryPoints: [resolve(root, "src/server/authorize-integration.ts")],
+    outfile: resolve(out, "authorize-integration.js"),
+  }),
 ]);
 
 await cp(resolve(root, "src/server/install"), resolve(out, "install"), { recursive: true });

@@ -165,6 +165,11 @@ export const errorDefs = {
   SETUP_DONE: { status: 403, params: [] },
   SETUP_IN_PROGRESS: { status: 409, params: [] },
   SETUP_TOKEN_INVALID: { status: 403, params: [] },
+  BOOTSTRAP_DISABLED: { status: 403, params: [] },
+  BOOTSTRAP_TOKEN_INVALID: { status: 403, params: [] },
+  BOOTSTRAP_CONFLICT: { status: 409, params: [] },
+  BOOTSTRAP_ACKNOWLEDGED: { status: 409, params: [] },
+  BOOTSTRAP_RECOVERY_EXPIRED: { status: 410, params: [] },
   CLUSTER_NOT_FOUND: { status: 404, params: [] },
   CLUSTER_SITE_LIMIT: { status: 409, params: ["limit"] },
   /** `nodes`: active nodes lacking the features (first 5). */

@@ -17,6 +17,7 @@ import { fetchClientMetadata } from "./lib/outbound";
 import { CLOSE_GRACE_MS, type NodeChannel, startNodeChannel } from "./node-channel/server";
 import { loadOrCreateNodeCa } from "./pki/store";
 import { AccessKeyRateLimiter } from "./services/access-keys";
+import { readBootstrapToken } from "./services/bootstrap";
 import { setDevelopmentModeSeconds } from "./services/development-mode";
 import { resealEnvelopes } from "./services/envelope-rotation";
 import { upgradeLegacyEnvelopes } from "./services/envelope-upgrade";
@@ -216,8 +217,12 @@ export async function bootstrap(): Promise<Running> {
   let http: Server | undefined;
 
   if (env.ROLE === "app" || env.ROLE === "all") {
-    const setupToken = await ensureSetupToken(ctx);
-    if (setupToken) announceSetupToken(log, setupToken, env.EDGEWEIR_PUBLIC_URL);
+    if (env.EDGEWEIR_BOOTSTRAP_TOKEN_FILE) {
+      await readBootstrapToken(env.EDGEWEIR_BOOTSTRAP_TOKEN_FILE);
+    } else {
+      const setupToken = await ensureSetupToken(ctx);
+      if (setupToken) announceSetupToken(log, setupToken, env.EDGEWEIR_PUBLIC_URL);
+    }
     warnConsoleUrls(log, {
       EDGEWEIR_PUBLIC_URL: env.EDGEWEIR_PUBLIC_URL,
       nodeApiUrl: await nodeChannelUrl(ctx),

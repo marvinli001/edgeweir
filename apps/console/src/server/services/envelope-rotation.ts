@@ -9,6 +9,7 @@ import type { Logger } from "../lib/logger";
 import { siteSecretBinding } from "../lib/site-secrets";
 import { caKeyBinding } from "../pki/store";
 import { ACME_DIRECTORY_KEY, acmeDirectoryBinding } from "./acme-directory";
+import { BOOTSTRAP_BINDING, BOOTSTRAP_KEY } from "./bootstrap";
 import {
   acmeAccountBinding,
   certificateAccountBinding,
@@ -23,6 +24,7 @@ import {
   credentialBinding as probeSourceCredentialBinding,
   webhookSecretBinding as probeSourceWebhookBinding,
 } from "./external-probes";
+import { INTEGRATION_GRANT_BINDING, INTEGRATION_GRANT_KEY } from "./integration-authorization";
 import { channelBinding, SMTP_KEY, smtpBinding } from "./notification-delivery";
 import { originClientKeyBinding } from "./origin-pki";
 import type { Executor } from "./revisions";
@@ -153,6 +155,8 @@ export const ENVELOPE_COLUMNS: EnvelopeColumn[] = [
 
 /** Every system setting that stores an envelope. */
 export const ENVELOPE_SETTINGS: EnvelopeSetting[] = [
+  { key: BOOTSTRAP_KEY, binding: BOOTSTRAP_BINDING, form: "object" },
+  { key: INTEGRATION_GRANT_KEY, binding: INTEGRATION_GRANT_BINDING, form: "object" },
   { key: SETUP_TOKEN_KEY, binding: SETUP_TOKEN_BINDING, form: "object" },
   { key: SMTP_KEY, binding: smtpBinding, form: "json" },
   { key: AUTH_SECRET_KEY, binding: AUTH_SECRET_BINDING, form: "object" },

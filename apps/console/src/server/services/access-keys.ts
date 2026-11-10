@@ -198,6 +198,25 @@ export async function createAccessKey(
   actor: Actor,
 ) {
   if (actor.type !== "user") fail("ACCESS_KEY_SESSION_REQUIRED", "sign in to create an access key");
+  return mintAccessKey(app, userId, input, actor);
+}
+
+/** Called only after the local deployment tool has authorized a private integration grant. */
+export async function createIntegrationAccessKey(app: AppContext, userId: string, actor: Actor) {
+  return mintAccessKey(
+    app,
+    userId,
+    { name: "Managed control service", scope: "write", requestsPerMinute: 600 },
+    actor,
+  );
+}
+
+async function mintAccessKey(
+  app: AppContext,
+  userId: string,
+  input: { name: string; scope: "read" | "write"; requestsPerMinute: number | null },
+  actor: Actor,
+) {
   const created = await app.auth.api.createApiKey({
     body: {
       userId,

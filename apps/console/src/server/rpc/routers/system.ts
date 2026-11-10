@@ -9,8 +9,14 @@ import {
 import { serviceAccountMe, toMe } from "../../services/account";
 import { listAttention } from "../../services/attention";
 import { auditFacets, listAuditLogs } from "../../services/audit";
+import { acknowledgeBootstrap, bootstrapStatus, runBootstrap } from "../../services/bootstrap";
 import { demoAuditEntry, isDemoEnabled } from "../../services/demo";
 import { getHiddenCards, updateHiddenCards } from "../../services/hidden-cards";
+import {
+  acknowledgeIntegration,
+  authorizeIntegration,
+  integrationAuthorizationStatus,
+} from "../../services/integration-authorization";
 import {
   answerConsent,
   getConsentRequest,
@@ -64,10 +70,34 @@ export const systemRouter = {
     status: os.system.status.handler(async ({ context }) => ({
       initialized: await isInitialized(context.app.db),
       version: context.app.env.version,
+      integrationAuthorization: await integrationAuthorizationStatus(context.app),
       demo: await isDemoEnabled(context.app.db),
+      bootstrap: await bootstrapStatus(context.app),
     })),
     setup: os.system.setup.handler(async ({ input, context }) =>
       runSetup(context.app, input, { ip: context.ip, userAgent: context.userAgent }),
+    ),
+    bootstrap: os.system.bootstrap.handler(({ input, context }) =>
+      runBootstrap(context.app, input, { ip: context.ip, userAgent: context.userAgent }),
+    ),
+    acknowledgeBootstrap: authed.system.acknowledgeBootstrap.handler(({ input, context }) =>
+      acknowledgeBootstrap(
+        context.app,
+        input,
+        { ip: context.ip, userAgent: context.userAgent },
+        context.headers.get("x-api-key"),
+      ),
+    ),
+    authorizeIntegration: os.system.authorizeIntegration.handler(({ input, context }) =>
+      authorizeIntegration(context.app, input, { ip: context.ip, userAgent: context.userAgent }),
+    ),
+    acknowledgeIntegration: authed.system.acknowledgeIntegration.handler(({ input, context }) =>
+      acknowledgeIntegration(
+        context.app,
+        input,
+        { ip: context.ip, userAgent: context.userAgent },
+        context.headers.get("x-api-key"),
+      ),
     ),
   },
   account: {
