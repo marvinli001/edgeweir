@@ -1,0 +1,18 @@
+{
+  "repository": "marvinli001/edgeweir",
+  "branch": "master",
+  "stages": {
+    "checks": "bash scripts/ci-accept.sh checks",
+    "tests": "bash scripts/ci-accept.sh tests",
+    "certd": "bash scripts/ci-accept.sh certd",
+    "containers": "bash scripts/ci-accept.sh containers"
+  },
+  "cleanup": "bash scripts/ci-accept.sh cleanup",
+  "image": "ghcr.io/marvinli001/edgeweir",
+  "local_image": "edgeweir:e2e",
+  "node_revision": ".github/node-revision",
+  "entrypoint": "/app/dist/server/main.js",
+  "private": false,
+  "node_version": "24.22.1",
+  "go_version_file": "helpers/certd/go.mod"
+}

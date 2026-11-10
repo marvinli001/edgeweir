@@ -361,13 +361,13 @@ feat(console)!: drop the public landing page from the open core
    bash deploy.sh template host | diff - compose.baota-host.yml
    ```
 
-基础镜像更新后，在 Actions 中手动运行 Release，重建 `master` 最新提交。
+基础镜像更新后，更新固定 digest，提交后用 `scope=full` 运行 CI；Release 晋级该次验收的候选镜像。
 
 ## 发布
 
 | 制品 | 触发 | 版本 |
 | --- | --- | --- |
-| 控制台镜像 `ghcr.io/marvinli001/edgeweir` | `master` 上的提交通过 CI 后由 Release 工作流发布；手动运行 Release 只重建 `master` 最新提交 | `<YYYYMMDD>-<提交前 7 位>`（UTC 提交日期，`scripts/image-version.sh`）；该提交仍是 `master` 最新提交时同时移动 `latest` |
+| 控制台镜像 `ghcr.io/marvinli001/edgeweir` | `master` 上的提交通过 CI 后由 Release 工作流发布；手动运行 Release 只晋级已有完整验收的同一候选摘要 | `<YYYYMMDD>-<提交前 7 位>`（UTC 提交日期，`scripts/image-version.sh`）；该提交仍是 `master` 最新提交时同时移动 `latest` |
 | 控制台 `stable` 渠道 | 维护者手动运行 Promote 工作流并输入日期 tag：工作流核对该 tag 的提交在 `master` 上、镜像由 release 工作流为这个提交签名，再把 `stable` 指向同一 digest；之后以该日期 tag 创建 GitHub Release | 不产生新的镜像 tag；回退即 promote 更早的日期 tag（两者之间没有新增迁移时） |
 | 节点 | edgeweir-node 的 `v*` tag（附注 tag，消息 `edgeweir-node vX.Y.Z`），goreleaser 生成 draft，校验后发布 | 语义化版本：修复升补丁；新能力名、新命令、新可选配置升次版本；去掉能力或 proto 字段、state 目录或 `identity.json` 不兼容、提高安装要求、需要重新注册升主版本 |
 | proto | 维护者在 `master` 上打 tag | `proto/vX.Y.Z` |
@@ -415,3 +415,27 @@ feat(console)!: drop the public landing page from the open core
 Edgeweir 以 [AGPL-3.0-only](LICENSE) 发布。提交贡献即表示同意以 AGPL-3.0-only 授权该贡献，并确认有权这样授权。
 
 开源核心允许合规商用；开源版面向单一运营者，多租户（组织、成员、角色与隔离）、对外客户门户、套餐计费、财务与分销属于独立商业运营产品（[LICENSING.md](LICENSING.md)）。向核心贡献不自动授予项目方闭源再许可的权利；双许可或插件链接例外须另行核实代码权利与贡献授权。
+
+## CI 验收与制品复用
+
+维护者可在 InstaBox 的独立、干净检出完成一次正式验收。需要 Python 3.11+、项目固定版本的 Node/Go、Docker Compose/Buildx、Skopeo；Core/Node 还需工作流固定版本的 Buf、GoReleaser、Syft，Core 升级验收需 cosign。先配置隔离端口、项目名和测试服务，所有测试在共享机的锁下运行。不要在共享机执行不可信 fork 的代码。
+
+```sh
+flock /data/locks/heavy.lock python3 scripts/ci-verify.py run --directory .local/acceptance/final
+```
+
+`.github/acceptance.json` 定义必须完成的全部命令；任一命令、清理或源码检查失败都不会生成完整验收。记录包含精确提交和 Git tree、策略摘要、命令/日志摘要、测试结果摘要、时间和双架构候选镜像摘要。普通定向测试不能冒充该记录。Node 的正式二进制仍按发布 tag 干净构建，不把 snapshot 包直接当正式包。
+
+获得发布授权后，由仓库所有者的 GitHub 身份上传验收记录：
+
+```sh
+python3 scripts/ci-verify.py publish --directory .local/acceptance/final
+```
+
+对带 Web 镜像的仓库，这一步也会将已验收的 OCI 候选上传到本仓库现有 GHCR 包的 `candidate-<完整提交>`，不会移动日期版本、latest 或 stable。所有者令牌须能写入 Git blob/commit status 和对应包；仓库/包可见性不会被修改。CI 只信任所有者签发的逐提交状态及其不可变证据 blob，核对源码、策略、完整范围和摘要，有效期按实际验收完成时间计算为 7 天，更新的 CI 失败会使旧结果失效。原始日志留在验收目录，只有摘要上传 GitHub。
+
+`scope=auto` 按变更选择验收；未提供比较基准时保守执行完整范围。`scope=full` 强制重新验收，不复用旧记录。独立 `full-acceptance` 门槛才可用于发布，局部 CI 的绿色结果不可用于发布。制品缺失、过期或标签/架构/摘要不符时拒绝发布，不能凭一次成功构建代替验收。
+
+公开仓库的正常 PR 仍在 GitHub 隔离 runner 检查。维护者若先在 InstaBox 验收，应冻结带 `[skip ci]` 的最终提交，推送后发布上述记录，再按需手动运行 CI/Release；这样不会在证据上传前抢先启动第二轮完整验收。不要以 `[skip ci]` 代替验收。需要完整重建时更新构建输入的固定版本并重新验收；Release 只晋级同一候选摘要，不重建镜像。
+
+Core 的 `.github/node-revision` 固定真实 E2E 使用的节点提交；在独立节点检出中准备该提交，并设置 `EDGEWEIR_NODE_CONTEXT`。修改固定版本需重新完成整套验收。PR 中已列入映射的单一 UI 路由只验收相关 E2E 章节，其依赖仍由 e2e.sh 展开；共享代码和未知输入执行完整范围，master 发布必须有完整验收。CI 生成原始构建来源证明，Release 保留镜像内 SBOM/BuildKit provenance，并签署实际摘要及独立验收声明；InstaBox 构建不会被冒称为 GitHub 重建。

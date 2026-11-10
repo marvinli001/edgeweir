@@ -4,9 +4,20 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      scope:
+        type: choice
+        options: [auto, full]
+        default: auto
+      base:
+        description: Optional comparison commit
+        type: string
 
 permissions:
   contents: read
+  statuses: read
+  actions: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -16,23 +27,37 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      product: ${{ steps.changes.outputs.product }}
+      product: ${{ steps.plan.outputs.product }}
+      checks: ${{ steps.plan.outputs.checks }}
+      certd: ${{ steps.plan.outputs.certd }}
+      image: ${{ steps.plan.outputs.image }}
+      containers: ${{ steps.plan.outputs.containers }}
+      full: ${{ steps.plan.outputs.full }}
+      reuse: ${{ steps.plan.outputs.reuse }}
+      e2e_sections: ${{ steps.plan.outputs.e2e_sections }}
+      node_revision: ${{ steps.node.outputs.revision }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 2
-      - id: changes
+          persist-credentials: false
+      - id: plan
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          CI_SCOPE: ${{ inputs.scope }}
+          CI_BASE_SHA: ${{ inputs.base || github.event.pull_request.base.sha || github.event.before }}
+          CI_ALLOW_REUSE: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        run: python3 scripts/ci-plan.py
+      - id: node
         run: |
-          product=$(bash scripts/ci-changes.sh "$BASE_SHA" "$HEAD_SHA")
-          echo "product=$product" >> "$GITHUB_OUTPUT"
+          revision=$(cat .github/node-revision)
+          [[ "$revision" =~ ^[a-f0-9]{40}$ ]]
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
 
   checks:
     name: lint · typecheck · test · build
     needs: changes
-    if: needs.changes.outputs.product == 'true'
+    if: needs.changes.outputs.checks == 'true'
     runs-on: ubuntu-latest
     services:
       # Tests of concurrent transactions (PGlite runs one at a time).
@@ -56,6 +81,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      - run: python3 -m unittest discover -s tests/ci -p 'test_*.py'
       - name: Generated TypeScript matches proto/
         run: pnpm proto:gen && git diff --exit-code -- packages/proto
       - name: proto/ stays compatible with the newest proto tag
@@ -63,16 +89,16 @@ jobs:
         env:
           PROTO_REMOTE: https://github.com/${{ github.repository }}.git
       - run: pnpm typecheck
-      - run: pnpm test
+      - if: needs.changes.outputs.reuse != 'true'
+        run: pnpm test
         env:
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
           EDGEWEIR_TEST_POSTGRES_URL: postgres://postgres:postgres@localhost:5432/postgres
-      - run: pnpm build
 
   certd:
     name: edgeweir-certd (Go)
     needs: changes
-    if: needs.changes.outputs.product == 'true'
+    if: needs.changes.outputs.certd == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -88,38 +114,83 @@ jobs:
   image:
     name: build image
     needs: changes
-    if: needs.changes.outputs.product == 'true'
+    if: needs.changes.outputs.image == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: version
-        run: echo "version=$(scripts/image-version.sh)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "version=$(scripts/image-version.sh)" >> "$GITHUB_OUTPUT"
+          echo "created=$(git log -1 --format=%cI)" >> "$GITHUB_OUTPUT"
+          echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+          mkdir -p .local/ci-candidate
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: false
+          outputs: type=oci,dest=.local/ci-candidate/image.tar
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
             REVISION=${{ github.sha }}
+          labels: org.opencontainers.image.created=${{ steps.version.outputs.created }}
           cache-from: type=gha,scope=console-image
           cache-to: type=gha,scope=console-image,mode=max
+          sbom: true
+          provenance: mode=max
+      - name: Inspect the immutable candidate
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y skopeo
+          python3 scripts/ci-image.py inspect
+      - name: Attest where the candidate was actually built
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/marvinli001/edgeweir
+          subject-digest: ${{ steps.build.outputs.digest }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: candidate-image
+          path: .local/ci-candidate/
+          include-hidden-files: true
+          compression-level: 0
+          retention-days: 7
 
   e2e:
     name: end-to-end (compose.e2e.yml)
     runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.product == 'true'
+    needs: [changes, image]
+    if: needs.changes.outputs.containers == 'true'
     env:
       EDGEWEIR_NODE_CONTEXT: ./edgeweir-node
+      CI_E2E_SECTIONS: ${{ needs.changes.outputs.e2e_sections }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: marvinli001/edgeweir-node
+          ref: ${{ needs.changes.outputs.node_revision }}
           path: edgeweir-node
           fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: candidate-image
+          path: .local/ci-candidate
+      - name: Load the same console image the release will publish
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y skopeo
+          python3 scripts/ci-image.py load
       - name: Restore immutable E2E fixtures
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
@@ -164,19 +235,16 @@ jobs:
           source: .
           files: compose.e2e.yml
           targets: |
-            console
             node
             geoip-fixture
           load: true
           set: |
-            console.cache-from=type=gha,scope=e2e-console
-            console.cache-to=type=gha,scope=e2e-console,mode=max
+            node.args.OPENRESTY_JOBS=4
             node.cache-from=type=gha,scope=e2e-node
             node.cache-to=type=gha,scope=e2e-node,mode=max
             geoip-fixture.cache-from=type=gha,scope=e2e-geoip
             geoip-fixture.cache-to=type=gha,scope=e2e-geoip,mode=max
-      - run: docker compose -f compose.e2e.yml up -d --no-build
-      - run: bash scripts/e2e.sh
+      - run: bash scripts/ci-accept.sh e2e
       - if: failure()
         run: docker compose -f compose.e2e.yml logs
       - if: always()
@@ -191,3 +259,29 @@ jobs:
           retention-days: 7
       - if: always()
         run: docker compose -f compose.e2e.yml --profile analytics --profile upgrades down -v
+
+  acceptance:
+    if: always() && needs.changes.outputs.product == 'true'
+    needs: [changes, checks, certd, image, e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          PLAN: ${{ toJSON(needs.changes.outputs) }}
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY_GATE'
+          import json, os
+          plan, results = json.loads(os.environ['PLAN']), json.loads(os.environ['RESULTS'])
+          assert results['changes']['result'] == 'success'
+          for job, key in [('checks', 'checks'), ('certd', 'certd'), ('image', 'image'), ('e2e', 'containers')]:
+              expected = 'success' if plan[key] == 'true' else 'skipped'
+              assert results[job]['result'] == expected, (job, results[job]['result'], expected)
+          PY_GATE
+
+  full-acceptance:
+    needs: [changes, acceptance]
+    # A reused proof keeps its original expiry; only fresh tests create this CI gate.
+    if: needs.changes.outputs.full == 'true' && needs.changes.outputs.reuse != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'true'

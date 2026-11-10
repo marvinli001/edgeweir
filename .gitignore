@@ -67,3 +67,11 @@ GEMINI.md
 # Development records of edgeweir and edgeweir-node: ADRs, roadmaps, specs,
 # audits, progress notes (maintainer-only, not published)
 /dev-docs/
+
+# CI verification receipts and immutable candidate archives
+.local/acceptance/
+.local/ci-candidate/
+
+# Python acceptance tooling
+__pycache__/
+*.pyc
