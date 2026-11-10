@@ -271,6 +271,26 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(sorted(members), sorted(sections))
         self.assertEqual(len(members), len(set(members)))
 
+    @unittest.skipUnless(Path("scripts/e2e.sh").exists() and Path("scripts/e2e-fixtures.sh").exists(), "core e2e shards")
+    def test_e2e_sections_declare_the_sections_whose_state_and_sites_they_read(self):
+        # A shard runs a section after core and its declared needs only.
+        listed = subprocess.check_output(["bash", "scripts/e2e.sh", "--list"], text=True).splitlines()
+        needs = {line.split()[0]: set(line.split()[1:]) for line in listed if line.strip()}
+        def closure(section):
+            found, todo = {"core"}, list(needs[section])
+            while todo:
+                need = todo.pop()
+                if need not in found:
+                    found.add(need)
+                    todo.extend(needs[need])
+            return found
+        for section in needs:
+            text = "".join(Path(f).read_text() for f in [f"scripts/e2e-{section}.mjs", f"apps/console/e2e/{section}.spec.ts"] if Path(f).exists())
+            read = {{"m6-upgrade": "m6-upgrades"}.get(name, name) for name in re.findall(r"\.e2e/([a-z0-9-]+?)-state\.json", text)}
+            read |= set(re.findall(r"[a-z0-9-]+\.(m[0-9]|g[0-9]+|p0|pp|h2)\.test\b", text))
+            with self.subTest(section=section):
+                self.assertEqual({r for r in read if r in needs and r != section} - closure(section), set())
+
     def test_force_full_is_available_even_for_docs(self):
         for repo in ["edgeweir", "edgeweir-node", "edgeweir-business", "edgeweir-cloud"]:
             self.assertTrue(plan.select(repo, ["README.md"], force_full=True)["full"])
