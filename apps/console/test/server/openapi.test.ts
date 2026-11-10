@@ -1,9 +1,15 @@
+import { schema } from "@edgeweir/db";
 import { afterAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import { createTestContext } from "./helpers";
 
-/** Procedures anyone may call: the first-run setup. */
-const PUBLIC_OPERATIONS = ["system.status", "system.setup"];
+/** Procedures without an API key; installer routes require a private local capability. */
+const PUBLIC_OPERATIONS = [
+  "system.status",
+  "system.setup",
+  "system.bootstrap",
+  "system.authorizeIntegration",
+];
 
 type Schema = {
   enum?: unknown[];
@@ -168,6 +174,23 @@ describe("OpenAPI security requirements", async () => {
       "post /extensions/{id}/node-settings/check extensions.checkNodeSettings",
       "put /extensions/{id}/node-settings extensions.updateNodeSettings",
     ]);
+  });
+
+  it("rejects installer requests without a locally authorized capability", async () => {
+    for (const path of ["bootstrap", "authorize-integration"]) {
+      const res = await app.request(`${origin}/api/v1/system/${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          installationId: "00000000-0000-4000-8000-000000000001",
+          requestId: "00000000-0000-4000-8000-000000000002",
+          token: "A".repeat(43),
+        }),
+      });
+      expect(res.status, path).toBe(403);
+    }
+    expect(await ctx.db.select().from(schema.apikey)).toHaveLength(0);
+    expect(await ctx.db.select().from(schema.user)).toHaveLength(0);
   });
 
   it("matches what the API enforces without credentials", async () => {
