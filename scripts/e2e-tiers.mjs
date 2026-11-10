@@ -278,7 +278,8 @@ const applied = () =>
     120,
   );
 
-await selected("smart selection after the nodes measured the origin");
+// Nodes measure one by one; the fallback appears once a lower node has measured both regions.
+await selected("smart selection after the nodes measured the origin", (s) => roles(s).fallback);
 let { upper, fallback, lowers } = roles(selection);
 assert.ok(fallback, `no fallback upper tier: ${JSON.stringify(selection)}`);
 assert.notEqual(byId[upper].region, byId[fallback].region, "the fallback is in the other region");

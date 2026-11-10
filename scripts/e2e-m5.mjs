@@ -141,6 +141,11 @@ console.log(
 const aRecords = (await records()).filter((r) => r.type === "A");
 await fixture("/dns/delete", { zone: provider.zone, records: aRecords });
 await a("POST", "/dns/reconcile");
+// Reconciling runs as a job, like the first publication above.
+await waitFor(
+  "DNS record drift repaired",
+  async () => (await records()).filter((r) => r.type === "A").length === aRecords.length,
+);
 assert.equal((await records()).filter((r) => r.type === "A").length, aRecords.length);
 console.log("PASS DNS record drift repaired without touching unrelated records");
 let channel = (await a("GET", "/alerts/channels")).find((c) => c.name === "E2E webhook");
