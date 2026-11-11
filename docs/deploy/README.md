@@ -15,7 +15,7 @@
 
 | tag | 来源 | 用途 |
 | --- | --- | --- |
-| `<YYYYMMDD>-<commit>` | master 上 CI 通过的每个提交，由 `release.yml` 构建发布；`<commit>` 为 7 位提交号 | 生产环境固定此 tag |
+| `<YYYYMMDD>-<commit>` | `release.yml` 将 master 上通过完整验收的候选镜像按原 digest 发布；`<commit>` 为 7 位提交号 | 生产环境固定此 tag |
 | `stable` | 维护者手动运行 `promote.yml`，指向一个已发布日期 tag 的 digest；不重新构建 | 各编排文件与平台模板的默认值 |
 | `latest` | master 最新提交的日期 tag | 评估环境 |
 

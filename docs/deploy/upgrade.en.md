@@ -8,10 +8,10 @@ Console image versions and channels, version pinning, signature verification, up
 | --- | --- |
 | Image | `ghcr.io/marvinli001/edgeweir`, linux/amd64 and linux/arm64, public |
 | Tag | `<YYYYMMDD>-<commit>`: UTC commit date and the first 7 characters of the commit ID, e.g. `20260929-a1b2c3d`; the same commit always gets the same tag (`scripts/image-version.sh`). No semantic version numbers |
-| Release | After a push to `master` passes CI, the release workflow builds that commit and pushes its dated tag |
+| Release | After a `master` commit passes complete acceptance, the release workflow publishes its tested multi-platform candidate under the dated tag, preserving its digest without rebuilding |
 | `stable` | Default channel: a maintainer points it, through the promote workflow, at the digest of a published dated tag (no rebuild, no new signature); every move comes with a [GitHub Release](https://github.com/marvinli001/edgeweir/releases) naming the matching node version, proto version, new database migrations, and upgrade steps |
 | `latest` | Preview channel: follows `master`; moves only while the built commit is still the tip of `master`, never backwards |
-| Manual release | Rebuilds the tip of `master` and pushes a new digest under the same dated tag |
+| Manual release | Requires complete acceptance and a retained candidate for the tip of `master`; publishes the original digest and refuses publication when evidence is missing |
 | Source build | Version `dev` |
 | Image labels | `org.opencontainers.image.version` is the dated tag; `org.opencontainers.image.revision` is the full commit ID |
 | Signing | cosign keyless signature, with SBOM and SLSA provenance |

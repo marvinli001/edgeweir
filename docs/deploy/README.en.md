@@ -15,7 +15,7 @@ Console components, image tags, runtime requirements, supported platforms, node 
 
 | Tag | Source | Use |
 | --- | --- | --- |
-| `<YYYYMMDD>-<commit>` | Every master commit whose CI run passed, built and published by `release.yml`; `<commit>` is the 7-character commit id | Pin this tag in production |
+| `<YYYYMMDD>-<commit>` | The fully accepted master candidate, published by `release.yml` without changing its digest; `<commit>` is the 7-character commit id | Pin this tag in production |
 | `stable` | Moved by hand by a maintainer running `promote.yml` to the digest of a published dated tag; nothing is rebuilt | Default of every compose file and platform template |
 | `latest` | The dated tag of the newest master commit | Evaluation |
 
