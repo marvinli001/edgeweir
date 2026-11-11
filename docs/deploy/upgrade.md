@@ -8,10 +8,10 @@
 | --- | --- |
 | 镜像 | `ghcr.io/marvinli001/edgeweir`，linux/amd64、linux/arm64，公开拉取 |
 | tag | `<YYYYMMDD>-<commit>`：UTC 提交日期与提交 ID 前 7 位，例如 `20260929-a1b2c3d`；同一提交始终得到同一 tag（`scripts/image-version.sh`）。不使用语义化版本号 |
-| 发布 | `master` 上的推送通过 CI 后，release 工作流构建该提交并推送其日期 tag |
+| 发布 | `master` 上的提交通过完整验收后，release 工作流将该提交已验收的双架构候选镜像按原 digest 推送为日期 tag，不重新构建 |
 | `stable` | 默认渠道：维护者经 promote 工作流把它指向一个已发布日期 tag 的同一 digest（不重新构建、不重新签名）；每次移动附一个 [GitHub Release](https://github.com/marvinli001/edgeweir/releases)，写明配套的节点版本、proto 版本、新增的数据库迁移与升级步骤 |
 | `latest` | 预览渠道：跟随 `master`，仅在构建的提交仍是 `master` 最新提交时移动，不回退 |
-| 手动发布 | 重建 `master` 最新提交，以同一日期 tag 推送新的 digest |
+| 手动发布 | 要求 `master` 最新提交已有完整验收结果和保留的候选镜像，按原 digest 发布；缺少证据时拒绝发布 |
 | 源码构建 | 版本为 `dev` |
 | 镜像标签 | `org.opencontainers.image.version` 为日期 tag；`org.opencontainers.image.revision` 为完整提交 ID |
 | 签名 | cosign keyless 签名，附 SBOM 与 SLSA provenance |
