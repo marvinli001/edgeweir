@@ -4,7 +4,12 @@
 set -euo pipefail
 syft_dir="$RUNNER_TEMP/syft"
 mkdir -p "$syft_dir"
-curl -fsSL --retry 3 --connect-timeout 15 --max-time 180 \
+# Release assets come through the API: with GH_TOKEN (the job token) it does
+# not hit the unauthenticated rate limit that parallel jobs on shared runner
+# addresses share (curl drops the header on the redirect to the asset host).
+auth=()
+[[ -z "${GH_TOKEN:-}" ]] || auth=(-H "Authorization: Bearer $GH_TOKEN")
+curl -fsSL --retry 3 --connect-timeout 15 --max-time 180 "${auth[@]}" \
   -H 'Accept: application/octet-stream' \
   https://api.github.com/repos/anchore/syft/releases/assets/570445809 \
   -o "$syft_dir/syft.tar.gz"
