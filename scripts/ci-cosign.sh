@@ -4,8 +4,13 @@ set -euo pipefail
 # Match cosign-installer v4.1.0's pinned bootstrap and keyless/KMS verification.
 cosign_dir="$RUNNER_TEMP/edgeweir-cosign"
 mkdir -p "$cosign_dir"
+# Release assets come through the API: with GH_TOKEN (the job token) it does
+# not hit the unauthenticated rate limit that parallel jobs on shared runner
+# addresses share (curl drops the header on the redirect to the asset host).
+auth=()
+[[ -z "${GH_TOKEN:-}" ]] || auth=(-H "Authorization: Bearer $GH_TOKEN")
 download_asset() {
-  curl -fsSL --retry 3 --connect-timeout 15 --max-time 180 \
+  curl -fsSL --retry 3 --connect-timeout 15 --max-time 180 "${auth[@]}" \
     -H 'Accept: application/octet-stream' \
     "https://api.github.com/repos/sigstore/cosign/releases/assets/$1" \
     -o "$cosign_dir/$2"

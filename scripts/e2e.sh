@@ -463,15 +463,20 @@ LANES=(
 # Shards for parallel runners (--shard N, CI's e2e matrix): each runs on a
 # fresh stack of its own after core and the sections it needs (SECTIONS), in
 # chain order, with the LANES whose sections it holds. Every section is in
-# exactly one shard. Balanced by the section times of a CI run with a warm
-# fixture cache (2026-11-10): about 16 to 17 minutes each, counting core and
-# the m5 and m6-upgrades runs that most sections need.
+# exactly one shard. Balanced by the section times of a CI run (2026-11-11):
+# core, m5 and m6-upgrades take about 8 minutes before most sections, so a
+# shard with them holds about 5 to 6 more minutes (p0 and g1 alone, the
+# lower bound; the fifth shard's lane runs usage-guard beside g9..g14); the
+# first two need neither.
 SHARDS=(
-  "core m1 analytics m2 install ssh-install wss channel node-logs diagnostics extensions m3 m4 probe-sources ai-crawl tiers allowlist mcp lifecycle"
-  "p0 g1 h2 usage-guard dev-mode"
-  "m5 m6-logs m6-upgrades dns g4 g6 g10 g14"
-  "g2 g5 g7 g12 g13 g16"
-  "pp g3 g8 g9 g15 g11 g17 g18 g19 g20"
+  "core m1 analytics m2 install ssh-install wss channel node-logs diagnostics extensions m3 m4 dev-mode"
+  "probe-sources ai-crawl tiers allowlist mcp lifecycle"
+  "p0 g1"
+  "dns g6 g7 g10"
+  "h2 g8 g9 g15 g11 g12 g14 usage-guard"
+  "g3 g4 g17"
+  "g2 g5 g13 g16"
+  "m5 m6-logs m6-upgrades pp g18 g19 g20"
 )
 section_names() { local s; for s in "${SECTIONS[@]}"; do printf '%s\n' "${s%%:*}"; done; }
 section_deps() { local s; for s in "${SECTIONS[@]}"; do [[ "${s%%:*}" != "$1" ]] || { printf '%s\n' "${s#*:}"; return; }; done; }
