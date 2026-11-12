@@ -100,6 +100,8 @@ export const auditActions = [
   "node.decommission_failed",
   "node.delete",
   "node.disable",
+  "node.traffic_limit_update",
+  "node.traffic_limit_reached",
   "node.enable",
   "node.enroll",
   "node.move",

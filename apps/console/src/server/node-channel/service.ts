@@ -22,6 +22,7 @@ import {
   CHANNEL_FOLLOW_FEATURE,
   formatIp,
   MAX_REPORTED_BANS,
+  networkCounters,
   nodeSupportsFeature,
   parseIp,
   TIER_UPPER_FEATURE,
@@ -93,6 +94,7 @@ import {
   reportDecommissionResult,
 } from "../services/node-decommission";
 import { ingestNodeLogs, nodeLogCursor } from "../services/node-logs";
+import { accountNodeTraffic } from "../services/node-traffic-limit";
 import { acceptedCertificate, isSerialRevoked, replaceReportedAddresses } from "../services/nodes";
 import { replaceOriginHealth } from "../services/origin-health";
 import { nodeOriginClientCertificates } from "../services/origin-pki";
@@ -245,6 +247,22 @@ function toNodeMetrics(m: NodeMetrics, now: Date): schema.NodeMetricsData {
     Number.isFinite(value) ? Math.min(Math.max(value, 0), max) : 0;
   const count = (value: bigint) =>
     Number(value < 0n ? 0n : value > 9007199254740991n ? 9007199254740991n : value);
+  const raw = m.network?.sampledAt
+    ? {
+        bootId: m.network.bootId,
+        sampledAt: timestampDate(m.network.sampledAt).toISOString(),
+        interfaces: m.network.interfaces.map((n) => ({
+          name: n.name,
+          bytesReceived: n.bytesReceived.toString(),
+          bytesSent: n.bytesSent.toString(),
+        })),
+      }
+    : undefined;
+  const parsed = networkCounters.safeParse(raw);
+  const network =
+    parsed.success && Date.parse(parsed.data.sampledAt) <= now.getTime() + 60_000
+      ? parsed.data
+      : undefined;
   return {
     cpuPercent: real(m.cpuPercent, 100),
     load1: real(m.load1, 1e6),
@@ -253,6 +271,7 @@ function toNodeMetrics(m: NodeMetrics, now: Date): schema.NodeMetricsData {
     memoryUsedBytes: count(m.memoryUsedBytes),
     memoryTotalBytes: count(m.memoryTotalBytes),
     egressBps: count(m.egressBps),
+    ...(network ? { network } : {}),
     activeConnections: count(m.activeConnections),
     reportedAt: now.toISOString(),
   };
@@ -514,7 +533,7 @@ export function createNodeService(
    * mTLS gate for every RPC except Enroll. `disabled` lets a disabled node
    * through, for RPCs that only concern its identity.
    */
-  async function requireNode(ctx: HandlerContext, { disabled = false } = {}) {
+  async function requireNode(ctx: HandlerContext, { disabled = false, accounting = false } = {}) {
     const peer = ctx.values.get(peerKey);
     if (!peer.authorized || !peer.commonName) {
       throw new ConnectError(clientCertificateError(peer), Code.Unauthenticated);
@@ -530,7 +549,7 @@ export function createNodeService(
       .from(schema.node)
       .where(eq(schema.node.id, peer.commonName));
     if (!row) throw new ConnectError("unknown node", Code.Unauthenticated);
-    if (row.status !== "active" && !disabled)
+    if (row.status !== "active" && !disabled && !(accounting && row.trafficLimit?.reachedAt))
       throw new ConnectError("node is disabled", Code.PermissionDenied);
     const certificate = acceptedCertificate(row, peer.serialNumber);
     if (!certificate)
@@ -579,7 +598,7 @@ export function createNodeService(
     },
     ctx: HandlerContext,
   ) => {
-    const node = await requireNode(ctx);
+    const node = await requireNode(ctx, { accounting: true });
     const l4Stats = req.l4Stats ?? [];
     if (req.batchSequence === 0n && req.stats.length === 0 && l4Stats.length === 0) {
       // The node's statistics watermark comes with a cursor query once nothing is pending.
@@ -978,7 +997,7 @@ export function createNodeService(
     },
 
     async reportStatus(req, ctx) {
-      const node = await requireNode(ctx);
+      const node = await requireNode(ctx, { accounting: true });
       const peer = ctx.values.get(peerKey);
       const now = new Date();
       if (req.appliedRevision < 0n || req.appliedRevision >= BigInt(Number.MAX_SAFE_INTEGER))
@@ -1043,6 +1062,11 @@ export function createNodeService(
             }),
           })
           .where(eq(schema.node.id, node.id));
+        await accountNodeTraffic(
+          tx,
+          node.id,
+          req.metrics ? toNodeMetrics(req.metrics, now).network : undefined,
+        );
         // Certificates of the applied revision the node could not load
         // (certificate-isolation-v1; older nodes fail the revision instead).
         const certificateFailures = toCertificateFailures(req.certificateFailures);

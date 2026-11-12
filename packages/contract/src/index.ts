@@ -274,6 +274,17 @@ export const contract = {
       .route({ method: "GET", path: "/analytics/traffic", tags: ["analytics"] })
       .input(s.trafficInput)
       .output(s.traffic),
+    l4Traffic: oc
+      .route({ method: "GET", path: "/analytics/l4-traffic", tags: ["analytics"] })
+      .input(
+        z.object({
+          range: s.analyticsRange.default("24h"),
+          appId: s.uuid.optional(),
+          from: s.isoDateTime.optional(),
+          to: s.isoDateTime.optional(),
+        }),
+      )
+      .output(s.traffic),
     topSites: oc
       .route({ method: "GET", path: "/analytics/top-sites", tags: ["analytics"] })
       .input(s.trafficTopInput)
@@ -438,6 +449,10 @@ export const contract = {
     update: oc
       .route({ method: "PATCH", path: "/nodes/{id}", tags: ["nodes"] })
       .input(s.nodeUpdateInput)
+      .output(s.node),
+    setTrafficLimit: oc
+      .route({ method: "PUT", path: "/nodes/{id}/traffic-limit", tags: ["nodes"] })
+      .input(s.nodeTrafficLimitInput)
       .output(s.node),
     disable: oc
       .route({ method: "POST", path: "/nodes/{id}/disable", tags: ["nodes"] })

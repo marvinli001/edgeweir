@@ -23,6 +23,7 @@ import {
 } from "./node-addresses";
 import { toNodeChannelStatus } from "./node-channel-status";
 import { findNodeGroup } from "./node-groups";
+import { trafficLimitView } from "./node-traffic-limit";
 import {
   type Executor,
   latestRevision,
@@ -127,6 +128,7 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
       banStatus: r.banStatus ?? null,
       probeEnabled: r.probeEnabled,
       metrics: r.metrics ?? null,
+      trafficLimit: trafficLimitView(r.trafficLimit),
       schedulingAddresses: scheduling.map((a) => ({
         ...a,
         reachable: !unreachable.has(a.address),
@@ -291,7 +293,18 @@ export async function setNodeStatus(
   actor: Actor,
 ): Promise<Node> {
   return db.transaction(async (tx) => {
-    const row = await findNode(tx, id);
+    const [row] = await tx.select().from(schema.node).where(eq(schema.node.id, id)).for("update");
+    if (!row) return fail("NODE_NOT_FOUND", "node not found");
+    if (
+      status === "active" &&
+      row.trafficLimit &&
+      BigInt(row.trafficLimit.bytesReceived) + BigInt(row.trafficLimit.bytesSent) >=
+        BigInt(row.trafficLimit.bytesLimit)
+    )
+      return fail(
+        "NODE_TRAFFIC_LIMIT_REACHED",
+        "reset usage or raise the node traffic limit before enabling",
+      );
     await tx.update(schema.node).set({ status }).where(eq(schema.node.id, id));
     const skippedTasks = status === "disabled" ? await skipNodeTasks(tx, id) : 0;
     if (status === "disabled") await discardNodeUpgrades(tx, id);

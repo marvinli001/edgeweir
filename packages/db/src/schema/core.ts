@@ -193,6 +193,22 @@ export interface NodeCertificateFailure {
   servingFingerprint: string;
 }
 
+export interface NetworkCountersData {
+  bootId: string;
+  sampledAt: string;
+  interfaces: { name: string; bytesReceived: string; bytesSent: string }[];
+}
+export interface NodeTrafficLimitData {
+  bytesLimit: string;
+  interfaces: string[];
+  bytesReceived: string;
+  bytesSent: string;
+  startedAt: string;
+  reachedAt: string | null;
+  measuredAt: string;
+  baseline: NetworkCountersData;
+}
+
 /** Host metrics of a node's last heartbeat (ReportStatusRequest.metrics, metrics-v1). */
 export interface NodeMetricsData {
   cpuPercent: number;
@@ -202,6 +218,7 @@ export interface NodeMetricsData {
   memoryUsedBytes: number;
   memoryTotalBytes: number;
   egressBps: number;
+  network?: NetworkCountersData;
   activeConnections: number;
   reportedAt: string;
 }
@@ -289,6 +306,7 @@ export const node = pgTable(
     securityState: jsonb("security_state").$type<NodeSiteSecurity[]>().notNull().default([]),
     /** Host metrics of the last heartbeat; null until a node with metrics-v1 reports. */
     metrics: jsonb("metrics").$type<NodeMetricsData>(),
+    trafficLimit: jsonb("traffic_limit").$type<NodeTrafficLimitData>(),
     /** The node also probes the others from its node group's region (ReportStatusResponse.probe). */
     probeEnabled: boolean("probe_enabled").notNull().default(false),
     /** Cache zone size of this node in GiB; null uses the cluster's (cache-zone-v1). */

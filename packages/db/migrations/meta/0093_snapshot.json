@@ -1,6 +1,6 @@
 {
-  "id": "13836b61-97bd-47ef-9434-e55511d2165b",
-  "prevId": "3b79f099-c248-4093-8741-8b97dd62175d",
+  "id": "04dfa0e1-e72a-459a-802f-e3304aba4949",
+  "prevId": "13836b61-97bd-47ef-9434-e55511d2165b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1226,6 +1226,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "resource_kind": {
+          "name": "resource_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'site'"
+        },
         "requests": {
           "name": "requests",
           "type": "numeric(38, 0)",
@@ -1308,11 +1315,12 @@
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "site_usage_window_start_site_id_pk": {
-          "name": "site_usage_window_start_site_id_pk",
+        "site_usage_window_start_site_id_resource_kind_pk": {
+          "name": "site_usage_window_start_site_id_resource_kind_pk",
           "columns": [
             "window_start",
-            "site_id"
+            "site_id",
+            "resource_kind"
           ]
         }
       },
@@ -4737,6 +4745,12 @@
         },
         "metrics": {
           "name": "metrics",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "traffic_limit": {
+          "name": "traffic_limit",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false

@@ -736,6 +736,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0090_extension_secrets_data` | `extension.secret_envelope`、`extension.secret_version`（控制台生成的扩展密钥）；`site_extension_data`（扩展的网站数据项） |
 | `0091_oauth_mcp` | MCP 的 OAuth 授权服务器：`oauth_client`、`oauth_resource`、`oauth_client_resource`、`oauth_consent`、`oauth_access_token`、`oauth_refresh_token`、`oauth_client_assertion` |
 | `0092_right_agent_brand` | `extension_node_setting`：节点扩展监听器与目标集群设置 |
+| `0093_ordinary_randall_flagg` | `site_usage.resource_kind` 区分网站和四层用量，回填四层历史；`node.traffic_limit` 持久化网卡流量限额 |
 
 ## 构建产物
 

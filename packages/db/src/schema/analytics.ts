@@ -41,6 +41,7 @@ export const siteUsage = pgTable(
   {
     windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
     siteId: uuid("site_id").notNull(),
+    resourceKind: text("resource_kind").notNull().default("site"),
     requests: numeric("requests", { precision: 38, scale: 0 }).notNull().default("0"),
     bytesSent: numeric("bytes_sent", { precision: 38, scale: 0 }).notNull().default("0"),
     bytesReceived: numeric("bytes_received", { precision: 38, scale: 0 }).notNull().default("0"),
@@ -49,7 +50,7 @@ export const siteUsage = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
-    primaryKey({ columns: [t.windowStart, t.siteId] }),
+    primaryKey({ columns: [t.windowStart, t.siteId, t.resourceKind] }),
     uniqueIndex("site_usage_seq_uq").on(t.seq),
     // A site's windows of a period (usage protection).
     index("site_usage_site_window_idx").on(t.siteId, t.windowStart),

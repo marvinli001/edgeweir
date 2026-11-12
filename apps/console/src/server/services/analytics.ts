@@ -145,6 +145,60 @@ export async function trafficSeries(
   };
 }
 
+/** L4 byte totals share the site's range and buckets without becoming HTTP requests. */
+export async function l4TrafficSeries(
+  db: Database,
+  query: { range: AnalyticsRange; appId?: string; from?: string; to?: string },
+  now = Date.now(),
+): Promise<Traffic> {
+  const window = rangeWindow(query.range, now);
+  const { bucketSeconds } = window;
+  const minute = query.range === "1h";
+  const source = minute ? sql`l4_minute_stats` : sql`site_usage`;
+  const time = minute ? sql`minute` : sql`window_start`;
+  const resource = minute ? sql`app_id` : sql`site_id`;
+  const result = await db.execute<{
+    bucket: string;
+    bytes_sent: string;
+    bytes_received: string;
+  }>(sql`
+    select date_bin(${`${bucketSeconds} seconds`}::interval, ${time}, timestamptz 'epoch') as bucket,
+      coalesce(sum(bytes_sent),0)::text as bytes_sent, coalesce(sum(bytes_received),0)::text as bytes_received
+    from ${source} where ${time}>=${window.previousFrom.toISOString()}::timestamptz
+      and ${time}<${window.end.toISOString()}::timestamptz
+      ${minute ? sql`` : sql`and resource_kind='l4'`}
+      ${query.appId ? sql`and ${resource}=${query.appId}::uuid` : sql``}
+      ${query.from ? sql`and ${time}>=${query.from}::timestamptz` : sql``}
+      ${query.to ? sql`and ${time}<${query.to}::timestamptz` : sql``}
+    group by 1 order by 1
+  `);
+  const byTime = new Map(result.rows.map((row) => [new Date(row.bucket).getTime(), row]));
+  const series = (from: Date, to: Date) => {
+    const points: (Counters & { time: string })[] = [];
+    for (let at = from.getTime(); at < to.getTime(); at += bucketSeconds * 1000) {
+      const row = byTime.get(at);
+      points.push({
+        ...zero(),
+        time: new Date(at).toISOString(),
+        bytesSent: Number(row?.bytes_sent ?? 0),
+        bytesReceived: Number(row?.bytes_received ?? 0),
+      });
+    }
+    return points;
+  };
+  const current = series(window.from, window.end),
+    previous = series(window.previousFrom, window.from);
+  return {
+    range: query.range,
+    bucketSeconds,
+    from: window.from.toISOString(),
+    to: new Date(Math.min(now, window.end.getTime())).toISOString(),
+    points: current,
+    totals: totalsOf(current, bucketSeconds),
+    previous: totalsOf(previous, bucketSeconds),
+  };
+}
+
 const topFields = (stats: StatsSource) => ({
   requests: sum(stats.requests),
   bytesSent: sum(stats.bytesSent),

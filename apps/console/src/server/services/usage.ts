@@ -28,8 +28,9 @@ const floorWindow = (ms: number) => Math.floor(ms / WINDOW_MS) * WINDOW_MS;
 function toRecord(row: UsageRow): UsageRecord {
   const start = row.windowStart.getTime();
   return {
-    id: `${row.siteId}.${start / 1000}`,
+    id: `${row.resourceKind === "l4" ? "l4." : ""}${row.siteId}.${start / 1000}`,
     siteId: row.siteId,
+    ...(row.resourceKind === "l4" ? { resourceKind: "l4" as const } : {}),
     windowStart: row.windowStart.toISOString(),
     windowEnd: new Date(start + WINDOW_MS).toISOString(),
     requests: row.requests,
@@ -107,7 +108,7 @@ async function computeUsageWindow(tx: Executor, siteId: string, bucket: Date): P
       on m.site_id = s.id and m.minute >= ${start}::timestamptz and m.minute < ${end}::timestamptz
     where s.id = ${siteId}::uuid
     group by s.id
-    on conflict (window_start, site_id) do update set
+    on conflict (window_start, site_id, resource_kind) do update set
       requests = excluded.requests,
       bytes_sent = excluded.bytes_sent,
       bytes_received = excluded.bytes_received,
@@ -274,18 +275,22 @@ function parseAligned(value: string): Date {
 }
 
 function encodeCursor(row: UsageRow) {
-  return Buffer.from(`${row.windowStart.toISOString()}|${row.siteId}`).toString("base64url");
+  return Buffer.from(`${row.windowStart.toISOString()}|${row.siteId}|${row.resourceKind}`).toString(
+    "base64url",
+  );
 }
 
-function decodeCursor(cursor: string): { windowStart: Date; siteId: string } {
-  const [time, siteId] = Buffer.from(cursor, "base64url").toString("utf8").split("|");
+function decodeCursor(cursor: string): { windowStart: Date; siteId: string; resourceKind: string } {
+  const [time, siteId, resourceKind = "site"] = Buffer.from(cursor, "base64url")
+    .toString("utf8")
+    .split("|");
   const windowStart = new Date(time ?? "");
   if (
     Number.isNaN(windowStart.getTime()) ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(siteId ?? "")
   )
     fail("USAGE_CURSOR_INVALID", "invalid cursor");
-  return { windowStart, siteId: siteId as string };
+  return { windowStart, siteId: siteId as string, resourceKind };
 }
 
 /** Usage in [from, to), ordered by window then site, one page at a time. */
@@ -297,6 +302,7 @@ export async function listUsage(
     siteId?: string;
     cursor?: string;
     limit: number;
+    includeL4?: "true" | "false";
   },
 ) {
   const from = parseAligned(input.from);
@@ -316,14 +322,15 @@ export async function listUsage(
       and(
         gte(u.windowStart, from),
         lt(u.windowStart, to),
+        input.includeL4 === "true" ? undefined : eq(u.resourceKind, "site"),
         input.siteId ? eq(u.siteId, input.siteId) : undefined,
         // A row comparison: one range of the primary key (window_start, site_id).
         after
-          ? sql`(${u.windowStart}, ${u.siteId}) > (${after.windowStart.toISOString()}::timestamptz, ${after.siteId}::uuid)`
+          ? sql`(${u.windowStart}, ${u.siteId}, ${u.resourceKind}) > (${after.windowStart.toISOString()}::timestamptz, ${after.siteId}::uuid, ${after.resourceKind})`
           : undefined,
       ),
     )
-    .orderBy(asc(u.windowStart), asc(u.siteId))
+    .orderBy(asc(u.windowStart), asc(u.siteId), asc(u.resourceKind))
     .limit(input.limit + 1);
   const page = rows.slice(0, input.limit);
   const last = page[page.length - 1];
@@ -336,14 +343,19 @@ export async function listUsage(
 }
 
 /** Records created or revised after `afterSeq`, in seq order. */
-export async function usageChanges(db: Database, input: { afterSeq: string; limit: number }) {
+export async function usageChanges(
+  db: Database,
+  input: { afterSeq: string; limit: number; includeL4?: "true" | "false" },
+) {
   const afterSeq = BigInt(input.afterSeq);
   if (afterSeq > 9223372036854775807n) fail("USAGE_CURSOR_INVALID", "afterSeq is out of range");
   const u = schema.siteUsage;
   const rows = await db
     .select()
     .from(u)
-    .where(gt(u.seq, afterSeq))
+    .where(
+      and(gt(u.seq, afterSeq), input.includeL4 === "true" ? undefined : eq(u.resourceKind, "site")),
+    )
     .orderBy(asc(u.seq))
     .limit(input.limit);
   const completeUntil = await usageCompleteUntil(db);
@@ -351,6 +363,7 @@ export async function usageChanges(db: Database, input: { afterSeq: string; limi
   return {
     items: rows.map(toRecord),
     lastSeq: last ? last.seq.toString() : input.afterSeq,
+    resourceKinds: ["site", "l4"] as ("site" | "l4")[],
     completeUntil: completeUntil?.toISOString() ?? null,
   };
 }
@@ -363,6 +376,7 @@ export async function usageRows(db: Executor, siteId: string, from: Date, to: Da
     .where(
       and(
         eq(schema.siteUsage.siteId, siteId),
+        eq(schema.siteUsage.resourceKind, "site"),
         gte(schema.siteUsage.windowStart, from),
         lte(schema.siteUsage.windowStart, to),
       ),

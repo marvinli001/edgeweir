@@ -988,3 +988,9 @@
 | `status` | enum | `firing`（告警中）/ `resolved`（已恢复） |
 | `occurredAt` | datetime | 发生时间 |
 | `siteName` | string | 网站名称；节点告警为节点名称，集群与 DNS 告警为告警对象的名称（集群、规则、证书等） |
+
+## 四层流量与用量
+
+`GET /analytics/l4-traffic?range=24h&appId=<uuid>` 返回与 `/analytics/traffic` 相同的时间桶。`range` 支持 `1h`、`6h`、`24h`、`7d`、`30d`，省略 `appId` 为全部四层应用。可选 `from`、`to` 在选定范围内限制资源归属时间。只累加收发字节，HTTP 请求、缓存命中和状态码保持为零。最近一小时读取分钟记录，更长范围读取持久化的五分钟用量。
+
+`GET /usage` 与 `/usage/changes` 接受 `includeL4=true`，默认 `false`。四层记录有 `resourceKind: "l4"`，`siteId` 为应用 ID，记录 ID 带 `l4.` 前缀；网站记录保持原格式。变更响应以 `resourceKinds: ["site", "l4"]` 声明支持。两类记录共用序号、修订和水位；批次游标与四层用量原子提交，重复批次不重复累加，删除应用后保留用量。迁移导入既有保留策略尚未删除的四层分钟记录。

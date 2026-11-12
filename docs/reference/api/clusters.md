@@ -1571,3 +1571,11 @@ GitHub 发布源经 releases API 查询，镜像读取 `<发布源>/latest`。�
 | `dnsRetired` | `array<object>` | 被替换、在 `expiresAt` 之前仍解析的名称 `{ name, expiresAt }`（有 DNS 绑定时） |
 | `createdAt` | datetime | 创建时间 |
 | `updatedAt` | datetime | 修改时间 |
+
+## 精确网卡流量限额
+
+`PUT /nodes/{id}/traffic-limit` 接受 `{ bytesLimit: "1500000000000", interfaces: ["eth0"], reset: false }`。`bytesLimit: null` 取消限制，空网卡列表统计全部非回环网卡。需要节点以 `network-counters-v1` 提供新鲜的 `metrics.network`；更换网卡列表须明确 `reset: true`。响应为节点 DTO，增加可空的 `trafficLimit`：`bytesLimit`、`interfaces`、`bytesReceived`、`bytesSent`、`startedAt`、`measuredAt`、`reachedAt`，不返回内部基准。字节数均为十进制整数字符串。
+
+按真实 RX＋TX 累计计数的差值统计，状态经数据库持久化。达到限额的心跳自动停用节点并更新调度；提高限额或重置累计不会自动启用已停用的节点。权限与其他节点写操作相同，设置与触发都有审计，不依赖商业授权。因限额停用的节点仍可报告计数和流量统计，不能取配置或任务。沿用 DNS TTL 和既有连接的行为，属于退出调度，不是网卡的瞬时防火墙封顶。
+
+`metrics.network` 包含 `bootId`、`sampledAt`、`interfaces: [{ name, bytesReceived, bytesSent }]`。读取失败时省略计数。含网桥、隧道或容器网卡的主机应明确选择对外网卡，避免同一数据在多层接口重复计入。

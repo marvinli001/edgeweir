@@ -49,6 +49,7 @@ import {
   updateNodeGroup,
 } from "../../services/node-groups";
 import { listNodeLogs } from "../../services/node-logs";
+import { saveNodeTrafficLimit } from "../../services/node-traffic-limit";
 import {
   deleteNode,
   getNode,
@@ -354,6 +355,10 @@ export const clustersRouter = {
     update: authed.nodes.update.handler(({ input, context }) =>
       updateNode(context.app.db, input, context.actor),
     ),
+    setTrafficLimit: authed.nodes.setTrafficLimit.handler(async ({ input, context }) => {
+      await saveNodeTrafficLimit(context.app.db, input, context.actor);
+      return getNode(context.app.db, input.id);
+    }),
     disable: authed.nodes.disable.handler(({ input, context }) =>
       setNodeStatus(context.app.db, input.id, "disabled", context.actor),
     ),

@@ -123,7 +123,7 @@ export async function periodUsage(db: Executor, siteId: string, start: Date, end
   const tail = new Date(Math.max(start.getTime(), Math.min(open, pending)));
   const closed = await db.execute<{ bytes: string; requests: string }>(sql`
     select coalesce(sum(bytes_sent), 0)::text as bytes, coalesce(sum(requests), 0)::text as requests
-    from site_usage where site_id = ${siteId}::uuid
+    from site_usage where resource_kind = 'site' and site_id = ${siteId}::uuid
       and window_start >= ${start.toISOString()}::timestamptz and window_start < ${tail.toISOString()}::timestamptz`);
   const recent = await db.execute<{ bytes: string; requests: string }>(sql`
     select coalesce(sum(bytes_sent), 0)::text as bytes, coalesce(sum(requests), 0)::text as requests

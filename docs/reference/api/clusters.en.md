@@ -1571,3 +1571,11 @@ Capabilities in `supportedFeatures` the console tells apart (every capability a 
 | `dnsRetired` | `array<object>` | Replaced names that keep resolving until `expiresAt`, `{ name, expiresAt }` (with a DNS binding) |
 | `createdAt` | datetime | Created |
 | `updatedAt` | datetime | Updated |
+
+## Exact NIC traffic limits
+
+`PUT /nodes/{id}/traffic-limit` accepts `{ bytesLimit: "1500000000000", interfaces: ["eth0"], reset: false }`. `bytesLimit: null` removes the limit; an empty interface list counts every non-loopback interface. Saving requires fresh `metrics.network` from a node with `network-counters-v1`; changing the interface list requires `reset: true`. The response is the node DTO with `trafficLimit` (nullable): `bytesLimit`, `interfaces`, `bytesReceived`, `bytesSent`, `startedAt`, `measuredAt`, `reachedAt`. Internal baselines are not exposed. All byte values are decimal integer strings.
+
+The policy uses actual RX+TX counter deltas, persists across agent/Core restarts and disables scheduling once a heartbeat reaches the limit. Raising the limit or resetting usage does not implicitly enable a disabled node. The read-write API permission and audit requirements match other node mutations; no vendor license is involved. Disabled quota nodes may continue reporting accounting and statistics, but cannot obtain configurations or tasks. DNS TTLs and existing connections retain their usual behavior; this is scheduling removal, not an instantaneous NIC firewall cap.
+
+`metrics.network` contains `bootId`, `sampledAt` and `interfaces: [{ name, bytesReceived, bytesSent }]`. Missing counter reads are omitted. Select uplink interfaces explicitly on hosts with bridges, tunnels or container interfaces to avoid counting the same packet at several interface layers.

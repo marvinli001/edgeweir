@@ -16,6 +16,7 @@ const decimal = z.string().regex(/^(0|[1-9][0-9]*)$/);
 const usageRecord = z.object({
   id: z.string(),
   siteId: uuid,
+  resourceKind: z.enum(["site", "l4"]).optional(),
   windowStart: isoDateTime,
   windowEnd: isoDateTime,
   /** Decimal integer strings (exact beyond 2^53). */
@@ -33,6 +34,7 @@ const usageListInput = z.object({
   /** Exclusive; a multiple of 5 minutes (UTC), after `from`. */
   to: isoDateTime,
   siteId: uuid.optional(),
+  includeL4: z.enum(["true", "false"]).default("false"),
   /** `nextCursor` of the previous page. */
   cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(MAX_USAGE_PAGE).default(1000),
@@ -41,6 +43,7 @@ const usageListInput = z.object({
 const usageChangesInput = z.object({
   /** Returns records with a higher seq; "0" starts from the beginning. */
   afterSeq: decimal.default("0"),
+  includeL4: z.enum(["true", "false"]).default("false"),
   limit: z.coerce.number().int().min(1).max(MAX_USAGE_PAGE).default(1000),
 });
 
@@ -69,6 +72,7 @@ export const usageContract = {
     .output(
       z.object({
         items: z.array(usageRecord),
+        resourceKinds: z.array(z.enum(["site", "l4"])).optional(),
         /** Pass as afterSeq next time; equals afterSeq when nothing changed. */
         lastSeq: decimal,
         completeUntil,

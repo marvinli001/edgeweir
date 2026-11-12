@@ -9,6 +9,7 @@ import {
   updateSiteAiCrawl,
 } from "../../services/ai-crawl";
 import {
+  l4TrafficSeries,
   topNodes,
   topRequests,
   topSites,
@@ -280,6 +281,9 @@ export const sitesRouter = {
       if (input.siteId) await getSite(context.app.db, input.siteId);
       return topRequests(context.app.db, input);
     }),
+    l4Traffic: authed.analytics.l4Traffic.handler(({ input, context }) =>
+      l4TrafficSeries(context.app.db, input),
+    ),
     traffic: authed.analytics.traffic.handler(async ({ input, context }) => {
       if (input.siteId) await getSite(context.app.db, input.siteId);
       return trafficSeries(context.app.db, input);

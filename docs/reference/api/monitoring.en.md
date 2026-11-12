@@ -988,3 +988,9 @@ The password is never returned.
 | `status` | enum | `firing` / `resolved` |
 | `occurredAt` | datetime | Time of the event |
 | `siteName` | string | Site name; for node alerts the node name, for cluster and DNS alerts the name of what the alert concerns (cluster, rule, certificate and so on) |
+
+## L4 traffic and usage
+
+`GET /analytics/l4-traffic?range=24h&appId=<uuid>` returns the same bucket shape as `/analytics/traffic`. `range` supports `1h`, `6h`, `24h`, `7d`, `30d`; omit `appId` for all L4 applications. Optional `from` and `to` restrict counted resource ownership timestamps, within the selected range. Only RX/TX bytes contribute; HTTP request, cache and status counters remain zero. The last-hour series reads minute rows; wider ranges read retained five-minute usage records.
+
+`GET /usage` and `/usage/changes` accept `includeL4=true` (default false). L4 records have `resourceKind: "l4"`, `siteId` set to the app ID and an `l4.`-prefixed record ID. Site records keep their existing shape. The changes response advertises `resourceKinds: ["site", "l4"]`. Shared sequence/revision and watermark semantics apply; batch cursor and L4 usage updates are atomic, repeated batches are ignored, and records outlive app deletion. Migration backfills the minute rows still retained by the existing policy.

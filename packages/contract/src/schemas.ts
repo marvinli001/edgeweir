@@ -958,6 +958,38 @@ const nodeBanStatus = z.object({
   connectionLimitsError: z.string().optional(),
 });
 
+export const networkCounters = z.object({
+  bootId: z.uuid(),
+  sampledAt: isoDateTime,
+  interfaces: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(64),
+        bytesReceived: z.string().regex(/^(0|[1-9][0-9]{0,19})$/),
+        bytesSent: z.string().regex(/^(0|[1-9][0-9]{0,19})$/),
+      }),
+    )
+    .max(256),
+});
+export const nodeTrafficLimitInput = z.object({
+  id: uuid,
+  bytesLimit: z
+    .string()
+    .regex(/^[1-9][0-9]{0,37}$/)
+    .nullable(),
+  interfaces: z.array(z.string().min(1).max(64)).max(64).default([]),
+  reset: z.boolean().default(false),
+});
+const nodeTrafficLimit = z.object({
+  bytesLimit: z.string(),
+  interfaces: z.array(z.string()),
+  bytesReceived: z.string(),
+  bytesSent: z.string(),
+  startedAt: isoDateTime,
+  reachedAt: isoDateTime.nullable(),
+  measuredAt: isoDateTime,
+});
+
 /** Host metrics of a node's last heartbeat (nodes with metrics-v1). */
 const nodeMetrics = z.object({
   /** CPU used by the whole host, 0-100. */
@@ -969,6 +1001,7 @@ const nodeMetrics = z.object({
   memoryTotalBytes: z.number(),
   /** Bits per second sent on non-loopback interfaces. */
   egressBps: z.number(),
+  network: networkCounters.optional(),
   activeConnections: z.number(),
   reportedAt: isoDateTime,
 });
@@ -1079,6 +1112,7 @@ export const node = z.object({
   probeEnabled: z.boolean(),
   /** Null until a node with metrics-v1 reports. */
   metrics: nodeMetrics.nullable(),
+  trafficLimit: nodeTrafficLimit.nullish(),
   schedulingAddresses: z.array(nodeSchedulingAddress),
   /** Address level DNS uses now (0 primary; higher while lower levels are unreachable). */
   schedulingLevel: z.number().int(),

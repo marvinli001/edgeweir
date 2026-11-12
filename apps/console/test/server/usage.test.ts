@@ -1,8 +1,10 @@
+import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { schema } from "@edgeweir/db";
 import { eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
+import { l4TrafficSeries } from "../../src/server/services/analytics";
 import { ingestMinuteStats, ingestStatsBatch } from "../../src/server/services/stats";
 import {
   advanceUsageWatermark,
@@ -431,5 +433,72 @@ describe("recomputable 5-minute usage", async () => {
       expect((await rpcError(admin.settings.setUsage(bad))).status).toBe(400);
     expect(await pruneUsage(ctx.db, new Date(window + 36 * 86_400_000))).toBeGreaterThan(0);
     expect(await usageRows(ctx.db, siteId, at(-100 * WINDOW), at(10 * WINDOW))).toEqual([]);
+  });
+  it("mirrors L4 revisions in the opt-in usage feed and retains them after deletion", async () => {
+    await admin.clusters.setPortPools({
+      clusterId,
+      pools: [{ protocol: "both", from: 19000, to: 19010 }],
+    });
+    const created = await admin.l4Apps.create({
+      clusterId,
+      name: "metered-l4",
+      protocol: "tcp",
+      port: 19000,
+      origins: [{ address: "origin.test", port: 8080 }],
+    });
+    const appId = created.app.id;
+    const payload = [
+      {
+        appId,
+        minute: at(60_000),
+        connections: 2,
+        refused: 0,
+        peakConcurrent: 1,
+        bytesSent: 9000,
+        bytesReceived: 4000,
+      },
+    ];
+    const point = payload[0];
+    assert(point);
+    await ingestStatsBatch(ctx.db, nodeA, 900n, [], undefined, undefined, payload);
+    await ingestStatsBatch(ctx.db, nodeA, 900n, [], undefined, undefined, payload);
+    await ingestStatsBatch(ctx.db, nodeB, 900n, [], undefined, undefined, [
+      { ...point, bytesSent: 1000, bytesReceived: 500 },
+    ]);
+    const all = await admin.usage.changes({ afterSeq: "0", includeL4: "true" });
+    const row = all.items.find((r) => r.siteId === appId);
+    assert(row);
+    expect(row).toMatchObject({
+      resourceKind: "l4",
+      bytesSent: "10000",
+      bytesReceived: "4500",
+      requests: "4",
+    });
+    expect(
+      (await admin.usage.changes({ afterSeq: "0" })).items.some((r) => r.siteId === appId),
+    ).toBe(false);
+    await ingestStatsBatch(ctx.db, nodeA, 901n, [], undefined, undefined, [
+      { ...point, bytesSent: 1, bytesReceived: 2 },
+    ]);
+    const revised = await admin.usage.changes({ afterSeq: row.seq, includeL4: "true" });
+    expect(revised.items.find((r) => r.siteId === appId)).toMatchObject({
+      revision: row.revision + 1,
+      bytesSent: "10001",
+      bytesReceived: "4502",
+    });
+    const traffic = await l4TrafficSeries(ctx.db, { range: "1h", appId }, at(180_000).getTime());
+    expect(traffic.totals).toMatchObject({ bytesSent: 10001, bytesReceived: 4502, requests: 0 });
+    const excluded = await l4TrafficSeries(
+      ctx.db,
+      { range: "1h", appId, from: at(120_000).toISOString() },
+      at(180_000).getTime(),
+    );
+    expect(excluded.totals.bytesSent).toBe(0);
+    await admin.l4Apps.delete({ id: appId });
+    expect(
+      (await admin.usage.changes({ afterSeq: "0", includeL4: "true" })).items.find(
+        (r) => r.siteId === appId,
+      )?.bytesSent,
+    ).toBe("10001");
   });
 });

@@ -1,4 +1,5 @@
 import { updateHttps, uploadCertificate } from "../../src/server/services/certificates";
+import { saveNodeTrafficLimit } from "../../src/server/services/node-traffic-limit";
 import "reflect-metadata";
 import { once } from "node:events";
 import http2 from "node:http2";
@@ -1519,5 +1520,37 @@ describe("node channel", async () => {
     expect((await mtls.getConfig({})).payload.case).toBe("snapshot");
     expect(await upgradeRequired()).toBe(false);
     await saveRules(ctx, null, [], platform);
+  });
+  it("accounts exact NIC counters through authenticated heartbeats and keeps reporting after a quota removes scheduling", async () => {
+    const { mtls, nodeId } = await enroll("nic-accounting");
+    const bootId = "11111111-1111-4111-8111-111111111111",
+      base = 9007199254740993000n;
+    const at = Date.now() - 10_000;
+    const report = (tick: number, delta: bigint) =>
+      mtls.reportStatus({
+        dataPlaneHealthy: true,
+        metrics: {
+          network: {
+            bootId,
+            sampledAt: timestampFromDate(new Date(at + tick * 1000)),
+            interfaces: [{ name: "eth0", bytesReceived: base + delta, bytesSent: delta }],
+          },
+        },
+      });
+    await report(0, 0n);
+    await saveNodeTrafficLimit(
+      ctx.db,
+      { id: nodeId, bytesLimit: "10", interfaces: [], reset: false },
+      actor,
+    );
+    await report(1, 5n);
+    const [held] = await ctx.db.select().from(schema.node).where(eq(schema.node.id, nodeId));
+    expect(held).toMatchObject({
+      status: "disabled",
+      trafficLimit: { bytesReceived: "5", bytesSent: "5" },
+    });
+    await report(2, 6n);
+    const [after] = await ctx.db.select().from(schema.node).where(eq(schema.node.id, nodeId));
+    expect(after?.trafficLimit).toMatchObject({ bytesReceived: "6", bytesSent: "6" });
   });
 });

@@ -206,6 +206,11 @@ export const errorDefs = {
   SCHEDULING_RULE_NOT_FOUND: { status: 404, params: [] },
   /** A rule the cluster cannot evaluate (e.g. backup_group without a line, an unknown line). */
   SCHEDULING_RULE_INVALID: { status: 400, params: [] },
+  NODE_NETWORK_COUNTERS_REQUIRED: { status: 409, params: [] },
+  NODE_NETWORK_COUNTERS_STALE: { status: 409, params: [] },
+  NODE_NETWORK_INTERFACE_UNKNOWN: { status: 400, params: [] },
+  NODE_NETWORK_RESET_REQUIRED: { status: 409, params: [] },
+  NODE_TRAFFIC_LIMIT_REACHED: { status: 409, params: [] },
   NODE_NOT_FOUND: { status: 404, params: [] },
   /** A decommission of the node is already waiting for the node. */
   NODE_DECOMMISSION_PENDING: { status: 409, params: [] },

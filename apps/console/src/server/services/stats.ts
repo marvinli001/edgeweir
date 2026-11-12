@@ -1,7 +1,7 @@
 import { isIP } from "node:net";
 import { type Database, schema } from "@edgeweir/db";
 import { eq, sql } from "drizzle-orm";
-import { lockStats } from "../lib/locks";
+import { lockStats, lockUsage } from "../lib/locks";
 import type { Executor } from "./revisions";
 import { addTrafficCounter } from "./stats-counter";
 import {
@@ -301,6 +301,7 @@ export async function ingestL4MinuteStats(
     b.bytesSent = addTrafficCounter(b.bytesSent, s.bytesSent);
   }
   if (buckets.size === 0) return 0;
+  await lockUsage(db);
   const t = schema.l4MinuteStats;
   const rows = [...buckets.values()].map((b) => ({
     minute: b.minute,
@@ -325,6 +326,31 @@ export async function ingestL4MinuteStats(
       bytes_received = least(9007199254740991::numeric, ${t}.bytes_received::numeric + excluded.bytes_received),
       bytes_sent = least(9007199254740991::numeric, ${t}.bytes_sent::numeric + excluded.bytes_sent)
     returning app_id
+  `);
+  // Persist billing windows in the same transaction as the batch cursor. Usage survives app deletion.
+  const windows = [
+    ...new Map(
+      rows.map((row) => {
+        const start = new Date(
+          Math.floor(Date.parse(row.minute) / 300_000) * 300_000,
+        ).toISOString();
+        return [`${row.app_id}:${start}`, { app_id: row.app_id, start }];
+      }),
+    ).values(),
+  ];
+  await db.execute(sql`
+    insert into site_usage (window_start, site_id, resource_kind, requests, bytes_sent, bytes_received, revision, seq, updated_at)
+    select b.start, b.app_id, 'l4', coalesce(sum(m.connections), 0), coalesce(sum(m.bytes_sent), 0), coalesce(sum(m.bytes_received), 0),
+      1, nextval('site_usage_seq'), now()
+    from jsonb_to_recordset(${JSON.stringify(windows)}::jsonb) as b(app_id uuid, start timestamptz)
+    join l4_app a on a.id=b.app_id and a.cluster_id=${node.clusterId}::uuid
+    left join l4_minute_stats m on m.app_id=b.app_id and m.minute>=b.start and m.minute<b.start+interval '5 minutes'
+    group by b.start,b.app_id
+    on conflict (window_start,site_id,resource_kind) do update set
+      requests=excluded.requests, bytes_sent=excluded.bytes_sent, bytes_received=excluded.bytes_received,
+      revision=site_usage.revision+1, seq=excluded.seq, updated_at=excluded.updated_at
+    where (site_usage.requests,site_usage.bytes_sent,site_usage.bytes_received)
+      is distinct from (excluded.requests,excluded.bytes_sent,excluded.bytes_received)
   `);
   const stored = new Set(result.rows.map((r) => r.app_id));
   let accepted = 0;
