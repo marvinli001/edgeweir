@@ -374,6 +374,23 @@ message NodeMetrics {
   uint64 egress_bps = 7;
   // Client connections the data plane holds (nginx $connections_active).
   uint64 active_connections = 8;
+  // Exact non-loopback interface counters from /proc/net/dev; absent on read failure.
+  NetworkCounters network = 9;
+}
+
+// NetworkCounters identifies one complete raw Linux interface counter sample.
+message NetworkCounters {
+  // Linux boot identity; counters reset across boots and interface recreation.
+  string boot_id = 1;
+  google.protobuf.Timestamp sampled_at = 2;
+  repeated InterfaceCounters interfaces = 3;
+}
+
+// InterfaceCounters contains exact octet counters for one non-loopback interface.
+message InterfaceCounters {
+  string name = 1;
+  uint64 bytes_received = 2;
+  uint64 bytes_sent = 3;
 }
 
 // SiteSecurity is the CC mitigation state of one site on one node.
