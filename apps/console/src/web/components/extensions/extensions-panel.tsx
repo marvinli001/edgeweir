@@ -78,11 +78,17 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
-function Names({ list }: { list: readonly string[] }) {
+function Names({
+  list,
+  capabilities = false,
+}: {
+  list: readonly string[];
+  capabilities?: boolean;
+}) {
   if (list.length === 0) return <span className="text-muted-foreground">—</span>;
   return list.map((name) => (
     <Badge key={name} size="sm" tone="neutral" className="font-mono">
-      {name}
+      {capabilities && name === "early_hints" ? m.extensions_capability_early_hints() : name}
     </Badge>
   ));
 }
@@ -283,7 +289,7 @@ function InstallDialog({
               <span className="tabular-nums">{formatBytes(verified.size)}</span>
             </Fact>
             <Fact label={m.extensions_capabilities()}>
-              <Names list={manifest.capabilities} />
+              <Names list={manifest.capabilities} capabilities />
             </Fact>
             <Fact label={m.extensions_scope()}>
               {manifest.scope === "node" ? m.extensions_scope_node() : m.extensions_scope_site()}
@@ -650,7 +656,7 @@ function DetailBody({
           </Fact>
         ) : null}
         <Fact label={m.extensions_capabilities()}>
-          <Names list={detail.manifest.capabilities} />
+          <Names list={detail.manifest.capabilities} capabilities />
         </Fact>
         <Fact label={m.extensions_hooks()}>
           <Names list={detail.manifest.hooks} />

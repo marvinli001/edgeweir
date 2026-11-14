@@ -3517,6 +3517,7 @@
   "extensions_signed_by": "签名者",
   "extensions_size": "大小",
   "extensions_capabilities": "能力",
+  "extensions_capability_early_hints": "提前提示（103）",
   "extensions_hooks": "钩子",
   "extensions_description": "描述",
   "extensions_homepage": "主页",

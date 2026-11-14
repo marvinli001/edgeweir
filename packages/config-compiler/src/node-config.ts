@@ -1,4 +1,5 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
+import { EXTENSIONS_EARLY_HINTS_FEATURE } from "@edgeweir/contract";
 import {
   type AiCrawlerCatalogue,
   AiCrawlerCatalogueSchema,
@@ -247,6 +248,9 @@ function compileExtensions(config: NodeConfig, input: CompileInput): void {
       : used.has(extension.id),
   );
   if (extensions.length === 0) return;
+  if (extensions.some((extension) => extension.capabilities?.includes("early_hints"))) {
+    config.requiredFeatures.push(EXTENSIONS_EARLY_HINTS_FEATURE);
+  }
   const order = new Map(
     extensions
       .filter((extension) => extension.scope !== "node")

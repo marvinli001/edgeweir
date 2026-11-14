@@ -3768,6 +3768,7 @@
   "extensions_signed_by": "Signed by",
   "extensions_size": "Size",
   "extensions_capabilities": "Capabilities",
+  "extensions_capability_early_hints": "Early hints (103)",
   "extensions_hooks": "Hooks",
   "extensions_description": "Description",
   "extensions_homepage": "Homepage",
