@@ -2,6 +2,14 @@
 
 控制台端口、反向代理、节点通道透传与客户端 IP 的配置。
 
+## 节点公网 IP 与地图
+
+节点列表优先显示调度入口，详情分别显示上报地址、调度地址与连接来源。云主机的公网 IPv4 可能由 NAT 映射，未必出现在网卡上；节点没有上报入站公网地址时，在节点详情「调度地址」显式配置云控制台所示的入站公网 IP，该配置同时影响 DNS 和探测。连接来源可能是共享出口或代理，不能自动当作入站地址。
+
+地图尊重显式调度级别，同级优先 IPv4；未显式配置时按上报公网 IPv4、连接来源公网 IPv4、公网 IPv6 选择。旧地址的坐标不会用于新地址。优先使用节点已有的离线 GeoIP 结果；二进制节点没有数据库时，可在控制台进程设置 `EDGEWEIR_IPINFO_DB_PATH` 指向只读挂载的 IPinfo Lite MMDB，重启后由控制台离线补齐国家。此设置不为节点启用 GeoIP 规则、不联网查询 IP；无经纬度时标记国家近似位置，库或记录缺失时位置仍未知。
+
+容器示例：在控制台的 Compose service 中挂载 `./geoip/ipinfo_lite.mmdb:/app/geoip/ipinfo_lite.mmdb:ro`，并在该 service 的 `environment` 设置 `EDGEWEIR_IPINFO_DB_PATH: /app/geoip/ipinfo_lite.mmdb`。仅在 `.env` 中声明变量不会自动注入容器。数据库下载、许可及署名见 [GeoIP 数据库](../guide/rules.md#geoip-数据库)；替换库后重启控制台，不需要重新注册节点。数据来源标为 IPinfo，城市坐标仍以节点配置的 City MMDB 为准。
+
 ## 端口
 
 | 端口 | 协议 | 内容 | 暴露方式 | 约束 |

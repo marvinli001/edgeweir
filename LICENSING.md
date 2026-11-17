@@ -24,6 +24,7 @@ Edgeweir 坚持 **“开源核心绝不设卡，商业扩展边界分明”** �
 | `edgeweir`（控制台） | AGPL-3.0-only |
 | `edgeweir-node`（节点） | AGPL-3.0-only |
 | 第三方组件 | 各自的许可证 |
+| 控制台离线节点定位读取器 [mmdb-lib](https://github.com/runk/mmdb-lib) 3.0.3 | MIT；原版权和许可随构建输出 `dist/licenses/mmdb-lib.LICENSE` 交付，容器内为 `/app/dist/licenses/mmdb-lib.LICENSE`；位置数据库另按其数据许可使用 |
 | 节点发布镜像内置的 GeoIP 数据 [IPinfo Lite](https://ipinfo.io/lite) | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)，原样再分发，不属于 AGPL 代码；署名：IP address data is powered by [IPinfo](https://ipinfo.io) |
 
 ## 产品边界

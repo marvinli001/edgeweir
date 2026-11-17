@@ -2,6 +2,14 @@
 
 Configure console ports, reverse proxies, node channel passthrough, and client IP resolution.
 
+## Node public IPs and the map
+
+Node lists prefer scheduling addresses; details distinguish reported addresses, scheduling addresses and the connection source. A cloud host's public IPv4 may be mapped through NAT and absent from its interfaces. If the node does not report its inbound public address, configure the address shown in the cloud console under **Scheduling addresses** in its details; this also changes DNS and probes. A connection source may belong to a proxy or shared egress and is not automatically an inbound address.
+
+The map honors configured scheduling levels, preferring IPv4 within a level. Without an explicit public address it prefers reported public IPv4, observed public IPv4, then public IPv6. Coordinates for an earlier address are discarded. The node's offline GeoIP result takes precedence. For package nodes without a database, set `EDGEWEIR_IPINFO_DB_PATH` on the console process to a read-only IPinfo Lite MMDB and restart it for offline country lookups. This does not enable node GeoIP rules or send IPs to an online service. Without coordinates the marker approximates the country; without a usable database or record the location remains unknown.
+
+For Compose, mount `./geoip/ipinfo_lite.mmdb:/app/geoip/ipinfo_lite.mmdb:ro` on the console service and add `EDGEWEIR_IPINFO_DB_PATH: /app/geoip/ipinfo_lite.mmdb` to that service's `environment`. A variable in `.env` alone is not injected into containers. See [GeoIP databases](../guide/rules.en.md#geoip-databases) for data downloads, licensing and attribution. Restart the console after replacing the file; nodes need not enroll again. Console country data is attributed to IPinfo; city coordinates still come from the node's City MMDB.
+
 ## Ports
 
 | Port | Protocol | Serves | Exposure | Constraint |

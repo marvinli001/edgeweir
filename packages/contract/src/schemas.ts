@@ -1165,7 +1165,8 @@ export const node = z.object({
   /**
    * Where the node's public address is, from the node's GeoIP databases:
    * country (ISO 3166-1 alpha-2, "" unknown), subdivision and, with a City
-   * MMDB, coordinates. Null before a node since v1.6.2 reports it.
+   * MMDB, coordinates. The console's optional offline database fills missing
+   * countries; source=ipinfo identifies that country-level approximation.
    */
   location: z
     .object({
@@ -1174,6 +1175,7 @@ export const node = z.object({
       subdivision: z.string(),
       latitude: z.number().nullable(),
       longitude: z.number().nullable(),
+      source: z.literal("ipinfo").optional(),
     })
     .nullable(),
   /**

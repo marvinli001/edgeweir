@@ -19,6 +19,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/server/app";
 import { type NodeChannel, startNodeChannel } from "../../src/server/node-channel/server";
 import { nodeChannelWebSocketOpen } from "../../src/server/services/node-channel-url";
+import { setNodeLocationDatabase } from "../../src/server/services/node-location";
 import { deleteNode, getNode, listNodes, setNodeStatus } from "../../src/server/services/nodes";
 import { listProbes } from "../../src/server/services/probes";
 import {
@@ -333,6 +334,37 @@ describe("enrolled nodes and probes follow the node channel URL", async () => {
       latitude: null,
       longitude: null,
     });
+  });
+
+  it("fills a NAT node's map location from the console database and refreshes it after an IP change", async () => {
+    setNodeLocationDatabase("test/fixtures/node-location.mmdb");
+    try {
+      const client = nodeAt("new.example.test", follower.cert);
+      const response = await client.reportStatus({
+        info: { ipAddresses: ["172.26.5.67", "2406:da14::1", "8.8.4.4"] },
+      });
+      expect(response.locateAddress).toBe("8.8.4.4");
+      expect((await getNode(ctx.db, follower.id)).location).toMatchObject({
+        address: "8.8.4.4",
+        country: "JP",
+        source: "ipinfo",
+        latitude: null,
+        longitude: null,
+      });
+      await client.reportStatus({
+        info: { ipAddresses: ["172.26.5.67", "1.1.1.1"] },
+        location: { address: "8.8.4.4", country: "JP", latitude: 35, longitude: 139 },
+      });
+      expect((await getNode(ctx.db, follower.id)).location).toMatchObject({
+        address: "1.1.1.1",
+        country: "NZ",
+        source: "ipinfo",
+        latitude: null,
+        longitude: null,
+      });
+    } finally {
+      setNodeLocationDatabase("");
+    }
   });
 
   it("keeps an earlier name while a node connects with it, and drops it once none does", async () => {

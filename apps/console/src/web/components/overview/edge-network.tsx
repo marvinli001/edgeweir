@@ -196,6 +196,16 @@ export function EdgeNetworkCard({
           ))}
         </ul>
       </div>
+      {nodes.some((node) => node.location?.source === "ipinfo") && (
+        <a
+          href="https://ipinfo.io"
+          target="_blank"
+          rel="noreferrer"
+          className="px-4 pb-3 text-xs text-muted-foreground"
+        >
+          {m.geo_attribution()}
+        </a>
+      )}
     </section>
   );
 }

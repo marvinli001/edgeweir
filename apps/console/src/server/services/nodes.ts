@@ -17,12 +17,14 @@ import { publishClusterDns } from "./dns";
 import {
   downAddresses,
   effectiveAddresses,
+  locateAddressOf,
   MAX_CONFIGURED_ADDRESSES,
   nodeIpRows,
   schedulingAddressesOf,
 } from "./node-addresses";
 import { toNodeChannelStatus } from "./node-channel-status";
 import { findNodeGroup } from "./node-groups";
+import { resolveNodeLocation } from "./node-location";
 import { trafficLimitView } from "./node-traffic-limit";
 import {
   type Executor,
@@ -157,15 +159,18 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
               skewed: Math.abs(r.clockOffsetMs) >= clockSkewSeconds * 1000,
             }
           : null,
-      location: r.location
-        ? {
-            address: r.location.address,
-            country: r.location.country,
-            subdivision: r.location.subdivision,
-            latitude: r.location.latitude,
-            longitude: r.location.longitude,
-          }
-        : null,
+      location: resolveNodeLocation(
+        locateAddressOf(own, r.remoteAddress),
+        r.location
+          ? {
+              address: r.location.address,
+              country: r.location.country,
+              subdivision: r.location.subdivision,
+              latitude: r.location.latitude,
+              longitude: r.location.longitude,
+            }
+          : null,
+      ),
       decommissionRequestedAt: r.decommissionRequestedAt?.toISOString() ?? null,
       decommissionError: r.decommissionError,
     };

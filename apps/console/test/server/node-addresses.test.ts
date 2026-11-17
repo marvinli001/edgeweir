@@ -2,6 +2,7 @@ import type { schema } from "@edgeweir/db";
 import { describe, expect, it } from "vitest";
 import {
   effectiveAddresses,
+  locateAddressOf,
   type SchedulingAddress,
   schedulingAddressesOf,
 } from "../../src/server/services/node-addresses";
@@ -23,6 +24,20 @@ const at = (address: string, level: number): SchedulingAddress => ({
 });
 
 describe("node scheduling addresses", () => {
+  it("locates NAT nodes by public IPv4 while retaining explicit levels and IPv6-only support", () => {
+    const v6 = "2406:da14::1";
+    expect(locateAddressOf([row("172.26.5.67"), row(v6)], "::ffff:8.8.4.4")).toBe("8.8.4.4");
+    expect(locateAddressOf([row(v6), row("8.8.8.8")], "1.1.1.1")).toBe("8.8.8.8");
+    expect(
+      locateAddressOf([row(v6, "configured"), row("9.9.9.9", "configured", 1)], "8.8.4.4"),
+    ).toBe(v6);
+    expect(locateAddressOf([row(v6, "configured"), row("9.9.9.9", "configured")], "8.8.4.4")).toBe(
+      "9.9.9.9",
+    );
+    expect(locateAddressOf([row("10.0.0.1", "configured")], "8.8.4.4")).toBe("8.8.4.4");
+    expect(locateAddressOf([row(v6)], null)).toBe(v6);
+    expect(locateAddressOf([row("172.26.5.67")], "100.64.0.1")).toBe("");
+  });
   it("use the configured addresses, else the public reported ones at level 0", () => {
     expect(
       schedulingAddressesOf([

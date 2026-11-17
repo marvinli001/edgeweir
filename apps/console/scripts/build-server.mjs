@@ -72,6 +72,11 @@ await cp(resolve(root, "src/server/install"), resolve(out, "install"), { recursi
 await cp(resolve(root, "../../packages/db/migrations"), resolve(root, "dist/migrations"), {
   recursive: true,
 });
+await mkdir(resolve(root, "dist/licenses"), { recursive: true });
+await cp(
+  resolve(root, "node_modules/mmdb-lib/LICENSE"),
+  resolve(root, "dist/licenses/mmdb-lib.LICENSE"),
+);
 
 for (const [file, { bytes }] of results.flatMap((r) => Object.entries(r.metafile.outputs))) {
   if (!file.endsWith(".js")) continue;

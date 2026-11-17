@@ -417,7 +417,7 @@ function NodeFacts({ node }: { node: Node }) {
           <TimeAgo at={node.lastSeenAt} />
         </span>
       </Fact>
-      <Fact label={m.nodes_col_ips()} testId="node-fact-ips">
+      <Fact label={m.node_reported_addresses()} testId="node-fact-ips">
         {node.ipAddresses.length ? (
           node.ipAddresses.map((ip) => (
             <span key={ip} className="font-mono break-all">

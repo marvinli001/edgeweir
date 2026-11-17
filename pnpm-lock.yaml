@@ -313,6 +313,9 @@ importers:
       hono:
         specifier: 4.13.11
         version: 4.13.11
+      mmdb-lib:
+        specifier: 3.0.3
+        version: 3.0.3
       motion:
         specifier: 13.5.1
         version: 13.5.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -3403,6 +3406,10 @@ packages:
   mgrs@1.0.0:
     resolution: {integrity: sha512-awNbTOqCxK1DBGjalK3xqWIstBZgN6fxsMSiXLs9/spqWkF2pAhb2rrYCFSsr1/tT7PhcDGjZndG8SWYn0byYA==}
 
+  mmdb-lib@3.0.3:
+    resolution: {integrity: sha512-xQPoBXcNjjHiOvOraFBKtA++uNWF6aCVHL9dRKFXEov8eI3QJwtgiw3qApsonFT5SpoqsEVISUTg3HIDs2DiXw==}
+    engines: {node: '>=10', npm: '>=6'}
+
   motion-dom@13.5.1:
     resolution: {integrity: sha512-/7CVCD20Mz1KobktorpdgvowV0V41J7UxqE+qWS3GkSJqrRr5ft+2RloOYtEKv+wvBp3JaSFBclhxt4ja8ovHg==}
 
@@ -6321,6 +6328,8 @@ snapshots:
       '@jridgewell/sourcemap-codec': 1.6.0
 
   mgrs@1.0.0: {}
+
+  mmdb-lib@3.0.3: {}
 
   motion-dom@13.5.1:
     dependencies:

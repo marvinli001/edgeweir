@@ -56,14 +56,32 @@ export function schedulingAddressesOf(rows: readonly NodeIpRow[]): SchedulingAdd
 /**
  * The public address a node is placed by on the map
  * (ReportStatusResponse.locate_address): its first public scheduling
- * address, else the public address its connection came from, else "".
+ * address (IPv4 first within a configured level), else its public connection source.
  */
 export function locateAddressOf(rows: readonly NodeIpRow[], remoteAddress: string | null): string {
   const isPublic = (address: string) => forbiddenOriginRange(address, []) === null;
-  const scheduling = schedulingAddressesOf(rows).find((a) => isPublic(a.address));
-  if (scheduling) return scheduling.address;
-  const remote = remoteAddress ? parseIp(remoteAddress) : null;
-  return remote && isPublic(formatIp(remote)) ? formatIp(remote) : "";
+  const configured = schedulingAddressesOf(rows).filter(
+    (a) => a.source === "configured" && isPublic(a.address),
+  );
+  let remote = remoteAddress ? parseIp(remoteAddress) : null;
+  if (
+    remote?.version === 6 &&
+    remote.bytes.slice(0, 10).every((b) => b === 0) &&
+    remote.bytes[10] === 255 &&
+    remote.bytes[11] === 255
+  )
+    remote = { version: 4, bytes: remote.bytes.slice(12) };
+  const observed = remote && isPublic(formatIp(remote)) ? formatIp(remote) : "";
+  const family = (address: string) => Number(address.includes(":"));
+  configured.sort((a, b) => a.level - b.level || family(a.address) - family(b.address));
+  if (configured[0]) return configured[0].address;
+  const scheduling = schedulingAddressesOf(rows.filter((a) => a.source !== "configured"));
+  return (
+    scheduling.find((a) => family(a.address) === 0)?.address ||
+    (observed && family(observed) === 0 ? observed : "") ||
+    scheduling[0]?.address ||
+    observed
+  );
 }
 
 /**

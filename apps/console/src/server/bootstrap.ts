@@ -23,6 +23,7 @@ import { resealEnvelopes } from "./services/envelope-rotation";
 import { upgradeLegacyEnvelopes } from "./services/envelope-upgrade";
 import { refreshExtensionFields } from "./services/extensions";
 import { nodeChannelUrl } from "./services/node-channel-url";
+import { setNodeLocationDatabase } from "./services/node-location";
 import { announceSetupToken, ensureSetupToken } from "./services/setup";
 import { SshInstallRuns } from "./services/ssh-install";
 
@@ -142,6 +143,7 @@ export interface Running {
 /** Loads config, migrates the database and starts the roles selected by ROLE. */
 export async function bootstrap(): Promise<Running> {
   const env = loadEnvOrExit();
+  setNodeLocationDatabase(env.EDGEWEIR_IPINFO_DB_PATH);
   setLogLevel(env.LOG_LEVEL);
   const log = logger;
   log.info("starting edgeweir console", { version: env.version, role: env.ROLE });

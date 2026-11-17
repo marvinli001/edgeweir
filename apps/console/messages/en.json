@@ -2641,6 +2641,7 @@
   "node_data_plane": "Data plane",
   "node_data_plane_healthy": "Healthy",
   "node_remote_address": "Connects from",
+  "node_reported_addresses": "Reported addresses",
   "node_cert_not_after": "Certificate expires",
   "node_cert_expiring": "Expires soon",
   "node_clock": "Clock offset",

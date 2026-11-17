@@ -2426,6 +2426,7 @@
   "node_data_plane": "数据面",
   "node_data_plane_healthy": "正常",
   "node_remote_address": "连接来源地址",
+  "node_reported_addresses": "上报地址",
   "node_cert_not_after": "证书到期",
   "node_cert_expiring": "即将到期",
   "node_clock": "时钟偏差",

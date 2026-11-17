@@ -319,7 +319,13 @@ export function NodesSection({
               title={row.original.hostname}
               data-row-ignore
             >
-              {row.original.ipAddresses[0] ?? row.original.hostname}
+              {[...row.original.schedulingAddresses].sort(
+                (a, b) =>
+                  a.level - b.level ||
+                  Number(a.address.includes(":")) - Number(b.address.includes(":")),
+              )[0]?.address ??
+                row.original.ipAddresses[0] ??
+                row.original.hostname}
             </span>
           </div>
         ),

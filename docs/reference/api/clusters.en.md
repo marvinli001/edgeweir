@@ -1429,6 +1429,7 @@ Counters: `connections` (TCP connections or UDP sessions accepted), `refused` (r
 | `schedulingAddresses` | `array<object>` | Addresses DNS and probes use, `{ address, level, source, reachable }`: `source` is `configured` (set by the operator, with a level) or `reported` (a public address the node reports while none is configured, level 0); `reachable` is `false` while the probes count it as down |
 | `schedulingLevel` | integer | Address level DNS uses now (0 primary; higher while lower levels are unreachable) |
 | `remoteAddress` | string | Source address of the node's latest connection to the console (its public address behind NAT, or a proxy's), `null` before it connects |
+| `location` | object | The current public address's `{ address, country, subdivision, latitude, longitude }`, or `null` without data; node-provided city coordinates take precedence. Console offline IPinfo Lite country lookups add `source: "ipinfo"` with null coordinates. Locations for earlier addresses are discarded |
 | `dnsIssue` | enum | `no_public_address`: the node reports no public address and none is configured, so DNS cannot answer with it; else `null` |
 | `authError` | string | Why the node channel refused the node's own certificate since its last heartbeat (an OpenSSL verify code; `CERT_HAS_EXPIRED` means it must enroll again), else `null` |
 | `cache.maxSizeGb` | integer | The node's own cache zone size (GiB), or `null` (the cluster's) |

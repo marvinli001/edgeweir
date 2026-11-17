@@ -1429,6 +1429,7 @@ GitHub 发布源经 releases API 查询，镜像读取 `<发布源>/latest`。�
 | `schedulingAddresses` | `array<object>` | DNS 与探针使用的地址 `{ address, level, source, reachable }`：`source` 为 `configured`（运营者配置，带级别）或 `reported`（没有配置地址时节点上报的公网地址，级别 0）；`reachable` 为 `false` 时探针判定其不可达 |
 | `schedulingLevel` | integer | DNS 当前使用的地址级别（0 为主；低级别不可达时更高） |
 | `remoteAddress` | string | 节点最近一次连接控制台的源地址（NAT 后的公网地址或代理的地址），连接之前为 `null` |
+| `location` | object | 当前公开地址的位置 `{ address, country, subdivision, latitude, longitude }`，无可用数据为 `null`；节点已有的城市坐标优先，控制台离线 IPinfo Lite 补齐国家时另含 `source: "ipinfo"` 且经纬度为 `null`；地址改变后不复用旧位置 |
 | `dnsIssue` | enum | `no_public_address`：节点没有上报公网地址也没有配置地址，DNS 无法应答该节点；否则为 `null` |
 | `authError` | string | 自最近一次心跳以来节点通道拒绝节点自己证书的原因（OpenSSL 校验代码；`CERT_HAS_EXPIRED` 时须重新注册），否则为 `null` |
 | `cache.maxSizeGb` | integer | 节点自己的缓存区大小（GiB），或 `null`（使用集群的） |

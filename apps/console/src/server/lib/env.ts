@@ -112,6 +112,8 @@ const schema = z.object({
   EDGEWEIR_TRUSTED_PROXIES: z.string().default(""),
   /** Explicit Core-side agent socket. Never inferred from SSH_AUTH_SOCK or supplied by HTTP. */
   EDGEWEIR_SSH_AGENT_SOCKET: z.string().default(""),
+  /** Optional offline IPinfo Lite MMDB for node maps; replacing it requires a restart. */
+  EDGEWEIR_IPINFO_DB_PATH: z.string().default(""),
   HOST: z.string().default("0.0.0.0"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   /**
