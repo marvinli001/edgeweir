@@ -219,7 +219,7 @@ export async function reportSecurityEvents(
  * The CC state of a heartbeat as stored on the node row: known levels, valid
  * site ids; sites at normal only while some of their paths are escalated.
  */
-export function toNodeSecurityState(
+function toNodeSecurityState(
   security: { siteId: string; level: string; escalatedPaths: number }[],
 ): schema.NodeSiteSecurity[] {
   const seen = new Set<string>();
@@ -238,22 +238,63 @@ export function toNodeSecurityState(
     .slice(0, 2000);
 }
 
+export async function authorizedNodeSecurityState(
+  db: Executor,
+  clusterId: string,
+  security: { siteId: string; level: string; escalatedPaths: number }[],
+): Promise<schema.NodeSiteSecurity[]> {
+  const state = toNodeSecurityState(security);
+  if (!state.length) return [];
+  const sites = await db
+    .select({ id: schema.site.id })
+    .from(schema.site)
+    .where(
+      and(
+        eq(schema.site.clusterId, clusterId),
+        inArray(
+          schema.site.id,
+          state.map((entry) => entry.siteId),
+        ),
+      ),
+    );
+  const allowed = new Set(sites.map((site) => site.id));
+  return state.filter((entry) => allowed.has(entry.siteId));
+}
+
 /** Sites above normal on an online, active node (the cc_mitigation condition). */
 export async function elevatedSites(db: Executor, now = Date.now()): Promise<Set<string>> {
   const nodes = await db
-    .select({ lastSeenAt: schema.node.lastSeenAt, securityState: schema.node.securityState })
+    .select({
+      lastSeenAt: schema.node.lastSeenAt,
+      securityState: schema.node.securityState,
+      clusterId: schema.node.clusterId,
+    })
     .from(schema.node)
     .where(eq(schema.node.status, "active"));
   const elevated = new Set<string>();
+  const sites = new Map(
+    (
+      await db.select({ id: schema.site.id, clusterId: schema.site.clusterId }).from(schema.site)
+    ).map((site) => [site.id, site.clusterId]),
+  );
   for (const node of nodes)
     if (isOnline(node.lastSeenAt, now))
       for (const entry of node.securityState)
-        if (entry.level !== "normal") elevated.add(entry.siteId);
+        if (entry.level !== "normal" && sites.get(entry.siteId) === node.clusterId)
+          elevated.add(entry.siteId);
   // A raise reported moments ago counts until the next heartbeat carries it.
   // Literal conditions: they select the partial index security_event_raise_idx.
   const recent = await db
     .selectDistinct({ siteId: schema.securityEvent.siteId })
     .from(schema.securityEvent)
+    .innerJoin(schema.node, eq(schema.node.id, schema.securityEvent.nodeId))
+    .innerJoin(
+      schema.site,
+      and(
+        eq(schema.site.id, schema.securityEvent.siteId),
+        eq(schema.site.clusterId, schema.node.clusterId),
+      ),
+    )
     .where(
       and(
         sql`${schema.securityEvent.kind} = 'site_level'`,

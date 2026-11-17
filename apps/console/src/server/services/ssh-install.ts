@@ -964,19 +964,33 @@ export class SshInstallRuns {
       host.phase = "preparing";
       if (host.username !== "root") {
         const preflight = async () => {
-          let output = "";
+          let output = Buffer.alloc(0);
+          let bytes = 0;
+          const outputAbort = new AbortController();
           const stdin = sudoInput();
           try {
             const code = await session!.exec(
               buildPreflightCommand(taskId, sudo),
               stdin,
               (chunk) => {
-                output += chunk.toString("utf8");
+                bytes += chunk.length;
+                if (bytes > 64 * 1024) {
+                  outputAbort.abort(new InstallPreflightFailure("install_failed"));
+                  return;
+                }
+                output = Buffer.concat([output, chunk.subarray(-4096)]).subarray(-4096);
               },
-              { ...execOptions(), timeoutMs: 15_000 },
+              {
+                ...execOptions(),
+                signal: AbortSignal.any([abort.signal, outputAbort.signal]),
+                timeoutMs: 15_000,
+              },
             );
             if (code === null) throw new SshFailure("connection_lost");
-            return code === 0 ? null : classifyFailure(code, output);
+            return code === 0 ? null : classifyFailure(code, output.toString("utf8"));
+          } catch (error) {
+            if (outputAbort.signal.aborted) throw outputAbort.signal.reason;
+            throw error;
           } finally {
             stdin.fill(0);
           }

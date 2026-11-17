@@ -160,9 +160,9 @@ The sign-in endpoints of `/api/auth` have better-auth's own rate limiting (`NODE
 | The first request still runs | 409 `IDEMPOTENCY_IN_PROGRESS` |
 | Malformed key | 400 `IDEMPOTENCY_KEY_INVALID` |
 | A body with SSH credentials: `sshInstalls.start`, `sshInstalls.retry` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`, not run, and no hash of the body is kept; send it again without the header |
-| A response with a credential shown once: `accessKeys.create`, `serviceAccounts.createKey`, `clusters.createEnrollmentToken`, `probes.createToken`, `authRules.signUrl` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`, not run; send it again without the header |
+| A response with a credential shown once: `accessKeys.create`, `serviceAccounts.createKey`, `clusters.createEnrollmentToken`, `probes.createToken`, `authRules.signUrl`, `originCertificates.issue` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`, not run; send it again without the header |
 
-- Keys are per caller: all AccessKeys share one namespace (one account), each service account has its own.
+- Keys are scoped to each credential and its current permissions: every AccessKey and service-account key has its own namespace. Expired, disabled, revoked or narrowed credentials cannot replay an earlier successful response.
 - Kept 24 hours; expired records are removed hourly.
 - 5xx responses are not stored, so the same key can be retried; neither are 401 and 429 (the procedure never ran). 4xx responses are stored and replay the same error.
 - A record still running after 10 minutes counts as abandoned; the next request takes it over and runs again.

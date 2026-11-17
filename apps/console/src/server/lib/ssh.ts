@@ -287,6 +287,7 @@ function session(client: InstanceType<typeof Client>, close: () => void): SshSes
         options.signal?.addEventListener("abort", aborted, { once: true });
         if (options.signal?.aborted) return aborted();
         const receive = (chunk: Buffer) => {
+          if (finished) return;
           if (!sent) {
             pending += stripVTControlCharacters(decoder.write(chunk)).replace(/\r/g, "");
             if (pending.split("\n").includes(options.inputReady ?? "")) {

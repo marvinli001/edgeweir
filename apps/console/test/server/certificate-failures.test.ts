@@ -1,16 +1,23 @@
 import "reflect-metadata";
 import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
+import { siteCreateInput } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { ApplyState, NodeService } from "@edgeweir/proto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type NodeChannel, startNodeChannel } from "../../src/server/node-channel/server";
-import { toCertificateFailures } from "../../src/server/services/certificate-failures";
+import {
+  certificateNodeFailures,
+  syncCertificateFailureAlerts,
+  toCertificateFailures,
+} from "../../src/server/services/certificate-failures";
 import { listCertificates } from "../../src/server/services/certificates";
 import { createClusterTx } from "../../src/server/services/clusters";
 import { createEnrollmentToken } from "../../src/server/services/enrollment";
 import { deleteNode, listNodes } from "../../src/server/services/nodes";
+import { publishRevision } from "../../src/server/services/revisions";
+import { createSite } from "../../src/server/services/sites";
 import { createTestContext, seedOperator } from "./helpers";
 import { nodeKeyAndCsr } from "./node-csr";
 
@@ -29,10 +36,10 @@ describe("certificates nodes report they cannot load", async () => {
   let clusterId: string;
   let certificateId: string;
 
-  const enroll = async (nodeName: string) => {
+  const enroll = async (nodeName: string, clusterOf = clusterId) => {
     const token = await createEnrollmentToken(
       ctx.db,
-      { clusterId, nodeName, ttlMinutes: 10 },
+      { clusterId: clusterOf, nodeName, ttlMinutes: 10 },
       {
         actor,
         consoleUrl: ctx.env.EDGEWEIR_PUBLIC_URL,
@@ -107,6 +114,24 @@ describe("certificates nodes report they cannot load", async () => {
       status: "ready",
       fingerprint: FP,
     });
+    const { site } = await createSite(
+      ctx.db,
+      siteCreateInput.parse({
+        name: "explicit",
+        clusterId,
+        domains: ["explicit.test"],
+        origins: [{ address: "origin.test" }],
+      }),
+      { actor, masterKey: ctx.masterKey },
+    );
+    await ctx.db.update(schema.site).set({ certificateId }).where(eq(schema.site.id, site.id));
+    await ctx.db.transaction((tx) =>
+      publishRevision(tx, {
+        clusterId,
+        reason: { code: "certificate_updated", params: { site: "explicit" } },
+        actor,
+      }),
+    );
   });
 
   afterAll(async () => {
@@ -159,6 +184,49 @@ describe("certificates nodes report they cannot load", async () => {
       reason: "invalid_material",
       servingFingerprint: EARLIER,
     });
+  });
+
+  it("rejects foreign certificates and unpublished fingerprints, including legacy stored claims", async () => {
+    const other = await ctx.db.transaction((tx) =>
+      createClusterTx(tx, { name: "other", description: "" }, actor),
+    );
+    const outsider = await enroll("edge-foreign", other.id);
+    const own = await enroll("edge-wrong-fingerprint");
+    const failure = {
+      certificateId,
+      sha256Fingerprint: FP,
+      reason: "invalid_material",
+      message: "failed",
+      servingFingerprint: "",
+    };
+    await outsider.mtls.reportStatus({ certificateFailures: [failure] });
+    await own.mtls.reportStatus({
+      certificateFailures: [{ ...failure, sha256Fingerprint: EARLIER }],
+    });
+    for (const nodeId of [outsider.nodeId, own.nodeId]) {
+      const [status] = await ctx.db
+        .select()
+        .from(schema.nodeConfigStatus)
+        .where(eq(schema.nodeConfigStatus.nodeId, nodeId));
+      expect(status?.certificateFailures).toEqual([]);
+    }
+    await ctx.db
+      .update(schema.nodeConfigStatus)
+      .set({
+        certificateFailures: [
+          {
+            certificateId,
+            fingerprint: FP,
+            reason: "invalid_material",
+            message: "legacy",
+            servingFingerprint: "",
+          },
+        ],
+      })
+      .where(eq(schema.nodeConfigStatus.nodeId, outsider.nodeId));
+    expect((await certificateNodeFailures(ctx.db)).has(certificateId)).toBe(false);
+    await ctx.db.transaction((tx) => syncCertificateFailureAlerts(tx, [certificateId]));
+    expect(await alerts()).toEqual([]);
   });
 
   it("stores a node's failures, shows them and alerts while any node reports one", async () => {

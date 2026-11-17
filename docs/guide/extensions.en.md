@@ -30,7 +30,7 @@ These operations apply to site extensions: installable site packages must omit `
 1. Open **Sites** → choose the site → **Extensions**.
 2. Turn the extension on and fill in its site settings; **Save**.
 
-Settings, enabling and the kill switch are hot updates. Installing, upgrading or removing an extension that a site uses reloads nginx on the nodes of that site's cluster. While an active node of the cluster lacks `extensions-v1` (an older node, or one started with `--no-extensions`), enabling is refused.
+Settings, enabling and the kill switch are hot updates. The kill switch applies immediately to stable and canary configurations; rollbacks also follow its current setting. Installing, upgrading or removing an extension that a site uses reloads nginx on the nodes of that site's cluster. While an active node of the cluster lacks `extensions-v1` (an older node, or one started with `--no-extensions`), enabling is refused.
 
 ## Rules, logs and statistics
 

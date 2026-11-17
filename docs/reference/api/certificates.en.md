@@ -511,7 +511,7 @@ Response: [Origin certificate](#origin-certificate-object)`[]`, newest first.
 
 ### `originCertificates.issue`
 
-`POST /origin-certificates` · write
+`POST /origin-certificates` · write · refuses `Idempotency-Key`
 
 | Parameter | In | Type | Required | Constraints and default | Description |
 | --- | --- | --- | --- | --- | --- |

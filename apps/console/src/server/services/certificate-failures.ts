@@ -1,9 +1,11 @@
+import { decodeNodeConfig } from "@edgeweir/config-compiler";
 import { schema } from "@edgeweir/db";
 import type { CertificateFailure } from "@edgeweir/proto";
 import { eq, inArray, sql } from "drizzle-orm";
 import { lockCertificateFailures } from "../lib/locks";
 import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
-import type { Executor } from "./revisions";
+import { type Executor, getRevision } from "./revisions";
+import { publishedRevisions } from "./rollout";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const FINGERPRINT = /^[0-9a-f]{64}$/;
@@ -11,6 +13,31 @@ const REASONS = new Set(["invalid_material", "fingerprint_mismatch", "unavailabl
 
 /** Failed certificates a node's status keeps at most. */
 const MAX_CERTIFICATE_FAILURES = 100;
+
+export async function publishedCertificatePairs(
+  db: Executor,
+  clusterId: string,
+): Promise<Set<string>> {
+  const authorized = new Set<string>();
+  for (const revision of await publishedRevisions(db, clusterId)) {
+    const row = await getRevision(db, clusterId, revision);
+    if (!row) continue;
+    for (const cert of decodeNodeConfig(row.ir).certificates)
+      authorized.add(`${cert.id}/${cert.sha256Fingerprint}`);
+  }
+  return authorized;
+}
+
+export async function authorizedCertificateFailures(
+  db: Executor,
+  clusterId: string,
+  failures: readonly CertificateFailure[],
+): Promise<schema.NodeCertificateFailure[]> {
+  const clean = toCertificateFailures(failures);
+  if (!clean.length) return [];
+  const allowed = await publishedCertificatePairs(db, clusterId);
+  return clean.filter((failure) => allowed.has(`${failure.certificateId}/${failure.fingerprint}`));
+}
 
 /**
  * ReportStatusRequest.certificate_failures as stored (certificate-isolation-v1):
@@ -64,16 +91,10 @@ export async function syncCertificateFailureAlerts(tx: Executor, ids: readonly s
     .select({ id: schema.certificate.id, name: schema.certificate.name })
     .from(schema.certificate)
     .where(inArray(schema.certificate.id, [...ids]));
+  const failures = await certificateNodeFailures(tx);
   for (const id of ids) {
-    const [failing] = await tx
-      .select({ nodeId: schema.nodeConfigStatus.nodeId })
-      .from(schema.nodeConfigStatus)
-      .where(
-        sql`${schema.nodeConfigStatus.certificateFailures} @> ${JSON.stringify([{ certificateId: id }])}::jsonb`,
-      )
-      .limit(1);
     const name = certificates.find((c) => c.id === id)?.name ?? "";
-    if (failing && name) await raisePlatformAlert(tx, "certificate_unloadable", id, name);
+    if (failures.has(id) && name) await raisePlatformAlert(tx, "certificate_unloadable", id, name);
     else await resolvePlatformAlert(tx, "certificate_unloadable", id, name);
   }
 }
@@ -87,6 +108,7 @@ export async function certificateNodeFailures(db: Executor) {
     .select({
       nodeId: schema.node.id,
       nodeName: schema.node.name,
+      clusterId: schema.node.clusterId,
       failures: schema.nodeConfigStatus.certificateFailures,
     })
     .from(schema.nodeConfigStatus)
@@ -96,8 +118,15 @@ export async function certificateNodeFailures(db: Executor) {
     string,
     { nodeId: string; nodeName: string; reason: string; servingEarlier: boolean }[]
   >();
-  for (const row of rows)
+  const authorized = new Map<string, Set<string>>();
+  for (const row of rows) {
+    let allowed = authorized.get(row.clusterId);
+    if (!allowed) {
+      allowed = await publishedCertificatePairs(db, row.clusterId);
+      authorized.set(row.clusterId, allowed);
+    }
     for (const f of row.failures) {
+      if (!allowed.has(`${f.certificateId}/${f.fingerprint}`)) continue;
       const list = out.get(f.certificateId) ?? [];
       list.push({
         nodeId: row.nodeId,
@@ -107,6 +136,7 @@ export async function certificateNodeFailures(db: Executor) {
       });
       out.set(f.certificateId, list);
     }
+  }
   for (const list of out.values()) list.sort((a, b) => a.nodeName.localeCompare(b.nodeName));
   return out;
 }

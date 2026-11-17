@@ -1,5 +1,4 @@
 import { createPrivateKey, type KeyObject, randomUUID, X509Certificate } from "node:crypto";
-import { decodeNodeConfig } from "@edgeweir/config-compiler";
 import {
   type CertificateDto,
   type CertificateRequest,
@@ -27,12 +26,11 @@ import { namesHosts } from "../lib/site-domains";
 import { issuedBy } from "../pki/ca";
 import { customAcmeDirectory, defaultAcmeCa, readPemCertificates } from "./acme-directory";
 import { type Actor, recordAudit, systemActor } from "./audit";
-import { certificateNodeFailures } from "./certificate-failures";
+import { certificateNodeFailures, publishedCertificatePairs } from "./certificate-failures";
 import { certdDns, probe, validCredentials } from "./dns-providers";
 import { assertHttp01Ready } from "./http01-check";
 import { originCaCertificates } from "./origin-pki";
-import { type Executor, getRevision, publishRevision } from "./revisions";
-import { publishedRevisions } from "./rollout";
+import { type Executor, publishRevision } from "./revisions";
 import { assertSitePorts, portsOf } from "./site-ports";
 
 export type CertificateContext = { actor: Actor };
@@ -1122,13 +1120,7 @@ export async function nodeCertificates(app: AppContext, clusterId: string, ids: 
   if (!valid.length) return [];
   // Certificates of every revision the cluster's nodes may run (stable, candidate, latest):
   // a certificate renewed in place has a different fingerprint in each of them.
-  const authorized = new Set<string>();
-  for (const revision of await publishedRevisions(app.db, clusterId)) {
-    const row = await getRevision(app.db, clusterId, revision);
-    if (!row) continue;
-    for (const cert of decodeNodeConfig(row.ir).certificates)
-      authorized.add(`${cert.id}/${cert.sha256Fingerprint}`);
-  }
+  const authorized = await publishedCertificatePairs(app.db, clusterId);
   if (!authorized.size) return [];
   const rows = await app.db
     .selectDistinct({ certificate: schema.certificate })

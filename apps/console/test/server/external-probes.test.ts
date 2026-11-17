@@ -341,6 +341,16 @@ describe("external probe sources", async () => {
     });
     let clock = Date.now();
     const hooks = new ProbeSourceWebhooks(() => clock);
+    for (let i = 0; i < 300; i++)
+      expect(
+        (
+          await hooks.handle(ctx, source.id, {
+            ip: "198.51.100.200",
+            body: Buffer.from("{}"),
+            headers: new Headers(),
+          })
+        ).status,
+      ).toBe(401);
     const deliver = (n: number, ip: string) => {
       const body = JSON.stringify({ results: [{ monitor: `m${n}`, up: true }] });
       const ts = Math.floor(clock / 1000);
@@ -407,6 +417,39 @@ describe("external probe sources", async () => {
     );
     expect((await admin.probeSources.results({ id: source.id }))[0]?.up).toBe(true);
     await admin.probeSources.delete({ id: source.id });
+  });
+
+  it("bounds retained locations across deliveries and still refreshes existing locations", async () => {
+    const { source } = await admin.probeSources.create({
+      name: "locations",
+      provider: "generic_webhook",
+    });
+    try {
+      const initial = Object.fromEntries(Array.from({ length: 64 }, (_, i) => [`loc-${i}`, false]));
+      await recordObservations(ctx.db, source.id, results("m", initial), now, "webhook");
+      tick(1);
+      const fresh = Object.fromEntries(Array.from({ length: 64 }, (_, i) => [`new-${i}`, true]));
+      await recordObservations(
+        ctx.db,
+        source.id,
+        results("m", { ...fresh, "loc-0": true }),
+        now,
+        "webhook",
+      );
+      await recordObservations(ctx.db, source.id, results("m", { "loc-0": true }), now, "webhook");
+      const rows = await ctx.db
+        .select()
+        .from(schema.externalProbeObservation)
+        .where(eq(schema.externalProbeObservation.sourceId, source.id));
+      expect(rows).toHaveLength(64);
+      expect(rows.every((row) => row.location.startsWith("loc-"))).toBe(true);
+      expect(rows.find((row) => row.location === "loc-0")).toMatchObject({
+        lost: 0,
+        receivedAt: now,
+      });
+    } finally {
+      await admin.probeSources.delete({ id: source.id });
+    }
   });
 
   it("drives a node unreachable and back by an external source alone (mode external)", async () => {

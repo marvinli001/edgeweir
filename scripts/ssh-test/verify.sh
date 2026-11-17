@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Run on InstaBox with flock /data/locks/heavy.lock bash scripts/ssh-test/verify.sh.
 set -Eeuo pipefail
-export COMPOSE_PROJECT_NAME=edgeweir-ssh-1108
-export SSH_TEST_TAG=ssh-1108
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-edgeweir-ssh-1108}"
+export SSH_TEST_TAG="${SSH_TEST_TAG:-ssh-1108}"
 dc() { docker compose -f scripts/ssh-test/compose.yml "$@"; }
 cleanup() {
   result=$?

@@ -71,9 +71,9 @@ import {
   reportCacheTaskResult,
 } from "../services/cache-tasks";
 import {
+  authorizedCertificateFailures,
   changedCertificates,
   syncCertificateFailureAlerts,
-  toCertificateFailures,
 } from "../services/certificate-failures";
 import { nodeCertificates } from "../services/certificates";
 import { challengeKeySecrets } from "../services/challenge-keys";
@@ -102,9 +102,9 @@ import { mintRevisionReceipt, verifyRevisionReceipt } from "../services/revision
 import { getRevision, latestRevision, nodeTarget } from "../services/revisions";
 import { evaluateAfterHeartbeat } from "../services/rollout";
 import {
+  authorizedNodeSecurityState,
   MAX_REPORTED_SECURITY_EVENTS,
   reportSecurityEvents,
-  toNodeSecurityState,
 } from "../services/security";
 import { sessionTicketKeySecrets } from "../services/session-ticket-keys";
 import { s3SecretBinding } from "../services/sites";
@@ -1035,7 +1035,7 @@ export function createNodeService(
             // Nodes without bans-v1 send no BanStatus.
             banStatus: req.bans ? toNodeBanStatus(req.bans, now) : null,
             // Sites above the normal CC level; nodes without challenge-v1 send none.
-            securityState: toNodeSecurityState(req.security),
+            securityState: await authorizedNodeSecurityState(tx, node.clusterId, req.security),
             // The address the node uses (channel-follow-v1) and what this connection showed.
             channel: channelData(req.channel, peer, now),
             // Nodes since v1.5.0, from the previous response's console_time.
@@ -1069,7 +1069,11 @@ export function createNodeService(
         );
         // Certificates of the applied revision the node could not load
         // (certificate-isolation-v1; older nodes fail the revision instead).
-        const certificateFailures = toCertificateFailures(req.certificateFailures);
+        const certificateFailures = await authorizedCertificateFailures(
+          tx,
+          node.clusterId,
+          req.certificateFailures,
+        );
         const [previous] = await tx
           .select({ certificateFailures: schema.nodeConfigStatus.certificateFailures })
           .from(schema.nodeConfigStatus)

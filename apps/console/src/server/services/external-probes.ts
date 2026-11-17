@@ -205,14 +205,22 @@ export async function recordObservations(
       .from(schema.externalProbeObservation)
       .where(eq(schema.externalProbeObservation.sourceId, sourceId));
     const stored = new Map(existing.map((e) => [`${e.monitorId}\u0000${e.location}`, e]));
+    let retained = stored.size;
     const monitors = new Set(existing.map((e) => e.monitorId));
+    const retainedLocations = new Map<string, number>();
+    for (const row of existing)
+      retainedLocations.set(row.monitorId, (retainedLocations.get(row.monitorId) ?? 0) + 1);
     for (const value of values) {
       const key = `${value.monitorId}\u0000${value.location}`;
       const prev = stored.get(key);
       if (prev && prev.checkedAt.getTime() > (value.checkedAt as Date).getTime()) continue;
-      if (!prev && !monitors.has(value.monitorId)) {
-        if (monitors.size >= MAX_MONITORS) continue;
+      if (!prev) {
+        if (!monitors.has(value.monitorId) && monitors.size >= MAX_MONITORS) continue;
+        const count = retainedLocations.get(value.monitorId) ?? 0;
+        if (count >= MAX_LOCATIONS || retained >= MAX_MONITORS * MAX_LOCATIONS) continue;
         monitors.add(value.monitorId);
+        retainedLocations.set(value.monitorId, count + 1);
+        retained++;
       }
       await tx
         .insert(schema.externalProbeObservation)

@@ -357,7 +357,12 @@ db_check() {
     esac
     return 1
   fi
+  if [[ ! $out =~ ^[0-9]{1,3}\ [tf]\ [tf]\ [tf]$ ]]; then
+    warn "数据库返回了无效的版本或权限信息。"
+    return 1
+  fi
   read -r major create_db create_public DB_USED <<<"$out"
+  major=$((10#$major))
   ok "已连接，PostgreSQL ${major}"
   if [[ $create_db != t || $create_public != t ]]; then
     warn "用户 ${DB_USER} 不能在 ${DB_NAME} 里建表或建 schema（迁移和后台任务需要）。"

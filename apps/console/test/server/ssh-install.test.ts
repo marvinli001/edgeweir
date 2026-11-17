@@ -64,7 +64,12 @@ type Exec = (call: {
 }) => Promise<number | "hang">;
 
 /** A real SSH server (ssh2) whose exec runs the test's script instead of a shell. */
-async function sshServer(opts: { exec: Exec; key?: string; keyboardOnly?: boolean }) {
+async function sshServer(opts: {
+  exec: Exec;
+  key?: string;
+  keyboardOnly?: boolean;
+  preflightOutput?: string;
+}) {
   const execs: { command: string; stdin: string; username: string }[] = [];
   const clients = new Set<{ end: () => void }>();
   const server = new Server({ hostKeys: [opts.key ?? hostKey.private] }, (client) => {
@@ -117,6 +122,7 @@ async function sshServer(opts: { exec: Exec; key?: string; keyboardOnly?: boolea
           });
           stream.on("end", async () => {
             if (info.command.includes("edgeweir-preflight")) {
+              if (opts.preflightOutput) stream.write(opts.preflightOutput);
               stream.exit(0);
               stream.end();
               return;
@@ -399,6 +405,22 @@ describe("SSH install (ADR-0066)", async () => {
     } finally {
       server.close();
       keyboard.close();
+    }
+  });
+
+  it("stops a non-root preflight that exceeds its output budget before installation", async () => {
+    const server = await sshServer({ exec: async () => 0, preflightOutput: "x".repeat(65 * 1024) });
+    try {
+      const run = await admin.sshInstalls.start({
+        clusterId,
+        credential: { username: "operator", password: PASSWORD },
+        hosts: [host(server.port)],
+      });
+      const done = await ended(run.id);
+      expect(done.hosts[0]).toMatchObject({ state: "failed", error: "install_failed" });
+      expect(server.execs).toEqual([]);
+    } finally {
+      server.close();
     }
   });
 

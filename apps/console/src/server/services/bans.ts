@@ -109,8 +109,8 @@ export function setBanSettings(db: Database, input: BanSettings, actor: Actor) {
 /**
  * Node addresses and the allow lists: no ban may cover them. A site
  * ban is held back only by the addresses of nodes in the site's cluster, a
- * platform ban by those of every node. A node reports single addresses; rows
- * stored before that was checked are skipped unless they are one.
+ * platform ban by operator-configured addresses of every node. Reported
+ * addresses protect only the reporting node's cluster.
  */
 export async function protectedAddresses(
   tx: Executor,
@@ -120,7 +120,9 @@ export async function protectedAddresses(
     .selectDistinct({ address: schema.nodeIp.address })
     .from(schema.nodeIp)
     .innerJoin(schema.node, eq(schema.node.id, schema.nodeIp.nodeId))
-    .where(clusterId ? eq(schema.node.clusterId, clusterId) : undefined);
+    .where(
+      clusterId ? eq(schema.node.clusterId, clusterId) : eq(schema.nodeIp.source, "configured"),
+    );
   const allow = await tx
     .select({ entries: schema.ipList.entries })
     .from(schema.ipList)

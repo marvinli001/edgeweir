@@ -18,7 +18,7 @@ describe("procedures that return a credential once", () => {
     for (const name of oneTimeSecretProcedures) expect(names.has(name), name).toBe(true);
   });
 
-  it("lists every procedure whose output has a string key, secret, token or webhook secret", () => {
+  it("lists every procedure whose output has a credential or private key", () => {
     const returning = all
       .filter(([, def]) => {
         const output = def.outputSchema;
@@ -26,7 +26,9 @@ describe("procedures that return a credential once", () => {
         // Nullable strings count too: a secret shown only when the console made it.
         return Object.entries(output.shape).some(
           ([field, schema]) =>
-            ["key", "accessKey", "secret", "token", "webhookSecret"].includes(field) &&
+            ["key", "accessKey", "secret", "token", "webhookSecret", "privateKeyPem"].includes(
+              field,
+            ) &&
             (schema instanceof z.ZodString ||
               (schema instanceof z.ZodNullable && schema.unwrap() instanceof z.ZodString)),
         );

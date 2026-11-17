@@ -119,11 +119,11 @@ export const DIMENSION_MAPS = [
   ["http_versions", null],
   ["tls_versions", null],
   ["block_reasons", null],
-  // Bounded by originsBounded (MAX_STATS_ORIGINS origins of 18 counters).
+  // Bounded by origin group, including SQL upserts and rollups.
   ["origin_stats", null],
   // Bounded by the key list (CHALLENGE_OUTCOME_KEYS).
   ["challenge_outcomes", null],
-  // Bounded by crawlersBounded (MAX_CRAWLER_STATS pairs of 10 counters).
+  // Bounded by crawler/verification group, including SQL upserts and rollups.
   ["crawler_stats", null],
   ["crawler_paths", MAX_CRAWLER_PATHS],
   // Bounded by TIER_STATUSES (two kinds of nine statuses).
@@ -357,26 +357,47 @@ export function reportedAsNames(reported: (ReportedDimensions | undefined)[]) {
 
 const SATURATE = "9007199254740991::numeric";
 
+function aggregateMap(column: string, values: SQL, limit: number | null): SQL {
+  const groups =
+    column === "origin_stats"
+      ? MAX_STATS_ORIGINS
+      : column === "crawler_stats"
+        ? MAX_CRAWLER_STATS
+        : null;
+  if (groups !== null)
+    return sql`with summed as (${values}), kept as (
+      select split_part(k, ':', 1) as id from summed group by id
+      order by coalesce(max(n) filter (where right(k, 2) = ':n'), 0) desc, id limit ${sql.raw(String(groups))}
+    ) select coalesce(jsonb_object_agg(k,n),'{}'::jsonb) from summed
+      where split_part(k, ':', 1) in (select id from kept)`;
+  return sql`select coalesce(jsonb_object_agg(k,n),'{}'::jsonb) from (
+    ${values} order by n desc,k${sql.raw(limit === null ? "" : ` limit ${limit}`)}) q`;
+}
+
 /** Ingestion's `on conflict ... do update` assignments: maps summed key by key, counters saturated. */
 export function dimensionUpsert(table: string): SQL {
   const maps = DIMENSION_MAPS.map(
     ([c, limit]) =>
-      `${c} = (select coalesce(jsonb_object_agg(k,n),'{}'::jsonb) from (
+      sql`${sql.raw(c)} = (${aggregateMap(
+        c,
+        sql.raw(`
         select k, least(${SATURATE}, coalesce((${table}.${c} ->> k)::numeric,0)+coalesce((excluded.${c} ->> k)::numeric,0)) as n
-        from jsonb_object_keys(${table}.${c} || excluded.${c}) as k order by n desc,k${limit === null ? "" : ` limit ${limit}`}) q)`,
+        from jsonb_object_keys(${table}.${c} || excluded.${c}) as k`),
+        limit,
+      )})`,
   );
-  const counters = DIMENSION_COUNTERS.map(
-    (c) => `${c} = least(${SATURATE}, ${table}.${c}::numeric + excluded.${c})`,
+  const counters = DIMENSION_COUNTERS.map((c) =>
+    sql.raw(`${c} = least(${SATURATE}, ${table}.${c}::numeric + excluded.${c})`),
   );
   // Column and table names are constants of this module.
-  return sql.raw([...maps, ...counters].join(",\n"));
+  return sql.join([...maps, ...counters], sql`,\n`);
 }
 
 /** A rollup's aggregates of the dimension columns over `source` rows matching `where`. */
 export function dimensionRollup(source: AnyPgTable, where: SQL): SQL {
   const parts = DIMENSION_MAPS.map(
     ([c, limit]) =>
-      sql`(select coalesce(jsonb_object_agg(k,n),'{}'::jsonb) from (select entry.key as k,least(${sql.raw(SATURATE)},sum(entry.value::numeric)) as n from ${source},lateral jsonb_each_text(${sql.raw(c)}) entry where ${where} group by entry.key order by n desc,k${sql.raw(limit === null ? "" : ` limit ${limit}`)}) ${sql.raw(`d_${c}`)})`,
+      sql`(${aggregateMap(c, sql`select entry.key as k,least(${sql.raw(SATURATE)},sum(entry.value::numeric)) as n from ${source},lateral jsonb_each_text(${sql.raw(c)}) entry where ${where} group by entry.key`, limit)})`,
   );
   const counters = DIMENSION_COUNTERS.map(
     (c) => sql`least(${sql.raw(SATURATE)},coalesce(sum(${sql.raw(c)}),0))`,

@@ -511,7 +511,7 @@ Origin CA 签发的源站服务器证书。行为见 [Origin CA](../../guide/htt
 
 ### `originCertificates.issue`
 
-`POST /origin-certificates` · 写
+`POST /origin-certificates` · 写 · 不接受 `Idempotency-Key`
 
 | 参数 | 位置 | 类型 | 必填 | 约束与默认值 | 说明 |
 | --- | --- | --- | --- | --- | --- |

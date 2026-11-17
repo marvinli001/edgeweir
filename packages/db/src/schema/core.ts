@@ -1036,7 +1036,7 @@ export const serviceAccountKey = pgTable(
 export const idempotencyKey = pgTable(
   "idempotency_key",
   {
-    /** "user:<id>" or "service_account:<id>". */
+    /** Credential identity and current scope, including its service account when applicable. */
     principal: text("principal").notNull(),
     key: text("key").notNull(),
     method: text("method").notNull(),

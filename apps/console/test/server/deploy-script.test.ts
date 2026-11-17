@@ -267,6 +267,29 @@ describe("deploy.sh", () => {
     }
   });
 
+  it("validates the entire database check response before using Bash arithmetic", () => {
+    const dir = directory();
+    const code = `select_pg_image() { :; }; pg_client() { printf '%s\\n' "$DB_REPLY"; }; DB_HOST=db DB_PORT=5432 DB_NAME=edgeweir DB_USER=operator; db_check; printf 'used=%s\\n' "$DB_USED"`;
+    for (const reply of [
+      'a[$(touch "$MARKER")] t t f',
+      "18 t t f extra",
+      "18 t t f\n18 t t f",
+      "18 true t f",
+      "18 t t x",
+      "1234 t t f",
+    ]) {
+      const result = run(code, { DB_REPLY: reply, MARKER: resolve(dir, "injected") });
+      expect(result.status, reply).toBe(1);
+      expect(result.stderr).toContain("数据库返回了无效的版本或权限信息");
+    }
+    expect(existsSync(resolve(dir, "injected"))).toBe(false);
+    for (const reply of ["18 t t f", "018 t t t"]) {
+      const result = run(code, { DB_REPLY: reply });
+      expect(result.status, reply).toBe(0);
+      expect(result.stdout).toContain(`used=${reply.endsWith("t") ? "t" : "f"}`);
+    }
+  });
+
   it.each([
     ["https://cdn-admin.example.com", true],
     ["http://[2001:db8::1]:3000", true],

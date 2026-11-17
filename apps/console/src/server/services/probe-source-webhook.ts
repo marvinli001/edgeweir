@@ -67,9 +67,6 @@ export class ProbeSourceWebhooks {
       !probeSourceEntry(row.provider)?.webhook
     )
       return { status: 404, code: "not_found" };
-    const sourceWait = this.limits.take(`source:${row.id}`, PER_SOURCE_PER_MINUTE, 60_000);
-    if (sourceWait !== null)
-      return { status: 429, code: "rate_limited", retryAfterSeconds: Math.ceil(sourceWait / 1000) };
     const now = new Date(this.now());
     const secret = openWebhookSecret(app, row) ?? "";
     const verdict = adapter.verifyWebhook(
@@ -84,6 +81,9 @@ export class ProbeSourceWebhooks {
       });
       return { status: 401, code: verdict };
     }
+    const sourceWait = this.limits.take(`source:${row.id}`, PER_SOURCE_PER_MINUTE, 60_000);
+    if (sourceWait !== null)
+      return { status: 429, code: "rate_limited", retryAfterSeconds: Math.ceil(sourceWait / 1000) };
     const fingerprint = createHash("sha256")
       .update(row.id)
       .update("\u0000")

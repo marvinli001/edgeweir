@@ -160,9 +160,9 @@ curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application
 | 第一次请求仍在执行 | 409 `IDEMPOTENCY_IN_PROGRESS` |
 | key 格式无效 | 400 `IDEMPOTENCY_KEY_INVALID` |
 | 请求体带 SSH 凭据：`sshInstalls.start`、`sshInstalls.retry` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`，不执行，也不留下请求体的哈希；不带该请求头重新发送 |
-| 响应里有只显示一次的凭据：`accessKeys.create`、`serviceAccounts.createKey`、`clusters.createEnrollmentToken`、`probes.createToken`、`authRules.signUrl` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`，不执行；不带该请求头重新发送 |
+| 响应里有只显示一次的凭据：`accessKeys.create`、`serviceAccounts.createKey`、`clusters.createEnrollmentToken`、`probes.createToken`、`authRules.signUrl`、`originCertificates.issue` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`，不执行；不带该请求头重新发送 |
 
-- key 按调用方区分：全部 AccessKey 共用一份（同一账户），每个服务账号单独一份。
+- key 按凭据和当前权限区分：每个 AccessKey、每个服务账号密钥各自独立；密钥过期、停用、撤销或权限收窄后不能重放之前的成功响应。
 - 保存 24 小时，每小时清理过期记录。
 - 5xx 响应不保存，可用同一个 key 重试；401 与 429（未进入过程）也不保存。4xx 响应保存，重放返回同一错误。
 - 执行中的记录 10 分钟后视为中断，下一个请求接管并重新执行。

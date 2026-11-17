@@ -968,10 +968,16 @@ export async function updateExtensionSettings(
         set: { value: { disabled: input.disabled } },
       });
     if (!input.disabled) await validateEnabledNodeExtensions(tx);
-    const published = await publishClusters(tx, await clustersUsing(tx), {
-      reason: { code: "extensions_settings_updated", params: {} },
-      actor,
-    });
+    // Stable history can still reference an extension after its current binding is removed.
+    const clusters = await tx.select({ id: schema.cluster.id }).from(schema.cluster);
+    const published = await publishClusters(
+      tx,
+      clusters.map((cluster) => cluster.id),
+      {
+        reason: { code: "extensions_settings_updated", params: {} },
+        actor,
+      },
+    );
     await recordAudit(tx, actor, {
       action: "extension.settings_update",
       targetType: "system_setting",

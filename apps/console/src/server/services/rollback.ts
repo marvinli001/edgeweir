@@ -307,8 +307,8 @@ async function restoreSites(
         return [extension];
       });
     }
-    out.extensionsDisabled = (await getExtensionSettings(tx)).disabled;
   }
+  out.extensionsDisabled = (await getExtensionSettings(tx)).disabled;
   return { config: out, currentSites, edge };
 }
 

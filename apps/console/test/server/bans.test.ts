@@ -256,7 +256,7 @@ describe("dynamic bans", async () => {
       .returning();
     await ctx.db.insert(schema.nodeIp).values([
       { nodeId: node?.id ?? "", address: "192.0.2.10" },
-      { nodeId: node?.id ?? "", address: "2001:db8:ffff::10" },
+      { nodeId: node?.id ?? "", address: "2001:db8:ffff::10", source: "configured" },
     ]);
     expect(
       (
@@ -324,7 +324,7 @@ describe("dynamic bans", async () => {
       .returning();
     // A node of another cluster, and rows stored before addresses were checked.
     await ctx.db.insert(schema.nodeIp).values([
-      { nodeId: far?.id ?? "", address: "192.0.2.77" },
+      { nodeId: far?.id ?? "", address: "192.0.2.77", source: "configured" },
       { nodeId: near?.id ?? "", address: "0.0.0.0/0" },
       { nodeId: near?.id ?? "", address: "::/0" },
     ]);
@@ -367,6 +367,83 @@ describe("dynamic bans", async () => {
     await ctx.db
       .delete(schema.node)
       .where(inArray(schema.node.id, [far?.id ?? "", near?.id ?? ""]));
+  });
+
+  it("does not grant reported addresses platform-wide manual or automatic ban protection", async () => {
+    const elsewhere = (await admin.clusters.create({ name: "reported-addresses" })).id;
+    const [claimant, reporter] = await ctx.db
+      .insert(schema.node)
+      .values([
+        { clusterId: elsewhere, name: "claimant" },
+        { clusterId, name: "reporter" },
+      ])
+      .returning();
+    const reported = "203.0.113.179";
+    const configured = "203.0.113.180";
+    await ctx.db.insert(schema.nodeIp).values([
+      { nodeId: claimant?.id ?? "", address: reported, source: "reported" },
+      { nodeId: claimant?.id ?? "", address: configured, source: "configured" },
+    ]);
+    expect(
+      (
+        await admin.bans.create({
+          scope: "platform",
+          cidr: reported,
+          reason: "abuse",
+          durationSeconds: 60,
+        })
+      ).cidr,
+    ).toBe(`${reported}/32`);
+    await liftAll();
+    expect(
+      (
+        await rpcError(
+          admin.bans.create({
+            scope: "platform",
+            cidr: configured,
+            reason: "abuse",
+            durationSeconds: 60,
+          }),
+        )
+      ).code,
+    ).toBe("BAN_PROTECTED_ADDRESS");
+    await reportAutoBans(
+      ctx.db,
+      { id: reporter?.id ?? "", clusterId },
+      [reported, configured].map((cidr) => ({
+        scope: "platform",
+        siteId: "",
+        cidr,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 600_000),
+        reason: "unknown_host_scan",
+        metric: "ip_qps",
+        observed: 250,
+        threshold: 100,
+        windowSeconds: 10,
+      })),
+    );
+    const active = await ctx.db
+      .select()
+      .from(schema.ipBan)
+      .where(
+        and(
+          inArray(schema.ipBan.cidr, [`${reported}/32`, `${configured}/32`]),
+          sql`${schema.ipBan.removedAt} is null`,
+        ),
+      );
+    expect(active.find((ban) => ban.cidr === `${reported}/32`)).toMatchObject({
+      source: "auto",
+      distributed: true,
+    });
+    expect(active.find((ban) => ban.cidr === `${configured}/32`)).toMatchObject({
+      source: "auto",
+      distributed: false,
+    });
+    await liftAll();
+    await ctx.db
+      .delete(schema.node)
+      .where(inArray(schema.node.id, [claimant?.id ?? "", reporter?.id ?? ""]));
   });
 
   it("limits active manual bans across the platform (system setting)", async () => {

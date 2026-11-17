@@ -1,4 +1,9 @@
-import { DEVELOPMENT_MODE_FEATURE, decodeNodeConfig } from "@edgeweir/config-compiler";
+import {
+  DEVELOPMENT_MODE_FEATURE,
+  decodeNodeConfig,
+  EXTENSIONS_FEATURE,
+  EXTENSIONS_V2_FEATURE,
+} from "@edgeweir/config-compiler";
 import { tlsSettings } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { and, eq, sql } from "drizzle-orm";
@@ -13,6 +18,7 @@ import {
 import { expireDevelopmentModes } from "../../src/server/services/development-mode";
 import { latestRevision, nodeTarget, publishRevision } from "../../src/server/services/revisions";
 import { evaluateRollout } from "../../src/server/services/rollout";
+import { PACKAGE, PUBLIC_JWK, SIGNATURE } from "./extension-fixtures";
 import { type ApiClient, createTestContext, rpcClient, setupPlatform, signIn } from "./helpers";
 
 type TestNode = { id: string; clusterId: string; nodeGroupId: string | null };
@@ -116,6 +122,8 @@ describe("configuration canary and current state", async () => {
             "challenge-v1",
             "http3-v1",
             DEVELOPMENT_MODE_FEATURE,
+            EXTENSIONS_FEATURE,
+            EXTENSIONS_V2_FEATURE,
           ],
         })),
       )
@@ -380,5 +388,50 @@ describe("configuration canary and current state", async () => {
     expect(await rollout()).toMatchObject({ state: "promoted", candidateRevision: null });
     expect((await target(stable))?.revision).toBe(row.revision);
     expect((await target(canary))?.revision).toBe(row.revision);
+  });
+
+  it("keeps the global extension stop on stable nodes, automatic rollback and explicit rollback", async () => {
+    await admin.extensionKeys.add({ publisher: "example.org", key: PUBLIC_JWK });
+    await admin.extensions.install({ package: PACKAGE.toString("base64"), signature: SIGNATURE });
+    await admin.extensions.update({ id: "hello-header", enabled: true });
+    await admin.extensions.updateSite({ siteId, id: "hello-header", enabled: true });
+    await admin.clusters.promoteRollout({ id: clusterId });
+    await settle();
+    const enabledRevision = (await target(stable))?.revision ?? 0;
+    const enabled = await config(stable);
+    expect(enabled.extensionsDisabled).toBe(false);
+    expect(enabled.extensions.map((extension) => extension.scope || "site")).toEqual(["site"]);
+    expect(enabled.sites.find((site) => site.id === siteId)?.extensions).toHaveLength(1);
+    await change();
+    await admin.extensions.updateSettings({ disabled: true });
+    expect((await rollout()).state).toBe("canary");
+    for (const node of [stable, canary]) expect((await config(node)).extensionsDisabled).toBe(true);
+    const candidate = (await rollout()).candidateRevision ?? 0;
+    await report(canary, candidate);
+    await ctx.db
+      .update(schema.nodeConfigStatus)
+      .set({ state: "failed" })
+      .where(eq(schema.nodeConfigStatus.nodeId, canary.id));
+    expect(await evaluateRollout(ctx, clusterId)).toBe("rolled_back");
+    for (const node of [stable, canary]) expect((await config(node)).extensionsDisabled).toBe(true);
+    await admin.clusters.rollback({ id: clusterId, revision: enabledRevision });
+    expect(await admin.extensions.settings()).toEqual({ disabled: true });
+    for (const node of [stable, canary]) expect((await config(node)).extensionsDisabled).toBe(true);
+  });
+
+  it("stops extensions retained only by stable history after their current binding and package are removed", async () => {
+    await admin.extensions.updateSettings({ disabled: false });
+    await settle();
+    await admin.extensions.updateSite({ siteId, id: "hello-header", enabled: false });
+    expect((await rollout()).state).toBe("canary");
+    expect(
+      (await config(stable)).sites.find((site) => site.id === siteId)?.extensions,
+    ).toHaveLength(1);
+    await admin.extensions.uninstall({ id: "hello-header" });
+    await admin.extensions.updateSettings({ disabled: true });
+    const historical = await config(stable);
+    expect(historical.extensions).toHaveLength(1);
+    expect(historical.extensionsDisabled).toBe(true);
+    expect((await config(canary)).extensions).toEqual([]);
   });
 });

@@ -92,7 +92,7 @@ describe("platform scan bans", async () => {
     ];
     await ctx.db.insert(schema.nodeIp).values([
       { nodeId: nodes.a2, address: "198.51.100.88" },
-      { nodeId: nodes.b, address: "198.51.100.77" },
+      { nodeId: nodes.b, address: "198.51.100.77", source: "configured" },
     ]);
   });
   afterAll(() => pglite.close());
@@ -228,7 +228,9 @@ describe("platform scan bans", async () => {
 
   it("leaves another cluster's ban of an address lifted for the reporting node's cluster", async () => {
     await share(true);
-    await ctx.db.insert(schema.nodeIp).values({ nodeId: nodes.a2, address: "198.51.100.99" });
+    await ctx.db
+      .insert(schema.nodeIp)
+      .values({ nodeId: nodes.a2, address: "198.51.100.99", source: "configured" });
     // For cluster B only another cluster's node: kept to node b, listed.
     expect(
       await reportAutoBans(ctx.db, { id: nodes.b, clusterId: clusterB }, [scan("198.51.100.99")]),
@@ -399,7 +401,9 @@ describe("platform scan bans", async () => {
   it("takes over a scan ban only where a new manual ban may go", async () => {
     await share(true);
     // Another cluster's node: a manual ban of it is refused, and so is the takeover.
-    await ctx.db.insert(schema.nodeIp).values({ nodeId: nodes.b, address: "198.51.100.79" });
+    await ctx.db
+      .insert(schema.nodeIp)
+      .values({ nodeId: nodes.b, address: "198.51.100.79", source: "configured" });
     expect(
       await reportAutoBans(ctx.db, { id: nodes.a, clusterId: clusterA }, [scan("198.51.100.79")]),
     ).toBe(1);

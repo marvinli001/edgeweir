@@ -1,4 +1,4 @@
-import { siteCreateInput } from "@edgeweir/contract";
+import { MAX_CRAWLER_STATS, MAX_STATS_ORIGINS, siteCreateInput } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { ne } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -238,5 +238,79 @@ describe("M5 statistics identity, rollups and retention", async () => {
         .from(schema.statsRollupDirty)
         .where(ne(schema.statsRollupDirty.granularity, "usage")),
     ).toEqual([]);
+  });
+
+  it("bounds cumulative origin and crawler groups in minute upserts, hourly and daily rollups", async () => {
+    const dimensions = (offset: number) => ({
+      origins: Array.from({ length: MAX_STATS_ORIGINS }, (_, i) => ({
+        originId: `00000000-0000-4000-8000-${String(offset * MAX_STATS_ORIGINS + i).padStart(12, "0")}`,
+        requests: offset * 1000 + i + 1,
+        connectFailures: 1,
+        timeouts: 0,
+        tlsFailures: 0,
+        invalidResponses: 0,
+        serverErrors: 0,
+        headerTimeBuckets: [],
+        headerTimeMsSum: 0,
+      })),
+      crawlers: Array.from({ length: MAX_CRAWLER_STATS }, (_, i) => ({
+        crawler: `crawler-${offset}-${i}`,
+        verification: "verified",
+        requests: offset * 1000 + i + 1,
+        status2xx: 0,
+        status3xx: 0,
+        status4xx: 0,
+        status5xx: 0,
+        blocked: 1,
+        bytes: 9,
+        charged: 0,
+        chargedMicros: 0,
+        robots: 0,
+        allowed: 0,
+      })),
+    });
+    const expected = (offset: number) => ({
+      originStats: Object.fromEntries(
+        dimensions(offset).origins.flatMap((origin) => [
+          [`${origin.originId}:n`, origin.requests],
+          [`${origin.originId}:cf`, 1],
+        ]),
+      ),
+      crawlerStats: Object.fromEntries(
+        dimensions(offset).crawlers.flatMap((crawler) => [
+          [`${crawler.crawler}|verified:n`, crawler.requests],
+          [`${crawler.crawler}|verified:b`, 1],
+          [`${crawler.crawler}|verified:by`, 9],
+        ]),
+      ),
+    });
+    const minute = "2026-09-23T01:01:00Z";
+    for (const offset of [0, 1])
+      await ingestMinuteStats(ctx.db, edge, [
+        { ...bucket(minute), dimensions: dimensions(offset) },
+      ]);
+    const stored = (await ctx.db.select().from(schema.nodeMinuteStats)).find(
+      (row) => row.minute.getTime() === new Date(minute).getTime(),
+    );
+    expect(stored).toMatchObject(expected(1));
+    expect(Object.keys(stored?.originStats ?? {})).toHaveLength(MAX_STATS_ORIGINS * 2);
+    expect(Object.keys(stored?.crawlerStats ?? {})).toHaveLength(MAX_CRAWLER_STATS * 3);
+    await ingestMinuteStats(ctx.db, edge, [
+      { ...bucket("2026-09-23T01:02:00Z"), dimensions: dimensions(2) },
+      { ...bucket("2026-09-23T02:01:00Z"), dimensions: dimensions(3) },
+    ]);
+    await rollupTraffic(ctx.db, now);
+    const hour = (await ctx.db.select().from(schema.nodeHourStats)).find(
+      (row) => row.minute.toISOString() === "2026-09-23T01:00:00.000Z",
+    );
+    const day = (await ctx.db.select().from(schema.nodeDayStats)).find(
+      (row) => row.minute.toISOString() === "2026-09-23T00:00:00.000Z",
+    );
+    expect(hour).toMatchObject(expected(2));
+    expect(Object.keys(hour?.originStats ?? {})).toHaveLength(MAX_STATS_ORIGINS * 2);
+    expect(Object.keys(hour?.crawlerStats ?? {})).toHaveLength(MAX_CRAWLER_STATS * 3);
+    expect(day).toMatchObject(expected(3));
+    expect(Object.keys(day?.originStats ?? {})).toHaveLength(MAX_STATS_ORIGINS * 2);
+    expect(Object.keys(day?.crawlerStats ?? {})).toHaveLength(MAX_CRAWLER_STATS * 3);
   });
 });

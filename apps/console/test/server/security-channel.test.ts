@@ -23,6 +23,7 @@ import { createClusterTx } from "../../src/server/services/clusters";
 import { createEnrollmentToken } from "../../src/server/services/enrollment";
 import { updateSiteProtection } from "../../src/server/services/protection";
 import {
+  elevatedSites,
   listSecurityEvents,
   pruneSecurityEvents,
   siteSecurityState,
@@ -326,13 +327,23 @@ describe("challenge keys, security events and JA4 over the node channel", async 
       dataPlaneHealthy: true,
       security: [
         { siteId, level: "pow", escalatedPaths: 3 },
-        { siteId: foreignSiteId.toUpperCase(), level: "normal", escalatedPaths: 0 },
+        { siteId: foreignSiteId.toUpperCase(), level: "pow", escalatedPaths: 0 },
         { siteId: "not-a-site", level: "js", escalatedPaths: 1 },
-        { siteId: crypto.randomUUID(), level: "slider", escalatedPaths: 1 },
+        { siteId: crypto.randomUUID(), level: "js", escalatedPaths: 1 },
       ],
     });
     const [row] = await ctx.db.select().from(schema.node).where(eq(schema.node.id, nodeId));
     expect(row?.securityState).toEqual([{ siteId, level: "pow", escalatedPaths: 3 }]);
+    await ctx.db
+      .update(schema.node)
+      .set({
+        securityState: [
+          ...(row?.securityState ?? []),
+          { siteId: foreignSiteId, level: "pow", escalatedPaths: 0 },
+        ],
+      })
+      .where(eq(schema.node.id, nodeId));
+    expect(await elevatedSites(ctx.db)).not.toContain(foreignSiteId);
     const state = await siteSecurityState(ctx.db, siteId, 24);
     expect(state.nodes.find((n) => n.id === nodeId)).toMatchObject({
       name: "edge-state",

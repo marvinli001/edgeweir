@@ -788,6 +788,7 @@ export const oneTimeSecretProcedures: ReadonlySet<string> = new Set([
   "serviceAccounts.createKey",
   "clusters.createEnrollmentToken",
   "probes.createToken",
+  "originCertificates.issue",
   // A webhook secret the console made is shown once.
   "probeSources.create",
   "probeSources.rotateWebhookSecret",

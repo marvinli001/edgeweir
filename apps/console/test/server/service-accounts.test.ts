@@ -426,6 +426,41 @@ describe("service accounts, scopes and idempotency keys", async () => {
     expect((await admin.sites.get({ id: siteId })).enabled).toBe(true);
   });
 
+  it("does not replay a write response through a different or expired AccessKey", async () => {
+    const writer = await admin.accessKeys.create({ name: "replay-writer", scope: "write" });
+    const reader = await admin.accessKeys.create({ name: "replay-reader", scope: "read" });
+    const path = `/sites/${siteId}/enabled`;
+    const headers = { "idempotency-key": "credential-bound" };
+    expect((await api(writer.key, "PUT", path, { enabled: false }, headers)).status).toBe(200);
+    const denied = await api(reader.key, "PUT", path, { enabled: false }, headers);
+    expect(denied.status).toBe(403);
+    expect(denied.headers.get("idempotent-replayed")).toBeNull();
+    await ctx.db
+      .update(schema.apikey)
+      .set({ expiresAt: new Date(0) })
+      .where(eq(schema.apikey.id, writer.id));
+    const expired = await api(writer.key, "PUT", path, { enabled: false }, headers);
+    expect(expired.status).toBe(401);
+    expect(expired.headers.get("idempotent-replayed")).toBeNull();
+    await admin.sites.setEnabled({ id: siteId, enabled: true });
+  });
+
+  it("checks a service account's current scopes before replaying a write", async () => {
+    const account = await admin.serviceAccounts.create({
+      name: "replay-scopes",
+      scopes: ["sites:read", "sites:write"],
+    });
+    const key = await admin.serviceAccounts.createKey({ id: account.id });
+    const path = `/sites/${siteId}/enabled`;
+    const headers = { "idempotency-key": "scope-bound" };
+    expect((await api(key.secret, "PUT", path, { enabled: false }, headers)).status).toBe(200);
+    await admin.serviceAccounts.update({ id: account.id, scopes: ["sites:read"] });
+    const denied = await api(key.secret, "PUT", path, { enabled: false }, headers);
+    expect(denied.status).toBe(403);
+    expect(denied.headers.get("idempotent-replayed")).toBeNull();
+    await admin.sites.setEnabled({ id: siteId, enabled: true });
+  });
+
   it("stores refusals (4xx) and keeps keys per caller", async () => {
     const stale = { enabled: false, expectedUpdatedAt: "2020-01-01T00:00:00.000Z" };
     const refused = await api(full, "PUT", `/sites/${siteId}/enabled`, stale, {
@@ -554,6 +589,8 @@ describe("service accounts, scopes and idempotency keys", async () => {
       [`/service-accounts/${accountId}/keys`, { name: "retried" }],
       ["/enrollment-tokens", { clusterId: cluster?.id }],
       ["/access-keys", { name: "minted", scope: "read" }],
+      ["/origin-certificates", { hostnames: ["origin.once.test"], validityYears: 1 }],
+      ["/origin-certificates/?retry=1", { hostnames: ["origin.once.test"], validityYears: 1 }],
     ] as const) {
       for (const attempt of [1, 2]) {
         const res = await api(operator.key, "POST", path, body, { "idempotency-key": path });

@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
-import { defaultKeyHasher } from "@better-auth/api-key";
 import { carriesSshCredentials, type ErrorCode, errorDefs } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { ORPCError } from "@orpc/server";
 import { and, eq, lt, lte } from "drizzle-orm";
+import { findAccessKey, keyScope } from "../services/access-keys";
 import { hashServiceAccountKey, isServiceAccountKey } from "../services/service-accounts";
 import { deleteInBatches } from "./retention";
 
@@ -38,12 +38,18 @@ export function parseIdempotencyKey(raw: string): string | null {
 }
 
 /** Who the key namespace belongs to, without side effects; null for invalid credentials. */
-async function idempotencyPrincipal(db: Database, apiKey: string | null): Promise<string | null> {
+async function idempotencyPrincipal(
+  db: Database,
+  apiKey: string | null,
+  now: Date,
+): Promise<string | null> {
   if (!apiKey || apiKey.length > 200) return null;
   if (isServiceAccountKey(apiKey)) {
     const [row] = await db
       .select({
         accountId: schema.serviceAccount.id,
+        keyId: schema.serviceAccountKey.id,
+        scopes: schema.serviceAccount.scopes,
         enabled: schema.serviceAccount.enabled,
         revokedAt: schema.serviceAccountKey.revokedAt,
       })
@@ -53,14 +59,12 @@ async function idempotencyPrincipal(db: Database, apiKey: string | null): Promis
         eq(schema.serviceAccount.id, schema.serviceAccountKey.serviceAccountId),
       )
       .where(eq(schema.serviceAccountKey.keyHash, hashServiceAccountKey(apiKey)));
-    return row?.enabled && !row.revokedAt ? `service_account:${row.accountId}` : null;
+    if (!row?.enabled || row.revokedAt) return null;
+    const scopes = createHash("sha256").update(JSON.stringify(row.scopes)).digest("hex");
+    return `service_account:${row.accountId}:${row.keyId}:${scopes}`;
   }
-  // better-auth stores user AccessKeys hashed with its default hasher.
-  const [row] = await db
-    .select({ userId: schema.apikey.referenceId, enabled: schema.apikey.enabled })
-    .from(schema.apikey)
-    .where(eq(schema.apikey.key, await defaultKeyHasher(apiKey)));
-  return row?.enabled ? `user:${row.userId}` : null;
+  const found = await findAccessKey(db, apiKey, now);
+  return found ? `access_key:${found.key.id}:${keyScope(found.key.permissions)}` : null;
 }
 
 function errorResponse(code: ErrorCode, message: string): Response {
@@ -94,15 +98,16 @@ export async function withIdempotency(
       "this request carries SSH credentials; send it without Idempotency-Key",
     );
   if (
+    new URL(request.url).pathname.replace(/\/$/, "") === "/api/v1/origin-certificates" ||
     ["/api/v1/system/bootstrap", "/api/v1/system/authorize-integration"].some((path) =>
       new URL(request.url).pathname.startsWith(path),
     )
   )
     return errorResponse(
       "IDEMPOTENCY_KEY_UNSUPPORTED",
-      "installer credentials use their own sealed recovery record; send without Idempotency-Key",
+      "this request carries a one-time credential; send without Idempotency-Key",
     );
-  const principal = await idempotencyPrincipal(db, apiKey);
+  const principal = await idempotencyPrincipal(db, apiKey, clock());
   // Without valid credentials the procedure answers 401; nothing to remember.
   if (principal === null) return handle(request);
 
