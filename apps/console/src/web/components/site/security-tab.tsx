@@ -300,8 +300,9 @@ function UnderAttackCard({ siteId, protection }: { siteId: string; protection: S
       <PanelHeader>
         <PanelTitle>{m.protection_under_attack()}</PanelTitle>
       </PanelHeader>
-      <PanelContent className="grid gap-4 sm:grid-cols-2">
-        <Field orientation="horizontal" className="min-h-9 w-auto flex-wrap self-end">
+      {/* The switch, its state and the challenge type on one row, compact; wraps on phones. */}
+      <PanelContent className="flex flex-wrap items-end gap-x-8 gap-y-4">
+        <Field orientation="horizontal" className="min-h-9 w-auto flex-wrap">
           <ConfirmDialog
             trigger={toggle}
             destructive={turningOn}
@@ -327,17 +328,19 @@ function UnderAttackCard({ siteId, protection }: { siteId: string; protection: S
             </Badge>
           ) : null}
         </Field>
-        <FormSelect
-          id="protection-under-attack-type"
-          label={m.rules_challenge_type()}
-          value={protection.underAttackChallenge}
-          disabled={pending}
-          testId="protection-under-attack-type"
-          options={challengeKindOptions(managed)}
-          onChange={(type) => void save({ underAttackChallenge: type as ChallengeKind })}
-        />
+        <div className="w-full sm:w-64">
+          <FormSelect
+            id="protection-under-attack-type"
+            label={m.rules_challenge_type()}
+            value={protection.underAttackChallenge}
+            disabled={pending}
+            testId="protection-under-attack-type"
+            options={challengeKindOptions(managed)}
+            onChange={(type) => void save({ underAttackChallenge: type as ChallengeKind })}
+          />
+        </div>
         {protection.platformUnderAttack ? (
-          <SafetyNote className="sm:col-span-2" data-testid="protection-platform-on">
+          <SafetyNote className="basis-full" data-testid="protection-platform-on">
             {m.protection_platform_on()}
           </SafetyNote>
         ) : null}

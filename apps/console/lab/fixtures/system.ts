@@ -1228,7 +1228,14 @@ export const systemFixtures: Fixtures = {
       targetTypes: distinct(auditLog.map((e) => e.targetType)),
     }),
   },
+  mcp: {
+    settings: () => ({ enabled: true, url: "https://console.example.net/mcp" }),
+  },
+  tieredCache: {
+    get: () => ({ topology: "smart", port: 8444, upperNodeIds: [], upperNodeGroupIds: [] }),
+  },
   settings: {
+    nodeLogRetention: () => ({ days: 7, perNode: 20000 }),
     get: () => ({
       version: CONSOLE_VERSION,
       consoleUrl: "https://console.example.net",

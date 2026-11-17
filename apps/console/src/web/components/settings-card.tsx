@@ -7,6 +7,7 @@ import { SaveBar } from "@/components/site/save-site";
 import { QueryView } from "@/components/states";
 import { type SettingsFormOptions, useSettingsForm } from "@/hooks/use-settings-form";
 import { m } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 const SOURCE_LABEL = {
   setting: m.system_source_setting,
@@ -57,6 +58,12 @@ interface SettingsFormProps<T, D, I, O, E, C>
   noValidate?: boolean;
   /** Off for rows that put each control beside its label (SettingRows): no label column. */
   indentSave?: boolean;
+  /**
+   * How the fields lay out: label-left (the default), `stacked` (labels on top, for a grid of
+   * fields that should use the panel's width), or `inline` (one setting: its field and the save
+   * on one row, no footer).
+   */
+  layout?: "label-left" | "stacked" | "inline";
   contentClassName?: string;
   saveTestId: string;
   errorTestId?: string;
@@ -103,6 +110,7 @@ function SettingsForm<T, D, I, O, E, C>({
   refresh,
   noValidate,
   indentSave = true,
+  layout = "label-left",
   contentClassName,
   saveTestId,
   errorTestId,
@@ -114,30 +122,47 @@ function SettingsForm<T, D, I, O, E, C>({
     value,
     mutation: { ...mutation, meta: { invalidates: [refresh], ...mutation.meta } },
   });
+  const fields = children({
+    value,
+    draft: form.draft,
+    set: form.set,
+    error: form.error,
+    pending: form.pending,
+    apply: form.apply,
+  });
   return (
     <form
       className="flex flex-col gap-(--panel-pad)"
       noValidate={noValidate}
       onSubmit={form.submit}
     >
-      <PanelContent form className={contentClassName}>
-        {children({
-          value,
-          draft: form.draft,
-          set: form.set,
-          error: form.error,
-          pending: form.pending,
-          apply: form.apply,
-        })}
-      </PanelContent>
-      <SaveBar
-        indent={indentSave}
-        dirty={form.dirty}
-        pending={form.pending}
-        error={form.error}
-        testId={saveTestId}
-        errorTestId={errorTestId}
-      />
+      {layout === "inline" ? (
+        <PanelContent className="flex flex-wrap items-end gap-x-3 gap-y-2">
+          <div className={cn("w-full min-w-0 sm:w-56", contentClassName)}>{fields}</div>
+          <SaveBar
+            inline
+            dirty={form.dirty}
+            pending={form.pending}
+            error={form.error}
+            testId={saveTestId}
+            errorTestId={errorTestId}
+          />
+        </PanelContent>
+      ) : (
+        <>
+          <PanelContent form={layout === "label-left"} className={contentClassName}>
+            {fields}
+          </PanelContent>
+          <SaveBar
+            indent={layout === "label-left" && indentSave}
+            dirty={form.dirty}
+            pending={form.pending}
+            error={form.error}
+            testId={saveTestId}
+            errorTestId={errorTestId}
+          />
+        </>
+      )}
     </form>
   );
 }

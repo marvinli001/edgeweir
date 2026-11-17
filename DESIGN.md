@@ -241,6 +241,7 @@
 - 内容列是名为 `main` 的容器，组件按它的宽度（容器查询）而不是视口变化。
 - 面板：`Panel`、`PanelHeader`、`PanelTitle`、`PanelAction`、`PanelContent`、`PanelFooter`（`components/layout/panel.tsx`）。`bg-card`，1px 细线，8px 圆角，无阴影，内边距 20px。标题 16px 500，操作在标题行末尾。超宽内容在面板内横向裁切，不撑宽手机页面。
 - 面板内的次级区域（代码、日志、选项列表）用 `faint-well`：`bg-well` + 细线。
+- 短设置卡在宽内容列（`@4xl/main` / `@5xl/main` 起）两两并排成顶对齐的两列（防护设置、系统设置「通用」、集群「设置」、账户安全）；表格、长编辑器和多列字段网格（CC 模板）占满两列。不让窄表单独占整行宽面板。
 
 ### 3.5 断点
 
@@ -284,7 +285,9 @@ Arc `Button`（`components/arc/button/button.tsx`）；路由链接用 `LinkButt
 - 输入框：面板底，1px `--ew-border`，悬停 `--ew-border-strong`，聚焦边框 `--ew-brand` + 品牌色 20% 光环，错误边框 `--ew-error`。
 - 校验：字段错误用 `FieldError`（`role="alert"`，12px `text-destructive`）紧贴字段显示；保存失败的错误显示在保存按钮旁；字段错误优先于通知。
 - 设置的来源徽标（「已保存 / 环境变量 / 默认」，`SettingSourceBadge`）放在控件下方，不挤占标签列。
-- 保存条：`SaveBar`（`components/site/save-site.tsx`）。按钮在前，与控件列对齐（`indent`）；未修改时禁用，保存中显示转圈；长编辑器传 `sticky`，保存条吸附在视口底部（面板底色 + 顶部细线）。
+- 保存条：`SaveBar`（`components/site/save-site.tsx`）。按钮在前，与控件列对齐（`indent`），错误在按钮之后；未修改时禁用，保存中显示转圈；长编辑器传 `sticky`，保存条吸附在视口底部（面板底色 + 顶部细线）。提交按钮一律左对齐，不放在页脚最右（OAuth 授权页这类对话式页面除外）。
+- 单项设置（一个字段，如请求体上限、大面积摘除保护）用 `inline`：标签在上，字段与保存同排，没有页脚；`SettingsCard` 传 `layout="inline"`。字段网格要用满面板宽时传 `layout="stacked"`（标签在上，不折成标签左置的一列）。
+- 一组复选框共用一个标签（端口）：`FieldSet data-layout="field"`，标签左置时图例进标签列，选项在控件列。
 - 有未保存修改时，离开页面或切换页签先确认（`useUnsavedChanges` + `UnsavedChangesGuard`）；同页的筛选与翻页不拦截。
 
 做：每个表单一个保存按钮。不做：字段说明段落（`FieldDescription` 等）；每次按键都校验。
@@ -328,6 +331,8 @@ Arc `Button`（`components/arc/button/button.tsx`）；路由链接用 `LinkButt
 ### 4.5 图表与监控面板
 
 `components/analytics/`（`panel.tsx` 的 `MetricCard`、`breakdown-charts.tsx`、`range-select.tsx`），Arc `LineChart`、`Sparkline`，`components/effects/`（实时图、拓扑、地图）。
+
+- 流量路径拓扑在卡片宽度不足 560px（手机）时改为自上而下的缩进树：每行一个节点、原尺寸、权重标在目标节点上，不缩小也不横向滚动。
 
 - 监控卡片是细线面板：13px 次要色标题，下方是数值与环比（`↗ 39.6%`，好坏用 `--delta-good` / `--delta-bad`，并带读屏文字），再下方是图表。整张卡片可点击打开明细对话框，悬停时右上角出现展开图标。
 - 卡片按内容列宽度排成 2–4 列网格；一行小卡片都没有数据时只显示数值，不画空图。

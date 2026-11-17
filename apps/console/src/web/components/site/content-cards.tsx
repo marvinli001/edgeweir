@@ -297,36 +297,39 @@ export function BodyLimitCard({ site }: { site: Site }) {
         <PanelHeader>
           <PanelTitle>{m.site_body_limit_title()}</PanelTitle>
         </PanelHeader>
-        <PanelContent form className="flex flex-col gap-3">
+        <PanelContent className="flex flex-col gap-3">
           {blocked ? (
             <SafetyNote data-testid="body-limit-unavailable">
               {m.feature_unavailable_nodes()}
             </SafetyNote>
           ) : null}
-          <div className="w-full sm:w-56">
-            <NumberField
-              id="body-limit"
-              label={m.site_body_limit_value()}
-              value={value}
-              min={0}
-              max={MAX_REQUEST_BODY_LIMIT / MIB}
-              step="any"
-              required
-              disabled={blocked}
-              placeholder={m.compression_no_limit()}
-              onChange={setValue}
-              testId="body-limit"
+          {/* One setting: the field and its save on one row. */}
+          <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+            <div className="w-full sm:w-56">
+              <NumberField
+                id="body-limit"
+                label={m.site_body_limit_value()}
+                value={value}
+                min={0}
+                max={MAX_REQUEST_BODY_LIMIT / MIB}
+                step="any"
+                required
+                disabled={blocked}
+                placeholder={m.compression_no_limit()}
+                onChange={setValue}
+                testId="body-limit"
+              />
+            </div>
+            <SaveBar
+              inline
+              dirty={valid && bytes !== saved}
+              pending={pending}
+              error={error}
+              testId="body-limit-save"
             />
           </div>
           <SafetyNote>{m.site_body_limit_note()}</SafetyNote>
         </PanelContent>
-        <SaveBar
-          indent
-          dirty={valid && bytes !== saved}
-          pending={pending}
-          error={error}
-          testId="body-limit-save"
-        />
       </form>
     </Panel>
   );

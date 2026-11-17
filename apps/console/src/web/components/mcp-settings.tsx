@@ -8,6 +8,8 @@ import { orpc } from "@/lib/orpc";
 
 /** OAuth 2.1 wants HTTPS, loopback consoles (clients on the same machine) aside. */
 function secureUrl(url: string) {
+  // An address the console could not build stays quiet instead of breaking the system page.
+  if (!URL.canParse(url)) return true;
   const { protocol, hostname } = new URL(url);
   return (
     protocol === "https:" || ["localhost", "127.0.0.1", "[::1]"].includes(hostname.toLowerCase())

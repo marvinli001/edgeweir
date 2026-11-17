@@ -29,7 +29,7 @@ export function CheckboxList<T extends string | number>({
   testId?: string;
 }) {
   return (
-    <FieldSet className="gap-2" data-testid={testId}>
+    <FieldSet className="gap-2" data-layout="field" data-testid={testId}>
       <FieldLegend variant="label">{legend}</FieldLegend>
       <div className="flex flex-wrap gap-x-5 gap-y-2">
         {options.map((option) => {

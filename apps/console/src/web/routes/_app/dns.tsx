@@ -87,7 +87,7 @@ function DnsPage() {
                           style={enterDelay(index, 40)}
                           {...rowActivationHandlers}
                         >
-                          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-sm @3xl/main:min-w-48">
+                          <span className="flex min-w-0 flex-1 basis-48 flex-wrap items-center gap-2 text-sm">
                             <button
                               type="button"
                               className={cn(rowLinkButton, "font-medium [overflow-wrap:anywhere]")}

@@ -158,6 +158,13 @@ async function take(browser: Browser, shot: Shot, scale = 2) {
       throw new TooTall(Math.max(1, Math.floor((MAX_CAPTURE / height) * 4) / 4));
     }
     if (height > MAX_CAPTURE) notes.push(`${height} px tall: cut off below ${MAX_CAPTURE} px`);
+    // A viewport as tall as the page, so sticky save bars sit where the page ends them instead of
+    // at the first viewport's bottom edge (on top of a panel title further down).
+    const viewport = page.viewportSize();
+    if (viewport && height > viewport.height) {
+      await page.setViewportSize({ width: viewport.width, height: Math.min(height, MAX_CAPTURE) });
+      await page.waitForTimeout(300);
+    }
     await page.screenshot({
       path: path.join(out as string, name),
       fullPage: true,

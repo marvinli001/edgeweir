@@ -462,16 +462,16 @@ function PurgeForm({
             </TabsContent>
           </Tabs>
         </PanelContent>
-        <PanelFooter className="flex-wrap justify-end gap-3 border-t">
-          {error ? (
-            <FieldError className="mr-auto animate-in fade-in" data-testid="purge-error">
-              {error}
-            </FieldError>
-          ) : null}
+        <PanelFooter className="flex-wrap gap-x-4 gap-y-2 border-t">
           <Button type="submit" disabled={pending || blocked} data-testid="purge-submit">
             {pending ? <Spinner /> : null}
             {m.purge_submit()}
           </Button>
+          {error ? (
+            <FieldError className="animate-in fade-in" data-testid="purge-error">
+              {error}
+            </FieldError>
+          ) : null}
         </PanelFooter>
       </form>
     </Panel>

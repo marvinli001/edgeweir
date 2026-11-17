@@ -17,22 +17,16 @@ import { m } from "@/lib/i18n";
  */
 export const Route = createFileRoute("/_app/protection")({ component: ProtectionPage });
 
-/** The two short cards share a row; the others span both columns. */
+/** Short cards pair up in two columns (top-aligned); the CC grid and tables span both. */
 function ProtectionPage() {
   return (
     <Page title={m.protection_page_title()}>
-      <div className="grid gap-6 @4xl/main:grid-cols-2">
+      <div className="grid items-start gap-6 @4xl/main:grid-cols-2">
         <ProtectionSettingsCard className="animate-enter" style={enterDelay(0, 60)} />
         <BanSettingsCard className="animate-enter" style={enterDelay(1, 60)} />
-        <InteractiveProviderCard
-          className="animate-enter @4xl/main:col-span-2"
-          style={enterDelay(2, 60)}
-        />
-        <CcTemplateCard className="animate-enter @4xl/main:col-span-2" style={enterDelay(3, 60)} />
-        <ConnectionLimitsCard
-          className="animate-enter @4xl/main:col-span-2"
-          style={enterDelay(4, 60)}
-        />
+        <InteractiveProviderCard className="animate-enter" style={enterDelay(2, 60)} />
+        <ConnectionLimitsCard className="animate-enter" style={enterDelay(3, 60)} />
+        <CcTemplateCard className="animate-enter @4xl/main:col-span-2" style={enterDelay(4, 60)} />
         <GeoIpSettings className="animate-enter @4xl/main:col-span-2" style={enterDelay(5, 60)} />
         <AiCrawlGlobalCard
           className="animate-enter @4xl/main:col-span-2"

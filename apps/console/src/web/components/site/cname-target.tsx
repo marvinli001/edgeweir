@@ -74,7 +74,7 @@ function DnsSetup({
               <code className="min-w-0 flex-1 break-all text-sm" data-testid="cname-target-value">
                 {cname}
               </code>
-              <CopyButton iconOnly value={cname} />
+              {/* State first: the copy buttons of all rows line up at the end. */}
               <Badge size="sm" tone="neutral" data-testid="cname-target-status">
                 {target.mode === "manual"
                   ? m.dns_mode_manual()
@@ -84,6 +84,7 @@ function DnsSetup({
                       : m.dns_no_healthy_nodes()
                     : m.dns_pending()}
               </Badge>
+              <CopyButton iconOnly value={cname} />
             </div>
             {target.lines.map((line) => (
               <div key={line.name} className="flex flex-wrap items-center gap-2 text-sm">

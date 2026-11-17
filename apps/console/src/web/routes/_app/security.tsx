@@ -49,8 +49,8 @@ function SecurityPage() {
   const me = useQuery(orpc.account.me.queryOptions());
   return (
     <Page title={m.security_title()}>
-      {/* Short forms keep a narrow column, at the start of the page column like the title. */}
-      <div className="flex w-full max-w-[56rem] flex-col gap-6">
+      {/* Two top-aligned columns once the content column is wide enough, one below. */}
+      <div className="grid w-full max-w-[72rem] items-start gap-6 @4xl/main:grid-cols-2">
         <PasswordCard />
         <QueryView query={me}>
           {({ user }) => <TwoFactorCard enabled={user.twoFactorEnabled} />}
@@ -137,12 +137,12 @@ function PasswordCard() {
             </Field>
           </FieldGroup>
         </PanelContent>
-        <PanelFooter className="flex-wrap justify-end gap-3 border-t">
-          {error ? <FieldError className="mr-auto animate-in fade-in">{error}</FieldError> : null}
+        <PanelFooter className="flex-wrap gap-x-4 gap-y-2 border-t">
           <Button type="submit" disabled={action.pending}>
             {action.pending ? <Spinner /> : null}
             {m.security_change_password()}
           </Button>
+          {error ? <FieldError className="animate-in fade-in">{error}</FieldError> : null}
         </PanelFooter>
       </form>
     </Panel>
@@ -222,8 +222,7 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
               </Field>
             </FieldGroup>
           </PanelContent>
-          <PanelFooter className="flex-wrap justify-end gap-3 border-t">
-            {error ? <FieldError className="mr-auto animate-in fade-in">{error}</FieldError> : null}
+          <PanelFooter className="flex-wrap gap-x-4 gap-y-2 border-t">
             <Button
               disabled={pending || code.length < 6}
               onClick={() => verify(code)}
@@ -232,6 +231,7 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
               {pending ? <Spinner /> : null}
               {m.security_2fa_verify()}
             </Button>
+            {error ? <FieldError className="animate-in fade-in">{error}</FieldError> : null}
           </PanelFooter>
         </>
       ) : (
@@ -268,8 +268,7 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
               />
             </Field>
           </PanelContent>
-          <PanelFooter className="flex-wrap justify-end gap-3 border-t">
-            {error ? <FieldError className="mr-auto animate-in fade-in">{error}</FieldError> : null}
+          <PanelFooter className="flex-wrap gap-x-4 gap-y-2 border-t">
             <Button
               type="submit"
               variant={enabled ? "danger" : "primary"}
@@ -279,6 +278,7 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
               {pending ? <Spinner /> : null}
               {enabled ? m.security_2fa_disable() : m.security_2fa_enable()}
             </Button>
+            {error ? <FieldError className="animate-in fade-in">{error}</FieldError> : null}
           </PanelFooter>
         </form>
       )}
@@ -320,14 +320,14 @@ function PasskeysCard() {
       </PanelHeader>
       <PanelContent className="flex flex-col gap-4">
         <form
-          className="flex flex-wrap items-end gap-2"
+          className="flex flex-wrap items-end gap-2 sm:flex-nowrap"
           onSubmit={(event) => {
             event.preventDefault();
             const name = String(new FormData(event.currentTarget).get("passkeyName") ?? "").trim();
             add.mutate(name || m.security_passkey_default_name());
           }}
         >
-          <Field className="w-full sm:w-64">
+          <Field className="w-full min-w-0 flex-1 sm:max-w-sm">
             <FieldLabel htmlFor="passkeyName">{m.settings_api_key_name()}</FieldLabel>
             <Input id="passkeyName" name="passkeyName" maxLength={64} placeholder="MacBook" />
           </Field>

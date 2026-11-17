@@ -43,7 +43,8 @@ export function useSaveSite(siteId: string) {
 
 /**
  * A form panel's save bar: the button on the left, lined up with the fields (tokens.md "Forms"),
- * and the last error beside it.
+ * and the last error beside it. `inline` drops the footer row for a single-setting card, whose
+ * save sits on the same row as its one field.
  */
 export function SaveBar({
   dirty,
@@ -51,6 +52,7 @@ export function SaveBar({
   error,
   indent = false,
   sticky = false,
+  inline = false,
   testId,
   errorTestId = "site-save-error",
   className,
@@ -63,34 +65,52 @@ export function SaveBar({
   indent?: boolean;
   /** Keeps the bar at the bottom of the viewport while a long form scrolls. */
   sticky?: boolean;
+  /** The button and error without the footer row, placed beside the card's one field. */
+  inline?: boolean;
   testId: string;
   errorTestId?: string;
   className?: string;
   form?: string;
 }) {
   useUnsavedChanges(dirty);
+  const button = (
+    <Button
+      type="submit"
+      form={form}
+      disabled={!dirty || pending}
+      className={
+        indent ? "@min-[42.5rem]/save-bar:ml-[calc(var(--ew-form-label)+1.5rem)]" : undefined
+      }
+      data-testid={testId}
+    >
+      {pending ? <Spinner /> : null}
+      {m.common_save()}
+    </Button>
+  );
+  const problem = error ? (
+    <FieldError className="animate-in fade-in" data-testid={errorTestId}>
+      {error}
+    </FieldError>
+  ) : null;
+  if (inline)
+    return (
+      <div
+        className={cn(
+          "flex min-h-(--arc-control-height-md) flex-wrap items-center gap-x-4 gap-y-2",
+          className,
+        )}
+      >
+        {button}
+        {problem}
+      </div>
+    );
   return (
     <PanelFooter
       sticky={sticky}
       className={cn("@container/save-bar flex-wrap gap-x-4 gap-y-2 border-t", className)}
     >
-      <Button
-        type="submit"
-        form={form}
-        disabled={!dirty || pending}
-        className={
-          indent ? "@min-[42.5rem]/save-bar:ml-[calc(var(--ew-form-label)+1.5rem)]" : undefined
-        }
-        data-testid={testId}
-      >
-        {pending ? <Spinner /> : null}
-        {m.common_save()}
-      </Button>
-      {error ? (
-        <FieldError className="animate-in fade-in" data-testid={errorTestId}>
-          {error}
-        </FieldError>
-      ) : null}
+      {button}
+      {problem}
     </PanelFooter>
   );
 }

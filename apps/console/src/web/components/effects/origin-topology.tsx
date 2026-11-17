@@ -1,7 +1,9 @@
 /*
  * A small directed graph read left to right (React Flow 12, MIT, webkid GmbH; nodes and edges
  * adapted from React Flow UI's base node, base handle and animated SVG edge, MIT; laid out with
- * dagre, MIT). Read-only: no dragging, panning or wheel zoom, so the page scrolls through it.
+ * dagre, MIT); narrow cards (phones) get an indented tree read top to bottom instead, at full
+ * size, with each edge's label on its target. Read-only: no dragging, panning or wheel zoom, so
+ * the page scrolls through it.
  * An image to assistive technology (role img with the caller's label): no node or edge takes
  * focus, and React Flow's own keyboard help, live region and edge labels (English, for editing)
  * stay out of the tree. Pulses travel the live edges only while the graph is on screen and motion
@@ -62,8 +64,17 @@ const TONE_DOT: Record<TopologyTone, string> = {
 
 const LiveContext = React.createContext(false);
 
-type GraphNode = Node<TopologyNode, "box">;
-type GraphEdge = Edge<{ label?: string; kind: TopologyEdge["kind"] }, "flow">;
+/** A node as drawn: in the tree, its incoming edge's label rides on it. */
+type BoxData = TopologyNode & { tree?: boolean; edgeLabel?: string };
+type GraphNode = Node<BoxData, "box">;
+type GraphEdge = Edge<{ label?: string; kind: TopologyEdge["kind"] }, "flow" | "tree">;
+
+/** The tree's indent per level, and where a parent's line down leaves it (left of its children). */
+const TREE_INDENT = 24;
+const TREE_LINE = 12;
+const TREE_GAP = 10;
+/** Cards narrower than this draw the tree. */
+const TREE_BELOW = 560;
 
 function BoxNode({ data }: NodeProps<GraphNode>) {
   return (
@@ -105,7 +116,18 @@ function BoxNode({ data }: NodeProps<GraphNode>) {
           </span>
         ) : null}
       </span>
-      <Handle type="source" position={Position.Right} className="opacity-0" isConnectable={false} />
+      {data.edgeLabel ? (
+        <span className="shrink-0 rounded-md bg-well px-1.5 text-[10px] leading-4 font-medium text-muted-foreground tabular-nums">
+          {data.edgeLabel}
+        </span>
+      ) : null}
+      <Handle
+        type="source"
+        position={data.tree ? Position.Bottom : Position.Right}
+        style={data.tree ? { left: TREE_LINE } : undefined}
+        className="opacity-0"
+        isConnectable={false}
+      />
     </div>
   );
 }
@@ -159,8 +181,25 @@ function FlowEdge({
   );
 }
 
+/** The tree's edge: down the parent's line, then across into the child's left side. */
+function TreeEdge({ id, sourceX, sourceY, targetX, targetY, data }: EdgeProps<GraphEdge>) {
+  const live = React.useContext(LiveContext);
+  const path = `M ${sourceX} ${sourceY} L ${sourceX} ${targetY} L ${targetX} ${targetY}`;
+  const kind = data?.kind ?? "flow";
+  return (
+    <>
+      <BaseEdge id={id} path={path} className="topology-edge" data-kind={kind} />
+      {live && kind !== "standby" ? (
+        <circle r={2.5} className={kind === "degraded" ? "fill-state-warn" : "fill-signal"}>
+          <animateMotion dur="1.6s" repeatCount="indefinite" path={path} />
+        </circle>
+      ) : null}
+    </>
+  );
+}
+
 const nodeTypes = { box: BoxNode };
-const edgeTypes = { flow: FlowEdge };
+const edgeTypes = { flow: FlowEdge, tree: TreeEdge };
 
 /** The sides of a scroller that hide more content fade out (scroll-fade), so a phone shows it scrolls. */
 function markFade(element: HTMLElement) {
@@ -169,6 +208,25 @@ function markFade(element: HTMLElement) {
   if (start || end) element.dataset.fade = start && end ? "both" : start ? "start" : "end";
   else delete element.dataset.fade;
 }
+
+/** A read-only graph: nothing moves, takes focus or captures the page's scrolling. */
+const STATIC_FLOW = {
+  nodeTypes,
+  edgeTypes,
+  nodesDraggable: false,
+  nodesConnectable: false,
+  nodesFocusable: false,
+  edgesFocusable: false,
+  elementsSelectable: false,
+  disableKeyboardA11y: true,
+  "aria-hidden": true,
+  panOnDrag: false,
+  zoomOnScroll: false,
+  zoomOnPinch: false,
+  zoomOnDoubleClick: false,
+  preventScrolling: false,
+  proOptions: { hideAttribution: true },
+} as const;
 
 /** fitView's padding on each side, as a share of the graph's size. */
 const FIT_PADDING = 0.06;
@@ -210,6 +268,54 @@ function layout(nodes: TopologyNode[], edges: TopologyEdge[]) {
     width: graph.graph().width ?? 960,
     height: graph.graph().height ?? 240,
   };
+}
+
+/**
+ * The narrow layout: nodes in depth-first order, one per row, each indented a level past the
+ * node its first incoming edge comes from, as wide as the card allows.
+ */
+function treeLayout(nodes: TopologyNode[], edges: TopologyEdge[], boxWidth: number) {
+  const parentEdge = new Map<string, TopologyEdge>();
+  for (const edge of edges) if (!parentEdge.has(edge.target)) parentEdge.set(edge.target, edge);
+  const children = new Map<string, TopologyNode[]>();
+  for (const node of nodes) {
+    const parent = parentEdge.get(node.id)?.source;
+    if (parent) children.set(parent, [...(children.get(parent) ?? []), node]);
+  }
+  const order: { node: TopologyNode; depth: number }[] = [];
+  const seen = new Set<string>();
+  const visit = (node: TopologyNode, depth: number) => {
+    if (seen.has(node.id)) return;
+    seen.add(node.id);
+    order.push({ node, depth });
+    for (const child of children.get(node.id) ?? []) visit(child, depth + 1);
+  };
+  for (const node of nodes) if (!parentEdge.has(node.id)) visit(node, 0);
+  for (const node of nodes) visit(node, 0);
+  const deepest = Math.max(0, ...order.map((entry) => entry.depth));
+  const width = Math.max(160, boxWidth - deepest * TREE_INDENT);
+  const placed: GraphNode[] = order.map(({ node, depth }, index) => ({
+    id: node.id,
+    type: "box",
+    data: { ...node, tree: true, edgeLabel: parentEdge.get(node.id)?.label },
+    position: { x: depth * TREE_INDENT, y: index * (NODE_HEIGHT + TREE_GAP) },
+    width,
+    height: NODE_HEIGHT,
+    draggable: false,
+    selectable: false,
+    connectable: false,
+  }));
+  const links: GraphEdge[] = edges
+    .filter((edge) => parentEdge.get(edge.target) === edge)
+    .map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      type: "tree",
+      data: { kind: edge.kind },
+      selectable: false,
+    }));
+  return { placed, links, height: order.length * (NODE_HEIGHT + TREE_GAP) - TREE_GAP };
 }
 
 export default function OriginTopology({
@@ -255,6 +361,11 @@ export default function OriginTopology({
     420,
     Math.max(scale < 1 ? 140 : 220, Math.round((height + 24) * scale)),
   );
+  const tree = boxWidth > 0 && boxWidth < TREE_BELOW;
+  const treeGraph = React.useMemo(
+    () => (tree ? treeLayout(nodes, edges, boxWidth) : null),
+    [tree, nodes, edges, boxWidth],
+  );
   // The inner frame's width changes after the box is measured; mark the fade again then.
   React.useEffect(() => {
     if (innerWidth > 0 && wrap.current) markFade(wrap.current);
@@ -267,32 +378,31 @@ export default function OriginTopology({
         aria-label={label}
         className="topology w-full overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-fade [scrollbar-width:none]"
       >
-        <div style={{ width: innerWidth || "100%", height: frameHeight }}>
-          <ReactFlow
-            key={innerWidth}
-            nodes={placed}
-            edges={links}
-            nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
-            colorMode={theme === "dark" ? "dark" : "light"}
-            fitView
-            minZoom={MIN_SCALE * 0.9}
-            fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1, minZoom: MIN_SCALE * 0.9 }}
-            nodesDraggable={false}
-            nodesConnectable={false}
-            nodesFocusable={false}
-            edgesFocusable={false}
-            elementsSelectable={false}
-            disableKeyboardA11y
-            aria-hidden
-            panOnDrag={false}
-            zoomOnScroll={false}
-            zoomOnPinch={false}
-            zoomOnDoubleClick={false}
-            preventScrolling={false}
-            proOptions={{ hideAttribution: true }}
-          />
-        </div>
+        {treeGraph ? (
+          <div style={{ width: boxWidth, height: treeGraph.height }}>
+            <ReactFlow
+              key={boxWidth}
+              nodes={treeGraph.placed}
+              edges={treeGraph.links}
+              defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+              {...STATIC_FLOW}
+              colorMode={theme === "dark" ? "dark" : "light"}
+            />
+          </div>
+        ) : (
+          <div style={{ width: innerWidth || "100%", height: frameHeight }}>
+            <ReactFlow
+              key={innerWidth}
+              nodes={placed}
+              edges={links}
+              fitView
+              minZoom={MIN_SCALE * 0.9}
+              fitViewOptions={{ padding: FIT_PADDING, maxZoom: 1, minZoom: MIN_SCALE * 0.9 }}
+              {...STATIC_FLOW}
+              colorMode={theme === "dark" ? "dark" : "light"}
+            />
+          </div>
+        )}
       </div>
     </LiveContext.Provider>
   );

@@ -303,7 +303,11 @@ function ClusterView({
           <TabsContent value="scheduling" className="animate-enter">
             <ClusterScheduling key={selected.id} clusterId={selected.id} />
           </TabsContent>
-          <TabsContent value="network" className="flex flex-col gap-6 animate-enter">
+          {/* Short cards pair up in two top-aligned columns on wide screens. */}
+          <TabsContent
+            value="network"
+            className="grid items-start gap-4 animate-enter @5xl/main:grid-cols-2"
+          >
             <ClusterNetwork key={selected.id} clusterId={selected.id} />
             <ClusterCacheCard key={`cache-${selected.id}`} cluster={selected} />
           </TabsContent>

@@ -130,7 +130,11 @@ function SystemSettingsPage() {
             </TabsTrigger>
           </TabsList>
         </PageTabs>
-        <TabsContent value="general" className="flex flex-col gap-6 animate-enter">
+        {/* Short settings cards pair up in two top-aligned columns on wide screens. */}
+        <TabsContent
+          value="general"
+          className="grid items-start gap-6 animate-enter @5xl/main:grid-cols-2"
+        >
           <GeneralSettings />
         </TabsContent>
         <TabsContent value="probes" className=" animate-enter">
@@ -154,7 +158,7 @@ function GeneralSettings() {
   const settings = useQuery(orpc.settings.get.queryOptions());
   return (
     <>
-      <Panel className="animate-enter">
+      <Panel className="animate-enter @5xl/main:col-span-2">
         <PanelHeader>
           <PanelTitle>{m.system_info()}</PanelTitle>
         </PanelHeader>
@@ -205,7 +209,9 @@ function GeneralSettings() {
           </QueryView>
         </PanelContent>
       </Panel>
-      <NodeChannelCard />
+      <div className="min-w-0 @5xl/main:col-span-2">
+        <NodeChannelCard />
+      </div>
       <OriginAllowListCard />
       <TieredCacheSettingsCard />
       <ReleaseSourceCard />
@@ -213,10 +219,12 @@ function GeneralSettings() {
       <UsageSettingsCard />
       <LogRetentionCard />
       <NodeLogRetentionCard />
-      <PlatformErrorPagesCard />
       <LoginAllowListCard />
       <DemoSettingsCard />
       <McpSettingsCard />
+      <div className="min-w-0 @5xl/main:col-span-2">
+        <PlatformErrorPagesCard />
+      </div>
     </>
   );
 }

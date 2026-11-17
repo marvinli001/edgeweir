@@ -45,36 +45,39 @@ export function RulesBodyLimitCard({ site }: { site: Site }) {
         <PanelHeader>
           <PanelTitle>{m.rules_body_limit_title()}</PanelTitle>
         </PanelHeader>
-        <PanelContent form className="flex flex-col gap-3">
+        <PanelContent className="flex flex-col gap-3">
           {blocked ? (
             <SafetyNote className="animate-in fade-in" data-testid="rules-body-limit-unavailable">
               {m.feature_unavailable_nodes()}
             </SafetyNote>
           ) : null}
-          <div className="w-full sm:[&_input]:w-40">
-            <NumberField
-              id="rules-body-limit"
-              label={m.rules_body_limit_value()}
-              value={value}
-              min={RULES_BODY_LIMIT.min}
-              max={RULES_BODY_LIMIT.max}
-              step={1}
-              required
-              disabled={blocked}
-              invalid={value.trim() !== "" && !valid}
-              onChange={setValue}
-              testId="rules-body-limit"
+          {/* One setting: the field and its save on one row. */}
+          <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+            <div className="w-full sm:w-56">
+              <NumberField
+                id="rules-body-limit"
+                label={m.rules_body_limit_value()}
+                value={value}
+                min={RULES_BODY_LIMIT.min}
+                max={RULES_BODY_LIMIT.max}
+                step={1}
+                required
+                disabled={blocked}
+                invalid={value.trim() !== "" && !valid}
+                onChange={setValue}
+                testId="rules-body-limit"
+              />
+            </div>
+            <SaveBar
+              inline
+              dirty={valid && bytes !== saved}
+              pending={pending}
+              error={error}
+              testId="rules-body-limit-save"
+              errorTestId="rules-body-limit-error"
             />
           </div>
         </PanelContent>
-        <SaveBar
-          indent
-          dirty={valid && bytes !== saved}
-          pending={pending}
-          error={error}
-          testId="rules-body-limit-save"
-          errorTestId="rules-body-limit-error"
-        />
       </form>
     </Panel>
   );

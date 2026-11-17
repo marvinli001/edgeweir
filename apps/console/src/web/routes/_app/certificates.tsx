@@ -195,7 +195,7 @@ function CertificatesPanel({
                 return (
                   <li
                     key={cert.id}
-                    className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-3 px-5 py-4 animate-enter @3xl/main:grid-cols-[minmax(0,1fr)_22rem_auto]"
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-6 gap-y-3 px-5 py-4 animate-enter @3xl/main:grid-cols-[minmax(0,1fr)_22rem_auto]"
                     style={enterDelay(index)}
                     data-testid="certificate-card"
                   >

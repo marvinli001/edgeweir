@@ -61,7 +61,8 @@ export function DnsProtectionCard() {
       mutation={orpc.dns.setProtection.mutationOptions()}
       toDraft={(protection) => ({ percent: String(Math.round(protection.massRemovalRatio * 100)) })}
       toInput={(draft) => ({ massRemovalRatio: Number(draft.percent) / 100 })}
-      contentClassName="max-w-sm"
+      layout="inline"
+      contentClassName="sm:w-72"
       saveTestId="dns-protection-save"
     >
       {({ draft, set }) => (

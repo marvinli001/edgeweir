@@ -152,12 +152,7 @@ export function CachePurgeCard({ site }: { site: Site }) {
             </Field>
           )}
         </PanelContent>
-        <PanelFooter className="flex-wrap justify-end gap-3">
-          {error ? (
-            <FieldError className="mr-auto animate-in fade-in" data-testid="cache-purge-error">
-              {error}
-            </FieldError>
-          ) : null}
+        <PanelFooter className="flex-wrap gap-x-4 gap-y-2">
           <Button
             type="submit"
             disabled={action.pending || blocked}
@@ -166,6 +161,11 @@ export function CachePurgeCard({ site }: { site: Site }) {
             {action.pending ? <Spinner /> : null}
             {m.purge_submit()}
           </Button>
+          {error ? (
+            <FieldError className="animate-in fade-in" data-testid="cache-purge-error">
+              {error}
+            </FieldError>
+          ) : null}
         </PanelFooter>
       </form>
       <PanelContent className="flex flex-col gap-3 border-t pt-(--panel-pad)">

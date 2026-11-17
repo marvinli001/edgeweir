@@ -46,9 +46,10 @@ export function ClusterNetwork({ clusterId }: { clusterId: string }) {
   const ports = useQuery(orpc.clusters.listenPorts.queryOptions({ input: { clusterId } }));
   const clientIp = useQuery(orpc.clusters.clientIp.queryOptions({ input: { clusterId } }));
   const unknownHosts = useQuery(orpc.clusters.unknownHosts.queryOptions({ input: { clusterId } }));
-  // Each card and its title stay while its setting loads or fails to.
+  // Each card and its title stay while its setting loads or fails to. The cards are items of the
+  // network tab's two-column grid (clusters.tsx), with the cache card after them.
   return (
-    <div className="flex flex-col gap-4">
+    <div className="contents">
       <Panel className="animate-enter" data-testid="listen-ports">
         <PanelHeader>
           <PanelTitle>{m.listen_ports_title()}</PanelTitle>

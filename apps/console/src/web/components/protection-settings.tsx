@@ -245,6 +245,7 @@ export function CcTemplateCard({
       mutation={orpc.settings.setCcTemplate.mutationOptions()}
       toDraft={toCcDraft}
       toInput={fromCcDraft}
+      layout="stacked"
       contentClassName="flex flex-col gap-4"
       saveTestId="cc-template-save"
     >
