@@ -677,17 +677,27 @@ try {
     "BAN_PREFIX_TOO_SHORT",
     { min: 48 },
   );
-  refused(
-    await admin.raw("POST", "/bans", {
-      scope: "platform",
-      cidr: edgeIp,
-      reason: "attack",
-      durationSeconds: 3600,
-    }),
-    400,
-    "BAN_PROTECTED_ADDRESS",
-    { address: edgeIp },
-  );
+  const nodeAddressPath = `/nodes/${featured[0].id}/addresses`;
+  const configuredBefore = featured[0].schedulingAddresses
+    .filter((address) => address.source === "configured")
+    .map(({ address, level }) => ({ address, level }));
+  // Global protection trusts configured addresses; reported ones protect their own cluster.
+  try {
+    await admin.ok("PUT", nodeAddressPath, { addresses: [{ address: edgeIp, level: 0 }] });
+    refused(
+      await admin.raw("POST", "/bans", {
+        scope: "platform",
+        cidr: edgeIp,
+        reason: "attack",
+        durationSeconds: 3600,
+      }),
+      400,
+      "BAN_PROTECTED_ADDRESS",
+      { address: edgeIp },
+    );
+  } finally {
+    await admin.ok("PUT", nodeAddressPath, { addresses: configuredBefore });
+  }
   const net24 = edgeIp.split(".").slice(0, 3).join(".");
   const subnet = `${net24}.0/24`;
   const covered = refused(
