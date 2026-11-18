@@ -550,7 +550,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 
 | 表 | 内容 |
 | --- | --- |
-| `site` | 网站：所属集群、启用状态、缓存键、分片、Cache-Tag 转发、WebSocket、证书、TLS 设置、缓存代际号、日志采样率、错误页是否拦截源站错误与保存时间、开发模式截止时间 |
+| `site` | 网站：所属集群、启用状态、缓存键、分片、Cache-Tag 转发、WebSocket、证书、TLS 设置、缓存代际号、日志采样率、错误页是否拦截源站错误与保存时间、开发模式截止时间、API 安全策略 |
 | `site_domain` | 网站域名：名称与写法（`kind`：精确、泛域名、后缀、正则），同一写法的同一名称全局唯一 |
 | `site_star` | 用户星标 |
 | `hidden_cards` | 用户在概览与网站统计中隐藏的卡片 |
@@ -619,7 +619,8 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `site_usage` | 按网站、UTC 5 分钟窗口的可复算用量（请求数、出站与入站字节，十进制精确值）、修订号与全局序号 `seq`（序列 `site_usage_seq`） |
 | `site_usage_guard` | 网站的用量保护：周期（自然日 / 月）与时区、发送流量 / 请求数 / 带宽上限、预警阈值、动作与恢复方式，以及 worker 维护的本周期状态（达到预警 / 上限的指标、带宽峰值、由它施加的动作、手动恢复后暂停到何时、动作发布失败的错误码） |
 | `site_auto_mitigation` | 网站的自动缓解：开关、触发级别、持续分钟数，以及 worker 维护的状态（开启时间、到期时间、触发级别、运营者接管后的暂停、最近一次失败的错误码）；没有记录即关闭 |
-| `access_log` | 采样与强制记录的访问日志（请求 id、User-Agent、Referer、协议、地区、回源、拦截原因与规则；网站开启时含 JA4、查询字符串、指定请求头与直连对端地址；命中的 CRS 规则与是否被拦截），按 UTC 日分区，保留期由系统设置决定 |
+| `access_log` | 采样与强制记录的访问日志（请求 id、User-Agent、Referer、协议、地区、回源、拦截原因与规则；网站开启时含 JA4、查询字符串、指定请求头与直连对端地址；命中的 CRS 规则与是否拦截、API 安全检查结果），按 UTC 日分区，保留期由系统设置决定 |
+| `site_api_endpoint` | 网站采样发现的 API 端点，按站点、方法与模板唯一。保存来源、确认状态、首次与最近时间、采样请求数与违规数 |
 | `security_event` | 节点上报的 CC 防护事件：级别变化、路径升降级、自动封禁，带当时的 Top IP 与 Top 路径 |
 | `node_log_cursor` | 每个节点访问日志批次的序号高水位 |
 | `node_log_entry` | 节点的警告、错误与白名单事件（时间、级别、来源、组件、消息、结构化字段、折叠条数、是否截断、事件），`kind = dropped` 的行记录节点丢弃的条数；按（节点、批次、序号）去重 |
@@ -738,6 +739,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0092_right_agent_brand` | `extension_node_setting`：节点扩展监听器与目标集群设置 |
 | `0093_ordinary_randall_flagg` | `site_usage.resource_kind` 区分网站和四层用量，回填四层历史；`node.traffic_limit` 持久化网卡流量限额 |
 | `0094_origin_certificate_idempotency` | 清除源站证书签发的历史幂等响应缓存，移除其中只应显示一次的私钥；不变更表结构 |
+| `0095_natural_squirrel_girl` | `site_api_endpoint`；`site.api_security` 保存网站策略，`access_log.api_security` 保存有界检查结果 |
 
 ## 构建产物
 

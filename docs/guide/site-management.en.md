@@ -205,6 +205,8 @@ Enabling, disabling, tags and deleting complete for every site or change none (f
 
 Domains, origins, certificates, ports, X-Cache, the PURGE method and key, charset, the request body limit, maintenance mode, development mode, usage protection, automatic mitigation and tags belong to no part and are never copied.
 
+API security rules and discovery records belong to the source site. Configure API security on the destination after copying settings or cloning.
+
 ### Why a copy fails
 
 A target that lacks something the settings use fails:

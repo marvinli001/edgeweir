@@ -44,9 +44,10 @@ describe("infrastructure procedures and read-only AccessKeys", async () => {
         body: JSON.stringify(body),
       });
     const uuid = "00000000-0000-4000-8000-000000000000";
-    // rules.validate is a POST but only checks an expression.
+    // These POSTs preview a draft without changing the site.
+    const previews = new Set(["rules.validate", "apiSecurity.importOpenApi"]);
     const writes = procedureRoutes(contract).filter(
-      ([name, route]) => route.method !== "GET" && name !== "rules.validate",
+      ([name, route]) => route.method !== "GET" && !previews.has(name),
     );
     expect(writes.map(([name]) => name)).toEqual(
       expect.arrayContaining([
@@ -58,8 +59,18 @@ describe("infrastructure procedures and read-only AccessKeys", async () => {
         "clusters.createEnrollmentToken",
         "nodes.delete",
         "settings.setOriginAllowList",
+        "apiSecurity.update",
+        "apiSecurity.confirmEndpoint",
       ]),
     );
+    const {
+      site: { id: siteId },
+    } = await admin.sites.create({
+      name: "Read-only preview",
+      domains: ["readonly-preview.test"],
+      origins: [{ address: "origin.test" }],
+    });
+    const beforePreview = await admin.apiSecurity.get({ id: siteId });
     const audit = (await admin.auditLogs.list({})).total;
     for (const [name, route] of writes) {
       const res = await api(
@@ -70,12 +81,19 @@ describe("infrastructure procedures and read-only AccessKeys", async () => {
       expect(res.status, name).toBe(403);
       expect(((await res.json()) as { code?: string }).code, name).toBe("ACCESS_KEY_READ_ONLY");
     }
-    expect((await admin.auditLogs.list({})).total).toBe(audit);
     const validated = await api("POST", "/rules/validate", {
       expression: "http.host gt 5",
       phase: "waf-custom",
     });
     expect(validated.status).toBe(200);
+    const imported = await api("POST", `/sites/${siteId}/api-security/import`, {
+      document: JSON.stringify({ openapi: "3.1.0", paths: { "/status": { get: {} } } }),
+    });
+    expect(imported.status).toBe(200);
+    expect(await imported.json()).toMatchObject({ openapiVersion: "3.1.0" });
+    expect(await admin.apiSecurity.get({ id: siteId })).toEqual(beforePreview);
+    expect((await admin.auditLogs.list({})).total).toBe(audit);
+    await admin.sites.delete({ id: siteId });
   });
 
   it("renames clusters and refuses to delete clusters that still hold sites", async () => {

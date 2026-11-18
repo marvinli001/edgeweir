@@ -1,7 +1,12 @@
 import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
-import { DEFAULT_COMPRESSION_TYPES, tlsSettings, WAF_PRESETS } from "@edgeweir/contract";
+import {
+  API_SECURITY_FEATURE,
+  DEFAULT_COMPRESSION_TYPES,
+  tlsSettings,
+  WAF_PRESETS,
+} from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { AccessLogSchema } from "@edgeweir/proto";
 import { eq } from "drizzle-orm";
@@ -55,6 +60,7 @@ const ALL_FEATURES = [
   "rules-body-v1",
   "challenge-v2",
   "access-logs-v2",
+  API_SECURITY_FEATURE,
   "image-convert-v1",
   "markdown-v1",
   "ai-crawlers-v1",
@@ -178,6 +184,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       imageConvert: available,
       markdown: available,
       aiCrawl: available,
+      apiSecurity: available,
     });
     const https = await admin.https.get({ id: siteId });
     expect(https).toMatchObject({ brotli: false, brotliLevel: 6, zstd: false, zstdLevel: 3 });
@@ -357,6 +364,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       imageConvert: unavailable,
       markdown: unavailable,
       aiCrawl: unavailable,
+      apiSecurity: unavailable,
     });
     const before = (await config()).revision;
     for (const [call, feature] of [

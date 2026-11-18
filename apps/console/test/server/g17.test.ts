@@ -797,6 +797,8 @@ describe("site tags, batch operations, copying settings and cloning (G17)", asyn
         "authIdentityHeaders",
         // A time-limited switch of the site itself (development mode).
         "developmentModeUntil",
+        // The destination has its own endpoints and token audience.
+        "apiSecurity",
         "createdAt",
         "updatedAt",
       ];
