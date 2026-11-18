@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="164" height="40" viewBox="0 0 164 40" role="img" aria-label="Visit LINUX DO">
+  <title>Visit LINUX DO</title>
+  <rect width="164" height="40" rx="6" fill="#FFB003"/>
+  <g transform="translate(14 9) scale(.22)" fill-rule="evenodd">
+    <path fill="#ececec" d="M46.82-.055h6.25q23.969 2.062 38 21.426c5.258 7.676 8.215 16.156 8.875 25.45v6.25q-2.064 23.968-21.43 38-11.512 7.885-25.445 8.874h-6.25q-23.97-2.064-38.004-21.43Q.971 67.056-.054 53.18v-6.473C1.362 30.781 8.503 18.148 21.37 8.817 29.047 3.562 37.527.604 46.821-.056"/>
+    <path fill="#191919" d="M47.266 2.957q22.53-.65 37.777 15.738a49.7 49.7 0 0 1 6.867 10.157q-41.964.222-83.93 0 9.75-18.616 30.024-24.387a61 61 0 0 1 9.262-1.508"/>
+    <path fill="#f9af00" d="M7.98 70.926c27.977-.035 55.954 0 83.93.113Q83.426 87.473 66.13 94.086q-18.81 6.544-36.832-1.898-14.203-7.09-21.317-21.262"/>
+  </g>
+  <text x="47" y="25.5" fill="#191919" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif" font-size="15" font-weight="600">Visit LINUX DO</text>
+</svg>
