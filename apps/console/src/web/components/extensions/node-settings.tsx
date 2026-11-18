@@ -21,7 +21,9 @@ import { SaveBar } from "@/components/site/save-site";
 import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { m } from "@/lib/i18n";
+import { nodeHref } from "@/lib/node-views";
 import { errorMessage, orpc } from "@/lib/orpc";
+import { workspaceLink } from "@/lib/workspace-link";
 
 type ListenerDraft = { enabled: boolean; port: string; bind: string; allow: string };
 type TargetMode = "all" | "selected" | "none";
@@ -141,8 +143,11 @@ function TargetNodes({
                         ) : null}
                       </div>
                       <LinkButton
-                        to="/clusters"
-                        search={{ cluster: node.clusterId, node: node.id }}
+                        {...workspaceLink(
+                          nodeHref(node.id, "overview", {
+                            returnTo: `/clusters?cluster=${node.clusterId}`,
+                          }),
+                        )}
                         size="sm"
                         variant="secondary"
                       >

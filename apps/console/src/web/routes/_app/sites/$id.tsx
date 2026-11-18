@@ -1,28 +1,17 @@
-import {
-  type AnalyticsRange,
-  analyticsRange,
-  BLOCK_REASONS,
-  displaySiteDomain,
-  type Site,
-  siteDomain,
-} from "@edgeweir/contract";
+import { type AnalyticsRange, displaySiteDomain, type Site, siteDomain } from "@edgeweir/contract";
 import {
   Add01Icon,
-  ArrowLeft01Icon,
   Copy01Icon,
   DatabaseSync01Icon,
   Delete02Icon,
-  Edit02Icon,
   Layers01Icon,
   MoreHorizontalIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, useLocation } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useLocation, useMatch } from "@tanstack/react-router";
 import * as React from "react";
-import * as z from "zod";
 import { AnalyticsSection } from "@/components/analytics/analytics-section";
-import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import {
   DropdownMenu,
@@ -32,21 +21,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/arc/dropdown-menu/dropdown-menu";
 import { Input } from "@/components/arc/input/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/arc/select/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/arc/tabs/tabs";
 import { ConfirmDialog, ControlledConfirmDialog } from "@/components/confirm-dialog";
-import { FormDialog } from "@/components/form-dialog";
-import { Field, FieldLabel } from "@/components/layout/form";
 import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
-import { LinkButton } from "@/components/link-button";
-import { Page, PageTabs } from "@/components/page";
+import { Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
+import { useSidebarScope, useWorkspaceTitle } from "@/components/shell/sidebar-scope";
 import { AccessTab } from "@/components/site/access-tab";
 import { AiCrawlTab } from "@/components/site/ai-crawl-tab";
 import { AttacksTab } from "@/components/site/attacks-tab";
@@ -60,92 +39,91 @@ import { DomainKindBadge, DomainName } from "@/components/site/domain-name";
 import { ErrorPagesTab } from "@/components/site/error-pages-tab";
 import { ExtensionsTab } from "@/components/site/extensions-tab";
 import { HttpsTab } from "@/components/site/https-tab";
-import { LaunchCheck } from "@/components/site/launch-check";
-import { LiveRequests } from "@/components/site/live-requests";
 import { LogsTab } from "@/components/site/logs-tab";
 import { OriginsTab } from "@/components/site/origins-tab";
 import { SitePortsCard } from "@/components/site/ports-card";
 import { RulesTab } from "@/components/site/rules-tab";
 import { SaveBar, useSaveSite } from "@/components/site/save-site";
 import { SecurityTab } from "@/components/site/security-tab";
+import { SiteOverview } from "@/components/site/site-overview";
+import { SiteSwitcher } from "@/components/site/site-switcher";
+import {
+  SiteWorkspaceContext,
+  siteWorkspaceSearch,
+} from "@/components/site/site-workspace-context";
 import { TierStatsCard } from "@/components/site/tiered-cache-card";
-import { UsageGuardCard } from "@/components/site/usage-guard-card";
 import { StarButton, useSiteStars } from "@/components/site-star";
-import { DevelopmentModeBadge, SiteStatus, untilLive } from "@/components/site-status";
-import { TagBadges, TagPicker } from "@/components/site-tags";
+import { DevelopmentModeBadge, untilLive } from "@/components/site-status";
 import { QueryView } from "@/components/states";
 import { NotFoundPage } from "@/components/status-page";
-import { TimeAgo } from "@/components/time-ago";
 import { useDraft } from "@/hooks/use-draft";
-import { useTabBar } from "@/hooks/use-tab-bar";
 import { DEFAULT_RANGE } from "@/lib/analytics";
 import { m } from "@/lib/i18n";
-import { client, orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/orpc";
 import { recordRecent } from "@/lib/recents";
 import { needsDomainForms, newDomains } from "@/lib/site-domains";
-import { SITE_TABS, type SiteTab, siteTabGroups, siteTabLabel } from "@/lib/site-tabs";
+import { isSiteTab, type SiteTab, siteDirectory, siteHref, siteTabLabel } from "@/lib/site-tabs";
 import { toast } from "@/lib/toast";
+import { workspaceLink } from "@/lib/workspace-link";
+import { listReturnTo } from "@/lib/workspace-nav";
 
 export const Route = createFileRoute("/_app/sites/$id")({
-  validateSearch: z.object({
-    tab: z.enum(SITE_TABS).optional(),
-    range: analyticsRange.optional(),
-    // A jump into the logs tab: the filters and the time window of the search.
-    blockReason: z.enum([...BLOCK_REASONS, "any"]).optional(),
-    ip: z.string().max(64).optional(),
-    cidr: z.string().max(64).optional(),
-    path: z.string().max(2048).optional(),
-    crawler: z
-      .string()
-      .regex(/^[a-z0-9-]{1,40}$/)
-      .optional(),
-    from: z.iso.datetime().optional(),
-    to: z.iso.datetime().optional(),
-  }),
+  validateSearch: siteWorkspaceSearch,
   component: SiteDetailPage,
 });
 
 function SiteDetailPage() {
   const { id } = Route.useParams();
   const href = useLocation({ select: (location) => location.href });
+  const viewParam = useMatch({
+    from: "/_app/sites/$id/$view",
+    shouldThrow: false,
+    select: (match) => match.params.view,
+  });
+  const view = isSiteTab(viewParam) ? viewParam : "overview";
+  const viewName = siteTabLabel(view);
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const { session } = Route.useRouteContext();
-  const site = useQuery({
+  const query = useQuery({
     ...orpc.sites.get.queryOptions({ input: { id } }),
     refetchInterval: (query) => untilLive(query.state.data ? [query.state.data] : undefined),
     meta: { background: true },
   });
+  const extensions = useQuery(orpc.extensions.list.queryOptions());
+  const hasExtensions = (extensions.data?.length ?? 0) > 0;
+  const site = query.data;
+  const name = site?.name;
   const stars = useSiteStars();
-  const tab: SiteTab = search.tab ?? "overview";
-  const groups = siteTabGroups();
-  const group = groups.find((group) => group.tabs.includes(tab)) as (typeof groups)[number];
-  const setTab = (value: SiteTab) =>
-    navigate({
-      // A jump's filters belong to the tab it opened.
-      search: (prev) => ({
-        ...prev,
-        tab: value === "overview" ? undefined : value,
-        blockReason: undefined,
-        ip: undefined,
-        cidr: undefined,
-        path: undefined,
-        crawler: undefined,
-        from: undefined,
-        to: undefined,
-      }),
-      replace: true,
+  const back = listReturnTo("/sites", search.returnTo);
+  const viewHref = (tab: SiteTab, siteId = id, range = search.range) =>
+    siteHref(siteId, tab, {
+      ...(tab === "logs" && view === "logs" ? search : {}),
+      range,
+      returnTo: back === "/sites" ? undefined : back,
     });
   const setRange = (range: AnalyticsRange) =>
-    navigate({
-      search: (prev) => ({ ...prev, range: range === DEFAULT_RANGE ? undefined : range }),
+    void navigate({
+      ...workspaceLink(
+        siteHref(id, view, {
+          ...search,
+          range: range === DEFAULT_RANGE ? undefined : range,
+        }),
+      ),
       replace: true,
     });
-  // The Extensions tab shows once an extension is installed.
-  const extensions = useQuery(orpc.extensions.list.queryOptions());
-  const hasExtensions = (extensions.data?.length ?? 0) > 0 || tab === "extensions";
-  const name = site.data?.name;
-  const tabBar = useTabBar(`tab-${tab}`);
+
+  const backLink = { href: back, label: m.nav_sites() };
+  useSidebarScope({
+    kind: "site",
+    back: backLink,
+    switcher: (rail) => (
+      <SiteSwitcher site={site} rail={rail} back={backLink} href={(next) => viewHref(view, next)} />
+    ),
+    items: siteDirectory(view, viewHref, hasExtensions),
+    commandGroup: name ? m.scope_current_site({ name }) : m.site_detail_title(),
+  });
+  useWorkspaceTitle(viewName, name);
 
   React.useEffect(() => {
     if (name) {
@@ -153,47 +131,36 @@ function SiteDetailPage() {
         kind: "site",
         id,
         name,
-        ...(tab === "overview" ? {} : { tab }),
+        ...(view === "overview" ? {} : { tab: view }),
       });
     }
-  }, [session.user.id, id, name, tab]);
+  }, [session.user.id, id, name, view]);
 
   return (
     <Page
-      title={site.data?.name ?? m.site_detail_title()}
+      title={view === "overview" ? (name ?? viewName) : viewName}
       actions={
-        <>
-          {site.data?.developmentModeUntil ? (
-            <DevelopmentModeBadge
-              until={site.data.developmentModeUntil}
-              testId="site-header-dev-mode"
-            />
-          ) : null}
-          {site.data ? (
+        site ? (
+          <>
+            {site.developmentModeUntil ? (
+              <DevelopmentModeBadge
+                until={site.developmentModeUntil}
+                testId="site-header-dev-mode"
+              />
+            ) : null}
             <StarButton
               starred={stars.ids.has(id)}
               pending={stars.pendingId === id || stars.starred.isPending}
               onToggle={() => void stars.toggle(id)}
             />
-          ) : null}
-          {site.data ? <SiteMenu site={site.data} /> : null}
-        </>
-      }
-      back={
-        <LinkButton
-          to="/sites"
-          size="sm"
-          variant="ghost"
-          className="icon-button"
-          aria-label={m.site_back()}
-          data-testid="back-link"
-        >
-          <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
-        </LinkButton>
+            <SiteEnabled site={site} />
+            <SiteMenu site={site} back={back} />
+          </>
+        ) : undefined
       }
     >
       <QueryView
-        query={site}
+        query={query}
         notFound={
           <NotFoundPage
             path={href}
@@ -202,195 +169,130 @@ function SiteDetailPage() {
           />
         }
       >
-        {(data) => (
-          <Tabs
-            key={data.id}
-            className="gap-4"
-            value={tab}
-            onValueChange={(value) => setTab(value as SiteTab)}
+        {(site) => (
+          <SiteWorkspaceContext.Provider
+            value={{
+              site,
+              search,
+              setRange,
+              analyticsHref: viewHref("analytics"),
+            }}
           >
-            {/* The page's tab bar, in the header band. */}
-            <PageTabs>
-              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-6">
-                <Select<SiteTab>
-                  value={group.tabs[0]}
-                  onValueChange={(value) => {
-                    if (value) void setTab(value);
-                  }}
-                >
-                  <SelectTrigger
-                    className="w-full sm:w-52 sm:flex-none"
-                    aria-label={m.site_settings_group()}
-                    data-testid="site-tab-group"
-                  >
-                    <SelectValue>{group.label}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {groups.map((item) => (
-                      <SelectItem
-                        key={item.tabs[0]}
-                        value={item.tabs[0]}
-                        data-site-tabs={item.tabs.join(" ")}
-                      >
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <TabsList
-                  ref={tabBar}
-                  variant="line"
-                  aria-label={group.label}
-                  className="w-full min-w-0 max-w-full justify-start overflow-x-auto overflow-y-hidden scroll-fade [scrollbar-width:none]"
-                >
-                  {group.tabs
-                    .filter((value) => value !== "extensions" || hasExtensions)
-                    .map((value) => (
-                      <TabsTrigger
-                        key={value}
-                        value={value}
-                        className="flex-none"
-                        data-testid={`tab-${value}`}
-                      >
-                        {siteTabLabel(value)}
-                      </TabsTrigger>
-                    ))}
-                </TabsList>
-              </div>
-            </PageTabs>
-            <TabsContent value="overview" className="animate-enter">
-              <OverviewTab site={data} />
-            </TabsContent>
-            <TabsContent value="analytics" className="flex flex-col gap-4 animate-enter">
-              <AnalyticsSection
-                siteId={data.id}
-                range={search.range ?? DEFAULT_RANGE}
-                onRangeChange={setRange}
-              />
-              <TierStatsCard siteId={data.id} range={search.range ?? DEFAULT_RANGE} />
-            </TabsContent>
-            <TabsContent value="domains" className="animate-enter">
-              <DomainsTab site={data} />
-            </TabsContent>
-            <TabsContent value="origins" className="animate-enter">
-              <OriginsTab
-                site={data}
-                range={search.range ?? DEFAULT_RANGE}
-                onRangeChange={(range) =>
-                  navigate({
-                    search: (prev) => ({
-                      ...prev,
-                      range: range === DEFAULT_RANGE ? undefined : range,
-                    }),
-                    replace: true,
-                  })
-                }
-              />
-            </TabsContent>
-            <TabsContent value="https" className="animate-enter">
-              <HttpsTab site={data} />
-            </TabsContent>
-            <TabsContent value="rules" className="animate-enter">
-              <RulesTab siteId={data.id} originGroups={originGroups(data)} site={data} />
-            </TabsContent>
-            <TabsContent value="redirects" className="animate-enter">
-              <BulkRedirectsTab siteId={data.id} />
-            </TabsContent>
-            <TabsContent value="access" className="animate-enter">
-              <AccessTab site={data} />
-            </TabsContent>
-            <TabsContent value="security" className="animate-enter">
-              <SecurityTab siteId={data.id} />
-            </TabsContent>
-            <TabsContent value="attacks" className="animate-enter">
-              <AttacksTab
-                siteId={data.id}
-                siteName={data.name}
-                range={search.range ?? DEFAULT_RANGE}
-                onRangeChange={(range) =>
-                  navigate({
-                    search: (prev) => ({
-                      ...prev,
-                      range: range === DEFAULT_RANGE ? undefined : range,
-                    }),
-                    replace: true,
-                  })
-                }
-              />
-            </TabsContent>
-            <TabsContent value="crawlers" className="animate-enter">
-              <AiCrawlTab
-                siteId={data.id}
-                range={search.range ?? DEFAULT_RANGE}
-                onRangeChange={(range) =>
-                  navigate({
-                    search: (prev) => ({
-                      ...prev,
-                      range: range === DEFAULT_RANGE ? undefined : range,
-                    }),
-                    replace: true,
-                  })
-                }
-              />
-            </TabsContent>
-            <TabsContent value="errors" className="animate-enter">
-              <ErrorPagesTab siteId={data.id} />
-            </TabsContent>
-            <TabsContent value="extensions" className="animate-enter">
-              <ExtensionsTab siteId={data.id} />
-            </TabsContent>
-            <TabsContent value="logs" className="animate-enter">
-              <LogsTab
-                siteId={data.id}
-                jump={
-                  search.blockReason ||
-                  search.ip ||
-                  search.cidr ||
-                  search.path ||
-                  search.crawler ||
-                  search.from ||
-                  search.to
-                    ? {
-                        blockReason: search.blockReason,
-                        ip: search.ip,
-                        cidr: search.cidr,
-                        path: search.path,
-                        crawler: search.crawler,
-                        from: search.from,
-                        to: search.to,
-                      }
-                    : undefined
-                }
-              />
-            </TabsContent>
-            <TabsContent value="cache" className="animate-enter">
-              <CacheTab site={data} />
-            </TabsContent>
-          </Tabs>
+            <Outlet key={site.id} />
+          </SiteWorkspaceContext.Provider>
         )}
       </QueryView>
     </Page>
   );
 }
 
-/** The site's origin groups besides the default one, for origin rules. */
+export function SiteWorkspaceView({ view }: { view: SiteTab }) {
+  const workspace = React.useContext(SiteWorkspaceContext);
+  if (!workspace) throw new Error("Site view must be rendered inside its detail route");
+  const { site, setRange, search, analyticsHref } = workspace;
+  const range = search.range ?? DEFAULT_RANGE;
+  switch (view) {
+    case "overview":
+      return (
+        <SiteOverview site={site} range={range} setRange={setRange} analyticsHref={analyticsHref} />
+      );
+    case "analytics":
+      return (
+        <div className="flex flex-col gap-4 animate-enter">
+          <AnalyticsSection siteId={site.id} range={range} onRangeChange={setRange} />
+          <TierStatsCard siteId={site.id} range={range} />
+        </div>
+      );
+    case "domains":
+      return <DomainsTab site={site} />;
+    case "origins":
+      return <OriginsTab site={site} range={range} onRangeChange={setRange} />;
+    case "https":
+      return <HttpsTab site={site} />;
+    case "rules":
+      return <RulesTab siteId={site.id} originGroups={originGroups(site)} site={site} />;
+    case "redirects":
+      return <BulkRedirectsTab siteId={site.id} />;
+    case "access":
+      return <AccessTab site={site} />;
+    case "security":
+      return <SecurityTab siteId={site.id} />;
+    case "attacks":
+      return (
+        <AttacksTab siteId={site.id} siteName={site.name} range={range} onRangeChange={setRange} />
+      );
+    case "crawlers":
+      return <AiCrawlTab siteId={site.id} range={range} onRangeChange={setRange} />;
+    case "errors":
+      return <ErrorPagesTab siteId={site.id} />;
+    case "extensions":
+      return <ExtensionsTab siteId={site.id} />;
+    case "logs": {
+      const { blockReason, ip, cidr, path, crawler, from, to } = search;
+      return (
+        <LogsTab
+          siteId={site.id}
+          jump={
+            blockReason || ip || cidr || path || crawler || from || to
+              ? { blockReason, ip, cidr, path, crawler, from, to }
+              : undefined
+          }
+        />
+      );
+    }
+    case "cache":
+      return <CacheTab site={site} />;
+  }
+}
+
+/** The site's named origin groups, for origin rules. */
 const originGroups = (site: Site) =>
   [...new Set(site.origins.flatMap((origin) => (origin.group ? [origin.group] : [])))].sort();
 
-function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
+function SiteEnabled({ site }: { site: Site }) {
+  const setEnabled = useMutation({
+    ...orpc.sites.setEnabled.mutationOptions(),
+    meta: { invalidates: [orpc.sites.key()] },
+  });
+  const queryClient = useQueryClient();
+  const label = site.enabled ? m.site_disable() : m.site_enable();
   return (
-    <div className="grid gap-1 py-2.5 @xs/facts:grid-cols-[6.5rem_minmax(0,1fr)] @xs/facts:items-center @xs/facts:gap-3">
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="flex min-w-0 flex-wrap items-center gap-2 text-sm">{children}</dd>
-    </div>
+    <ConfirmDialog
+      trigger={
+        <Button size="sm" variant="secondary" data-testid="site-toggle-enabled">
+          {label}
+        </Button>
+      }
+      destructive={site.enabled}
+      title={
+        site.enabled
+          ? m.site_disable_confirm({ name: site.name })
+          : m.site_enable_confirm({ name: site.name })
+      }
+      note={site.enabled ? m.site_disable_note() : undefined}
+      confirmLabel={label}
+      onConfirm={async () => {
+        const result = await setEnabled.mutateAsync({
+          id: site.id,
+          enabled: !site.enabled,
+          expectedUpdatedAt: site.updatedAt,
+        });
+        followSiteDelivery(
+          queryClient,
+          site.id,
+          result.site.enabled ? m.site_enabled_toast() : m.site_disabled_toast(),
+          result.site.delivery,
+        );
+      }}
+    />
   );
 }
 
 /**
- * The site's actions in the page header (every tab): copy its settings to other sites, clone it,
+ * The site's actions in the page header (every view): copy its settings to other sites, clone it,
  * purge its cache, delete it.
  */
-function SiteMenu({ site }: { site: Site }) {
+function SiteMenu({ site, back }: { site: Site; back: string }) {
   const navigate = Route.useNavigate();
   const queryClient = useQueryClient();
   const purge = useMutation({
@@ -472,166 +374,13 @@ function SiteMenu({ site }: { site: Site }) {
           toast.success(m.sites_deleted({ revision: result.revision.revision }));
           // Leave first and drop what was read about the site: refreshing its queries while
           // they are on screen fails (404, retried for seconds) and flashes an error.
-          await navigate({ to: "/sites" });
+          await navigate(workspaceLink(back));
           queryClient.removeQueries({
             predicate: (query) => JSON.stringify(query.queryKey).includes(site.id),
           });
           await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
         }}
       />
-    </>
-  );
-}
-
-function OverviewTab({ site }: { site: Site }) {
-  const setEnabled = useMutation({
-    ...orpc.sites.setEnabled.mutationOptions(),
-    meta: { invalidates: [orpc.sites.key()] },
-  });
-  const queryClient = useQueryClient();
-  // A draft: enabling the site or a refetch keeps a name being edited.
-  const { draft: name, setDraft: setName } = useDraft(site.name);
-  const { save, error, pending } = useSaveSite(site.id);
-
-  return (
-    <div className="grid items-start gap-4 @4xl/main:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
-      <div className="flex min-w-0 flex-col gap-4">
-        {site.enabled ? <LiveRequests siteId={site.id} /> : null}
-        <LaunchCheck site={site} />
-      </div>
-      <div className="flex min-w-0 flex-col gap-4">
-        <Panel className="@container/facts">
-          <form
-            className="flex flex-col gap-(--panel-pad)"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void save({ name: name.trim() });
-            }}
-          >
-            <PanelHeader>
-              <PanelTitle>{m.site_tab_overview()}</PanelTitle>
-            </PanelHeader>
-            <PanelContent>
-              <Field className="pb-2">
-                <FieldLabel htmlFor="site-name">{m.site_form_name()}</FieldLabel>
-                <Input
-                  id="site-name"
-                  value={name}
-                  required
-                  maxLength={100}
-                  onChange={(event) => setName(event.target.value)}
-                  data-testid="site-name-input"
-                />
-              </Field>
-              <dl className="divide-y border-t">
-                <InfoRow label={m.sites_col_status()}>
-                  <SiteStatus site={site} />
-                  <ConfirmDialog
-                    trigger={
-                      <Button size="sm" variant="secondary" data-testid="site-toggle-enabled">
-                        {site.enabled ? m.site_disable() : m.site_enable()}
-                      </Button>
-                    }
-                    destructive={site.enabled}
-                    title={
-                      site.enabled
-                        ? m.site_disable_confirm({ name: site.name })
-                        : m.site_enable_confirm({ name: site.name })
-                    }
-                    note={site.enabled ? m.site_disable_note() : undefined}
-                    confirmLabel={site.enabled ? m.site_disable() : m.site_enable()}
-                    onConfirm={async () => {
-                      const result = await setEnabled.mutateAsync({
-                        id: site.id,
-                        enabled: !site.enabled,
-                        expectedUpdatedAt: site.updatedAt,
-                      });
-                      followSiteDelivery(
-                        queryClient,
-                        site.id,
-                        result.site.enabled ? m.site_enabled_toast() : m.site_disabled_toast(),
-                        result.site.delivery,
-                      );
-                    }}
-                  />
-                </InfoRow>
-                <InfoRow label={m.sites_col_domains()}>
-                  <span className="flex min-w-0 flex-col font-mono text-xs leading-5">
-                    {site.domains.map((d) => (
-                      <DomainName key={d} domain={d} className="break-all" />
-                    ))}
-                  </span>
-                </InfoRow>
-                <InfoRow label={m.sites_col_cluster()}>
-                  <Badge size="sm" tone="neutral">
-                    {site.clusterName}
-                  </Badge>
-                </InfoRow>
-                <InfoRow label={m.tags_label()}>
-                  <SiteTagsRow site={site} />
-                </InfoRow>
-                <InfoRow label={m.site_updated_at()}>
-                  <TimeAgo at={site.updatedAt} />
-                </InfoRow>
-              </dl>
-            </PanelContent>
-            <SaveBar
-              dirty={name.trim() !== site.name && name.trim() !== ""}
-              pending={pending}
-              error={error}
-              testId="site-name-save"
-            />
-          </form>
-        </Panel>
-        <UsageGuardCard site={site} />
-      </div>
-    </div>
-  );
-}
-
-/** The site's tags, and a dialog that edits them (saved at once: tags are not published). */
-function SiteTagsRow({ site }: { site: Site }) {
-  const queryClient = useQueryClient();
-  const navigate = Route.useNavigate();
-  const [open, setOpen] = React.useState(false);
-  const [tags, setTags] = React.useState<string[]>([]);
-  return (
-    <>
-      <TagBadges
-        tags={site.tags}
-        onSelect={(tag) => void navigate({ to: "/sites", search: { tags: [tag.id] } })}
-      />
-      <Button
-        className="icon-button"
-        size="sm"
-        variant="ghost"
-        aria-label={m.tags_label()}
-        onClick={() => {
-          setTags(site.tags.map((tag) => tag.name));
-          setOpen(true);
-        }}
-        data-testid="site-tags-edit"
-      >
-        <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} />
-      </Button>
-      <FormDialog
-        open={open}
-        onOpenChange={setOpen}
-        title={m.tags_label()}
-        submitLabel={m.common_save()}
-        submitTestId="site-tags-save"
-        onSubmit={async () => {
-          await client.sites.setTags({ id: site.id, tags });
-          toast.success(m.tags_saved());
-          setOpen(false);
-          await Promise.all([
-            queryClient.invalidateQueries({ queryKey: orpc.sites.key() }),
-            queryClient.invalidateQueries({ queryKey: orpc.siteTags.key() }),
-          ]);
-        }}
-      >
-        <TagPicker id="site-tags" value={tags} onChange={setTags} />
-      </FormDialog>
     </>
   );
 }

@@ -2,7 +2,7 @@ import type { L4App } from "@edgeweir/contract";
 import { Add01Icon, ArrowDataTransferHorizontalIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useQueries, useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useLocation } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
 import { Badge } from "@/components/arc/badge/badge";
@@ -20,8 +20,10 @@ import { Dot } from "@/components/status-dot";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
 import { originLabel, portsLabel } from "@/lib/l4";
+import { l4Href } from "@/lib/l4-views";
 import { orpc } from "@/lib/orpc";
 import { rowLink } from "@/lib/row-link";
+import { workspaceLink } from "@/lib/workspace-link";
 
 export const Route = createFileRoute("/_app/l4/")({
   validateSearch: z.object({
@@ -35,6 +37,8 @@ export const Route = createFileRoute("/_app/l4/")({
 
 function L4AppsPage() {
   const search = Route.useSearch();
+  const listHref = useLocation({ select: (location) => location.href });
+  const returnTo = listHref === "/l4" ? undefined : listHref;
   const navigate = Route.useNavigate();
   const apps = useQuery({
     ...orpc.l4Apps.list.queryOptions({ input: { clusterId: search.cluster } }),
@@ -77,8 +81,7 @@ function L4AppsPage() {
             </span>
             <div className="flex min-w-0 flex-col">
               <Link
-                to="/l4/$id"
-                params={{ id: row.original.id }}
+                {...workspaceLink(l4Href(row.original.id, "overview", { returnTo }))}
                 className="truncate rounded-sm font-medium underline-offset-4 outline-none focus-ring hover:underline"
                 title={row.original.name}
                 data-testid="l4-app-link"
@@ -158,12 +161,12 @@ function L4AppsPage() {
         header: () => <span className="sr-only">{m.common_actions()}</span>,
         cell: ({ row }) => (
           <div className="flex justify-end">
-            <L4AppActions app={row.original} onEdit={edit.show} />
+            <L4AppActions app={row.original} onEdit={edit.show} returnTo={returnTo} />
           </div>
         ),
       },
     ],
-    [edit.show],
+    [edit.show, returnTo],
   );
 
   const noCluster = clusters.data?.length === 0 && m.l4_needs_cluster();

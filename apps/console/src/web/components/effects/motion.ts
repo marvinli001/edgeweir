@@ -22,6 +22,7 @@ export {
   useMotionValue,
   useMotionValueEvent,
   usePresence,
+  usePresenceData,
   useSpring,
   useTransform,
 } from "motion/react";

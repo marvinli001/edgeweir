@@ -126,6 +126,7 @@ export function LinesChart({
   range,
   domain,
   label = m.chart_label(),
+  height = 232,
 }: {
   data: ChartRow[];
   series: Series[];
@@ -134,6 +135,7 @@ export function LinesChart({
   /** Fixed value axis (ratios); otherwise from zero to fit the data. */
   domain?: [number, number];
   label?: string;
+  height?: number;
 }) {
   return (
     <LineChart
@@ -144,7 +146,7 @@ export function LinesChart({
       )}
       series={series.map((s) => ({ key: s.key, label: s.label, color: s.color, area: false }))}
       label={label}
-      height={232}
+      height={height}
       legend={false}
       curve="linear"
       domain={domain}

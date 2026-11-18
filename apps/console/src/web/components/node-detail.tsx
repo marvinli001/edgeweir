@@ -8,19 +8,24 @@ import {
   nodeUpgradeRecommended,
   unicastAddress,
 } from "@edgeweir/contract";
-import { Add01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, Cancel01Icon, MoreHorizontalIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
-import { Drawer, DrawerContent } from "@/components/arc/drawer/drawer";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/arc/dropdown-menu/dropdown-menu";
 import { Input } from "@/components/arc/input/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/arc/tabs/tabs";
 import { DecommissionNodeDialog } from "@/components/clusters/node-dialogs";
 import { markOverflow } from "@/components/data-table";
 import { OptionSelect } from "@/components/form-select";
 import { FieldError } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { Spinner } from "@/components/layout/spinner";
 import {
   Table,
@@ -32,14 +37,13 @@ import {
 } from "@/components/layout/table";
 import { Meter } from "@/components/meter";
 import { NodeChannelFact } from "@/components/node-channel-state";
-import { NodeDebugLogs } from "@/components/node-debug-logs";
-import { NodeLogs } from "@/components/node-logs";
 import { ProbeResults } from "@/components/probes";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { nextDraftKey } from "@/components/site/save-site";
 import { StatusDot } from "@/components/status-dot";
 import { TimeAgo } from "@/components/time-ago";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import {
   formatBitRate,
   formatBytes,
@@ -51,6 +55,7 @@ import {
   m,
   timeAgo,
 } from "@/lib/i18n";
+import { nodeMainAddress } from "@/lib/node-views";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
@@ -147,90 +152,59 @@ function DetailState({ node }: { node: Node }) {
   );
 }
 
-/** The tabs of a node's details (?nodeTab=). */
-export type NodeDetailTab = "overview" | "logs";
-
-/**
- * A node's details in a side sheet. Overview: host metrics, the scheduling addresses with their
- * levels and reachability (and an editor for configured ones), whether it also probes, and how the
- * probes see it. Logs: pulls of the node's debug log buffer, then its warnings, errors and events.
- * `node` comes from the polling node list.
- */
-export function NodeDetailSheet({
-  node,
-  tab = "overview",
-  onTabChange,
-  onClose,
-}: {
-  node: Node;
-  tab?: NodeDetailTab;
-  onTabChange: (tab: NodeDetailTab) => void;
-  onClose: () => void;
-}) {
+export function NodeOverview({ node }: { node: Node }) {
   return (
-    <Drawer open onOpenChange={(open) => !open && onClose()}>
-      <DrawerContent
-        side="right"
-        className="w-[min(42rem,100vw)]! [&>div:nth-child(2)]:p-0"
-        data-testid="node-detail"
-        title={
-          <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-            <span className="min-w-0 break-all" data-testid="node-detail-name">
-              {node.name}
-            </span>
-            <span className="text-sm font-normal">
-              <DetailState node={node} />
-            </span>
-            <span className="w-full truncate font-mono text-xs font-normal text-muted-foreground">
-              {node.hostname}
-            </span>
+    <div className="grid gap-4">
+      <Panel>
+        <PanelHeader>
+          <PanelTitle>{m.scope_node_status()}</PanelTitle>
+          <span data-testid="node-detail-state">
+            <DetailState node={node} />
           </span>
-        }
-      >
-        <Tabs
-          value={tab}
-          onValueChange={(value) => onTabChange(value as NodeDetailTab)}
-          className="min-h-0 flex-1 gap-0"
-        >
-          <div className="border-b px-6">
-            <TabsList variant="line">
-              <TabsTrigger value="overview" data-testid="node-detail-tab-overview">
-                {m.node_detail_overview()}
-              </TabsTrigger>
-              <TabsTrigger value="logs" data-testid="node-detail-tab-logs">
-                {m.node_logs_tab()}
-              </TabsTrigger>
-            </TabsList>
-          </div>
-          <TabsContent
-            value="overview"
-            className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto p-6"
-          >
-            <NodeMetrics node={node} />
-            <NodeFacts node={node} />
-            <NodeProbeSwitch node={node} />
-            <NodeCache node={node} />
-            <NodeAddresses node={node} />
-            <section className="flex min-w-0 flex-col gap-3">
-              <h3 className="text-sm font-medium">{m.probes_results()}</h3>
-              <ProbeResults input={{ nodeId: node.id }} by="prober" testId="node-probe-results" />
-            </section>
-            <NodeDecommission node={node} />
-          </TabsContent>
-          <TabsContent
-            value="logs"
-            className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto p-6"
-          >
-            <NodeDebugLogs node={node} />
-            <NodeLogs node={node} />
-          </TabsContent>
-        </Tabs>
-      </DrawerContent>
-    </Drawer>
+        </PanelHeader>
+        <PanelContent className="flex flex-col gap-3">
+          <code className="break-all text-xs text-muted-foreground">{node.hostname}</code>
+          {node.decommissionRequestedAt ? (
+            <SafetyNote data-testid="node-decommission-waiting">
+              {node.online ? m.node_decommission_waiting() : m.node_decommission_waiting_offline()}
+            </SafetyNote>
+          ) : null}
+          {node.decommissionError ? (
+            <Badge
+              size="sm"
+              tone="danger"
+              title={node.decommissionError}
+              data-testid="node-decommission-failed"
+            >
+              {m.node_decommission_failed()}
+            </Badge>
+          ) : null}
+          <NodeFacts node={node} />
+        </PanelContent>
+      </Panel>
+      <Panel>
+        <PanelContent>
+          <NodeMetrics node={node} />
+        </PanelContent>
+      </Panel>
+    </div>
   );
 }
 
-/** One metric tile of the detail: label, value (the test id is on the value alone), a gauge. */
+export function NodeProbes({ node }: { node: Node }) {
+  return (
+    <Panel>
+      <PanelHeader>
+        <PanelTitle>{m.probes_results()}</PanelTitle>
+      </PanelHeader>
+      <PanelContent className="flex flex-col gap-4">
+        <NodeProbeSwitch node={node} />
+        <ProbeResults input={{ nodeId: node.id }} by="prober" testId="node-probe-results" />
+      </PanelContent>
+    </Panel>
+  );
+}
+
 function Metric({
   label,
   children,
@@ -428,6 +402,14 @@ function NodeFacts({ node }: { node: Node }) {
           <span className="text-muted-foreground">—</span>
         )}
       </Fact>
+      <Fact label={m.node_addresses_title()} testId="node-fact-address">
+        <code className="break-all">{nodeMainAddress(node)}</code>
+        {node.schedulingAddresses.length ? (
+          <Badge size="sm" tone="neutral">
+            {levelLabel(Math.min(...node.schedulingAddresses.map((address) => address.level)))}
+          </Badge>
+        ) : null}
+      </Fact>
       <Fact label={m.node_data_plane()} testId="node-data-plane">
         {node.dataPlaneHealthy ? (
           <StatusDot tone="good" glow={node.online}>
@@ -496,7 +478,7 @@ function NodeProbeSwitch({ node }: { node: Node }) {
  * The node's cache zone: its disk usage as last measured and its own size
  * (empty follows the cluster's; needs cache-zone-v1 on every active node).
  */
-function NodeCache({ node }: { node: Node }) {
+export function NodeCache({ node }: { node: Node }) {
   const cluster = useQuery(orpc.clusters.get.queryOptions({ input: { id: node.clusterId } }));
   const nodes = useQuery(orpc.nodes.list.queryOptions({ input: { clusterId: node.clusterId } }));
   const setCache = useMutation({
@@ -505,6 +487,7 @@ function NodeCache({ node }: { node: Node }) {
   });
   const saved = node.cache.maxSizeGb === null ? "" : String(node.cache.maxSizeGb);
   const [size, setSize] = React.useState(saved);
+  useUnsavedChanges(size !== saved);
   const available = (nodes.data ?? [])
     .filter((n) => n.status === "active")
     .every((n) => n.supportedFeatures.includes(CACHE_ZONE_FEATURE));
@@ -610,7 +593,7 @@ function NodeCache({ node }: { node: Node }) {
 
 type AddressDraft = { key: number; address: string; level: number };
 
-function NodeAddresses({ node }: { node: Node }) {
+export function NodeAddresses({ node }: { node: Node }) {
   const [editing, setEditing] = React.useState(false);
   const configured = node.schedulingAddresses.some((a) => a.source === "configured");
   return (
@@ -727,6 +710,8 @@ function AddressEditor({
       .filter((a) => !configured || a.source === "configured")
       .map((a) => ({ key: nextDraftKey(), address: a.address, level: configured ? a.level : 0 })),
   );
+  const [initial] = React.useState(rows);
+  useUnsavedChanges(JSON.stringify(rows) !== JSON.stringify(initial));
   const [error, setError] = React.useState<string | null>(null);
   const [pending, setPending] = React.useState<"save" | "reset" | null>(null);
   const patch = (key: number, change: Partial<AddressDraft>) =>
@@ -875,11 +860,7 @@ function AddressEditor({
   );
 }
 
-/**
- * Decommission (decommission-v1): the node stops serving and forgets its
- * identity, then the console deletes it. Waiting: withdraw it; failed: why.
- */
-function NodeDecommission({ node }: { node: Node }) {
+export function NodeDetailActions({ node }: { node: Node }) {
   const [confirming, setConfirming] = React.useState(false);
   const cancel = useMutation({
     ...orpc.nodes.cancelDecommission.mutationOptions(),
@@ -887,47 +868,43 @@ function NodeDecommission({ node }: { node: Node }) {
   });
   if (!nodeSupportsFeature(node.supportedFeatures, NODE_DECOMMISSION_FEATURE)) return null;
   return (
-    <section className="flex min-w-0 flex-col gap-3" data-testid="node-decommission-section">
-      <h3 className="text-sm font-medium">{m.node_decommission()}</h3>
-      {node.decommissionRequestedAt ? (
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          <span className="text-muted-foreground" data-testid="node-decommission-waiting">
-            {node.online ? m.node_decommission_waiting() : m.node_decommission_waiting_offline()}
-          </span>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={cancel.isPending}
-            onClick={() => cancel.mutate({ id: node.id })}
-            data-testid="node-decommission-cancel"
-          >
-            {m.node_decommission_cancel()}
-          </Button>
-        </div>
-      ) : (
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          {node.decommissionError ? (
-            <Badge
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
               size="sm"
-              tone="danger"
-              title={node.decommissionError}
-              data-testid="node-decommission-failed"
+              variant="ghost"
+              className="icon-button"
+              aria-label={m.common_actions()}
+              data-testid="node-detail-actions"
+            />
+          }
+        >
+          <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {node.decommissionRequestedAt ? (
+            <DropdownMenuItem
+              disabled={cancel.isPending}
+              onClick={() => cancel.mutate({ id: node.id })}
+              data-testid="node-decommission-cancel"
             >
-              {m.node_decommission_failed()}
-            </Badge>
-          ) : null}
-          <Button
-            size="sm"
-            variant="danger"
-            disabled={node.status !== "active"}
-            onClick={() => setConfirming(true)}
-            data-testid="node-decommission-start"
-          >
-            {m.node_decommission()}
-          </Button>
-        </div>
-      )}
+              {m.node_decommission_cancel()}
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              variant="destructive"
+              disabled={node.status !== "active"}
+              onClick={() => setConfirming(true)}
+              data-testid="node-decommission-start"
+            >
+              {m.node_decommission()}
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
       <DecommissionNodeDialog node={node} open={confirming} onOpenChange={setConfirming} />
-    </section>
+    </>
   );
 }

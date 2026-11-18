@@ -34,8 +34,10 @@ import { ANALYTICS_RANGES, OTHER_COLOR, RANGE_HOURS, rangeLabel } from "@/lib/an
 import { formatCompact, formatDateTime, formatNumber, formatPercent, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { eventKindLabel, levelLabel, metricLabel } from "@/lib/protection";
+import { siteHref } from "@/lib/site-tabs";
 import { groupBuckets } from "@/lib/time-buckets";
 import { cn } from "@/lib/utils";
+import { workspaceLink } from "@/lib/workspace-link";
 
 const PAGE_SIZE = 20;
 const ALL = "all";
@@ -65,9 +67,7 @@ function LogsLink({ siteId, jump, testId }: { siteId: string; jump: LogJump; tes
       className="icon-button relative size-6 min-h-6 -my-1 shrink-0 pointer-coarse:after:absolute pointer-coarse:after:-inset-2.5 pointer-coarse:after:content-['']"
       aria-label={m.attacks_view_logs()}
       title={m.attacks_view_logs()}
-      to="/sites/$id"
-      params={{ id: siteId }}
-      search={{ tab: "logs", ...jump }}
+      {...workspaceLink(siteHref(siteId, "logs", { ...jump }), true)}
       data-testid={testId}
     >
       <HugeiconsIcon icon={Search01Icon} strokeWidth={2} />

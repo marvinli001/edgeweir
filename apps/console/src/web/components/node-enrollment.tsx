@@ -17,7 +17,9 @@ import { SafetyNote } from "@/components/safety-note";
 import { ErrorState, QueryView } from "@/components/states";
 import { Dot, type StatusTone } from "@/components/status-dot";
 import { m } from "@/lib/i18n";
+import { nodeHref } from "@/lib/node-views";
 import { orpc } from "@/lib/orpc";
+import { workspaceLink } from "@/lib/workspace-link";
 
 const urlWarningText = (warning: ConsoleUrlWarning) =>
   ({
@@ -274,8 +276,11 @@ export function EnrollProgress({
               {m.enroll_step_enrolled()}
               {node ? (
                 <Link
-                  to="/clusters"
-                  search={{ cluster: node.clusterId, node: node.id }}
+                  {...workspaceLink(
+                    nodeHref(node.id, "overview", {
+                      returnTo: `/clusters?cluster=${node.clusterId}`,
+                    }),
+                  )}
                   className="font-medium underline-offset-4 hover:underline"
                   data-testid="enroll-node-link"
                 >

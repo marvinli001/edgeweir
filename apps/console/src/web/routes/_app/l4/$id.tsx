@@ -1,47 +1,48 @@
 import type { L4App } from "@edgeweir/contract";
-import {
-  ArrowLeft01Icon,
-  ArrowRight01Icon,
-  Delete02Icon,
-  PencilEdit01Icon,
-} from "@hugeicons/core-free-icons";
+import { ArrowDataTransferHorizontalIcon, MoreHorizontalIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, useLocation } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, Outlet, useLocation, useMatch } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
-import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/arc/tabs/tabs";
-import { CopyButton } from "@/components/copy-button";
-import { DeleteL4AppDialog, L4EnabledSwitch } from "@/components/l4/app-actions";
-import { L4AppDialog } from "@/components/l4/app-dialog";
-import { L4AppStats } from "@/components/l4/app-stats";
-import { DnsTarget, L4NodesWarning, ProtocolBadge } from "@/components/l4/common";
-import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
-import { LinkButton } from "@/components/link-button";
-import { Page, PageTabs } from "@/components/page";
-import { CnamePrefixActions } from "@/components/site/cname-prefix";
-import { QueryView } from "@/components/states";
-import { StatusDot } from "@/components/status-dot";
-import { NotFoundPage } from "@/components/status-page";
-import { TimeAgo } from "@/components/time-ago";
-import { formatNumber, m } from "@/lib/i18n";
 import {
-  L4_STATS_RANGES,
-  type L4StatsRange,
-  listChips,
-  originLabel,
-  portsLabel,
-  proxyVersionLabel,
-} from "@/lib/l4";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/arc/dropdown-menu/dropdown-menu";
+import { DeleteL4AppDialog, L4EnabledSwitch } from "@/components/l4/app-actions";
+import { L4AppSettings } from "@/components/l4/app-dialog";
+import { L4AppOverview } from "@/components/l4/app-overview";
+import { L4AppStats } from "@/components/l4/app-stats";
+import { L4WorkspaceContext } from "@/components/l4/app-workspace-context";
+import { LinkButton } from "@/components/link-button";
+import { Page } from "@/components/page";
+import {
+  type ScopeOption,
+  ScopeSwitcher,
+  useSwitcherSearch,
+} from "@/components/shell/scope-switcher";
+import {
+  flatScopeItems,
+  useSidebarScope,
+  useWorkspaceTitle,
+} from "@/components/shell/sidebar-scope";
+import { QueryView } from "@/components/states";
+import { NotFoundPage } from "@/components/status-page";
+import { m } from "@/lib/i18n";
+import { L4_STATS_RANGES, type L4StatsRange, portsLabel } from "@/lib/l4";
+import { L4_VIEWS, type L4View, l4Href } from "@/lib/l4-views";
 import { orpc } from "@/lib/orpc";
+import { workspaceLink } from "@/lib/workspace-link";
+import { listReturnTo } from "@/lib/workspace-nav";
 
 const DEFAULT_RANGE: L4StatsRange = "24h";
 
 export const Route = createFileRoute("/_app/l4/$id")({
   validateSearch: z.object({
-    tab: z.enum(["overview", "stats"]).optional(),
+    returnTo: z.string().optional(),
     range: z.enum(L4_STATS_RANGES).optional(),
   }),
   component: L4AppPage,
@@ -50,319 +51,177 @@ export const Route = createFileRoute("/_app/l4/$id")({
 function L4AppPage() {
   const { id } = Route.useParams();
   const href = useLocation({ select: (location) => location.href });
+  const selected = useMatch({
+    from: "/_app/l4/$id/$view",
+    shouldThrow: false,
+    select: (match) => match.params.view,
+  });
+  const view: L4View = selected === "stats" || selected === "settings" ? selected : "overview";
+  const label = L4_VIEWS[view].label();
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
-  const app = useQuery(orpc.l4Apps.get.queryOptions({ input: { id } }));
-  const tab = search.tab ?? "overview";
+  const query = useQuery(orpc.l4Apps.get.queryOptions({ input: { id } }));
+  const app = query.data;
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const returnTo = listReturnTo("/l4", search.returnTo);
+  const back = { href: returnTo, label: m.l4_title() };
+  const viewHref = (next: L4View, appId = id, range = search.range) =>
+    l4Href(appId, next, { range, returnTo: returnTo === "/l4" ? undefined : returnTo });
+  const setRange = (range: L4StatsRange) =>
+    void navigate({
+      ...workspaceLink(
+        l4Href(id, view, { ...search, range: range === DEFAULT_RANGE ? undefined : range }),
+      ),
+      replace: true,
+    });
+  useSidebarScope({
+    kind: "l4",
+    back,
+    switcher: (rail) => (
+      <L4Switcher app={app} rail={rail} href={(appId) => viewHref(view, appId)} back={back} />
+    ),
+    items: flatScopeItems(L4_VIEWS, view, viewHref),
+    commandGroup: app ? m.scope_current_l4({ name: app.name }) : m.l4_title(),
+  });
+  useWorkspaceTitle(label, app?.name);
   return (
     <Page
-      title={app.data?.name ?? m.l4_title()}
+      title={view === "overview" ? (app?.name ?? label) : label}
       actions={
-        <LinkButton to="/l4" size="sm" variant="ghost" data-testid="back-link">
-          <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
-          {m.l4_back()}
-        </LinkButton>
+        app ? (
+          <>
+            {view !== "settings" ? (
+              <LinkButton
+                {...workspaceLink(viewHref("settings"))}
+                size="sm"
+                variant="secondary"
+                data-testid="l4-app-edit-open"
+              >
+                {m.common_edit()}
+              </LinkButton>
+            ) : null}
+            <L4EnabledSwitch app={app} button />
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="icon-button"
+                    aria-label={m.common_actions()}
+                    data-testid="l4-detail-actions"
+                  />
+                }
+              >
+                <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => setDeleteOpen(true)}
+                  data-testid="l4-app-delete-open"
+                >
+                  {m.common_delete()}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DeleteL4AppDialog
+              app={app}
+              open={deleteOpen}
+              onOpenChange={setDeleteOpen}
+              onDeleted={() => void navigate(workspaceLink(back.href))}
+            />
+          </>
+        ) : undefined
       }
     >
       <QueryView
-        query={app}
+        query={query}
         notFound={
           <NotFoundPage
             path={href}
             surface="inline"
-            record={{ title: m.status_l4_missing(), to: "/l4", label: m.status_back_l4() }}
+            record={{
+              title: m.status_l4_missing(),
+              to: "/l4",
+              label: m.status_back_l4(),
+            }}
           />
         }
       >
-        {(data) => (
-          <Tabs
-            key={data.id}
-            value={tab}
-            onValueChange={(value) =>
-              navigate({
-                search: (prev) => ({ ...prev, tab: value === "stats" ? "stats" : undefined }),
-                replace: true,
-              })
-            }
+        {(app) => (
+          <L4WorkspaceContext.Provider
+            value={{
+              app,
+              range: search.range ?? DEFAULT_RANGE,
+              setRange,
+              statsHref: viewHref("stats"),
+            }}
           >
-            {/* The page's tab bar, in the header band. */}
-            <PageTabs>
-              <TabsList
-                variant="line"
-                className="w-full max-w-full justify-start overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
-              >
-                <TabsTrigger value="overview" className="flex-none" data-testid="l4-tab-overview">
-                  {m.site_tab_overview()}
-                </TabsTrigger>
-                <TabsTrigger value="stats" className="flex-none" data-testid="l4-tab-stats">
-                  {m.analytics_title()}
-                </TabsTrigger>
-              </TabsList>
-            </PageTabs>
-            <TabsContent value="overview" className="animate-enter">
-              <Overview app={data} />
-            </TabsContent>
-            <TabsContent value="stats" className="animate-enter">
-              <L4AppStats
-                appId={data.id}
-                range={search.range ?? DEFAULT_RANGE}
-                onRangeChange={(range) =>
-                  navigate({
-                    search: (prev) => ({
-                      ...prev,
-                      range: range === DEFAULT_RANGE ? undefined : range,
-                    }),
-                    replace: true,
-                  })
-                }
-              />
-            </TabsContent>
-          </Tabs>
+            <Outlet key={app.id} />
+          </L4WorkspaceContext.Provider>
         )}
       </QueryView>
     </Page>
   );
 }
 
-/** One cell of the overview's summary well: label over value. */
-function SummaryCell({
-  label,
-  children,
-  testId,
+export function L4WorkspaceView({ view }: { view: L4View }) {
+  const workspace = React.useContext(L4WorkspaceContext);
+  if (!workspace) throw new Error("L4 view must be rendered inside its detail route");
+  const { app, range, setRange, statsHref } = workspace;
+  if (view === "overview")
+    return <L4AppOverview app={app} range={range} setRange={setRange} statsHref={statsHref} />;
+  if (view === "settings") return <L4AppSettings app={app} />;
+  return <L4AppStats appId={app.id} range={range} onRangeChange={setRange} />;
+}
+
+function appOption(app: L4App): ScopeOption {
+  return {
+    id: app.id,
+    name: app.name,
+    detail: `${app.protocol.toUpperCase()} ${portsLabel(app)}`,
+    tone: app.enabled ? "good" : "idle",
+    state: app.enabled ? m.l4_state_enabled() : m.l4_state_disabled(),
+  };
+}
+
+function L4Switcher({
+  app,
+  rail,
+  href,
+  back,
 }: {
-  label: string;
-  children: React.ReactNode;
-  testId?: string;
+  app: L4App | undefined;
+  rail: boolean;
+  href: (id: string) => string;
+  back: { href: string; label: string };
 }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-1.5 px-4 py-3">
-      <dt className="truncate text-xs text-muted-foreground">{label}</dt>
-      <dd
-        className="flex min-h-7 min-w-0 flex-wrap items-center gap-2 text-sm"
-        data-testid={testId}
-      >
-        {children}
-      </dd>
-    </div>
-  );
-}
-
-function InfoRow({
-  label,
-  children,
-  testId,
-}: {
-  label: string;
-  children: React.ReactNode;
-  testId?: string;
-}) {
-  return (
-    <div className="grid gap-1 py-2.5 sm:grid-cols-[10rem_1fr] sm:items-center sm:gap-4">
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="flex min-w-0 flex-wrap items-center gap-2 text-sm" data-testid={testId}>
-        {children}
-      </dd>
-    </div>
-  );
-}
-
-const limitText = (value: number) => (value === 0 ? m.l4_unlimited() : formatNumber(value));
-
-function Overview({ app }: { app: L4App }) {
-  const navigate = Route.useNavigate();
-  const clusters = useQuery(orpc.clusters.list.queryOptions());
-  const pools = useQuery(
-    orpc.clusters.portPools.queryOptions({ input: { clusterId: app.clusterId } }),
-  );
-  const lists = useQuery(orpc.ipLists.list.queryOptions());
-  const [editOpen, setEditOpen] = React.useState(false);
-  const [deleteOpen, setDeleteOpen] = React.useState(false);
-  const proxy: string[] = [];
-  if (app.acceptProxyProtocol) proxy.push(m.l4_proxy_accepts());
-  if (app.proxyProtocolVersion > 0)
-    proxy.push(m.l4_proxy_sends({ version: proxyVersionLabel(app.proxyProtocolVersion) }));
-
-  return (
-    <div className="flex flex-col gap-4">
-      {pools.data ? (
-        <L4NodesWarning cluster={app.clusterName} nodes={pools.data.nodesWithoutL4} />
-      ) : null}
-      <Panel data-testid="l4-app-overview">
-        <PanelHeader className="flex flex-row flex-wrap items-center gap-2">
-          <PanelTitle className="flex-1">{m.site_tab_overview()}</PanelTitle>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => setEditOpen(true)}
-            data-testid="l4-app-edit-open"
-          >
-            <HugeiconsIcon icon={PencilEdit01Icon} strokeWidth={2} />
-            {m.common_edit()}
-          </Button>
-          <Button
-            size="sm"
-            variant="danger"
-            onClick={() => setDeleteOpen(true)}
-            data-testid="l4-app-delete-open"
-          >
-            <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-            {m.common_delete()}
-          </Button>
-        </PanelHeader>
-        <PanelContent className="flex flex-col gap-2">
-          <dl className="grid divide-y divide-edge overflow-hidden rounded-md faint-well @2xl/main:grid-cols-3 @2xl/main:divide-x @2xl/main:divide-y-0">
-            <SummaryCell label={m.l4_port()} testId="l4-app-listen">
-              <ProtocolBadge protocol={app.protocol} />
-              <span className="font-mono text-xl font-medium readout">{portsLabel(app)}</span>
-            </SummaryCell>
-            <SummaryCell label={m.sites_col_status()} testId="l4-app-state">
-              <L4EnabledSwitch app={app} />
-              <StatusDot tone={app.enabled ? "good" : "idle"}>
-                {app.enabled ? m.l4_state_enabled() : m.l4_state_disabled()}
-              </StatusDot>
-            </SummaryCell>
-            <SummaryCell label={m.sites_col_cluster()}>
-              <Link
-                to="/clusters"
-                search={{ cluster: app.clusterId, tab: "ports" }}
-                className="inline-flex min-w-0 items-center gap-1 rounded-md font-medium text-primary-ink underline-offset-4 outline-none focus-ring hover:underline"
-              >
-                <span className="truncate">{app.clusterName}</span>
-                <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className="size-3.5" />
-              </Link>
-            </SummaryCell>
-          </dl>
-          <dl className="divide-y divide-edge">
-            <InfoRow label={m.dns_cname_target()}>
-              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                <DnsTarget target={app.dnsTarget} testId="l4-app-dns" well />
-                {app.dnsLines.map((line) => (
-                  <div
-                    key={line.name}
-                    className="flex min-w-0 items-center gap-2"
-                    data-testid="l4-app-dns-line"
-                  >
-                    <span className="w-10 shrink-0 truncate text-xs text-muted-foreground">
-                      {line.name}
-                    </span>
-                    <span className="flex w-fit max-w-full min-w-0 items-center gap-1.5 rounded-lg bg-well py-0.5 pr-0.5 pl-2">
-                      <code className="min-w-0 font-mono text-xs break-all">{line.target}</code>
-                      <CopyButton iconOnly value={line.target} />
-                    </span>
-                  </div>
-                ))}
-                {app.dnsTarget ? <L4CnamePrefix app={app} /> : null}
-              </div>
-            </InfoRow>
-            <InfoRow label={m.sites_col_origins()}>
-              <ul className="flex min-w-0 flex-col gap-1">
-                {app.origins.map((origin) => (
-                  <li
-                    key={origin.id}
-                    className="flex min-w-0 flex-wrap items-center gap-2"
-                    data-testid="l4-app-origin"
-                  >
-                    <span className="font-mono text-xs break-all">{originLabel(origin)}</span>
-                    <Badge size="sm" tone="neutral">
-                      {m.l4_origin_weight({ weight: origin.weight })}
-                    </Badge>
-                    {origin.backup ? (
-                      <Badge size="sm" tone="neutral">
-                        {m.site_origin_backup()}
-                      </Badge>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </InfoRow>
-            {app.certificateName ? (
-              <InfoRow label={m.l4_tls_certificate()} testId="l4-app-tls">
-                {app.certificateName}
-                <Badge size="sm" tone="neutral">{`TLS ${app.tlsMinimumVersion}+`}</Badge>
-              </InfoRow>
-            ) : null}
-            <InfoRow label={m.l4_proxy()} testId="l4-app-proxy">
-              {proxy.length ? proxy.join(" · ") : m.l4_proxy_off()}
-            </InfoRow>
-            <InfoRow label={m.l4_timeouts()}>
-              {m.l4_timeouts_value({
-                connect: formatNumber(app.connectTimeoutMs / 1000),
-                idle: formatNumber(app.idleTimeoutSeconds),
-              })}
-            </InfoRow>
-            <InfoRow label={m.site_pool_health()}>
-              {m.l4_health_value({
-                fails: formatNumber(app.maxFails),
-                seconds: formatNumber(app.failTimeoutSeconds),
-              })}
-            </InfoRow>
-            <InfoRow label={m.ip_lists_title()} testId="l4-app-lists">
-              <ListNames
-                label={m.l4_allow_lists()}
-                chips={listChips(app.allowListIds, lists.data)}
-              />
-              <ListNames
-                label={m.l4_block_lists()}
-                chips={listChips(app.blockListIds, lists.data)}
-              />
-            </InfoRow>
-            <InfoRow label={m.l4_limits()}>
-              {m.l4_limits_value({
-                connections: limitText(app.maxConnections),
-                rate: limitText(app.newConnectionsPerSecond),
-              })}
-            </InfoRow>
-            <InfoRow label={m.site_updated_at()}>
-              <TimeAgo at={app.updatedAt} />
-            </InfoRow>
-          </dl>
-        </PanelContent>
-      </Panel>
-      <L4AppDialog
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        app={app}
-        clusters={clusters.data ?? []}
-      />
-      <DeleteL4AppDialog
-        app={app}
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        onDeleted={() => void navigate({ to: "/l4" })}
-      />
-    </div>
-  );
-}
-
-function ListNames({ label, chips }: { label: string; chips: { id: string; name: string }[] }) {
-  return (
-    <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-      <span className="text-muted-foreground">{label}</span>
-      {chips.length === 0 ? (
-        <span>{m.l4_lists_none()}</span>
-      ) : (
-        chips.map((chip) => (
-          <Badge size="sm" key={chip.id} tone="neutral" className="font-mono">
-            {chip.name}
-          </Badge>
-        ))
-      )}
-    </span>
-  );
-}
-
-/** Regenerates or sets the application's CNAME prefix (its old name resolves for 24 hours). */
-function L4CnamePrefix({ app }: { app: L4App }) {
-  const setPrefix = useMutation({
-    ...orpc.l4Apps.setCnamePrefix.mutationOptions(),
-    meta: { invalidates: [orpc.l4Apps.key()] },
+  const search = useSwitcherSearch();
+  const list = useQuery({
+    ...orpc.l4Apps.list.queryOptions({ input: {} }),
+    enabled: search.open,
   });
+  const term = search.query.toLowerCase();
+  const options = (list.data ?? [])
+    .map(appOption)
+    .filter((option) =>
+      [option.name, option.detail ?? ""].some((value) => value.toLowerCase().includes(term)),
+    );
   return (
-    <CnamePrefixActions
-      prefix={app.cnamePrefix}
-      retired={app.dnsRetired}
-      testId="l4-cname-prefix"
-      change={(prefix) => setPrefix.mutateAsync({ id: app.id, prefix })}
+    <ScopeSwitcher
+      kind="l4"
+      rail={rail}
+      icon={ArrowDataTransferHorizontalIcon}
+      current={app ? appOption(app) : undefined}
+      label={m.scope_switch_l4()}
+      searchLabel={m.scope_search_l4()}
+      search={search}
+      groups={[{ label: m.l4_back(), items: options }]}
+      pending={list.isPending}
+      retry={list.isLoadingError ? () => void list.refetch() : undefined}
+      href={href}
+      back={{ ...back, label: m.l4_back() }}
     />
   );
 }

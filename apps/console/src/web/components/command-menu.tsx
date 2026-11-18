@@ -20,11 +20,14 @@ import * as React from "react";
 import { type CommandItem, CommandPalette } from "@/components/arc/command-palette/command-palette";
 import { accountNav, moreNav, navGroups } from "@/components/nav-items";
 import { useQuickActions } from "@/components/quick-actions";
+import { useCurrentSidebarScope } from "@/components/shell/sidebar-scope";
 import { useSiteTags } from "@/components/site-tags";
 import { useTheme } from "@/components/theme-provider";
 import { getLocale, m, setLocale } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { readRecents } from "@/lib/recents";
+import { siteHref } from "@/lib/site-tabs";
+import { workspaceLink } from "@/lib/workspace-link";
 
 const OPEN_EVENT = "edgeweir:command-menu";
 
@@ -59,6 +62,7 @@ export function CommandMenu() {
   // The site page the palette was opened on: "Ban an IP…" and "Purge URLs…" start with it.
   const current = useMatch({ from: "/_app/sites/$id", shouldThrow: false });
   const currentSiteId = current?.params.id;
+  const scope = useCurrentSidebarScope();
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -120,6 +124,19 @@ export function CommandMenu() {
     items.push(item);
     actions.set(item.id, run);
   };
+  for (const item of scope?.items ?? []) {
+    for (const link of "children" in item ? item.children : [item]) {
+      add(
+        {
+          id: `scope:${link.key}`,
+          label: link.label,
+          group: scope?.commandGroup,
+          icon: icon(item.icon),
+        },
+        () => navigate({ ...workspaceLink(link.href), replace: true }),
+      );
+    }
+  }
   for (const site of sites) {
     const domain = site.domains[0] ? displaySiteDomain(site.domains[0]) : undefined;
     add(
@@ -132,7 +149,7 @@ export function CommandMenu() {
         icon: icon(GlobeIcon),
         testId: "command-site",
       },
-      () => navigate({ to: "/sites/$id", params: { id: site.id } }),
+      () => navigate(workspaceLink(siteHref(site.id))),
     );
   }
   for (const tag of foundTags)

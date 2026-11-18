@@ -19,7 +19,7 @@ type SiteDnsTarget = Awaited<ReturnType<typeof client.dns.siteTarget>>;
  * target, otherwise the edge addresses for A/AAAA records and a request
  * per domain that bypasses DNS; with each domain's pointing state.
  */
-export function DnsSetupCard({ siteId }: { siteId: string }) {
+export function DnsSetupCard({ siteId, title }: { siteId: string; title?: string }) {
   const target = useQuery(
     orpc.dns.siteTarget.queryOptions({
       input: { siteId },
@@ -34,6 +34,7 @@ export function DnsSetupCard({ siteId }: { siteId: string }) {
       {(data) => (
         <DnsSetup
           siteId={siteId}
+          title={title}
           target={data}
           launch={launch}
           recheck={<RecheckButton queries={[target, launch]} />}
@@ -45,11 +46,13 @@ export function DnsSetupCard({ siteId }: { siteId: string }) {
 
 function DnsSetup({
   siteId,
+  title,
   target,
   launch,
   recheck,
 }: {
   siteId: string;
+  title?: string;
   target: SiteDnsTarget;
   launch: QueryResult<SiteLaunch>;
   recheck: React.ReactNode;
@@ -63,7 +66,7 @@ function DnsSetup({
     <Panel data-testid={cname ? "cname-target" : "edge-addresses"}>
       <PanelHeader className="flex flex-row items-center gap-3">
         <PanelTitle className="flex-1">
-          {cname ? m.dns_cname_target() : m.dns_edge_addresses()}
+          {title ?? (cname ? m.dns_cname_target() : m.dns_edge_addresses())}
         </PanelTitle>
         {recheck}
       </PanelHeader>

@@ -283,7 +283,7 @@ function useShownAt(): string {
 /** The list a missing record belongs to: the page says what is missing and leads back there. */
 export interface MissingRecord {
   title: string;
-  to: "/sites" | "/l4";
+  to: "/sites" | "/l4" | "/clusters";
   label: string;
 }
 

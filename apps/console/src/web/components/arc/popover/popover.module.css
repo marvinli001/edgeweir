@@ -1,0 +1,32 @@
+@layer components {
+  .positioner {
+    z-index: 60;
+  }
+  .popup {
+    max-width: var(--available-width);
+    max-height: var(--available-height);
+    overflow: auto;
+    padding: var(--arc-space-4);
+    border: 1px solid var(--arc-border-subtle);
+    border-radius: var(--arc-radius-panel);
+    background: var(--arc-surface-raised);
+    color: var(--arc-foreground);
+    box-shadow: var(--arc-shadow-floating);
+    outline: 0;
+    transition: opacity var(--arc-duration-standard) var(--arc-ease-enter);
+  }
+  .popup[data-starting-style],
+  .popup[data-ending-style] {
+    opacity: 0;
+  }
+  .popup[data-ending-style] {
+    pointer-events: none;
+    transition: opacity var(--arc-duration-fast) var(--arc-ease-exit);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .popup,
+    .popup[data-ending-style] {
+      transition-duration: var(--arc-duration-instant);
+    }
+  }
+}

@@ -2,7 +2,6 @@ import type { DnsPointing, Site, SiteLaunch } from "@edgeweir/contract";
 import { RefreshIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
-import type { LinkProps } from "@tanstack/react-router";
 import { Button } from "@/components/arc/button/button";
 import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { ResourceRow } from "@/components/resource-list";
@@ -15,7 +14,9 @@ import { domainsDetail } from "@/lib/domain-list";
 import { formatClockTime, m } from "@/lib/i18n";
 import { notPointing } from "@/lib/launch";
 import { orpc } from "@/lib/orpc";
+import { siteHref } from "@/lib/site-tabs";
 import { cn } from "@/lib/utils";
+import { workspaceLink } from "@/lib/workspace-link";
 
 /**
  * The site's launch check (sites.launch). DNS lookups take seconds, so it is
@@ -160,7 +161,7 @@ function LaunchRow({
   pulse,
 }: {
   item: LaunchItem;
-  link: LinkProps;
+  link: React.ComponentProps<typeof ResourceRow>["link"];
   testId: string;
   pulse?: boolean;
 }) {
@@ -198,12 +199,12 @@ export function LaunchCheck({ site }: { site: Site }) {
             <ul className="flex flex-col animate-enter [&>li:last-child>a]:border-b-0">
               <LaunchRow
                 item={dnsItem(data)}
-                link={{ to: "/sites/$id", params: { id: site.id }, search: { tab: "domains" } }}
+                link={workspaceLink(siteHref(site.id, "domains"), true)}
                 testId="launch-dns"
               />
               <LaunchRow
                 item={certificateItem(data)}
-                link={{ to: "/sites/$id", params: { id: site.id }, search: { tab: "https" } }}
+                link={workspaceLink(siteHref(site.id, "https"), true)}
                 testId="launch-certificate"
               />
               <LaunchRow

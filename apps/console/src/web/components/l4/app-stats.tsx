@@ -51,6 +51,31 @@ const TILES: { key: Counter; title: () => string; format: (value: number) => str
  * nodes' shares. The window ends now and moves on every minute; a refetch keeps the old numbers,
  * dimmed, until the new ones arrive.
  */
+export function useL4Stats(appId: string, range: L4StatsRange, compare = false) {
+  const [now, setNow] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), REFRESH_MS);
+    return () => clearInterval(timer);
+  }, []);
+  const duration = L4_STATS_RANGE_SECONDS[range] * 1000;
+  const start = now - duration;
+  const span = { from: new Date(start).toISOString(), to: new Date(now).toISOString() };
+  const stats = useQuery({
+    ...orpc.l4Apps.stats.queryOptions({ input: { id: appId, ...span } }),
+    placeholderData: keepPreviousData,
+    meta: { background: true },
+  });
+  const previous = useQuery({
+    ...orpc.l4Apps.stats.queryOptions({
+      input: { id: appId, from: new Date(start - duration).toISOString(), to: span.from },
+    }),
+    enabled: compare,
+    placeholderData: keepPreviousData,
+    meta: { background: true },
+  });
+  return { stats, previous, refresh: () => setNow(Date.now()) };
+}
+
 export function L4AppStats({
   appId,
   range,
@@ -60,24 +85,7 @@ export function L4AppStats({
   range: L4StatsRange;
   onRangeChange: (range: L4StatsRange) => void;
 }) {
-  const [now, setNow] = React.useState(() => Date.now());
-  React.useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), REFRESH_MS);
-    return () => clearInterval(timer);
-  }, []);
-  const span = React.useMemo(
-    () => ({
-      from: new Date(now - L4_STATS_RANGE_SECONDS[range] * 1000).toISOString(),
-      to: new Date(now).toISOString(),
-    }),
-    [now, range],
-  );
-  const stats = useQuery({
-    ...orpc.l4Apps.stats.queryOptions({ input: { id: appId, ...span } }),
-    placeholderData: keepPreviousData,
-    meta: { background: true },
-  });
-
+  const { stats, refresh } = useL4Stats(appId, range);
   return (
     <section className="flex flex-col gap-3" aria-labelledby="l4-stats-title">
       <div className="flex flex-wrap items-center gap-2">
@@ -95,7 +103,7 @@ export function L4AppStats({
           variant="ghost"
           aria-label={m.analytics_refresh()}
           disabled={stats.isFetching}
-          onClick={() => setNow(Date.now())}
+          onClick={refresh}
           data-testid="l4-stats-refresh"
         >
           <HugeiconsIcon

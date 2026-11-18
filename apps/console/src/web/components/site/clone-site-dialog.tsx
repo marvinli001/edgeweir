@@ -12,6 +12,8 @@ import { TagPicker } from "@/components/site-tags";
 import { domainList } from "@/lib/address-input";
 import { m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
+import { siteHref } from "@/lib/site-tabs";
+import { workspaceLink } from "@/lib/workspace-link";
 
 /** A new site with the source's settings, origins and tags: its own name and domains. */
 export function CloneSiteDialog({
@@ -49,7 +51,7 @@ export function CloneSiteDialog({
           queryClient.invalidateQueries({ queryKey: orpc.sites.key() }),
           queryClient.invalidateQueries({ queryKey: orpc.siteTags.key() }),
         ]);
-        await navigate({ to: "/sites/$id", params: { id: result.site.id } });
+        await navigate(workspaceLink(siteHref(result.site.id)));
       }}
     >
       <SafetyNote>{m.clone_note()}</SafetyNote>

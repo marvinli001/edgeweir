@@ -1,6 +1,6 @@
 import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Link, type LinkProps } from "@tanstack/react-router";
+import { Link, type LinkProps, type RegisteredRouter } from "@tanstack/react-router";
 import type * as React from "react";
 import { cn } from "@/lib/utils";
 
@@ -74,7 +74,7 @@ export function ResourceRow({
   icon: React.ReactNode;
   children: React.ReactNode;
   trailing?: React.ReactNode;
-  link: LinkProps;
+  link: LinkProps<"a", RegisteredRouter, string, string>;
   testId?: string;
 }) {
   return (

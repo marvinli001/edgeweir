@@ -3,6 +3,7 @@ import * as React from "react";
 import { CommandMenu } from "@/components/command-menu";
 import { QuickActionsProvider } from "@/components/quick-actions";
 import { AppShell } from "@/components/shell/app-shell";
+import { SidebarScopeProvider } from "@/components/shell/sidebar-scope";
 import { UnsavedChangesGuard } from "@/components/unsaved-changes";
 import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/lib/orpc";
@@ -47,10 +48,12 @@ function AppLayout() {
   }, [pathname, session.user.id]);
   return (
     <QuickActionsProvider>
-      <AppShell user={{ name: session.user.name, email: session.user.email, demo: me.demo }}>
-        <Outlet />
-      </AppShell>
-      <CommandMenu />
+      <SidebarScopeProvider>
+        <AppShell user={{ name: session.user.name, email: session.user.email, demo: me.demo }}>
+          <Outlet />
+        </AppShell>
+        <CommandMenu />
+      </SidebarScopeProvider>
       <UnsavedChangesGuard />
     </QuickActionsProvider>
   );

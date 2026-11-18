@@ -16,7 +16,9 @@ import { aiCrawlerCategoryLabel, formatUsd, verificationLabel } from "@/lib/ai-c
 import { relativeChange } from "@/lib/analytics";
 import { formatBytes, formatCompact, formatNumber, formatPercent, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
+import { siteHref } from "@/lib/site-tabs";
 import { cn } from "@/lib/utils";
+import { workspaceLink } from "@/lib/workspace-link";
 
 const REFRESH_MS = 60_000;
 const MINUTE = 60_000;
@@ -268,9 +270,13 @@ function OperatorCard({
                   className="icon-button relative size-6 min-h-6 -my-1 shrink-0"
                   aria-label={m.attacks_view_logs()}
                   title={m.attacks_view_logs()}
-                  to="/sites/$id"
-                  params={{ id: siteId }}
-                  search={{ tab: "logs", crawler: row.crawler, from: window.from, to: window.to }}
+                  {...workspaceLink(
+                    siteHref(siteId, "logs", {
+                      crawler: row.crawler,
+                      from: window.from,
+                      to: window.to,
+                    }),
+                  )}
                   data-testid="ai-crawl-crawler-logs"
                 >
                   <HugeiconsIcon icon={Search01Icon} strokeWidth={2} />

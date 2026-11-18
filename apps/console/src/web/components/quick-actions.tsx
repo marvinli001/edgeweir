@@ -27,6 +27,7 @@ import { useDialogState } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
 import { expandPurgeTargets } from "@/lib/purge";
+import { siteHref } from "@/lib/site-tabs";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import {
@@ -35,6 +36,7 @@ import {
   siteWideRuleIds,
   withSiteWideRuleIds,
 } from "@/lib/waf-exclusions";
+import { workspaceLink } from "@/lib/workspace-link";
 
 /**
  * Something done where the data is (a log row, a top list, an event, ⌘K): it runs in place in a
@@ -279,9 +281,7 @@ function useSaveExclusions(siteId: string) {
         label: m.waf_view(),
         onClick: () =>
           void navigate({
-            to: "/sites/$id",
-            params: { id: siteId },
-            search: { tab: "security" },
+            ...workspaceLink(siteHref(siteId, "security")),
             hash: "security-waf",
           }),
       },

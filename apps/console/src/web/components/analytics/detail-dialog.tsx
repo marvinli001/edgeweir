@@ -19,9 +19,12 @@ import { LoadingState, QueryView } from "@/components/states";
 import type { DialogProps } from "@/hooks/use-dialog-state";
 import { type DetailView, detailViewId, type Metric, OTHER_COLOR } from "@/lib/analytics";
 import { formatBitRate, formatBytes, formatCompact, formatPercent, m } from "@/lib/i18n";
+import { nodeHref } from "@/lib/node-views";
 import { orpc } from "@/lib/orpc";
+import { siteHref } from "@/lib/site-tabs";
 import { groupBuckets } from "@/lib/time-buckets";
 import { cn } from "@/lib/utils";
+import { workspaceLink } from "@/lib/workspace-link";
 
 const REFRESH_MS = 60_000;
 /** Lines or stacked segments per chart; the list below goes further. */
@@ -97,16 +100,18 @@ function RankedList({
             >
               {link === "site" ? (
                 <Link
-                  to="/sites/$id"
-                  params={{ id: item.id }}
+                  {...workspaceLink(siteHref(item.id))}
                   className={cn(nameClass, "hover:underline hover:underline-offset-4")}
                 >
                   {name}
                 </Link>
               ) : link === "node" && item.parentId ? (
                 <Link
-                  to="/clusters"
-                  search={{ cluster: item.parentId }}
+                  {...workspaceLink(
+                    nodeHref(item.id, "overview", {
+                      returnTo: `/clusters?cluster=${item.parentId}`,
+                    }),
+                  )}
                   className={cn(nameClass, "hover:underline hover:underline-offset-4")}
                 >
                   {name}
