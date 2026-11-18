@@ -64,7 +64,7 @@ Origins cannot serve content under this prefix. CC per-IP bans apply to it too.
 
 ## Turn on Under Attack
 
-1. Open **Sites**, select the site, and open the **Security** tab.
+1. Open **Sites**, select the site, and open the **Security** view.
 2. In the **Under Attack** card, pick the **Challenge type** (**JavaScript** by default); the choice is saved at once.
 3. Turn on the **Under Attack** switch and click **Turn on** in the **Turn on Under Attack?** dialog. The card shows **On**; nodes apply it once the configuration is published.
 4. Verify:
@@ -104,7 +104,7 @@ The level required is the highest of: global Under Attack, the site's Under Atta
 
 ## Challenge settings
 
-The **Challenges** card of the **Security** tab:
+The **Challenges** card of the **Security** view:
 
 1. Under **Preset**, pick Loose, Standard (the default), or Strict to fill in the first three fields below; pick **Custom** to set each one. Saved values that match no preset show as **Custom**.
 2. Set the other fields as needed.
@@ -210,7 +210,7 @@ Needs the node capability `challenge-v3`; without it the console offers neither 
 
 ## Challenge rules
 
-In the **Custom WAF** phase of the site's **Rules** tab or of **Global rules** (`/rules`), pick the action **Managed challenge**, **Non-interactive challenge**, or **Challenge** and a **Challenge type**, for example to challenge the login page only, or given JA4 fingerprints:
+In the **Custom WAF** phase of the site's **Rules** view or of **Global rules** (`/rules`), pick the action **Managed challenge**, **Non-interactive challenge**, or **Challenge** and a **Challenge type**, for example to challenge the login page only, or given JA4 fingerprints:
 
 ```text
 http.request.uri.path eq "/login"
@@ -227,7 +227,7 @@ A request with a pass of a sufficient level continues with the following rules; 
 
 ## CC mitigation
 
-CC mitigation is set per site and off by default. The **CC mitigation** card of the **Security** tab:
+CC mitigation is set per site and off by default. The **CC mitigation** card of the **Security** view:
 
 1. Turn on **Enabled**.
 2. Keep **Follow the default template** to use the thresholds of **Protection settings → CC template**, or turn it off and pick Loose, Standard, or Strict under **Preset**, or **Custom** to set each threshold. Saved thresholds that match no preset show as **Custom**.
@@ -278,9 +278,9 @@ Every preset uses a 10-second window and keeps the captcha level as a captcha.
 
 ### State and events
 
-The **In effect** line at the top of the **Security** tab shows Under Attack (the site's or global), CC (the preset, **Custom**, **Template** or **Off**), the CRS mode and preset, and the challenge preset; when an online node is above normal it also shows **Nodes: (highest level)**. The first four jump to their cards; **Nodes: …** opens the **Attacks** tab. **This site's bans**, **Global rules** and **Protection settings** on the same line open those pages.
+The **In effect** line at the top of the **Security** view shows Under Attack (the site's or global), CC (the preset, **Custom**, **Template** or **Off**), the CRS mode and preset, and the challenge preset; when an online node is above normal it also shows **Nodes: (highest level)**. The first four jump to their cards; **Nodes: …** opens the **Attacks** view. **This site's bans**, **Global rules** and **Protection settings** on the same line open those pages.
 
-The parts of a site's **Attacks** tab (see [Attacks and automatic mitigation](attack-dashboard.en.md)) about challenges and CC:
+The parts of a site's **Attacks** view (see [Attacks and automatic mitigation](attack-dashboard.en.md)) about challenges and CC:
 
 | Section | Content |
 | --- | --- |

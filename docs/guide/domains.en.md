@@ -20,7 +20,7 @@ The Domains tab, domain forms and precedence, internationalized names, DNS check
 
 ## The Domains tab
 
-Page: **Sites → (site) → Domains** (`/sites/<site ID>?tab=domains`), three cards from top to bottom:
+Page: **Sites → (site) → Domains** (`/sites/<site ID>/domains`), three cards from top to bottom:
 
 | Card | Content |
 | --- | --- |
@@ -82,7 +82,7 @@ The console looks up the A and AAAA records of every domain with the system DNS 
 | `.` | `.example.com` | `img.example.com`, `a.img.example.com` | `example.com` |
 | `~pattern` | `~(www\|m)\.example\.com` | `www.example.com`, `m.example.com` | `wwwx.example.com`, `www.example.com.evil` |
 
-- Domains are entered on the site's **Domains** tab (see [editing domains](#editing-domains)) or in the **New site** dialog; when creating a site, one per line or separated by spaces or commas (commas inside a pattern do not separate).
+- Domains are entered on the site's **Domains** view (see [editing domains](#editing-domains)) or in the **New site** dialog; when creating a site, one per line or separated by spaces or commas (commas inside a pattern do not separate).
 - Host names are case-insensitive and stored in lowercase; a trailing `.`, a port, and the scheme and path of a pasted URL are removed.
 - A site has 1–50 domains, at most 10 of them patterns. A name in one form belongs to one site only (`*.a.com` and `.a.com` are different forms and may belong to different sites); a taken one shows "Domain already in use: …" (`DOMAIN_IN_USE`).
 - In the list, wildcard, suffix and pattern domains carry the badges **Wildcard**, **All subdomains** and **Pattern**.
@@ -125,7 +125,7 @@ Purges find sites by Host as nodes do: among each cluster's enabled sites, with 
 
 | Item | Behavior |
 | --- | --- |
-| Launch check | The **Domains** tab and the launch check show **Not checkable**; they do not count towards **DNS pointed N/M** |
+| Launch check | The **Domains** view and the launch check show **Not checkable**; they do not count towards **DNS pointed N/M** |
 | Certificates | Not counted for "The certificate covers every domain". One-click HTTPS asks for `*.a.com` for `.a.com` (DNS-01 only, covering one level); patterns get no name, and a site with patterns only shows "The site has only pattern domains: no name to issue for" |
 | HTTP-01 | Answered for exact domains only: hosts matched by a suffix or pattern cannot be issued for by HTTP-01 |
 | HTTPS | Handshakes complete only for host names the certificate covers (the same name, or `*.` one label up); other names abort the handshake |
@@ -184,7 +184,7 @@ Once the cluster has [DNS steering](dns.en.md), the CNAME target of a site or L4
 
 ### Regenerate and customize
 
-1. Open the **CNAME target** card on the site's **Domains** tab, or **CNAME target** on the L4 app's page.
+1. Open the **CNAME target** card on the site's **Domains** view, or **CNAME target** on the L4 app's page.
 2. Click **Regenerate** and confirm ("Regenerate the CNAME prefix?", "The old name keeps resolving for 24 hours") to get a new random prefix, or click **Customize**, fill in **CNAME prefix** and click **Save**.
 3. The console shows "CNAME prefix changed". In Automatic mode it publishes a DNS revision of the cluster at once (reason "CNAME prefix of … changed"); in Manual mode it writes no records: create the new name from the records the DNS tab lists.
 4. Point the CNAME records of the domains at the new target. The old name is shown struck through with "Resolves until …".
@@ -210,7 +210,7 @@ Saving a DNS binding whose line name equals a prefix (old prefixes in their tran
 | `domains-v2` | A site (disabled ones included) has suffix or pattern domains |
 | `unknown-host-v1` | The unknown host settings are not the defaults (a handling other than the unknown host page, or scan protection on) |
 
-While an active node of the cluster lacks `domains-v2`, the **Domains** tab and the **New site** dialog show "Some nodes in the cluster do not support suffix and pattern domains"; while one lacks `unknown-host-v1`, the **Unknown hosts** card shows "Some nodes in the cluster do not support it". Service accounts and background tasks get `NODE_CAPABILITY_REQUIRED`. Upgrading nodes: [node upgrades](node-upgrades.en.md).
+While an active node of the cluster lacks `domains-v2`, the **Domains** view and the **New site** dialog show "Some nodes in the cluster do not support suffix and pattern domains"; while one lacks `unknown-host-v1`, the **Unknown hosts** card shows "Some nodes in the cluster do not support it". Service accounts and background tasks get `NODE_CAPABILITY_REQUIRED`. Upgrading nodes: [node upgrades](node-upgrades.en.md).
 
 | Change | How it applies |
 | --- | --- |

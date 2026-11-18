@@ -15,7 +15,7 @@ Conversion keeps the size, does not crop, and reads no URL parameters.
 
 ## Turning it on
 
-1. Open **Sites**, select the site, and open the **Cache** tab.
+1. Open **Sites**, select the site, and open the **Cache** view.
 2. Make sure a **Cache rules** entry caches the paths of the images: only cached requests are converted (the card notes "Converts cached images only").
 3. In the **Image format conversion** card, turn on **On**; in the **WebP** and **AVIF** groups turn on the formats to offer and set their **Quality**; under **Source types** choose **JPEG** and/or **PNG**; change **Smallest original (bytes)**, **Largest original (bytes)**, and **Most pixels** under **Limits** as needed.
 4. Click **Save**.

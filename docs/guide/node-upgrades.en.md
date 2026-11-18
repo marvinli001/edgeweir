@@ -178,7 +178,7 @@ A node without one shows **Upgrade required**; it keeps using the last configura
 
 | Capability | Needed for |
 | --- | --- |
-| `tls-v1` | Sites with HTTPS settings (the **HTTPS** tab has been saved) |
+| `tls-v1` | Sites with HTTPS settings (the **HTTPS** view has been saved) |
 | `http01-v1` | ACME HTTP-01 validation |
 | `tls-pending-domains-v1` | Domains served over HTTP until the certificate covers them |
 | `http3-v1` | Sites with HTTP/3 on |

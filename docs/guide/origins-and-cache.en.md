@@ -21,7 +21,7 @@ The site's Origins and Cache tabs: origins, groups, health checks, origin connec
 
 ## Tabs and cards
 
-The **Origins** tab (`/sites/<site ID>?tab=origins`) and the **Cache** tab (`?tab=cache`) of the site page. Each card saves on its own; saving one card keeps unsaved edits in the others.
+The **Origins** view (`/sites/<site ID>/origins`) and the **Cache** view (`?tab=cache`) of the site page. Each card saves on its own; saving one card keeps unsaved edits in the others.
 
 The Cache tab starts with **Development mode**, **Purge cache** and **Cache rules**. The other cards are grouped by purpose and start collapsed. Click a group heading, or focus it with Tab and press Enter / Space, to open or close it:
 
@@ -59,7 +59,7 @@ Closing a group keeps unsaved edits. Leaving the page or switching tabs still as
 
 ## Configure origins
 
-1. Open **Sites**, select the site, and open the **Origins** tab.
+1. Open **Sites**, select the site, and open the **Origins** view.
 2. In the **Origins** card, edit an existing origin or click **Add origin**.
 3. Enter **Origin**, **Port**, **Protocol**, and **Weight**; set **Origin Host**, **SNI** (HTTPS only), and **Origin group** as needed, choose **PROXY protocol**, and turn on **Backup** or **S3 signing** as needed. A URL such as `https://origin.example.com:8443` pasted or typed into **Origin** fills its scheme and port into their fields.
 4. Click **Save** at the bottom of the card.
@@ -73,7 +73,7 @@ Closing a group keeps unsaved edits. Leaving the page or switching tabs still as
 
 ### Traffic path
 
-The **Traffic path** card at the top of the **Origins** tab draws where requests go under the saved configuration.
+The **Traffic path** card at the top of the **Origins** view draws where requests go under the saved configuration.
 
 | Node | Content |
 | --- | --- |
@@ -195,7 +195,7 @@ Error codes need node proto v0.2.1 or later; other errors and older nodes show t
 
 ### Active health check
 
-1. On the **Origins** tab, in the **Pool settings** card, turn on **Enabled** under **Active health check**.
+1. On the **Origins** view, in the **Pool settings** card, turn on **Enabled** under **Active health check**.
 2. Choose the **Probe**: for HTTP enter the **Path** and choose the **Method**; for gRPC fill in the **gRPC service** as needed. Change other fields as needed.
 3. Click **Save** at the bottom of the card.
 4. Verify: make one origin's check path answer a status outside the expected range (gRPC: make the service report `NOT_SERVING`); after about **Interval (seconds)** × **Unhealthy threshold** seconds the origin shows "Down on {down} of {total} nodes", the node results say **Active**, and requests stop going to it.
@@ -251,7 +251,7 @@ When every origin is down, the node still tries primaries, then backups (fail op
 
 ### Origin quality
 
-The **Origin quality** card on the **Origins** tab shows how each origin answered over the selected range. The numbers come from counters the nodes report every minute, so the access log sample rate does not affect them. Without fetches in the range the card shows **No origin fetches**.
+The **Origin quality** card on the **Origins** view shows how each origin answered over the selected range. The numbers come from counters the nodes report every minute, so the access log sample rate does not affect them. Without fetches in the range the card shows **No origin fetches**.
 
 | Column / item | Meaning |
 | --- | --- |
@@ -260,7 +260,7 @@ The **Origin quality** card on the **Origins** tab shows how each origin answere
 | Error rate | (no connection + timeout + TLS failed + invalid answer + 5xx) ÷ fetches; hovering the rate shows "No connection {connect} · timeout {timeout} · TLS failed {tls} · invalid answer {invalid} · 5xx {server}". No connection, timeout and TLS failed are judged as in the passive health check; an invalid answer is one that is no HTTP/1.x response; 5xx includes 500 |
 | p50 time / p95 time | Time from the attempt to the response header for attempts the origin answered (body transfer not included). Nodes count in buckets of 10, 25, 50, 100, 250 and 500 ms and 1, 2.5, 5 and 10 s; percentiles are interpolated inside a bucket, and anything above 10 s shows as "> 10 s" |
 | Lines | **p95 time to first byte** and **Error rate**: each origin over time; periods without fetches have no point |
-| Range | **Last hour**, **Last 6 hours**, **Last 24 hours** (default), **Last 7 days**, **Last 30 days**, shared with the **Analytics** tab (URL parameter `range`); 7 and 30 days read the hourly rollups. An origin removed and added again starts a new record |
+| Range | **Last hour**, **Last 6 hours**, **Last 24 hours** (default), **Last 7 days**, **Last 30 days**, shared with the **Analytics** view (URL parameter `range`); 7 and 30 days read the hourly rollups. An origin removed and added again starts a new record |
 | Partial | While an active node of the cluster lacks the node capability `origin-stats-v1` (nodes before 1.4.0), the card shows "Some nodes in the cluster are too old to report origin fetches" and the numbers cover the reporting nodes only |
 
 ### Session affinity
@@ -299,7 +299,7 @@ An upgraded connection closes after 3600 seconds idle (the [idle timeout](access
 
 ### HTTP/2 and gRPC
 
-1. In the **Pool settings** card of the **Origins** tab, set **Origin HTTP version** to **HTTP/2**; to proxy gRPC, also turn on **gRPC**.
+1. In the **Pool settings** card of the **Origins** view, set **Origin HTTP version** to **HTTP/2**; to proxy gRPC, also turn on **gRPC**.
 2. Click **Save** at the bottom of the card.
 3. Verify: once the notification shows **Live on every node**, the origin's access log shows HTTP/2 requests. A gRPC site can be called through a node, for example:
 
@@ -321,7 +321,7 @@ With **gRPC** on, requests with `Content-Type: application/grpc` (also with a su
 
 | Item | Behavior |
 | --- | --- |
-| Client connection | gRPC clients must connect to the node over HTTP/2: HTTPS ports enable HTTP/2 for the site's domains (also when the **HTTPS** tab turns HTTP/2 off); while a site of the cluster proxies gRPC, HTTP ports also take h2c, and the domains of sites without gRPC answer h2c requests with 421 |
+| Client connection | gRPC clients must connect to the node over HTTP/2: HTTPS ports enable HTTP/2 for the site's domains (also when the **HTTPS** view turns HTTP/2 off); while a site of the cluster proxies gRPC, HTTP ports also take h2c, and the domains of sites without gRPC answer h2c requests with 421 |
 | Streaming | Requests and responses are passed on frame by frame both ways, trailers (`grpc-status`, `grpc-message`) as they are; client and bidirectional streaming work |
 | Cache and compression | Never cached; the node compresses nothing |
 | Request body | No size limit |
@@ -357,7 +357,7 @@ For L4 apps' PROXY protocol see [L4](l4.en.md#proxy-protocol).
 **Origin group** splits a site's origins into groups; empty is the default group. Requests that match no **Origin override** rule go to the default group only.
 
 1. In the **Origins** card, enter an **Origin group** for an origin, for example `api`, and click **Save**. Keep at least one origin in the default group; otherwise the card shows "Keep at least one origin in the default group" and cannot be saved.
-2. On the **Rules** tab, click **Add rule** in the **Origin** phase and enter an expression such as `starts_with(http.request.uri.path, "/api/")`; select the **Origin override** action, pick `api` as **Origin group**, set **Origin Host**, **SNI**, and **Port** as needed, turn on **Enabled** (a new rule starts disabled), and click **Save**. Fields: [Action fields](rules.en.md#action-fields).
+2. On the **Rules** view, click **Add rule** in the **Origin** phase and enter an expression such as `starts_with(http.request.uri.path, "/api/")`; select the **Origin override** action, pick `api` as **Origin group**, set **Origin Host**, **SNI**, and **Port** as needed, turn on **Enabled** (a new rule starts disabled), and click **Save**. Fields: [Action fields](rules.en.md#action-fields).
 3. Verify: requests below `/api/` reach the origins of the `api` group in their logs; other paths still reach the default group.
 
 | Item | Behavior |
@@ -371,7 +371,7 @@ For L4 apps' PROXY protocol see [L4](l4.en.md#proxy-protocol).
 
 ## Request body limit
 
-The **Request body limit** card on the site's **Origins** tab is saved separately.
+The **Request body limit** card on the site's **Origins** view is saved separately.
 
 | Field | API field | Values | Default | Effect |
 | --- | --- | --- | --- | --- |
@@ -386,7 +386,7 @@ The **Request body limit** card on the site's **Origins** tab is saved separatel
 | gRPC | Not checked |
 | Node requirement | Another value than 100 MiB needs the node capability `site-content-v1`; while an active node of the cluster lacks it and the limit is 100 MiB, the card is unavailable |
 
-The limit of request bodies the rules read (`contentSettings.rulesBodyLimit`) is set on the **Rules** tab, see [Rules](rules.en.md).
+The limit of request bodies the rules read (`contentSettings.rulesBodyLimit`) is set on the **Rules** view, see [Rules](rules.en.md).
 
 ## Origin address restrictions
 
@@ -440,7 +440,7 @@ Every preset but MinIO switches the scheme to HTTPS and the port to 443. Only se
 
 ## Configure cache rules
 
-1. Open **Sites**, select the site, and open the **Cache** tab.
+1. Open **Sites**, select the site, and open the **Cache** view.
 2. In the **Cache rules** card, click **Add rule**; or click **Static assets** to add the static assets template (see the table below).
 3. In **Builder**, enter **Path prefix** and **Extensions**; or switch to **Advanced** and enter the condition in **Expression**, see [Request conditions](#request-conditions).
 4. Select **Action**, enter **TTL (seconds)**, and set **Browser TTL (s)** as needed; turn off **Respect origin** only for static assets.
@@ -575,7 +575,7 @@ The **Cache key & slicing** card is saved separately and applies to all rules of
 
 ## PURGE method
 
-In the **PURGE method** card on the **Cache** tab, turn on **Enabled**, enter 16–256 printable ASCII characters without spaces in **PURGE key** or click **Generate** for a random 32-byte key (base64url, shown with "Shown once; copy it before saving" and a copy button), and save. Then:
+In the **PURGE method** card on the **Cache** view, turn on **Enabled**, enter 16–256 printable ASCII characters without spaces in **PURGE key** or click **Generate** for a random 32-byte key (base64url, shown with "Shown once; copy it before saving" and a copy button), and save. Then:
 
 ```bash
 curl -X PURGE -H 'X-Purge-Key: <key>' -H 'Host: www.example.com' 'http://<node IP>/static/app.js?v=2'
@@ -596,7 +596,7 @@ answers `202 {"task_id":"…"}`: the console creates a URL purge task for that U
 
 ## Development mode
 
-With **Bypass the cache for 3 hours** on in the **Development mode** card at the top of a site's **Cache** tab, edge nodes neither answer the site's requests from the cache nor store them for three hours: every request goes to the origin, `X-Cache` is `BYPASS`, and changes show at once. The card shows the time left and turns it off early; the site header and the site list show a **Development mode** badge while it is on.
+With **Bypass the cache for 3 hours** on in the **Development mode** card at the top of a site's **Cache** view, edge nodes neither answer the site's requests from the cache nor store them for three hours: every request goes to the origin, `X-Cache` is `BYPASS`, and changes show at once. The card shows the time left and turns it off early; the site header and the site list show a **Development mode** badge while it is on.
 
 | Item | Details |
 | --- | --- |
@@ -632,11 +632,11 @@ Applies to `text/*`, `application/javascript`, `application/json`, and `applicat
 
 ## Compression
 
-The **Compression** card on the **Cache** tab has three groups, Zstandard, Brotli, and Gzip (**On**, **Level**, **Minimum compression size (bytes)**, **Compressed content types**), and **Largest compressed (bytes)**. These fields are stored with the site's HTTPS settings and saved with `https.update` (`PUT /sites/{id}/https`); the card sends only the compression fields and keeps unsaved edits on the **HTTPS** tab. Fields, defaults, and negotiation: [HTTPS and certificates](https.en.md#compression).
+The **Compression** card on the **Cache** view has three groups, Zstandard, Brotli, and Gzip (**On**, **Level**, **Minimum compression size (bytes)**, **Compressed content types**), and **Largest compressed (bytes)**. These fields are stored with the site's HTTPS settings and saved with `https.update` (`PUT /sites/{id}/https`); the card sends only the compression fields and keeps unsaved edits on the **HTTPS** view. Fields, defaults, and negotiation: [HTTPS and certificates](https.en.md#compression).
 
 ## Image format conversion
 
-The **Image format conversion** card on the **Cache** tab converts cached JPEG and PNG images to WebP or AVIF by the visitor's `Accept`; the **Saved by conversion** card shows the bytes saved. See [Image format conversion](image-convert.en.md).
+The **Image format conversion** card on the **Cache** view converts cached JPEG and PNG images to WebP or AVIF by the visitor's `Accept`; the **Saved by conversion** card shows the bytes saved. See [Image format conversion](image-convert.en.md).
 
 ## Cache zone
 
@@ -684,11 +684,11 @@ The **Cache zone** card on the **Settings** tab of the **Clusters & nodes** page
 | Source | The actor's name; tasks of the PURGE method show "PURGE method ({node})"; make-up whole-site purges "System (make-up whole-site purge)" |
 | URL parameters | `/purge?site=<site ID>` lists only that site's tasks (the site's name shows next to **Tasks**; × clears it) and preselects the site for site and tag purges; `/purge?type=<type>&urls=<URL>` opens that type with the URL filled in (several URLs as a JSON array, e.g. `urls=["https://www.example.com/a","https://www.example.com/b"]`); `type` is `url`, `prefix`, `host`, `tag`, `site`, `prefetch`, or `sitemap` |
 | Command menu | **Purge URLs…** in ⌘K / Ctrl+K opens this page (listing only the site's tasks on a site's pages) |
-| Other entries | The access logs, the top URLs on a site's **Analytics** tab and the top paths on its **Attacks** tab offer **Purge URL** under **⋯** at the end of the row: paths expand to each of the site's exact domains (not wildcard, `.` suffix or pattern domains), and after confirming "Purge {count} URLs?" a URL purge is created; **View tasks** in the notification opens the site's tasks |
+| Other entries | The access logs, the top URLs on a site's **Analytics** view and the top paths on its **Attacks** view offer **Purge URL** under **⋯** at the end of the row: paths expand to each of the site's exact domains (not wildcard, `.` suffix or pattern domains), and after confirming "Purge {count} URLs?" a URL purge is created; **View tasks** in the notification opens the site's tasks |
 
 ### Purge from the site
 
-The **Purge cache** card at the top of the site's **Cache** tab:
+The **Purge cache** card at the top of the site's **Cache** view:
 
 1. Select **Purge URLs**, **Purge directories**, or **Purge sites**.
 2. For URLs and directories, enter one path starting with `/` or one full URL per line in **Paths or URLs**. Paths expand to each of the site's exact domains (`/app.js` gives one URL for `www.example.com` and one for `example.com`); the count of expanded URLs shows at the top right. A line that is neither a path nor a URL shows "Not a path or URL: …", more than 500 URLs "At most 500 URLs", and paths on a site with only wildcard, `.` suffix or pattern domains "The site has no exact domain; enter full URLs"; in these cases **Submit** stays disabled. **Purge sites** shows the domains it purges.
@@ -717,7 +717,7 @@ The origin lists tags, comma separated, in the `Cache-Tag` response header, e.g.
 | Item | Behavior |
 | --- | --- |
 | Parsing | Compared in lowercase after trimming spaces and tabs; printable ASCII only (no comma); a tag is at most 128 bytes, the whole header at most 4096 bytes (several lines are joined); tags beyond that are dropped and the response is cached as usual |
-| Forwarding | Not forwarded to visitors by default (cache hits included); with **Forward Cache-Tag to clients** (`cacheSettings.keepCacheTag`) on in the **Cache-Tag** card of the site's **Cache** tab it is forwarded as is. Nodes record the tags either way |
+| Forwarding | Not forwarded to visitors by default (cache hits included); with **Forward Cache-Tag to clients** (`cacheSettings.keepCacheTag`) on in the **Cache-Tag** card of the site's **Cache** view it is forwarded as is. Nodes record the tags either way |
 | Purge result | Once the task succeeded, no node returns an object carrying a purged tag, also not as stale content after it expired; all slices of a sliced object are purged together |
 | Index | Nodes record the tags of every cached object of sites that use `Cache-Tag`, in shared memory (node flag `--tag-dict-mb`, default 64 MiB), evicting the least recently used |
 | Extra origin requests | Objects the index does not know (evicted, after an nginx restart, cached before the site's first `Cache-Tag` response) go to the origin once while the site has tag purges on record, then hit again |
@@ -824,7 +824,7 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 | 502 with `X-Edgeweir-Error: no-origin` | Every origin was dropped before the attempt (resolution failure, forbidden address, missing S3 credentials) | Read the error in the **Origins** card |
 | 502 with `X-Edgeweir-Error: origin-signing` | The node could not sign a request for an S3 origin (node log `cannot sign origin request`) | Read the node log; check **Region**, **Access key ID**, and **Secret key** |
 | 404 with `X-Edgeweir-Error: unknown-host` | The Host belongs to no site the node applied and is no domain of a disabled site: the site or domain was deleted, or the node has not applied the latest revision | Check the domain and the node's **Applied** revision |
-| 503 with `X-Edgeweir-Error: site-disabled` | The site is disabled | Enable the site on its **Overview** tab |
+| 503 with `X-Edgeweir-Error: site-disabled` | The site is disabled | Enable the site on its **Overview** view |
 | HTTPS requests fail in the TLS handshake | The SNI belongs to no site the node serves (an unknown domain, a disabled site), or the site has no certificate | Send the request over HTTP to see the node's answer; give the site a certificate, see [HTTPS and certificates](https.en.md) |
 | 508 with `X-Edgeweir-Error: loop-detected` | The origin points back at this node or at a CDN in front of it | Change the origin address |
 | 403 with `X-Edgeweir-Error: websocket-disabled` | WebSocket is off for the site | Turn on **WebSocket** |
@@ -861,7 +861,7 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 | "Nodes do not support … yet: `<nodes>`" (`NODE_CAPABILITY_REQUIRED`) | A configuration published by a service account or a background job, or a purge or prefetch task, needs a node capability an active node of the cluster lacks (such as "Rule extensions", "HTTP/2 and gRPC to origins", "Host and tag purges", "Sitemap and device prefetch") | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
 | Requests sent to different origin groups get the same cached object | The cache key does not include the origin group | Pick origin groups by path, or add what decides the group to the cache key |
 | "No site serves …" (`CACHE_TASK_HOST_UNKNOWN`) | The URL's Host is not a domain of any site; the Host of a PURGE request does not belong to the site | Check the spelling of the domain |
-| "The site is disabled" (`SITE_DISABLED`) | A task or **Purge cache** concerns a disabled site | Enable the site on its **Overview** tab, then submit again |
+| "The site is disabled" (`SITE_DISABLED`) | A task or **Purge cache** concerns a disabled site | Enable the site on its **Overview** view, then submit again |
 | "Invalid URL: …" (`CACHE_TASK_URL_INVALID`) | Not an `http(s)` URL, carries credentials, or a directory purge has a query | Fix the URL |
 | "Invalid host: …" (`CACHE_TASK_HOST_INVALID`) | Has a port, is a wildcard, or is not a valid host name | Enter one host name per line |
 | "Invalid cache tag: …" (`CACHE_TASK_TAG_INVALID`) | The tag has a comma or non-ASCII characters, or is longer than 128 bytes | Fix the tag; the origin's `Cache-Tag` follows the same rules |

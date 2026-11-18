@@ -37,7 +37,7 @@ An account is one set of credentials and one zone; for several zones under the s
 3. Select **Provider account**; **Zone** shows the account's zone. Fill in **Cluster domain** and **TTL (seconds)**.
 4. If needed, click **Add line**, fill in **Line name**, and select a **Node group** of this cluster; if needed, select a **Resolution line**, fill in **Minimum healthy IPs**, and use **Add backup group** under **Backup node groups**, ordering the groups. For a node behind NAT or on a private network, enter its public addresses in the node's **node name: target addresses** field, or configure the node's [scheduling addresses](scheduling.en.md#scheduling-addresses-and-backup-ips); leave it empty to use the node's scheduling addresses. Without lines, `all.<cluster domain>` answers with the addresses of every healthy node of the cluster.
 5. Click **Save**. The console shows **DNS revision N created**.
-6. Verify: the **Current records** card shows **Published**, and the site's **Domains** tab shows the **CNAME target**.
+6. Verify: the **Current records** card shows **Published**, and the site's **Domains** view shows the **CNAME target**.
 
    ```bash
    dig +short CNAME <CNAME prefix>.<cluster domain>
@@ -45,7 +45,7 @@ An account is one set of credentials and one zone; for several zones under the s
    ```
 
    The first prints `all.<cluster domain>.`, the second the addresses of the cluster's healthy nodes.
-7. In each site domain's DNS, CNAME the domain to the **CNAME target**. Below it the card lists where each domain resolves (**Points here**, **Points elsewhere**, **Not resolved**, **Not checked**; **Not checkable** for suffix and regex domains); the **Launch check** on the site's **Overview** tab sums it up as **DNS pointed N/M**.
+7. In each site domain's DNS, CNAME the domain to the **CNAME target**. Below it the card lists where each domain resolves (**Points here**, **Points elsewhere**, **Not resolved**, **Not checked**; **Not checkable** for suffix and regex domains); the **Launch check** on the site's **Overview** view sums it up as **DNS pointed N/M**.
 
 Clusters may use different provider accounts and cluster domains. The **Cluster bindings** table on the **DNS steering** page lists **Cluster**, **Cluster domain** (shown when a binding has one), and **Status** for each cluster: the state of the latest revision when the mode is **Automatic** and a DNS revision exists (**Published**, **Pending**, **Failed**, **Held back**, possibly with "Over the mass removal limit" or the revision's error), otherwise the mode (**Not managed**, **Manual**, **Automatic**); a click on the cluster's row opens its **DNS** tab.
 
@@ -81,7 +81,7 @@ With a provider that has the default line only, **Resolution line** is unavailab
 | `<old CNAME prefix>.<cluster domain>` | CNAME | `all.<cluster domain>`; kept for 24 hours after a prefix change, see [CNAME prefixes](domains.en.md#cname-prefixes) |
 | `<line name>.<CNAME prefix>.<cluster domain>` | CNAME | `<line name>.<cluster domain>`; one set per site and per enabled L4 app (prefixes replaced in the last 24 hours included), only with **Keep per-site line targets**; default line only |
 
-Address records are written once per cluster (`all.<cluster domain>` once per resolution line in use): the record count is "sites + enabled L4 apps + cluster addresses", plus "(sites + enabled L4 apps) × lines" with per-site line targets. With per-site line targets off, the line targets on a site's **Domains** tab and on an L4 app's page are `<line name>.<cluster domain>`.
+Address records are written once per cluster (`all.<cluster domain>` once per resolution line in use): the record count is "sites + enabled L4 apps + cluster addresses", plus "(sites + enabled L4 apps) × lines" with per-site line targets. With per-site line targets off, the line targets on a site's **Domains** view and on an L4 app's page are `<line name>.<cluster domain>`.
 
 The **Resolution line** column of the **Current records** and **Records to create** tables shows each record's resolution line.
 
@@ -133,7 +133,7 @@ The console writes no DNS. The cluster's **DNS** tab lists the records to create
 | Resolution lines | Records list their resolution line; the BIND zone file holds the default line's records, and records of other resolution lines follow as comments (`; line telecom`) to be created on those lines at the provider |
 | Sites | One CNAME per site; a single `*.<cluster domain> CNAME all.<cluster domain>` can replace the per-site records |
 | L4 apps | One CNAME per enabled app; a disabled app drops out of the list, delete its record by hand |
-| CNAME target | Shown on the site's **Domains** tab as usual, with the state **Manual** |
+| CNAME target | Shown on the site's **Domains** view as usual, with the state **Manual** |
 | Switching modes | From Automatic to Manual, written records stay and the console stops changing them; only **Not managed** removes them |
 
 ### Upgrading from the global DNS configuration
@@ -141,7 +141,7 @@ The console writes no DNS. The cluster's **DNS** tab lists the records to create
 Earlier versions had one global DNS steering configuration. On upgrade it becomes one binding per cluster, and the CNAME records of site domains need no change:
 
 - Every cluster's cluster domain is the former CNAME domain, so each site's CNAME target keeps its name and resolves to the same addresses as before.
-- A configuration that was on becomes Automatic with **Keep per-site line targets** on, so the line targets a site's **Domains** tab listed, `<line>.<site UUID>.<CNAME domain>`, keep resolving; one that was off becomes Not managed, with account, domain, and lines kept in the form.
+- A configuration that was on becomes Automatic with **Keep per-site line targets** on, so the line targets a site's **Domains** view listed, `<line>.<site UUID>.<CNAME domain>`, keep resolving; one that was off becomes Not managed, with account, domain, and lines kept in the form.
 - When several clusters share the former CNAME domain, their all-lines records are named `all`, `all-2`, … (clusters with sites first) and each site's CNAME points at its cluster's record.
 - The former per-site address records `all.<site UUID>.<CNAME domain>` are removed by the next reconciliation, which deletes only names the console registered.
 - If the first publication after the upgrade would leave only CNAMEs and no address records (for example before any node has reconnected), the cluster keeps its previous records and the revision shows **Held back**, as in [Mass removal protection](#mass-removal-protection); it continues once nodes are back, or with **Publish anyway**.

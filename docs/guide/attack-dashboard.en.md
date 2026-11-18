@@ -1,6 +1,6 @@
 # Attacks and automatic mitigation
 
-What a site's "Attacks" tab shows about blocks, sources and matches, and automatic mitigation, which turns a site's Under Attack on and off by its CC level.
+What a site's "Attacks" view shows about blocks, sources and matches, and automatic mitigation, which turns a site's Under Attack on and off by its CC level.
 
 ## Concepts
 
@@ -15,7 +15,7 @@ What a site's "Attacks" tab shows about blocks, sources and matches, and automat
 
 ## The Attacks tab
 
-Page: **Sites → (site) → Attacks** (`/sites/<site ID>?tab=attacks`). The "Range" at the top right ("Last hour", "Last 6 hours", "Last 24 hours" (default), "Last 7 days", "Last 30 days") applies to every card but "Automatic mitigation" and "Current level per node"; it is kept as `range` in the URL (`1h`, `6h`, `24h`, `7d`, `30d`, shared with the "Analytics" tab).
+Page: **Sites → (site) → Attacks** (`/sites/<site ID>/attacks`). The "Range" at the top right ("Last hour", "Last 6 hours", "Last 24 hours" (default), "Last 7 days", "Last 30 days") applies to every card but "Automatic mitigation" and "Current level per node"; it is kept as `range` in the URL (`1h`, `6h`, `24h`, `7d`, `30d`, shared with the "Analytics" view).
 
 | Card | Content |
 | --- | --- |
@@ -49,7 +49,7 @@ When nodes of the cluster do not report the data, a card shows "Some nodes in th
 
 ### Access log links
 
-The link `/sites/<site ID>?tab=logs` opens the "Logs" tab with its query parameters as filters:
+The link `/sites/<site ID>/logs` opens the "Logs" tab with its query parameters as filters:
 
 | Parameter | Content |
 | --- | --- |
@@ -73,7 +73,7 @@ On the "Automatic mitigation" card click "Set up" ("Edit" at the top right of th
 Sites not set up have no automatic mitigation; the card shows "Not set up". The card refreshes every 15 seconds and shows "State" ("On", "Armed", "Off"), "Trigger level", "Hold" and "Level now" (the site level).
 
 1. The site level reaches the trigger level or goes above it.
-2. Automatic mitigation turns on the site's Under Attack (with the "Challenge type" of the site's Under Attack card) and publishes the site's cluster. The card shows "Under Attack on until {time}" and "End now"; the Under Attack card on the site's "Security" tab shows "Automatic until {time}".
+2. Automatic mitigation turns on the site's Under Attack (with the "Challenge type" of the site's Under Attack card) and publishes the site's cluster. The card shows "Under Attack on until {time}" and "End now"; the Under Attack card on the site's "Security" view shows "Automatic until {time}".
 3. While the site level stays at the trigger level or above, the expiry moves to "now + hold", without a new revision.
 4. Once the site level is below the trigger level and the expiry has passed, Under Attack is turned off again and the cluster is published.
 

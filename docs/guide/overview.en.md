@@ -52,7 +52,7 @@ The conditions of each item are in [Needs attention](clusters.en.md#needs-attent
 
 ## Analytics
 
-Traffic of every site over the chosen range; the site **Analytics** tab uses the same component for one site.
+Traffic of every site over the chosen range; the site **Analytics** view uses the same component for one site.
 
 ### Range and refresh
 
@@ -176,7 +176,7 @@ The **Customize cards** menu in the **Analytics** header lists every overview ca
 | Rule | Description |
 | --- | --- |
 | Storage | Kept with the account in the console, the same in every browser; not audited |
-| Scope | One choice for the overview and one for the site **Analytics** tab; the latter applies to every site |
+| Scope | One choice for the overview and one for the site **Analytics** view; the latter applies to every site |
 | New cards | Cards added by later versions show by default |
 | Hidden cards | Load no data; with every analytics card hidden the section shows **All cards hidden** and **Show all** |
 

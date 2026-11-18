@@ -16,7 +16,7 @@ Turn on the OWASP Core Rule Set (CRS) per site: ModSecurity on the nodes inspect
 
 Prerequisites: every active node of the site's cluster supports `modsecurity-v1` (has `edgeweir-openresty-modsecurity` installed, see [Adding nodes](../deploy/nodes.en.md)).
 
-1. Open **Sites**, select the site, and open the **Security** tab.
+1. Open **Sites**, select the site, and open the **Security** view.
 2. In the **OWASP CRS managed rules** card, set **Mode** to **Detect only**.
 3. Pick Loose, Standard (the default), or Strict under **Preset**, or **Custom** to set **Paranoia level**, **Anomaly score threshold**, and **Request body inspected (bytes)**; add [exclusions](#exclusions) as needed.
 4. Click **Save**. The console shows **Saved** and publishes a new configuration revision for the site's cluster.
@@ -27,7 +27,7 @@ Prerequisites: every active node of the site's cluster supports `modsecurity-v1`
      'https://www.example.com/?q=%3Cscript%3Ealert(1)%3C/script%3E'
    ```
 
-   In **Detect only** mode the origin's usual status comes back; within a minute, **Most-matched CRS rules** on the **Attacks** tab lists the rules the request matched (such as 941100).
+   In **Detect only** mode the origin's usual status comes back; within a minute, **Most-matched CRS rules** on the **Attacks** view lists the rules the request matched (such as 941100).
 6. Once matches and false positives are reviewed, set **Mode** to **Block** and save. The same request returns `403`.
 
 ## Fields
@@ -115,7 +115,7 @@ Larger limits cost the node more memory and CPU, see [Performance](#performance)
 
 | Where | Contents |
 | --- | --- |
-| **Attacks** tab → **Most-matched CRS rules** | The rule IDs matched most often in the **Range** (1 hour, 6 hours, 24 hours, 7 days, 30 days). The counts are approximate: each node reports only the 20 most-matched rules per site and minute |
+| **Attacks** view → **Most-matched CRS rules** | The rule IDs matched most often in the **Range** (1 hour, 6 hours, 24 hours, 7 days, 30 days). The counts are approximate: each node reports only the 20 most-matched rules per site and minute |
 | The site's **Logs** tab | With access log sampling on, requests that matched rules show **CRS** under the request: the rule IDs (at most 16 per request) and a **Blocked** badge. The CSV gets `wafRuleIds` (space-separated) and `wafBlocked` columns |
 
 Matches are recorded in both detect and block mode.
@@ -124,7 +124,7 @@ A rule that raises false positives can be excluded for the whole site where it s
 
 Initialization, blocking evaluation and correlation rules (901xxx, 949xxx, 959xxx, 980xxx) only add up scores and decide, so 949110, for one, matches every blocked request. They are left out of **Most-matched CRS rules** and cannot be excluded (the console and the API refuse them, 400 `WAF_RULE_NOT_EXCLUDABLE`), since excluding them breaks CRS or turns blocking off. Against a false positive, exclude the rule that detected it in the log row; to stop blocking, set the mode to **Detect only**.
 
-The **In effect** line at the top of the **Security** tab shows **CRS: (mode) · (preset)**; click it to jump to the CRS card, whose title shows the mode while it is detect only or block. Access logs: [Access logs](access-logs.en.md).
+The **In effect** line at the top of the **Security** view shows **CRS: (mode) · (preset)**; click it to jump to the CRS card, whose title shows the mode while it is detect only or block. Access logs: [Access logs](access-logs.en.md).
 
 ## Performance
 

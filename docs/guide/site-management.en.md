@@ -1,15 +1,13 @@
 # Site management
 
-The site list, creating sites, the site page and its Overview tab, stars, tags, batch actions, copying settings, cloning and deleting sites.
-
-![Site settings groups and tabs](../assets/ui/site-settings.en.png)
+The site list, creating sites, the site workspace, stars, tags, batch actions, copying settings, cloning and deleting sites.
 
 ## Concepts
 
 | Term | Definition |
 | --- | --- |
 | Site | A set of domains, origins and settings in one cluster. Every save of a site makes its cluster publish a new configuration revision to the nodes, see [revisions](clusters.en.md#revisions). |
-| Site tab | A section of the site page (`/sites/<site ID>`), addressed as `?tab=<tab>`, see [site tabs](#site-tabs). |
+| Site view | A view of the site workspace. See [site views](#site-views). |
 | Star | An account's mark on a site. Starred sites come first in the overview's "Sites" card and in the command menu. Not shipped to nodes; no configuration revision. |
 | Tag | A group name of a site, 1–32 characters, case-insensitive (`Prod` and `prod` are one tag, shown as first written). A site has at most 10. Tags are used by the console only: nodes never receive them and changing tags publishes no configuration revision. |
 | Batch action | Turning on, turning off, purging, adding tags, removing tags, copying settings or deleting the sites selected in the site list, up to 100 sites at once. |
@@ -47,11 +45,11 @@ Page: **Sites** (`/sites`). The "Sites | L4 apps" switch at the left of the filt
 
 1. On **Sites** click "New site" (or choose "New site" in the command menu).
 2. Fill in the form and click "Create".
-3. The cluster publishes a new configuration revision (reason "Site {site} created") and the page opens the site's "Overview" tab; the notice "Site created" follows the nodes until "Live on every node", see [site enabling](clusters.en.md#site-enabling).
+3. The cluster publishes a new configuration revision (reason "Site {site} created") and the page opens the site's "Overview" view; the notice "Site created" follows the nodes until "Live on every node", see [site enabling](clusters.en.md#site-enabling).
 
 | Field | Values and limits | Default | Details |
 | --- | --- | --- | --- |
-| "Name" | 1–100 characters | The first domain (cut at 100 characters) | The site's display name; editable on the "Overview" tab |
+| "Name" | 1–100 characters | The first domain (cut at 100 characters) | The site's display name; editable on the "Overview" view |
 | "Cluster" | The console's clusters | The cluster the list is filtered by, else the oldest cluster | Shown only with several clusters. Cannot be changed after creation |
 | "Domains" | 1–50, at most 10 of them patterns | None | One per line, or separated by spaces or commas (commas inside a pattern do not separate); forms: [domain forms](domains.en.md#domain-forms). A name in one form belongs to one site only |
 | "Origin" | IP or host name | None | Pasting a URL (`https://origin.example.com:8443/app`) or `host:port` fills the port and protocol into their fields |
@@ -70,7 +68,7 @@ Page: **Sites** (`/sites`). The "Sites | L4 apps" switch at the left of the filt
 
 ## The site page
 
-Page: **Sites → (site)** (`/sites/<site ID>`). The header holds the button back to the list ("All sites") on the left, and the star button and **⋯** on the right. **⋯** is available on every tab:
+Page: **Sites → (site)** (`/sites/<site ID>`). The sidebar provides the back link, site switcher and directory. The header contains the star, Enable or Disable, and **⋯** on every view.
 
 | Item | Details |
 | --- | --- |
@@ -79,54 +77,56 @@ Page: **Sites → (site)** (`/sites/<site ID>`). The header holds the button bac
 | "Purge cache" | The confirmation lists every domain of the site; confirming creates a whole-site purge task (no configuration revision), shows "Whole-site purge submitted", and "View tasks" opens **Purge & prefetch** (`/purge?site=<site ID>`), see [purge a site's cache](origins-and-cache.en.md#purge-a-sites-cache). A disabled site returns "The site is disabled" (`SITE_DISABLED`) |
 | "Delete" | See [deleting a site](#deleting-a-site) |
 
-### Site tabs
+### Site views
 
-Below the title, choose a group and then one of its tabs. Switching groups opens the group's first tab. On phones the group selector takes its own row; the tabs within a group scroll sideways when needed.
+Open a group in the sidebar to see its views. The top row returns to the list with its filters and sort. The switcher searches by name or domain and keeps the selected view. On phones, open the directory from **Open menu**.
 
-| Group | Tabs |
+| Group | Views |
 | --- | --- |
-| "Overview" | Overview |
-| "Connection" | Domains, Origins, HTTPS |
-| "Performance & delivery" | Cache, Rules, Bulk redirects, Error pages, Extensions (shown once an extension is installed) |
-| "Security" | Security, Access control, AI crawlers |
-| "Observability" | Analytics, Attacks, Logs |
+| Analytics & logs | Analytics, Attacks, Access logs |
+| Connection | Domains, Origins |
+| Rules | Rules, Bulk redirects |
+| Security | Security protection, Access control, AI crawlers |
 
-Existing tab addresses are unchanged. Opening an old link, refreshing or going back or forward selects the group and tab from the address. Switching groups or tabs asks before discarding unsaved changes; cancelling keeps the current tab and draft.
+Overview, HTTPS, Cache, Error pages and Extensions appear directly in the directory. Extensions appears when an extension is installed. Old `?tab=` links redirect to the corresponding view and keep their other parameters. Navigation prompts before discarding unsaved changes.
 
-| Tab | Address | Content | Documentation |
+| View | Address | Content | Documentation |
 | --- | --- | --- | --- |
-| "Overview" | `/sites/<ID>` | Live requests, launch check, name, status, tags, usage protection | [Overview tab](#overview-tab) |
-| "Analytics" | `?tab=analytics` | Requests, traffic, cache hit ratio and other analytics cards | [View analytics](access-logs.en.md#view-analytics) |
-| "Domains" | `?tab=domains` | CNAME target or edge addresses, domains, ports | [Domains and unknown hosts](domains.en.md) |
-| "Origins" | `?tab=origins` | Origin topology, origin quality, origins, pool settings, request body limit | [Origins and caching](origins-and-cache.en.md#configure-origins) |
-| "Cache" | `?tab=cache` | Purge, cache rules, cache key, PURGE method, Cache-Tag, X-Cache, compression, image format conversion, charset | [Origins and caching](origins-and-cache.en.md#configure-cache-rules), [compression](https.en.md#compression), [image format conversion](image-convert.en.md) |
-| "HTTPS" | `?tab=https` | Certificates, HTTPS options | [HTTPS and certificates](https.en.md#configure-a-sites-https) |
-| "Rules" | `?tab=rules` | Site rules, the largest request body rules read | [Rules, IP lists and GeoIP](rules.en.md#edit-site-rules) |
-| "Bulk redirects" | `?tab=redirects` | The redirect table | [Bulk redirects](rules.en.md#bulk-redirects) |
-| "Access control" | `?tab=access` | Access authentication, site lists, regions, hotlink protection, user agents, CORS, WebSocket, security headers, encoded path exemptions, IP check | [Access control](access-control.en.md) |
-| "Security" | `?tab=security` | Under Attack, challenge settings, CC policy, OWASP CRS | [Challenges and CC mitigation](challenges.en.md), [OWASP CRS](waf.en.md) |
-| "Attacks" | `?tab=attacks` | Attack statistics, automatic mitigation, security events | [Attacks and automatic mitigation](attack-dashboard.en.md) |
-| "AI crawlers" | `?tab=crawlers` | Crawler traffic, access policies, Markdown for Agents | [AI crawlers](ai-crawl-control.en.md) |
-| "Error pages" | `?tab=errors` | Error pages, maintenance mode | [Error pages](error-pages.en.md) |
-| "Extensions" | `?tab=extensions` | Per-site switches and settings for installed extensions | [Extensions](extensions.en.md) |
-| "Logs" | `?tab=logs` | Searching, exporting and configuring access logs | [Access logs](access-logs.en.md) |
+| "Overview" | `/sites/<ID>` | Live requests, launch check, name, status, tags, usage protection | [Overview](#overview) |
+| "Analytics" | `/sites/<ID>/analytics` | Requests, traffic, cache hit ratio and other analytics cards | [View analytics](access-logs.en.md#view-analytics) |
+| "Domains" | `/sites/<ID>/domains` | CNAME target or edge addresses, domains, ports | [Domains and unknown hosts](domains.en.md) |
+| "Origins" | `/sites/<ID>/origins` | Origin topology, origin quality, origins, pool settings, request body limit | [Origins and caching](origins-and-cache.en.md#configure-origins) |
+| "Cache" | `/sites/<ID>/cache` | Purge, cache rules, cache key, PURGE method, Cache-Tag, X-Cache, compression, image format conversion, charset | [Origins and caching](origins-and-cache.en.md#configure-cache-rules), [compression](https.en.md#compression), [image format conversion](image-convert.en.md) |
+| "HTTPS" | `/sites/<ID>/https` | Certificates, HTTPS options | [HTTPS and certificates](https.en.md#configure-a-sites-https) |
+| "Rules" | `/sites/<ID>/rules` | Site rules, the largest request body rules read | [Rules, IP lists and GeoIP](rules.en.md#edit-site-rules) |
+| "Bulk redirects" | `/sites/<ID>/redirects` | The redirect table | [Bulk redirects](rules.en.md#bulk-redirects) |
+| "Access control" | `/sites/<ID>/access` | Access authentication, site lists, regions, hotlink protection, user agents, CORS, WebSocket, security headers, encoded path exemptions, IP check | [Access control](access-control.en.md) |
+| "Security protection" | `/sites/<ID>/security` | Under Attack, challenge settings, CC policy, OWASP CRS | [Challenges and CC mitigation](challenges.en.md), [OWASP CRS](waf.en.md) |
+| "Attacks" | `/sites/<ID>/attacks` | Attack statistics, automatic mitigation, security events | [Attacks and automatic mitigation](attack-dashboard.en.md) |
+| "AI crawlers" | `/sites/<ID>/crawlers` | Crawler traffic, access policies, Markdown for Agents | [AI crawlers](ai-crawl-control.en.md) |
+| "Error pages" | `/sites/<ID>/errors` | Error pages, maintenance mode | [Error pages](error-pages.en.md) |
+| "Extensions" | `/sites/<ID>/extensions` | Per-site switches and settings for installed extensions | [Extensions](extensions.en.md) |
+| "Access logs" | `/sites/<ID>/logs` | Searching, exporting and configuring access logs | [Access logs](access-logs.en.md) |
 
-The time range of the "Analytics", "Origins" and "Attacks" tabs is kept in `?range=`.
+The overview and analytics views keep the time range in `?range=`.
 
-### Overview tab
+### Overview
 
 | Block | Content |
 | --- | --- |
 | "Live requests" | Requests per second over the last hour, minute by minute, refreshed every 60 seconds; the current minute, still being counted, is left out. Shown only while the site is enabled |
 | "Launch check" | See [launch check](#launch-check) |
-| "Overview" | "Name" and the rows below |
-| "Usage protection" | Below the "Overview" card, see [usage protection](usage-protection.en.md) |
+| "Traffic" | Requests, data transferred, cache hit ratio and error responses. Select a row to open its breakdown. |
+| "Site status" | Name and the rows below |
+| "Connection" | CNAME or edge addresses and the DNS status of the domains |
+| "Quick actions" | Development mode and Under Attack |
+| "Usage protection" | Below the traffic and launch checks, see [usage protection](usage-protection.en.md) |
 
 | Row | Details |
 | --- | --- |
 | "Name" | 1–100 characters, not empty. Change it and click "Save": the cluster publishes a new configuration revision (reason "Site {site} updated") and the audit entry "Site updated" is written |
-| "Status" | The site's status and the "Disable" / "Enable" button. Disabling asks "Disable {name}?" ("Nodes stop serving these domains; DNS records stay"); enabling asks "Enable {name}?". When the site changed after the page loaded: "It changed since you loaded it; reload and try again" (`UPDATED_AT_MISMATCH`). Behavior: [site enabling](clusters.en.md#site-enabling) |
-| "Domains" | Every domain of the site (internationalized names in Unicode, Punycode on hover); changed on the "Domains" tab |
+| "Status" | The site's status. The page header has "Disable" / "Enable". Disabling asks "Disable {name}?" ("Nodes stop serving these domains; DNS records stay"); enabling asks "Enable {name}?". When the site changed after the page loaded: "It changed since you loaded it; reload and try again" (`UPDATED_AT_MISMATCH`). Behavior: [site enabling](clusters.en.md#site-enabling) |
+| "Domains" | Every domain of the site (internationalized names in Unicode, Punycode on hover); changed on the "Domains" view |
 | "Cluster" | The site's cluster |
 | "Tags" | The site's tags and the edit button, see [tags](#tags) |
 | "Updated" | When the site was last changed |
@@ -137,8 +137,8 @@ The "Launch check" card checks every 30 seconds; "Check again" at its top right 
 
 | Row | States | Link |
 | --- | --- | --- |
-| DNS | "DNS pointed {ok}/{total}": of the checkable domains, how many resolve to the cluster's nodes, with the unresolved ones and those pointing elsewhere on the right; "Not checkable" when the site has only suffix and pattern domains. Rules: [pointing states](domains.en.md#pointing-states) | "Domains" tab |
-| Certificate | "No certificate", "Certificate covers every domain", "Certificate misses domains" (the missing domains on the right), "Certificate being issued", "Certificate issuance failed" (the reason on the right), "Certificate expired". Suffix and pattern domains are not counted | "HTTPS" tab |
+| DNS | "DNS pointed {ok}/{total}": of the checkable domains, how many resolve to the cluster's nodes, with the unresolved ones and those pointing elsewhere on the right; "Not checkable" when the site has only suffix and pattern domains. Rules: [pointing states](domains.en.md#pointing-states) | "Domains" view |
+| Certificate | "No certificate", "Certificate covers every domain", "Certificate misses domains" (the missing domains on the right), "Certificate being issued", "Certificate issuance failed" (the reason on the right), "Certificate expired". Suffix and pattern domains are not counted | "HTTPS" view |
 | Nodes | "Live on {current}/{total} nodes"; "Disabled" for a disabled site, "No online nodes" when the cluster has none; during a canary "Canary, all nodes at {time}" or "Canary, awaiting promotion" on the right | **Clusters & nodes** |
 
 ## Stars
@@ -210,7 +210,7 @@ A target that lacks something the settings use fails:
 
 | Message | Error code | What to do |
 | --- | --- | --- |
-| Rule "…" chooses origin group …, which the site does not have | `ORIGIN_GROUP_UNKNOWN` | Add an origin group of that name on the target's "Origins" tab first |
+| Rule "…" chooses origin group …, which the site does not have | `ORIGIN_GROUP_UNKNOWN` | Add an origin group of that name on the target's "Origins" view first |
 | The HTTPS redirect, HSTS and client certificates need a certificate on the site | `HTTPS_REQUIRES_CERTIFICATE` | The target has no certificate: give it one, or leave out "HTTPS options" |
 | The site does not serve … / The site has no domain … | `BULK_REDIRECT_HOST_UNKNOWN` / `AUTH_DOMAIN_UNKNOWN` | A bulk redirect source (`domain/path`) or an access authentication rule's domains name a domain the target does not have |
 | Redirect port … is not an HTTPS port of the site | `HTTPS_REDIRECT_PORT_INVALID` | Add the port to the target, or use 443 on the source |
@@ -276,7 +276,7 @@ Fields and error codes are in the [API reference](../reference/api/sites.en.md#s
 | Creating shows "Enter a host name or IP, optionally with a port; IPv6 with a port in brackets" | "Origin Host" is malformed | Enter a host name or IP, or leave it empty to keep the request's |
 | The origin shows "Origin address … is in the special-purpose range …" (`ORIGIN_ADDRESS_FORBIDDEN`) | The origin is a private, loopback or other special-purpose address | Use a public address, or add the range to the origin allow list in the system settings, see [origin address restrictions](origins-and-cache.en.md#origin-address-restrictions) |
 | Enabling or disabling shows "It changed since you loaded it; reload and try again" (`UPDATED_AT_MISMATCH`) | The site changed after the page was opened | Reload the page and try again |
-| The "Requests (24h)" column is missing | A search or filter is set, the page is not page 1, or there are more than 20 sites | See the site's "Analytics" tab |
+| The "Requests (24h)" column is missing | A search or filter is set, the page is not page 1, or there are more than 20 sites | See the site's "Analytics" view |
 | A batch purge shows "The site is disabled" (`SITE_DISABLED`) | A selected site is disabled | Deselect the disabled sites |
 | Adding tags shows "Site {site} can have at most 10 tags" (`SITE_TAG_LIMIT`) | The site would get more than 10 tags | Remove some of that site's tags first, or deselect it |
 | Copying settings fails on some sites | A target lacks something the settings use | See [why a copy fails](#why-a-copy-fails) |

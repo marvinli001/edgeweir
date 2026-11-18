@@ -16,7 +16,7 @@ The error pages nodes answer with: a site's templates and redirects, maintenance
 
 ## Set a site's error pages
 
-Page: **Sites** → the site → the **Error pages** tab (`/sites/<site ID>?tab=errors`). The tab holds the **Maintenance mode** card on top (see [Maintenance mode](#maintenance-mode)) and the **Error pages** card below.
+Page: **Sites** → the site → the **Error pages** view (`/sites/<site ID>/errors`). The tab holds the **Maintenance mode** card on top (see [Maintenance mode](#maintenance-mode)) and the **Error pages** card below.
 
 1. In the **Error pages** card, find the row of the status. The switch at the top right of the row chooses **HTML template** or **Redirect to URL**.
 2. **HTML template**: enter the template in the field; its size shows as "{bytes} / 65,536 bytes". To send it with another status, fill in **Response status**. **Redirect to URL**: enter the URL (placeholder example `/error?code={{status}}`). Rows left empty use the built-in page.
@@ -85,7 +85,7 @@ With **Redirect to URL**, responses of that status become a 302 redirect.
 
 ## Maintenance mode
 
-In the **Maintenance mode** card on the **Error pages** tab, turn on **Enabled**, fill in **Retry-After (seconds)**, **Allowed addresses**, **Allowed path prefixes** and **Maintenance page** as needed, and click **Save**. The other settings are kept while it is off.
+In the **Maintenance mode** card on the **Error pages** view, turn on **Enabled**, fill in **Retry-After (seconds)**, **Allowed addresses**, **Allowed path prefixes** and **Maintenance page** as needed, and click **Save**. The other settings are kept while it is off.
 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |

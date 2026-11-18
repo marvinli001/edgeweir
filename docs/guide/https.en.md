@@ -10,7 +10,7 @@ Uploads, ACME requests and renewal, DNS credentials and origin protection on the
 | ACME certificate | A certificate the console requests from Let's Encrypt, ZeroSSL, Google Trust Services or a custom ACME directory and renews automatically. |
 | ACME account | An account the console registered with a CA, one per directory, EAB key ID and email, shared by the certificates of that combination. |
 | DNS credential | A DNS provider credential that DNS-01 validation uses to write TXT records. Separate from the provider accounts of DNS steering. |
-| HTTPS settings | The certificates (up to 4), redirect, HSTS, TLS, HTTP/2, HTTP/3, OCSP stapling and client certificate options on a site's **HTTPS** tab; compression is set in the **Compression** card of the **Cache** tab and stored in the same group of fields. |
+| HTTPS settings | The certificates (up to 4), redirect, HSTS, TLS, HTTP/2, HTTP/3, OCSP stapling and client certificate options on a site's **HTTPS** view; compression is set in the **Compression** card of the **Cache** view and stored in the same group of fields. |
 | Client certificate | A certificate a visitor presents in the TLS handshake, issued by a CA the site trusts (mutual TLS). |
 | Listener ports | The ports nodes take HTTP and HTTPS traffic on: 80, 443 and the cluster's extra ports; a site chooses some of them in its **Ports** card. |
 | Origin protection | The Origin CA issues origin certificates only the nodes trust; the origin client CA issues the client certificates nodes present to origins. |
@@ -68,11 +68,11 @@ Nodes cannot load certificates with explicit curve parameters uploaded earlier e
 | Item | Behavior |
 | --- | --- |
 | Background check | A background job checks the uploaded certificates at every start: such a certificate shows **Unusable** with the reason, and the audit log records "Certificate marked unloadable" (`certificate.unloadable`) with the sites and L4 apps that use it |
-| Sites | Sites and the **Existing certificate** list no longer offer it; a site that uses it is not changed automatically, and saving its **HTTPS** tab answers with the same error |
+| Sites | Sites and the **Existing certificate** list no longer offer it; a site that uses it is not changed automatically, and saving its **HTTPS** view answers with the same error |
 | Nodes 1.1.0 and later | Skip a certificate they cannot load and apply the rest of the revision: a node that still holds the certificate's previous version keeps serving it, otherwise it refuses the TLS handshakes that need it, never answering with another certificate |
 | Earlier nodes | No node of the cluster applies the revision |
 | Reports | Once nodes report it, the certificate row shows the node report (status **Unusable** when handshakes are refused), the node shows "Certificates not loaded: N", and the alert "A node cannot load a certificate" fires |
-| Fix | Upload a named-curve certificate (see [Troubleshooting](#troubleshooting)), select it on those sites' **HTTPS** tab and save, or choose **HTTP only**, then delete the old certificate |
+| Fix | Upload a named-curve certificate (see [Troubleshooting](#troubleshooting)), select it on those sites' **HTTPS** view and save, or choose **HTTP only**, then delete the old certificate |
 
 ## Add a DNS credential
 
@@ -171,9 +171,9 @@ The **ACME accounts** card lists the accounts the console registered: email, CA,
 
 ## Enable HTTPS with one click
 
-While a site has no certificate, or its first certificate is an unissued or expired upload, its **HTTPS** tab shows only the **HTTPS is off** card.
+While a site has no certificate, or its first certificate is an unissued or expired upload, its **HTTPS** view shows only the **HTTPS is off** card.
 
-1. Open **Sites**, select the site, and open the **HTTPS** tab.
+1. Open **Sites**, select the site, and open the **HTTPS** view.
 2. The console first checks whether a certificate can be issued; anything in the way is listed line by line and **Enable HTTPS** is unavailable. After fixing it, click **Check again**.
 3. When needed, click **Customize** to change **Certificate authority** or **Account email**, or to turn on **Skip the DNS check**.
 4. Click **Enable HTTPS**.
@@ -203,7 +203,7 @@ Check results are cached for 30 seconds. While the certificate is issued, the ta
 
 ## Configure a site's HTTPS
 
-1. Open **Sites**, select the site, and open the **HTTPS** tab (for a site without a certificate see [Enable HTTPS with one click](#enable-https-with-one-click)).
+1. Open **Sites**, select the site, and open the **HTTPS** view (for a site without a certificate see [Enable HTTPS with one click](#enable-https-with-one-click)).
 2. Select a certificate in **Certificates**. The list contains every issued, unexpired certificate nodes can load, and the certificates the site already uses; **HTTP only** disables HTTPS. For more certificates click **Add certificate**, see [Several certificates](#several-certificates).
 3. Set **Minimum TLS version**, **Cipher profile**, **HSTS lifetime (seconds)**, and the switches.
 4. Click **Save**. The console shows **Saved**, publishes a new configuration revision for the site's cluster (reason "Certificate policy for {site} updated"), and audits `site.https_update`.
@@ -297,7 +297,7 @@ The first shows the certificate covering `a.example.com` (`256 bit` for ECDSA); 
 
 ### Client certificates
 
-**Client certificates** on the **HTTPS** tab asks visitors for a certificate issued by a CA the site trusts (mutual TLS), for example for a site only internal systems or partners use.
+**Client certificates** on the **HTTPS** view asks visitors for a certificate issued by a CA the site trusts (mutual TLS), for example for a site only internal systems or partners use.
 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
@@ -330,7 +330,7 @@ With Required the first answers 403 and the second the origin's content; with th
 
 ### Adding domains to an HTTPS site
 
-When new domains are saved on the site's **Domains** tab:
+When new domains are saved on the site's **Domains** view:
 
 | The site's certificate | Behavior |
 | --- | --- |
@@ -370,7 +370,7 @@ The second prints `Reused, TLSv1.3` (`TLSv1.2` with `-tls1_2`).
 
 ### Compression
 
-The **Compression** card on a site's **Cache** tab has a group of settings each for Zstandard, Brotli, and Gzip, saved on their own (unsaved changes on the **HTTPS** tab stay):
+The **Compression** card on a site's **Cache** view has a group of settings each for Zstandard, Brotli, and Gzip, saved on their own (unsaved changes on the **HTTPS** view stay):
 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
@@ -429,7 +429,7 @@ The SNI of an HTTPS request must equal its `Host`; otherwise the node returns 42
 
 ### Site ports
 
-The **Ports** card on a site's **Domains** tab chooses where the site is served: **HTTP** on 80 and the cluster's extra HTTP ports, **HTTPS** on 443 and its extra HTTPS ports. Default: 80 and 443. **Save** publishes the site's cluster.
+The **Ports** card on a site's **Domains** view chooses where the site is served: **HTTP** on 80 and the cluster's extra HTTP ports, **HTTPS** on 443 and its extra HTTPS ports. Default: 80 and 443. **Save** publishes the site's cluster.
 
 | Item | Rule |
 | --- | --- |
@@ -444,7 +444,7 @@ The **Ports** card on a site's **Domains** tab chooses where the site is served:
 
 ## Origin protection
 
-Makes origins accept connections from the edge nodes only: the nodes present a client certificate the console issued (the origin verifies it), and origins use certificates of the console's Origin CA (which only the nodes trust). Use either or both; they are managed in the **Origin certificates** and **Origin client** tabs of **Certificates** and turned on in the site's **Pool settings** on its **Origins** tab (**Verify origin certificates**, **Trust** and **Present client certificate** under **Origin TLS**, see [Origins and cache](origins-and-cache.en.md)).
+Makes origins accept connections from the edge nodes only: the nodes present a client certificate the console issued (the origin verifies it), and origins use certificates of the console's Origin CA (which only the nodes trust). Use either or both; they are managed in the **Origin certificates** and **Origin client** tabs of **Certificates** and turned on in the site's **Pool settings** on its **Origins** view (**Verify origin certificates**, **Trust** and **Present client certificate** under **Origin TLS**, see [Origins and cache](origins-and-cache.en.md)).
 
 ### Origin CA
 
@@ -652,8 +652,8 @@ Paths are relative to `/api/v1` and authenticated with an AccessKey (`x-api-key`
 | "A domain does not resolve to the nodes" | The check before the issuance found a name that does not resolve to the cluster's nodes; the CA was not contacted | Fix the DNS records; it is retried within 5 minutes, or click **Renew now** |
 | "Issuance failed; see the console log" | An unclassified error | Find `certificate operation failed` in the log of the console process that runs background jobs and follow its `reason` |
 | Certificate stays **Pending** | No console process runs background jobs | Make sure a process with `ROLE=worker` or `ROLE=all` runs |
-| "Certificate operation is already in progress" | The certificate is **Issuing**; a request for the site is already waiting to be bound; or an uploaded certificate was renewed | Wait for issuance to finish; retry or cancel that request on the site's **HTTPS** tab |
-| "The certificate is used by sites: …" | The listed sites selected the certificate (first or further) | Select or remove another certificate on their **HTTPS** tab first |
+| "Certificate operation is already in progress" | The certificate is **Issuing**; a request for the site is already waiting to be bound; or an uploaded certificate was renewed | Wait for issuance to finish; retry or cancel that request on the site's **HTTPS** view |
+| "The certificate is used by sites: …" | The listed sites selected the certificate (first or further) | Select or remove another certificate on their **HTTPS** view first |
 | "The certificate is still used by L4 apps: …" | The listed L4 apps terminate TLS with the certificate | Select another certificate on those L4 apps first, see [TLS termination](l4.en.md#tls-termination) |
 | "Check “CA certificates (PEM)”" | Client certificates are **Optional** or **Required** but the CA field is empty | Paste the CA issuing the client certificates |
 | 403, `X-Edgeweir-Error: client-cert-required` | The site requires client certificates and the request presented no valid certificate of the CA, or came over plain HTTP | Present one with `curl --cert … --key …`; check the CA certificates and the depth; for HTTP turn on **Redirect HTTP to HTTPS** |
@@ -669,12 +669,12 @@ Paths are relative to `/api/v1` and authenticated with an AccessKey (`x-api-key`
 | "This provider cannot list zones; enter the zone" | The provider cannot list zones | Type the **Zone** |
 | `openssl s_client -sess_in` always prints `New` | Another site's SNI; a node from before session resumption; a session older than 1 hour; a TLS 1.2 session ID (`-no_ticket`) on another node | Use the same SNI and check the node version |
 | A node shows **Upgrade required** | The node lacks a capability the configuration needs (such as `http3-v1`) and keeps its last-known-good configuration | Upgrade the node, see [Node upgrades](node-upgrades.en.md) |
-| 404 with `X-Edgeweir-Error: unknown-host` for a configured site | The request reached a port the site is not bound to | Bind the port in the **Ports** card of the **Domains** tab, or use the site's ports |
+| 404 with `X-Edgeweir-Error: unknown-host` for a configured site | The request reached a port the site is not bound to | Bind the port in the **Ports** card of the **Domains** view, or use the site's ports |
 | TLS handshake fails on an extra HTTPS port | The site is not bound to that port, or has no certificate | Bind the port and choose a certificate |
 | Connections to an extra port time out | The node's firewall or security group does not allow it; a container node does not publish it | Open it as described in [Ports and firewall](../deploy/nodes.en.md#ports-and-firewall) |
 | "Port {port} is still used by sites: …" | Removing an extra cluster port that sites are bound to | Unbind the port in those sites' **Ports** card first |
 | 421 with `X-Edgeweir-Error: sni-host-mismatch` | TLS SNI differs from `Host`, for example a client reused a connection opened for another domain | The client opens a connection for the requested domain |
 | Browsers do not use HTTP/3 | UDP of the site's HTTPS port (UDP 443, UDP 9443…) is blocked; the node lacks `http3-v1`; clients read `Alt-Svc` only after a first visit | Open the matching UDP port and check node capabilities |
-| Responses are not compressed | The content type is not listed; the response is below the minimum size or above the largest compressed length; the client sent no `Accept-Encoding`; the origin response already has a `Content-Encoding` | Check the **Compression** settings on the **Cache** tab |
+| Responses are not compressed | The content type is not listed; the response is below the minimum size or above the largest compressed length; the client sent no `Accept-Encoding`; the origin response already has a `Content-Encoding` | Check the **Compression** settings on the **Cache** view |
 | gzip instead of br or zstd | The client's `Accept-Encoding` lacks the algorithm or gives it a lower q-value; the algorithm is off | Check the request header and the **Compression** settings |
 | The Brotli or Zstandard switch is unavailable | An active node of the cluster lacks `brotli-v1` / `zstd-v1` | Upgrade the nodes |

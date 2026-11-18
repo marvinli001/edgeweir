@@ -28,9 +28,9 @@ With Tiered Cache a node (lower tier) that misses its cache first fetches from a
 ## Turning it on
 
 1. Open **System** and choose the topology in the "Tiered Cache" card; change the "Upper tier port" (default 8444) if needed. Saving publishes the clusters of the sites that follow it.
-2. For one site: open **Sites** → the site → the "Cache" tab and choose "Global" or a topology in the "Tiered Cache" card.
+2. For one site: open **Sites** → the site → the "Cache" view and choose "Global" or a topology in the "Tiered Cache" card.
 3. The "Upper tiers" card lists each node of the cluster with its upper tiers, why they were chosen and their round trip times, or why there are none.
-4. The "Tiered Cache" card of the "Analytics" tab shows the upper tier hit ratio, upper tier fetches, origin fallbacks and requests served to lower tiers.
+4. The "Tiered Cache" card of the "Analytics" view shows the upper tier hit ratio, upper tier fetches, origin fallbacks and requests served to lower tiers.
 
 ## Node requirements
 
