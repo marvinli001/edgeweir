@@ -178,7 +178,7 @@ EDGEWEIR_UPGRADE_PUBLIC_KEY=/etc/edgeweir-node/release.pub
 
 | 能力 | 需要的场景 |
 | --- | --- |
-| `tls-v1` | 网站有 HTTPS 设置（保存过「HTTPS」页签） |
+| `tls-v1` | 网站有 HTTPS 设置（保存过「HTTPS」视图） |
 | `http01-v1` | ACME HTTP-01 验证 |
 | `tls-pending-domains-v1` | 证书尚未覆盖的域名先以 HTTP 服务 |
 | `http3-v1` | 网站开启 HTTP/3 |

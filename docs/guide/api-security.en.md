@@ -1,6 +1,6 @@
 # API security
 
-Configure endpoint discovery, OpenAPI request validation, JWT and GraphQL checks under **Sites → (site) → Security → API security**.
+Open **Security → API security** in the site sidebar (`/sites/<ID>/api-security`) to configure endpoint discovery, OpenAPI request validation, JWT and GraphQL checks.
 
 ## Enable and save
 

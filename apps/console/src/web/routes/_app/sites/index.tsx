@@ -8,7 +8,7 @@ import { MAX_HOST_HEADER_LENGTH, validHostHeader } from "@edgeweir/rule-engine";
 import { Add01Icon, GlobeIcon, Tag01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useLocation, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
 import { Badge } from "@/components/arc/badge/badge";
@@ -54,6 +54,8 @@ import { formatCompact, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { rowLink } from "@/lib/row-link";
 import { domainFormsAvailable, needsDomainForms } from "@/lib/site-domains";
+import { siteHref } from "@/lib/site-tabs";
+import { workspaceLink } from "@/lib/workspace-link";
 
 const PAGE_SIZE = 20;
 /** The most sites one traffic breakdown returns (the contract's limit). */
@@ -84,6 +86,8 @@ export const Route = createFileRoute("/_app/sites/")({
 
 function SitesPage() {
   const search = Route.useSearch();
+  const listHref = useLocation({ select: (location) => location.href });
+  const returnTo = listHref === "/sites" ? undefined : listHref;
   const createKey = useOpenKey(search.create === true);
   const navigate = Route.useNavigate();
   const page = search.page ?? 1;
@@ -222,8 +226,7 @@ function SitesPage() {
             {/* Tags follow the name on its line; on phone cards they wrap under it. */}
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               <Link
-                to="/sites/$id"
-                params={{ id: row.original.id }}
+                {...workspaceLink(siteHref(row.original.id, "overview", { returnTo }))}
                 className="max-w-56 truncate rounded-sm font-medium underline-offset-4 outline-none focus-ring hover:underline"
                 title={m.sites_created({ ago: timeAgo(row.original.createdAt) })}
                 data-testid="site-link"
@@ -332,6 +335,7 @@ function SitesPage() {
       pageItems,
       pageSelected,
       selectRows,
+      returnTo,
       filterTag,
     ],
   );
@@ -591,7 +595,7 @@ function CreateSiteDialog({
             setNavigating(true);
             try {
               await queryClient.invalidateQueries();
-              await navigate({ to: "/sites/$id", params: { id: siteId } });
+              await navigate(workspaceLink(siteHref(siteId)));
             } finally {
               setNavigating(false);
             }

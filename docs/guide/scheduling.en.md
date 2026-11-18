@@ -134,7 +134,7 @@ Only the latest result per prober, node, address, and port is kept; results not 
 
 ### Nodes that also probe
 
-1. In the node list, click the node's name, or **Actions** → **Details** (`/clusters?node=<node ID>`).
+1. In the node list, click the node's name, or **Actions** → **Details** (`/clusters/nodes/<node ID>`).
 2. Turn on **Also probes**.
 
 | Item | Behavior |

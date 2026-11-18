@@ -18,7 +18,7 @@ Limits on a site's bytes sent, requests and bandwidth, with alerts at a warning 
 
 ## Setting it up
 
-Page: **Sites** → the site → the **Overview** tab (`/sites/<site ID>`) → the **Usage protection** card.
+Page: **Sites** → the site → the **Overview** view (`/sites/<site ID>`) → the **Usage protection** card.
 
 1. Without settings the card shows "No usage protection"; click **Set up**. With settings, click the edit button (**Edit**) on the right of the card title.
 2. In the dialog, choose **Period** and **Time zone**, fill in at least one limit, and set **Warning**, **At the limit** and **Recovery**.
@@ -52,7 +52,7 @@ With all three limits empty the dialog shows "Set at least one limit" and **Save
 | Refresh | The card reloads every minute |
 | Delete | **Delete** on the right of the card title, confirmed with "Delete usage protection?" ("The action it holds is lifted too"); the console shows "Usage protection deleted" |
 
-While usage protection holds an action, the status column of the sites list and the status on the **Overview** tab show an "Over usage limit" badge.
+While usage protection holds an action, the status column of the sites list and the status on the **Overview** view show an "Over usage limit" badge.
 
 ## At the limit
 

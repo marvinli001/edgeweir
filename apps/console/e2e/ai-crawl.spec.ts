@@ -16,7 +16,7 @@ const STATE = JSON.parse(readFileSync(resolve("../../.e2e/ai-crawl-state.json"),
 test("AI crawlers: the overview counts the crawlers' requests", async ({ page }) => {
   const pageErrors = errors(page);
   await signedIn(page);
-  await page.goto(`/sites/${STATE.siteId}?tab=crawlers`);
+  await page.goto(`/sites/${STATE.siteId}/crawlers`);
   const overview = page.getByTestId("ai-crawl-overview");
   await expect(overview).toBeVisible();
   await expect(page.getByTestId("ai-crawl-partial")).toHaveCount(0);
@@ -36,7 +36,7 @@ test("AI crawlers: the overview counts the crawlers' requests", async ({ page })
 test("AI crawlers: the settings card and the managed robots.txt preview", async ({ page }) => {
   const pageErrors = errors(page);
   await signedIn(page);
-  await page.goto(`/sites/${STATE.siteId}?tab=crawlers`);
+  await page.goto(`/sites/${STATE.siteId}/crawlers`);
   const card = page.getByTestId("ai-crawl-settings-card");
   await expect(card).toBeVisible();
   await expect(page.getByTestId("ai-crawl-unavailable")).toHaveCount(0);

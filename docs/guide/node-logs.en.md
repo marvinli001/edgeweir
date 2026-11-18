@@ -1,6 +1,6 @@
 # Node logs
 
-Local node logs (journal), the Logs tab of a node's details in the console (warnings, errors and events), and debug logs pulled on demand.
+Local node logs (journal), the Logs view of a node's details in the console (warnings, errors and events), and debug logs pulled on demand.
 
 ## Local logs
 
@@ -22,9 +22,9 @@ docker logs -f edgeweir-node
 
 More detail: set `EDGEWEIR_LOG_LEVEL=debug` in `/etc/default/edgeweir-node` and restart the service, and set it back afterwards; or [pull debug logs](#debug-logs) from the console without a restart. Flags: [Node configuration](../node/configuration.en.md#logs).
 
-## The Logs tab
+## Logs
 
-The **Logs** tab of a node's details lists the entries the node uploaded, newest first, refreshed every 10 seconds. Each shows time, level, source and message; opening one shows its structured fields.
+The **Logs** view of a node's details lists the entries the node uploaded, newest first, refreshed every 10 seconds. Each shows time, level, source and message; opening one shows its structured fields.
 
 | Source | What is collected |
 | --- | --- |
@@ -72,7 +72,7 @@ A message holds at most 2048 bytes, an entry at most 16 fields, field names at m
 
 ## Debug logs
 
-The **Logs** tab holds warnings, errors and events only. **Pull debug logs** on the same tab fetches the node's in-memory logs of every level:
+The **Logs** view holds warnings, errors and events only. **Pull debug logs** on **Debug logs** in the node sidebar fetches the node's in-memory logs of every level:
 
 | Item | Behavior |
 | --- | --- |
@@ -82,7 +82,7 @@ The **Logs** tab holds warnings, errors and events only. **Pull debug logs** on 
 | Failures | "The node did not upload within 2 minutes", "The node's debug buffer is off", "Node version too old" (no `debug-logs-v1`), "Upload failed"; one open pull per node at a time |
 | Viewing | A finished pull can be opened with **View** (filter by level and message) or saved with **Download** as JSON Lines |
 | Retention | The last 10 pulls per node, deleted after as many days as the node log retention |
-| Access | Entries are redacted like the **Logs** tab; the demo account can view and download but not pull; every pull is audited |
+| Access | Entries are redacted like the **Logs** view; the demo account can view and download but not pull; every pull is audited |
 | Node flag | `--debug-log-buffer` sets the number of entries (`0` turns it off, at most 100,000) |
 | Old supervisor | While an older supervisor still runs after a remote upgrade, results are marked "Supervisor and OpenResty entries missing" until the node service restarts |
 

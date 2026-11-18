@@ -16,7 +16,7 @@ test("development mode: the card turns it on with the time left and a badge, and
   const pageErrors = errors(page);
   const { siteId } = JSON.parse(readFileSync(STATE, "utf8")) as { siteId: string };
   await signedIn(page);
-  await page.goto(`/sites/${siteId}?tab=cache`);
+  await page.goto(`/sites/${siteId}/cache`);
   const toggle = page.getByTestId("dev-mode-switch");
   await expect(page.getByTestId("dev-mode-card")).toBeVisible();
   await expect(page.getByTestId("dev-mode-unavailable")).toHaveCount(0);
@@ -35,7 +35,7 @@ test("development mode: the card turns it on with the time left and a badge, and
   await page.goto("/sites?q=dev-mode.test");
   await expect(page.getByTestId("site-dev-mode")).toBeVisible();
 
-  await page.goto(`/sites/${siteId}?tab=cache`);
+  await page.goto(`/sites/${siteId}/cache`);
   await expect(page.getByTestId("site-header-dev-mode")).toBeVisible();
   await saved(page, page.getByTestId("dev-mode-switch"), "developmentMode/set");
   await expect(page.getByTestId("dev-mode-switch")).toHaveAttribute("aria-checked", "false");

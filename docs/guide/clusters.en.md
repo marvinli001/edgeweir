@@ -31,7 +31,7 @@ Once the cluster has a node, the tabs (`?tab=`) appear:
 | **Settings** | `network` | [Listener ports](https.en.md#the-clusters-listener-ports), [client IP](../deploy/nodes.en.md#client-ip), [unknown hosts](domains.en.md#unknown-hosts-and-node-ip-access), [cache zone](origins-and-cache.en.md#cache-zone) |
 | **Port pools** | `ports` | Port ranges L4 apps may use, see [Set up port pools](l4.en.md#set-up-port-pools) |
 
-Other query parameters: `?node=<node ID>` opens the node details, `?nodeTab=logs` their **Logs** tab; `?enroll=true` opens the **Add node** dialog (the setup wizard ends there).
+`?enroll=true` opens **Add node** at the end of setup.
 
 ## Clusters
 
@@ -98,7 +98,7 @@ The node table on the **Nodes** tab has one row per node and sorts by **Node**, 
 
 ### Node details
 
-A click on the node's row, or **Details** under **⋯** (`/clusters?node=<node ID>`). Tabs **Overview** and **Logs** (`?nodeTab=logs`, see [Node logs](node-logs.en.md)).
+Click a node row or choose **Details** under **⋯** to open its overview (`/clusters/nodes/<node ID>`). The sidebar can switch nodes and return to the filtered list. Open **Scheduling addresses**, **Probes**, **Cache**, **Node upgrades**, **Logs** or **Debug logs** from the directory. Each has its own path. The header menu can request or cancel retirement. See [Node logs](node-logs.en.md).
 
 | Item | Content |
 | --- | --- |

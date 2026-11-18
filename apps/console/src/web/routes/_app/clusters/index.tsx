@@ -2,7 +2,7 @@ import type { Cluster } from "@edgeweir/contract";
 import { Add01Icon, ServerStack01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect, useLocation } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
 import { Button } from "@/components/arc/button/button";
@@ -20,7 +20,6 @@ import { FilterBar } from "@/components/data-table";
 import { ClusterDns } from "@/components/dns/cluster-dns";
 import { OptionSelect } from "@/components/form-select";
 import { PortPoolsSection } from "@/components/l4/port-pools";
-import type { NodeDetailTab } from "@/components/node-detail";
 import { NodeUpgrades } from "@/components/node-upgrades";
 import { Page, PageTabs } from "@/components/page";
 import { RegionsPanel } from "@/components/regions";
@@ -28,21 +27,23 @@ import { ClusterScheduling } from "@/components/scheduling";
 import { EmptyState, QueryView } from "@/components/states";
 import { useTabBar } from "@/hooks/use-tab-bar";
 import { m } from "@/lib/i18n";
+import { legacyNodeHref } from "@/lib/node-views";
 import { orpc } from "@/lib/orpc";
 
-export const Route = createFileRoute("/_app/clusters")({
+export const Route = createFileRoute("/_app/clusters/")({
   validateSearch: z.object({
     /** The regions view of the page (regions are shared by every cluster). */
     view: z.enum(["regions"]).optional(),
     cluster: z.string().optional(),
     enroll: z.boolean().optional(),
     tab: z.enum(["overview", "releases", "dns", "scheduling", "network", "ports"]).optional(),
-    node: z.string().optional(),
-    /** The tab of the node's details. */
-    nodeTab: z.enum(["logs"]).optional(),
     /** The node table's sort ("name", "-seen"). */
     sort: z.string().optional(),
   }),
+  beforeLoad: ({ location }) => {
+    const href = legacyNodeHref(location.searchStr);
+    if (href) throw redirect({ href, replace: true });
+  },
   component: ClustersPage,
 });
 
@@ -185,37 +186,14 @@ function ClusterView({
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const tabBar = useTabBar(`cluster-tab-${search.tab ?? "overview"}`);
-  // The node whose details are open (?node=) and their tab (?nodeTab=).
-  const showDetail = React.useCallback(
-    (id: string | null) =>
-      navigate({
-        search: (prev) => ({
-          ...prev,
-          node: id ?? undefined,
-          nodeTab: id && id === prev.node ? prev.nodeTab : undefined,
-        }),
-        replace: true,
-      }),
-    [navigate],
-  );
-  const showDetailTab = React.useCallback(
-    (tab: NodeDetailTab) =>
-      navigate({
-        search: (prev) => ({ ...prev, nodeTab: tab === "logs" ? "logs" : undefined }),
-        replace: true,
-      }),
-    [navigate],
-  );
+  const returnTo = useLocation({ select: (location) => location.href });
   const nodes = (
     <NodesSection
       cluster={selected}
       // Under the tabs, the "nodes" tab names the table.
       heading={selected.nodeCount === 0}
       onEnroll={onEnroll}
-      detailId={search.node}
-      detailTab={search.nodeTab}
-      onDetail={showDetail}
-      onDetailTab={showDetailTab}
+      returnTo={returnTo === "/clusters" ? undefined : returnTo}
       sort={search.sort}
       onSortChange={(sort) => navigate({ search: (prev) => ({ ...prev, sort }), replace: true })}
     />

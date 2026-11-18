@@ -1,4 +1,17 @@
-import { m } from "@/lib/i18n";
+import {
+  Activity01Icon,
+  Alert02Icon,
+  DashboardSquare01Icon,
+  GlobeIcon,
+  Layers01Icon,
+  type Link01Icon,
+  LockPasswordIcon,
+  Plug01Icon,
+  Route01Icon,
+  Shield01Icon,
+} from "@hugeicons/core-free-icons";
+import { m } from "../paraglide/messages.js";
+import { legacyViewHref, type ScopeItem, type ScopeLink, viewHref } from "./workspace-nav";
 
 /** Stable tab values for site detail URLs. */
 export const SITE_TABS = [
@@ -22,19 +35,6 @@ export const SITE_TABS = [
 
 export type SiteTab = (typeof SITE_TABS)[number];
 
-export function siteTabGroups(): { label: string; tabs: [SiteTab, ...SiteTab[]] }[] {
-  return [
-    { label: m.site_tab_overview(), tabs: ["overview"] },
-    { label: m.site_group_connection(), tabs: ["domains", "origins", "https"] },
-    {
-      label: m.site_group_delivery(),
-      tabs: ["cache", "rules", "redirects", "errors", "extensions"],
-    },
-    { label: m.site_tab_security(), tabs: ["security", "access", "api-security", "crawlers"] },
-    { label: m.site_group_observability(), tabs: ["analytics", "attacks", "logs"] },
-  ];
-}
-
 export function isSiteTab(value: unknown): value is SiteTab {
   return typeof value === "string" && (SITE_TABS as readonly string[]).includes(value);
 }
@@ -50,12 +50,79 @@ export function siteTabLabel(tab: SiteTab): string {
     rules: m.site_tab_rules,
     redirects: m.site_tab_redirects,
     access: m.site_tab_access,
-    security: m.site_tab_security,
+    security: m.scope_site_protection,
     "api-security": m.site_tab_api_security,
     attacks: m.site_tab_attacks,
     crawlers: m.site_tab_crawlers,
     errors: m.site_tab_errors,
     extensions: m.site_tab_extensions,
-    logs: m.site_tab_logs,
+    logs: m.scope_site_access_logs,
   }[tab]();
+}
+
+const SITE_DIRECTORY = [
+  { key: "overview", icon: DashboardSquare01Icon },
+  {
+    key: "observability",
+    label: () => m.scope_site_observability(),
+    icon: Activity01Icon,
+    children: ["analytics", "attacks", "logs"],
+  },
+  {
+    key: "connection",
+    label: () => m.scope_site_connection(),
+    icon: GlobeIcon,
+    children: ["domains", "origins"],
+  },
+  { key: "https", icon: LockPasswordIcon },
+  { key: "cache", icon: Layers01Icon },
+  {
+    key: "rule-group",
+    label: () => m.site_tab_rules(),
+    icon: Route01Icon,
+    children: ["rules", "redirects"],
+  },
+  {
+    key: "security-group",
+    label: () => m.site_tab_security(),
+    icon: Shield01Icon,
+    children: ["security", "access", "api-security", "crawlers"],
+  },
+  { key: "errors", icon: Alert02Icon },
+  { key: "extensions", icon: Plug01Icon },
+] as const satisfies readonly (
+  | { key: SiteTab; icon: typeof Link01Icon }
+  | { key: string; label: () => string; icon: typeof Link01Icon; children: readonly SiteTab[] }
+)[];
+
+export function siteDirectory(
+  current: SiteTab,
+  href: (view: SiteTab) => string,
+  hasExtensions: boolean,
+): ScopeItem[] {
+  const link = (key: SiteTab): ScopeLink => ({
+    key,
+    label: siteTabLabel(key),
+    href: href(key),
+    current: key === current,
+  });
+  return SITE_DIRECTORY.filter((item) => item.key !== "extensions" || hasExtensions).map((item) =>
+    "children" in item
+      ? { ...item, label: item.label(), children: item.children.map(link) }
+      : { ...link(item.key), icon: item.icon },
+  );
+}
+
+export function siteHref(
+  id: string,
+  view: SiteTab = "overview",
+  search?: Parameters<typeof viewHref>[3],
+) {
+  return viewHref("/sites", id, view, search);
+}
+
+export function legacySiteHref(id: string, searchStr: string) {
+  return legacyViewHref(searchStr, (tab, search) =>
+    siteHref(id, isSiteTab(tab) ? tab : "overview", search),
+  );
 }

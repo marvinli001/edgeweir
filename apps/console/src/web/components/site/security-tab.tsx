@@ -72,6 +72,7 @@ import {
   providerKindLabel,
   wafModeLabel,
 } from "@/lib/protection";
+import { siteHref } from "@/lib/site-tabs";
 import { toast } from "@/lib/toast";
 import {
   type Exclusion,
@@ -82,6 +83,7 @@ import {
   unexcludable,
   withSiteWideRuleIds,
 } from "@/lib/waf-exclusions";
+import { workspaceLink } from "@/lib/workspace-link";
 
 /** Saves part of the site's protection and refreshes it; returns whether it worked. */
 function useUpdateProtection(siteId: string) {
@@ -239,9 +241,7 @@ function SecuritySummary({ siteId, protection }: { siteId: string; protection: S
         part.key === "nodes" ? (
           <Link
             key={part.key}
-            to="/sites/$id"
-            params={{ id: siteId }}
-            search={{ tab: "attacks" }}
+            {...workspaceLink(siteHref(siteId, "attacks"), true)}
             className="rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
             data-testid={`security-summary-${part.key}`}
           >
@@ -272,6 +272,53 @@ function SecuritySummary({ siteId, protection }: { siteId: string; protection: S
   );
 }
 
+function UnderAttackSwitch({
+  protection,
+  apply,
+  pending,
+  quick = false,
+}: {
+  protection: SiteProtection;
+  apply: ReturnType<typeof useUpdateProtection>["apply"];
+  pending: boolean;
+  quick?: boolean;
+}) {
+  const turningOn = !protection.underAttack;
+  return (
+    <ConfirmDialog
+      trigger={
+        <Switch
+          id={quick ? undefined : "protection-under-attack"}
+          aria-label={m.protection_under_attack()}
+          checked={protection.underAttack}
+          disabled={pending}
+          data-testid={quick ? "site-quick-under-attack" : "protection-under-attack"}
+        />
+      }
+      destructive={turningOn}
+      title={turningOn ? m.protection_under_attack_on() : m.protection_under_attack_off()}
+      note={turningOn ? m.protection_under_attack_on_note() : undefined}
+      confirmLabel={turningOn ? m.protection_turn_on() : m.protection_turn_off()}
+      onConfirm={() => apply({ underAttack: turningOn })}
+    />
+  );
+}
+
+export function UnderAttackQuick({ siteId }: { siteId: string }) {
+  const protection = useQuery(orpc.protection.get.queryOptions({ input: { id: siteId } }));
+  const { apply, pending } = useUpdateProtection(siteId);
+  return (
+    <QueryView query={protection}>
+      {(data) => (
+        <div className="flex min-h-9 items-center justify-between gap-3 text-[13px] pointer-coarse:min-h-11">
+          <span>{m.protection_under_attack()}</span>
+          <UnderAttackSwitch protection={data} apply={apply} pending={pending} quick />
+        </div>
+      )}
+    </QueryView>
+  );
+}
+
 function UnderAttackCard({ siteId, protection }: { siteId: string; protection: SiteProtection }) {
   const { apply, save, pending } = useUpdateProtection(siteId);
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: siteId } }));
@@ -286,15 +333,6 @@ function UnderAttackCard({ siteId, protection }: { siteId: string; protection: S
     }),
   );
   const automatic = protection.underAttack ? mitigation.data?.active : null;
-  const turningOn = !protection.underAttack;
-  const toggle = (
-    <Switch
-      id="protection-under-attack"
-      checked={protection.underAttack}
-      disabled={pending}
-      data-testid="protection-under-attack"
-    />
-  );
   return (
     <Panel id={CARD_IDS.underAttack} className="scroll-mt-4 animate-enter">
       <PanelHeader>
@@ -303,14 +341,7 @@ function UnderAttackCard({ siteId, protection }: { siteId: string; protection: S
       {/* The switch, its state and the challenge type on one row, compact; wraps on phones. */}
       <PanelContent className="flex flex-wrap items-end gap-x-8 gap-y-4">
         <Field orientation="horizontal" className="min-h-9 w-auto flex-wrap">
-          <ConfirmDialog
-            trigger={toggle}
-            destructive={turningOn}
-            title={turningOn ? m.protection_under_attack_on() : m.protection_under_attack_off()}
-            note={turningOn ? m.protection_under_attack_on_note() : undefined}
-            confirmLabel={turningOn ? m.protection_turn_on() : m.protection_turn_off()}
-            onConfirm={() => apply({ underAttack: turningOn })}
-          />
+          <UnderAttackSwitch protection={protection} apply={apply} pending={pending} />
           <FieldLabel htmlFor="protection-under-attack">{m.protection_under_attack()}</FieldLabel>
           {protection.underAttack ? (
             <Badge size="sm" tone="danger" data-testid="protection-under-attack-on">

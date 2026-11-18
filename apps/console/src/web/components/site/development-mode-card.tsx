@@ -1,6 +1,7 @@
 import type { Site } from "@edgeweir/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
+import { Switch } from "@/components/arc/switch/switch";
 import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
@@ -41,25 +42,41 @@ function useNow(active: boolean): number {
  * hours, the time left while on, and a refresh when it ends.
  */
 export function DevelopmentModeCard({ site }: { site: Site }) {
-  const query = useQuery(orpc.developmentMode.get.queryOptions({ input: { id: site.id } }));
   return (
     <Panel className="animate-enter" style={{ animationDelay: "40ms" }} data-testid="dev-mode-card">
       <PanelHeader>
         <PanelTitle>{m.site_dev_mode_title()}</PanelTitle>
       </PanelHeader>
-      <QueryView query={query}>
-        {(mode) => <DevelopmentModeBody siteId={site.id} mode={mode} />}
-      </QueryView>
+      <PanelContent>
+        <DevelopmentModeControl siteId={site.id} />
+      </PanelContent>
     </Panel>
+  );
+}
+
+export function DevelopmentModeControl({
+  siteId,
+  quick = false,
+}: {
+  siteId: string;
+  quick?: boolean;
+}) {
+  const query = useQuery(orpc.developmentMode.get.queryOptions({ input: { id: siteId } }));
+  return (
+    <QueryView query={query}>
+      {(mode) => <DevelopmentModeBody siteId={siteId} mode={mode} quick={quick} />}
+    </QueryView>
   );
 }
 
 function DevelopmentModeBody({
   siteId,
   mode,
+  quick,
 }: {
   siteId: string;
   mode: { until: string | null; unsupportedNodes: number };
+  quick: boolean;
 }) {
   const queryClient = useQueryClient();
   const set = useMutation({
@@ -78,8 +95,25 @@ function DevelopmentModeBody({
   }, [until, queryClient]);
   const on = until !== null && Date.parse(until) > now;
   const blocked = !on && mode.unsupportedNodes > 0;
+  const setEnabled = (enabled: boolean) => set.mutate({ id: siteId, enabled });
+  if (quick)
+    return (
+      <>
+        <div className="flex min-h-9 items-center justify-between gap-3 text-[13px] pointer-coarse:min-h-11">
+          <span>{m.site_dev_mode_title()}</span>
+          <Switch
+            checked={on}
+            disabled={blocked || set.isPending}
+            onCheckedChange={setEnabled}
+            aria-label={m.site_dev_mode_title()}
+            data-testid="site-quick-dev-mode"
+          />
+        </div>
+        {blocked ? <SafetyNote>{m.feature_unavailable_nodes()}</SafetyNote> : null}
+      </>
+    );
   return (
-    <PanelContent className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3">
       {blocked ? (
         <SafetyNote data-testid="dev-mode-unavailable">{m.feature_unavailable_nodes()}</SafetyNote>
       ) : null}
@@ -89,7 +123,7 @@ function DevelopmentModeBody({
           label={m.site_dev_mode_switch()}
           checked={on}
           disabled={blocked || set.isPending}
-          onCheckedChange={(enabled) => void set.mutateAsync({ id: siteId, enabled })}
+          onCheckedChange={setEnabled}
           className="self-start"
           testId="dev-mode-switch"
         />
@@ -104,6 +138,6 @@ function DevelopmentModeBody({
         ) : null}
       </div>
       {on ? <SafetyNote data-testid="dev-mode-note">{m.site_dev_mode_note()}</SafetyNote> : null}
-    </PanelContent>
+    </div>
   );
 }

@@ -216,6 +216,37 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
     </section>
   );
 }
+
+export function NodeUpgradeHistory({ clusterId, nodeId }: { clusterId: string; nodeId: string }) {
+  const jobs = useQuery({
+    ...orpc.upgrades.list.queryOptions({ input: { clusterId } }),
+    refetchInterval: 3000,
+    meta: { background: true },
+  });
+  return (
+    <QueryView query={jobs}>
+      {(jobs) => {
+        const entries = jobs.flatMap((job) =>
+          job.deliveries
+            .filter((entry) => entry.nodeId === nodeId)
+            .map((entry) => ({ job, entry })),
+        );
+        if (entries.length === 0) return <EmptyState compact title={m.upgrade_empty()} />;
+        return entries.map(({ job, entry }) => (
+          <Panel key={entry.id}>
+            <PanelHeader>
+              <PanelTitle className="break-all font-mono">{job.version}</PanelTitle>
+              <TimeAgo at={job.createdAt} className="text-xs text-muted-foreground" />
+            </PanelHeader>
+            <PanelContent>
+              <Delivery delivery={entry} version={job.version} jobState={job.state} />
+            </PanelContent>
+          </Panel>
+        ));
+      }}
+    </QueryView>
+  );
+}
 function UpgradeDialog({
   open,
   onOpenChange,

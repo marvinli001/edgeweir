@@ -440,7 +440,7 @@ for (const locale of ["zh-CN", "en"] as const) {
       json: { site },
     } = (await created.json()) as { json: { site: Site } };
     try {
-      await page.goto(`/sites/${site.id}?tab=extensions`);
+      await page.goto(`/sites/${site.id}/extensions`);
       const card = page.getByTestId("site-extension");
       const siteCredential = card.getByTestId("extension-config-credential");
       await expect(siteCredential).toHaveAttribute("type", "password");

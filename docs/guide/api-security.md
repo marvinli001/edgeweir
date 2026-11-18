@@ -1,6 +1,6 @@
 # API安全
 
-在网站的**安全 → API安全**配置端点发现、OpenAPI请求校验、JWT与GraphQL检查。
+打开网站侧栏的 **安全 → API安全**（`/sites/<ID>/api-security`），配置端点发现、OpenAPI 请求校验、JWT 与 GraphQL 检查。
 
 ## 开启与保存
 

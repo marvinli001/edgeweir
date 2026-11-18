@@ -109,7 +109,7 @@ test("G14: the new WAF actions, rate limit bans, the CRS override and the rules 
   siteId = /\/sites\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? "";
   expect(siteId, "the new site's id in the address").not.toBe("");
 
-  await page.goto(`/sites/${siteId}?tab=rules`);
+  await page.goto(`/sites/${siteId}/rules`);
   await expect(page.getByTestId("rule-add-waf-custom")).toBeVisible();
   // The cluster's nodes run waf-v2, rules-body-v1 and challenge-v2: nothing is locked.
   for (const id of ["rules-waf-v2", "rules-body", "rules-challenge-v2"])
@@ -398,7 +398,7 @@ test("G14: CRS exclusions by path and target, and 按路径排除 from the top C
   const pageErrors = errors(page);
   await signedIn(page);
 
-  await page.goto(`/sites/${siteId}?tab=security`);
+  await page.goto(`/sites/${siteId}/security`);
   await expect(page.getByTestId("waf-card")).toBeVisible();
   await expect(page.getByTestId("waf-exclusion-entries-unavailable")).toHaveCount(0);
   // Every path: the chips.
@@ -516,7 +516,7 @@ test("G14: verified crawlers, challenge page texts and challenge failure bans", 
   expect(siteId, "the first test created the site").not.toBe("");
   const pageErrors = errors(page);
   await signedIn(page);
-  await page.goto(`/sites/${siteId}?tab=security`);
+  await page.goto(`/sites/${siteId}/security`);
   await expect(page.getByTestId("protection-verified-bots")).toHaveAttribute(
     "aria-checked",
     "false",

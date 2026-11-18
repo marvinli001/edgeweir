@@ -11,7 +11,7 @@ test("M6: log filters, CSV export and scoped AccessKey revocation", async ({ pag
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await signedIn(page);
-  await page.goto(`/sites/${state.siteId}?tab=logs`);
+  await page.goto(`/sites/${state.siteId}/logs`);
   await expect(page.getByLabel("访问日志采样率")).toBeVisible();
   await page.getByLabel("状态码", { exact: true }).fill("200");
   await page.getByLabel("路径前缀").fill(state.path);
@@ -29,9 +29,9 @@ test("M6: log filters, CSV export and scoped AccessKey revocation", async ({ pag
   await page.getByRole("button", { name: "查询", exact: true }).click();
   await expect(page.getByRole("table")).toBeVisible();
   // Back/forward navigation can reuse cached site data without a loading remount.
-  const originalUrl = `${new URL(page.url()).pathname}?tab=logs`;
-  const originalTitle = await page.getByTestId("page-title").innerText();
-  await page.getByTestId("nav-sites").click();
+  const originalUrl = new URL(page.url()).pathname;
+  const originalTitle = await page.title();
+  await page.getByTestId("site-nav-back").click();
   const other = page
     .getByTestId("sites-table")
     .getByRole("row")
@@ -40,14 +40,14 @@ test("M6: log filters, CSV export and scoped AccessKey revocation", async ({ pag
     .first();
   await other.click();
   await siteTab(page, "logs");
-  const otherUrl = `${new URL(page.url()).pathname}?tab=logs`;
-  const otherTitle = await page.getByTestId("page-title").innerText();
+  const otherUrl = new URL(page.url()).pathname;
+  const otherTitle = await page.title();
   await page.getByLabel("路径前缀").fill("previous-site-filter");
   const visitCached = async (url: string, title: string) => {
     await page.evaluate(
       `history.pushState({}, "", ${JSON.stringify(url)}); dispatchEvent(new PopStateEvent("popstate"));`,
     );
-    await expect(page.getByTestId("page-title")).toHaveText(title);
+    await expect(page).toHaveTitle(title);
     await expect(page.getByLabel("路径前缀")).toHaveValue("");
   };
   await visitCached(originalUrl, originalTitle);

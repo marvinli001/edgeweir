@@ -32,8 +32,9 @@ import { formatNumber, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { RECENT_PAGES, readRecents } from "@/lib/recents";
 import { revisionReason } from "@/lib/revisions";
-import { siteTabLabel } from "@/lib/site-tabs";
+import { siteHref, siteTabLabel } from "@/lib/site-tabs";
 import { cn } from "@/lib/utils";
+import { workspaceLink } from "@/lib/workspace-link";
 
 const LIST_SIZE = 5;
 
@@ -165,7 +166,7 @@ function OverviewPage() {
                   id: "sites",
                   title: m.analytics_top_sites(),
                   renderLink: (item, props) => (
-                    <Link to="/sites/$id" params={{ id: item.id }} {...props} />
+                    <Link {...workspaceLink(siteHref(item.id))} {...props} />
                   ),
                 },
                 {
@@ -363,7 +364,7 @@ function SitesList({
         <ResourceRow
           key={site.id}
           icon={<HugeiconsIcon icon={GlobeIcon} strokeWidth={2} />}
-          link={{ to: "/sites/$id", params: { id: site.id } }}
+          link={workspaceLink(siteHref(site.id))}
           trailing={site.starred ? <StarMark /> : null}
           testId="home-site"
         >
@@ -508,11 +509,7 @@ function RecentsList() {
               link={
                 recent.kind === "page"
                   ? { to: recent.path }
-                  : {
-                      to: "/sites/$id",
-                      params: { id: recent.id },
-                      search: recent.tab ? { tab: recent.tab } : {},
-                    }
+                  : workspaceLink(siteHref(recent.id, recent.tab))
               }
               testId="home-recent"
             >

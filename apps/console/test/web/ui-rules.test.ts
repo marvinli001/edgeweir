@@ -5,6 +5,19 @@ import { describe, expect, it } from "vitest";
 const root = resolve(import.meta.dirname, "../..");
 const read = (file: string) => readFileSync(resolve(root, file), "utf8");
 const webSources = globSync("src/web/{routes,components,lib}/**/*.{ts,tsx}", { cwd: root });
+
+describe("workspace routes", () => {
+  it("builds detail links with path views", () => {
+    const legacyHref = /\/(?:sites|l4)\/[^"'\x60\n]*\?tab=/;
+    expect(webSources.filter((file) => legacyHref.test(read(file)))).toEqual([]);
+  });
+
+  it("keeps sidebar scope transitions in effects", () => {
+    expect(
+      webSources.filter((file) => /function SidebarScopeTransition\b/.test(read(file))),
+    ).toEqual(["src/web/components/effects/sidebar-scope-transition.tsx"]);
+  });
+});
 /** Everything the browser gets from src/web, minus generated code. */
 const allWeb = globSync("src/web/**/*.{ts,tsx,css}", {
   cwd: root,

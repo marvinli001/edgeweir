@@ -89,7 +89,7 @@ test("G13: every access control card renders and saves", async ({ page }) => {
   siteId = /\/sites\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? "";
   expect(siteId, "the new site's id in the address").not.toBe("");
 
-  await page.goto(`/sites/${siteId}?tab=access`);
+  await page.goto(`/sites/${siteId}/access`);
   for (const card of [...CARDS, "ip-check"])
     await expect(page.getByTestId(`${card}-card`)).toBeVisible();
   // The cluster's nodes run access-control-v1: no card says they cannot.
@@ -178,7 +178,7 @@ test("G13: the IP check on the access tab and on the IP lists page", async ({ pa
   await signedIn(page);
 
   // On the site: the address is on its block list.
-  await page.goto(`/sites/${siteId}?tab=access`);
+  await page.goto(`/sites/${siteId}/access`);
   const card = page.getByTestId("ip-check-card");
   await card.getByTestId("ip-check-input").fill(ADDRESS);
   await card.getByTestId("ip-check-submit").click();

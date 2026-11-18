@@ -7,9 +7,9 @@ From console setup to a first site served over HTTP and HTTPS by an edge node.
 1. **Complete the setup wizard**: create the only account and the default cluster.
 2. **Enroll a node**: generate the install command in the console and run it on the node host; once enrolled, the node connects to the node channel over mTLS.
 3. **Create a site**: enter its domains, origin, and cache setting; the cluster publishes a new configuration revision.
-4. **Configure DNS**: point the site's domains at the edge addresses or the CNAME target listed on the site's **Domains** tab in the authoritative DNS and wait for the records to take effect.
-5. **Enable HTTPS**: click **Enable HTTPS** on the site's **HTTPS** tab; the certificate is used once issued, see [HTTPS and certificates](https.en.md).
-6. **Verify**: every item of the **Launch check** on the site's **Overview** tab passes; check origin fetch and caching with curl.
+4. **Configure DNS**: point the site's domains at the edge addresses or the CNAME target listed on the site's **Domains** view in the authoritative DNS and wait for the records to take effect.
+5. **Enable HTTPS**: click **Enable HTTPS** on the site's **HTTPS** view; the certificate is used once issued, see [HTTPS and certificates](https.en.md).
+6. **Verify**: every item of the **Launch check** on the site's **Overview** view passes; check origin fetch and caching with curl.
 
 ## Prerequisites
 
@@ -92,7 +92,7 @@ The token is single-use. For the installer's checks, the download mirror, and fa
    | **TTL (seconds)** | 3600 | 0–31536000 |
    | **Respect origin Cache-Control** | On | On: cache by the origin's `Cache-Control` / `Expires`, by the TTL when the origin sends neither; off: always by the TTL, also `private` and `no-store` responses |
 
-   The site's ports are HTTP 80 and HTTPS 443. Tags, ports, origin pools and other cache settings are not in the form and are changed on the site's tabs after creation; the API takes them at creation (`tags`, `ports`, `originSettings`, `cacheSettings`, `contentSettings`).
+   The site's ports are HTTP 80 and HTTPS 443. Tags, ports, origin pools and other cache settings are not in the form and are changed in the site views after creation; the API takes them at creation (`tags`, `ports`, `originSettings`, `cacheSettings`, `contentSettings`).
 
 3. Click **Create**. The site's cluster publishes a new revision and the site page opens. The notice **Site created** follows the nodes: **Rolling out N/M** → **Live on every node** (**Canary N/M, all nodes at HH:MM** during a [configuration canary](clusters.en.md#configuration-canary)).
 
@@ -101,7 +101,7 @@ The token is single-use. For the installer's checks, the download mirror, and fa
 | Cluster | With several clusters, **Cluster** in the form (default: the oldest); through the API, `clusterId`. A site cannot change clusters later |
 | Domains | Domains are published to the nodes as soon as the site is saved. A domain (name and form) belongs to at most one site; when the forms of several sites cover the same Host, the [precedence](domains.en.md#precedence) picks one |
 | Origin address | Origins in special-purpose ranges are refused unless the origin allow list covers the range |
-| Disabling | **Disable** on the site's **Overview** tab: the site is no longer sent to the nodes, which answer HTTP requests for its domains with a 503 disabled page (`X-Edgeweir-Error: site-disabled`) and fail the TLS handshake of HTTPS requests; DNS records stay. **Enable** restores it, see [Site enabling](clusters.en.md#site-enabling) |
+| Disabling | **Disable** on the site's **Overview** view: the site is no longer sent to the nodes, which answer HTTP requests for its domains with a 503 disabled page (`X-Edgeweir-Error: site-disabled`) and fail the TLS handshake of HTTPS requests; DNS records stay. **Enable** restores it, see [Site enabling](clusters.en.md#site-enabling) |
 
 For origin pools, cache rules, and cache keys, see [Origins and cache](origins-and-cache.en.md).
 
@@ -111,8 +111,8 @@ Add a record for every site domain in the domain's authoritative DNS.
 
 | DNS steering | Record |
 | --- | --- |
-| Not configured (the cluster's DNS is **Not managed**) | `A` / `AAAA` records to the addresses in the **Edge addresses** card on the site's **Domains** tab (the scheduling addresses of the cluster's online nodes, copyable), one record per address |
-| Configured (the **DNS** tab of **Clusters & nodes**) | A `CNAME` record to the address in the **CNAME target** card on the site's **Domains** tab (`<CNAME prefix>.<cluster domain>`; the prefix can be regenerated or customized, see [CNAME prefixes](domains.en.md#cname-prefixes)). In Automatic mode the card shows **Published** once the records are written to the provider; in Manual mode create the cluster's records listed on that tab first |
+| Not configured (the cluster's DNS is **Not managed**) | `A` / `AAAA` records to the addresses in the **Edge addresses** card on the site's **Domains** view (the scheduling addresses of the cluster's online nodes, copyable), one record per address |
+| Configured (the **DNS** tab of **Clusters & nodes**) | A `CNAME` record to the address in the **CNAME target** card on the site's **Domains** view (`<CNAME prefix>.<cluster domain>`; the prefix can be regenerated or customized, see [CNAME prefixes](domains.en.md#cname-prefixes)). In Automatic mode the card shows **Published** once the records are written to the provider; in Manual mode create the cluster's records listed on that tab first |
 
 The card lists where each domain resolves now: **Points here** (every address belongs to a node of the cluster), **Points elsewhere**, **Not resolved**, **Not checked** (the lookup failed, or the nodes have no known address), **Not checkable** (`.` suffix and pattern domains name no single host; not counted in **DNS pointed N/M**). A wildcard is resolved as `edgeweir-check.<domain>`. The card and the **Launch check** resolve again every 30 seconds; **Check again** beside the card's title resolves now. A recursive resolver's cached answer (also "no such name") holds until its TTL ends.
 
@@ -120,22 +120,22 @@ For lines, health-based removal, and TTL of DNS steering, see [Configure DNS ste
 
 ## 5. Enable HTTPS
 
-1. Open the site's **HTTPS** tab. Fix what the tab lists (for example records from step 4 that are not live yet) and click **Check again**.
+1. Open the site's **HTTPS** view. Fix the listed issues (for example records from step 4 that are not live yet) and click **Check again**.
 2. Click **Enable HTTPS**. The console requests a certificate for all of the site's domains (a wildcard domain needs a DNS credential first); once issued, the site uses it. To redirect HTTP to HTTPS, turn on **Redirect HTTP to HTTPS** in the HTTPS settings afterwards.
 3. The cluster publishes a new revision. Once an enabled site in the cluster uses a certificate, nodes listen on TCP 443.
 
-An uploaded certificate (on the **Certificates** page) is chosen under **Existing certificate** on the site's **HTTPS** tab.
+An uploaded certificate (on the **Certificates** page) is chosen under **Existing certificate** on the site's **HTTPS** view.
 
 For issuance methods, renewal, TLS, and HTTP/3, see [HTTPS and certificates](https.en.md).
 
 ## 6. Verify
 
-1. Check the **Launch check** on the site's **Overview** tab; each item leads to its settings:
+1. Check the **Launch check** on the site's **Overview** view; each item leads to its settings:
 
    | Item | Passes | Otherwise |
    | --- | --- | --- |
-   | **DNS pointed N/M** | Every domain **Points here** | Lists the domains that do not; opens the **Domains** tab |
-   | Certificate | **Certificate covers every domain**, or **No certificate** (HTTP only) | **Certificate misses domains** (listed), **Certificate being issued**, **Certificate issuance failed** (with the reason), **Certificate expired**; opens the **HTTPS** tab |
+   | **DNS pointed N/M** | Every domain **Points here** | Lists the domains that do not; opens the **Domains** view |
+   | Certificate | **Certificate covers every domain**, or **No certificate** (HTTP only) | **Certificate misses domains** (listed), **Certificate being issued**, **Certificate issuance failed** (with the reason), **Certificate expired**; opens the **HTTPS** view |
    | **Live on N/M nodes** | N equals M | Shows the window's end during a canary; with **No online nodes**, enroll a node first; opens the cluster |
 
 2. Send an HTTP request straight to the node, bypassing DNS. Without DNS steering, the **Edge addresses** card gives a copyable command per domain (HTTPS when the site's certificate covers the domain); otherwise replace `203.0.113.10` below:
@@ -188,8 +188,8 @@ For issuance methods, renewal, TLS, and HTTP/3, see [HTTPS and certificates](htt
 | Node stays **Awaiting heartbeat** | Enrolled, but the node's agent has not connected to the node channel yet | See [Adding nodes](../deploy/nodes.en.md#troubleshooting) |
 | **Applied** shows **Apply failed** | The node failed to validate or apply the configuration | Hover the badge for the reason |
 | **Applied** shows **Upgrade required** | The node lacks a capability the configuration needs | Upgrade the node; see [Node upgrades](node-upgrades.en.md) |
-| 404 with `X-Edgeweir-Error: unknown-host` | The domain is not in the node's configuration: revision not applied, or the domain belongs to no site | Check **Applied** and the **Status** on the site's **Overview** tab |
-| 503 with `X-Edgeweir-Error: site-disabled` | The site is disabled | **Enable** it on the site's **Overview** tab |
+| 404 with `X-Edgeweir-Error: unknown-host` | The domain is not in the node's configuration: revision not applied, or the domain belongs to no site | Check **Applied** and the **Status** on the site's **Overview** view |
+| 503 with `X-Edgeweir-Error: site-disabled` | The site is disabled | **Enable** it on the site's **Overview** view |
 | HTTPS requests fail in the TLS handshake | The SNI belongs to no site the node serves (an unknown domain, a disabled site), or the site has no certificate or one that does not cover the domain yet | Send the request over HTTP to see the node's answer; check the certificate item of the **Launch check** |
 | A domain in the **Launch check** **Points elsewhere** | Its records point at an old server or another CDN, or also hold other addresses | Keep only records for the edge addresses (or the CNAME target) and wait for the old records' TTL |
 | A domain in the **Launch check** is **Not resolved** | The domain has no record yet, or the CNAME target has no address (the **CNAME target** card shows **No healthy nodes**); resolvers that asked before the record existed answer "no such name" for the zone's negative caching time | Add the record; with **No healthy nodes**, check that the nodes are online with a healthy data plane; then click **Check again** |

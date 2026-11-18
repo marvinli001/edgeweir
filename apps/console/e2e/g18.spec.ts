@@ -73,7 +73,7 @@ test("G18: conversion turns on in the cache tab, refuses bad settings and keeps 
   siteId = /\/sites\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? "";
   expect(siteId).not.toBe("");
 
-  await page.goto(`/sites/${siteId}?tab=cache`);
+  await page.goto(`/sites/${siteId}/cache`);
   await page.getByTestId("cache-group-optimization-trigger").click();
   const card = page.getByTestId("image-convert-card");
   await expect(card).toBeVisible();
@@ -122,7 +122,7 @@ test("G18: the savings card shows what the nodes saved", async ({ page }) => {
   const pageErrors = errors(page);
   const state = JSON.parse(readFileSync(G18_STATE, "utf8")) as { siteId: string };
   await signedIn(page);
-  await page.goto(`/sites/${state.siteId}?tab=cache`);
+  await page.goto(`/sites/${state.siteId}/cache`);
   await page.getByTestId("cache-group-optimization-trigger").click();
   await expect(page.getByTestId("image-convert-enabled")).toHaveAttribute("aria-checked", "true");
   const bytes = page.getByTestId("image-savings-bytes");

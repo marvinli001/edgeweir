@@ -20,14 +20,16 @@ import {
 import { Switch } from "@/components/arc/switch/switch";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { m } from "@/lib/i18n";
+import { l4Href } from "@/lib/l4-views";
 import { orpc } from "@/lib/orpc";
 import { toast } from "@/lib/toast";
+import { workspaceLink } from "@/lib/workspace-link";
 
 /**
  * The application's enabled switch: turning it either way asks first. A component of its own:
  * column templates are plain functions (DataTable) and hold no hooks.
  */
-export function L4EnabledSwitch({ app }: { app: L4App }) {
+export function L4EnabledSwitch({ app, button = false }: { app: L4App; button?: boolean }) {
   const setEnabled = useMutation({
     ...orpc.l4Apps.setEnabled.mutationOptions(),
     meta: { invalidates: [orpc.l4Apps.key(), orpc.clusters.key()] },
@@ -36,13 +38,25 @@ export function L4EnabledSwitch({ app }: { app: L4App }) {
   const enable = !app.enabled;
   return (
     <>
-      <Switch
-        checked={app.enabled}
-        disabled={setEnabled.isPending}
-        onCheckedChange={() => setOpen(true)}
-        aria-label={m.l4_enabled()}
-        data-testid="l4-app-enabled"
-      />
+      {button ? (
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => setOpen(true)}
+          disabled={setEnabled.isPending}
+          data-testid="l4-app-enabled"
+        >
+          {enable ? m.site_enable() : m.site_disable()}
+        </Button>
+      ) : (
+        <Switch
+          checked={app.enabled}
+          disabled={setEnabled.isPending}
+          onCheckedChange={() => setOpen(true)}
+          aria-label={m.l4_enabled()}
+          data-testid="l4-app-enabled"
+        />
+      )}
       <ControlledConfirmDialog
         open={open}
         onOpenChange={setOpen}
@@ -104,7 +118,15 @@ export function DeleteL4AppDialog({
 }
 
 /** Row menu of an application: edit, statistics, delete. */
-export function L4AppActions({ app, onEdit }: { app: L4App; onEdit: (app: L4App) => void }) {
+export function L4AppActions({
+  app,
+  onEdit,
+  returnTo,
+}: {
+  app: L4App;
+  onEdit: (app: L4App) => void;
+  returnTo?: string;
+}) {
   const navigate = useNavigate();
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   return (
@@ -129,9 +151,7 @@ export function L4AppActions({ app, onEdit }: { app: L4App; onEdit: (app: L4App)
             {m.common_edit()}
           </DropdownMenuItem>
           <DropdownMenuItem
-            onClick={() =>
-              navigate({ to: "/l4/$id", params: { id: app.id }, search: { tab: "stats" } })
-            }
+            onClick={() => navigate(workspaceLink(l4Href(app.id, "stats", { returnTo })))}
             data-testid="l4-app-stats"
           >
             <HugeiconsIcon icon={ChartLineData01Icon} strokeWidth={2} />

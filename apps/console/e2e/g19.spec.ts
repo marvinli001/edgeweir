@@ -97,7 +97,7 @@ test("origin protection: rotating a CA from the certificates page", async ({ pag
 
 test("origin protection: a pool's trust and client certificate", async ({ page }) => {
   await signedIn(page);
-  await page.goto(`/sites/${state.ocaSiteId}?tab=origins`);
+  await page.goto(`/sites/${state.ocaSiteId}/origins`);
   const trust = page.getByTestId("pool-tls-trust");
   const verify = page.getByTestId("pool-tls-verify");
   const clientCertificate = page.getByTestId("pool-client-certificate");
@@ -114,7 +114,7 @@ test("origin protection: a pool's trust and client certificate", async ({ page }
   await pick(page, trust, "Origin CA");
   await expect(save).toBeDisabled();
 
-  await page.goto(`/sites/${state.mtlsSiteId}?tab=origins`);
+  await page.goto(`/sites/${state.mtlsSiteId}/origins`);
   await expect(clientCertificate).toHaveAttribute("aria-checked", "true");
   await expect(trust).toBeDisabled();
   await clientCertificate.click();

@@ -8,6 +8,7 @@ import {
 import { Add01Icon, MoreHorizontalIcon, ServerStack01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import * as React from "react";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
@@ -27,17 +28,17 @@ import {
   LOAD_BAD,
   LOAD_WARN,
   memoryPercent,
-  NodeDetailSheet,
-  type NodeDetailTab,
 } from "@/components/node-detail";
 import { EmptyState, QueryView } from "@/components/states";
 import { Dot, StatusDot } from "@/components/status-dot";
 import { TimeAgo } from "@/components/time-ago";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { formatBitRate, formatPercent, m } from "@/lib/i18n";
+import { nodeHref, nodeMainAddress } from "@/lib/node-views";
 import { orpc } from "@/lib/orpc";
 import { rowLink, rowLinkButton } from "@/lib/row-link";
 import { cn } from "@/lib/utils";
+import { workspaceLink } from "@/lib/workspace-link";
 
 function RevisionBadge({ node, latest }: { node: Node; latest: number }) {
   if (node.upgradeRequired) {
@@ -83,11 +84,11 @@ const servesOrStarts = (node: Node) => node.dataPlaneHealthy || node.appliedRevi
 function NodeActions({
   node,
   onAction,
-  onDetail,
+  returnTo,
 }: {
   node: Node;
   onAction: (action: NodeAction) => void;
-  onDetail: (id: string) => void;
+  returnTo: string | undefined;
 }) {
   const meta = { invalidates: "all", toastError: true } as const;
   const disable = useMutation({ ...orpc.nodes.disable.mutationOptions(), meta });
@@ -110,7 +111,10 @@ function NodeActions({
         <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => onDetail(node.id)} data-testid="node-details">
+        <DropdownMenuItem
+          render={<Link {...workspaceLink(nodeHref(node.id, "overview", { returnTo }))} />}
+          data-testid="node-details"
+        >
           {m.nodes_details()}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => onAction({ kind: "rename", node })}>
@@ -253,18 +257,13 @@ function NodeState({ node }: { node: Node }) {
 
 /**
  * The cluster's nodes, one row each: name, state, group, load, revision and agent; a click
- * anywhere in a row opens the node's details (everything else about it). `detailId` is the node
- * whose details are open (`onDetail` opens and closes them) and `detailTab` their tab; they come
- * from the polling list so they stay current.
+ * anywhere in a row opens the node's detail page.
  */
 export function NodesSection({
   cluster,
   heading = true,
   onEnroll,
-  detailId,
-  detailTab,
-  onDetail: showDetail,
-  onDetailTab,
+  returnTo,
   sort,
   onSortChange,
 }: {
@@ -272,10 +271,7 @@ export function NodesSection({
   /** The section's heading with the node count (off where a tab names it). */
   heading?: boolean;
   onEnroll: () => void;
-  detailId: string | undefined;
-  detailTab: NodeDetailTab | undefined;
-  onDetail: (id: string | null) => void;
-  onDetailTab: (tab: NodeDetailTab) => void;
+  returnTo: string | undefined;
   /** The table's sort (the URL keeps it). */
   sort: SortParam | undefined;
   onSortChange: (sort: SortParam | undefined) => void;
@@ -287,7 +283,6 @@ export function NodesSection({
   });
   const action = useDialogState<NodeAction>();
   const latest = cluster.latestRevision?.revision ?? 0;
-  const detail = detailId ? nodes.data?.find((n) => n.id === detailId) : undefined;
   const { show } = action;
   const columns = React.useMemo<Columns<Node>>(
     () => [
@@ -299,15 +294,14 @@ export function NodesSection({
         cell: ({ row }) => (
           <div className="flex min-w-0 flex-col">
             <span className="flex min-w-0 items-center gap-1.5">
-              <button
-                type="button"
+              <Link
+                {...workspaceLink(nodeHref(row.original.id, "overview", { returnTo }))}
                 className={cn(rowLinkButton, "truncate font-medium")}
-                onClick={() => showDetail(row.original.id)}
                 data-testid="node-open"
                 {...rowLink}
               >
                 <span data-testid="node-name">{row.original.name}</span>
-              </button>
+              </Link>
               {row.original.probeEnabled ? (
                 <Badge size="sm" tone="neutral" data-testid="node-probe-badge">
                   {m.node_probe_switch()}
@@ -319,13 +313,7 @@ export function NodesSection({
               title={row.original.hostname}
               data-row-ignore
             >
-              {[...row.original.schedulingAddresses].sort(
-                (a, b) =>
-                  a.level - b.level ||
-                  Number(a.address.includes(":")) - Number(b.address.includes(":")),
-              )[0]?.address ??
-                row.original.ipAddresses[0] ??
-                row.original.hostname}
+              {nodeMainAddress(row.original)}
             </span>
           </div>
         ),
@@ -407,12 +395,12 @@ export function NodesSection({
         header: () => <span className="sr-only">{m.common_actions()}</span>,
         cell: ({ row }) => (
           <div className="flex justify-end">
-            <NodeActions node={row.original} onAction={show} onDetail={showDetail} />
+            <NodeActions node={row.original} onAction={show} returnTo={returnTo} />
           </div>
         ),
       },
     ],
-    [latest, show, showDetail],
+    [latest, show, returnTo],
   );
 
   return (
@@ -456,14 +444,6 @@ export function NodesSection({
           action={action.value}
           open={action.open}
           onOpenChange={action.onOpenChange}
-        />
-      ) : null}
-      {detail ? (
-        <NodeDetailSheet
-          node={detail}
-          tab={detailTab}
-          onTabChange={onDetailTab}
-          onClose={() => showDetail(null)}
         />
       ) : null}
     </section>

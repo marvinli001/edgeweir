@@ -32,10 +32,12 @@ import {
   FieldLegend,
   FieldSet,
 } from "@/components/layout/form";
+import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
 import { Spinner } from "@/components/layout/spinner";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SettingsGroup, SwitchField } from "@/components/site/fields";
 import { nextDraftKey } from "@/components/site/save-site";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { m } from "@/lib/i18n";
 import {
   apiError,
@@ -218,6 +220,20 @@ export function L4AppDialog({
   );
 }
 
+export function L4AppSettings({ app }: { app: L4App }) {
+  const clusters = useQuery(orpc.clusters.list.queryOptions());
+  return (
+    <Panel>
+      <PanelHeader>
+        <PanelTitle>{m.l4_edit()}</PanelTitle>
+      </PanelHeader>
+      <PanelContent>
+        <AppForm app={app} clusters={clusters.data ?? []} initial={draftOf(app, app.clusterId)} />
+      </PanelContent>
+    </Panel>
+  );
+}
+
 function AppForm({
   app,
   clusters,
@@ -228,13 +244,24 @@ function AppForm({
   app?: L4App;
   clusters: { id: string; name: string }[];
   initial: AppDraft;
-  onDone: (app: L4App) => void;
-  onCancel: () => void;
+  onDone?: (app: L4App) => void;
+  onCancel?: () => void;
 }) {
   const queryClient = useQueryClient();
   const uid = React.useId();
   const id = (name: string) => `${uid}-${name}`;
   const [draft, setDraft] = React.useState(initial);
+  const [baseline, setBaseline] = React.useState(initial);
+  const [updatedAt, setUpdatedAt] = React.useState(app?.updatedAt);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(baseline);
+  React.useEffect(() => {
+    if (!onCancel && app && !dirty && updatedAt !== app.updatedAt) {
+      setDraft(initial);
+      setBaseline(initial);
+      setUpdatedAt(app.updatedAt);
+    }
+  }, [app, dirty, initial, onCancel, updatedAt]);
+  useUnsavedChanges(!onCancel && dirty);
   // Opened before the clusters loaded, a new application takes the default cluster once they have.
   const clusterId = draft.clusterId || initial.clusterId;
   // A new application's idle timeout follows the protocol until it is edited.
@@ -319,7 +346,11 @@ function AppForm({
     setRefusal(null);
     try {
       const result = app
-        ? await update.mutateAsync({ id: app.id, expectedUpdatedAt: app.updatedAt, ...fields })
+        ? await update.mutateAsync({
+            id: app.id,
+            expectedUpdatedAt: updatedAt ?? app.updatedAt,
+            ...fields,
+          })
         : await create.mutateAsync({
             clusterId,
             enabled: draft.enabled,
@@ -334,7 +365,13 @@ function AppForm({
           ? m.site_saved({ revision: result.revision.revision })
           : m.site_form_created({ revision: result.revision.revision }),
       );
-      onDone(result.app);
+      if (onDone) onDone(result.app);
+      else {
+        const saved = draftOf(result.app, result.app.clusterId);
+        setBaseline(saved);
+        setDraft((current) => (current === draft ? saved : current));
+        setUpdatedAt(result.app.updatedAt);
+      }
     } catch (error) {
       const { code } = apiError(error);
       setRefusal({
@@ -711,19 +748,31 @@ function AppForm({
           />
         )}
         {errorFor("form")}
-        <DialogFooter>
-          <Button type="button" variant="secondary" onClick={onCancel}>
-            {m.common_cancel()}
-          </Button>
+        {onCancel ? (
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={onCancel}>
+              {m.common_cancel()}
+            </Button>
+            <Button
+              type="submit"
+              disabled={pending || noPrimary || !clusterId}
+              data-testid="l4-app-submit"
+            >
+              {pending ? <Spinner /> : null}
+              {app ? m.common_save() : m.common_create()}
+            </Button>
+          </DialogFooter>
+        ) : (
           <Button
             type="submit"
-            disabled={pending || noPrimary || !clusterId}
+            className="self-start"
+            disabled={!dirty || pending || noPrimary || !clusterId}
             data-testid="l4-app-submit"
           >
             {pending ? <Spinner /> : null}
-            {app ? m.common_save() : m.common_create()}
+            {m.common_save()}
           </Button>
-        </DialogFooter>
+        )}
       </FieldGroup>
     </form>
   );

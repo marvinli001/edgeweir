@@ -44,7 +44,7 @@ export function ChangeIndicator({
   better,
 }: {
   change: number | null;
-  better: "up" | "down";
+  better?: "up" | "down";
 }) {
   if (change === null || !Number.isFinite(change)) return null;
   const text = formatPercent(Math.abs(change) * 100);
@@ -64,7 +64,11 @@ export function ChangeIndicator({
     <span
       className={cn(
         "inline-flex items-center gap-0.5 text-xs font-medium tabular-nums",
-        up === (better === "up") ? "text-delta-good" : "text-delta-bad",
+        better
+          ? up === (better === "up")
+            ? "text-delta-good"
+            : "text-delta-bad"
+          : "text-muted-foreground",
       )}
       title={m.analytics_change({ change: signed })}
     >

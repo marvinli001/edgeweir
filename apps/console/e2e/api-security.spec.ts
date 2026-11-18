@@ -17,6 +17,8 @@ test("API security: saved modes, sampled endpoints and observations render on de
   await signedIn(page);
   await page.goto(`/sites/${state.siteId}`);
   await siteTab(page, "api-security");
+  await expect(page).toHaveURL(/\/api-security$/);
+  await expect(page.getByTestId("site-nav-api-security")).toHaveAttribute("aria-current", "page");
   await expect(page.getByTestId("api-schema-mode")).toContainText("执行");
   await expect(page.getByTestId("api-jwt-mode")).toContainText("执行");
   await expect(page.getByTestId("api-graphql-mode")).toContainText("观察");
@@ -49,7 +51,7 @@ test("API security: import previews issue locations and cannot enable schema enf
     if (request.url().includes("/rpc/apiSecurity/update")) updates++;
   });
   await signedIn(page);
-  await page.goto(`/sites/${state.siteId}?tab=api-security`);
+  await page.goto(`/sites/${state.siteId}/api-security`);
   await page.getByTestId("api-import-open").click();
   const document = {
     openapi: "3.1.0",
@@ -91,7 +93,7 @@ test("API security: exceptions save, toggle and delete; enforcement requires an 
 }) => {
   const pageErrors = errors(page);
   await signedIn(page);
-  await page.goto(`/sites/${state.siteId}?tab=api-security`);
+  await page.goto(`/sites/${state.siteId}/api-security`);
   await page.getByTestId("api-exception-add").click();
   await pick(page, page.getByTestId("api-exception-check"), "GraphQL");
   await pick(page, page.getByTestId("api-exception-method"), "POST");

@@ -1,5 +1,5 @@
 /*
- * A live series on canvas (uPlot, MIT, Leon Sorokin): the signal line over a fading wash, value
+ * A live series on canvas (uPlot, MIT, Leon Sorokin): the signal line, value
  * ticks on the right, a glow on the line in dark mode. Hovering reports the point to `onRead`.
  * Colors are tokens read through a canvas and re-read when the theme changes. uPlot draws only
  * when the data or size changes, so there is no loop to stop. The one exception to the effects'
@@ -105,17 +105,6 @@ export default function LiveChart({
           stroke: signal,
           width: 1.75,
           points: { show: false },
-          fill: (u) => {
-            const gradient = u.ctx.createLinearGradient(
-              0,
-              u.bbox.top,
-              0,
-              u.bbox.top + u.bbox.height,
-            );
-            gradient.addColorStop(0, tokenRgb("--signal", dark ? 0.3 : 0.22));
-            gradient.addColorStop(1, tokenRgb("--signal", 0));
-            return gradient;
-          },
         },
       ],
       hooks: {

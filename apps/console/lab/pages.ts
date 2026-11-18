@@ -22,7 +22,7 @@ export interface LabPage {
   path: string;
 }
 
-const site = (tab?: string) => `/sites/${SHOP}${tab ? `?tab=${tab}` : ""}`;
+const site = (tab?: string) => `/sites/${SHOP}${tab ? `/${tab}` : ""}`;
 
 export const PAGES: LabPage[] = [
   { name: "login", group: "auth", path: "/login" },
@@ -40,6 +40,7 @@ export const PAGES: LabPage[] = [
   { name: "site-redirects", group: "site", path: site("redirects") },
   { name: "site-access", group: "site", path: site("access") },
   { name: "site-security", group: "site", path: site("security") },
+  { name: "site-api-security", group: "site", path: site("api-security") },
   { name: "site-attacks", group: "site", path: site("attacks") },
   { name: "site-crawlers", group: "site", path: site("crawlers") },
   { name: "site-errors", group: "site", path: site("errors") },
@@ -53,7 +54,7 @@ export const PAGES: LabPage[] = [
   { name: "protection", group: "access", path: "/protection" },
 
   { name: "clusters", group: "infrastructure", path: "/clusters" },
-  { name: "clusters-node", group: "infrastructure", path: `/clusters?node=${LAGGING_NODE}` },
+  { name: "clusters-node", group: "infrastructure", path: `/clusters/nodes/${LAGGING_NODE}` },
   { name: "clusters-releases", group: "infrastructure", path: "/clusters?tab=releases" },
   { name: "clusters-dns", group: "infrastructure", path: "/clusters?tab=dns" },
   { name: "clusters-scheduling", group: "infrastructure", path: "/clusters?tab=scheduling" },
@@ -66,7 +67,7 @@ export const PAGES: LabPage[] = [
   { name: "clusters-regions", group: "infrastructure", path: "/clusters?view=regions" },
   { name: "l4", group: "infrastructure", path: "/l4" },
   { name: "l4-app", group: "infrastructure", path: `/l4/${L4_APP}` },
-  { name: "l4-app-stats", group: "infrastructure", path: `/l4/${L4_APP}?tab=stats` },
+  { name: "l4-app-stats", group: "infrastructure", path: `/l4/${L4_APP}/stats` },
   { name: "dns", group: "infrastructure", path: "/dns" },
 
   { name: "alerts", group: "system", path: "/alerts" },

@@ -47,11 +47,11 @@ When a cluster's [client IP](../deploy/nodes.en.md#client-ip) is not "Direct", t
 
 | Entry | Result |
 | --- | --- |
-| A site's "Logs" tab, row **⋯** → "Ban IP" | The ban dialog with the site and address filled in |
-| "Top IPs (approximate)" of the analytics, row **⋯** → "Ban IP" | On a site's "Analytics" tab the site and address; on **Overview** "Global" and the address |
-| A site's "Attacks" tab, "Top addresses and paths", address row **⋯** → "Ban IP" | The site and address |
-| A site's "Attacks" tab, "Events", automatic ban row **⋯** → "Ban on all sites" | "Global" and the address |
-| A site's "Attacks" tab, "Events", automatic ban row **⋯** → "Unban" | After confirmation, lifts the site's bans of exactly that address (a covering range stays); "This address has no active ban" when there is none |
+| A site's "Access logs" view, row **⋯** → "Ban IP" | The ban dialog with the site and address filled in |
+| "Top IPs (approximate)" of the analytics, row **⋯** → "Ban IP" | On a site's "Analytics" view the site and address; on **Overview** "Global" and the address |
+| A site's "Attacks" view, "Top addresses and paths", address row **⋯** → "Ban IP" | The site and address |
+| A site's "Attacks" view, "Events", automatic ban row **⋯** → "Ban on all sites" | "Global" and the address |
+| A site's "Attacks" view, "Events", automatic ban row **⋯** → "Unban" | After confirmation, lifts the site's bans of exactly that address (a covering range stays); "This address has no active ban" when there is none |
 | ⌘K / Ctrl+K → "Ban an IP…" | The ban dialog; on a site's pages with the site filled in |
 | `/bans?site=<site ID>&ip=<address>` | The dialog with the site and address; the list shows only that site's bans overlapping the address, × beside the address clears it |
 

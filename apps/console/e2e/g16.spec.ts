@@ -87,7 +87,7 @@ test("G16: a site's access log options save and stay", async ({ page }) => {
   siteId = /\/sites\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? "";
   expect(siteId).not.toBe("");
 
-  await page.goto(`/sites/${siteId}?tab=logs`);
+  await page.goto(`/sites/${siteId}/logs`);
   await expect(page.getByTestId("log-options")).toBeVisible();
   // The cluster's nodes run access-logs-v2: nothing is locked.
   await expect(page.getByTestId("log-options-unavailable")).toHaveCount(0);
@@ -113,7 +113,7 @@ test("G16: the new filters and the line details of the access log", async ({ pag
   const pageErrors = errors(page);
   await signedIn(page);
   const blockId = await siteNamed(page, BLOCK_SITE);
-  await page.goto(`/sites/${blockId}?tab=logs`);
+  await page.goto(`/sites/${blockId}/logs`);
   await expect(page.getByTestId("logs-search")).toBeVisible();
   await page.getByTestId("logs-more-filters").click();
   await expect(page.getByTestId("logs-more-filters-panel")).toBeVisible();
@@ -134,7 +134,7 @@ test("G16: the new filters and the line details of the access log", async ({ pag
   await check(page, "log-filters");
 
   const logsId = await siteNamed(page, LOGS_SITE);
-  await page.goto(`/sites/${logsId}?tab=logs`);
+  await page.goto(`/sites/${logsId}/logs`);
   await page.getByTestId("logs-more-filters").click();
   await page.getByTestId("log-filter-ua").fill("chrome/129");
   await pick(page, page.getByTestId("log-filter-cache-status"), "MISS");
@@ -160,7 +160,7 @@ test("G16: the statistics dimension cards and the overview's countries", async (
   const pageErrors = errors(page);
   await signedIn(page);
   const logsId = await siteNamed(page, LOGS_SITE);
-  await page.goto(`/sites/${logsId}?tab=analytics`);
+  await page.goto(`/sites/${logsId}/analytics`);
   const dims = page.getByTestId("stats-dimensions");
   await expect(dims).toBeVisible();
   await expect(page.getByTestId("stats-dims-partial")).toHaveCount(0);
@@ -193,7 +193,7 @@ test("G16: origin quality on the origins tab", async ({ page }) => {
   const pageErrors = errors(page);
   await signedIn(page);
   const logsId = await siteNamed(page, LOGS_SITE);
-  await page.goto(`/sites/${logsId}?tab=origins&range=1h`);
+  await page.goto(`/sites/${logsId}/origins?range=1h`);
   const card = page.getByTestId("origin-quality");
   await expect(card).toBeVisible();
   const row = card.getByTestId("origin-quality-row");
@@ -211,7 +211,7 @@ test("G16: block reasons and the challenge pass rate on the attacks tab", async 
   const pageErrors = errors(page);
   await signedIn(page);
   const blockId = await siteNamed(page, BLOCK_SITE);
-  await page.goto(`/sites/${blockId}?tab=attacks`);
+  await page.goto(`/sites/${blockId}/attacks`);
   const reasons = page.getByTestId("block-reasons");
   await expect(reasons).toContainText("自定义规则");
   await expect(reasons).toContainText("限速");

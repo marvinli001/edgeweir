@@ -5,7 +5,7 @@ import { pick, signedIn, test } from "./helpers";
 
 /**
  * Node logs in the browser, after scripts/e2e-node-logs.mjs (.e2e/node-logs-state.json): the core
- * node's details open on the logs tab from the URL; the Lua warning about the origin that does not
+ * node's logs open from the URL; the Lua warning about the origin that does not
  * resolve is listed with its source and, expanded, its request without the query string; the
  * secret of the run is nowhere on the page; the level filter hides it, a search without matches
  * shows the empty state and clearing the filters brings it back; a debug log pull started from the
@@ -50,10 +50,10 @@ test("the node's logs tab lists the warning without secrets", async ({ page }) =
   test.skip(!state, "run scripts/e2e-node-logs.mjs first");
   if (!state) return;
   await signedIn(page);
-  await page.goto(`/clusters?cluster=${state.clusterId}&node=${state.nodeId}&nodeTab=logs`);
-  const sheet = page.getByTestId("node-detail");
+  await page.goto(`/clusters/nodes/${state.nodeId}/logs`);
+  const sheet = page.locator("main");
   await expect(sheet).toBeVisible();
-  await expect(sheet.getByTestId("node-detail-tab-logs")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("node-nav-logs")).toHaveAttribute("aria-current", "page");
   const row = sheet
     .getByTestId("node-log-row")
     .filter({ hasText: `of site ${state.siteId} marked down` })
@@ -82,17 +82,17 @@ test("the node's logs tab lists the warning without secrets", async ({ page }) =
     sheet.getByTestId("node-log-row").filter({ hasText: `of site ${state.siteId} marked down` }),
   ).not.toHaveCount(0);
 
-  // The overview tab is one click away and leaves the URL without nodeTab.
-  await sheet.getByTestId("node-detail-tab-overview").click();
-  await expect(page).not.toHaveURL(/nodeTab=/);
+  // The overview is one click away and has its own path.
+  await page.getByTestId("node-nav-overview").click();
+  await expect(page).toHaveURL(new RegExp(`/clusters/nodes/${state.nodeId}(?:\\?|$)`));
 });
 
 test("a debug log pull from the tab can be viewed and downloaded", async ({ page }) => {
   test.skip(!state, "run scripts/e2e-node-logs.mjs first");
   if (!state) return;
   await signedIn(page);
-  await page.goto(`/clusters?cluster=${state.clusterId}&node=${state.nodeId}&nodeTab=logs`);
-  const sheet = page.getByTestId("node-detail");
+  await page.goto(`/clusters/nodes/${state.nodeId}/debug-logs`);
+  const sheet = page.locator("main");
   const section = sheet.getByTestId("node-debug-logs");
   await expect(section).toBeVisible();
   const done = section.locator('[data-testid="node-debug-pull-row"][data-state="succeeded"]');

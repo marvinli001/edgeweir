@@ -20,8 +20,8 @@ test.describe.configure({ mode: "serial" });
 const check = (page: Page, name: string) => shots(page, "g8", name);
 
 async function openTab(page: Page, siteId: string, tab: "rules" | "errors") {
-  await page.goto(`/sites/${siteId}?tab=${tab}`);
-  await expect(page.getByTestId(`tab-${tab}`)).toHaveAttribute("aria-selected", "true");
+  await page.goto(`/sites/${siteId}/${tab}`);
+  await expect(page.getByTestId(`site-nav-${tab}`)).toHaveAttribute("aria-current", "page");
 }
 
 const phaseRules = (page: Page, phase: string) =>

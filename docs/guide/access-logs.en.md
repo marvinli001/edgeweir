@@ -19,13 +19,13 @@ Traffic analytics and dimensions; access log sampling, search, export, retention
 | Location | Scope |
 | --- | --- |
 | **Overview** (`/overview`) | All sites and nodes, including **Top sites by requests** and **Top nodes by requests**, see [Overview](overview.en.md) |
-| **Sites** → the site → the **Analytics** tab (`/sites/<site ID>?tab=analytics`) | One site |
+| **Sites** → the site → the **Analytics** view (`/sites/<site ID>/analytics`) | One site |
 
-1. Open a page from the table and select a range: **Last hour**, **Last 6 hours**, **Last 24 hours**, **Last 7 days**, or **Last 30 days**. On a site's **Analytics** tab the range goes into the address parameter `range` (`1h`, `6h`, `24h`, `7d`, `30d`).
-2. Read **Total requests**, **Data transferred**, **Cache hit ratio**, **Peak bandwidth**, **4xx rate**, **5xx rate**, **Status codes**, **Top URLs (approximate)**, and **Top IPs (approximate)**; click a metric for details. A site's **Analytics** tab also has **Countries**, **Networks (approximate)**, **Referrers (approximate)**, **Clients** and **Protocols** cards, and the overview **Top countries by traffic** (by data transferred), see [Statistics dimensions](#statistics-dimensions).
+1. Open a page from the table and select a range: **Last hour**, **Last 6 hours**, **Last 24 hours**, **Last 7 days**, or **Last 30 days**. On a site's **Analytics** view the range goes into the address parameter `range` (`1h`, `6h`, `24h`, `7d`, `30d`).
+2. Read **Total requests**, **Data transferred**, **Cache hit ratio**, **Peak bandwidth**, **4xx rate**, **5xx rate**, **Status codes**, **Top URLs (approximate)**, and **Top IPs (approximate)**; click a metric for details. A site's **Analytics** view also has **Countries**, **Networks (approximate)**, **Referrers (approximate)**, **Clients** and **Protocols** cards, and the overview **Top countries by traffic** (by data transferred), see [Statistics dimensions](#statistics-dimensions).
 3. Click **Refresh** to reload.
-4. Click **Customize cards** to choose which cards show; the choice on a site's **Analytics** tab applies to every site and is kept apart from the overview's, see [Customize cards](overview.en.md#customize-cards).
-5. To act on an entry, click **⋯** at the end of its row: a top IP offers **Ban IP** (with the site filled in on a site's **Analytics** tab, with the **Global** scope on the overview); a top URL on a site's **Analytics** tab offers **Purge URL**, which expands the path to each of the site's domains that is not a wildcard and lists the URLs before it submits the purge.
+4. Click **Customize cards** to choose which cards show; the choice on a site's **Analytics** view applies to every site and is kept apart from the overview's, see [Customize cards](overview.en.md#customize-cards).
+5. To act on an entry, click **⋯** at the end of its row: a top IP offers **Ban IP** (with the site filled in on a site's **Analytics** view, with the **Global** scope on the overview); a top URL on a site's **Analytics** view offers **Purge URL**, which expands the path to each of the site's domains that is not a wildcard and lists the URLs before it submits the purge.
 
 Readouts with a fixed window and no range to pick:
 
@@ -33,7 +33,7 @@ Readouts with a fixed window and no range to pick:
 | --- | --- |
 | **Right now** on the **Overview** | Request rate and egress of all sites in the last full minute, cache hit ratio over the last hour, see [Right now](overview.en.md#right-now) |
 | **Requests (24h)** in the **Sites** list | Each site's requests over the last 24 hours, with a trend line; shown only with at most 20 sites and no search or filter on the list |
-| **Sites** → **Overview** tab → **Live requests** | An enabled site's requests per second over the last hour, minute by minute (the minute still being counted is left out), refreshed every minute; hover to read a minute |
+| **Sites** → **Overview** view → **Live requests** | An enabled site's requests per second over the last hour, minute by minute (the minute still being counted is left out), refreshed every minute; hover to read a minute |
 
 ### Analytics data
 
@@ -51,12 +51,12 @@ Readouts with a fixed window and no range to pick:
 
 | Location | Card | Content |
 | --- | --- | --- |
-| A site's **Analytics** tab | **Countries** | Requests and data transferred per client country; addresses GeoIP does not know count as **Unknown** |
+| A site's **Analytics** view | **Countries** | Requests and data transferred per client country; addresses GeoIP does not know count as **Unknown** |
 | | **Networks (approximate)** | Requests per client network (AS number and name), approximate, at most 50 |
 | | **Referrers (approximate)** | Requests per host of the `Referer` (without port; not counted when it is the request's own Host), approximate, at most 50 |
 | | **Clients** | **Browsers**, **Operating systems** and **Devices** (the node's User-Agent classification) |
 | | **Protocols** | **HTTP versions** (1.0, 1.1, 2, 3) and **TLS versions** (1.2, 1.3, plain) |
-| A site's **Security** tab | **Block reasons** | Requests per [block reason](#block-reasons) |
+| A site's **Security protection** view | **Block reasons** | Requests per [block reason](#block-reasons) |
 | | **Challenge pass rate** | Challenges sent (challenge pages and cookie302 redirects), passes issued after a verified answer, and their ratio |
 | **Overview** | **Top countries by traffic** | Countries of all sites by data transferred |
 
@@ -82,7 +82,7 @@ Readouts with a fixed window and no range to pick:
 
 ## Enable access logs
 
-Page: **Sites** → the site → the **Logs** tab (`/sites/<site ID>?tab=logs`). The card on top holds the log settings, the one below the search.
+Page: **Sites** → the site → the **Access logs** view (`/sites/<site ID>/logs`). The card on top holds the log settings, the one below the search.
 
 1. Select **Off**, **1%**, **10%** or **100%** in **Access log sample rate**. The choice is saved at once and publishes a new configuration revision of the site's cluster ("Site {site} updated"); the console shows **Saved**.
 2. Turn on **Always log blocked, challenged and refused requests**, **Log query strings** or **Log the peer address** as needed, enter header names in **Log request headers**, and click **Save**. Only what changed is sent, and it publishes a new configuration revision too.
@@ -116,7 +116,7 @@ Country and network come from the node's GeoIP lookups: each worker caches recen
 
 Forced lines share the budget of 100 lines per site and second on each node with **Write access log** rules; beyond it, the sample rate applies as usual. While the site's sample rate is **Off**, the console keeps these lines as long as forced logging is on (only lines with a block reason).
 
-With **Record JA4 in access logs** on (the **Challenges** card on the site's **Security** tab), logs also record the JA4 TLS client fingerprint (empty over plain HTTP): the table shows **JA4** and the fingerprint under the request, and the CSV has a `ja4` column. Once it is off, the console stops keeping the field. JA4 format: [JA4](challenges.en.md#ja4).
+With **Record JA4 in access logs** on (the **Challenges** card on the site's **Security protection** view), logs also record the JA4 TLS client fingerprint (empty over plain HTTP): the table shows **JA4** and the fingerprint under the request, and the CSV has a `ja4` column. Once it is off, the console stops keeping the field. JA4 format: [JA4](challenges.en.md#ja4).
 
 With [OWASP CRS](waf.en.md) on, requests that matched rules also record the rule IDs (at most 16 per request, ascending) and whether CRS blocked them: the table shows **CRS** under the request (rule IDs and a **Blocked** badge) and the CSV has `wafRuleIds` (space-separated) and `wafBlocked` columns.
 
@@ -151,7 +151,7 @@ Nodes record the reason where they refuse; reasons match the `X-Edgeweir-Error` 
 
 ## Search and export logs
 
-1. On the **Logs** tab, enter **From** and **To**, and optionally **Status**, **Client IP**, **Path prefix**, and **Request ID**; the other conditions are under **More filters** (shown as "More filters ({count})" while some are set).
+1. On the **Access logs** view, enter **From** and **To**, and optionally **Status**, **Client IP**, **Path prefix**, and **Request ID**; the other conditions are under **More filters** (shown as "More filters ({count})" while some are set).
 2. Click **Search**.
 3. For a file, click **Export CSV**.
 4. To act on a request, click **⋯** at the end of its row; the action runs on the same page:
@@ -197,10 +197,10 @@ The columns are **Time**, **Client IP**, **Request**, **Status**, **Bytes**, **D
 
 ### Jump parameters
 
-Other pages open the **Logs** tab with the conditions in the address, such as **View logs** on the **Attacks** tab:
+Other pages open the **Access logs** view with the conditions in the address, such as **View logs** on the **Attacks** view:
 
 ```text
-/sites/<site ID>?tab=logs&blockReason=any&ip=203.0.113.7&from=2026-10-30T08:00:00.000Z&to=2026-10-30T09:01:00.000Z
+/sites/<site ID>/logs?blockReason=any&ip=203.0.113.7&from=2026-10-30T08:00:00.000Z&to=2026-10-30T09:01:00.000Z
 ```
 
 | Parameter | Values | Fills in |
