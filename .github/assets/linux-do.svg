@@ -1,39 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="89" height="20" role="img" aria-label="LINUX DO">
-  <title>LINUX DO</title>
-  <filter id="blur">
-    <feGaussianBlur stdDeviation="16" />
-  </filter>
-  <linearGradient id="s" x2="0" y2="100%">
-    <stop offset="0" stop-color="#bbb" stop-opacity=".1" />
-    <stop offset="1" stop-opacity=".1" />
-  </linearGradient>
-  <clipPath id="r">
-    <rect width="89" height="20" rx="3" />
-  </clipPath>
-  <g clip-path="url(#r)">
-    <rect width="62" height="20" fill="#555" />
-    <rect x="62" width="27" height="20" fill="#ffb003" />
-    <rect width="89" height="20" fill="url(#s)" />
+<svg xmlns="http://www.w3.org/2000/svg" width="194" height="40" viewBox="0 0 194 40" role="img" aria-label="访问 LINUX DO 社区">
+  <title>访问 LINUX DO 社区</title>
+  <rect width="194" height="40" rx="6" fill="#FFB003"/>
+  <g transform="translate(14 9) scale(.22)" fill-rule="evenodd" aria-hidden="true">
+    <path fill="#ececec" d="M46.82-.055h6.25q23.969 2.062 38 21.426c5.258 7.676 8.215 16.156 8.875 25.45v6.25q-2.064 23.968-21.43 38-11.512 7.885-25.445 8.874h-6.25q-23.97-2.064-38.004-21.43Q.971 67.056-.054 53.18v-6.473C1.362 30.781 8.503 18.148 21.37 8.817 29.047 3.562 37.527.604 46.821-.056"/>
+    <path fill="#191919" d="M47.266 2.957q22.53-.65 37.777 15.738a49.7 49.7 0 0 1 6.867 10.157q-41.964.222-83.93 0 9.75-18.616 30.024-24.387a61 61 0 0 1 9.262-1.508"/>
+    <path fill="#f9af00" d="M7.98 70.926c27.977-.035 55.954 0 83.93.113Q83.426 87.473 66.13 94.086q-18.81 6.544-36.832-1.898-14.203-7.09-21.317-21.262"/>
   </g>
-  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
-    <svg x="5" y="3" width="14" height="14" viewBox="0 0 100 100">
-      <path d="M46.82-.055h6.25q23.969 2.062 38 21.426c5.258 7.676 8.215 16.156 8.875 25.45v6.25q-2.064 23.968-21.43 38-11.512 7.885-25.445 8.874h-6.25q-23.97-2.064-38.004-21.43Q.971 67.056-.054 53.18v-6.473C1.362 30.781 8.503 18.148 21.37 8.817 29.047 3.562 37.527.604 46.821-.056" style="stroke:none;fill-rule:evenodd;fill:#ececec;fill-opacity:1" />
-      <path d="M47.266 2.957q22.53-.65 37.777 15.738a49.7 49.7 0 0 1 6.867 10.157q-41.964.222-83.93 0 9.75-18.616 30.024-24.387a61 61 0 0 1 9.262-1.508" style="stroke:none;fill-rule:evenodd;fill:#191919;fill-opacity:1" />
-      <path d="M7.98 70.926c27.977-.035 55.954 0 83.93.113Q83.426 87.473 66.13 94.086q-18.81 6.544-36.832-1.898-14.203-7.09-21.317-21.262" style="stroke:none;fill-rule:evenodd;fill:#f9af00;fill-opacity:1" />
-    </svg>
-    <g transform="scale(.1)">
-      <g aria-hidden="true" fill="#010101">
-        <text x="405" y="150" fill-opacity=".8" filter="url(#blur)" textLength="350">LINUX</text>
-        <text x="405" y="150" fill-opacity=".3" textLength="350">LINUX</text>
-      </g>
-      <text x="405" y="140" textLength="350">LINUX</text>
-    </g>
-    <g transform="scale(.1)">
-      <g aria-hidden="true" fill="#ccc">
-        <text x="745" y="150" fill-opacity=".8" filter="url(#blur)" textLength="170">DO</text>
-        <text x="745" y="150" fill-opacity=".3" textLength="170">DO</text>
-      </g>
-      <text x="745" y="140" textLength="170" fill="#333">DO</text>
-    </g>
-  </g>
+  <text x="47" y="25.5" fill="#191919" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif" font-size="15" font-weight="600">访问 LINUX DO 社区</text>
 </svg>
