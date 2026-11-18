@@ -160,22 +160,29 @@ describe.runIf(!!postgres)("listener port transactions on PostgreSQL", () => {
           secretVersion: 1,
         })
         .where(eq(schema.extension.id, id));
-      const [cluster] = await old.db
-        .insert(schema.cluster)
-        .values({ name: "old cluster" })
-        .returning();
-      const [site] = await old.db
-        .insert(schema.site)
-        .values({ clusterId: cluster?.id ?? "", name: "old site", cnamePrefix: "old-site" })
-        .returning();
+      // Seed the pre-upgrade database with columns present in 0091.
+      const {
+        rows: [cluster],
+      } = await old.pool.query<{ id: string }>(
+        "insert into cluster (name) values ($1) returning id",
+        ["old cluster"],
+      );
+      if (!cluster) throw new Error("legacy cluster was not created");
+      const {
+        rows: [site],
+      } = await old.pool.query<{ id: string }>(
+        "insert into site (cluster_id, name, cname_prefix) values ($1, $2, $3) returning id",
+        [cluster.id, "old site", "old-site"],
+      );
+      if (!site) throw new Error("legacy site was not created");
       await old.db.insert(schema.siteExtension).values({
-        siteId: site?.id ?? "",
+        siteId: site.id,
         extensionId: id,
         enabled: true,
         config: { label: "old site" },
       });
       await old.db.insert(schema.siteExtensionData).values({
-        siteId: site?.id ?? "",
+        siteId: site.id,
         extensionId: id,
         name: "legacy",
         sha256: "old-digest",
@@ -187,6 +194,11 @@ describe.runIf(!!postgres)("listener port transactions on PostgreSQL", () => {
         tables.map(async (table) => (await old.pool.query(`select * from ${table}`)).rows),
       );
       await runMigrations(old.pool);
+      const [upgraded] = await old.db
+        .select({ apiSecurity: schema.site.apiSecurity })
+        .from(schema.site)
+        .where(eq(schema.site.id, site.id));
+      expect(upgraded?.apiSecurity).toEqual({});
       expect(
         await Promise.all(
           tables.map(async (table) => (await old.pool.query(`select * from ${table}`)).rows),
