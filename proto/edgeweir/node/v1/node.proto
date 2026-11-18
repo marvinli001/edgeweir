@@ -974,6 +974,9 @@ message AccessLog {
   string crawler = 40;
   string crawler_verification = 41;
   uint64 crawler_charged_micros = 42;
+  // Bounded, redacted API endpoint template and check outcomes (api-security-v1).
+  // No query values, headers, credentials or body data.
+  string api_security_json = 43;
   // Requests the edge fetched through the tiered cache: the upper tier's
   // node id and cache status ("<id> HIT"), "origin" when it fell back to
   // the origins; "" otherwise (cache hits included). Added in v1.9.0.

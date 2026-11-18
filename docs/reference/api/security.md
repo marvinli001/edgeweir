@@ -6,6 +6,8 @@
 
 ## 网站规则
 
+站点API流量防护另见 [API安全](../../guide/api-security.md)。`apiSecurity.get`、`results`使用GET读取配置和结果；`importOpenApi`使用只读POST预览文档；`update`使用PUT替换完整配置并发布；`confirmEndpoint`使用PUT确认发现元数据。路径与输入输出见该指南及公开OpenAPI规范，均使用现有运营者凭据，不向服务账号额外授予权限。
+
 - 保存与恢复发布网站所在集群的配置版本（原因 `rules_updated`），审计 `site.rules_update`、`site.rule_restore`（元数据含规则数 `count`；恢复另含规则 `{ id, name }` 与 `version`）。
 - 每次保存为新增、修改或删除的规则各记一个版本；只调整顺序不记版本。每条规则保留最近 50 个版本，每个网站保留最近删除的 100 条规则。
 - 规则对象与动作见[规则对象](#规则对象)、[规则动作](#规则动作)；表达式语言见[表达式](../../guide/rules.md#表达式)；行为见[规则、IP 名单与 GeoIP](../../guide/rules.md)。

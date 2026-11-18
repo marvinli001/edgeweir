@@ -12,6 +12,7 @@ export const SITE_TABS = [
   "redirects",
   "access",
   "security",
+  "api-security",
   "attacks",
   "crawlers",
   "errors",
@@ -29,7 +30,7 @@ export function siteTabGroups(): { label: string; tabs: [SiteTab, ...SiteTab[]] 
       label: m.site_group_delivery(),
       tabs: ["cache", "rules", "redirects", "errors", "extensions"],
     },
-    { label: m.site_tab_security(), tabs: ["security", "access", "crawlers"] },
+    { label: m.site_tab_security(), tabs: ["security", "access", "api-security", "crawlers"] },
     { label: m.site_group_observability(), tabs: ["analytics", "attacks", "logs"] },
   ];
 }
@@ -50,6 +51,7 @@ export function siteTabLabel(tab: SiteTab): string {
     redirects: m.site_tab_redirects,
     access: m.site_tab_access,
     security: m.site_tab_security,
+    "api-security": m.site_tab_api_security,
     attacks: m.site_tab_attacks,
     crawlers: m.site_tab_crawlers,
     errors: m.site_tab_errors,

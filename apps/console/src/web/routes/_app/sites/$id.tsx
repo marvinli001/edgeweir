@@ -49,6 +49,7 @@ import { Page, PageTabs } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { AccessTab } from "@/components/site/access-tab";
 import { AiCrawlTab } from "@/components/site/ai-crawl-tab";
+import { ApiSecurityTab } from "@/components/site/api-security-tab";
 import { AttacksTab } from "@/components/site/attacks-tab";
 import { BulkRedirectsTab } from "@/components/site/bulk-redirects-tab";
 import { CacheTab } from "@/components/site/cache-tab";
@@ -301,6 +302,9 @@ function SiteDetailPage() {
             </TabsContent>
             <TabsContent value="security" className="animate-enter">
               <SecurityTab siteId={data.id} />
+            </TabsContent>
+            <TabsContent value="api-security" className="animate-enter">
+              <ApiSecurityTab site={data} />
             </TabsContent>
             <TabsContent value="attacks" className="animate-enter">
               <AttacksTab

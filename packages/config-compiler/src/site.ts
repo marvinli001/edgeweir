@@ -75,6 +75,7 @@ import {
   structuredCacheCondition,
 } from "@edgeweir/rule-engine";
 import { aiCrawlActive, aiCrawlChallenges } from "./ai-crawl";
+import { encodeApiSecurity } from "./api-security";
 import { matchMap } from "./canonical";
 import {
   type AccessControlModel,
@@ -309,6 +310,7 @@ export function compileSite(
     logQuery: model.logQuery ?? false,
     logHeaders: sortedByteSet(model.logHeaders ?? []),
     logPeer: model.logPeer ?? false,
+    apiSecurityJson: model.apiSecurity ? encodeApiSecurity(model.apiSecurity) : "",
     ...(model.imageConvert ? { imageConvert: compileImageConvert(model.imageConvert) } : {}),
     ...(model.markdown
       ? {

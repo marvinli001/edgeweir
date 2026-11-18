@@ -1,4 +1,4 @@
-import type { LogEntry } from "@edgeweir/contract";
+import { type ApiSecurityResults, apiSecurityLog, type LogEntry } from "@edgeweir/contract";
 import type { Env } from "../lib/env";
 import type { LogFilter } from "./access-logs";
 import { DIMENSION_COLUMNS } from "./stats-dims";
@@ -29,6 +29,7 @@ const LOG_COLUMNS = [
   ["crawler_charged_micros", "UInt64 DEFAULT 0"],
   ["tier", "String DEFAULT ''"],
   ["ext", "Map(String, String)"],
+  ["api_security_json", "String DEFAULT ''"],
 ] as const;
 
 /** Operator-controlled endpoint from the environment. Credentials stay in headers. */
@@ -202,6 +203,7 @@ export async function insertClickHouseLogs(env: Env, rows: LogEntry[]) {
         crawler_charged_micros: r.crawlerChargedMicros,
         tier: r.tier,
         ext: r.ext,
+        api_security_json: r.apiSecurity ? JSON.stringify(r.apiSecurity) : "",
       }),
     )
     .join("\n");
@@ -220,7 +222,7 @@ export async function queryClickHouseLogs(env: Env, input: LogFilter): Promise<L
     toFloat64(request_bytes) AS requestBytes, content_type AS contentType, tls_version AS tlsVersion,
     block_reason AS blockReason, block_rule_id AS blockRuleId, query, headers, peer_ip AS peerIp,
     crawler, crawler_verification AS crawlerVerification, toFloat64(crawler_charged_micros) AS crawlerChargedMicros,
-    tier, ext
+    tier, ext, api_security_json AS apiSecurityJson
     FROM access_log FINAL WHERE site_id = {site:UUID}
       AND time >= fromUnixTimestamp64Milli({from:Int64}) AND time < fromUnixTimestamp64Milli({to:Int64})
       AND ({status:UInt16} = 0 OR status = {status:UInt16}) AND ({ip:String} = '' OR client_ip = {ip:String})
@@ -267,8 +269,60 @@ export async function queryClickHouseLogs(env: Env, input: LogFilter): Promise<L
         .trim()
         .split("\n")
         .map((line) => {
-          const { timeIso, ...rest } = JSON.parse(line);
-          return { ...rest, time: new Date(timeIso).toISOString() } as LogEntry;
+          const { timeIso, apiSecurityJson, ...rest } = JSON.parse(line);
+          return {
+            ...rest,
+            time: new Date(timeIso).toISOString(),
+            apiSecurity: storedApiSecurity(apiSecurityJson),
+          } as LogEntry;
+        })
+    : [];
+}
+
+function storedApiSecurity(value: string): LogEntry["apiSecurity"] {
+  if (!value || Buffer.byteLength(value) > 4096) return null;
+  try {
+    const parsed = apiSecurityLog.safeParse(JSON.parse(value));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function queryClickHouseApiSecurityEvents(
+  env: Env,
+  siteId: string,
+  from: number,
+  to: number,
+): Promise<ApiSecurityResults["events"]> {
+  await ensureClickHouse(env);
+  const output = await clickhouse(
+    env,
+    `SELECT formatDateTime(time, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS time,
+      request_id AS requestId, method, status, api_security_json AS detail
+      FROM access_log FINAL WHERE site_id = {site:UUID}
+      AND time >= fromUnixTimestamp64Milli({from:Int64}) AND time < fromUnixTimestamp64Milli({to:Int64})
+      AND api_security_json != '' ORDER BY time DESC, id DESC LIMIT 100 FORMAT JSONEachRow`,
+    { site: siteId, from: String(from), to: String(to) },
+  );
+  return output.trim()
+    ? output
+        .trim()
+        .split("\n")
+        .flatMap((line) => {
+          const row = JSON.parse(line);
+          const detail = storedApiSecurity(row.detail);
+          return detail
+            ? [
+                {
+                  time: new Date(row.time).toISOString(),
+                  requestId: row.requestId,
+                  method: row.method,
+                  status: row.status,
+                  detail,
+                },
+              ]
+            : [];
         })
     : [];
 }

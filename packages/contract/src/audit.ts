@@ -4,6 +4,8 @@
  * as underscores) and shows codes it does not know (older entries) as they are.
  */
 export const auditActions = [
+  "site.api_security_update",
+  "site.api_endpoint_confirm",
   "account.passkey_add",
   "account.passkey_delete",
   "account.password_change",

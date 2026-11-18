@@ -1,8 +1,10 @@
 import { isIP } from "node:net";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { apiSecurityEnabled } from "@edgeweir/config-compiler";
 import {
   AI_CRAWLER_VERIFICATIONS,
+  type ApiSecuritySettings,
   BLOCK_REASONS,
   HTTP_VERSIONS,
   LOG_RETENTION_DEFAULTS,
@@ -17,9 +19,16 @@ import {
 import { type Database, schema } from "@edgeweir/db";
 import type { AccessLog } from "@edgeweir/proto";
 import { and, desc, eq, gte, inArray, lt, ne, type SQL, sql } from "drizzle-orm";
+import { readApiSecurity } from "../lib/api-security";
 import type { AppContext } from "../lib/context";
 import type { Env } from "../lib/env";
 import { lockLogPartition, lockLogPartitions, tryLockNodeLogs } from "../lib/locks";
+import {
+  API_SECURITY_TTL_MS,
+  ingestApiEndpoints,
+  parseApiSecurityLog,
+  pruneApiEndpoints,
+} from "./api-security";
 import type { Actor } from "./audit";
 import { recordAudit } from "./audit";
 import { applyClickHouseRetention, insertClickHouseLogs, queryClickHouseLogs } from "./clickhouse";
@@ -134,6 +143,7 @@ export async function maintainLogs(db: Database, now = Date.now(), env?: Env) {
     for (const row of rows.rows)
       if (/^access_log_\d{8}$/.test(row.relname) && row.relname.slice(-8) < cutoff)
         await tx.execute(sql.raw(`DROP TABLE "${row.relname}"`));
+    await pruneApiEndpoints(tx, now);
   });
   if (env?.EDGEWEIR_ANALYTICS === "clickhouse") await syncClickHouseRetention(env, retention);
 }
@@ -141,6 +151,8 @@ export async function maintainLogs(db: Database, now = Date.now(), env?: Env) {
 interface SiteLogPolicy {
   /** The site only logs blocked requests: lines without a block reason are dropped. */
   blockedOnly: boolean;
+  blocked: boolean;
+  apiSecurity: ApiSecuritySettings;
   ja4: boolean;
   query: boolean;
   headers: ReadonlySet<string>;
@@ -181,6 +193,7 @@ export async function ingestLogs(
           logHeaders: schema.site.logHeaders,
           logPeer: schema.site.logPeer,
           logBlocked: schema.site.logBlocked,
+          apiSecurity: schema.site.apiSecurity,
           // The site samples, or an enabled site or platform rule samples some
           // of its requests (config action logSampleRate, rules-v2) or writes
           // lines whatever the sample rate (log action accessLog, waf-v2).
@@ -201,12 +214,15 @@ export async function ingestLogs(
   const policies = new Map<string, SiteLogPolicy>();
   for (const s of sites) {
     const sampled = s.sampled === true;
+    const apiSecurity = readApiSecurity(s.apiSecurity);
     // Nothing sampled and blocked requests not logged: none of its lines.
-    if (!sampled && !s.logBlocked) continue;
+    if (!sampled && !s.logBlocked && !apiSecurityEnabled(apiSecurity)) continue;
     policies.set(s.id, {
       // Only blocked requests are logged: other lines (nodes behind the
       // revision, a spooled backlog) are not kept.
       blockedOnly: !sampled,
+      blocked: s.logBlocked,
+      apiSecurity,
       ja4: s.logJa4 === true,
       query: s.logQuery,
       headers: new Set(s.logHeaders),
@@ -217,9 +233,13 @@ export async function ingestLogs(
     const policy = policies.get(l.siteId);
     const time = l.time ? timestampDate(l.time).getTime() : NaN,
       bytes = Number(l.bytesSent);
+    const apiSecurity =
+      policy && time >= now - API_SECURITY_TTL_MS
+        ? parseApiSecurityLog(l.apiSecurityJson, policy.apiSecurity)
+        : null;
     if (
       !policy ||
-      (policy.blockedOnly && !REASONS.has(l.blockReason)) ||
+      (policy.blockedOnly && !(policy.blocked && REASONS.has(l.blockReason)) && !apiSecurity) ||
       !Number.isFinite(time) ||
       time < cutoff ||
       time > now + 300000 ||
@@ -294,6 +314,7 @@ export async function ingestLogs(
         ...crawlerFields(l),
         tier: TIER_LOG_RE.test(l.tier) ? l.tier : "",
         ext: extensionLogFields(l.ext),
+        apiSecurity,
       },
     ];
   });
@@ -322,6 +343,16 @@ export async function ingestLogs(
         .values(entries.map((e) => ({ ...e, time: new Date(e.time) })))
         .onConflictDoNothing();
     }
+    await ingestApiEndpoints(
+      tx,
+      entries,
+      new Set(
+        [...policies.entries()]
+          .filter(([, policy]) => policy.apiSecurity.discovery.enabled)
+          .map(([id]) => id),
+      ),
+      now,
+    );
     await tx.update(cursor).set({ sequence }).where(eq(cursor.nodeId, node.id));
     return entries.length;
   });

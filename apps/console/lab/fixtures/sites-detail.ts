@@ -2295,6 +2295,7 @@ function entry(
     crawlerChargedMicros: 0,
     tier: "",
     ext: {},
+    apiSecurity: null,
   };
 }
 

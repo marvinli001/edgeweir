@@ -16,6 +16,7 @@ Documentation: <https://marvinli001.github.io/edgeweir/en/>
 
 | Area | Capabilities |
 | --- | --- |
+| API security | [Endpoint discovery, OpenAPI request validation, static-public-key JWT and HTTP GraphQL limits](docs/guide/api-security.en.md), observe/enforce modes and per-check exceptions |
 | Clusters and account | Node groups, regions, configuration canary, 2FA / passkeys, service accounts, audit log |
 | Site management | Site tags (filter by any or all, rename and merge, ⌘K search), batch on/off, purge, add or remove tags and delete, copying a site's settings (15 parts) to other sites after a preview, cloning sites |
 | Origins and cache | Origin pools and origin groups, active and passive health checks, session affinity, origin TLS verification, S3-signed origins, HTTP/2 and gRPC to origins, WebSocket, expression cache rules with browser TTLs, cache keys, slicing, purge by URL / directory / host / Cache-Tag, prefetch per device and from sitemaps, a keyed PURGE method, cache zones sized per cluster and node, caching responses with Set-Cookie (the cookies go only to the request that fetched them), origin tries and status retries, request body limits, charsets, object storage presets, error pages per status and for 4xx / 5xx (HTML or redirect), maintenance mode, WebP / AVIF conversion (variants cached by Accept, the bytes saved in the statistics) |

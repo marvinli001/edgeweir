@@ -17,6 +17,7 @@ import { accessControlContract, ipCheckContract } from "./access-control";
 import { accessKeysContract } from "./access-keys";
 import { aiCrawlContract } from "./ai-crawl";
 import { alertsContract } from "./alerts";
+import { apiSecurityContract } from "./api-security";
 import { authRulesContract } from "./auth-rules";
 import { autoMitigationContract } from "./auto-mitigation";
 import { banSettings, bansContract } from "./bans";
@@ -83,6 +84,7 @@ import { siteFeatures, wafContract } from "./waf";
 export * from "./access-control";
 export * from "./addresses";
 export * from "./ai-crawl";
+export * from "./api-security";
 export * from "./audit";
 export * from "./auth-rules";
 export * from "./bans";
@@ -172,6 +174,7 @@ export const contract = {
   autoMitigation: autoMitigationContract,
   /** A site's access authentication: Basic, forward authentication and signed URLs. */
   authRules: authRulesContract,
+  apiSecurity: apiSecurityContract,
   /** A site's access control: site lists, geo, CORS, hotlink, user agents, WebSocket origins, security headers. */
   accessControl: accessControlContract,
   /** A site's WebP / AVIF conversion of cached images and the bytes it saved. */

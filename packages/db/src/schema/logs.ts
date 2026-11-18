@@ -76,10 +76,38 @@ export const accessLog = pgTable(
     tier: text("tier").notNull().default(""),
     /** Node extensions' log fields and verdicts ("ext.<id>.<name>", extensions-v1). */
     ext: jsonb("ext").$type<Record<string, string>>().notNull().default({}),
+    apiSecurity: jsonb("api_security").$type<{
+      template: string;
+      source: "traffic" | "schema";
+      issues: { check: "schema" | "jwt" | "graphql"; code: string; mode: "observe" | "enforce" }[];
+      exceptionIds: string[];
+    }>(),
   },
   (t) => [
     primaryKey({ columns: [t.time, t.id] }),
     index("access_log_site_time_idx").on(t.siteId, t.time),
+  ],
+);
+export const siteApiEndpoint = pgTable(
+  "site_api_endpoint",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => site.id, { onDelete: "cascade" }),
+    method: text("method").notNull(),
+    template: text("template").notNull(),
+    path: text("path").notNull(),
+    source: text("source").notNull(),
+    confirmed: boolean("confirmed").notNull().default(false),
+    sampledRequests: bigint("sampled_requests", { mode: "number" }).notNull().default(0),
+    violations: bigint("violations", { mode: "number" }).notNull().default(0),
+    firstSeen: timestamp("first_seen", { withTimezone: true }).notNull(),
+    lastSeen: timestamp("last_seen", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("site_api_endpoint_template_uq").on(t.siteId, t.method, t.template),
+    index("site_api_endpoint_last_seen_idx").on(t.lastSeen),
   ],
 );
 /** Node logs (ADR-0050): the last ReportNodeLogs batch stored per node. */

@@ -9,6 +9,7 @@ import {
   compileSitePorts,
   DEFAULT_SITE_PROTECTION,
   decodeNodeConfig,
+  encodeApiSecurity,
   refreshDerived,
   usesSessionTickets,
 } from "@edgeweir/config-compiler";
@@ -29,6 +30,7 @@ import {
 } from "@edgeweir/proto";
 import { listReferences } from "@edgeweir/rule-engine";
 import { eq, inArray } from "drizzle-orm";
+import { readApiSecurity } from "../lib/api-security";
 import { failUncovered, uncoveredByAll } from "../lib/certificate-names";
 import { fail } from "../lib/errors";
 import { lockClusterPublish } from "../lib/locks";
@@ -227,6 +229,15 @@ async function restoreSites(
     // Development mode is the current state: never revived or ended by
     // republishing older content.
     site.developmentMode = compileDevelopmentMode(current.developmentModeUntil);
+    if (site.apiSecurityJson) {
+      const settings = readApiSecurity(JSON.parse(site.apiSecurityJson));
+      const privacy = readApiSecurity(current.apiSecurity).discovery;
+      settings.discovery = {
+        enabled: settings.discovery.enabled && privacy.enabled,
+        sampleRate: Math.min(settings.discovery.sampleRate, privacy.sampleRate),
+      };
+      site.apiSecurityJson = encodeApiSecurity(settings);
+    }
     sites.push(site);
   }
   out.sites = sites;

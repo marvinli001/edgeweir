@@ -33,6 +33,7 @@ const BLOCK_REASON_LABELS: Record<BlockReason, Label> = {
   cc: m.block_reason_cc,
   challenge: m.block_reason_challenge,
   auth: m.block_reason_auth,
+  api_security: m.block_reason_api_security,
   referer: m.block_reason_referer,
   user_agent: m.block_reason_user_agent,
   region: m.block_reason_region,

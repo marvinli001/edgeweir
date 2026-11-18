@@ -6,6 +6,8 @@ Access levels, authentication, idempotency keys and the error format: [API overv
 
 ## Site rules
 
+Protection of site API traffic is covered in [API security](../../guide/api-security.en.md). `apiSecurity.get` and `results` use GET; `importOpenApi` previews a document with a read-only POST; `update` replaces and publishes the full policy with PUT; `confirmEndpoint` updates discovery metadata with PUT. Paths and shapes are in that guide and the public OpenAPI document. These procedures use existing operator credentials and grant no additional service-account access.
+
 - Saving and restoring publish a configuration revision for the site's cluster (reason `rules_updated`) and audit `site.rules_update` and `site.rule_restore` (metadata: the rule count `count`; a restore also has the rule `{ id, name }` and `version`).
 - Every save records a version for each rule it adds, changes or deletes; a change of order alone records none. Each rule keeps its last 50 versions; each site keeps its 100 most recently deleted rules.
 - Rule object and actions: [Rule object](#rule-object), [Rule actions](#rule-actions). Expression language: [Expressions](../../guide/rules.en.md#expressions). Behavior: [Rules, IP lists, and GeoIP](../../guide/rules.en.md).

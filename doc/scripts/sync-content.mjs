@@ -100,6 +100,7 @@ const OSS = {
       pages: [
         ["rules", "docs/guide/rules.md"],
         ["access-control", "docs/guide/access-control.md"],
+        ["api-security", "docs/guide/api-security.md"],
         ["bans", "docs/guide/bans.md"],
         ["challenges", "docs/guide/challenges.md"],
         ["ai-crawl-control", "docs/guide/ai-crawl-control.md"],

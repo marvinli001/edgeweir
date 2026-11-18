@@ -5,6 +5,9 @@
  * to the server's English `message`.
  */
 export const errorDefs = {
+  API_SECURITY_INVALID: { status: 400, params: [] },
+  API_SECURITY_IMPORT_INVALID: { status: 400, params: [] },
+  API_ENDPOINT_NOT_FOUND: { status: 404, params: [] },
   UPGRADE_RELEASE_UNAVAILABLE: { status: 502, params: [] },
   RELEASE_SOURCE_REFUSED: { status: 400, params: [] },
   UPGRADE_NOT_FOUND: { status: 404, params: [] },

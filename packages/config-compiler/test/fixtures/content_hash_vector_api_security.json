@@ -1,0 +1,64 @@
+{
+  "config": {
+    "revision": "7",
+    "contentHash": "7ec302eeef5657c92c296e32f3a8233076e1713cf149c1e2da9401840970fe72",
+    "clusterId": "c1",
+    "listeners": [
+      {
+        "port": 80,
+        "protocol": "LISTENER_PROTOCOL_HTTP"
+      }
+    ],
+    "cacheZones": [
+      {
+        "name": "default",
+        "maxSizeMb": "1024",
+        "keysZoneMb": 10,
+        "inactiveSeconds": 600
+      }
+    ],
+    "sites": [
+      {
+        "id": "s1",
+        "name": "demo",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "demo.test"
+          }
+        ],
+        "originPool": {
+          "id": "p1",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o1",
+              "address": "whoami",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ]
+        },
+        "cacheRules": [
+          {
+            "id": "r1",
+            "priority": 10,
+            "match": {
+              "pathPrefixes": ["/"]
+            },
+            "action": "CACHE_ACTION_CACHE",
+            "edgeTtlSeconds": 60,
+            "originCacheControl": "ORIGIN_CACHE_CONTROL_OVERRIDE"
+          }
+        ],
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "apiSecurityJson": "{\"version\":1,\"discovery\":{\"enabled\":true,\"sampleRate\":1000},\"schema\":{\"mode\":\"off\",\"unknownEndpoints\":\"allow\",\"endpoints\":[],\"issues\":[]},\"jwt\":{\"mode\":\"off\",\"scope\":{\"domains\":[],\"pathPrefixes\":[],\"extensions\":[],\"excludePathPrefixes\":[]},\"issuer\":\"\",\"audiences\":[],\"algorithms\":[\"RS256\"],\"keys\":[],\"clockToleranceSeconds\":30},\"graphql\":{\"mode\":\"off\",\"pathPrefixes\":[\"/graphql\"],\"maxDepth\":10,\"maxFields\":200,\"maxAliases\":30,\"maxBatch\":5,\"maxDocumentBytes\":65536,\"introspection\":false},\"exceptions\":[]}"
+      }
+    ],
+    "requiredFeatures": ["api-security-v1"]
+  },
+  "canonical_hex": "1a0263312204085010012a110a0764656661756c74108008180a20d80432ce040a027331120464656d6f1801220b0a0964656d6f2e746573742a1a0a02703110011a120a026f31120677686f616d6918502001280132110a027231100a1a030a012f2001283c30013a0764656661756c744001ca02f7037b2276657273696f6e223a312c22646973636f76657279223a7b22656e61626c6564223a747275652c2273616d706c6552617465223a313030307d2c22736368656d61223a7b226d6f6465223a226f6666222c22756e6b6e6f776e456e64706f696e7473223a22616c6c6f77222c22656e64706f696e7473223a5b5d2c22697373756573223a5b5d7d2c226a7774223a7b226d6f6465223a226f6666222c2273636f7065223a7b22646f6d61696e73223a5b5d2c22706174685072656669786573223a5b5d2c22657874656e73696f6e73223a5b5d2c226578636c756465506174685072656669786573223a5b5d7d2c22697373756572223a22222c2261756469656e636573223a5b5d2c22616c676f726974686d73223a5b225253323536225d2c226b657973223a5b5d2c22636c6f636b546f6c6572616e63655365636f6e6473223a33307d2c226772617068716c223a7b226d6f6465223a226f6666222c22706174685072656669786573223a5b222f6772617068716c225d2c226d61784465707468223a31302c226d61784669656c6473223a3230302c226d6178416c6961736573223a33302c226d61784261746368223a352c226d6178446f63756d656e744279746573223a36353533362c22696e74726f7370656374696f6e223a66616c73657d2c22657863657074696f6e73223a5b5d7d4a0f6170692d73656375726974792d7631",
+  "content_hash": "7ec302eeef5657c92c296e32f3a8233076e1713cf149c1e2da9401840970fe72"
+}

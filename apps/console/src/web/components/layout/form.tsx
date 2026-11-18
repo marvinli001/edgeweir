@@ -131,7 +131,7 @@ function FieldError({
     <div
       role="alert"
       data-slot="field-error"
-      className={cn("text-xs text-destructive", className)}
+      className={cn("min-w-0 text-xs [overflow-wrap:anywhere] text-destructive", className)}
       {...props}
     >
       {children ??

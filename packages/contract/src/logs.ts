@@ -1,6 +1,7 @@
 import { oc } from "@orpc/contract";
 import * as z from "zod";
 import { parseCidr } from "./addresses";
+import { apiSecurityLog } from "./api-security";
 
 /**
  * Why a node refused or challenged a request (AccessLog.block_reason,
@@ -28,6 +29,7 @@ export const BLOCK_REASONS = [
   "ai_crawler",
   "pay_per_crawl",
   "extension",
+  "api_security",
 ] as const;
 const blockReason = z.enum(BLOCK_REASONS);
 export type BlockReason = z.infer<typeof blockReason>;
@@ -185,6 +187,7 @@ export const logEntry = z.object({
   tier: z.string().default(""),
   /** Node extensions' log fields and verdicts ("ext.<id>.<name>" → value). */
   ext: z.record(z.string(), z.string()).default({}),
+  apiSecurity: apiSecurityLog.nullable().default(null),
 });
 export type LogEntry = z.infer<typeof logEntry>;
 

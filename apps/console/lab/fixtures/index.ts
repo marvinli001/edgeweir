@@ -345,6 +345,7 @@ const core: Fixtures = {
         imageConvert: older,
         markdown: older,
         aiCrawl: older,
+        apiSecurity: older,
       };
     },
   },

@@ -425,6 +425,7 @@ export const site = pgTable(
      * means never set (off, the defaults).
      */
     markdown: jsonb("markdown").$type<Record<string, unknown>>().notNull().default({}),
+    apiSecurity: jsonb("api_security").$type<Record<string, unknown>>().notNull().default({}),
     cacheGeneration: bigint("cache_generation", { mode: "number" }).notNull().default(1),
     /** Cache key policy (contract `cacheKeyPolicy`); `{}` means the defaults. */
     cacheKey: jsonb("cache_key").$type<Record<string, unknown>>().notNull().default({}),

@@ -57,6 +57,7 @@ import {
   protocolText,
 } from "@/lib/access-logs";
 import { formatUsd, verificationLabel } from "@/lib/ai-crawl";
+import { apiCheckLabel, apiModeLabel, apiSourceLabel } from "@/lib/api-security-labels";
 import { formatNumber, m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 import { requestUrl } from "@/lib/purge";
@@ -531,6 +532,32 @@ function details(
   const add = (key: string, label: string, testId: string, value: React.ReactNode) => {
     rows.push({ key, label, testId, value });
   };
+  if (row.apiSecurity) {
+    add("api-endpoint", m.api_security_path(), "log-api-endpoint", row.apiSecurity.template);
+    add(
+      "api-source",
+      m.api_security_source(),
+      "log-api-source",
+      apiSourceLabel(row.apiSecurity.source),
+    );
+    for (const [index, issue] of row.apiSecurity.issues.entries()) {
+      add(
+        `api-issue-${index}`,
+        apiCheckLabel(issue.check),
+        "log-api-issue",
+        <span>
+          {issue.code} · {apiModeLabel(issue.mode)}
+        </span>,
+      );
+    }
+    if (row.apiSecurity.exceptionIds.length)
+      add(
+        "api-exceptions",
+        m.api_security_exceptions(),
+        "log-api-exceptions",
+        row.apiSecurity.exceptionIds.join(", "),
+      );
+  }
   if (row.userAgent) add("ua", m.logs_field_user_agent(), "log-user-agent", row.userAgent);
   if (row.referer) add("referer", m.logs_field_referer(), "log-referer", row.referer);
   const protocol = protocolText(row);

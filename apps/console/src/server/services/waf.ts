@@ -30,6 +30,7 @@ import {
 } from "@edgeweir/config-compiler";
 import {
   type AnalyticsRange,
+  API_SECURITY_FEATURE,
   CLIENT_IP_FEATURE,
   CRS_EVALUATION_FILES,
   crsDetectionRule,
@@ -217,6 +218,7 @@ export async function siteFeatures(db: Database, siteId: string): Promise<SiteFe
       : { available: false, reason: "nodes" };
   return {
     brotli: byNodes(BROTLI_FEATURE),
+    apiSecurity: byNodes(API_SECURITY_FEATURE),
     zstd: byNodes(ZSTD_FEATURE),
     crs: byNodes(MODSECURITY_FEATURE),
     activeHealthCheck: byNodes(ACTIVE_HEALTH_FEATURE),

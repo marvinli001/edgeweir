@@ -34,6 +34,7 @@ import {
 } from "@edgeweir/rule-engine";
 import { and, asc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
 import { accessControlModel, readAccessControl } from "../lib/access-control";
+import { readApiSecurity } from "../lib/api-security";
 import { toAuthRuleDto } from "../lib/auth-rule-dto";
 import { parseCacheCondition } from "../lib/cache-conditions";
 import { readCacheKey } from "../lib/cache-key";
@@ -357,6 +358,7 @@ async function loadSiteModels(
           s.authIdentityHeaders,
           allAuthRules.filter((rule) => rule.siteId === s.id),
         ),
+        apiSecurity: readApiSecurity(s.apiSecurity),
         accessControl: accessControlModel(readAccessControl(s), listIds),
         encodedPathExemptions: readAccessControl(s).encodedPaths.exemptions,
         developmentModeUntil: s.developmentModeUntil,

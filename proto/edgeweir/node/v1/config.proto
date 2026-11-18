@@ -589,6 +589,9 @@ message Site {
   // whose Accept names text/markdown (Markdown); unset means off. Added in
   // proto/v1.9.0 (feature markdown-v1).
   Markdown markdown = 40;
+  // Bounded API security policy as UTF-8 JSON, contract api-security-v1.
+  // Empty: disabled. Public verification keys only; no credentials.
+  string api_security_json = 41;
   // AI crawl control (ADR-0070): actions on the crawlers of
   // NodeConfig.ai_crawlers, the managed robots.txt and pay per crawl.
   // Unset: crawlers are only tagged. Added in v1.9.0 (feature

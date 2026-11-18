@@ -1,4 +1,5 @@
 // Defined by the contract, which the console also takes them from; kept here for existing imports.
+
 export {
   CACHE_ZONE_FEATURE,
   DEFAULT_REQUEST_BODY_LIMIT,
@@ -6,6 +7,7 @@ export {
   L4_FEATURE,
   UNKNOWN_HOST_FEATURE,
 } from "@edgeweir/contract";
+export { apiSecurityEnabled, encodeApiSecurity } from "./api-security";
 export { canonicalize, contentHash } from "./canonical";
 export { clusterTcpPorts, compileUnknownHosts, edgeOf, mergePortRanges } from "./edge";
 export {

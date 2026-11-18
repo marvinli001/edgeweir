@@ -72,7 +72,10 @@ function refuseStoredSecret(context: RequestContext, path: readonly string[]) {
 }
 
 /** POST procedures that change nothing: read-only callers may use them. */
-const READ_ONLY_POSTS: ReadonlySet<string> = new Set(["rules.validate"]);
+const READ_ONLY_POSTS: ReadonlySet<string> = new Set([
+  "rules.validate",
+  "apiSecurity.importOpenApi",
+]);
 
 /**
  * Whether a read-only caller (a read AccessKey, a read OAuth grant, the demo account) may call

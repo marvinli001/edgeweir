@@ -262,6 +262,7 @@ export const siteFeatures = z.object({
   markdown: featureAvailability,
   /** AI crawl control: crawler actions, the managed robots.txt and pay per crawl (ai-crawlers-v1). */
   aiCrawl: featureAvailability,
+  apiSecurity: featureAvailability,
 });
 
 const idParam = z.object({ id: uuid });

@@ -41,6 +41,51 @@ test.describe("small touch window", () => {
   });
 });
 
+test.describe("phone form recovery", () => {
+  test.use({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true });
+
+  test("long validation errors wrap without hiding the draft or retry", async ({ page }) => {
+    const pageErrors = errors(page);
+    await login(page, email, password);
+    for (const locale of ["zh-CN", "en"]) {
+      for (const theme of ["light", "dark"]) {
+        await page.evaluate(
+          ({ locale, theme }) => {
+            localStorage.setItem("PARAGLIDE_LOCALE", locale);
+            localStorage.setItem("theme", theme);
+          },
+          { locale, theme },
+        );
+        await page.goto("/system");
+        const input = page.getByTestId("origin-allow-list");
+        await expect(input).toBeVisible();
+        const original = await input.inputValue();
+        const invalid = `invalid-cidr-${"x".repeat(140)}`;
+        await input.fill(invalid);
+        const save = page.getByTestId("origin-allow-list-save");
+        await save.click();
+        const error = page.getByTestId("origin-allow-list-error");
+        await expect(error).toContainText(invalid);
+        await expect(input).toHaveValue(invalid);
+        await expect(save).toBeEnabled();
+        const bounds = await error.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          return {
+            right: rect.right,
+            viewport: element.ownerDocument.documentElement.clientWidth,
+            width: element.clientWidth,
+            content: element.scrollWidth,
+          };
+        });
+        expect(bounds.right).toBeLessThanOrEqual(bounds.viewport);
+        expect(bounds.content).toBeLessThanOrEqual(bounds.width);
+        await input.fill(original);
+      }
+    }
+    expect(pageErrors).toEqual([]);
+  });
+});
+
 test.afterEach(async ({ page }) => {
   for (const id of created.splice(0)) {
     await page.request.post("/rpc/sites/delete", {

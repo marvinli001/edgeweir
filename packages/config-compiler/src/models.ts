@@ -1,4 +1,4 @@
-import type { AuthKind as AuthRuleKind } from "@edgeweir/contract";
+import type { ApiSecuritySettings, AuthKind as AuthRuleKind } from "@edgeweir/contract";
 import type { CertificateRef, EdgeRule, HttpChallenge, TlsOptions } from "@edgeweir/proto";
 import type { Expression } from "@edgeweir/rule-engine";
 import type { TieredCacheModel } from "./tiers";
@@ -417,6 +417,7 @@ export interface SiteModel {
   markdown?: MarkdownModel;
   /** AI crawl control (feature ai-crawlers-v1); absent: crawlers are only tagged. */
   aiCrawl?: AiCrawlModel;
+  apiSecurity?: ApiSecuritySettings;
   /**
    * Extensions the site turns on with the site's configuration (JSON);
    * compiled only for extensions in CompileInput.extensions, in their order.

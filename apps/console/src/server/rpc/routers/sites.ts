@@ -17,6 +17,13 @@ import {
   trafficSeries,
 } from "../../services/analytics";
 import {
+  apiSecurityResults,
+  confirmApiEndpoint,
+  getApiSecurity,
+  importOpenApi,
+  updateApiSecurity,
+} from "../../services/api-security";
+import {
   authFailures,
   forgetIdentityHeaders,
   getAuthRules,
@@ -63,6 +70,7 @@ import {
 import {
   createSite,
   deleteSite,
+  findSite,
   getSite,
   listSites,
   setSiteEnabled,
@@ -90,6 +98,24 @@ import { authed, ok } from "../base";
 
 /** Sites, their settings, logs, analytics and cache tasks, and layer-4 applications. */
 export const sitesRouter = {
+  apiSecurity: {
+    get: authed.apiSecurity.get.handler(({ input, context }) =>
+      getApiSecurity(context.app.db, input.id),
+    ),
+    update: authed.apiSecurity.update.handler(({ input, context }) =>
+      updateApiSecurity(context.app.db, input, context.actor),
+    ),
+    importOpenApi: authed.apiSecurity.importOpenApi.handler(async ({ input, context }) => {
+      await findSite(context.app.db, input.id);
+      return importOpenApi(input.document);
+    }),
+    results: authed.apiSecurity.results.handler(({ input, context }) =>
+      apiSecurityResults(context.app, input.id),
+    ),
+    confirmEndpoint: authed.apiSecurity.confirmEndpoint.handler(({ input, context }) =>
+      confirmApiEndpoint(context.app.db, input, context.actor),
+    ),
+  },
   bulkRedirects: {
     get: authed.bulkRedirects.get.handler(({ input, context }) =>
       getBulkRedirects(context.app.db, input.id),

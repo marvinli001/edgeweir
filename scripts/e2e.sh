@@ -425,7 +425,7 @@ SECTIONS=(
   "pp:m6-upgrades"
   "g8:m6-upgrades" "g9:m6-upgrades" "g15:m6-upgrades" "g10:dns m5 m6-upgrades" "g11:m6-upgrades"
   "g12:m6-upgrades" "g13:m6-upgrades" "g14:m6-upgrades" "g16:m6-upgrades" "g17:m6-upgrades"
-  "g18:m6-upgrades" "g19:m6-upgrades" "g20:m6-upgrades" "probe-sources:" "usage-guard:m6-upgrades" "dev-mode:" "ai-crawl:" "tiers:" "allowlist:" "mcp:" "lifecycle:"
+  "g18:m6-upgrades" "g19:m6-upgrades" "g20:m6-upgrades" "probe-sources:" "usage-guard:m6-upgrades" "dev-mode:" "ai-crawl:" "tiers:" "allowlist:" "mcp:" "api-security:" "lifecycle:"
 )
 # Parallel lanes, "FIRST..LAST:SECTION ...": the SECTIONs run in a second
 # lane while the chain runs FIRST to LAST, and the chain waits for the lane
@@ -470,7 +470,7 @@ LANES=(
 # first two need neither.
 SHARDS=(
   "core m1 analytics m2 install ssh-install wss channel node-logs diagnostics extensions m3 m4 dev-mode"
-  "probe-sources ai-crawl tiers allowlist mcp lifecycle"
+  "probe-sources ai-crawl tiers allowlist mcp api-security lifecycle"
   "p0 g1"
   "dns g6 g7 g10"
   "h2 g8 g9 g15 g11 g12 g14 usage-guard"
@@ -2127,6 +2127,12 @@ pass "Login IP allow list checks passed"
 }
 
 # ----------------------------------------------------------------- section mcp
+section_api_security() {
+step "API security: observed and enforced requests, origin counters, exceptions, JWT and GraphQL"
+"${COMPOSE[@]}" --profile api-security up -d api-origin
+story api-security --cleanup
+}
+
 section_mcp() {
 step "MCP over OAuth: discovery, registration, sign-in resume, consent, tools as the MCP client, scopes, revoke"
 story mcp --cleanup

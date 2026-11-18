@@ -1,5 +1,6 @@
 import { clone } from "@bufbuild/protobuf";
 import {
+  API_SECURITY_FEATURE,
   CACHE_ZONE_FEATURE,
   CLIENT_IP_FEATURE,
   DEFAULT_HTTP_PORT,
@@ -514,6 +515,7 @@ export function derivedFeatures(config: NodeConfig): string[] {
     ...(config.sites.some((site) => site.developmentMode) ? [DEVELOPMENT_MODE_FEATURE] : []),
     ...(config.sites.some((site) => site.markdown) ? [MARKDOWN_FEATURE] : []),
     ...(config.sites.some((site) => site.aiCrawl) ? [AI_CRAWLERS_FEATURE] : []),
+    ...(config.sites.some((site) => site.apiSecurityJson) ? [API_SECURITY_FEATURE] : []),
     ...(config.extensions.length ||
     configExpressions(config).map(expressionOf).some(needsExtensionFields)
       ? [EXTENSIONS_FEATURE]

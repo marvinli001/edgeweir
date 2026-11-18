@@ -31,7 +31,6 @@ import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { Input } from "@/components/arc/input/input";
 import { Switch } from "@/components/arc/switch/switch";
-import { Textarea } from "@/components/arc/textarea/textarea";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CopyButton } from "@/components/copy-button";
 import { FormDialog } from "@/components/form-dialog";
@@ -48,8 +47,8 @@ import { SecurityHeadersCard } from "@/components/site/access-control/security-h
 import { SiteListsCard } from "@/components/site/access-control/site-lists-card";
 import { UserAgentsCard } from "@/components/site/access-control/user-agents-card";
 import { WebsocketCard } from "@/components/site/access-control/websocket-card";
+import { AuthScopeFields } from "@/components/site/auth-scope-fields";
 import { NumberField, SwitchField } from "@/components/site/fields";
-import { CheckboxList } from "@/components/site/ports-card";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, EmptyState, QueryView } from "@/components/states";
 import { useSettingsForm } from "@/hooks/use-settings-form";
@@ -609,58 +608,7 @@ function RuleDialog({
           testId="auth-enabled"
         />
       </div>
-      {site.domains.length > 1 ? (
-        <CheckboxList
-          id="auth-domains"
-          legend={m.auth_domains()}
-          options={site.domains.map((domain) => ({
-            value: domain,
-            label: displaySiteDomain(domain),
-          }))}
-          value={d.domains}
-          onChange={(domains) => set({ domains })}
-          testId="auth-domains"
-        />
-      ) : null}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field>
-          <FieldLabel htmlFor="auth-prefixes">{m.auth_path_prefixes()}</FieldLabel>
-          <Textarea
-            id="auth-prefixes"
-            rows={2}
-            value={d.pathPrefixes}
-            placeholder="/admin/"
-            spellCheck={false}
-            className="font-mono text-sm"
-            onChange={(e) => set({ pathPrefixes: e.target.value })}
-            data-testid="auth-prefixes"
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="auth-excludes">{m.auth_exclude_prefixes()}</FieldLabel>
-          <Textarea
-            id="auth-excludes"
-            rows={2}
-            value={d.excludePathPrefixes}
-            spellCheck={false}
-            className="font-mono text-sm"
-            onChange={(e) => set({ excludePathPrefixes: e.target.value })}
-            data-testid="auth-excludes"
-          />
-        </Field>
-      </div>
-      <Field>
-        <FieldLabel htmlFor="auth-extensions">{m.auth_extensions()}</FieldLabel>
-        <Input
-          id="auth-extensions"
-          value={d.extensions}
-          placeholder="mp4, m3u8"
-          spellCheck={false}
-          className="font-mono text-sm"
-          onChange={(e) => set({ extensions: e.target.value })}
-          data-testid="auth-extensions"
-        />
-      </Field>
+      <AuthScopeFields domains={site.domains} value={d} onChange={set} />
       {d.kind === "basic" ? <BasicFields d={d} set={set} /> : null}
       {d.kind === "forward" ? <ForwardFields d={d} set={set} /> : null}
       {url ? (

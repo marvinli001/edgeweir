@@ -666,6 +666,13 @@
       "when": 1794547200000,
       "tag": "0094_origin_certificate_idempotency",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1794902042936,
+      "tag": "0095_natural_squirrel_girl",
+      "breakpoints": true
     }
   ]
 }
