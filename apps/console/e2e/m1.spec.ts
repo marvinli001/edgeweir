@@ -56,7 +56,7 @@ test("M1: site editing, clusters, node groups, audit and i18n", async ({ page })
     await expect(page.getByTestId("domain-list")).toContainText("www.edited.test");
 
     // Every site is listed, whichever surface created it.
-    await page.getByTestId("nav-sites").click();
+    await page.getByTestId("site-nav-back").click();
     const sites = page.getByTestId("sites-table");
     await expect(sites.getByText("edited-site")).toBeVisible();
     await expect(sites.getByText("demo.test")).toBeVisible();

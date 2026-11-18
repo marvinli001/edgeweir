@@ -76,7 +76,7 @@ test("site navigation keeps links, history, keyboard access and drafts", async (
   await page.goto(siteUrl);
 
   await test.step("every original destination stays reachable", async () => {
-    for (const tab of [
+    for (const view of [
       "overview",
       "domains",
       "origins",
@@ -92,42 +92,47 @@ test("site navigation keeps links, history, keyboard access and drafts", async (
       "attacks",
       "logs",
     ]) {
-      await siteTab(page, tab);
-      await expect(page.getByTestId(`tab-${tab}`)).toHaveAttribute("aria-selected", "true");
-      expect(new URL(page.url()).searchParams.get("tab") ?? "overview").toBe(tab);
+      await siteTab(page, view);
+      await expect(page.getByTestId(`site-nav-${view}`)).toHaveAttribute("aria-current", "page");
+      expect(new URL(page.url()).pathname).toBe(
+        view === "overview" ? siteUrl : `${siteUrl}/${view}`,
+      );
     }
-    // A direct link still exposes Extensions when none are installed.
-    await page.goto(`${siteUrl}?tab=extensions`);
-    await expect(page.getByTestId("site-tab-group")).toHaveText("性能与交付");
-    await expect(page.getByTestId("tab-extensions")).toHaveAttribute("aria-selected", "true");
-    await page.getByTestId("tab-rules").click();
-    await expect(page.getByTestId("tab-extensions")).toHaveCount(0);
+    await page.goto(`${siteUrl}/extensions`);
+    await expect(page.getByText("尚未安装扩展", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("site-nav-extensions")).toHaveCount(0);
+    await siteTab(page, "rules");
+    await expect(page.getByTestId("site-nav-extensions")).toHaveCount(0);
   });
 
   await test.step("deep links, refresh and history follow the route", async () => {
     await page.goto(`${siteUrl}?tab=logs&range=1h&ip=203.0.113.9&path=%2Fnav`);
-    await expect(page.getByTestId("site-tab-group")).toHaveText("观测");
-    await expect(page.getByTestId("tab-logs")).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("site-nav-observability")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await expect(page.getByTestId("site-nav-logs")).toHaveAttribute("aria-current", "page");
+    expect(new URL(page.url()).pathname).toBe(`${siteUrl}/logs`);
+    expect(new URL(page.url()).searchParams.has("tab")).toBe(false);
     expect(new URL(page.url()).searchParams.get("ip")).toBe("203.0.113.9");
+    expect(new URL(page.url()).searchParams.get("path")).toBe("/nav");
     await siteTab(page, "https");
-    await expect(page.getByTestId("tab-https")).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("site-nav-https")).toHaveAttribute("aria-current", "page");
     expect(new URL(page.url()).searchParams.get("range")).toBe("1h");
     expect(new URL(page.url()).searchParams.has("ip")).toBe(false);
     expect(new URL(page.url()).searchParams.has("path")).toBe(false);
     const url = page.url();
     await page.reload();
-    await expect(page.getByTestId("site-tab-group")).toHaveText("接入");
-    await expect(page.getByTestId("tab-https")).toHaveAttribute("aria-selected", "true");
-    await page.getByTestId("back-link").click();
+    await expect(page.getByTestId("site-nav-https")).toHaveAttribute("aria-current", "page");
+    await page.getByTestId("site-nav-back").click();
     await expect(page).toHaveURL(/\/sites$/);
     await page.goBack();
     await expect(page).toHaveURL(url);
-    await expect(page.getByTestId("site-tab-group")).toHaveText("接入");
-    await expect(page.getByTestId("tab-https")).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("site-nav-https")).toHaveAttribute("aria-current", "page");
     await page.goForward();
     await expect(page).toHaveURL(/\/sites$/);
     await page.goBack();
-    await expect(page.getByTestId("tab-https")).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("site-nav-https")).toHaveAttribute("aria-current", "page");
   });
 
   await test.step("phone navigation works by keyboard in both languages and themes", async () => {
@@ -141,39 +146,39 @@ test("site navigation keeps links, history, keyboard access and drafts", async (
           },
           { locale, theme },
         );
-        await page.goto(`${siteUrl}?tab=https&range=1h`);
+        await page.goto(`${siteUrl}/https?range=1h`);
         await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-        const group = page.getByTestId("site-tab-group");
+        await page.getByTestId("nav-menu").press("Enter");
+        const drawer = page.locator('[data-slot="drawer-content"]');
+        const group = drawer.getByTestId("site-nav-observability");
         await expect(group).toHaveAccessibleName(
-          locale === "en" ? "Site settings group" : "网站设置分组",
+          locale === "en" ? "Analytics & logs" : "统计与日志",
         );
         for (
           let step = 0;
-          step < 30 && !(await group.evaluate((node) => node === node.ownerDocument.activeElement));
+          step < 16 && !(await group.evaluate((node) => node === node.ownerDocument.activeElement));
           step++
         ) {
           await page.keyboard.press("Tab");
         }
         await expect(group).toBeFocused();
-        await group.press("ArrowDown");
-        const chosen = page.getByRole("option", { selected: true });
-        await expect(chosen).toBeVisible();
-        await expect(chosen).toBeFocused();
-        await page.keyboard.press("End");
-        const observability = page.locator('[role="option"][data-site-tabs~="analytics"]');
-        await expect(observability).toBeFocused();
-        await page.keyboard.press("Enter");
-        await expect(group).toHaveText(locale === "en" ? "Observability" : "观测");
-        const analytics = page.getByTestId("tab-analytics");
-        await expect(analytics).toHaveAttribute("aria-selected", "true");
+        const before = page.url();
+        await group.press("Enter");
+        await expect(group).toHaveAttribute("aria-expanded", "true");
+        await expect(page).toHaveURL(before);
         await page.keyboard.press("Tab");
-        await expect(analytics).toBeFocused();
-        await analytics.press("End");
+        await expect(drawer.getByTestId("site-nav-analytics")).toBeFocused();
+        await page.keyboard.press("Tab");
+        await page.keyboard.press("Tab");
+        const logs = drawer.getByTestId("site-nav-logs");
+        await expect(logs).toBeFocused();
         await page.keyboard.press("Enter");
-        await expect(page.getByTestId("tab-logs")).toBeFocused();
-        await expect(page.getByTestId("tab-logs")).toHaveAttribute("aria-selected", "true");
+        await expect(drawer).toBeHidden();
+        await expect(page).toHaveURL(/\/logs\?range=1h$/);
+        await page.getByTestId("nav-menu").press("Enter");
+        await expect(logs).toHaveAttribute("aria-current", "page");
         await siteTab(page, "errors");
-        await expect(group).toHaveText(locale === "en" ? "Performance & delivery" : "性能与交付");
+        await expect(page).toHaveURL(/\/errors\?range=1h$/);
         expect(
           await page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"),
         ).toBe(true);
@@ -188,29 +193,47 @@ test("site navigation keeps links, history, keyboard access and drafts", async (
     }
   });
 
-  await test.step("blocked group switches keep the active tab and unsaved draft", async () => {
+  await test.step("blocked directory links, switcher and back preserve the draft", async () => {
+    await page.setViewportSize({ width: 1440, height: 960 });
     await page.evaluate(() => localStorage.setItem("PARAGLIDE_LOCALE", "zh-CN"));
+    const other = await createSite(page, "Switcher smoke");
     await page.goto(siteUrl);
-    const group = page.getByTestId("site-tab-group");
     const name = page.getByTestId("site-name-input");
     await name.fill("Unsaved navigation draft");
     await expect(page.getByTestId("site-name-save")).toBeEnabled();
-    await group.click();
-    await page.getByRole("option", { name: "观测", exact: true }).click();
+    await siteTab(page, "analytics");
     const dialog = page.getByRole("dialog", { name: "放弃未保存的更改？" });
-    await expect(dialog).toBeVisible();
-    await expect(group).toHaveText("概览");
-    await expect(page.getByTestId("tab-overview")).toHaveAttribute("aria-selected", "true");
-    await dialog.getByRole("button", { name: "取消", exact: true }).click();
-    await expect(dialog).toBeHidden();
-    await expect(name).toHaveValue("Unsaved navigation draft");
-    await expect(group).toHaveText("概览");
-    expect(new URL(page.url()).searchParams.has("tab")).toBe(false);
-    await group.click();
-    await page.getByRole("option", { name: "观测", exact: true }).click();
+    async function cancel() {
+      await expect(dialog).toBeVisible();
+      await expect(page.getByTestId("site-nav-overview")).toHaveAttribute("aria-current", "page");
+      await dialog.getByRole("button", { name: "取消", exact: true }).click();
+      await expect(dialog).toBeHidden();
+      await expect(name).toHaveValue("Unsaved navigation draft");
+      expect(new URL(page.url()).pathname).toBe(siteUrl);
+    }
+    await cancel();
+    await page.getByTestId("site-nav-back").click();
+    await cancel();
+    const switcher = page.getByTestId("site-nav-switcher");
+    await switcher.click();
+    const panel = page.getByTestId("site-switcher-panel");
+    const search = panel.getByRole("combobox");
+    await expect(search).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(switcher).toBeFocused();
+    await switcher.click();
+    await search.fill(other.name);
+    await panel.getByRole("option").filter({ hasText: other.name }).click();
+    await cancel();
+    await siteTab(page, "analytics");
     await dialog.getByTestId("confirm-action").click();
-    await expect(group).toHaveText("观测");
-    await expect(page.getByTestId("tab-analytics")).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("site-nav-analytics")).toHaveAttribute("aria-current", "page");
+    await switcher.click();
+    await search.fill(other.name);
+    await expect(panel.getByRole("option").filter({ hasText: other.name })).toBeEnabled();
+    await search.press("Enter");
+    await expect(page).toHaveURL(new RegExp(`/sites/${other.id}/analytics$`));
+    await expect(page.getByTestId("site-nav-analytics")).toHaveAttribute("aria-current", "page");
   });
   expect(pageErrors).toEqual([]);
 });
@@ -279,7 +302,7 @@ test("cache groups preserve drafts, validation and saved values, with phone keyb
       await expect(dialog).toBeVisible();
       await dialog.getByRole("button", { name: "取消", exact: true }).click();
       await expect(dialog).toBeHidden();
-      await expect(page.getByTestId("tab-cache")).toHaveAttribute("aria-selected", "true");
+      await expect(page.getByTestId("site-nav-cache")).toHaveAttribute("aria-current", "page");
       await behavior.click();
       await expect(headers).toHaveValue("accept-language, x-cache-draft");
       expect(await original?.evaluate((node) => node.isConnected)).toBe(true);
@@ -331,13 +354,13 @@ test("cache groups preserve drafts, validation and saved values, with phone keyb
             },
             { locale, theme },
           );
-          await page.goto(`${siteUrl}?tab=cache`);
+          await page.goto(`${siteUrl}/cache`);
           await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
           await expect(behavior).toHaveAccessibleName(
             locale === "en" ? "Cache behavior" : "缓存行为",
           );
           await expect(behavior).toHaveAccessibleDescription(/Cache key|缓存键/);
-          await page.getByTestId("tab-cache").click();
+          await siteTab(page, "cache");
           for (const name of ["behavior", "optimization", "response"]) {
             const trigger = page.getByTestId(`cache-group-${name}-trigger`);
             const content = page.getByTestId(`cache-group-${name}-content`);
@@ -611,7 +634,7 @@ test("rule delivery RPC fixtures keep saved, live and unavailable states separat
   const pageErrors = errors(page);
   await login(page, email, password);
   const site = await createSite(page, "Delivery smoke");
-  const siteUrl = `/sites/${site.id}?tab=rules`;
+  const siteUrl = `/sites/${site.id}/rules`;
   let delivery: "partial" | "live" | "offline" | "unavailable" = "partial";
   // Only delivery responses are fixtures; saves use the real console without an enrolled node.
   await page.route("**/rpc/sites/get**", async (route) => {

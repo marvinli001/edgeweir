@@ -158,7 +158,7 @@ test("G10: the cluster's unknown host handling", async ({ page }) => {
 test("G10: the CNAME card regenerates and customizes the prefix", async ({ page }) => {
   const pageErrors = errors(page);
   await signedIn(page);
-  await page.goto(`/sites/${state.suffixSiteId}?tab=domains`);
+  await page.goto(`/sites/${state.suffixSiteId}/domains`);
   const card = page.getByTestId("cname-target");
   const value = card.getByTestId("cname-target-value");
   await expect(value).toHaveText(`g10-custom.${state.domain}`);

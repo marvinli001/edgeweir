@@ -97,7 +97,7 @@ test("DNS: the CNAME target on the site page and the Custom HTTP DNS-01 credenti
 }) => {
   const pageErrors = errors(page);
   await signedIn(page);
-  await page.goto(`/sites/${state.siteB}?tab=domains`);
+  await page.goto(`/sites/${state.siteB}/domains`);
   await expect(page.getByTestId("cname-target-value")).toHaveText(
     `${state.siteBPrefix}.edge.cdn-b.dns.test`,
   );

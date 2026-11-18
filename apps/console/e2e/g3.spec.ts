@@ -26,8 +26,8 @@ test.describe.configure({ mode: "serial" });
 const check = (page: Page, name: string) => shots(page, "g3", name);
 
 async function openTab(page: Page, siteId: string, tab: "cache" | "security" | "logs") {
-  await page.goto(`/sites/${siteId}?tab=${tab}`);
-  await expect(page.getByTestId(`tab-${tab}`)).toHaveAttribute("aria-selected", "true");
+  await page.goto(`/sites/${siteId}/${tab}`);
+  await expect(page.getByTestId(`site-nav-${tab}`)).toHaveAttribute("aria-current", "page");
   if (tab === "cache") await page.getByTestId("cache-group-optimization-trigger").click();
 }
 

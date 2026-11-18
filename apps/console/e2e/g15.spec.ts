@@ -23,8 +23,8 @@ test.describe.configure({ mode: "serial" });
 const check = (page: Page, name: string) => shots(page, "g15", name);
 
 async function openTab(page: Page, siteId: string, tab: "cache" | "origins" | "errors") {
-  await page.goto(`/sites/${siteId}?tab=${tab}`);
-  await expect(page.getByTestId(`tab-${tab}`)).toHaveAttribute("aria-selected", "true");
+  await page.goto(`/sites/${siteId}/${tab}`);
+  await expect(page.getByTestId(`site-nav-${tab}`)).toHaveAttribute("aria-current", "page");
 }
 
 test("G15: cache tab with excluded parameters, Set-Cookie caching, PURGE, X-Cache, gzip level and charset", async ({
@@ -192,8 +192,8 @@ test("G15: the cluster's cache zone and a node's own size and usage", async ({ p
   await expect(card.getByTestId("cluster-cache-save")).toBeEnabled();
   await check(page, "cluster-cache");
 
-  await page.goto(`/clusters?cluster=${state.clusterId}&node=${state.nodeId}`);
-  const dialog = page.getByTestId("node-detail");
+  await page.goto(`/clusters/nodes/${state.nodeId}/cache`);
+  const dialog = page.locator("main");
   const cache = dialog.getByTestId("node-cache");
   await expect(cache.getByTestId("node-cache-usage")).toContainText("/", { timeout: 60_000 });
   await expect(cache.getByTestId("node-cache-size")).toHaveValue("");

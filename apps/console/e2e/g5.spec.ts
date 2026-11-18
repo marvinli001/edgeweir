@@ -35,8 +35,8 @@ async function openTab(
   siteId: string,
   tab: "rules" | "redirects" | "cache" | "origins",
 ) {
-  await page.goto(`/sites/${siteId}?tab=${tab}`);
-  await expect(page.getByTestId(`tab-${tab}`)).toHaveAttribute("aria-selected", "true");
+  await page.goto(`/sites/${siteId}/${tab}`);
+  await expect(page.getByTestId(`site-nav-${tab}`)).toHaveAttribute("aria-current", "page");
 }
 
 /** The rules of one phase section of the rules editor. */

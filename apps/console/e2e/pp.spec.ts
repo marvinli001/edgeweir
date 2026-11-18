@@ -18,8 +18,8 @@ test("PROXY protocol and gRPC health checks: an origin's version and the probe t
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await signedIn(page);
-  await page.goto(`/sites/${state.siteId}?tab=origins`);
-  await expect(page.getByTestId("tab-origins")).toHaveAttribute("aria-selected", "true");
+  await page.goto(`/sites/${state.siteId}/origins`);
+  await expect(page.getByTestId("site-nav-origins")).toHaveAttribute("aria-current", "page");
   const version = page.getByTestId("origin-proxy-protocol").first();
   const note = page.getByTestId("origin-proxy-protocol-note");
   const save = page.getByTestId("origins-save");

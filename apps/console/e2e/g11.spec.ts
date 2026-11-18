@@ -54,7 +54,7 @@ async function check(page: Page, name: string) {
 test("G11: several certificates and client certificates on the HTTPS tab", async ({ page }) => {
   const pageErrors = errors(page);
   await signedIn(page);
-  await page.goto(`/sites/${state.multiSiteId}?tab=https`);
+  await page.goto(`/sites/${state.multiSiteId}/https`);
   const first = page.getByLabel("证书", { exact: true });
   await expect(first).toContainText("g11-wild");
   for (const [n, name] of [
@@ -81,7 +81,7 @@ test("G11: several certificates and client certificates on the HTTPS tab", async
   await expect(page.getByLabel("证书 4", { exact: true })).toContainText("g11-rsa");
 
   // Client certificates: optional (left by the script), switched to required and back.
-  await page.goto(`/sites/${state.mtlsSiteId}?tab=https`);
+  await page.goto(`/sites/${state.mtlsSiteId}/https`);
   const section = page.getByTestId("https-client-cert");
   const mode = section.getByLabel("客户端证书", { exact: true });
   await expect(mode).toContainText("可选");

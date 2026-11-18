@@ -53,11 +53,11 @@ const kinds = (page: Page) => page.getByTestId("auth-rule-kind");
 test("G12: access authentication rules: add, edit, reorder, delete", async ({ page }) => {
   const pageErrors = errors(page);
   await signedIn(page);
-  await page.goto(`/sites/${state.urlSiteId}?tab=access`);
+  await page.goto(`/sites/${state.urlSiteId}/access`);
   await expect(kinds(page)).toHaveText(["URL 鉴权 A", "URL 鉴权 B", "URL 鉴权 C", "URL 鉴权 D"]);
   await check(page, "access-rules");
 
-  await page.goto(`/sites/${state.basicSiteId}?tab=access`);
+  await page.goto(`/sites/${state.basicSiteId}/access`);
   await expect(kinds(page)).toHaveText(["Basic 认证"]);
   // The saved users: names only, passwords write-only.
   await page.getByTestId("auth-rule-edit").first().click();
@@ -121,12 +121,12 @@ test("G12: access authentication rules: add, edit, reorder, delete", async ({ pa
 test("G12: failures on the attacks tab, an empty access tab", async ({ page }) => {
   const pageErrors = errors(page);
   await signedIn(page);
-  await page.goto(`/sites/${state.basicSiteId}?tab=attacks`);
+  await page.goto(`/sites/${state.basicSiteId}/attacks`);
   await expect(page.getByTestId("auth-failures-count")).not.toHaveText("0");
   await page.getByTestId("auth-failures-card").scrollIntoViewIfNeeded();
   await check(page, "security-failures");
 
-  await page.goto(`/sites/${state.fwdSiteId}?tab=access`);
+  await page.goto(`/sites/${state.fwdSiteId}/access`);
   await expect(kinds(page)).toHaveCount(5);
   // Remove every rule: the empty state with its action.
   for (let i = 0; i < 5; i++) await page.getByTestId("auth-rule-delete").first().click();

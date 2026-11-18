@@ -98,14 +98,19 @@ export async function pick(page: Page, trigger: Locator, option: string) {
   await page.getByRole("option", { name: option, exact: true }).click();
 }
 
-/** Opens a site tab through its group, using the navigation's own membership. */
-export async function siteTab(page: Page, tab: string) {
-  const group = page.getByTestId("site-tab-group");
-  await expect(group).toBeVisible();
-  const target = page.getByTestId(`tab-${tab}`);
-  if (!(await target.isVisible())) {
-    await group.click();
-    await page.locator(`[role="option"][data-site-tabs~="${tab}"]`).click();
+/** Opens a site's view through the directory, including its parent when it is folded. */
+export async function siteTab(page: Page, view: string) {
+  const mobile = await page.getByTestId("nav-menu").isVisible();
+  const sidebar = mobile
+    ? page.locator('[data-slot="drawer-content"]')
+    : page.locator('[data-slot="sidebar"]');
+  if (mobile && !(await sidebar.isVisible())) await page.getByTestId("nav-menu").click();
+  const directory = sidebar.locator('[data-slot="scope-directory"]');
+  const target = directory.getByTestId(`site-nav-${view}`);
+  const parent = directory.locator(`button[data-scope-views~="${view}"]`);
+  await expect(directory).toBeVisible();
+  if ((await parent.count()) && (await parent.getAttribute("aria-expanded")) === "false") {
+    await parent.click();
   }
   await target.click();
 }

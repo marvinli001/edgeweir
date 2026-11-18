@@ -33,8 +33,8 @@ test.describe.configure({ mode: "serial" });
 const check = (page: Page, name: string) => shots(page, "g4", name);
 
 async function openTab(page: Page, siteId: string, tab: "cache" | "origins" | "errors" | "logs") {
-  await page.goto(`/sites/${siteId}?tab=${tab}`);
-  await expect(page.getByTestId(`tab-${tab}`)).toHaveAttribute("aria-selected", "true");
+  await page.goto(`/sites/${siteId}/${tab}`);
+  await expect(page.getByTestId(`site-nav-${tab}`)).toHaveAttribute("aria-current", "page");
 }
 
 /** Switches the purge form to a type; the type lives in the URL, so wait for the tab to land. */

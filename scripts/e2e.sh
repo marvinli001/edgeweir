@@ -941,7 +941,7 @@ if ! $SKIP_UI; then
     || fail "Playwright smoke test failed"
   # The settings workflows publish newer revisions after the initial revision is checked.
   part ui env E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
-    pnpm --filter @edgeweir/console run test:e2e e2e/smoke-settings.spec.ts \
+    pnpm --filter @edgeweir/console run test:e2e e2e/smoke-settings.spec.ts e2e/scope-workspaces.spec.ts \
     || fail "Playwright settings smoke test failed"
   pass "Playwright smoke passed"
 fi

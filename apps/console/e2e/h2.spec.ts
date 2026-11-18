@@ -20,8 +20,8 @@ test("HTTP/2 and gRPC: the pool settings switch the protocol towards the origins
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await signedIn(page);
-  await page.goto(`/sites/${state.siteId}?tab=origins`);
-  await expect(page.getByTestId("tab-origins")).toHaveAttribute("aria-selected", "true");
+  await page.goto(`/sites/${state.siteId}/origins`);
+  await expect(page.getByTestId("site-nav-origins")).toHaveAttribute("aria-current", "page");
   const protocol = page.getByTestId("pool-protocol");
   const grpc = page.getByTestId("pool-grpc");
   const note = page.getByTestId("pool-grpc-note");

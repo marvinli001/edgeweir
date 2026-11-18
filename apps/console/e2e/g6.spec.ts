@@ -153,9 +153,9 @@ test("G6: a node shows its metrics, scheduling addresses with levels and the pro
   const edge = row(nodes, state.nodes.edge.id);
   await expect(edge.getByTestId("node-load")).toContainText("CPU", { timeout: 60_000 });
   await edge.getByTestId("node-open").click();
-  await expect(page).toHaveURL(new RegExp(`node=${state.nodes.edge.id}`));
-  const dialog = page.getByTestId("node-detail");
-  await expect(dialog.getByTestId("node-detail-name")).toHaveText(state.nodes.edge.name);
+  await expect(page).toHaveURL(new RegExp(`/clusters/nodes/${state.nodes.edge.id}`));
+  const dialog = page.locator("main");
+  await expect(dialog.getByTestId("page-title")).toHaveText(state.nodes.edge.name);
 
   await test.step("host metrics", async () => {
     await expect(dialog.getByTestId("node-metric-cpu")).toHaveText(/^[\d.]+%$/, {
@@ -168,6 +168,7 @@ test("G6: a node shows its metrics, scheduling addresses with levels and the pro
   });
 
   await test.step("scheduling addresses with their level, source and reachability", async () => {
+    await page.getByTestId("node-nav-addresses").click();
     const rows = dialog.getByTestId("node-address-row");
     await expect(rows.first()).toBeVisible();
     await expect(
@@ -177,11 +178,14 @@ test("G6: a node shows its metrics, scheduling addresses with levels and the pro
     await expect(dialog.getByTestId("node-address-in-use").first()).toBeVisible({
       timeout: 60_000,
     });
+    await page.getByTestId("node-nav-probes").click();
     await expect(dialog.getByTestId("node-probe-results")).toBeVisible({ timeout: 60_000 });
   });
+  await page.getByTestId("node-nav-overview").click();
   await check(page, "node-detail");
 
   await test.step("a second backup address is configured, then the addresses are restored", async () => {
+    await page.getByTestId("node-nav-addresses").click();
     const configuredBefore = await dialog
       .locator('[data-testid="node-address-row"][data-source="configured"]')
       .count();
@@ -223,6 +227,7 @@ test("G6: a node shows its metrics, scheduling addresses with levels and the pro
   });
 
   await test.step("the node also probes, then stops", async () => {
+    await page.getByTestId("node-nav-probes").click();
     const toggle = dialog.getByTestId("node-probe-switch");
     await expect(toggle).toBeEnabled();
     await expect(dialog.getByTestId("node-probe-no-region")).toHaveCount(0);
@@ -230,13 +235,16 @@ test("G6: a node shows its metrics, scheduling addresses with levels and the pro
     const after = before === "true" ? "false" : "true";
     await saved(page, toggle, "nodes/setProbe");
     await expect(toggle).toHaveAttribute("aria-checked", after);
+    await page.getByTestId("node-nav-back").click();
     await expect(edge.getByTestId("node-probe-badge")).toHaveCount(after === "true" ? 1 : 0);
+    await edge.getByTestId("node-open").click();
+    await page.getByTestId("node-nav-probes").click();
     await saved(page, toggle, "nodes/setProbe");
     await expect(toggle).toHaveAttribute("aria-checked", before ?? "false");
   });
-  await page.keyboard.press("Escape");
-  await expect(dialog).toBeHidden();
-  await expect(page).not.toHaveURL(/node=/);
+  await page.getByTestId("node-nav-back").click();
+  await expect(page.getByTestId("node-nav-overview")).toBeHidden();
+  await expect(page).toHaveURL(/\/clusters\?cluster=/);
   await logout(page);
   expect(pageErrors).toEqual([]);
 });

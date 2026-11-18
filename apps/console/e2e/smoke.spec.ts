@@ -103,7 +103,7 @@ test("login -> clusters & nodes -> sites, then switch to English", async ({ page
   await page.getByTestId("create-site-submit").click();
   // The new site opens on its detail page; the list shows it too.
   await expect(page.getByTestId("page-title")).toHaveText("ui-site");
-  await page.getByTestId("nav-sites").click();
+  await page.getByTestId("site-nav-back").click();
   await expect(sites.getByText("ui.test")).toBeVisible();
 
   // i18n: switch to English from the user menu; the UI reloads in English.

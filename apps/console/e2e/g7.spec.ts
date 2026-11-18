@@ -269,21 +269,21 @@ test("G7: an L4 app's statistics show its connections, traffic and nodes", async
   const overview = page.getByTestId("l4-app-overview");
 
   await test.step("the overview names the listener, the DNS target and the origins", async () => {
-    await expect(page.getByTestId("l4-tab-overview")).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("l4-nav-overview")).toHaveAttribute("aria-current", "page");
     const listen = overview.getByTestId("l4-app-listen");
     await expect(listen.getByTestId("l4-app-protocol")).toHaveText("TCP");
     await expect(listen).toContainText(String(app.port));
-    await expect(overview.getByTestId("l4-app-dns")).toHaveText(
+    await expect(page.getByTestId("l4-app-dns")).toHaveText(
       new RegExp(`^${literal(app.cnamePrefix)}\\.\\S+$`),
     );
-    await expect(overview.getByTestId("l4-app-origin").first()).toBeVisible();
+    await expect(page.getByTestId("l4-app-origin").first()).toBeVisible();
     await expect(overview.getByTestId("l4-app-state")).toContainText("已启用");
   });
   await check(page, "l4-app");
 
   await test.step("connections, refused connections and bytes over 6 hours, per node", async () => {
-    await page.getByTestId("l4-tab-stats").click();
-    await expect(page).toHaveURL(/tab=stats/);
+    await page.getByTestId("l4-nav-stats").click();
+    await expect(page).toHaveURL(/\/stats$/);
     // The minute statistics are kept 7 days: no 30-day range.
     await page.getByTestId("analytics-range").click();
     await expect(page.getByRole("menuitemradio")).toHaveCount(4);
@@ -308,9 +308,31 @@ test("G7: an L4 app's statistics show its connections, traffic and nodes", async
   if (proxy) {
     await test.step("an app with PROXY protocol says how it uses it", async () => {
       await page.goto(`/l4/${proxy.id}`);
-      await expect(overview.getByTestId("l4-app-proxy")).toHaveText(/^(接受|发送 v[12])/);
+      await expect(page.getByTestId("l4-app-proxy")).toHaveText(/^(接受|发送 v[12])/);
     });
   }
+  await test.step("a legacy stats link, switcher and settings follow the detail paths", async () => {
+    await page.goto(`/l4/${app.id}?tab=stats&range=6h`);
+    await expect(page).toHaveURL(/\/stats\?range=6h$/);
+    await expect(page.getByTestId("l4-nav-stats")).toHaveAttribute("aria-current", "page");
+    await page.getByTestId("l4-nav-switcher").click();
+    const panel = page.getByTestId("l4-switcher-panel");
+    await panel.getByRole("combobox").fill(state.apps.udp.name);
+    await panel.getByRole("option").filter({ hasText: state.apps.udp.name }).click();
+    await expect(page).toHaveURL(new RegExp(`/l4/${state.apps.udp.id}/stats\\?range=6h$`));
+    await page.getByTestId("l4-nav-settings").click();
+    await expect(page.getByTestId("l4-nav-settings")).toHaveAttribute("aria-current", "page");
+    await page.getByTestId("l4-app-name").fill("Unsaved L4 draft");
+    await page.getByTestId("l4-nav-back").click();
+    const discard = page.getByRole("dialog", { name: "放弃未保存的更改？" });
+    await expect(discard).toBeVisible();
+    await discard.getByRole("button", { name: "取消", exact: true }).click();
+    await expect(page.getByTestId("l4-app-name")).toHaveValue("Unsaved L4 draft");
+    await page.getByTestId("l4-nav-back").click();
+    await discard.getByTestId("confirm-action").click();
+    await expect(page).toHaveURL(/\/l4$/);
+    await expect(page.getByTestId("l4-app-link").first()).toBeVisible();
+  });
   await logout(page);
   expect(pageErrors).toEqual([]);
 });

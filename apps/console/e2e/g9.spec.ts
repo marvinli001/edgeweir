@@ -67,7 +67,7 @@ test("G9: listener ports and the client address of a cluster", async ({ page }) 
 test("G9: a site's ports and its HTTPS redirect", async ({ page }) => {
   const pageErrors = errors(page);
   await signedIn(page);
-  await page.goto(`/sites/${state.portsSiteId}?tab=domains`);
+  await page.goto(`/sites/${state.portsSiteId}/domains`);
   const card = page.getByTestId("site-ports");
   for (const [port, checked] of [
     ["80", false],
@@ -95,7 +95,7 @@ test("G9: a site's ports and its HTTPS redirect", async ({ page }) => {
   await expect(save).toBeDisabled();
   await check(page, "site-ports");
 
-  await page.goto(`/sites/${state.portsSiteId}?tab=https`);
+  await page.goto(`/sites/${state.portsSiteId}/https`);
   const redirect = page.getByTestId("https-redirect");
   await expect(redirect).toBeVisible();
   await expect(redirect.locator("#redirectStatus")).toHaveText("308");
