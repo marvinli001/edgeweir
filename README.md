@@ -5,6 +5,7 @@
 [![CI](https://github.com/marvinli001/edgeweir/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/marvinli001/edgeweir/actions/workflows/ci.yml)
 [![Docs](https://github.com/marvinli001/edgeweir/actions/workflows/docs.yml/badge.svg?branch=master)](https://marvinli001.github.io/edgeweir/zh/)
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg)](LICENSE)
+[![LINUX DO 社区](.github/assets/linux-do.svg)](https://linux.do/)
 
 [![加入 Telegram 交流群](.github/assets/telegram-zh.svg)](https://t.me/darkfiber_labs)
 
