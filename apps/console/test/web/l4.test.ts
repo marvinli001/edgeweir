@@ -44,7 +44,9 @@ describe("L4 IP-list chips", () => {
 
   it("keys the chips by list id on the overview and in the dialog, never by the shown name", () => {
     // Two chips named "00000000" would share a key, and React would leave one behind.
-    expect(componentKeys("src/web/routes/_app/l4/$id.tsx", "ListNames")).toEqual(["chip.id"]);
+    expect(componentKeys("src/web/components/l4/app-overview.tsx", "ListNames")).toEqual([
+      "chip.id",
+    ]);
     expect(componentKeys("src/web/components/l4/app-dialog.tsx", "ListPicker")).toEqual(["listId"]);
   });
 });
