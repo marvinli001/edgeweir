@@ -5,7 +5,7 @@ import {
   EXTENSIONS_FEATURE,
   EXTENSIONS_V2_FEATURE,
 } from "@edgeweir/config-compiler";
-import type { RuleInput } from "@edgeweir/contract";
+import { EXTENSIONS_EARLY_HINTS_FEATURE, type RuleInput } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { desc, eq, like } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -403,6 +403,49 @@ describe("node extensions", async () => {
     await admin.extensions.activate({ id: "hello-header", version: "1.0.0" });
     expect((await ir()).requiredFeatures).not.toContain(EXTENSIONS_V2_FEATURE);
     await admin.extensions.deleteVersion({ id: "hello-header", version: "1.2.0" });
+  });
+
+  it("gates informational responses on site enable, global enable, upgrade and rollback", async () => {
+    const id = "informational-links";
+    const pack = (version: string, hints = true) =>
+      exampleVersion(version, (manifest) => {
+        manifest.id = id;
+        manifest.requires = { lua_api: 2 };
+        if (hints) manifest.capabilities = ["response_headers", "verdicts", "early_hints"];
+      });
+    const supportedFeatures = ["tls-v1", "rules-v1", EXTENSIONS_FEATURE, EXTENSIONS_V2_FEATURE];
+    await admin.extensions.install(pack("1.0.0"));
+    const enabledSite = { siteId, id, enabled: true, config: {} };
+    expect(await rpcError(admin.extensions.updateSite(enabledSite))).toMatchObject({
+      code: "NODE_CAPABILITY_REQUIRED",
+      data: { features: EXTENSIONS_EARLY_HINTS_FEATURE },
+    });
+    await ctx.db
+      .update(schema.node)
+      .set({ supportedFeatures: [...supportedFeatures, EXTENSIONS_EARLY_HINTS_FEATURE] })
+      .where(eq(schema.node.id, nodeId));
+    await admin.extensions.updateSite(enabledSite);
+    expect((await ir()).requiredFeatures).toContain(EXTENSIONS_EARLY_HINTS_FEATURE);
+    await ctx.db.update(schema.node).set({ supportedFeatures }).where(eq(schema.node.id, nodeId));
+    expect(await rpcError(admin.extensions.update({ id, enabled: true }))).toMatchObject({
+      code: "NODE_CAPABILITY_REQUIRED",
+      data: { features: EXTENSIONS_EARLY_HINTS_FEATURE },
+    });
+    await ctx.db
+      .update(schema.node)
+      .set({ supportedFeatures: [...supportedFeatures, EXTENSIONS_EARLY_HINTS_FEATURE] })
+      .where(eq(schema.node.id, nodeId));
+    await admin.extensions.update({ id, enabled: true });
+    await admin.extensions.install(pack("1.1.0", false));
+    expect((await ir()).requiredFeatures).not.toContain(EXTENSIONS_EARLY_HINTS_FEATURE);
+    await ctx.db.update(schema.node).set({ supportedFeatures }).where(eq(schema.node.id, nodeId));
+    expect((await rpcError(admin.extensions.activate({ id, version: "1.0.0" }))).code).toBe(
+      "NODE_CAPABILITY_REQUIRED",
+    );
+    expect((await rpcError(admin.extensions.install(pack("1.2.0")))).code).toBe(
+      "NODE_CAPABILITY_REQUIRED",
+    );
+    await admin.extensions.uninstall({ id });
   });
 
   it("stores what nodes report", async () => {

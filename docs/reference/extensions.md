@@ -201,6 +201,7 @@ edgeweir-node extension verify --pubkey publisher.pub.jwk --publisher example.or
 | `html_inject` | HTML 注入辅助函数 |
 | `body_rewrite` | `body_filter` 钩子 |
 | `http_client` | 对外 TCP 连接 |
+| `early_hints` | Lua API 2；在网站的 `access` / `access_late` 发送一次 103 信息响应；另需节点能力 `extensions-early-hints-v1` |
 | `timers` | 在 `init` 中启动后台定时器 |
 
 控制台在校验扩展包时与扩展页面上列出能力。
@@ -276,6 +277,7 @@ edgeweir-node 仓库里的 `examples/extensions/hello-header` 就是这个扩展
 
 | 调用 | 说明 |
 | --- | --- |
+| `ew.early_hints(links)` | `early_hints`；仅网站的 `access` / `access_late`；见[信息响应](#信息响应) |
 | `ew.site_name` | 网站的主域名（第一个域名） |
 | `ew.req.http_version()` | `"1.0"`、`"1.1"`、`"2"`、`"3"` |
 | `ew.req.request_length()`、`ew.req.request_time()` | 收到的字节数（请求行、请求头、请求体）与自第一个字节起的秒数；`log` |
@@ -293,6 +295,25 @@ edgeweir-node 仓库里的 `examples/extensions/hello-header` 就是这个扩展
 | `ew.sidecar.proxy(opts)` | `sidecar`；仅 `access_late`：把请求交给边车的裁决（见[边车](#边车)） |
 
 两个 API 版本通用的说明：`ew.req.pass_level()` 为 0（无）、1 `cookie302`、2 `js`、3 `pow`、4 `captcha`；`ew.sha256` 与 `ew.hmac_sha256` 返回 32 个原始字节；`ew.req.header(name)` 不区分大小写，重复的请求头以 `", "` 连接；`ew.respond` 可以设置 `Set-Cookie`，`HEAD` 请求不发送正文；`ew.ctx` 对同一请求、同一扩展的所有钩子是同一个表（包括 `endpoint` 与 `log`）；`/.edgeweir/ext/<id>/…` 请求不运行访问阶段钩子，运行 `log` 钩子；响应头过滤钩子也作用于扩展自己用 `ew.respond` 生成的响应；带查询字符串的同源 `src` 仍算同源，静态资源的服务与查询字符串无关。
+
+### 信息响应
+
+`early_hints` 是任何发布者都可声明的通用能力，仅限网站作用范围，要求 Lua API 2。它不学习、缓存或解析链接，也不转发源站自己的 103。
+
+```lua
+local ok, reason = ew.early_hints({
+  "</static/app.css>; rel=preload; as=style",
+  "<https://static.example.org>; rel=preconnect",
+})
+```
+
+- 仅 `access`、`access_late` 可调；未声明能力或钩子不符时抛错。
+- `links` 是 1–32 个字符串的连续数组，每条是以 `<` 开头的 Link 字段值，不得包含 CR、LF、NUL；字段值合计至多 8192 字节。参数不合规时抛错。
+- 只向 HTTP/2、HTTP/3 客户端的主请求发送一个 103，仅带所给的 Link 头。每请求跨全部扩展、钩子与内部重定向最多发送一次；分层缓存的上层等内部请求不发送。不会把 Link 值添加到最终响应。
+- 成功返回 `true`；运行期不能发送时返回 `false, reason`，不抛错：`protocol`（HTTP/1.x）、`sent`（本请求已发过）、`subrequest`、`internal`、`unsupported`（底层实现不可用、最终响应头已发送或发送失败）。
+- 103 后继续正常处理，可回源、命中缓存、重定向或由后续扩展拒绝。提示可能先于最终的 304、403 或源站错误送达；调用方应避免暴露私有链接，并自行决定是否适合发送。
+
+支持节点须报告 `extensions-v1`、`extensions-v2`、`extensions-early-hints-v1`。启用、切换版本或按网站开启时，只要目标集群有活动节点缺少所需能力，控制台就以 `NODE_CAPABILITY_REQUIRED` 拒绝。Lua API 2 或节点版本本身不能证明支持。扩展包写 `requires.node: ">=1.9.0"`；节点的底层包须为 edgeweir-openresty 1.31.1.1-4 或更新版本，且通过 FFI 探测。`--no-extensions` 不声明这些扩展能力。
 
 ### 节点作用范围与 HTTP 监听器契约
 
@@ -469,5 +490,5 @@ edgeweir-node 仓库里的 `examples/extensions/hello-header` 就是这个扩展
 
 ## 兼容性
 
-- 格式与 Lua API 的版本只增不减：支持 Lua API 1 的节点保留上面的每个调用；新调用随更高的 `lua_api` 出现，扩展包需要目标节点没有的 API 时控制台拒绝。
+- 格式与 Lua API 的版本只增不减：支持 Lua API 1 的节点保留上面的每个调用；新调用通常随更高的 `lua_api` 出现；`ew.early_hints` 沿用 API 2，以独立节点能力 `extensions-early-hints-v1` 把关。扩展包需要目标节点没有的 API 或能力时控制台拒绝。
 - 控制台拒绝带未知成员的 manifest，为更新格式编写的扩展包会校验失败，而不是被一知半解地运行。

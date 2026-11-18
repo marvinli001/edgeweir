@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EXTENSION_FORMAT,
+  EXTENSIONS_EARLY_HINTS_FEATURE,
   EXTENSIONS_FEATURE,
   EXTENSIONS_NODE_FEATURE,
   EXTENSIONS_V2_FEATURE,
@@ -34,6 +35,20 @@ const binding = { port: 9145, allow: ["10.1.2.3/8"] };
 const clusterId = "00000000-0000-4000-8000-000000000001";
 
 describe("extension scope", () => {
+  it("gates informational responses independently of Lua API 2 and only for site scope", () => {
+    const hints = { ...site, requires: { lua_api: 2 }, capabilities: ["early_hints"] };
+    const manifest = extensionManifest.parse(hints);
+    expect(extensionRequiredFeatures(manifest)).toEqual([
+      EXTENSIONS_FEATURE,
+      EXTENSIONS_V2_FEATURE,
+      EXTENSIONS_EARLY_HINTS_FEATURE,
+    ]);
+    expect(extensionManifest.safeParse({ ...hints, requires: { lua_api: 1 } }).success).toBe(false);
+    expect(extensionManifest.safeParse({ ...node, capabilities: ["early_hints"] }).success).toBe(
+      false,
+    );
+  });
+
   it("defaults old packages to site scope without changing the input", () => {
     const before = JSON.stringify(site);
     const manifest = extensionManifest.parse(site);

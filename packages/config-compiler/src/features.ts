@@ -8,6 +8,7 @@ import {
   DOMAINS_V2_FEATURE,
   EDGE_PORTS_FEATURE,
   ERROR_PAGES_V1_STATUSES,
+  EXTENSIONS_EARLY_HINTS_FEATURE,
   EXTENSIONS_NODE_FEATURE,
   L4_FEATURE,
   L4_V2_FEATURE,
@@ -525,6 +526,10 @@ export function derivedFeatures(config: NodeConfig): string[] {
       : []),
     ...(config.extensions.some((extension) => extension.scope === "node")
       ? [EXTENSIONS_NODE_FEATURE]
+      : []),
+    // The signed manifest's capabilities are not repeated on the extension wire.
+    ...(config.extensions.length && config.requiredFeatures.includes(EXTENSIONS_EARLY_HINTS_FEATURE)
+      ? [EXTENSIONS_EARLY_HINTS_FEATURE]
       : []),
   ];
 }

@@ -15,6 +15,7 @@ export const EXTENSIONS_FEATURE = "extensions-v1";
 export const EXTENSIONS_V2_FEATURE = "extensions-v2";
 /** Node scope, including dedicated HTTP listeners; not implied by Lua API 2. */
 export const EXTENSIONS_NODE_FEATURE = "extensions-node-v1";
+export const EXTENSIONS_EARLY_HINTS_FEATURE = "extensions-early-hints-v1";
 /** Declared names per Lua API: log fields and counters. */
 const API_LIMITS = {
   1: { logFields: 8, counters: 8 },
@@ -89,6 +90,7 @@ const EXTENSION_CAPABILITIES = [
   "http_client",
   "timers",
   "sidecar",
+  "early_hints",
 ] as const;
 const EXTENSION_ENDPOINT_METHODS = ["GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"] as const;
 const EXTENSION_FIELD_TYPES = ["string", "number", "boolean"] as const;
@@ -576,6 +578,13 @@ export const extensionManifest = z
       }
     }
     const limits = API_LIMITS[manifest.requires.lua_api];
+    if (manifest.capabilities.includes("early_hints") && manifest.requires.lua_api < 2) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["capabilities"],
+        message: "early_hints needs lua_api 2",
+      });
+    }
     for (const member of ["secret", "sidecar", "data"] as const) {
       if (manifest[member] !== undefined && manifest.requires.lua_api < 2) {
         ctx.addIssue({ code: "custom", path: [member], message: `${member} needs lua_api 2` });
@@ -616,6 +625,7 @@ export function extensionRequiredFeatures(manifest: ExtensionManifest): string[]
     EXTENSIONS_FEATURE,
     ...(manifest.requires.lua_api === 2 ? [EXTENSIONS_V2_FEATURE] : []),
     ...(manifest.scope === "node" ? [EXTENSIONS_NODE_FEATURE] : []),
+    ...(manifest.capabilities.includes("early_hints") ? [EXTENSIONS_EARLY_HINTS_FEATURE] : []),
   ];
 }
 

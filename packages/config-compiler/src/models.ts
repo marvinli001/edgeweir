@@ -802,6 +802,7 @@ export interface ExtensionModel {
   sharedDicts: { name: string; sizeKb: number }[];
   /** The package's Lua API (1 when absent); 2 needs extensions-v2. */
   luaApi?: number;
+  capabilities?: string[];
   /** Version of the console-generated secret (manifest `secret: true`); 0 or absent: none. */
   secretVersion?: number;
   /** Absent/site preserves the legacy wire encoding. Node entries are cluster-filtered. */

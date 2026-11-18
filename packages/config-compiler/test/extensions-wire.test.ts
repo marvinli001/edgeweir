@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fromBinary, fromJson, type JsonObject, toBinary, toJson } from "@bufbuild/protobuf";
-import { EXTENSIONS_NODE_FEATURE } from "@edgeweir/contract";
+import { EXTENSIONS_EARLY_HINTS_FEATURE, EXTENSIONS_NODE_FEATURE } from "@edgeweir/contract";
 import { ExtensionSchema, NodeConfigDiffSchema, NodeConfigSchema } from "@edgeweir/proto";
 import { describe, expect, it } from "vitest";
 import {
@@ -10,6 +10,7 @@ import {
   type ExtensionModel,
   encodeNodeConfig,
   nodeRequirements,
+  refreshDerived,
 } from "../src/index";
 import { site } from "./v0230-models";
 
@@ -28,6 +29,25 @@ const model = (overrides: Partial<ExtensionModel> = {}): ExtensionModel => ({
 });
 
 describe("extension wire compatibility", () => {
+  it("retains the manifest's informational-response gate without changing extension wire bytes", () => {
+    const input = {
+      clusterId: "c",
+      sites: [site("a", { extensions: [{ id: "old-ext", configJson: "{}" }] })],
+      extensions: [model({ capabilities: ["early_hints"] })],
+    };
+    const config = compileNodeConfig(input, 1n);
+    expect(config.requiredFeatures).toContain(EXTENSIONS_EARLY_HINTS_FEATURE);
+    expect(refreshDerived(config).requiredFeatures).toContain(EXTENSIONS_EARLY_HINTS_FEATURE);
+    expect(
+      config.extensions.map((extension) =>
+        Buffer.from(toBinary(ExtensionSchema, extension)).toString("hex"),
+      ),
+    ).toEqual([(vectors[0] as Vector).canonical_hex]);
+    expect(compileNodeConfig({ ...input, sites: [] }, 2n).requiredFeatures).not.toContain(
+      EXTENSIONS_EARLY_HINTS_FEATURE,
+    );
+  });
+
   it.each(vectors)("encodes and decodes $name", ({ extension, canonical_hex }) => {
     const encoded = toBinary(ExtensionSchema, fromJson(ExtensionSchema, extension));
     expect(Buffer.from(encoded).toString("hex")).toBe(canonical_hex);

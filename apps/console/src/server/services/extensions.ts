@@ -381,6 +381,7 @@ export async function loadExtensionInput(
       configJson: canonicalJson(extension.config),
       sharedDicts: manifest.shared_dicts.map((d) => ({ name: d.name, sizeKb: d.size_kb })),
       luaApi: manifest.requires.lua_api,
+      capabilities: manifest.capabilities,
       secretVersion: manifest.secret ? extension.secretVersion : 0,
       ...(manifest.scope === "node"
         ? {

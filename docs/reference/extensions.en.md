@@ -201,6 +201,7 @@ The first verdict wins; later extensions' hooks are not called. Verdicts need `v
 | `html_inject` | HTML injection helpers |
 | `body_rewrite` | The `body_filter` hook |
 | `http_client` | Outgoing TCP connections |
+| `early_hints` | Lua API 2; one 103 informational response in site `access` / `access_late`; also requires `extensions-early-hints-v1` |
 | `timers` | Background timers from `init` |
 
 The console shows the capabilities when the package is verified and on the extension page.
@@ -276,6 +277,7 @@ Capabilities gain `sidecar`. A package with a sidecar may be up to 64 MiB (archi
 
 | Call | Notes |
 | --- | --- |
+| `ew.early_hints(links)` | `early_hints`; site `access` / `access_late` only; see [informational responses](#informational-responses) |
 | `ew.site_name` | The site's primary domain (its first domain) |
 | `ew.req.http_version()` | `"1.0"`, `"1.1"`, `"2"`, `"3"` |
 | `ew.req.request_length()`, `ew.req.request_time()` | Bytes received (request line, headers, body) and seconds since the first byte; `log` |
@@ -293,6 +295,25 @@ Capabilities gain `sidecar`. A package with a sidecar may be up to 64 MiB (archi
 | `ew.sidecar.proxy(opts)` | `sidecar`; `access_late` only: verdict that hands the request to the sidecar (see [Sidecars](#sidecars)) |
 
 Clarifications for both API versions: `ew.req.pass_level()` is 0 (none), 1 `cookie302`, 2 `js`, 3 `pow`, 4 `captcha`; `ew.sha256` and `ew.hmac_sha256` return 32 raw bytes; `ew.req.header(name)` is case-insensitive and joins repeated headers with `", "`; `ew.respond` may set `Set-Cookie` and sends no body for `HEAD`; `ew.ctx` is one table per request and extension across all its hooks (also `endpoint` and `log`); access hooks do not run for `/.edgeweir/ext/<id>/…` requests, the `log` hook does; header filter hooks also run on responses an extension produced with `ew.respond`; a same-origin `src` with a query string counts as same origin, and assets are served regardless of the query string.
+
+### Informational responses
+
+`early_hints` is a generic capability available to every publisher, for site scope and Lua API 2 only. It does not learn, cache or parse links, or forward the origin's own 103 responses.
+
+```lua
+local ok, reason = ew.early_hints({
+  "</static/app.css>; rel=preload; as=style",
+  "<https://static.example.org>; rel=preconnect",
+})
+```
+
+- Only `access` and `access_late` may call it. Missing capability or a different hook raises an error.
+- `links` is a dense array of 1–32 strings, each a Link field value starting with `<` and containing no CR, LF or NUL. Total field values must not exceed 8192 bytes. Invalid arguments raise an error.
+- Only HTTP/2 and HTTP/3 client main requests receive a 103, containing only the supplied Link headers. At most one is sent per request across all extensions, hooks and internal redirects. Internal requests, including upper-tier cache fetches, never send one. These links are not added to the final response.
+- Returns `true` on success. Runtime refusal returns `false, reason`, without throwing: `protocol` (HTTP/1.x), `sent` (already sent), `subrequest`, `internal`, or `unsupported` (unavailable implementation, final headers already sent, or send failure).
+- Processing continues after the 103: origin fetch, cache hit, redirect or a later extension's denial all remain possible. Hints may precede a final 304, 403 or origin error. Callers must avoid exposing private links and decide when hints are appropriate.
+
+Supporting nodes report `extensions-v1`, `extensions-v2` and `extensions-early-hints-v1`. Enabling, switching versions or enabling per site fails with `NODE_CAPABILITY_REQUIRED` if any active node in a target cluster lacks the required features. Lua API 2 or a version alone does not establish support. Packages set `requires.node: ">=1.9.0"`; the node also needs edgeweir-openresty 1.31.1.1-4 or later and a successful FFI probe. `--no-extensions` advertises none of these extension features.
 
 ### Node scope and HTTP listener contract
 
@@ -469,5 +490,5 @@ Each extension's node state carries `details` (JSON, ≤ 4 KiB): `sidecar` (stat
 
 ## Compatibility
 
-- Format and Lua API versions only grow: a node that supports Lua API 1 keeps every call above; new calls come with a higher `lua_api` and the console refuses packages that need an API a target node lacks.
+- Format and Lua API versions only grow: a node that supports Lua API 1 keeps every call above; new calls normally come with a higher `lua_api`; `ew.early_hints` stays on API 2 and requires the separate `extensions-early-hints-v1` node feature. The console refuses packages that need an API or feature a target node lacks.
 - Consoles reject manifests with unknown members, so a package for a later format fails verification instead of running half-understood.
