@@ -34,10 +34,11 @@ test("P0: the operator disables and enables a site", async ({ page }) => {
   // The e2e has more sites than one page: find this one by its name.
   const name = await page.getByTestId("page-title").innerText();
   await page.goto(`/sites?q=${encodeURIComponent(name)}`);
-  const row = page
-    .getByTestId("sites-table")
-    .getByRole("row")
-    .filter({ has: page.locator(`a[href="/sites/${state.siteId}"]`) });
+  const row = page.getByTestId("sites-table").locator(`[data-row-id="${state.siteId}"]`);
+  await expect(row.getByTestId("site-link")).toHaveAttribute(
+    "href",
+    new RegExp(`^/sites/${state.siteId}(?:\\?|$)`),
+  );
   await expect(row.getByTestId("site-status")).toHaveText("运行中");
   await logout(page);
   expect(pageErrors).toEqual([]);
