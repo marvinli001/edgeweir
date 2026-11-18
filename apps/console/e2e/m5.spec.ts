@@ -55,6 +55,7 @@ test("M5: DNS provider controls, statistics and alert subscriptions", async ({ p
   await siteTab(page, "analytics");
   await expect(page.getByTestId("top-url")).toContainText("/m5-popular");
   await expect(page.getByTestId("analytics")).toBeVisible();
+  await page.getByTestId("site-nav-back").click();
   await page.getByTestId("nav-alerts").click();
   await page.getByTestId("alert-subscribe").click();
   await pick(page, dialog.getByLabel("告警渠道", { exact: true }), channelName);

@@ -82,6 +82,7 @@ test("overview lists and charts, stars, site analytics with breakdowns", async (
   });
 
   await test.step("recents remember the visited site", async () => {
+    await page.getByTestId("site-nav-back").click();
     await page.getByTestId("nav-overview").click();
     await expect(page.getByTestId("home-recents")).toContainText("demo");
   });
