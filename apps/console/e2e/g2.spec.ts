@@ -26,7 +26,7 @@ const check = (page: Page, name: string) => shots(page, "g2", name);
 async function openSecurityTab(page: Page) {
   await page.goto(`/sites/${state.benchSiteId}`);
   await siteTab(page, "security");
-  await expect(page).toHaveURL(/tab=security/);
+  await expect(page).toHaveURL(`/sites/${state.benchSiteId}/security`);
   await expect(page.getByTestId("protection-under-attack")).toBeVisible();
 }
 
@@ -109,7 +109,7 @@ test("G2: the site's security tab turns Under Attack off and on, edits the CC po
 
   // What the nodes report and what happened during the CC run, on the attacks tab.
   await siteTab(page, "attacks");
-  await expect(page).toHaveURL(/tab=attacks/);
+  await expect(page).toHaveURL(`/sites/${state.benchSiteId}/attacks`);
   const nodes = page.getByTestId("security-node-row");
   await expect(nodes).toHaveCount(2);
   await expect(nodes.first().getByTestId("security-node-level")).toHaveText("正常");
