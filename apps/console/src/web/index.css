@@ -294,24 +294,19 @@
   }
 }
 
-/*
- * Label-left settings forms (tokens.md "Forms"): in a [data-form="label-left"] block of a panel
- * at least 40rem wide, each labelled field puts its label in the --ew-form-label column and its
- * control, hint and error beside it, grids of fields stack into one column 24px apart, and
- * switches, hints and the save bar line up with the controls. Dialogs, narrow panels and phones
- * keep labels on top. Unlayered, so it beats the grid utilities the forms carry.
- */
+/* Short fields share a row only when each has room for its label and control. */
+@utility form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--ew-form-field-min)), 1fr));
+  gap: var(--ew-space-4);
+}
+
+/* Standalone fields may put the label on the left. Nested grids own their tracks. */
 @container panel (width >= 40rem) {
   [data-form="label-left"] {
     --form-indent: calc(var(--ew-form-label) + 1.5rem);
-    &,
-    & .grid:has(> [data-slot="field"]) {
-      display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
-    }
     &
-      [data-slot="field"][data-orientation="vertical"]:has(
+      > [data-slot="field"][data-orientation="vertical"]:has(
         > [data-slot="field-label"]:not(.sr-only)
       ) {
       display: grid;
@@ -358,16 +353,13 @@
       }
     }
     /* Numbers (ports, seconds, counts) take a number's width, not the whole control column. */
-    & input[type="number"]:not([data-slot="input-group"] *),
-    & [data-slot="input-group"]:has(input[type="number"]) {
+    & > [data-slot="field"] > input[type="number"],
+    & > [data-slot="field"] > [data-slot="input-group"]:has(input[type="number"]) {
       max-width: 12rem;
     }
     /* Rows without a label of their own (a switch, a hint, an add button) start at the controls. */
     & > :not([data-slot="field"], [data-slot="field-set"], :has([data-slot="field-label"])),
-    &
-      .grid:has(> [data-slot="field"])
-      > :not([data-slot="field"], [data-slot="field-set"], :has([data-slot="field-label"])),
-    & [data-slot="field"][data-orientation="horizontal"] {
+    & > [data-slot="field"][data-orientation="horizontal"] {
       margin-left: var(--form-indent);
       width: auto;
       align-self: flex-start;
@@ -405,8 +397,8 @@
   --text-section--line-height: 24px;
   --text-title: 18px;
   --text-title--line-height: 26px;
-  --text-display: 28px;
-  --text-display--line-height: 36px;
+  --text-display: var(--ew-text-display);
+  --text-display--line-height: var(--ew-leading-display);
   --text-hero: 36px;
   --text-hero--line-height: 44px;
   --color-canvas: var(--canvas);
@@ -433,9 +425,6 @@
   --color-tooltip: var(--tooltip);
   --color-tooltip-foreground: var(--tooltip-foreground);
   --color-input-hover: var(--input-hover);
-  --color-kpi-1: var(--kpi-1);
-  --color-kpi-2: var(--kpi-2);
-  --color-kpi-3: var(--kpi-3);
   --color-grid: var(--grid);
   --color-axis: var(--axis);
   --shadow-elev-1: var(--elev-1);

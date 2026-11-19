@@ -1014,7 +1014,7 @@ export function ProbeModesPanel() {
       <QueryView query={modes} frame={PanelContent}>
         {(data) => (
           <PanelContent className="flex flex-col gap-4">
-            <div className="grid items-center gap-2 sm:grid-cols-[12rem_minmax(0,20rem)]">
+            <div className="grid items-center gap-2 @md/panel:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
               <span className="text-sm text-muted-foreground">{m.probe_mode_global()}</span>
               <OptionSelect
                 label={m.probe_mode_global()}
@@ -1032,9 +1032,11 @@ export function ProbeModesPanel() {
                 {data.clusters.map((c) => (
                   <li
                     key={c.clusterId}
-                    className="grid items-center gap-2 sm:grid-cols-[12rem_minmax(0,20rem)]"
+                    className="grid items-center gap-2 @md/panel:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]"
                   >
-                    <span className="truncate text-sm">{c.clusterName}</span>
+                    <span className="min-w-0 text-sm [overflow-wrap:anywhere]">
+                      {c.clusterName}
+                    </span>
                     <OptionSelect
                       label={c.clusterName}
                       value={c.mode ?? ALL_ADDRESSES}

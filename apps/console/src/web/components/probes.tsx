@@ -27,7 +27,13 @@ import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/layout/form";
-import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
+import {
+  Panel,
+  PanelColumns,
+  PanelContent,
+  PanelHeader,
+  PanelTitle,
+} from "@/components/layout/panel";
 import { Spinner } from "@/components/layout/spinner";
 import {
   Table,
@@ -290,7 +296,7 @@ export function ProbesPanel({
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <QueryView
         query={probes}
         empty={
@@ -314,8 +320,10 @@ export function ProbesPanel({
       </QueryView>
       <ProbeMatrixCard />
       <ProbeSourcesPanel />
-      <ProbeModesPanel />
-      <ProbeSettingsCard />
+      <PanelColumns>
+        <ProbeModesPanel />
+        <ProbeSettingsCard />
+      </PanelColumns>
       <AddProbeDialog key={`add-${addKey}`} open={addOpen} onOpenChange={onAddOpenChange} />
       {action.value ? (
         <ProbeActionDialog
@@ -986,7 +994,7 @@ function ProbeSettingsCard() {
       check={(s) =>
         s.timeoutMs > s.intervalSeconds * 1000 ? m.probes_settings_timeout_too_long() : null
       }
-      contentClassName="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+      layout="grid"
       saveTestId="probe-settings-save"
     >
       {({ draft, set }) =>

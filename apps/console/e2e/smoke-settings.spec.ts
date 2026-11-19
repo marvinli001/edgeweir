@@ -8,6 +8,43 @@ const password = process.env.E2E_ADMIN_PASSWORD ?? "e2e-admin-password-123";
 // Sites these tests create; later sections expect the sites list to hold only theirs.
 const created: string[] = [];
 
+test("settings cards and fields reflow without losing a draft", async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 900 });
+  await login(page, email, password);
+  await page.goto("/system");
+  const port = page.getByTestId("tiered-cache-port");
+  const original = await port.inputValue();
+  const draft = original === "18443" ? "19443" : "18443";
+  await port.fill(draft);
+  const channel = page.getByTestId("node-channel-card");
+  const pageWidth = () => page.locator("html").evaluate((el) => el.scrollWidth);
+  for (const width of [1920, 1024, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(port).toHaveValue(draft);
+    await expect(page.getByTestId("tiered-cache-settings-save")).toBeEnabled();
+    const field = await port.boundingBox();
+    const card = await channel.boundingBox();
+    if (!field || !card) throw new Error("Missing settings controls");
+    expect(field.width).toBeGreaterThan(80);
+    if (width === 1920) expect(field.x).toBeGreaterThan(card.x + card.width);
+    else expect(field.x + field.width).toBeLessThanOrEqual(card.x + card.width);
+    expect(await pageWidth()).toBe(width);
+  }
+  await port.fill(original);
+  await page.getByTestId("system-tab-probes").click();
+  const interval = page.getByTestId("probe-settings-intervalSeconds");
+  const timeout = page.getByTestId("probe-settings-timeoutMs");
+  for (const width of [375, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(interval).toBeVisible();
+    const first = await interval.boundingBox();
+    const second = await timeout.boundingBox();
+    if (!first || !second) throw new Error("Missing probe fields");
+    if (width === 375) expect(second.y).toBeGreaterThanOrEqual(first.y + first.height);
+    else expect(second.x).toBeGreaterThanOrEqual(first.x + first.width);
+  }
+});
+
 test.describe("small touch window", () => {
   test.use({ viewport: { width: 320, height: 844 }, isMobile: true, hasTouch: true });
 

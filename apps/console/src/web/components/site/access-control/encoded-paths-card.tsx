@@ -103,14 +103,14 @@ function EncodedPathFields({ draft, set, blocked, invalid }: PartFields<Draft>) 
               type="button"
               size="sm"
               variant="ghost"
-              className="icon-button sm:order-last"
+              className="icon-button @xl/panel:order-last"
               aria-label={m.common_delete()}
               onClick={() => setRows(rows.filter((_, i) => i !== index))}
               data-testid="encoded-paths-delete"
             >
               <HugeiconsIcon icon={Delete02Icon} />
             </Button>
-            <div className="flex basis-full items-center gap-4 sm:basis-auto">
+            <div className="flex basis-full items-center gap-4 @xl/panel:basis-auto">
               <SwitchField
                 id={`encoded-paths-slash-${row.key}`}
                 label={m.access_encoded_slash()}

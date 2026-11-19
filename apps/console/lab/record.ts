@@ -136,7 +136,7 @@ await page.waitForSelector('[data-testid="live-requests"]');
 await page.waitForTimeout(1400);
 
 // Read the live chart.
-const chart = await page.locator(".live-chart").boundingBox();
+const chart = await page.getByTestId("live-requests").getByRole("slider").boundingBox();
 if (chart) {
   await glide(
     page,

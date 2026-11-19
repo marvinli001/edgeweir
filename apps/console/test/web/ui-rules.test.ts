@@ -47,6 +47,13 @@ describe("UI rules (ADR-0003)", () => {
     expect(found).toEqual([]);
   });
 
+  it("uses the panel surface for metric cards in both themes", () => {
+    const tinted = allWeb.filter((file) =>
+      /(?:bg-kpi-|--(?:ew-|color-)?kpi-)[1-3]/.test(read(file)),
+    );
+    expect(tinted).toEqual([]);
+  });
+
   it("spells out no colors in TS/TSX: they come from CSS tokens", () => {
     // Hex (#rgb, #rrggbb, #rrggbbaa) and functional notation with literal channels. Named keywords
     // (white, transparent, currentColor) and Tailwind palette classes are tokens already.
@@ -226,7 +233,7 @@ describe("UI rules (ADR-0003)", () => {
         }
       }
     }
-    expect([...heavy]).toEqual(expect.arrayContaining(["live-chart", "origin-topology"]));
+    expect([...heavy]).toEqual(expect.arrayContaining(["edge-globe", "origin-topology"]));
     const imports = webSources
       .filter((file) => !file.includes("components/effects/"))
       .flatMap((file) =>

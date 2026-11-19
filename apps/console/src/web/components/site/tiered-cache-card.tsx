@@ -10,6 +10,7 @@ import {
   type TierTopology,
 } from "@edgeweir/contract";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { MetricValue } from "@/components/analytics/panel";
 import { Badge } from "@/components/arc/badge/badge";
 import { Checkbox } from "@/components/arc/checkbox/checkbox";
 import { FormSelect } from "@/components/form-select";
@@ -95,7 +96,7 @@ export function TierUpperPicker({
   return (
     <QueryView query={combineQueries(nodes, groups)}>
       {([nodeList, groupList]) => (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="form-grid">
           <Field>
             <FieldLabel id={`${idPrefix}-groups`}>{m.tiered_cache_upper_groups()}</FieldLabel>
             <fieldset
@@ -381,9 +382,9 @@ export function TierStatsCard({
 function Stat({ label, value, testId }: { label: string; value: string; testId: string }) {
   return (
     <div className="flex flex-col gap-1">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="font-heading text-2xl font-medium tabular-nums" data-testid={testId}>
-        {value}
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd>
+        <MetricValue data-testid={testId}>{value}</MetricValue>
       </dd>
     </div>
   );

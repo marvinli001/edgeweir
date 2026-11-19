@@ -9,6 +9,21 @@ import { cn } from "@/lib/utils";
  * page) and never widens a phone page.
  */
 
+/** Each stack grows independently when a setting expands or a list gets longer. */
+function PanelColumns({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="panel-columns"
+      className={cn("grid min-w-0 grid-cols-1 items-start gap-4 @4xl/main:grid-cols-2", className)}
+      {...props}
+    />
+  );
+}
+
+function PanelStack({ children }: { children: React.ReactNode }) {
+  return <div className="flex min-w-0 flex-col gap-4">{children}</div>;
+}
+
 function Panel({
   className,
   size = "default",
@@ -65,15 +80,15 @@ function PanelAction({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 /**
- * The panel's body. With `form`, a settings form: its fields lay out label-left once the panel is
- * 40rem wide (index.css [data-form]), and `className` styles the block that holds them.
+ * Form layouts apply their classes inside the query container. With `form={true}`, standalone
+ * fields switch to left labels at 40rem; `stacked` keeps labels above their controls.
  */
 function PanelContent({
   className,
   form = false,
   children,
   ...props
-}: React.ComponentProps<"div"> & { form?: boolean }) {
+}: React.ComponentProps<"div"> & { form?: boolean | "stacked" }) {
   return (
     <div
       data-slot="panel-content"
@@ -81,7 +96,7 @@ function PanelContent({
       {...props}
     >
       {form ? (
-        <div data-form="label-left" className={className}>
+        <div data-form={form === true ? "label-left" : "stacked"} className={className}>
           {children}
         </div>
       ) : (
@@ -113,4 +128,13 @@ function PanelFooter({
   );
 }
 
-export { Panel, PanelAction, PanelContent, PanelFooter, PanelHeader, PanelTitle };
+export {
+  Panel,
+  PanelAction,
+  PanelColumns,
+  PanelContent,
+  PanelFooter,
+  PanelHeader,
+  PanelStack,
+  PanelTitle,
+};

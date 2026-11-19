@@ -162,6 +162,21 @@ export function NodeChannelCard() {
       // The system information, the check and install commands follow the URL.
       refresh={orpc.settings.key()}
       noValidate
+      layout="inline"
+      contentClassName="flex-[1_1_12rem]"
+      details={(value, draft) => (
+        <div className="flex w-full min-w-0 flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <SettingSourceBadge source={value.source} testId="node-channel-source" />
+            <UrlScopeBadge url={value.effectiveUrl} testId="node-api-url-scope" />
+            <NodeChannelCheckStatus />
+          </div>
+          {draft.url.trim() !== value.url ? (
+            <SafetyNote data-testid="node-channel-note">{m.system_node_channel_note()}</SafetyNote>
+          ) : null}
+          <NodeChannelMigration value={value} />
+        </div>
+      )}
       saveTestId="node-channel-save"
     >
       {({ value, draft, set, error }) => (
@@ -180,19 +195,6 @@ export function NodeChannelCard() {
             className="font-mono text-sm"
             data-testid="node-channel-url"
           />
-          <SettingSourceBadge
-            className="w-fit! justify-self-start"
-            source={value.source}
-            testId="node-channel-source"
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <UrlScopeBadge url={value.effectiveUrl} testId="node-api-url-scope" />
-            <NodeChannelCheckStatus />
-          </div>
-          {draft.url.trim() !== value.url ? (
-            <SafetyNote data-testid="node-channel-note">{m.system_node_channel_note()}</SafetyNote>
-          ) : null}
-          <NodeChannelMigration value={value} />
         </Field>
       )}
     </SettingsCard>

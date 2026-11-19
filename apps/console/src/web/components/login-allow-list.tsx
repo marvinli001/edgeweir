@@ -53,7 +53,7 @@ export function LoginAllowListCard() {
                 onChange={(event) => set({ text: event.target.value })}
                 placeholder={value.currentIp || "203.0.113.0/24"}
                 aria-invalid={error ? true : undefined}
-                className="min-h-28 font-mono text-sm"
+                className="max-h-60 font-mono text-sm"
                 data-testid="login-allow-list"
               />
             </Field>

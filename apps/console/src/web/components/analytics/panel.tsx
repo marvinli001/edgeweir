@@ -32,7 +32,7 @@ export function PanelHeader({
 }) {
   return (
     <div className={cn("flex min-h-5 items-center justify-between gap-2 px-4 pt-4", className)}>
-      <h3 className="truncate text-dense text-muted-foreground">{title}</h3>
+      <h3 className="min-w-0 text-sm text-muted-foreground">{title}</h3>
       {aside}
     </div>
   );
@@ -111,48 +111,57 @@ export function OpenCardHint() {
   );
 }
 
-/**
- * Title, headline value with its change, and a chart underneath. Small cards of a row with
- * nothing to draw (`empty`: no value above zero in any of them) drop their charts, so a quiet
- * range is a row of values, not of blank plots.
- */
+export function MetricValue({ className, ...props }: React.ComponentProps<"span">) {
+  return (
+    <span
+      data-slot="metric-value"
+      className={cn("text-display font-medium readout", className)}
+      {...props}
+    />
+  );
+}
+
 export function MetricCard({
   title,
   value,
-  change,
+  rawValue,
+  aside,
+  footer,
+  change = null,
   better,
-  size,
+  size = "sm",
   onOpen,
   children,
   testId,
   fill = false,
-  empty = false,
 }: {
   title: string;
-  value: string;
-  change: number | null;
-  better: "up" | "down";
-  size: "lg" | "sm";
+  value: React.ReactNode;
+  rawValue?: number;
+  aside?: React.ReactNode;
+  footer?: React.ReactNode;
+  change?: number | null;
+  better?: "up" | "down";
+  size?: "lg" | "sm";
   onOpen?: () => void;
-  children: React.ReactNode;
+  children?: React.ReactNode;
   testId?: string;
   /** Grow to the row's height (a large chart alone beside a taller card), the chart with it. */
   fill?: boolean;
-  /** A small card's row has no value above zero to draw. */
-  empty?: boolean;
 }) {
-  const compact = empty && size === "sm";
+  const compact = !children;
   return (
     <Panel
       data-testid={testId}
       className={cn(
-        size === "lg"
-          ? fill
-            ? "h-full min-h-64"
-            : "h-64"
-          : compact
-            ? "h-full pb-4"
-            : "h-52 @3xl/main:h-60",
+        "w-full",
+        compact
+          ? "self-start pb-4"
+          : size === "lg"
+            ? fill
+              ? "h-full min-h-64"
+              : "min-h-64"
+            : "min-h-52 @3xl/main:min-h-60",
         onOpen &&
           "group/panel transition-colors duration-200 ease-out hover:border-primary/40 motion-reduce:transition-none",
       )}
@@ -160,18 +169,16 @@ export function MetricCard({
       {onOpen ? (
         <OpenCardButton label={m.analytics_details({ metric: title })} onOpen={onOpen} />
       ) : null}
-      <PanelHeader title={title} aside={onOpen ? <OpenCardHint /> : undefined} />
+      <PanelHeader title={title} aside={onOpen ? <OpenCardHint /> : aside} />
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-4 pt-1">
-        <span className="text-2xl font-medium" data-slot="metric-value">
-          {value}
-        </span>
+        <MetricValue data-value={rawValue}>{value}</MetricValue>
         <ChangeIndicator change={change} better={better} />
       </div>
+      {footer ? <div className="px-4 pt-2">{footer}</div> : null}
       {compact ? null : (
         <div
           className={cn(
-            "relative min-h-0 flex-1",
-            size === "lg" ? "px-4 pt-3 pb-3" : "pt-3",
+            "relative flex min-h-0 flex-1 flex-col justify-end px-4 pt-3 pb-3",
             onOpen && "cursor-pointer",
           )}
         >

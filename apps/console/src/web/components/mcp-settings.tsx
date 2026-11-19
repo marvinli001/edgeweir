@@ -27,18 +27,10 @@ export function McpSettingsCard() {
       mutation={orpc.mcp.setSettings.mutationOptions()}
       toDraft={(s) => ({ enabled: s.enabled })}
       toInput={(d) => ({ enabled: d.enabled })}
-      saveTestId="mcp-settings-save"
-    >
-      {({ value, draft, set }) => (
+      layout="inline"
+      contentClassName="w-auto"
+      details={(value) => (
         <>
-          <SwitchField
-            id="mcp-enabled"
-            label={m.system_mcp_enabled()}
-            checked={draft.enabled}
-            onCheckedChange={(enabled) => set({ enabled })}
-            className="self-start"
-            testId="mcp-enabled"
-          />
           {value.enabled ? (
             <Field className="animate-enter">
               <FieldLabel>{m.system_mcp_url()}</FieldLabel>
@@ -49,6 +41,18 @@ export function McpSettingsCard() {
             <SafetyNote data-testid="mcp-https">{m.system_mcp_https()}</SafetyNote>
           )}
         </>
+      )}
+      saveTestId="mcp-settings-save"
+    >
+      {({ draft, set }) => (
+        <SwitchField
+          id="mcp-enabled"
+          label={m.system_mcp_enabled()}
+          checked={draft.enabled}
+          onCheckedChange={(enabled) => set({ enabled })}
+          className="self-start"
+          testId="mcp-enabled"
+        />
       )}
     </SettingsCard>
   );

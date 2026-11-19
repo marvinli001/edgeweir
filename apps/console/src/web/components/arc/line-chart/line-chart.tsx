@@ -290,7 +290,9 @@ function TickLabel({
       exit={{ opacity: 0, transition: fadeFast }}
       transition={{ duration: duration.standard, ease: [...ease.standard] }}
     >
-      <span className={styles.tickText}>{format(value)}</span>
+      <span className={styles.tickText} data-slot="chart-tick">
+        {format(value)}
+      </span>
     </motion.span>
   );
 }
@@ -362,7 +364,7 @@ export function LineChart({
   const showLegend = legend ?? series.length > 1;
 
   // Each series becomes a dense curve in data units; the scale fits only the series on show.
-  const signature = `${curve}|${series.map((item) => item.key).join(",")}|${data.map((item) => `${item.key}:${series.map((line) => item.values[line.key] ?? 0).join(",")}`).join(";")}`;
+  const signature = `${curve}|${series.map((item) => item.key).join(",")}|${data.map((item) => `${item.key}:${series.map((line) => (item.values[line.key] === null ? "gap" : (item.values[line.key] ?? 0))).join(",")}`).join(";")}`;
   const targets = useMemo(
     () =>
       new Map(
@@ -440,8 +442,8 @@ export function LineChart({
       // A sample sits on the segment between two data points; it is drawn only when both have values.
       const open = ([x]: Point) => {
         if (n < 1) return !holes[0];
-        const at = Math.min(n - 1, Math.floor(x * n + 1e-6));
-        return !holes[at] && !holes[at + 1];
+        const position = x * n;
+        return !holes[Math.floor(position + 1e-6)] && !holes[Math.ceil(position - 1e-6)];
       };
       const runs: Point[][] = [];
       let run: Point[] = [];
@@ -456,7 +458,12 @@ export function LineChart({
       const xy = ([x, value]: Point) => `${(x * w).toFixed(1)},${y(value).toFixed(1)}`;
       lines.current
         .get(line.key)
-        ?.setAttribute("d", runs.map((points) => `M${points.map(xy).join("L")}`).join(""));
+        ?.setAttribute(
+          "d",
+          runs
+            .map((points) => `M${points.map(xy).join("L")}${points.length === 1 ? "h0" : ""}`)
+            .join(""),
+        );
       areas.current
         .get(line.key)
         ?.setAttribute(
@@ -763,9 +770,6 @@ export function LineChart({
           aria-valuetext={valueText}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
-          onPointerUp={(event) => {
-            if (event.pointerType !== "mouse") setActive(null);
-          }}
           onPointerCancel={() => setActive(null)}
           onPointerLeave={(event) => {
             if (event.pointerType === "mouse") setActive(null);

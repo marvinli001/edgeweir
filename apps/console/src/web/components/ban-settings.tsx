@@ -1,15 +1,9 @@
 import type * as React from "react";
 import { Switch } from "@/components/arc/switch/switch";
-import {
-  GRID_CARD,
-  SettingNumber,
-  SettingRow,
-  SettingRows,
-} from "@/components/protection-settings";
+import { SettingNumber, SettingRow, SettingRows } from "@/components/protection-settings";
 import { SettingsCard } from "@/components/settings-card";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
-import { cn } from "@/lib/utils";
 
 /** Protection page card: platform limit of manual bans and sharing of automatic bans in a cluster. */
 export function BanSettingsCard({
@@ -21,15 +15,13 @@ export function BanSettingsCard({
 }) {
   return (
     <SettingsCard
-      indentSave={false}
       title={m.system_bans_title()}
-      className={cn(GRID_CARD, className)}
+      className={className}
       style={style}
       query={orpc.settings.bans.queryOptions()}
       mutation={orpc.settings.setBans.mutationOptions()}
       toDraft={(s) => ({ maxTotal: String(s.maxTotal), shareAutoBans: s.shareAutoBans })}
       toInput={(d) => ({ maxTotal: Number(d.maxTotal), shareAutoBans: d.shareAutoBans })}
-      contentClassName="flex-1"
       saveTestId="ban-settings-save"
     >
       {({ draft, set }) => (

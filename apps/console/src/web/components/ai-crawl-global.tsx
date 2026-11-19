@@ -109,7 +109,7 @@ function AiCrawlGlobalForm({
             idPrefix="ai-crawl-global"
           />
         </FieldSet>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="form-grid">
           <FormSelect
             id="ai-crawl-global-impersonators"
             label={m.ai_crawl_impersonators()}

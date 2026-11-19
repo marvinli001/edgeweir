@@ -17,6 +17,7 @@ import {
   seriesColor,
   useSeriesSlots,
 } from "@/components/analytics/breakdown-charts";
+import { MetricValue } from "@/components/analytics/panel";
 import { Badge } from "@/components/arc/badge/badge";
 import { FormSelect } from "@/components/form-select";
 import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
@@ -36,7 +37,6 @@ import { orpc } from "@/lib/orpc";
 import { eventKindLabel, levelLabel, metricLabel } from "@/lib/protection";
 import { siteHref } from "@/lib/site-tabs";
 import { groupBuckets } from "@/lib/time-buckets";
-import { cn } from "@/lib/utils";
 import { workspaceLink } from "@/lib/workspace-link";
 
 const PAGE_SIZE = 20;
@@ -488,18 +488,15 @@ function AuthFailuresCard({ siteId, range }: { siteId: string; range: AnalyticsR
       data-testid="auth-failures-card"
     >
       <PanelHeader>
-        <PanelTitle>{m.auth_failures_title()}</PanelTitle>
+        <PanelTitle className="text-sm font-normal text-muted-foreground">
+          {m.auth_failures_title()}
+        </PanelTitle>
       </PanelHeader>
       <PanelContent className="flex flex-col gap-4">
         <QueryView query={failures}>
           {({ requests, unsupportedNodes }) => (
             <>
-              <p
-                className="font-heading text-3xl font-medium tabular-nums"
-                data-testid="auth-failures-count"
-              >
-                {formatNumber(requests)}
-              </p>
+              <MetricValue data-testid="auth-failures-count">{formatNumber(requests)}</MetricValue>
               {unsupportedNodes > 0 ? (
                 <SafetyNote data-testid="auth-failures-partial">
                   {m.auth_failures_partial()}
@@ -534,7 +531,7 @@ function ChallengesCard({ siteId, range }: { siteId: string; range: AnalyticsRan
                   {m.security_top_empty()}
                 </p>
               ) : (
-                <dl className="grid grid-cols-3 gap-4 sm:max-w-xl">
+                <dl className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-4">
                   {(
                     [
                       // A pass can be counted by another node than the challenge (or fall in
@@ -555,15 +552,9 @@ function ChallengesCard({ siteId, range }: { siteId: string; range: AnalyticsRan
                     ] as const
                   ).map(([key, label, value]) => (
                     <div key={key} className="flex min-w-0 flex-col gap-1">
-                      <dt className="text-xs text-muted-foreground">{label}</dt>
-                      <dd
-                        className={cn(
-                          "font-heading font-medium tabular-nums",
-                          key === "rate" ? "text-3xl" : "text-xl",
-                        )}
-                        data-testid={`challenges-${key}`}
-                      >
-                        {value}
+                      <dt className="text-sm text-muted-foreground">{label}</dt>
+                      <dd>
+                        <MetricValue data-testid={`challenges-${key}`}>{value}</MetricValue>
                       </dd>
                     </div>
                   ))}

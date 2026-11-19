@@ -8,7 +8,6 @@ import * as z from "zod";
 import { Button } from "@/components/arc/button/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/arc/tabs/tabs";
 import { ClusterRolloutCard } from "@/components/cluster-rollout";
-import { ClusterCacheCard } from "@/components/clusters/cache-zone";
 import { ClusterDialog } from "@/components/clusters/cluster-dialog";
 import { ClusterSummary } from "@/components/clusters/cluster-summary";
 import { EnrollDialogHost } from "@/components/clusters/enroll-dialog";
@@ -281,13 +280,8 @@ function ClusterView({
           <TabsContent value="scheduling" className="animate-enter">
             <ClusterScheduling key={selected.id} clusterId={selected.id} />
           </TabsContent>
-          {/* Short cards pair up in two top-aligned columns on wide screens. */}
-          <TabsContent
-            value="network"
-            className="grid items-start gap-4 animate-enter @5xl/main:grid-cols-2"
-          >
-            <ClusterNetwork key={selected.id} clusterId={selected.id} />
-            <ClusterCacheCard key={`cache-${selected.id}`} cluster={selected} />
+          <TabsContent value="network" className="animate-enter">
+            <ClusterNetwork key={selected.id} cluster={selected} />
           </TabsContent>
           <TabsContent value="ports" className="animate-enter">
             <PortPoolsSection

@@ -79,7 +79,7 @@ export function SaveBar({
       form={form}
       disabled={!dirty || pending}
       className={
-        indent ? "@min-[42.5rem]/save-bar:ml-[calc(var(--ew-form-label)+1.5rem)]" : undefined
+        indent ? "@min-[40rem]/save-bar:ml-[calc(var(--ew-form-label)+1.5rem)]" : undefined
       }
       data-testid={testId}
     >

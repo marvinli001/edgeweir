@@ -20,7 +20,7 @@ export function UsageSettingsCard() {
         retentionDays: Number(d.retentionDays),
         offlineThresholdMinutes: Number(d.offlineThresholdMinutes),
       })}
-      contentClassName="grid gap-4 sm:grid-cols-2"
+      layout="grid"
       saveTestId="usage-settings-save"
     >
       {({ draft, set }) => (

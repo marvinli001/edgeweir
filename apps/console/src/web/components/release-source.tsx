@@ -20,6 +20,11 @@ export function ReleaseSourceCard() {
         releaseSourceInput.safeParse(input).success ? null : m.system_release_invalid()
       }
       noValidate
+      layout="inline"
+      contentClassName="flex-[1_1_12rem]"
+      details={(value) => (
+        <SettingSourceBadge source={value.source} testId="release-source-origin" />
+      )}
       saveTestId="release-source-save"
     >
       {({ value, draft, set, error }) => (
@@ -37,11 +42,6 @@ export function ReleaseSourceCard() {
             aria-invalid={error ? true : undefined}
             className="font-mono text-sm"
             data-testid="release-source"
-          />
-          <SettingSourceBadge
-            className="w-fit! justify-self-start"
-            source={value.source}
-            testId="release-source-origin"
           />
         </Field>
       )}

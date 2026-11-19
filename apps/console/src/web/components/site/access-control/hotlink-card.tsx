@@ -65,7 +65,7 @@ export function HotlinkCard({ siteId, index }: { siteId: string; index: number }
                   testId="hotlink-check-origin"
                 />
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 @xl/panel:grid-cols-2">
                 <ListText
                   id="hotlink-allowed"
                   label={m.access_hotlink_allowed()}
@@ -95,7 +95,7 @@ export function HotlinkCard({ siteId, index }: { siteId: string; index: number }
                 onChange={(extensions) => set({ extensions })}
                 testId="hotlink-extensions"
               />
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 @xl/panel:grid-cols-2">
                 <ListText
                   id="hotlink-prefixes"
                   label={m.access_path_prefixes()}
@@ -115,7 +115,7 @@ export function HotlinkCard({ siteId, index }: { siteId: string; index: number }
                   testId="hotlink-excludes"
                 />
               </div>
-              <div className="grid gap-4 sm:grid-cols-[12rem_minmax(0,1fr)]">
+              <div className="grid gap-4 @xl/panel:grid-cols-[12rem_minmax(0,1fr)]">
                 <FormSelect
                   id="hotlink-action"
                   label={m.access_hotlink_action()}

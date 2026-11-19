@@ -138,7 +138,7 @@ export function EdgeNetworkCard({
     >
       <div className="flex items-start justify-between gap-3 px-4 pt-4">
         <div className="flex min-w-0 flex-col gap-1">
-          <h2 id="edge-network-title" className="truncate text-dense text-muted-foreground">
+          <h2 id="edge-network-title" className="truncate text-sm text-muted-foreground">
             {m.overview_edge_network()}
           </h2>
           <div className="flex items-baseline gap-2">

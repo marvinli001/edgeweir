@@ -172,15 +172,15 @@ export function AnalyticsSection({
   };
 
   type Series = NonNullable<typeof traffic.data>;
-  /** Every small metric is null or zero in every bucket: the row drops its charts. */
-  const quiet = (series: Series) =>
-    small.every((item) => series.points.every((p) => !item.point(p, series.bucketSeconds)));
-  const chart = (item: Metric, series: Series, fill = false, empty = false) => {
+  const chart = (item: Metric, series: Series, fill = false) => {
     const data = series.points.map((point) => ({
       time: point.time,
       value: item.point(point, series.bucketSeconds),
     }));
     const total = item.total(series.totals);
+    const sampled = series.points.some(
+      (p) => p.requests > 0 || p.bytesSent > 0 || p.cacheHits + p.cacheMisses > 0,
+    );
     const open = () => detail.show(item.id);
     return (
       <div key={item.id} {...enter()}>
@@ -193,16 +193,17 @@ export function AnalyticsSection({
           onOpen={open}
           testId={`metric-${item.id}`}
           fill={fill}
-          empty={empty}
         >
-          <MetricChart
-            data={data}
-            label={item.title()}
-            format={item.format}
-            axis={item.size === "lg"}
-            domain={item.domain}
-            onClick={open}
-          />
+          {sampled && total !== null ? (
+            <MetricChart
+              data={data}
+              label={item.title()}
+              format={item.format}
+              range={range}
+              domain={item.domain}
+              onClick={open}
+            />
+          ) : null}
         </MetricCard>
       </div>
     );
@@ -262,7 +263,8 @@ export function AnalyticsSection({
                     <div
                       className={cn(
                         "grid gap-3 @5xl/main:col-span-2",
-                        large.length > 1 && "@3xl/main:grid-cols-2 @5xl/main:grid-cols-1",
+                        large.length > 1 &&
+                          "content-start @3xl/main:grid-cols-2 @5xl/main:grid-cols-1",
                       )}
                     >
                       {large.map((item) => chart(item, series, large.length === 1))}
@@ -277,7 +279,7 @@ export function AnalyticsSection({
               ) : null}
               {small.length > 0 ? (
                 <div className={cn("grid gap-3", SMALL_GRID[small.length])}>
-                  {small.map((item) => chart(item, series, false, quiet(series)))}
+                  {small.map((item) => chart(item, series))}
                 </div>
               ) : null}
               {statusCells > 0 ? (

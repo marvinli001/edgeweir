@@ -10,19 +10,13 @@ import * as React from "react";
 import { Input } from "@/components/arc/input/input";
 import { Switch } from "@/components/arc/switch/switch";
 import { OptionSelect } from "@/components/form-select";
-import {
-  GRID_CARD,
-  SettingNumber,
-  SettingRow,
-  SettingRows,
-} from "@/components/protection-settings";
+import { SettingNumber, SettingRow, SettingRows } from "@/components/protection-settings";
 import { SafetyNote } from "@/components/safety-note";
 import { SettingsCard } from "@/components/settings-card";
 import { StatusDot } from "@/components/status-dot";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { formatPorts, parsePorts } from "@/lib/ports";
-import { cn } from "@/lib/utils";
 
 interface Draft {
   enabled: boolean;
@@ -77,10 +71,9 @@ export function ConnectionLimitsCard({
   const choices = (clusters.data ?? []).map((c) => ({ value: c.id, label: c.name }));
   return (
     <SettingsCard
-      indentSave={false}
       key={clusterId}
       title={m.connection_limits_title()}
-      className={cn(GRID_CARD, className)}
+      className={className}
       style={style}
       testId="connection-limits-card"
       query={orpc.clusters.connectionLimits.queryOptions({ input: { clusterId } })}
@@ -121,7 +114,6 @@ export function ConnectionLimitsCard({
                 <OptionSelect
                   id="connection-limits-cluster"
                   label={m.connection_limits_cluster()}
-                  className="w-56"
                   value={clusterId}
                   options={choices}
                   onChange={setPicked}
@@ -171,7 +163,6 @@ export function ConnectionLimitsCard({
               <OptionSelect
                 id="connection-limits-port-mode"
                 label={m.connection_limits_ports()}
-                className="w-56"
                 value={draft.portMode}
                 options={[
                   { value: "cluster", label: m.connection_limits_ports_cluster() },
@@ -194,7 +185,7 @@ export function ConnectionLimitsCard({
                   spellCheck={false}
                   autoComplete="off"
                   placeholder="80, 443, 10000-10999"
-                  className="w-56 font-mono"
+                  className="font-mono"
                   data-testid="connection-limits-port-list"
                 />
               </SettingRow>
@@ -204,7 +195,7 @@ export function ConnectionLimitsCard({
                 label={m.connection_limits_ports_effective()}
               >
                 <span
-                  className="font-mono text-sm text-muted-foreground"
+                  className="min-w-0 font-mono text-sm wrap-anywhere text-muted-foreground"
                   data-testid="connection-limits-effective"
                 >
                   {formatPorts(value.effectivePorts) || "—"}

@@ -11,7 +11,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/arc/tabs/
 import { CopyButton } from "@/components/copy-button";
 import { DemoSettingsCard } from "@/components/demo-settings";
 import { ExtensionsPanel } from "@/components/extensions/extensions-panel";
-import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
+import {
+  Panel,
+  PanelColumns,
+  PanelContent,
+  PanelHeader,
+  PanelStack,
+  PanelTitle,
+} from "@/components/layout/panel";
 import { LogRetentionCard } from "@/components/log-retention";
 import { LoginAllowListCard } from "@/components/login-allow-list";
 import { McpSettingsCard } from "@/components/mcp-settings";
@@ -42,9 +49,11 @@ type Tab = "general" | "probes" | "service-accounts" | "extensions";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid min-h-12 gap-1 py-2.5 sm:grid-cols-[12rem_minmax(0,1fr)] sm:items-center sm:gap-4">
+    <div className="grid min-w-0 grid-cols-[min(23%,5.5rem)_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1 @lg/panel:grid-cols-1">
       <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-      <dd className="flex min-w-0 flex-wrap items-center gap-2 text-sm break-all">{children}</dd>
+      <dd className="flex min-w-0 flex-wrap items-center gap-2 text-sm [overflow-wrap:anywhere]">
+        {children}
+      </dd>
     </div>
   );
 }
@@ -130,12 +139,26 @@ function SystemSettingsPage() {
             </TabsTrigger>
           </TabsList>
         </PageTabs>
-        {/* Short settings cards pair up in two top-aligned columns on wide screens. */}
-        <TabsContent
-          value="general"
-          className="grid items-start gap-6 animate-enter @5xl/main:grid-cols-2"
-        >
-          <GeneralSettings />
+        <TabsContent value="general" className="flex flex-col gap-4 animate-enter">
+          <PanelColumns>
+            <PanelStack>
+              <SystemInfo />
+              <NodeChannelCard />
+              <ReleaseSourceCard />
+              <UsageSettingsCard />
+              <LogRetentionCard />
+              <NodeLogRetentionCard />
+              <DemoSettingsCard />
+            </PanelStack>
+            <PanelStack>
+              <OriginAllowListCard />
+              <TieredCacheSettingsCard />
+              <AcmeDirectoryCard />
+              <LoginAllowListCard />
+              <McpSettingsCard />
+            </PanelStack>
+          </PanelColumns>
+          <PlatformErrorPagesCard />
         </TabsContent>
         <TabsContent value="probes" className=" animate-enter">
           <ProbesPanel addOpen={search.addProbe === true} onAddOpenChange={setAddProbe} />
@@ -154,77 +177,59 @@ function SystemSettingsPage() {
   );
 }
 
-function GeneralSettings() {
+function SystemInfo() {
   const settings = useQuery(orpc.settings.get.queryOptions());
   return (
-    <>
-      <Panel className="animate-enter @5xl/main:col-span-2">
-        <PanelHeader>
-          <PanelTitle>{m.system_info()}</PanelTitle>
-        </PanelHeader>
-        <PanelContent>
-          <QueryView query={settings}>
-            {(system) => (
-              <dl className="divide-y">
-                <Row label={m.system_version()}>
-                  <span className="font-mono text-[13px]">{system.version}</span>
-                </Row>
-                <Row label={m.system_console_url()}>
-                  <span className="font-mono text-[13px]">{system.consoleUrl}</span>
-                  <UrlScopeBadge url={system.consoleUrl} testId="console-url-scope" />
-                </Row>
-                <Row label={m.system_ca_fingerprint()}>
-                  <code
-                    className="min-w-0 flex-1 rounded-md px-2.5 py-1.5 font-mono text-xs leading-relaxed faint-well"
-                    data-testid="ca-fingerprint"
-                  >
-                    {system.nodeCaSha256}
-                  </code>
-                  <CopyButton value={system.nodeCaSha256} iconOnly />
-                </Row>
-                <Row label={m.system_analytics()}>
-                  <Badge size="sm" tone="neutral" className="font-mono">
-                    {system.analyticsMode}
-                  </Badge>
-                </Row>
-                <Row label={m.system_setup_token()}>
-                  <Badge size="sm" tone="neutral" data-testid="setup-token-state">
-                    {system.setupCompletedAt
-                      ? m.system_setup_token_used({
-                          time: formatDateTime(system.setupCompletedAt),
-                        })
-                      : m.system_setup_token_pending()}
-                  </Badge>
-                </Row>
-                <Row label={m.system_openapi()}>
-                  <a
-                    className="rounded-sm font-mono text-[13px] text-primary-ink underline-offset-4 outline-none focus-ring hover:underline"
-                    href="/api/v1/openapi.json"
-                  >
-                    /api/v1/openapi.json
-                  </a>
-                </Row>
-              </dl>
-            )}
-          </QueryView>
-        </PanelContent>
-      </Panel>
-      <div className="min-w-0 @5xl/main:col-span-2">
-        <NodeChannelCard />
-      </div>
-      <OriginAllowListCard />
-      <TieredCacheSettingsCard />
-      <ReleaseSourceCard />
-      <AcmeDirectoryCard />
-      <UsageSettingsCard />
-      <LogRetentionCard />
-      <NodeLogRetentionCard />
-      <LoginAllowListCard />
-      <DemoSettingsCard />
-      <McpSettingsCard />
-      <div className="min-w-0 @5xl/main:col-span-2">
-        <PlatformErrorPagesCard />
-      </div>
-    </>
+    <Panel className="animate-enter">
+      <PanelHeader>
+        <PanelTitle>{m.system_info()}</PanelTitle>
+      </PanelHeader>
+      <PanelContent>
+        <QueryView query={settings}>
+          {(system) => (
+            <dl className="grid gap-x-5 gap-y-3 @lg/panel:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+              <Row label={m.system_version()}>
+                <span className="font-mono text-[13px]">{system.version}</span>
+              </Row>
+              <Row label={m.system_console_url()}>
+                <span className="font-mono text-[13px]">{system.consoleUrl}</span>
+                <UrlScopeBadge url={system.consoleUrl} testId="console-url-scope" />
+              </Row>
+              <Row label={m.system_analytics()}>
+                <Badge size="sm" tone="neutral" className="font-mono">
+                  {system.analyticsMode}
+                </Badge>
+              </Row>
+              <Row label={m.system_setup_token()}>
+                <span className="tabular-nums" data-testid="setup-token-state">
+                  {system.setupCompletedAt
+                    ? m.system_setup_token_used({
+                        time: formatDateTime(system.setupCompletedAt),
+                      })
+                    : m.system_setup_token_pending()}
+                </span>
+              </Row>
+              <Row label={m.system_openapi()}>
+                <a
+                  className="rounded-sm font-mono text-[13px] text-primary-ink underline-offset-4 outline-none focus-ring hover:underline"
+                  href="/api/v1/openapi.json"
+                >
+                  /api/v1/openapi.json
+                </a>
+              </Row>
+              <Row label={m.system_ca_fingerprint()}>
+                <code
+                  className="min-w-0 max-w-full flex-1 rounded-md px-2.5 py-1.5 font-mono text-xs leading-relaxed break-all faint-well"
+                  data-testid="ca-fingerprint"
+                >
+                  {system.nodeCaSha256}
+                </code>
+                <CopyButton value={system.nodeCaSha256} iconOnly />
+              </Row>
+            </dl>
+          )}
+        </QueryView>
+      </PanelContent>
+    </Panel>
   );
 }

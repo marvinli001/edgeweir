@@ -32,13 +32,14 @@ export function AcmeDirectoryCard() {
         acmeDirectoryInput.safeParse(input).success ? null : m.system_acme_invalid()
       }
       noValidate
-      contentClassName="grid grid-cols-1 gap-4 sm:grid-cols-2"
+      layout="grid"
+      contentClassName="@2xl/panel:grid-cols-2"
       saveTestId="acme-directory-save"
       errorTestId="acme-directory-error"
     >
       {({ value, draft, set, error }) => (
         <>
-          <Field className="sm:col-span-2" data-invalid={error ? true : undefined}>
+          <Field className="col-span-full" data-invalid={error ? true : undefined}>
             <FieldLabel htmlFor="acme-directory-url">{m.system_acme_url()}</FieldLabel>
             <Input
               id="acme-directory-url"
@@ -85,7 +86,7 @@ export function AcmeDirectoryCard() {
               }
             />
           </Field>
-          <Field className="sm:col-span-2">
+          <Field className="col-span-full">
             <FieldLabel htmlFor="acme-directory-ca">{m.system_acme_ca()}</FieldLabel>
             <Textarea
               id="acme-directory-ca"
@@ -105,7 +106,7 @@ export function AcmeDirectoryCard() {
           </Field>
           {value.caaIdentities.length ? (
             <p
-              className="text-sm text-muted-foreground sm:col-span-2"
+              className="text-sm text-muted-foreground col-span-full"
               data-testid="acme-directory-caa"
             >
               {m.system_acme_caa()}:{" "}

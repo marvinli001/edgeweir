@@ -35,7 +35,6 @@ the primitives switched to Base UI, keeping Arc's styling and motion. MIT licens
 | [cobe](https://github.com/shuding/cobe) | 2.0.1 | Copyright (c) 2021 Shu Ding | MIT |
 | [@xyflow/react](https://github.com/xyflow/xyflow) | 12.12.0 | Copyright (c) 2019-2025 webkid GmbH | MIT |
 | [@dagrejs/dagre](https://github.com/dagrejs/dagre) | 3.1.1 | Copyright (c) 2012-2014 Chris Pettitt | MIT |
-| [uPlot](https://github.com/leeoniya/uPlot) | 1.6.32 | Copyright (c) 2022 Leon Sorokin | MIT |
 | [@number-flow/react](https://github.com/barvian/number-flow) | 0.6.2 | Copyright (c) 2024 Maxwell Barvian | MIT |
 | [motion](https://github.com/motiondivision/motion) | 13.5.1 | Copyright (c) 2024 Motion B.V. | MIT |
 

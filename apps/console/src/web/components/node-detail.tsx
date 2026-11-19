@@ -12,6 +12,7 @@ import { Add01Icon, Cancel01Icon, MoreHorizontalIcon } from "@hugeicons/core-fre
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { MetricCard } from "@/components/analytics/panel";
 import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import {
@@ -57,7 +58,6 @@ import {
 } from "@/lib/i18n";
 import { nodeMainAddress } from "@/lib/node-views";
 import { errorMessage, orpc } from "@/lib/orpc";
-import { cn } from "@/lib/utils";
 
 const MAX_ADDRESSES = 8;
 const LEVELS = [0, 1, 2] as const;
@@ -182,11 +182,7 @@ export function NodeOverview({ node }: { node: Node }) {
           <NodeFacts node={node} />
         </PanelContent>
       </Panel>
-      <Panel>
-        <PanelContent>
-          <NodeMetrics node={node} />
-        </PanelContent>
-      </Panel>
+      <NodeMetrics node={node} />
     </div>
   );
 }
@@ -219,12 +215,12 @@ function Metric({
   className?: string;
 }) {
   return (
-    <div className={cn("flex min-w-0 flex-col gap-1.5 rounded-md bg-well px-3 py-2.5", className)}>
-      <dt className="truncate text-xs text-muted-foreground">{label}</dt>
-      <dd className="truncate text-lg leading-tight font-medium readout" data-testid={testId}>
-        {children}
-      </dd>
-      {meter ? <dd className="pt-0.5">{meter}</dd> : null}
+    <div className={className}>
+      <MetricCard
+        title={label}
+        value={<span data-testid={testId}>{children}</span>}
+        footer={meter}
+      />
     </div>
   );
 }
@@ -247,11 +243,11 @@ function NodeMetrics({ node }: { node: Node }) {
         ) : null}
       </div>
       {metrics ? (
-        <dl className="grid grid-cols-2 gap-2 sm:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 @xl/main:grid-cols-6">
           <Metric
             label={m.node_metrics_cpu()}
             testId="node-metric-cpu"
-            className="sm:col-span-3"
+            className="@xl/main:col-span-3"
             meter={<LoadMeter value={metrics.cpuPercent} label={m.node_metrics_cpu()} />}
           >
             {formatPercent(metrics.cpuPercent)}
@@ -259,7 +255,7 @@ function NodeMetrics({ node }: { node: Node }) {
           <Metric
             label={m.node_metrics_memory()}
             testId="node-metric-memory"
-            className="sm:col-span-3"
+            className="@xl/main:col-span-3"
             meter={
               memory === null ? undefined : (
                 <LoadMeter value={memory} label={m.node_metrics_memory()} />
@@ -272,31 +268,27 @@ function NodeMetrics({ node }: { node: Node }) {
               {memory === null ? formatBytes(metrics.memoryUsedBytes) : formatPercent(memory)}
             </span>
           </Metric>
-          <Metric
-            label={m.node_metrics_load()}
-            testId="node-metric-load"
-            className="col-span-2 sm:col-span-2"
-          >
+          <Metric label={m.node_metrics_load()} testId="node-metric-load" className="col-span-2">
             {load(metrics.load1)} / {load(metrics.load5)} / {load(metrics.load15)}
           </Metric>
           <Metric
             label={m.node_metrics_egress()}
             testId="node-metric-egress"
-            className="sm:col-span-2"
+            className="@xl/main:col-span-2"
           >
             {formatBitRate(metrics.egressBps / 8)}
           </Metric>
           <Metric
             label={m.node_metrics_connections()}
             testId="node-metric-connections"
-            className="sm:col-span-2"
+            className="@xl/main:col-span-2"
           >
             {formatNumber(metrics.activeConnections)}
           </Metric>
-        </dl>
+        </div>
       ) : (
         <p
-          className="rounded-md bg-well px-3 py-2.5 text-sm text-muted-foreground"
+          className="rounded-lg border bg-card p-4 text-sm text-muted-foreground"
           data-testid="node-metrics-none"
         >
           {m.node_metrics_none()}
@@ -500,43 +492,46 @@ export function NodeCache({ node }: { node: Node }) {
   const blocked = !available && node.cache.maxSizeGb === null;
   return (
     <section className="flex flex-col gap-3" data-testid="node-cache">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-medium">{m.node_cache_title()}</h3>
-        {usage ? (
+      <MetricCard
+        title={m.node_cache_title()}
+        aside={
+          usage ? (
+            <span
+              className="text-xs text-muted-foreground tabular-nums"
+              title={formatDateTime(usage.measuredAt)}
+            >
+              {m.node_cache_measured({ time: timeAgo(usage.measuredAt) })}
+            </span>
+          ) : undefined
+        }
+        value={
           <span
-            className="text-xs text-muted-foreground tabular-nums"
-            title={formatDateTime(usage.measuredAt)}
+            data-testid="node-cache-usage"
+            className={usage ? undefined : "text-sm font-normal text-muted-foreground"}
           >
-            {m.node_cache_measured({ time: timeAgo(usage.measuredAt) })}
+            {usage
+              ? m.node_cache_used({
+                  used: formatBytes(usage.usedBytes),
+                  total: formatBytes(usage.maxBytes),
+                })
+              : m.node_cache_unreported()}
           </span>
-        ) : null}
-      </div>
-      {/* The last measured use as a tile with its gauge (a full cache is normal: one zone). */}
-      <div className="flex min-w-0 flex-col gap-2 rounded-md bg-well px-3 py-2.5">
-        <p
-          className={cn("text-sm tabular-nums", usage ? "font-medium" : "text-muted-foreground")}
-          data-testid="node-cache-usage"
-        >
-          {usage
-            ? m.node_cache_used({
+        }
+        footer={
+          usage && usage.maxBytes > 0 ? (
+            <Meter
+              value={Math.min(100, (usage.usedBytes / usage.maxBytes) * 100)}
+              low={0}
+              high={100}
+              optimum={50}
+              label={m.node_cache_used({
                 used: formatBytes(usage.usedBytes),
                 total: formatBytes(usage.maxBytes),
-              })
-            : m.node_cache_unreported()}
-        </p>
-        {usage && usage.maxBytes > 0 ? (
-          <Meter
-            value={Math.min(100, (usage.usedBytes / usage.maxBytes) * 100)}
-            low={0}
-            high={100}
-            optimum={50}
-            label={m.node_cache_used({
-              used: formatBytes(usage.usedBytes),
-              total: formatBytes(usage.maxBytes),
-            })}
-          />
-        ) : null}
-      </div>
+              })}
+            />
+          ) : undefined
+        }
+      />
       <form
         className="flex flex-wrap items-end gap-2"
         onSubmit={(event) => {

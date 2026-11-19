@@ -29,8 +29,10 @@ import { Field, FieldLabel } from "@/components/layout/form";
 import {
   Panel,
   PanelAction,
+  PanelColumns,
   PanelContent,
   PanelHeader,
+  PanelStack,
   PanelTitle,
 } from "@/components/layout/panel";
 import { enterDelay, Page } from "@/components/page";
@@ -165,11 +167,17 @@ function AlertsPage() {
   );
   return (
     <Page title={m.alert_title()}>
-      <ChannelsCard channels={channels} />
-      <SmtpSettings className="animate-enter" style={{ animationDelay: "60ms" }} />
-      <SubscriptionsCard channels={(channels.data ?? []).filter((c) => c.enabled)} />
-      <EventsCard />
-      <PolicyCard />
+      <PanelColumns>
+        <PanelStack>
+          <ChannelsCard channels={channels} />
+          <SmtpSettings className="animate-enter" style={{ animationDelay: "60ms" }} />
+        </PanelStack>
+        <PanelStack>
+          <SubscriptionsCard channels={(channels.data ?? []).filter((c) => c.enabled)} />
+          <PolicyCard />
+          <EventsCard />
+        </PanelStack>
+      </PanelColumns>
     </Page>
   );
 }
@@ -483,24 +491,24 @@ function EventsCard() {
                 return (
                   <li
                     key={event.id}
-                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-2.5 text-sm animate-enter first:pt-0 last:pb-0 sm:grid-cols-[6.5rem_minmax(0,1fr)_auto_auto]"
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-2.5 text-sm animate-enter first:pt-0 last:pb-0 @2xl/panel:grid-cols-[6.5rem_minmax(0,1fr)_auto_auto]"
                     style={enterDelay(index)}
                   >
-                    <span className="order-2 justify-self-end sm:order-none sm:justify-self-start">
+                    <span className="order-2 justify-self-end @2xl/panel:order-none @2xl/panel:justify-self-start">
                       <StatusDot tone={firing ? "bad" : "good"}>
                         <span className={firing ? "font-medium" : "text-muted-foreground"}>
                           {firing ? m.alert_event_fired() : m.alert_event_resolved()}
                         </span>
                       </StatusDot>
                     </span>
-                    <span className="order-1 min-w-0 font-medium [overflow-wrap:anywhere] sm:order-none">
+                    <span className="order-1 min-w-0 font-medium [overflow-wrap:anywhere] @2xl/panel:order-none">
                       {event.siteName}
                     </span>
                     {/*
                       Phones: the kind and the time share the second line while they fit; a longer
                       kind keeps its full text and the time drops to a line of its own.
                     */}
-                    <span className="order-3 col-span-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 sm:order-none sm:contents">
+                    <span className="order-3 col-span-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 @2xl/panel:order-none @2xl/panel:contents">
                       <Badge
                         size="sm"
                         tone="neutral"
@@ -510,7 +518,7 @@ function EventsCard() {
                       </Badge>
                       <time
                         dateTime={event.occurredAt}
-                        className="ml-auto shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums sm:justify-self-end"
+                        className="ml-auto shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums @2xl/panel:justify-self-end"
                       >
                         {formatDateTime(event.occurredAt)}
                       </time>
@@ -538,7 +546,7 @@ function PolicyCard() {
       toDraft={(saved: AlertPolicy) => saved}
       toInput={(draft) => draft}
       check={(input) => (alertPolicy.safeParse(input).success ? null : m.alert_check_fields())}
-      contentClassName="grid gap-4 sm:grid-cols-2"
+      layout="grid"
       saveTestId="alert-policy-save"
     >
       {({ draft, set }) => (

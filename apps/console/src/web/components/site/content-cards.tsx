@@ -224,7 +224,7 @@ export function CharsetCard({ site }: { site: Site }) {
             </SafetyNote>
           ) : null}
           {/* The switches keep to the select's side instead of spreading across the card. */}
-          <div className="grid gap-4 sm:grid-cols-[12rem_auto_auto] sm:items-end sm:justify-start sm:gap-x-6">
+          <div className="grid gap-4 @xl/panel:grid-cols-[12rem_auto_auto] @xl/panel:items-end @xl/panel:justify-start @xl/panel:gap-x-6">
             <FormSelect
               id="charset-name"
               label={m.site_charset_name()}

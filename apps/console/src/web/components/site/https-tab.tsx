@@ -522,7 +522,7 @@ function HttpsEditor({
         <PanelHeader>
           <PanelTitle>{m.site_tab_https()}</PanelTitle>
         </PanelHeader>
-        <PanelContent form className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <PanelContent form="stacked" className="grid gap-5 @xl/panel:grid-cols-2">
           <FormSelect
             id="siteCertificate"
             label={m.cert_title()}
@@ -584,7 +584,7 @@ function HttpsEditor({
             </div>
           ))}
           {canAdd ? (
-            <div className="flex flex-col gap-2 self-end sm:col-span-2">
+            <div className="flex flex-col gap-2 self-end col-span-full">
               <Button
                 type="button"
                 variant="secondary"
@@ -656,7 +656,7 @@ function HttpsEditor({
             // The redirect's settings sit right under the force HTTPS switch (in the reading order
             // too), marked by a rule beside them; the other switches follow.
             <div
-              className="grid gap-4 border-l-2 border-border pl-3 animate-enter sm:col-span-2 sm:grid-cols-2"
+              className="grid gap-4 border-l-2 border-border pl-3 animate-enter col-span-full @xl/panel:grid-cols-2"
               data-testid="https-redirect"
             >
               <FormSelect
@@ -691,7 +691,7 @@ function HttpsEditor({
                 />
               </Field>
               {hostDomains.length > 1 ? (
-                <div className="sm:col-span-2">
+                <div className="col-span-full">
                   <CheckboxList
                     id="redirect-excluded"
                     legend={m.https_redirect_excluded()}
@@ -712,7 +712,7 @@ function HttpsEditor({
                 </div>
               ) : null}
               {redirectAvailable ? null : (
-                <SafetyNote className="sm:col-span-2" data-testid="https-redirect-unavailable">
+                <SafetyNote className="col-span-full" data-testid="https-redirect-unavailable">
                   {m.feature_unavailable_nodes()}
                 </SafetyNote>
               )}
@@ -730,7 +730,7 @@ function HttpsEditor({
             />
           ))}
           <div
-            className="grid grid-cols-1 gap-4 border-t pt-5 sm:col-span-2 sm:grid-cols-2"
+            className="grid grid-cols-1 gap-4 border-t pt-5 col-span-full @xl/panel:grid-cols-2"
             data-testid="https-client-cert"
           >
             <FormSelect
@@ -757,7 +757,7 @@ function HttpsEditor({
                   max={CLIENT_CERTIFICATE_DEPTH_RANGE.max}
                   onChange={(value) => setClient({ depth: Number(value) })}
                 />
-                <Field className="sm:col-span-2">
+                <Field className="col-span-full">
                   <FieldLabel htmlFor="clientCertCa">{m.https_client_ca()}</FieldLabel>
                   <Textarea
                     id="clientCertCa"
@@ -779,16 +779,15 @@ function HttpsEditor({
               </>
             )}
             {settings.http3 && clientCert.mode === "off" && settings.certificateId ? (
-              <SafetyNote className="sm:col-span-2">{m.https_client_cert_http3()}</SafetyNote>
+              <SafetyNote className="col-span-full">{m.https_client_cert_http3()}</SafetyNote>
             ) : clientCert.mode === "off" && settings.certificateId && !clientAvailable ? (
-              <SafetyNote className="sm:col-span-2" data-testid="https-client-cert-unavailable">
+              <SafetyNote className="col-span-full" data-testid="https-client-cert-unavailable">
                 {m.feature_unavailable_nodes()}
               </SafetyNote>
             ) : null}
           </div>
         </PanelContent>
         <SaveBar
-          indent
           dirty={JSON.stringify(httpsOf(settings)) !== JSON.stringify(httpsOf(initial))}
           pending={mutation.isPending}
           error={error}

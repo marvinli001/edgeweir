@@ -36,12 +36,14 @@ The conditions of each item are in [Needs attention](clusters.en.md#needs-attent
 
 ## Right now
 
-| Tile | Value | Sparkline |
+| Card | Value | Chart reading |
 | --- | --- | --- |
-| **Request rate** | requests of the last full minute / 60, in **/s** | requests per minute over the last hour |
-| **Egress** | bytes sent to visitors in the last full minute × 8 / 60, in bps–Tbps | bytes sent per minute over the last hour |
-| **Cache hit ratio** | `hits / (hits + misses)` over the last hour, labelled **Last hour** | hit ratio per minute |
+| **Request rate** | requests of the last full minute / 60, in **/s** | average requests/s for each minute |
+| **Egress** | bytes sent to visitors in the last full minute × 8 / 60, in bps–Tbps | average egress bandwidth for each minute (bps–Tbps) |
+| **Cache hit ratio** | `hits / (hits + misses)` over the last hour, labelled **Last hour** | hit ratio for each minute with cache samples |
 | **Nodes online** | nodes online / all nodes, with a ratio bar | — |
+
+Hover, tap, or focus a chart and use the arrow keys to read a minute. The cache hit ratio shows **0%** when every lookup missed and **—** when the hour has no cache samples. Minutes without samples leave gaps in the line.
 
 | Rule | Description |
 | --- | --- |

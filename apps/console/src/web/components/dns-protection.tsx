@@ -62,7 +62,7 @@ export function DnsProtectionCard() {
       toDraft={(protection) => ({ percent: String(Math.round(protection.massRemovalRatio * 100)) })}
       toInput={(draft) => ({ massRemovalRatio: Number(draft.percent) / 100 })}
       layout="inline"
-      contentClassName="sm:w-72"
+      contentClassName="w-72"
       saveTestId="dns-protection-save"
     >
       {({ draft, set }) => (

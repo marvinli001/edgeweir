@@ -1,3 +1,4 @@
+import type { Traffic } from "@edgeweir/contract";
 import { expect, type Page } from "@playwright/test";
 import { signedIn, siteTab, test } from "./helpers";
 
@@ -101,4 +102,57 @@ test("overview lists and charts, stars, site analytics with breakdowns", async (
   });
 
   expect(pageErrors).toEqual([]);
+});
+
+test.describe("right now on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, reducedMotion: "reduce" });
+
+  test("cache misses, unsampled minutes and complete bandwidth ticks", async ({ page }) => {
+    let sampled = false;
+    await page.route("**/rpc/analytics/traffic", async (route) => {
+      const response = await route.fetch();
+      const body: { json: Traffic } = await response.json();
+      const { points, bucketSeconds } = body.json;
+      for (const [index, point] of points.entries()) {
+        point.requests = 60 * bucketSeconds;
+        point.bytesSent = (index === points.length - 1 ? 900_000 : 100_000) * bucketSeconds;
+        // The open minute has hits. Only two isolated completed minutes have cache observations.
+        point.cacheHits = index === points.length - 1 ? 20 : 0;
+        point.cacheMisses = sampled && (index === 0 || index === points.length - 2) ? 10 : 0;
+      }
+      await route.fulfill({ json: body });
+    });
+    await page.goto("/overview?range=1h");
+    const hit = page.getByTestId("live-hit-ratio");
+    const value = hit.locator("[data-slot=metric-value]");
+    await expect(value).toHaveText("—");
+    await expect(hit.getByRole("slider")).toHaveCount(0);
+
+    const egress = page.getByTestId("live-egress");
+    await expect(egress.locator("[data-slot=metric-value]")).toHaveText("800 Kbps");
+    const tick = egress.locator("[data-slot=chart-tick]").filter({ hasText: /^800\sKbps$/ });
+    await expect(tick).toBeVisible();
+    expect(
+      await tick.evaluate((el) => {
+        const range = el.ownerDocument.createRange();
+        range.selectNodeContents(el);
+        return (
+          range.getBoundingClientRect().right <=
+          (el.closest("section")?.getBoundingClientRect().right ?? 0)
+        );
+      }),
+    ).toBe(true);
+
+    sampled = true;
+    await page.getByTestId("analytics-refresh").click();
+    await expect(value).toHaveText("0%");
+    const plot = hit.getByRole("slider");
+    await plot.tap();
+    await expect(hit.locator("[data-scrubbing]")).toBeVisible();
+    await plot.press("End");
+    await expect(plot).toHaveAttribute("aria-valuetext", /0%$/);
+    await plot.press("ArrowLeft");
+    await expect(plot).toHaveAttribute("aria-valuetext", /—$/);
+    await expect(hit.locator("[data-slot=chart-line]")).toHaveAttribute("d", /h0M.*h0/);
+  });
 });

@@ -52,7 +52,14 @@ import {
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormSelect } from "@/components/form-select";
 import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/layout/form";
-import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
+import {
+  Panel,
+  PanelColumns,
+  PanelContent,
+  PanelHeader,
+  PanelStack,
+  PanelTitle,
+} from "@/components/layout/panel";
 import { LinkButton } from "@/components/link-button";
 import { PresetSelect, presetLabel, usePreset } from "@/components/preset-select";
 import { SafetyNote } from "@/components/safety-note";
@@ -141,12 +148,16 @@ export function SecurityTab({ siteId }: { siteId: string }) {
       </div>
       <QueryView query={protection}>
         {(data) => (
-          <>
-            <UnderAttackCard siteId={siteId} protection={data} />
-            <ChallengeSettingsCard siteId={siteId} protection={data} />
-            <InteractiveChallengeCard siteId={siteId} protection={data} />
-            <CcPolicyCard siteId={siteId} protection={data} />
-          </>
+          <PanelColumns>
+            <PanelStack>
+              <UnderAttackCard siteId={siteId} protection={data} />
+              <InteractiveChallengeCard siteId={siteId} protection={data} />
+            </PanelStack>
+            <PanelStack>
+              <ChallengeSettingsCard siteId={siteId} protection={data} />
+              <CcPolicyCard siteId={siteId} protection={data} />
+            </PanelStack>
+          </PanelColumns>
         )}
       </QueryView>
       <WafCard siteId={siteId} />
@@ -459,7 +470,7 @@ function ChallengeSettingsCard({
         <PanelHeader>
           <PanelTitle>{m.protection_challenge_title()}</PanelTitle>
         </PanelHeader>
-        <PanelContent form className="flex flex-col gap-5">
+        <PanelContent className="flex flex-col gap-5">
           {v2Locked ? (
             <SafetyNote
               className="animate-in fade-in"
@@ -469,7 +480,7 @@ function ChallengeSettingsCard({
               {m.feature_unavailable_nodes()}
             </SafetyNote>
           ) : null}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 @xl/panel:grid-cols-2 @3xl/panel:grid-cols-3">
             <PresetSelect id="protection-preset" value={preset.choice} onChange={preset.choose} />
             {preset.choice === "custom" ? (
               <>
@@ -551,7 +562,7 @@ function ChallengeSettingsCard({
               }
             />
             {failure.enabled ? (
-              <div className="grid gap-4 animate-in fade-in sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 animate-in fade-in @xl/panel:grid-cols-2 @3xl/panel:grid-cols-3">
                 <NumberField
                   id="protection-failure-threshold"
                   label={m.protection_failure_threshold()}
@@ -585,7 +596,7 @@ function ChallengeSettingsCard({
             <FieldLegend variant="label" className="mb-3 text-muted-foreground">
               {m.protection_challenge_text()}
             </FieldLegend>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 @xl/panel:grid-cols-2">
               {CHALLENGE_TEXT_FIELDS.map(([key, label]) => (
                 <Field key={key} data-disabled={(v2Locked && !textsSet) || undefined}>
                   <FieldLabel htmlFor={`protection-text-${key}`}>{label()}</FieldLabel>
@@ -608,7 +619,7 @@ function ChallengeSettingsCard({
             </div>
           </FieldSet>
         </PanelContent>
-        <SaveBar indent dirty={dirty} pending={pending} error={error} testId="protection-save" />
+        <SaveBar dirty={dirty} pending={pending} error={error} testId="protection-save" />
       </form>
     </Panel>
   );
@@ -665,7 +676,7 @@ function InteractiveChallengeCard({
         <PanelHeader>
           <PanelTitle>{m.challenge_provider_title()}</PanelTitle>
         </PanelHeader>
-        <PanelContent form className="flex flex-col gap-5">
+        <PanelContent className="flex flex-col gap-5">
           {v3Locked ? (
             <SafetyNote
               className="animate-in fade-in"
@@ -675,7 +686,7 @@ function InteractiveChallengeCard({
               {m.feature_unavailable_nodes()}
             </SafetyNote>
           ) : null}
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 @xl/panel:grid-cols-2">
             <FormSelect
               id="protection-interactive-choice"
               label={m.challenge_provider_choice()}
@@ -701,7 +712,6 @@ function InteractiveChallengeCard({
           </div>
         </PanelContent>
         <SaveBar
-          indent
           dirty={dirty}
           pending={pending}
           error={issue ?? error}
@@ -743,7 +753,7 @@ function CcPolicyCard({ siteId, protection }: { siteId: string; protection: Site
         <PanelHeader>
           <PanelTitle>{m.cc_title()}</PanelTitle>
         </PanelHeader>
-        <PanelContent form className="flex flex-col gap-4">
+        <PanelContent className="flex flex-col gap-4">
           <div className="flex flex-wrap gap-x-6 gap-y-3">
             <SwitchField
               id="cc-enabled"
@@ -775,7 +785,7 @@ function CcPolicyCard({ siteId, protection }: { siteId: string; protection: Site
           />
           <SafetyNote>{m.cc_per_node_note()}</SafetyNote>
         </PanelContent>
-        <SaveBar indent dirty={dirty} pending={pending} error={error} testId="cc-save" />
+        <SaveBar dirty={dirty} pending={pending} error={error} testId="cc-save" />
       </form>
     </Panel>
   );
@@ -894,8 +904,8 @@ function WafForm({
   };
   return (
     <form className="flex flex-col gap-(--panel-pad)" onSubmit={form.submit}>
-      <PanelContent form className="flex flex-col gap-4">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <PanelContent className="flex flex-col gap-4">
+        <div className="grid gap-4 @xl/panel:grid-cols-2 @3xl/panel:grid-cols-4">
           <FormSelect
             id="waf-mode"
             label={m.waf_mode()}
@@ -1024,13 +1034,7 @@ function WafForm({
           </SafetyNote>
         )}
       </PanelContent>
-      <SaveBar
-        indent
-        dirty={form.dirty}
-        pending={form.pending}
-        error={form.error}
-        testId="waf-save"
-      />
+      <SaveBar dirty={form.dirty} pending={form.pending} error={form.error} testId="waf-save" />
     </form>
   );
 }

@@ -50,7 +50,7 @@ export function OriginAllowListCard() {
               onChange={(event) => set({ text: event.target.value })}
               placeholder={"10.0.0.0/8\n172.18.0.0/16\nfd00::/8"}
               aria-invalid={error ? true : undefined}
-              className="min-h-28 font-mono text-sm"
+              className="max-h-60 font-mono text-sm"
               data-testid="origin-allow-list"
             />
           </Field>

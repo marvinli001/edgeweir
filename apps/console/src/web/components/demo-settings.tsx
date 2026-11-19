@@ -16,24 +16,26 @@ export function DemoSettingsCard() {
       mutation={orpc.settings.setDemo.mutationOptions()}
       toDraft={(s) => ({ enabled: s.enabled })}
       toInput={(d) => ({ enabled: d.enabled })}
+      layout="inline"
+      contentClassName="w-auto"
+      details={(value) =>
+        value.enabled ? (
+          <SafetyNote data-testid="demo-credentials">
+            {m.system_demo_credentials({ email: DEMO_EMAIL, password: DEMO_PASSWORD })}
+          </SafetyNote>
+        ) : null
+      }
       saveTestId="demo-settings-save"
     >
-      {({ value, draft, set }) => (
-        <>
-          <SwitchField
-            id="demo-enabled"
-            label={m.system_demo_enabled()}
-            checked={draft.enabled}
-            onCheckedChange={(enabled) => set({ enabled })}
-            className="self-start"
-            testId="demo-enabled"
-          />
-          {value.enabled ? (
-            <SafetyNote data-testid="demo-credentials">
-              {m.system_demo_credentials({ email: DEMO_EMAIL, password: DEMO_PASSWORD })}
-            </SafetyNote>
-          ) : null}
-        </>
+      {({ draft, set }) => (
+        <SwitchField
+          id="demo-enabled"
+          label={m.system_demo_enabled()}
+          checked={draft.enabled}
+          onCheckedChange={(enabled) => set({ enabled })}
+          className="self-start"
+          testId="demo-enabled"
+        />
       )}
     </SettingsCard>
   );

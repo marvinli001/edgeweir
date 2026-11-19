@@ -3,6 +3,7 @@ import { AiCrawlGlobalCard } from "@/components/ai-crawl-global";
 import { BanSettingsCard } from "@/components/ban-settings";
 import { ConnectionLimitsCard } from "@/components/connection-limits";
 import { GeoIpSettings } from "@/components/geoip-settings";
+import { PanelColumns, PanelStack } from "@/components/layout/panel";
 import { enterDelay, Page } from "@/components/page";
 import {
   CcTemplateCard,
@@ -17,22 +18,22 @@ import { m } from "@/lib/i18n";
  */
 export const Route = createFileRoute("/_app/protection")({ component: ProtectionPage });
 
-/** Short cards pair up in two columns (top-aligned); the CC grid and tables span both. */
 function ProtectionPage() {
   return (
     <Page title={m.protection_page_title()}>
-      <div className="grid items-start gap-6 @4xl/main:grid-cols-2">
-        <ProtectionSettingsCard className="animate-enter" style={enterDelay(0, 60)} />
-        <BanSettingsCard className="animate-enter" style={enterDelay(1, 60)} />
-        <InteractiveProviderCard className="animate-enter" style={enterDelay(2, 60)} />
-        <ConnectionLimitsCard className="animate-enter" style={enterDelay(3, 60)} />
-        <CcTemplateCard className="animate-enter @4xl/main:col-span-2" style={enterDelay(4, 60)} />
-        <GeoIpSettings className="animate-enter @4xl/main:col-span-2" style={enterDelay(5, 60)} />
-        <AiCrawlGlobalCard
-          className="animate-enter @4xl/main:col-span-2"
-          style={enterDelay(6, 60)}
-        />
-      </div>
+      <PanelColumns>
+        <PanelStack>
+          <ProtectionSettingsCard className="animate-enter" style={enterDelay(0, 60)} />
+          <InteractiveProviderCard className="animate-enter" style={enterDelay(2, 60)} />
+          <CcTemplateCard className="animate-enter" style={enterDelay(4, 60)} />
+        </PanelStack>
+        <PanelStack>
+          <BanSettingsCard className="animate-enter" style={enterDelay(1, 60)} />
+          <ConnectionLimitsCard className="animate-enter" style={enterDelay(3, 60)} />
+          <GeoIpSettings className="animate-enter" style={enterDelay(5, 60)} />
+        </PanelStack>
+      </PanelColumns>
+      <AiCrawlGlobalCard className="animate-enter" style={enterDelay(6, 60)} />
     </Page>
   );
 }

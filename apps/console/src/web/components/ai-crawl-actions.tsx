@@ -62,16 +62,16 @@ export function AiCrawlActionList({
       .map((a) => ({ value: a as Choice, label: aiCrawlActionLabel(a) })),
   ];
   return (
-    <ul
-      className="flex flex-col divide-y rounded-lg faint-well"
-      data-testid={`${idPrefix}-actions`}
-    >
+    <ul className="space-y-3 gap-3 @5xl/panel:columns-2" data-testid={`${idPrefix}-actions`}>
       {catalogue.operators.map((operator) => {
         const crawlers = catalogue.crawlers.filter((c) => c.operator === operator.id);
         if (crawlers.length === 0) return null;
         const own = value.operators[operator.id];
         return (
-          <li key={operator.id} className="flex flex-col py-1">
+          <li
+            key={operator.id}
+            className="@container/operator flex min-w-0 break-inside-avoid flex-col rounded-lg py-1 faint-well"
+          >
             <Row
               name={operator.name}
               strong
@@ -150,7 +150,7 @@ function Row({
       <OptionSelect
         id={id}
         size="sm"
-        className="w-full sm:w-48"
+        className="w-full @md/operator:w-48"
         label={name}
         value={value}
         options={options}

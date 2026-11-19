@@ -36,7 +36,14 @@ import {
   CollapsibleTrigger,
 } from "@/components/layout/collapsible";
 import { Field, FieldLabel } from "@/components/layout/form";
-import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
+import {
+  Panel,
+  PanelColumns,
+  PanelContent,
+  PanelHeader,
+  PanelStack,
+  PanelTitle,
+} from "@/components/layout/panel";
 import { SafetyNote } from "@/components/safety-note";
 import { CachePurgeCard } from "@/components/site/cache-purge-card";
 import { CompressionCard } from "@/components/site/compression-card";
@@ -70,30 +77,51 @@ export function CacheTab({ site }: { site: Site }) {
         title={m.site_cache_group_behavior()}
         items={m.site_cache_group_behavior_items()}
       >
-        <CacheKeyCard key={`key-${JSON.stringify({ cacheKey, rangeSlice })}`} site={site} />
-        <TieredCacheCard site={site} />
-        <TierSelectionCard siteId={site.id} />
+        <PanelColumns>
+          <PanelStack>
+            <CacheKeyCard key={`key-${JSON.stringify({ cacheKey, rangeSlice })}`} site={site} />
+          </PanelStack>
+          <PanelStack>
+            <TieredCacheCard site={site} />
+            <TierSelectionCard siteId={site.id} />
+          </PanelStack>
+        </PanelColumns>
       </CacheGroup>
       <CacheGroup
         name="optimization"
         title={m.site_cache_group_optimization()}
         items={m.site_cache_group_optimization_items()}
       >
-        <CompressionCard site={site} />
-        <ImageConvertCard site={site} />
-        <ImageSavingsCard siteId={site.id} />
-        <MarkdownCard site={site} />
-        <MarkdownStatsCard siteId={site.id} />
+        <PanelColumns>
+          <PanelStack>
+            <CompressionCard site={site} />
+            <ImageConvertCard site={site} />
+            <ImageSavingsCard siteId={site.id} />
+          </PanelStack>
+          <PanelStack>
+            <MarkdownCard site={site} />
+            <MarkdownStatsCard siteId={site.id} />
+          </PanelStack>
+        </PanelColumns>
       </CacheGroup>
       <CacheGroup
         name="response"
         title={m.site_cache_group_response()}
         items={m.site_cache_group_response_items()}
       >
-        <PurgeMethodCard key={`purge-${JSON.stringify(purgeMethod)}`} site={site} />
-        <CacheTagCard key={`cache-tag-${keepCacheTag}`} site={site} />
-        <XCacheCard key={`x-cache-${xCache}`} site={site} />
-        <CharsetCard key={`charset-${JSON.stringify(site.contentSettings.charset)}`} site={site} />
+        <PanelColumns>
+          <PanelStack>
+            <PurgeMethodCard key={`purge-${JSON.stringify(purgeMethod)}`} site={site} />
+            <CacheTagCard key={`cache-tag-${keepCacheTag}`} site={site} />
+          </PanelStack>
+          <PanelStack>
+            <XCacheCard key={`x-cache-${xCache}`} site={site} />
+            <CharsetCard
+              key={`charset-${JSON.stringify(site.contentSettings.charset)}`}
+              site={site}
+            />
+          </PanelStack>
+        </PanelColumns>
       </CacheGroup>
     </div>
   );
@@ -857,7 +885,7 @@ function CacheKeyCard({ site }: { site: Site }) {
           <PanelTitle>{m.site_cache_key_title()}</PanelTitle>
         </PanelHeader>
         <PanelContent className="flex flex-col gap-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[12rem_1fr_auto]">
+          <div className="grid gap-3 @xl/panel:grid-cols-2 @2xl/panel:grid-cols-[12rem_1fr_auto]">
             <Field>
               <FieldLabel>{m.site_cache_key_query()}</FieldLabel>
               <OptionSelect
@@ -888,7 +916,7 @@ function CacheKeyCard({ site }: { site: Site }) {
               testId="cache-key-sort"
             />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 @xl/panel:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="cache-key-headers">{m.site_cache_key_headers()}</FieldLabel>
               <Input

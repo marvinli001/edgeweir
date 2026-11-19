@@ -1,6 +1,7 @@
 import {
   CLIENT_IP_HEADERS,
   type ClientIpMode,
+  type Cluster,
   type ClusterClientIp,
   type ClusterListenPorts,
   type ClusterUnknownHosts,
@@ -23,9 +24,17 @@ import { Badge } from "@/components/arc/badge/badge";
 import { Button } from "@/components/arc/button/button";
 import { Input } from "@/components/arc/input/input";
 import { Textarea } from "@/components/arc/textarea/textarea";
+import { ClusterCacheCard } from "@/components/clusters/cache-zone";
 import { OptionSelect } from "@/components/form-select";
 import { Field, FieldError, FieldLabel } from "@/components/layout/form";
-import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
+import {
+  Panel,
+  PanelColumns,
+  PanelContent,
+  PanelHeader,
+  PanelStack,
+  PanelTitle,
+} from "@/components/layout/panel";
 import { Spinner } from "@/components/layout/spinner";
 import { SafetyNote } from "@/components/safety-note";
 import { ListInput, SwitchField } from "@/components/site/fields";
@@ -42,43 +51,47 @@ import { errorMessage, orpc } from "@/lib/orpc";
  * The cluster page's network tab: listener ports, the client address
  * setting and the handling of unknown hosts and node IP access.
  */
-export function ClusterNetwork({ clusterId }: { clusterId: string }) {
+export function ClusterNetwork({ cluster }: { cluster: Cluster }) {
+  const clusterId = cluster.id;
   const ports = useQuery(orpc.clusters.listenPorts.queryOptions({ input: { clusterId } }));
   const clientIp = useQuery(orpc.clusters.clientIp.queryOptions({ input: { clusterId } }));
   const unknownHosts = useQuery(orpc.clusters.unknownHosts.queryOptions({ input: { clusterId } }));
-  // Each card and its title stay while its setting loads or fails to. The cards are items of the
-  // network tab's two-column grid (clusters.tsx), with the cache card after them.
   return (
-    <div className="contents">
-      <Panel className="animate-enter" data-testid="listen-ports">
-        <PanelHeader>
-          <PanelTitle>{m.listen_ports_title()}</PanelTitle>
-        </PanelHeader>
-        <QueryView query={ports} frame={PanelContent}>
-          {(data) => <ListenPortsForm key={JSON.stringify(data)} data={data} />}
-        </QueryView>
-      </Panel>
-      <Panel className="animate-enter" style={{ animationDelay: "60ms" }} data-testid="client-ip">
-        <PanelHeader>
-          <PanelTitle>{m.client_ip_title()}</PanelTitle>
-        </PanelHeader>
-        <QueryView query={clientIp} frame={PanelContent}>
-          {(data) => <ClientIpForm key={JSON.stringify(data.settings)} data={data} />}
-        </QueryView>
-      </Panel>
-      <Panel
-        className="animate-enter"
-        style={{ animationDelay: "120ms" }}
-        data-testid="unknown-hosts"
-      >
-        <PanelHeader>
-          <PanelTitle>{m.unknown_hosts_title()}</PanelTitle>
-        </PanelHeader>
-        <QueryView query={unknownHosts} frame={PanelContent}>
-          {(data) => <UnknownHostsForm key={JSON.stringify(data.settings)} data={data} />}
-        </QueryView>
-      </Panel>
-    </div>
+    <PanelColumns>
+      <PanelStack>
+        <Panel className="animate-enter" data-testid="listen-ports">
+          <PanelHeader>
+            <PanelTitle>{m.listen_ports_title()}</PanelTitle>
+          </PanelHeader>
+          <QueryView query={ports} frame={PanelContent}>
+            {(data) => <ListenPortsForm key={JSON.stringify(data)} data={data} />}
+          </QueryView>
+        </Panel>
+        <Panel
+          className="animate-enter"
+          style={{ animationDelay: "120ms" }}
+          data-testid="unknown-hosts"
+        >
+          <PanelHeader>
+            <PanelTitle>{m.unknown_hosts_title()}</PanelTitle>
+          </PanelHeader>
+          <QueryView query={unknownHosts} frame={PanelContent}>
+            {(data) => <UnknownHostsForm key={JSON.stringify(data.settings)} data={data} />}
+          </QueryView>
+        </Panel>
+      </PanelStack>
+      <PanelStack>
+        <Panel className="animate-enter" style={{ animationDelay: "60ms" }} data-testid="client-ip">
+          <PanelHeader>
+            <PanelTitle>{m.client_ip_title()}</PanelTitle>
+          </PanelHeader>
+          <QueryView query={clientIp} frame={PanelContent}>
+            {(data) => <ClientIpForm key={JSON.stringify(data.settings)} data={data} />}
+          </QueryView>
+        </Panel>
+        <ClusterCacheCard cluster={cluster} />
+      </PanelStack>
+    </PanelColumns>
   );
 }
 
@@ -121,7 +134,7 @@ function ListenPortsForm({ data }: { data: ClusterListenPorts }) {
         if (parsed.success) void form.submit();
       }}
     >
-      <PanelContent form className="flex flex-col gap-4">
+      <PanelContent className="flex flex-col gap-4">
         <div
           className="flex flex-wrap items-center gap-2 text-sm"
           data-testid="listen-ports-always"
@@ -134,7 +147,7 @@ function ListenPortsForm({ data }: { data: ClusterListenPorts }) {
             443
           </Badge>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="form-grid">
           <Field>
             <FieldLabel htmlFor="listen-http">{m.listen_ports_http()}</FieldLabel>
             <ListInput
@@ -171,7 +184,6 @@ function ListenPortsForm({ data }: { data: ClusterListenPorts }) {
       </PanelContent>
       {/* The save row of settings cards; the guard for unsaved changes stays on `dirty` above. */}
       <SaveBar
-        indent
         dirty={dirty && parsed.success && !(locked && grows)}
         pending={form.pending}
         error={form.error}
@@ -241,7 +253,7 @@ function ClientIpForm({ data }: { data: ClusterClientIp }) {
         }
       }}
     >
-      <PanelContent form className="flex flex-col gap-4">
+      <PanelContent className="flex flex-col gap-4">
         <Field className="sm:max-w-xs">
           <FieldLabel htmlFor="client-ip-mode">{m.client_ip_mode()}</FieldLabel>
           <OptionSelect
@@ -266,7 +278,7 @@ function ClientIpForm({ data }: { data: ClusterClientIp }) {
           <SafetyNote data-testid="client-ip-proxy-note">{m.client_ip_proxy_note()}</SafetyNote>
         ) : null}
         {mode === "header" ? (
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="form-grid">
             <Field>
               <FieldLabel htmlFor="client-ip-cidrs">{m.client_ip_cidrs()}</FieldLabel>
               <Textarea
@@ -336,7 +348,6 @@ function ClientIpForm({ data }: { data: ClusterClientIp }) {
         ) : null}
       </PanelContent>
       <SaveBar
-        indent
         dirty={dirty && !!normalized && !locked}
         pending={save.isPending}
         error={error}
@@ -459,8 +470,8 @@ function UnknownHostsForm({ data }: { data: ClusterUnknownHosts }) {
         }
       }}
     >
-      <PanelContent form className="flex flex-col gap-4">
-        <div className="grid gap-4 sm:grid-cols-2">
+      <PanelContent className="flex flex-col gap-4">
+        <div className="form-grid">
           <Field>
             <FieldLabel htmlFor="unknown-hosts-unknown">{m.unknown_hosts_unknown()}</FieldLabel>
             <OptionSelect
@@ -563,7 +574,7 @@ function UnknownHostsForm({ data }: { data: ClusterUnknownHosts }) {
           testId="unknown-hosts-scan"
         />
         {scan ? (
-          <div className="grid gap-4 animate-enter sm:grid-cols-2">
+          <div className="form-grid animate-enter">
             <Field data-invalid={scanError || undefined}>
               <FieldLabel htmlFor="unknown-hosts-threshold">
                 {m.unknown_hosts_scan_threshold()}
@@ -593,7 +604,7 @@ function UnknownHostsForm({ data }: { data: ClusterUnknownHosts }) {
               />
             </Field>
             {scanError ? (
-              <FieldError className="sm:col-span-2" data-testid="unknown-hosts-scan-invalid">
+              <FieldError className="col-span-full" data-testid="unknown-hosts-scan-invalid">
                 {m.unknown_hosts_scan_invalid({
                   min: SCAN_THRESHOLD.min,
                   max: SCAN_THRESHOLD.max,
@@ -611,7 +622,6 @@ function UnknownHostsForm({ data }: { data: ClusterUnknownHosts }) {
         ) : null}
       </PanelContent>
       <SaveBar
-        indent
         dirty={dirty && !!normalized && !locked}
         pending={save.isPending}
         error={error}

@@ -7,6 +7,7 @@ import {
 } from "@edgeweir/contract";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { MetricValue } from "@/components/analytics/panel";
 import { Textarea } from "@/components/arc/textarea/textarea";
 import { FormSelect } from "@/components/form-select";
 import { Field, FieldLabel } from "@/components/layout/form";
@@ -154,7 +155,9 @@ export function MarkdownStatsCard({ siteId }: { siteId: string }) {
       data-testid="markdown-stats-card"
     >
       <PanelHeader className="flex flex-wrap items-center justify-between gap-3">
-        <PanelTitle>{m.markdown_responses_title()}</PanelTitle>
+        <PanelTitle className="text-sm font-normal text-muted-foreground">
+          {m.markdown_responses_title()}
+        </PanelTitle>
         <div className="w-full sm:w-44">
           <FormSelect
             id="markdown-stats-range"
@@ -170,12 +173,7 @@ export function MarkdownStatsCard({ siteId }: { siteId: string }) {
         <QueryView query={stats}>
           {({ responses, unsupportedNodes }) => (
             <>
-              <p
-                className="font-heading text-3xl font-medium tabular-nums"
-                data-testid="markdown-responses"
-              >
-                {formatNumber(responses)}
-              </p>
+              <MetricValue data-testid="markdown-responses">{formatNumber(responses)}</MetricValue>
               {unsupportedNodes > 0 ? (
                 <SafetyNote data-testid="markdown-stats-partial">
                   {m.markdown_responses_partial()}

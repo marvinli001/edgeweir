@@ -1,22 +1,23 @@
+import type { AnalyticsRange } from "@edgeweir/contract";
+import { chartData } from "@/components/analytics/breakdown-charts";
 import { LineChart } from "@/components/arc/line-chart/line-chart";
-import { formatChartTime } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-export interface MetricDatum {
+type MetricDatum = {
   time: string;
   value: number | null;
-}
+};
 
 /**
- * One series as a brand line over a faint wash (Arc's line chart). With `axis`, hairlines and
- * value ticks on the right; without, the area runs to the panel's edges. Buckets without a value
- * leave gaps. Hovering reads a point.
+ * One series as a brand line over a faint wash (Arc's line chart). Value ticks run down the right and time ticks
+ * follow the range. Buckets without a value leave gaps.
  */
 export function MetricChart({
   data,
   label,
   format,
-  axis = false,
+  range,
+  onRead,
   domain,
   onClick,
   className,
@@ -24,7 +25,8 @@ export function MetricChart({
   data: MetricDatum[];
   label: string;
   format: (value: number) => string;
-  axis?: boolean;
+  range: AnalyticsRange;
+  onRead?: (index: number | null) => void;
   domain?: [number, number];
   onClick?: () => void;
   className?: string;
@@ -34,16 +36,12 @@ export function MetricChart({
     // biome-ignore lint/a11y/useKeyWithClickEvents: as above
     <div className={cn("flex h-full w-full flex-col justify-end", className)} onClick={onClick}>
       <LineChart
-        data={data.map((point) => ({
-          key: point.time,
-          label: formatChartTime(point.time),
-          values: { value: point.value },
-        }))}
+        data={chartData(data, ["value"], range)}
         series={[{ key: "value", label, color: "var(--arc-series-1)", area: true }]}
         label={label}
-        height={axis ? 140 : 128}
+        height={128}
         legend={false}
-        axis={axis}
+        onActiveChange={onRead}
         curve="linear"
         domain={domain}
         formatValue={(value) => format(value)}

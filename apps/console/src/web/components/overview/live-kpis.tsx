@@ -1,98 +1,17 @@
 import type { OverviewCard, Traffic } from "@edgeweir/contract";
-import {
-  ArrowDataTransferVerticalIcon,
-  DatabaseLightningIcon,
-  PulseRectangle01Icon,
-  ServerStack01Icon,
-} from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import * as React from "react";
-import { FlowNumber, FlowScaled, NumberFlowGroup } from "@/components/effects/number-flow";
+import { MetricChart } from "@/components/analytics/metric-chart";
+import { MetricCard } from "@/components/analytics/panel";
+import { RequestRateCard } from "@/components/analytics/request-rate-card";
+import { FlowNumber } from "@/components/effects/number-flow";
 import { Meter } from "@/components/meter";
 import { QueryView } from "@/components/states";
 import { LiveDot } from "@/components/status-dot";
-import { Sparkline } from "@/components/trend-line";
-import { m } from "@/lib/i18n";
+import { cacheHitRatio } from "@/lib/analytics";
+import { formatBitRate, formatNumber, formatPercent, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
-const BIT_UNITS = ["bps", "Kbps", "Mbps", "Gbps", "Tbps"] as const;
-
-/** The last full minute of the last hour (the newest bucket is still filling). */
-function latest(traffic: Traffic) {
-  const points = traffic.points.slice(0, -1);
-  const last = points.at(-1);
-  const seconds = traffic.bucketSeconds;
-  const hits = points.reduce((sum, p) => sum + p.cacheHits, 0);
-  const misses = points.reduce((sum, p) => sum + p.cacheMisses, 0);
-  return {
-    points,
-    rps: last ? last.requests / seconds : 0,
-    bps: last ? (last.bytesSent * 8) / seconds : 0,
-    hit: hits + misses > 0 ? (hits / (hits + misses)) * 100 : 0,
-  };
-}
-
-/** Starts at zero and moves to the value once the tile is on screen, so the digits roll in. */
-function useArrival<T extends number>(value: T): T | 0 {
-  const [arrived, setArrived] = React.useState(false);
-  React.useEffect(() => {
-    const frame = requestAnimationFrame(() => setArrived(true));
-    return () => cancelAnimationFrame(frame);
-  }, []);
-  return arrived ? value : 0;
-}
-
-/** The pale KPI fills (tokens.css --ew-kpi-*), in turn across the row. */
-const KPI_TINT = ["bg-kpi-1", "bg-kpi-2", "bg-kpi-3"];
-
-function Tile({
-  icon,
-  title,
-  span,
-  children,
-  footer,
-  index,
-}: {
-  icon: typeof ServerStack01Icon;
-  title: string;
-  /** The window a value covers when it is not the last minute, shown after the title. */
-  span?: string;
-  children: React.ReactNode;
-  footer?: React.ReactNode;
-  index: number;
-}) {
-  return (
-    <div
-      className={cn(
-        "relative flex min-h-36 flex-col overflow-hidden rounded-lg animate-enter",
-        KPI_TINT[index % KPI_TINT.length],
-      )}
-      style={{ animationDelay: `${index * 50}ms` }}
-    >
-      <div className="flex items-center gap-2 px-4 pt-4 text-dense text-muted-foreground">
-        <HugeiconsIcon icon={icon} strokeWidth={2} className="size-4" />
-        <span className="truncate">{title}</span>
-        {span ? <span className="ms-auto shrink-0 text-xs">{span}</span> : null}
-      </div>
-      <div className="truncate px-4 pt-2 text-display font-medium">{children}</div>
-      <div className="mt-auto">{footer}</div>
-    </div>
-  );
-}
-
-/**
- * The platform right now, under the section's title: request rate and egress of the last full
- * minute, the cache hit ratio of the last hour (labelled, as the statistics below show it for the
- * chosen range), and nodes online. Traffic polls every minute, the size of the hour's buckets, so
- * the 1-hour traffic query keeps the cadence the statistics give it; the digits roll to each new
- * value. Until its first answer the traffic tiles are a loader, and a failed first load an error
- * with a retry, never a row of zeros; the nodes tile comes from the overview summary the page has
- * already loaded and stands on its own. The live light is on only while the traffic tiles show
- * live numbers. Tiles the user hid are left out (the traffic query too when all three are); with
- * none left the section is gone.
- */
 export function LiveKpis({
   online,
   total,
@@ -121,25 +40,23 @@ export function LiveKpis({
         </h2>
         {tiles.length > 0 && traffic.isSuccess ? <LiveDot label={m.overview_live()} /> : null}
       </div>
-      <NumberFlowGroup>
-        <div className={cn("grid gap-3", GRID[count])}>
-          {tiles.length > 0 ? (
-            // The loader or the error in the traffic tiles' place; the tiles are cells of the row.
-            <div
-              className={
-                traffic.data
-                  ? "contents"
-                  : cn("col-span-full flex flex-col justify-center", nodes && SPAN[tiles.length])
-              }
-            >
-              <QueryView query={traffic} loadingClassName="min-h-36">
-                {(data) => <TrafficTiles traffic={data} tiles={tiles} />}
-              </QueryView>
-            </div>
-          ) : null}
-          {nodes ? <NodesTile online={online} total={total} index={tiles.length} /> : null}
-        </div>
-      </NumberFlowGroup>
+      <div className={cn("grid gap-3", GRID[count])}>
+        {tiles.length > 0 ? (
+          // The loader or the error in the traffic tiles' place; the tiles are cells of the row.
+          <div
+            className={
+              traffic.data
+                ? "contents"
+                : cn("col-span-full flex flex-col justify-center", nodes && SPAN[tiles.length])
+            }
+          >
+            <QueryView query={traffic} loadingClassName="min-h-36">
+              {(data) => <TrafficTiles traffic={data} tiles={tiles} />}
+            </QueryView>
+          </div>
+        ) : null}
+        {nodes ? <NodesTile online={online} total={total} /> : null}
+      </div>
     </section>
   );
 }
@@ -160,79 +77,72 @@ const GRID = [
 const SPAN = ["", "@3xl/main:col-span-1", "@3xl/main:col-span-2", "@3xl/main:col-span-3"];
 
 function TrafficTiles({ traffic, tiles }: { traffic: Traffic; tiles: readonly TrafficTile[] }) {
-  const now = latest(traffic);
-  const rps = useArrival(Math.round(now.rps));
-  const bps = useArrival(now.bps);
-  const hit = useArrival(now.hit);
-  const series = (pick: (p: Traffic["points"][number]) => number) => now.points.map(pick);
-  const index = (tile: TrafficTile) => tiles.indexOf(tile);
-
+  // The newest minute is still filling. Use the same closed buckets for readings and trends.
+  const points = traffic.points.slice(0, -1);
+  const last = points.at(-1);
+  const seconds = traffic.bucketSeconds;
+  const bandwidth = last ? formatBitRate(last.bytesSent / seconds) : "—";
+  const hit = cacheHitRatio({
+    cacheHits: points.reduce((sum, p) => sum + p.cacheHits, 0),
+    cacheMisses: points.reduce((sum, p) => sum + p.cacheMisses, 0),
+  });
   return (
     <>
       {tiles.includes("live-requests") ? (
-        <Tile
-          icon={PulseRectangle01Icon}
-          title={m.overview_request_rate()}
-          index={index("live-requests")}
-          footer={<Sparkline tone="signal" data={series((p) => p.requests)} />}
-        >
-          <FlowNumber value={rps} suffix={m.overview_per_second()} />
-        </Tile>
+        <RequestRateCard points={points} seconds={seconds} title={m.overview_request_rate()} />
       ) : null}
       {tiles.includes("live-egress") ? (
-        <Tile
-          icon={ArrowDataTransferVerticalIcon}
-          title={m.overview_egress()}
-          index={index("live-egress")}
-          footer={<Sparkline tone="signal" data={series((p) => p.bytesSent)} />}
-        >
-          <FlowScaled value={bps} units={BIT_UNITS} />
-        </Tile>
+        <MetricCard title={m.overview_egress()} value={bandwidth} testId="live-egress">
+          {points.some((p) => p.bytesSent > 0 || p.requests > 0) ? (
+            <MetricChart
+              data={points.map((p) => ({ time: p.time, value: p.bytesSent / seconds }))}
+              label={m.overview_egress()}
+              format={formatBitRate}
+              range="1h"
+            />
+          ) : null}
+        </MetricCard>
       ) : null}
       {tiles.includes("live-hit-ratio") ? (
-        <Tile
-          icon={DatabaseLightningIcon}
+        <MetricCard
           title={m.analytics_hit_ratio()}
-          span={m.analytics_range_1h()}
-          index={index("live-hit-ratio")}
-          footer={
-            <Sparkline
-              tone="metric"
-              data={series((p) =>
-                p.cacheHits + p.cacheMisses > 0 ? p.cacheHits / (p.cacheHits + p.cacheMisses) : 0,
-              )}
-            />
+          value={hit === null ? "—" : formatPercent(hit)}
+          aside={
+            <span className="shrink-0 text-xs text-muted-foreground">{m.analytics_range_1h()}</span>
           }
+          testId="live-hit-ratio"
         >
-          <FlowNumber
-            value={hit / 100}
-            format={{ style: "percent", maximumFractionDigits: 1, minimumFractionDigits: 1 }}
-          />
-        </Tile>
+          {hit !== null ? (
+            <MetricChart
+              data={points.map((p) => ({ time: p.time, value: cacheHitRatio(p) }))}
+              label={m.analytics_hit_ratio()}
+              format={formatPercent}
+              domain={[0, 100]}
+              range="1h"
+            />
+          ) : null}
+        </MetricCard>
       ) : null}
     </>
   );
 }
 
-function NodesTile({ online, total, index }: { online: number; total: number; index: number }) {
-  const nodes = useArrival(online);
+function NodesTile({ online, total }: { online: number; total: number }) {
   return (
-    <Tile
-      icon={ServerStack01Icon}
+    <MetricCard
       title={m.clusters_nodes_online()}
-      index={index}
+      testId="live-nodes"
+      value={<FlowNumber value={online} suffix={` / ${formatNumber(total)}`} />}
       footer={
-        <div className="flex flex-col gap-2 px-4 pb-4">
+        total > 0 ? (
           <Meter
-            value={total > 0 ? (online / total) * 100 : 0}
+            value={(online / total) * 100}
             high={99.9}
             optimum={100}
             label={m.clusters_nodes_count({ online, total })}
           />
-        </div>
+        ) : null
       }
-    >
-      <FlowNumber value={nodes} suffix={` / ${total}`} />
-    </Tile>
+    />
   );
 }

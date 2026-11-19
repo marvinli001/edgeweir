@@ -81,11 +81,6 @@
   --ew-axis: rgb(0 0 0 / 40%);
   --ew-star: #e3a400;
 
-  /* Pale KPI card fills (百炼): brand, indigo, sky; text on them keeps the normal tokens. */
-  --ew-kpi-1: #edf3ff;
-  --ew-kpi-2: #eef0fb;
-  --ew-kpi-3: #eaf6fd;
-
   /*
    * Atmosphere mesh: sign-in, setup, the overview welcome strip, public landing and pricing
    * pages, first-run empty states. Never behind tables, charts or forms.
@@ -126,14 +121,14 @@
   --ew-text-body: 14px;
   --ew-text-section: 16px;
   --ew-text-title: 18px;
-  --ew-text-display: 28px;
+  --ew-text-display: 24px;
   --ew-text-hero: 36px;
   --ew-leading-caption: 20px;
   --ew-leading-dense: 20px;
   --ew-leading-body: 22px;
   --ew-leading-section: 24px;
   --ew-leading-title: 26px;
-  --ew-leading-display: 36px;
+  --ew-leading-display: 32px;
   --ew-leading-hero: 44px;
   --ew-weight-regular: 400;
   --ew-weight-medium: 500;
@@ -160,6 +155,7 @@
   --ew-control-touch: 44px;
   --ew-row-height: 44px;
   --ew-form-label: 120px;
+  --ew-form-field-min: 12rem;
 
   /* Motion (Arc's curves and durations): quiet, no loops. */
   --ew-ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
@@ -244,9 +240,6 @@
   --delta-good: var(--ew-success-ink);
   --delta-bad: var(--ew-error-ink);
   --star: var(--ew-star);
-  --kpi-1: var(--ew-kpi-1);
-  --kpi-2: var(--ew-kpi-2);
-  --kpi-3: var(--ew-kpi-3);
   --mesh: var(--ew-mesh);
   --elev-1: var(--ew-shadow-1);
   --elev-2: var(--ew-shadow-2);
@@ -311,10 +304,6 @@
   --ew-grid: #303030;
   --ew-axis: rgb(255 255 255 / 40%);
   --ew-star: #f5ba18;
-
-  --ew-kpi-1: #1d2738;
-  --ew-kpi-2: #23233a;
-  --ew-kpi-3: #1b2c36;
 
   --ew-mesh-base: #10131c;
   --ew-mesh-blue: rgb(40 92 214 / 55%);

@@ -32,7 +32,7 @@ export function LogRetentionCard() {
         postgresDays: s.storage === "clickhouse" ? s.postgresDays : Number(d.days),
         clickhouseDays: s.storage === "clickhouse" ? Number(d.days) : s.clickhouseDays,
       })}
-      contentClassName="grid gap-4 sm:grid-cols-2"
+      layout="inline"
       saveTestId="log-retention-save"
       errorTestId="log-retention-error"
     >

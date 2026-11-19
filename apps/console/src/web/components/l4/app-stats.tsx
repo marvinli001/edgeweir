@@ -3,36 +3,20 @@ import { ChartLineData01Icon, RefreshIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { type ChartRow, LinesChart, SeriesLegend } from "@/components/analytics/breakdown-charts";
-import { Panel, PanelHeader } from "@/components/analytics/panel";
+import { LinesChart, SeriesLegend } from "@/components/analytics/breakdown-charts";
+import { MetricChart } from "@/components/analytics/metric-chart";
+import { MetricCard, Panel, PanelHeader } from "@/components/analytics/panel";
 import { RangeSelect } from "@/components/analytics/range-select";
 import { Button } from "@/components/arc/button/button";
 import { type Columns, DataTable } from "@/components/data-table";
 import { EmptyState, QueryView } from "@/components/states";
-import { Sparkline } from "@/components/trend-line";
 import { SERIES_COLORS } from "@/lib/analytics";
 import { formatBytes, formatCompact, formatNumber, m } from "@/lib/i18n";
-import { L4_STATS_RANGE_SECONDS, L4_STATS_RANGES, type L4StatsRange } from "@/lib/l4";
+import { L4_STATS_RANGE_SECONDS, L4_STATS_RANGES, type L4StatsRange, l4PlotPoints } from "@/lib/l4";
 import { orpc } from "@/lib/orpc";
-import { groupBuckets, wholeGroups } from "@/lib/time-buckets";
 import { cn } from "@/lib/utils";
 
 const REFRESH_MS = 60_000;
-/** Most points a chart draws; minute buckets of longer ranges are summed into wider ones. */
-const MAX_POINTS = 120;
-const CHARTED = ["connections", "refused", "bytesReceived", "bytesSent"] as const;
-/** Nodes report their finished minutes once a minute, so the last one may not have arrived yet. */
-const REPORT_LAG_MS = 60_000;
-
-/** A counter's points for a tile's trend line: at most `max`, a group's highest value each. */
-function trend(points: L4Stats["points"], key: Counter, max = 60): number[] {
-  const values = points.map((point) => point[key]);
-  const size = Math.max(1, Math.ceil(values.length / max));
-  const out: number[] = [];
-  for (let i = 0; i < values.length; i += size) out.push(Math.max(...values.slice(i, i + size)));
-  return out;
-}
-
 const isL4StatsRange = (value: string): value is L4StatsRange =>
   (L4_STATS_RANGES as readonly string[]).includes(value);
 
@@ -141,83 +125,69 @@ function StatsBody({
     { key: "bytesReceived", label: m.l4_stats_received(), color: SERIES_COLORS[1] },
     { key: "bytesSent", label: m.l4_stats_sent(), color: SERIES_COLORS[2] },
   ];
-  const rows: ChartRow[] = wholeGroups(
-    groupBuckets(
-      stats.points.map((point) => point.time),
-      CHARTED.map((key) => stats.points.map((point) => point[key])),
-      stats.bucketSeconds,
-      MAX_POINTS,
-      Date.parse(stats.to) - REPORT_LAG_MS,
-    ),
-  ).map((group) => ({
-    time: group.time,
-    ...Object.fromEntries(CHARTED.map((key, index) => [key, group.values[index] ?? 0])),
-  }));
+  const hasSamples = stats.nodes.length > 0 || TILES.some(({ key }) => stats.totals[key] > 0);
+  const rows = hasSamples ? l4PlotPoints(stats) : [];
   return (
     <div
       className={cn("flex flex-col gap-3 transition-opacity duration-300", stale && "opacity-60")}
       aria-busy={stale}
       data-testid="l4-stats"
     >
-      <div className="grid grid-cols-2 gap-3 @3xl/main:grid-cols-5">
+      <div className="grid gap-3 @lg/main:grid-cols-2 @3xl/main:grid-cols-3 @[72rem]/main:grid-cols-5">
         {TILES.map((tile, index) => (
-          // The first tile has a row of its own on phones, so the other four pair up.
-          <div
-            key={tile.key}
-            {...enter(index)}
-            className={cn("animate-enter", index === 0 && "col-span-2 @3xl/main:col-span-1")}
-          >
-            <Panel className="gap-1 pt-3" data-testid={`l4-stat-${tile.key}`}>
-              <h3 className="truncate px-4 text-[13px] text-muted-foreground">{tile.title()}</h3>
-              <p
-                className="truncate px-4 text-2xl font-medium readout"
-                data-slot="metric-value"
-                data-value={stats.totals[tile.key]}
-              >
-                {tile.format(stats.totals[tile.key])}
-              </p>
-              <Sparkline
-                data={trend(stats.points, tile.key)}
-                tone="metric"
-                height={32}
-                className="mt-1"
-              />
-            </Panel>
+          <div key={tile.key} {...enter(index)}>
+            <MetricCard
+              title={tile.title()}
+              value={tile.format(stats.totals[tile.key])}
+              rawValue={stats.totals[tile.key]}
+              testId={`l4-stat-${tile.key}`}
+            >
+              {rows.length > 0 ? (
+                <MetricChart
+                  data={rows.map((p) => ({ time: p.time, value: p[tile.key] }))}
+                  label={tile.title()}
+                  format={tile.format}
+                  range={range}
+                />
+              ) : null}
+            </MetricCard>
           </div>
         ))}
       </div>
-      <div className="grid gap-3 @3xl/main:grid-cols-2">
-        <div {...enter(5)}>
-          <Panel className="pb-3" data-testid="l4-stats-connections-chart">
-            <PanelHeader title={m.l4_stats_connections()} />
-            <SeriesLegend
-              mark="line"
-              series={connections.map((s) => ({
-                ...s,
-                value: formatCompact(stats.totals[s.key as Counter]),
-              }))}
-            />
-            <div className="px-2 pt-2">
-              <LinesChart data={rows} series={connections} format={formatCompact} range={range} />
-            </div>
-          </Panel>
+      {rows.length > 0 ? (
+        <div className="grid gap-3 @3xl/main:grid-cols-2">
+          <div {...enter(5)}>
+            <Panel className="pb-3" data-testid="l4-stats-connections-chart">
+              <PanelHeader title={m.l4_stats_connections()} />
+              <SeriesLegend
+                mark="line"
+                series={connections.map((s) => ({
+                  ...s,
+                  value: formatCompact(stats.totals[s.key as Counter]),
+                }))}
+              />
+              <div className="px-2 pt-2">
+                <LinesChart data={rows} series={connections} format={formatCompact} range={range} />
+              </div>
+            </Panel>
+          </div>
+          <div {...enter(6)}>
+            <Panel className="pb-3" data-testid="l4-stats-traffic-chart">
+              <PanelHeader title={m.l4_stats_traffic()} />
+              <SeriesLegend
+                mark="line"
+                series={traffic.map((s) => ({
+                  ...s,
+                  value: formatBytes(stats.totals[s.key as Counter]),
+                }))}
+              />
+              <div className="px-2 pt-2">
+                <LinesChart data={rows} series={traffic} format={formatBytes} range={range} />
+              </div>
+            </Panel>
+          </div>
         </div>
-        <div {...enter(6)}>
-          <Panel className="pb-3" data-testid="l4-stats-traffic-chart">
-            <PanelHeader title={m.l4_stats_traffic()} />
-            <SeriesLegend
-              mark="line"
-              series={traffic.map((s) => ({
-                ...s,
-                value: formatBytes(stats.totals[s.key as Counter]),
-              }))}
-            />
-            <div className="px-2 pt-2">
-              <LinesChart data={rows} series={traffic} format={formatBytes} range={range} />
-            </div>
-          </Panel>
-        </div>
-      </div>
+      ) : null}
       <NodeShares nodes={stats.nodes} />
     </div>
   );

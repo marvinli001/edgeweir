@@ -146,30 +146,26 @@ function KillSwitch() {
   });
   const [confirming, setConfirming] = React.useState(false);
   return (
-    <Panel className="animate-enter" data-testid="extensions-kill-switch">
-      <PanelHeader>
-        <PanelTitle>{m.extensions_run_title()}</PanelTitle>
-      </PanelHeader>
-      <PanelContent className="flex flex-col gap-3">
-        <QueryView query={settings}>
-          {({ disabled }) => (
-            <>
-              <SwitchField
-                id="extensions-run"
-                label={m.extensions_run_label()}
-                checked={!disabled}
-                disabled={update.isPending}
-                onCheckedChange={(on) =>
-                  on ? update.mutate({ disabled: false }) : setConfirming(true)
-                }
-                className="self-start"
-                testId="extensions-run"
-              />
-              {disabled ? <SafetyNote>{m.extensions_run_off_note()}</SafetyNote> : null}
-            </>
-          )}
-        </QueryView>
-      </PanelContent>
+    <PanelHeader className="pb-(--panel-pad)" data-testid="extensions-kill-switch">
+      <PanelTitle className="flex-none">{m.extensions_run_title()}</PanelTitle>
+      <QueryView query={settings}>
+        {({ disabled }) => (
+          <>
+            <SwitchField
+              id="extensions-run"
+              label={m.extensions_run_label()}
+              checked={!disabled}
+              disabled={update.isPending}
+              onCheckedChange={(on) =>
+                on ? update.mutate({ disabled: false }) : setConfirming(true)
+              }
+              className="self-start"
+              testId="extensions-run"
+            />
+            {disabled ? <SafetyNote>{m.extensions_run_off_note()}</SafetyNote> : null}
+          </>
+        )}
+      </QueryView>
       <ControlledConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
@@ -178,7 +174,7 @@ function KillSwitch() {
         confirmLabel={m.extensions_run_off()}
         onConfirm={() => update.mutateAsync({ disabled: true })}
       />
-    </Panel>
+    </PanelHeader>
   );
 }
 
@@ -422,7 +418,9 @@ function KeysPanel() {
                 >
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                      <span className="font-mono font-medium">{trusted.publisher}</span>
+                      <span className="min-w-0 font-mono font-medium wrap-anywhere">
+                        {trusted.publisher}
+                      </span>
                       {trusted.label ? (
                         <span className="text-muted-foreground">{trusted.label}</span>
                       ) : null}
@@ -923,29 +921,34 @@ export function ExtensionsPanel({
     [sheet.show],
   );
   return (
-    <div className="flex flex-col gap-6">
-      <KillSwitch />
-      <QueryView
-        query={extensions}
-        empty={
-          <EmptyState icon={PuzzleIcon} title={m.extensions_empty()}>
-            <Button onClick={() => onInstallOpenChange(true)}>
-              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-              {m.extensions_install()}
-            </Button>
-          </EmptyState>
-        }
-      >
-        {(list) => (
-          <DataTable
-            data={list}
-            columns={columns}
-            getRowId={(e) => e.id}
-            testId="extensions-table"
-            pinFirstColumn
-          />
-        )}
-      </QueryView>
+    <div className="flex flex-col gap-4">
+      <Panel className="gap-0 pb-0 animate-enter [&>[data-slot=data-table]]:rounded-none [&>[data-slot=data-table]]:border-x-0 [&>[data-slot=data-table]]:border-b-0">
+        <KillSwitch />
+        <QueryView
+          query={extensions}
+          frame={PanelContent}
+          empty={
+            <PanelContent className="pb-(--panel-pad)">
+              <EmptyState compact title={m.extensions_empty()}>
+                <Button onClick={() => onInstallOpenChange(true)}>
+                  <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+                  {m.extensions_install()}
+                </Button>
+              </EmptyState>
+            </PanelContent>
+          }
+        >
+          {(list) => (
+            <DataTable
+              data={list}
+              columns={columns}
+              getRowId={(e) => e.id}
+              testId="extensions-table"
+              pinFirstColumn
+            />
+          )}
+        </QueryView>
+      </Panel>
       <KeysPanel />
       <InstallDialog
         key={`install-${installKey}`}

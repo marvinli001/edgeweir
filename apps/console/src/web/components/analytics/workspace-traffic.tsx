@@ -65,7 +65,7 @@ export function TrafficMetricRow({
         <OpenCardButton label={m.analytics_details({ metric: label })} onOpen={onOpen} />
       ) : null}
       <div className="min-w-0 space-y-1">
-        <h3 className="text-[13px] text-muted-foreground">{label}</h3>
+        <h3 className="text-sm text-muted-foreground">{label}</h3>
         <div className="text-display font-medium readout" data-slot="metric-value">
           {value}
         </div>

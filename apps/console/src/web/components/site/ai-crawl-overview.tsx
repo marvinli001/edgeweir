@@ -92,7 +92,7 @@ export function AiCrawlOverviewSection({
             aria-busy={overview.isPlaceholderData}
             data-testid="ai-crawl-overview"
           >
-            <OverviewBody siteId={siteId} data={data} catalogue={list} />
+            <OverviewBody siteId={siteId} range={range} data={data} catalogue={list} />
           </div>
         )}
       </QueryView>
@@ -101,11 +101,13 @@ export function AiCrawlOverviewSection({
 }
 
 function OverviewBody({
+  range,
   siteId,
   data,
   catalogue,
 }: {
   siteId: string;
+  range: AnalyticsRange;
   data: AiCrawlOverview;
   catalogue: AiCrawlCatalogue;
 }) {
@@ -138,10 +140,11 @@ function OverviewBody({
       change={relativeChange(totals[key], previous[key])}
       better={better}
       size="sm"
-      empty={!chart}
       testId={`ai-crawl-metric-${id}`}
     >
-      {chart ? <MetricChart data={trend(chart)} label={title} format={formatCompact} /> : null}
+      {chart ? (
+        <MetricChart data={trend(chart)} label={title} format={formatCompact} range={range} />
+      ) : null}
     </MetricCard>
   );
   // The logs of the range: from its first bucket to a minute from now (the latest request is in).

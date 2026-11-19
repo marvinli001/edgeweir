@@ -39,7 +39,7 @@ export function TieredCacheSettingsCard() {
     >
       {({ draft, set }) => (
         <>
-          <div className="grid gap-4 sm:grid-cols-[16rem_10rem]">
+          <div className="grid gap-4 @xs/panel:grid-cols-[minmax(0,1fr)_minmax(7rem,0.45fr)]">
             <FormSelect
               id="tiered-cache-global-topology"
               label={m.tiered_cache_topology()}

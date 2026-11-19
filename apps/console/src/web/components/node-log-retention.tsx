@@ -21,7 +21,7 @@ export function NodeLogRetentionCard() {
       }}
       toDraft={(s) => ({ days: String(s.days), perNode: String(s.perNode) })}
       toInput={(d) => ({ days: Number(d.days), perNode: Number(d.perNode) })}
-      contentClassName="grid gap-4 sm:grid-cols-2"
+      layout="grid"
       saveTestId="node-log-retention-save"
       errorTestId="node-log-retention-error"
     >

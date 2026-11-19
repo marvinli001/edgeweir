@@ -36,6 +36,13 @@ function ratio(part: number, whole: number): number | null {
   return whole > 0 ? (part / whole) * 100 : null;
 }
 
+export function cacheHitRatio({
+  cacheHits,
+  cacheMisses,
+}: Pick<TrafficPoint, "cacheHits" | "cacheMisses">) {
+  return ratio(cacheHits, cacheHits + cacheMisses);
+}
+
 /** Relative change from the previous period, or null when there is nothing to compare with. */
 export function relativeChange(current: number | null, previous: number | null): number | null {
   if (current === null || previous === null || previous === 0) return null;
@@ -152,8 +159,8 @@ export const METRICS: Metric[] = [
     id: "hit-ratio",
     title: m.analytics_hit_ratio,
     size: "sm",
-    total: (t) => ratio(t.cacheHits, t.cacheHits + t.cacheMisses),
-    point: (p) => ratio(p.cacheHits, p.cacheHits + p.cacheMisses),
+    total: cacheHitRatio,
+    point: cacheHitRatio,
     format: formatPercent,
     better: "up",
     domain: [0, 100],

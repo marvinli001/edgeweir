@@ -82,7 +82,7 @@ function MaintenanceForm({
   const blocked = !availability.available && !initial.enabled;
   return (
     <form className="flex flex-col gap-(--panel-pad)" onSubmit={submit}>
-      <PanelContent form className="flex flex-col gap-5">
+      <PanelContent className="flex flex-col gap-5">
         {blocked ? (
           <SafetyNote className="animate-in fade-in" data-testid="maintenance-unavailable">
             {m.feature_unavailable_nodes()}
@@ -97,7 +97,7 @@ function MaintenanceForm({
           className="self-start"
           testId="maintenance-enabled"
         />
-        <div className="grid gap-4 sm:grid-cols-[10rem_1fr_1fr]">
+        <div className="grid gap-4 @xl/panel:grid-cols-[10rem_1fr_1fr]">
           <NumberField
             id="maintenance-retry-after"
             label={m.site_maintenance_retry_after()}
@@ -144,7 +144,6 @@ function MaintenanceForm({
         />
       </PanelContent>
       <SaveBar
-        indent
         dirty={dirty && !templateTooLarge(draft.template)}
         pending={pending}
         error={error}

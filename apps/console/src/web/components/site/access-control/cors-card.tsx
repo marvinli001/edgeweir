@@ -55,7 +55,7 @@ export function CorsCard({ siteId, index }: { siteId: string; index: number }) {
           />
           {draft.enabled ? (
             <div className="flex flex-col gap-5 animate-in fade-in">
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 @xl/panel:grid-cols-2">
                 <ListText
                   id="cors-origins"
                   label={m.access_cors_origins()}
@@ -75,7 +75,7 @@ export function CorsCard({ siteId, index }: { siteId: string; index: number }) {
                   testId="cors-prefixes"
                 />
               </div>
-              <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem]">
+              <div className="grid gap-4 @xl/panel:grid-cols-[minmax(0,1fr)_10rem]">
                 <Field data-invalid={invalid("allowedMethods") || undefined}>
                   <FieldLabel htmlFor="cors-methods">{m.access_cors_methods()}</FieldLabel>
                   <ListInput
@@ -98,7 +98,7 @@ export function CorsCard({ siteId, index }: { siteId: string; index: number }) {
                   testId="cors-max-age"
                 />
               </div>
-              <div className="grid gap-4 sm:grid-cols-[12rem_minmax(0,1fr)]">
+              <div className="grid gap-4 @xl/panel:grid-cols-[12rem_minmax(0,1fr)]">
                 <FormSelect
                   id="cors-headers-mode"
                   label={m.access_cors_headers()}

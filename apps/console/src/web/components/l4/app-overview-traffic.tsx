@@ -1,4 +1,3 @@
-import type { L4Stats } from "@edgeweir/contract";
 import { LinesChart, SeriesLegend } from "@/components/analytics/breakdown-charts";
 import { ChangeIndicator } from "@/components/analytics/panel";
 import { TrafficMetricRow, WorkspaceTraffic } from "@/components/analytics/workspace-traffic";
@@ -6,37 +5,17 @@ import { useL4Stats } from "@/components/l4/app-stats";
 import { EmptyState, QueryView } from "@/components/states";
 import { relativeChange, SERIES_COLORS } from "@/lib/analytics";
 import { formatBytes, formatCompact, m } from "@/lib/i18n";
-import { L4_STATS_RANGES, type L4StatsRange } from "@/lib/l4";
+import { L4_STATS_RANGES, type L4StatsRange, l4PlotPoints } from "@/lib/l4";
 
 const METRICS = [
   { key: "connections", label: () => m.l4_stats_connections(), color: SERIES_COLORS[0] },
-  { key: "refused", label: () => m.l4_stats_refused(), color: SERIES_COLORS[3] },
+  { key: "refused", label: () => m.l4_stats_refused(), color: SERIES_COLORS[0] },
   { key: "peakConcurrent", label: () => m.l4_stats_peak(), color: SERIES_COLORS[0] },
 ] as const;
 const TRANSFER = [
   { key: "bytesReceived", label: () => m.l4_stats_received(), color: SERIES_COLORS[1] },
   { key: "bytesSent", label: () => m.l4_stats_sent(), color: SERIES_COLORS[2] },
 ] as const;
-
-/** Sum counters over adjacent buckets and retain the greatest observed concurrency. */
-function plotPoints(points: L4Stats["points"]) {
-  const stride = Math.max(1, Math.ceil(points.length / 120));
-  const rows: L4Stats["points"] = [];
-  for (let i = 0; i < points.length; i += stride) {
-    const first = points[i];
-    if (!first) break;
-    const row = { ...first };
-    for (const point of points.slice(i + 1, i + stride)) {
-      row.connections += point.connections;
-      row.refused += point.refused;
-      row.bytesReceived += point.bytesReceived;
-      row.bytesSent += point.bytesSent;
-      row.peakConcurrent = Math.max(row.peakConcurrent, point.peakConcurrent);
-    }
-    rows.push(row);
-  }
-  return rows;
-}
 
 export function L4OverviewTraffic({
   appId,
@@ -60,10 +39,12 @@ export function L4OverviewTraffic({
       href={statsHref}
     >
       <QueryView query={stats}>
-        {({ totals, points }) => {
+        {(data) => {
+          const { totals } = data;
           if (
             !totals.connections &&
             !totals.refused &&
+            !totals.peakConcurrent &&
             !totals.bytesReceived &&
             !totals.bytesSent
           ) {
@@ -73,7 +54,7 @@ export function L4OverviewTraffic({
               </div>
             );
           }
-          const rows = plotPoints(points);
+          const rows = l4PlotPoints(data);
           const earlier =
             previous.isPlaceholderData || stats.isPlaceholderData
               ? undefined
@@ -107,7 +88,9 @@ export function L4OverviewTraffic({
                     {series.map((item) => (
                       <div key={item.key} className="flex flex-col gap-1">
                         <span className="text-xs text-muted-foreground">{item.label}</span>
-                        <span className="font-medium">{formatBytes(totals[item.key])}</span>
+                        <span className="text-display font-medium readout">
+                          {formatBytes(totals[item.key])}
+                        </span>
                         <ChangeIndicator
                           change={relativeChange(totals[item.key], earlier?.[item.key] ?? null)}
                         />

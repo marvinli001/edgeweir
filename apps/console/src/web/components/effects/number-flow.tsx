@@ -2,12 +2,10 @@
  * Rolling digits for headline numbers (Number Flow, MIT, Maxwell Barvian). Formatting follows the
  * console's language; the digits stand still under reduced motion (Number Flow checks it).
  */
-import NumberFlow, { type Format, NumberFlowGroup } from "@number-flow/react";
+import NumberFlow, { type Format } from "@number-flow/react";
 import type * as React from "react";
 import { getLocale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-
-export { NumberFlowGroup };
 
 export function FlowNumber({
   value,

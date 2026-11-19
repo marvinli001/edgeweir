@@ -67,7 +67,7 @@ export function SecurityHeadersCard({ siteId, index }: { siteId: string; index: 
               testId="headers-powered-by"
             />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 @xl/panel:grid-cols-2">
             <FormSelect
               id="headers-frame"
               label={m.access_headers_frame()}

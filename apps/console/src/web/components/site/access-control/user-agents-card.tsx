@@ -119,7 +119,7 @@ function UserAgentFields({ draft, set, blocked, invalid }: PartFields<Draft>) {
                     rows.map((r, i) => (i === index ? { ...r, pattern: event.target.value } : r)),
                   )
                 }
-                className="order-last h-8 min-w-0 basis-full font-mono text-sm sm:order-none sm:flex-1 sm:basis-0"
+                className="order-last h-8 min-w-0 basis-full font-mono text-sm @xl/panel:order-none @xl/panel:flex-1 @xl/panel:basis-0"
                 data-testid="ua-rule-pattern"
               />
               <div className="ml-auto flex shrink-0 items-center gap-1">
@@ -173,7 +173,7 @@ function UserAgentFields({ draft, set, blocked, invalid }: PartFields<Draft>) {
           {m.access_ua_add()}
         </Button>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 @xl/panel:grid-cols-2">
         <ListText
           id="ua-prefixes"
           label={m.access_path_prefixes()}

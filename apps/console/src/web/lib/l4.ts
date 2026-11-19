@@ -1,6 +1,7 @@
-import type { AnalyticsRange, L4Protocol, PortPoolProtocol } from "@edgeweir/contract";
+import type { AnalyticsRange, L4Protocol, L4Stats, PortPoolProtocol } from "@edgeweir/contract";
 // Relative on purpose: the module is unit-tested outside Vite's "@" alias.
 import { m } from "../paraglide/messages.js";
+import { groupBuckets, wholeGroups } from "./time-buckets";
 
 /** Protocols of an application, in menu order. Labels are protocol names, the same in every language. */
 export const L4_PROTOCOLS = [
@@ -79,4 +80,38 @@ export function apiError(error: unknown): { code?: string; data: Record<string, 
     code: typeof e.code === "string" ? e.code : undefined,
     data: e.data && typeof e.data === "object" ? (e.data as Record<string, unknown>) : {},
   };
+}
+
+/** Chart only complete groups: nodes report a finished minute up to a minute later. */
+export function l4PlotPoints({
+  points,
+  bucketSeconds,
+  to,
+}: Pick<L4Stats, "points" | "bucketSeconds" | "to">): L4Stats["points"] {
+  const groups = groupBuckets(
+    points.map((point) => point.time),
+    [
+      points.map((point) => point.connections),
+      points.map((point) => point.refused),
+      { peaks: points.map((point) => point.peakConcurrent) },
+      points.map((point) => point.bytesReceived),
+      points.map((point) => point.bytesSent),
+    ],
+    bucketSeconds,
+    120,
+    Date.parse(to) - 60_000,
+  );
+  return wholeGroups(groups).map(
+    ({
+      time,
+      values: [connections = 0, refused = 0, peakConcurrent = 0, bytesReceived = 0, bytesSent = 0],
+    }) => ({
+      time,
+      connections,
+      refused,
+      peakConcurrent,
+      bytesReceived,
+      bytesSent,
+    }),
+  );
 }

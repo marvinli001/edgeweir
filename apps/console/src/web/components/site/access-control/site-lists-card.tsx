@@ -52,7 +52,7 @@ function SiteListsFields({ draft, set, blocked }: PartFields<SiteListSettings>) 
       }
     >
       {(all) => (
-        <div className="grid min-w-0 gap-4 md:grid-cols-2">
+        <div className="grid min-w-0 gap-4 @xl/panel:grid-cols-2">
           <ListPicker
             id="site-block-lists"
             legend={m.access_site_block_lists()}

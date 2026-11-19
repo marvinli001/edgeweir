@@ -100,7 +100,7 @@
     min-width: 0;
   }
   .chart[data-axis] {
-    grid-template-columns: minmax(0, 1fr) 48px;
+    grid-template-columns: minmax(0, 1fr) max-content;
     grid-template-rows: auto 26px;
   }
   .plot {
@@ -254,14 +254,13 @@
   }
 
   .gutter {
-    position: relative;
+    display: grid;
     grid-area: 1 / 2;
-    min-width: 0;
+    align-content: start;
+    padding-inline: 10px 2px;
   }
   .tick {
-    position: absolute;
-    top: 0;
-    left: 10px;
+    grid-area: 1 / 1;
     display: block;
     height: 0;
     white-space: nowrap;

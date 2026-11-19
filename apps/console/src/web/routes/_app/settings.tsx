@@ -43,9 +43,8 @@ export const Route = createFileRoute("/_app/settings")({
 function SettingsPage() {
   const { theme, setTheme } = useTheme();
   return (
-    <Page title={m.settings_title()}>
-      {/* Short forms keep a narrow column, at the start of the page column like the title. */}
-      <div className="flex w-full max-w-[56rem] flex-col gap-6">
+    <Page title={m.settings_title()} width="narrow">
+      <div className="flex flex-col gap-6">
         <Panel className="animate-enter">
           <PanelHeader>
             <PanelTitle>{m.settings_preferences()}</PanelTitle>

@@ -12,7 +12,7 @@
 | 企业级、安静 | 灰色画布上的白色面板，1px 细线分隔；颜色只用来表达品牌、状态与数据 |
 | 该密的地方密 | 表格、列表、监控面板紧凑（13px、44px 行高）；页面四周与面板之间留足空白 |
 | 结构 | 参照腾讯云控制台：56px 顶栏、分组侧边栏、页头条带与线形页签、表格上方的筛选栏、`共 N 项` 表尾 |
-| 观感 | 参照阿里云百炼：浅色调 KPI 卡片、克制的字重、只用于氛围页面的柔和渐变 |
+| 观感 | 参照阿里云百炼：中性面板、克制的字重、只用于氛围页面的柔和渐变 |
 | 组件来源 | 只用 [Arc](https://uiarc.dev) 免费层（MIT）；Arc 没有的面板、表单、表格由 `components/layout/` 提供 |
 | 文案简短 | 一个标签、一个数值、一个动作；说明写进文档，不写进界面 |
 
@@ -103,11 +103,10 @@
 - 线宽 1.5px，不加光晕或渐变描边；面积填充是系列色的低透明度。
 - 语义名：`--series-*`、`--chart-*`、`--status-*`、`--metric`（= 系列 1）、`--signal`（= 系列 2，实时视图）、`--delta-good` / `--delta-bad`（环比变化的文字色）。
 
-### 2.5 颜色：KPI 与氛围
+### 2.5 氛围色
 
 | Token | 浅色 | 深色 | 用途 |
 | --- | --- | --- | --- |
-| `--ew-kpi-1` / `-2` / `-3` | `#EDF3FF` / `#EEF0FB` / `#EAF6FD` | `#1D2738` / `#23233A` / `#1B2C36` | 一行 KPI 卡片的浅色底，按 1→2→3 轮换（`bg-kpi-1..3`） |
 | `--ew-mesh` | 蓝、青、紫三个径向渐变叠在 `--ew-mesh-base`（`#F5F8FF`）上 | 同构，底 `#10131C` | 氛围页面（`bg-mesh`），见 [4.16](#416-氛围页面) |
 | `--ew-gradient-plan` | `linear-gradient(135deg, #3D7BFF, #6C8CFF 45%, #A58BFF)` | 同左 | 保留，控制台不使用 |
 
@@ -140,11 +139,11 @@
 | Token | 字号 / 行高 | Tailwind | 用途 |
 | --- | --- | --- | --- |
 | `--ew-text-caption` | 12 / 20 | `text-xs` | 辅助行、单位、侧边栏分组标签、徽标 |
-| `--ew-text-dense` | 13 / 20 | `text-dense` | 表格单元格与表头、表尾、监控卡片标题 |
-| `--ew-text-body` | 14 / 22 | `text-sm` | 默认正文、表单标签、按钮、导航项 |
+| `--ew-text-dense` | 13 / 20 | `text-dense` | 表格单元格与表头、表尾 |
+| `--ew-text-body` | 14 / 22 | `text-sm` | 默认正文、指标卡标题、表单标签、按钮、导航项 |
 | `--ew-text-section` | 16 / 24，500 | `text-section` | 面板标题、对话框标题、产品名 |
 | `--ew-text-title` | 18 / 26，500 | `text-title` | 页面标题 |
-| `--ew-text-display` | 28 / 36，500 | `text-display` | KPI 数字 |
+| `--ew-text-display` | 24 / 32，500 | `text-display` | 指标卡主数值 |
 | `--ew-text-hero` | 36 / 44，500 | `text-hero` | 只用于登录、初始化 |
 
 ### 2.8 间距与尺寸
@@ -161,6 +160,7 @@
 | `--ew-control-touch` | 44px | 粗指针（`pointer: coarse`）下所有控件的高度 |
 | `--ew-row-height` | 44px | 表格行；表头 40px |
 | `--ew-form-label` | 120px | 表单标签列 |
+| `--ew-form-field-min` | 12rem | 普通字段并排时每列的最小宽度 |
 
 面板内边距 20px（手机与 `size="sm"` 为 16px），面板之间 16px，内容列在页头条带下方 20px 开始，底部留 40px。
 
@@ -177,7 +177,7 @@
 
 - 只有淡入淡出与不超过 8px 的位移；弹簧不回弹（`components/arc/motion-tokens.ts`）。
 - 页面与面板入场用 `animate-enter`（200ms 淡入）；列表行用 `enterDelay(index)` 错开 20ms，最多错开 12 行。
-- 允许的持续动画只有：加载转圈、2px 顶部进度条、进行中状态的圆点脉冲（`dot-pulse`），以及概览「边缘网络」卡片里慢转的地球（cobe，`effects/edge-globe.tsx`）：标出节点公网地址的 GeoIP 位置，按健康着色、按节点数定大小，可拖动；离屏、标签页在后台或减少动态效果时停转，没有光晕；旁边的位置列表是它的文字替代。KPI 数字变化时滚动（`FlowNumber`），折线图挂载时画出。
+- 允许的持续动画只有：加载转圈、2px 顶部进度条、进行中状态的圆点脉冲（`dot-pulse`），以及概览「边缘网络」卡片里慢转的地球（cobe，`effects/edge-globe.tsx`）：标出节点公网地址的 GeoIP 位置，按健康着色、按节点数定大小，可拖动；离屏、标签页在后台或减少动态效果时停转，没有光晕；旁边的位置列表是它的文字替代。实时请求数与在线数变化时滚动（`FlowNumber`），折线图挂载时画出。
 - Motion 只经 `components/effects/motion`，在 `LazyMotion` 下使用轻量组件。
 - 减少动态效果（`prefers-reduced-motion: reduce`）：位移与缩放变为淡入淡出，循环停止，进度条静止，数字不滚动。
 
@@ -250,7 +250,7 @@
 - 内容列是名为 `main` 的容器，组件按它的宽度（容器查询）而不是视口变化。
 - 面板：`Panel`、`PanelHeader`、`PanelTitle`、`PanelAction`、`PanelContent`、`PanelFooter`（`components/layout/panel.tsx`）。`bg-card`，1px 细线，8px 圆角，无阴影，内边距 20px。标题 16px 500，操作在标题行末尾。超宽内容在面板内横向裁切，不撑宽手机页面。
 - 面板内的次级区域（代码、日志、选项列表）用 `faint-well`：`bg-well` + 细线。
-- 短设置卡在宽内容列（`@4xl/main` / `@5xl/main` 起）两两并排成顶对齐的两列（防护设置、系统设置「通用」、集群「设置」、账户安全）；表格、长编辑器和多列字段网格（CC 模板）占满两列。不让窄表单独占整行宽面板。
+- 设置卡按用途分组。内容列达到 56rem 时，`PanelColumns` 排成两列，每个 `PanelStack` 内的卡片依次紧接。展开字段只推移同列的后续卡片。窄屏按相同的文档顺序排成一列。探针矩阵、扩展列表和平台错误页编辑器可使用整行。
 
 ### 3.5 断点
 
@@ -260,7 +260,7 @@
 | `md` | 768px | 显示侧边栏（以下为抽屉）；顶栏显示搜索框；边距 24px（以下 16px） |
 | `lg` | 1024px | 账户块显示名字与角色 |
 | 容器 `main` < 42rem | 672px | 数据表格的行变为卡片 |
-| 容器 `panel` ≥ 40rem | 640px | 表单标签左置 |
+| 容器 `panel` ≥ 40rem | 640px | 指定标签左置的独立字段切换到左右排列 |
 | 容器 `main` < 64rem / 72rem | 1024 / 1152px | 标记 `hideBelow: "lg"` / `"xl"` 的次要列隐藏 |
 | `pointer: coarse` | — | 所有控件、导航项、页签至少 44px |
 
@@ -289,13 +289,13 @@ Arc `Button`（`components/arc/button/button.tsx`）；路由链接用 `LinkButt
 
 `Field`、`FieldLabel`、`FieldError`、`FieldSet`、`FieldGroup`（`components/layout/form.tsx`），`InputGroup`（`components/layout/input-group.tsx`），Arc `Input`、`Textarea`、`Select`、`Switch`、`Checkbox`、`OtpInput`。
 
-- 设置表单放在 `PanelContent form` 或 `SettingsCard`（`components/settings-card.tsx`）里。面板宽度 ≥ 40rem 时标签左置：120px 标签列（次要色）+ 24px 间隔 + 最宽 32rem 的控件列，行距 24px；没有标签的行（开关、提示、添加按钮）从控件列开始。对话框、窄面板、手机上标签在上。
+- 设置卡默认将标签放在控件上方。成组的数值、凭据使用 `SettingsCard layout="grid"` 或 `form-grid`，按卡片可用空间分栏。长地址、证书与编辑器可独占整行。`PanelContent form` 的独立字段在面板宽度达到 40rem 时使用 120px 左标签列和最宽 32rem 的控件列，内部网格保留自己的列宽。`form="stacked"` 保留上置标签。
 - 控件宽度贴合内容：端口窄，域名宽。
 - 输入框：面板底，1px `--ew-border`，悬停 `--ew-border-strong`，聚焦边框 `--ew-brand` + 品牌色 20% 光环，错误边框 `--ew-error`。
 - 校验：字段错误用 `FieldError`（`role="alert"`，12px `text-destructive`）紧贴字段显示；保存失败的错误显示在保存按钮旁；字段错误优先于通知。
 - 设置的来源徽标（「已保存 / 环境变量 / 默认」，`SettingSourceBadge`）放在控件下方，不挤占标签列。
 - 保存条：`SaveBar`（`components/site/save-site.tsx`）。按钮在前，与控件列对齐（`indent`），错误在按钮之后；未修改时禁用，保存中显示转圈；长编辑器传 `sticky`，保存条吸附在视口底部（面板底色 + 顶部细线）。提交按钮一律左对齐，不放在页脚最右（OAuth 授权页这类对话式页面除外）。
-- 单项设置（一个字段，如请求体上限、大面积摘除保护）用 `inline`：标签在上，字段与保存同排，没有页脚；`SettingsCard` 传 `layout="inline"`。字段网格要用满面板宽时传 `layout="stacked"`（标签在上，不折成标签左置的一列）。
+- 单项设置使用 `layout="inline"`。字段与保存按钮同排，宽度不足时按钮换行。来源、连接状态与只读地址跟在字段下方。
 - 一组复选框共用一个标签（端口）：`FieldSet data-layout="field"`，标签左置时图例进标签列，选项在控件列。
 - 有未保存修改时，离开页面或切换页签先确认（`useUnsavedChanges` + `UnsavedChangesGuard`）；同页的筛选与翻页不拦截。
 
@@ -328,24 +328,24 @@ Arc `Button`（`components/arc/button/button.tsx`）；路由链接用 `LinkButt
 
 做：搜索、筛选与页码保存在 URL，返回时仍在。不做：在表格外面再套一层面板标题；表头用粗体。
 
-### 4.4 KPI 卡片
+### 4.4 统计卡片
 
-`components/overview/live-kpis.tsx`
+`components/analytics/panel.tsx` 的 `MetricCard` 与 `MetricValue`，`components/analytics/metric-chart.tsx` 的 `MetricChart`。
 
-- 浅色底（`bg-kpi-1..3` 依次轮换），无边框、无阴影，8px 圆角，最小高度 144px。
-- 首行：16px 图标 + 13px 次要色标签，可选的时间范围在末尾；下面是 `text-display` 数字（500），单位跟在数字后。
-- 数字变化时滚动（`FlowNumber`），首次加载显示加载状态，不显示一排 0。
-- 实时数据的卡片组标题旁放 `LiveDot`。
+- 浅色与深色主题都使用 `bg-card` 面板，1px 细边框、8px 圆角。标题 14px 次要色，主数值 24px、500 字重，单位紧跟数值。
+- 有时间序列的指标用品牌蓝折线，显示时间、数值刻度与单位。悬停、轻触或用方向键可读取单个时间点。纵轴按最长的完整刻度文字留宽。
+- 只有当前值时使用紧凑数值卡。在线节点显示在线数 / 总数与状态比例条。缓存没有命中或未命中样本时显示「—」，图中对应分钟留空；全部未命中时显示 0%。
+- 实时卡片组标题旁保留 `LiveDot`。首次请求显示加载状态，失败时提供重试。
 
 ### 4.5 图表与监控面板
 
-`components/analytics/`（`panel.tsx` 的 `MetricCard`、`breakdown-charts.tsx`、`range-select.tsx`），Arc `LineChart`、`Sparkline`，`components/effects/`（实时图、拓扑、地图）。
+`components/analytics/`（`panel.tsx` 的 `MetricCard`、`breakdown-charts.tsx`、`range-select.tsx`），Arc `LineChart`、`Sparkline`，`components/effects/`（拓扑、地图）。
 
 - 流量路径拓扑在卡片宽度不足 560px（手机）时改为自上而下的缩进树：每行一个节点、原尺寸、权重标在目标节点上，不缩小也不横向滚动。
 
-- 监控卡片是细线面板：13px 次要色标题，下方是数值与环比（`↗ 39.6%`，好坏用 `--delta-good` / `--delta-bad`，并带读屏文字），再下方是图表。整张卡片可点击打开明细对话框，悬停时右上角出现展开图标。
+- 监控卡片是细线面板：14px 次要色标题，下方是数值与环比（`↗ 39.6%`，好坏用 `--delta-good` / `--delta-bad`，并带读屏文字），再下方是图表。支持明细的卡片可点击打开对话框，悬停时右上角出现展开图标。
 - 卡片按内容列宽度排成 2–4 列网格；一行小卡片都没有数据时只显示数值，不画空图。
-- 折线图：Arc `LineChart`；空值留缺口；比例用 `domain`；卡片里的小图用 `axis={false}`。横轴标签按可用宽度隔项显示，最新一项总在，标签不重叠（堆叠条同样）。网格线 `--ew-grid`，坐标轴文字 `--ew-axis`。
+- 折线图：Arc `LineChart`；空值留缺口；比例用 `domain`；纵轴以格式化后的数值与单位决定宽度。横轴标签按可用宽度隔项显示，最新一项总在，标签不重叠（堆叠条同样）。网格线 `--ew-grid`，坐标轴文字 `--ew-axis`。
 - 堆叠条与状态码条：`breakdown-charts.tsx` 的 SVG，状态码用 `--ew-status-*`，片段之间留间隙。
 - 表格单元格里的趋势：`Sparkline`，单系列品牌蓝。
 - 时间范围：区域标题行末尾的次要按钮（日历图标 + 当前范围），点开为单选菜单（`RangeSelect`）；旁边是刷新等图标按钮。

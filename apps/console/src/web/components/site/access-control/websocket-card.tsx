@@ -38,7 +38,7 @@ export function WebsocketCard({ siteId, index }: { siteId: string; index: number
     >
       {({ draft, set, blocked, invalid }) => (
         <>
-          <div className="grid gap-4 sm:grid-cols-[minmax(0,16rem)_10rem]">
+          <div className="grid gap-4 @xl/panel:grid-cols-[minmax(0,16rem)_10rem]">
             <FormSelect
               id="websocket-origins-mode"
               label={m.access_ws_origins_mode()}

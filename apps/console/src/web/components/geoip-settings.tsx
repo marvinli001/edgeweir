@@ -44,7 +44,7 @@ export function GeoIpSettings({
     }),
   );
   return (
-    <Panel className={className} style={style}>
+    <Panel className={cn("@container/geo", className)} style={style}>
       <PanelHeader className="flex flex-wrap items-center justify-between gap-3">
         <PanelTitle>{m.geo_title()}</PanelTitle>
         <a
@@ -61,7 +61,7 @@ export function GeoIpSettings({
         frame={PanelContent}
         empty={
           <PanelContent>
-            <EmptyState title={m.geo_empty()} />
+            <EmptyState compact title={m.geo_empty()} />
           </PanelContent>
         }
       >
@@ -89,10 +89,7 @@ export function GeoIpSettings({
                         {/* Narrow, the light alone keeps the table inside its card. */}
                         <StatusDot tone={ready ? "good" : "idle"} title={word}>
                           <span
-                            className={cn(
-                              "@max-lg/main:sr-only",
-                              !ready && "text-muted-foreground",
-                            )}
+                            className={cn("@max-lg/geo:sr-only", !ready && "text-muted-foreground")}
                           >
                             {word}
                           </span>

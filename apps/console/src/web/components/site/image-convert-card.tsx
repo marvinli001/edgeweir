@@ -10,6 +10,7 @@ import {
 } from "@edgeweir/contract";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { MetricValue } from "@/components/analytics/panel";
 import { FormSelect } from "@/components/form-select";
 import { FieldLegend, FieldSet } from "@/components/layout/form";
 import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
@@ -224,7 +225,9 @@ export function ImageSavingsCard({ siteId }: { siteId: string }) {
       data-testid="image-savings-card"
     >
       <PanelHeader className="flex flex-wrap items-center justify-between gap-3">
-        <PanelTitle>{m.image_savings_title()}</PanelTitle>
+        <PanelTitle className="text-sm font-normal text-muted-foreground">
+          {m.image_savings_title()}
+        </PanelTitle>
         <div className="w-full sm:w-44">
           <FormSelect
             id="image-savings-range"
@@ -240,12 +243,7 @@ export function ImageSavingsCard({ siteId }: { siteId: string }) {
         <QueryView query={savings}>
           {({ bytesSaved, unsupportedNodes }) => (
             <>
-              <p
-                className="font-heading text-3xl font-medium tabular-nums"
-                data-testid="image-savings-bytes"
-              >
-                {formatBytes(bytesSaved)}
-              </p>
+              <MetricValue data-testid="image-savings-bytes">{formatBytes(bytesSaved)}</MetricValue>
               {unsupportedNodes > 0 ? (
                 <SafetyNote data-testid="image-savings-partial">
                   {m.image_savings_partial()}

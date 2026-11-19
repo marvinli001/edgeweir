@@ -64,18 +64,20 @@ function PlatformErrorPagesForm({ initial }: { initial: PlatformErrorPages }) {
   const tooLarge = PAGES.some(({ key }) => templateTooLarge(pages[key]));
   return (
     <form className="flex flex-col gap-(--panel-pad)" onSubmit={form.submit}>
-      <PanelContent form className="flex flex-col gap-5">
-        {PAGES.map(({ key, id, name }) => (
-          <TemplateField
-            key={key}
-            id={id}
-            status={PLATFORM_ERROR_PAGE_STATUSES[key]}
-            name={name()}
-            value={pages[key]}
-            onChange={(template) => form.set({ [key]: template })}
-            testId={id}
-          />
-        ))}
+      <PanelContent className="flex flex-col gap-4">
+        <div className="grid gap-4 @2xl/panel:grid-cols-2">
+          {PAGES.map(({ key, id, name }) => (
+            <TemplateField
+              key={key}
+              id={id}
+              status={PLATFORM_ERROR_PAGE_STATUSES[key]}
+              name={name()}
+              value={pages[key]}
+              onChange={(template) => form.set({ [key]: template })}
+              testId={id}
+            />
+          ))}
+        </div>
         <TemplateVariables />
         {PAGES.some(({ key }) => usesRulesV3Placeholders(pages[key])) ? (
           <SafetyNote className="animate-in fade-in" data-testid="platform-pages-v3-note">
@@ -84,7 +86,6 @@ function PlatformErrorPagesForm({ initial }: { initial: PlatformErrorPages }) {
         ) : null}
       </PanelContent>
       <SaveBar
-        indent
         dirty={form.dirty && !tooLarge}
         pending={form.pending}
         error={form.error}

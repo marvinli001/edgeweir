@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { listChips } from "../../src/web/lib/l4";
+import { l4PlotPoints, listChips } from "../../src/web/lib/l4";
 
 const root = resolve(import.meta.dirname, "../..");
 
@@ -48,5 +48,26 @@ describe("L4 IP-list chips", () => {
       "chip.id",
     ]);
     expect(componentKeys("src/web/components/l4/app-dialog.tsx", "ListPicker")).toEqual(["listId"]);
+  });
+});
+
+it("plots settled L4 totals and the highest concurrency of each group", () => {
+  const start = Date.parse("2026-10-07T12:00:00Z");
+  const points = Array.from({ length: 360 }, (_, i) => ({
+    time: new Date(start + i * 60_000).toISOString(),
+    connections: 4,
+    refused: 1,
+    peakConcurrent: 10 + (i % 5),
+    bytesReceived: 20,
+    bytesSent: 50,
+  }));
+  const rows = l4PlotPoints({ points, bucketSeconds: 60, to: "2026-10-07T18:00:00Z" });
+  expect(rows.at(-1)).toEqual({
+    time: "2026-10-07T17:50:00.000Z",
+    connections: 20,
+    refused: 5,
+    peakConcurrent: 14,
+    bytesReceived: 100,
+    bytesSent: 250,
   });
 });

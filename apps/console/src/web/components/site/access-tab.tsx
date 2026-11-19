@@ -37,7 +37,14 @@ import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { IpCheckCard } from "@/components/ip-check";
 import { Field, FieldLabel } from "@/components/layout/form";
-import { Panel, PanelContent, PanelHeader, PanelTitle } from "@/components/layout/panel";
+import {
+  Panel,
+  PanelColumns,
+  PanelContent,
+  PanelHeader,
+  PanelStack,
+  PanelTitle,
+} from "@/components/layout/panel";
 import { SafetyNote } from "@/components/safety-note";
 import { CorsCard } from "@/components/site/access-control/cors-card";
 import { EncodedPathsCard } from "@/components/site/access-control/encoded-paths-card";
@@ -273,15 +280,21 @@ export function AccessTab({ site }: { site: Site }) {
           )}
         </QueryView>
       </Panel>
-      <SiteListsCard siteId={site.id} index={1} />
-      <GeoCard siteId={site.id} index={2} />
-      <HotlinkCard siteId={site.id} index={3} />
-      <UserAgentsCard siteId={site.id} index={4} />
-      <CorsCard siteId={site.id} index={5} />
-      <WebsocketCard siteId={site.id} index={6} />
-      <SecurityHeadersCard siteId={site.id} index={7} />
-      <EncodedPathsCard siteId={site.id} index={8} />
-      <IpCheckCard siteId={site.id} index={9} />
+      <PanelColumns>
+        <PanelStack>
+          <SiteListsCard siteId={site.id} index={1} />
+          <GeoCard siteId={site.id} index={2} />
+          <HotlinkCard siteId={site.id} index={3} />
+          <UserAgentsCard siteId={site.id} index={4} />
+        </PanelStack>
+        <PanelStack>
+          <CorsCard siteId={site.id} index={5} />
+          <WebsocketCard siteId={site.id} index={6} />
+          <SecurityHeadersCard siteId={site.id} index={7} />
+          <EncodedPathsCard siteId={site.id} index={8} />
+          <IpCheckCard siteId={site.id} index={9} />
+        </PanelStack>
+      </PanelColumns>
     </div>
   );
 }

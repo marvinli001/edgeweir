@@ -152,8 +152,8 @@ function BindingEditor({
         <PanelHeader>
           <PanelTitle>{m.dns_binding_title()}</PanelTitle>
         </PanelHeader>
-        <PanelContent form className="grid gap-5">
-          <div className="grid gap-4 sm:grid-cols-2">
+        <PanelContent className="grid gap-5">
+          <div className="grid gap-4 @xl/panel:grid-cols-2">
             <FormSelect
               id="dns-binding-mode"
               label={m.dns_mode()}
@@ -289,7 +289,7 @@ function BindingEditor({
                   style={{ animationDelay: `${index * 40}ms` }}
                   data-testid="dns-line"
                 >
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-3 @xl/panel:grid-cols-2">
                     <Field>
                       <FieldLabel htmlFor={`line-name-${index}`}>{m.dns_line_name()}</FieldLabel>
                       <Input
@@ -387,7 +387,6 @@ function BindingEditor({
           ) : null}
         </PanelContent>
         <SaveBar
-          indent
           sticky
           dirty={JSON.stringify(draft) !== JSON.stringify(initial)}
           pending={save.isPending}

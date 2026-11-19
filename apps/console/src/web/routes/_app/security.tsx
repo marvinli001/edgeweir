@@ -13,9 +13,11 @@ import { CodeBlock } from "@/components/copy-button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/layout/form";
 import {
   Panel,
+  PanelColumns,
   PanelContent,
   PanelFooter,
   PanelHeader,
+  PanelStack,
   PanelTitle,
 } from "@/components/layout/panel";
 import { Spinner } from "@/components/layout/spinner";
@@ -48,16 +50,19 @@ async function unwrap<T>(
 function SecurityPage() {
   const me = useQuery(orpc.account.me.queryOptions());
   return (
-    <Page title={m.security_title()}>
-      {/* Two top-aligned columns once the content column is wide enough, one below. */}
-      <div className="grid w-full max-w-[72rem] items-start gap-6 @4xl/main:grid-cols-2">
-        <PasswordCard />
-        <QueryView query={me}>
-          {({ user }) => <TwoFactorCard enabled={user.twoFactorEnabled} />}
-        </QueryView>
-        <PasskeysCard />
-        <ConnectedAppsCard />
-      </div>
+    <Page title={m.security_title()} width="narrow">
+      <PanelColumns>
+        <PanelStack>
+          <PasswordCard />
+          <PasskeysCard />
+        </PanelStack>
+        <PanelStack>
+          <QueryView query={me}>
+            {({ user }) => <TwoFactorCard enabled={user.twoFactorEnabled} />}
+          </QueryView>
+          <ConnectedAppsCard />
+        </PanelStack>
+      </PanelColumns>
     </Page>
   );
 }

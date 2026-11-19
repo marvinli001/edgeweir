@@ -83,18 +83,20 @@ export function SiteTraffic({
                         })
                       }
                     >
-                      <LinesChart
-                        data={points.map((point) => ({
-                          time: point.time,
-                          value: metric.point(point, bucketSeconds),
-                        }))}
-                        series={[{ key: "value", label, color: SERIES_COLORS[0] }]}
-                        format={metric.format}
-                        range={range}
-                        domain={metric.domain}
-                        label={label}
-                        height={140}
-                      />
+                      {total !== null ? (
+                        <LinesChart
+                          data={points.map((point) => ({
+                            time: point.time,
+                            value: metric.point(point, bucketSeconds),
+                          }))}
+                          series={[{ key: "value", label, color: SERIES_COLORS[0] }]}
+                          format={metric.format}
+                          range={range}
+                          domain={metric.domain}
+                          label={label}
+                          height={140}
+                        />
+                      ) : null}
                     </TrafficMetricRow>
                   );
                 })}

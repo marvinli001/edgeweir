@@ -22,20 +22,13 @@ import { SettingsCard } from "@/components/settings-card";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { challengeKindOptions } from "@/lib/protection";
-import { cn } from "@/lib/utils";
 
-/**
- * A settings card in a grid of settings cards: it fills its grid cell, and its save row stays at
- * the bottom when a neighbour in the same row is taller (the card's form and fields grow).
- */
-export const GRID_CARD = "[&>form]:flex-1";
-
-/** The settings of a card as rows split by hairlines (SettingRow). */
+/** Labels stay with their controls as the card gains or loses field columns. */
 export function SettingRows({ children }: { children: React.ReactNode }) {
-  return <div className="flex flex-col divide-y divide-border">{children}</div>;
+  return <div className="form-grid items-end">{children}</div>;
 }
 
-/** One setting: its label (and a state mark) on the left, its control on the right. */
+/** One labelled setting with an optional state mark. */
 export function SettingRow({
   htmlFor,
   label,
@@ -50,18 +43,17 @@ export function SettingRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-12 flex-wrap items-center justify-between gap-x-6 gap-y-2 py-3 first:pt-0 last:pb-0">
+    <div className="flex min-w-0 flex-col gap-1.5">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <FieldLabel htmlFor={htmlFor}>{label}</FieldLabel>
         {aside}
       </div>
-      {/* Stays on the right when a long label pushes it onto a line of its own. */}
-      <div className="ml-auto flex shrink-0 items-center">{children}</div>
+      <div className="flex min-h-(--arc-control-height-md) min-w-0 items-center">{children}</div>
     </div>
   );
 }
 
-/** A whole number of a setting row, kept as text while editing; figures line up on the right. */
+/** A whole number kept as text while editing. */
 export function SettingNumber({
   id,
   value,
@@ -88,7 +80,7 @@ export function SettingNumber({
       required
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="w-32 text-right"
+      className="w-full tabular-nums"
       data-testid={testId}
     />
   );
@@ -108,9 +100,8 @@ export function ProtectionSettingsCard({
 }) {
   return (
     <SettingsCard
-      indentSave={false}
       title={m.protection_settings_title()}
-      className={cn(GRID_CARD, className)}
+      className={className}
       style={style}
       query={orpc.settings.protection.queryOptions()}
       mutation={orpc.settings.setProtection.mutationOptions()}
@@ -123,7 +114,6 @@ export function ProtectionSettingsCard({
         underAttackChallenge: d.underAttackChallenge,
         eventRetentionDays: Number(d.eventRetentionDays),
       })}
-      contentClassName="flex-1"
       saveTestId="protection-settings-save"
     >
       {({ value, draft, set, pending, apply }) => {
@@ -171,7 +161,6 @@ export function ProtectionSettingsCard({
             <SettingRow htmlFor="platform-under-attack-type" label={m.rules_challenge_type()}>
               <OptionSelect
                 id="platform-under-attack-type"
-                className="w-44"
                 value={draft.underAttackChallenge}
                 testId="platform-under-attack-type"
                 options={challengeKindOptions(true)}
@@ -213,7 +202,7 @@ export function InteractiveProviderCard({
       mutation={orpc.settings.setProtection.mutationOptions()}
       toDraft={(s) => toProviderDraft(s.provider)}
       toInput={(d, s) => ({ ...withoutProvider(s), provider: fromProviderDraft(d) })}
-      contentClassName="flex flex-col gap-4"
+      layout="grid"
       saveTestId="interactive-provider-save"
     >
       {({ value, draft, set }) => (
@@ -245,7 +234,6 @@ export function CcTemplateCard({
       mutation={orpc.settings.setCcTemplate.mutationOptions()}
       toDraft={toCcDraft}
       toInput={fromCcDraft}
-      layout="stacked"
       contentClassName="flex flex-col gap-4"
       saveTestId="cc-template-save"
     >

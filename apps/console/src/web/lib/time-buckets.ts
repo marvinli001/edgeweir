@@ -11,7 +11,7 @@ const GROUP_MINUTES = [1, 2, 5, 10, 15, 30, 60, 120, 180, 360, 720, 1_440];
 export type BucketGroup = {
   /** Start of the group's span. */
   time: string;
-  /** Per series, the sum of the group's buckets. */
+  /** Per series, the group's sum of counters or highest peak. */
   values: number[];
   /**
    * Whether the group holds exactly the buckets of its span, each ended by
@@ -29,7 +29,7 @@ export type BucketGroup = {
  */
 export function groupBuckets(
   times: string[],
-  series: number[][],
+  series: (number[] | { peaks: number[] })[],
   bucketSeconds: number,
   max = 32,
   settled = Number.POSITIVE_INFINITY,
@@ -62,9 +62,12 @@ export function groupBuckets(
     if (!group) return;
     group.buckets++;
     if (at + bucketSeconds * 1000 > settled) group.open = true;
-    for (let i = 0; i < series.length; i++) {
-      group.values[i] = (group.values[i] ?? 0) + (series[i]?.[index] ?? 0);
-    }
+    series.forEach((source, i) => {
+      const current = group.values[i] ?? 0;
+      group.values[i] = Array.isArray(source)
+        ? current + (source[index] ?? 0)
+        : Math.max(current, source.peaks[index] ?? 0);
+    });
   });
   return groups.map(({ buckets, open, ...group }) => ({
     ...group,

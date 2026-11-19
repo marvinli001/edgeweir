@@ -40,7 +40,7 @@ export function SmtpSettings({
       check={(input) => (smtpInput.safeParse(input).success ? null : m.alert_check_fields())}
       // Alert channels report a missing SMTP server too.
       refresh={orpc.alerts.key()}
-      contentClassName="grid gap-4 sm:grid-cols-2"
+      layout="grid"
       saveTestId="smtp-save"
     >
       {({ value, draft, set }) => (
@@ -82,7 +82,7 @@ export function SmtpSettings({
             checked={draft.secure}
             onCheckedChange={(secure) => set({ secure })}
           />
-          <Field className="sm:col-span-2">
+          <Field className="col-span-full">
             <FieldLabel htmlFor="smtp-ca">{m.alert_smtp_ca()}</FieldLabel>
             <Textarea
               id="smtp-ca"

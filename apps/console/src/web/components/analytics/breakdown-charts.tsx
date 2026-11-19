@@ -74,7 +74,11 @@ export function SeriesLegend({
 }
 
 /** Chart points for the Arc line chart, with date labels on clock boundaries (hours, days). */
-function chartData(rows: ChartRow[], keys: string[], range: AnalyticsRange): LineChartDatum[] {
+export function chartData(
+  rows: ChartRow[],
+  keys: string[],
+  range: AnalyticsRange,
+): LineChartDatum[] {
   const ticks = new Set(
     timeTicks(
       rows.map((row) => row.time),
@@ -201,7 +205,7 @@ export function StackedBarsChart({
   const shown = React.useMemo(() => fittingLabels(points, axisWidth), [points, axisWidth]);
   return (
     <figure className="relative m-0 grid min-w-0 gap-2 px-4" aria-label={label}>
-      <div className="grid grid-cols-[minmax(0,1fr)_48px]">
+      <div className="grid grid-cols-[minmax(0,1fr)_max-content]">
         <div
           className="relative"
           style={{ height: PLOT_HEIGHT }}
@@ -290,11 +294,11 @@ export function StackedBarsChart({
             </div>
           ) : null}
         </div>
-        <div className="relative" aria-hidden="true">
+        <div className="grid content-start ps-2.5 pe-0.5" aria-hidden="true">
           {ticks.map((tick) => (
             <span
               key={tick}
-              className="readout absolute left-2.5 -translate-y-1/2 text-xs leading-none text-muted-foreground"
+              className="relative col-start-1 row-start-1 -translate-y-1/2 text-xs leading-none whitespace-nowrap readout text-muted-foreground"
               style={{ top: y(tick) }}
             >
               {format(tick)}

@@ -348,26 +348,16 @@ function failures(theme: Theme, pairs: Pair[], min: number): string[] {
   });
 }
 
-const SURFACES = [
-  "background",
-  "canvas",
-  "card",
-  "well",
-  "raised",
-  "popover",
-  "sidebar",
-  "muted",
-  "kpi-1",
-  "kpi-2",
-  "kpi-3",
-];
+const SURFACES = ["background", "canvas", "card", "well", "raised", "popover", "sidebar", "muted"];
 
 function textPairs(): Pair[] {
   return [
     ...["foreground", "muted-foreground"].flatMap((fg) =>
       SURFACES.map((bg) => ({ fg, bg, use: "body and secondary text on the surface ladder" })),
     ),
-    { fg: "card-foreground", bg: "card", use: "card text" },
+    { fg: "card-foreground", bg: "card", use: "card text and metric values" },
+    { fg: "delta-good", bg: "card", use: "improving metric" },
+    { fg: "delta-bad", bg: "card", use: "worsening metric" },
     { fg: "popover-foreground", bg: "popover", use: "menus, dialogs, toasts" },
     { fg: "secondary-foreground", bg: "secondary", use: "secondary buttons and badges" },
     { fg: "accent-foreground", bg: "accent", use: "highlighted menu items" },

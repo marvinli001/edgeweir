@@ -40,15 +40,6 @@ export function tokenVec3(name: `--${string}`): [number, number, number] {
   return [r / 255, g / 255, b / 255];
 }
 
-/**
- * A token as an `rgba(r, g, b, a)` string (legacy comma syntax), for libraries that parse only
- * that form.
- */
-export function tokenRgb(name: `--${string}`, alpha?: number): string {
-  const [r, g, b, a] = cssColorToRgba(readToken(name));
-  return `rgba(${r}, ${g}, ${b}, ${Math.round((alpha ?? a) * 1000) / 1000})`;
-}
-
 function subscribeTheme(onChange: () => void) {
   const observer = new MutationObserver(onChange);
   observer.observe(document.documentElement, {

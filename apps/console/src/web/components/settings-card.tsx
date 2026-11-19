@@ -56,14 +56,10 @@ interface SettingsFormProps<T, D, I, O, E, C>
   refresh?: QueryKey;
   /** Leaves the checks to `check` instead of the browser's. */
   noValidate?: boolean;
-  /** Off for rows that put each control beside its label (SettingRows): no label column. */
-  indentSave?: boolean;
-  /**
-   * How the fields lay out: label-left (the default), `stacked` (labels on top, for a grid of
-   * fields that should use the panel's width), or `inline` (one setting: its field and the save
-   * on one row, no footer).
-   */
-  layout?: "label-left" | "stacked" | "inline";
+  /** A single setting can place its save action beside the field. */
+  layout?: "stacked" | "grid" | "inline";
+  /** Status or read-only details below a single setting and its save button. */
+  details?: (value: T, draft: D) => React.ReactNode;
   contentClassName?: string;
   saveTestId: string;
   errorTestId?: string;
@@ -71,8 +67,7 @@ interface SettingsFormProps<T, D, I, O, E, C>
 }
 
 /**
- * A card that loads a setting, edits a draft of it and saves it (useSettingsForm). Its fields lay
- * out label-left (index.css [data-form]) above a sticky save bar.
+ * A card that loads a setting, edits a draft of it and saves it (useSettingsForm).
  */
 export function SettingsCard<T, D, I, O, E, C, QE>({
   title,
@@ -109,8 +104,8 @@ function SettingsForm<T, D, I, O, E, C>({
   mutation,
   refresh,
   noValidate,
-  indentSave = true,
-  layout = "label-left",
+  layout = "stacked",
+  details,
   contentClassName,
   saveTestId,
   errorTestId,
@@ -131,30 +126,34 @@ function SettingsForm<T, D, I, O, E, C>({
     apply: form.apply,
   });
   return (
-    <form
-      className="flex flex-col gap-(--panel-pad)"
-      noValidate={noValidate}
-      onSubmit={form.submit}
-    >
+    <form className="flex min-w-0 flex-col gap-4" noValidate={noValidate} onSubmit={form.submit}>
       {layout === "inline" ? (
-        <PanelContent className="flex flex-wrap items-end gap-x-3 gap-y-2">
-          <div className={cn("w-full min-w-0 sm:w-56", contentClassName)}>{fields}</div>
-          <SaveBar
-            inline
-            dirty={form.dirty}
-            pending={form.pending}
-            error={form.error}
-            testId={saveTestId}
-            errorTestId={errorTestId}
-          />
+        <PanelContent className="flex flex-col items-start gap-2">
+          <div className="flex w-full min-w-0 flex-wrap items-end gap-x-3 gap-y-2">
+            <div className={cn("w-56 min-w-0 max-w-full", contentClassName)}>{fields}</div>
+            <SaveBar
+              inline
+              dirty={form.dirty}
+              pending={form.pending}
+              error={form.error}
+              testId={saveTestId}
+              errorTestId={errorTestId}
+            />
+          </div>
+          {details?.(value, form.draft)}
         </PanelContent>
       ) : (
         <>
-          <PanelContent form={layout === "label-left"} className={contentClassName}>
+          <PanelContent
+            form="stacked"
+            className={cn(
+              layout === "grid" ? "form-grid items-end" : "flex flex-col gap-3",
+              contentClassName,
+            )}
+          >
             {fields}
           </PanelContent>
           <SaveBar
-            indent={layout === "label-left" && indentSave}
             dirty={form.dirty}
             pending={form.pending}
             error={form.error}
