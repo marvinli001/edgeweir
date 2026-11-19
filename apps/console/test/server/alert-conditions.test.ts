@@ -57,7 +57,7 @@ interface Fixture {
     requests: number;
     statusCodes: Record<string, number>;
   }[];
-  events: { siteId: string; kind: string; level: string; receivedAt: number }[];
+  events: { nodeId: string; siteId: string; kind: string; level: string; receivedAt: number }[];
 }
 
 const LEVELS = ["normal", "cookie302", "js", "pow", "captcha"];
@@ -182,14 +182,18 @@ function generate(seed: number, clusterIds: string[], now: number): Fixture {
       if (chance(0.08))
         node.security.push({ siteId: site.id, level: pick(LEVELS), escalatedPaths: 0 });
   const events: Fixture["events"] = [];
-  for (const site of sites)
-    if (chance(0.15))
-      events.push({
-        siteId: site.id,
-        kind: pick(["site_level", "site_level", "ip_banned"]),
-        level: pick(LEVELS),
-        receivedAt: ago(300_000),
-      });
+  for (const site of sites) {
+    if (!chance(0.15)) continue;
+    const node = nodes.find((n) => n.clusterId === site.clusterId);
+    if (!node) continue;
+    events.push({
+      nodeId: node.id,
+      siteId: site.id,
+      kind: pick(["site_level", "site_level", "ip_banned"]),
+      level: pick(LEVELS),
+      receivedAt: ago(300_000),
+    });
+  }
   return { nodes, certificates, sites, health, traffic, events };
 }
 
@@ -289,7 +293,7 @@ describe("alert conditions", async () => {
   afterAll(() => client.close());
 
   it("match a direct evaluation of the policy on a generated fixture", async () => {
-    const now = Math.floor(Date.now() / 1000) * 1000;
+    const now = Date.parse("2026-10-02T12:00:15Z");
     const clusterIds = [randomUUID(), randomUUID(), randomUUID()];
     await ctx.db
       .insert(schema.cluster)
@@ -360,6 +364,7 @@ describe("alert conditions", async () => {
       .values(f.traffic.map((t) => ({ ...t, minute: new Date(t.minute) })));
     await ctx.db.insert(schema.securityEvent).values(
       f.events.map((e, i) => ({
+        nodeId: e.nodeId,
         nodeEventId: `event-${i}`,
         siteId: e.siteId,
         kind: e.kind,
